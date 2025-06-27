@@ -22,7 +22,6 @@ Usage:
 
 import hashlib
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import pandas as pd
 
@@ -34,7 +33,7 @@ def hash_question(question_text: str) -> str:
     return hashlib.md5(question_text.encode("utf-8")).hexdigest()
 
 
-def read_file_to_dataframe(file_path: str, sheet_name: Optional[str] = None) -> pd.DataFrame:
+def read_file_to_dataframe(file_path: str, sheet_name: str | None = None) -> pd.DataFrame:
     """
     Read a file (Excel, CSV, or TSV) into a pandas DataFrame.
 
@@ -69,7 +68,7 @@ def read_file_to_dataframe(file_path: str, sheet_name: Optional[str] = None) -> 
         raise ValueError(f"Unsupported file format: {file_extension}")
 
 
-def get_file_preview(file_path: str, sheet_name: Optional[str] = None, max_rows: int = 100) -> Dict:
+def get_file_preview(file_path: str, sheet_name: str | None = None, max_rows: int = 100) -> dict:
     """
     Get a preview of the file with column information and sample data.
 
@@ -108,8 +107,8 @@ def get_file_preview(file_path: str, sheet_name: Optional[str] = None, max_rows:
 
 
 def extract_questions_from_file(
-    file_path: str, question_column: str, answer_column: str, sheet_name: Optional[str] = None
-) -> List[Question]:
+    file_path: str, question_column: str, answer_column: str, sheet_name: str | None = None
+) -> list[Question]:
     """
     Extract questions from a file with flexible column selection.
 
@@ -161,7 +160,7 @@ def extract_questions_from_file(
     return questions
 
 
-def extract_questions_from_excel(excel_path: str) -> List[Question]:
+def extract_questions_from_excel(excel_path: str) -> list[Question]:
     """
     Extract questions from the Easy sheet of the Excel file.
 
@@ -172,7 +171,7 @@ def extract_questions_from_excel(excel_path: str) -> List[Question]:
     )
 
 
-def generate_questions_file(questions: List[Question], output_path: str):
+def generate_questions_file(questions: list[Question], output_path: str):
     """Generate the questions.py file with all extracted questions."""
 
     # Create the file content
@@ -206,7 +205,7 @@ def generate_questions_file(questions: List[Question], output_path: str):
         f.write(content)
 
 
-def questions_to_json(questions: List[Question]) -> Dict:
+def questions_to_json(questions: list[Question]) -> dict:
     """
     Convert questions to JSON format compatible with the webapp.
 
@@ -231,9 +230,9 @@ def extract_and_generate_questions(
     output_path: str,
     question_column: str = "Question",
     answer_column: str = "Answer",
-    sheet_name: Optional[str] = None,
+    sheet_name: str | None = None,
     return_json: bool = False,
-) -> Optional[Dict]:
+) -> dict | None:
     """
     Extract questions from file and generate a Python file with Question instances.
 

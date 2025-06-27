@@ -21,7 +21,7 @@ Your task:
 - Always ONLY return the code for the Pydantic class definition itself. DO NOT include any import statements, comments, or text outside the class definition.
 - The class should be named Answer.
 - The class should inherit from BaseAnswer.
-- The class should have a model_post_init method that sets the id and correct attributes.
+- The class should have a model_post_init method that sets the correct attributes (but NOT the id - the id will be set programmatically).
 - The class should have a verify method that checks if the answer is correct.
 - Everytime a class extracts more than one parameter, it should have a verify_granular method that checks if the answer is correct.
 - The verify_granular method should return a float between 0 and 1, where 1 means the answer is completely correct and 0 means the answer is completely incorrect.
@@ -40,7 +40,6 @@ class Answer(BaseAnswer):
     answer: bool = Field(description="Answer contains whether rofecoxib is withdrawn - true or false")
 
     def model_post_init(self, __context):
-        self.id = "0317484267bee22cd3f8539fdfb27b30"
         self.correct = True
 
     def verify(self) -> bool:
@@ -60,7 +59,6 @@ class Answer(BaseAnswer):
     )
 
     def model_post_init(self, __context):
-        self.id = "f678ebd11f1fdd9df203c76f6d2d87b2"
         self.correct = "Increased risk of cardiovascular side effects"
 
     def verify(self) -> bool:
@@ -78,7 +76,6 @@ class Answer(BaseAnswer):
     answer: int = Field(description="Number of targets associated with ALS in the answer")
 
     def model_post_init(self, __context):
-        self.id = "b71b5912eddade8d4b172557d184e0a7"
         self.correct = 324
 
     def verify(self) -> bool:
@@ -101,7 +98,6 @@ class Answer(BaseAnswer):
     )
 
     def model_post_init(self, __context):
-        self.id = "a4ff2c7d7f61ab8c062ff34acb4fc5b5"
         self.correct = {"phase": "Phase II", "status": "Completed"}
 
     def verify(self) -> bool:
@@ -130,7 +126,6 @@ class Answer(BaseAnswer):
     answer: List[str] = Field(description="Names of all drugs approved for Duchenne muscular dystrophy named in the response")
 
     def model_post_init(self, __context):
-        self.id = "b71d3558119a7990bb6659435d7ddfbe"
         self.correct = [
             "DEFLAZACORT",
             "ATALUREN",
@@ -166,7 +161,6 @@ class Answer(BaseAnswer):
     east_asian_percentage: float = Field(description="Percentage of East Asian ancestry reported in the answer")
 
     def model_post_init(self, __context):
-        self.id = "38c3a1d6683278a48d79dfb881a1d8e7"
         self.correct = {"european_percentage": 74.0, "east_asian_percentage": 26.0}
 
     def verify(self) -> bool:
@@ -199,7 +193,6 @@ class Answer(BaseAnswer):
     answer: bool = Field(description="Whether baricitinib can be repurposed for alopecia according to the response")
 
     def model_post_init(self, __context):
-        self.id = "18560aa613e3a5dcb4b4c16e5e8c4dd8"
         self.correct = {
             "answer": True,
         }
@@ -219,7 +212,6 @@ class Answer(BaseAnswer):
     answer: float = Field(description="Overall association score for FUS and ALS returned by the response")
 
     def model_post_init(self, __context):
-        self.id = "eba9a8ea710e90be6c6b1959d72d652a"
         self.correct = 0.84
 
     def verify(self) -> bool:
@@ -240,7 +232,6 @@ class Answer(BaseAnswer):
     drugs: List[str] = Field(description="List of such drugs if any exist in the response")
 
     def model_post_init(self, __context):
-        self.id = "338120dd65fe5f25ab14fcd95c3d626e"
         self.correct = {"has_drugs": True, "drugs": ["OBINUTUZUMAB", "MOSUNETUZUMAB"]}
 
     def verify(self) -> bool:

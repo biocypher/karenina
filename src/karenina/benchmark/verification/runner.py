@@ -1,10 +1,10 @@
 """Single model verification runner."""
 
 import time
-from typing import Optional
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from ...answers.generator import inject_question_id_into_answer_class
 from ...llm.interface import init_chat_model_unified
 from ..models import ModelConfiguration, VerificationResult
 from .validation import validate_answer_template
@@ -16,10 +16,10 @@ def run_single_model_verification(
     template_code: str,
     answering_model: ModelConfiguration,
     parsing_model: ModelConfiguration,
-    run_name: Optional[str] = None,
-    job_id: Optional[str] = None,
-    answering_replicate: Optional[int] = None,
-    parsing_replicate: Optional[int] = None,
+    run_name: str | None = None,
+    job_id: str | None = None,
+    answering_replicate: int | None = None,
+    parsing_replicate: int | None = None,
 ) -> VerificationResult:
     """
     Run verification for a single question with specific answering and parsing models.
@@ -56,7 +56,7 @@ def run_single_model_verification(
 
     try:
         # Step 1: Validate the template
-        is_valid, error_msg, Answer = validate_answer_template(template_code)
+        is_valid, error_msg, RawAnswer = validate_answer_template(template_code)
         if not is_valid:
             return VerificationResult(
                 question_id=question_id,
@@ -75,6 +75,9 @@ def run_single_model_verification(
                 answering_replicate=answering_replicate,
                 parsing_replicate=parsing_replicate,
             )
+
+        # Step 1.5: Inject question ID into the Answer class
+        Answer = inject_question_id_into_answer_class(RawAnswer, question_id)
 
         # Step 2: Initialize answering model
         answering_llm = init_chat_model_unified(
@@ -187,7 +190,9 @@ Follow the schema exactly as defined."""
                 raw_llm_response=raw_llm_response,
                 answering_model=answering_model_str,
                 parsing_model=parsing_model_str,
-                parsed_response=parsed_answer.model_dump() if hasattr(parsed_answer, "model_dump") else str(parsed_answer),
+                parsed_response=parsed_answer.model_dump()
+                if hasattr(parsed_answer, "model_dump")
+                else str(parsed_answer),
                 execution_time=time.time() - start_time,
                 timestamp=timestamp,
                 answering_system_prompt=answering_model.system_prompt,

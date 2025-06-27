@@ -22,7 +22,6 @@ def mock_llm():
         answer: bool = Field(description="Answer contains whether the condition is true or false")
 
         def model_post_init(self, __context):
-            self.id = "test_id"
             self.correct = True
     ```
     """
@@ -81,7 +80,6 @@ all_questions = [question_1]
             answer: bool = Field(description="Answer contains whether the condition is true or false")
 
             def model_post_init(self, __context):
-                self.id = "test1"
                 self.correct = True
         ```
         """
@@ -121,7 +119,6 @@ class Answer(BaseAnswer):
     answer: bool = Field(description="Answer contains whether the condition is true or false")
 
     def model_post_init(self, __context):
-        self.id = "test1"
         self.correct = True
 """,
         "test2": """
@@ -129,7 +126,6 @@ class Answer(BaseAnswer):
     answer: str = Field(description="Answer contains the string response")
 
     def model_post_init(self, __context):
-        self.id = "test2"
         self.correct = True
 """,
     }
@@ -230,7 +226,6 @@ all_questions = [question_1]
             answer: bool = Field(description="Integration test answer")
 
             def model_post_init(self, __context):
-                self.id = "integration_test"
                 self.correct = True
         ```
         """
@@ -290,7 +285,6 @@ all_questions = [question_1]
             answer: bool = Field(description="Dictionary compatibility test answer")
 
             def model_post_init(self, __context):
-                self.id = "dict_test"
                 self.correct = True
         ```
         """
