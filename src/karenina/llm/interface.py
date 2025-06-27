@@ -13,6 +13,8 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field, SecretStr
 
+from .manual_llm import create_manual_llm
+
 load_dotenv()
 
 # LangChain imports
@@ -119,27 +121,28 @@ class ChatOpenRouter(ChatOpenAI):
         super().__init__(base_url="https://openrouter.ai/api/v1", openai_api_key=openai_api_key, **kwargs)
 
 
-def init_chat_model_unified(model: str, provider: str = None, interface: str = "langchain", **kwargs) -> ChatSession:
+def init_chat_model_unified(model: str, provider: str = None, interface: str = "langchain", question_hash: str = None, **kwargs):
     """Initialize a chat model using the unified interface.
 
     This function provides a unified way to initialize different chat models
-    across various interfaces (LangChain, OpenRouter, etc.) with consistent
+    across various interfaces (LangChain, OpenRouter, Manual) with consistent
     parameter handling.
 
     Args:
         model: The model name (e.g., "gemini-2.0-flash", "gpt-4", "claude-3-sonnet")
         provider: The model provider (e.g., "google_genai", "openai", "anthropic").
-                 Optional for OpenRouter interface.
+                 Optional for OpenRouter and Manual interfaces.
         interface: The interface to use for model initialization.
-                  Supported values: "langchain", "openrouter"
+                  Supported values: "langchain", "openrouter", "manual"
+        question_hash: The MD5 hash of the question (required for manual interface)
         **kwargs: Additional keyword arguments passed to the underlying model
                  initialization (e.g., temperature, max_tokens, api_key)
 
     Returns:
-        ChatSession: An initialized chat model instance ready for inference
+        An initialized model instance ready for inference
 
     Raises:
-        ValueError: If an unsupported interface is specified
+        ValueError: If an unsupported interface is specified or required args missing
 
     Examples:
         Initialize a Google Gemini model via LangChain:
@@ -150,11 +153,18 @@ def init_chat_model_unified(model: str, provider: str = None, interface: str = "
 
         Initialize with custom temperature:
         >>> model = init_chat_model_unified("claude-3-sonnet", "anthropic", temperature=0.2)
+
+        Initialize manual traces:
+        >>> model = init_chat_model_unified("manual", interface="manual", question_hash="abc123...")
     """
     if interface == "langchain":
         return init_chat_model(model=model, model_provider=provider, **kwargs)
     elif interface == "openrouter":
         return ChatOpenRouter(model=model, **kwargs)
+    elif interface == "manual":
+        if question_hash is None:
+            raise ValueError("question_hash is required for manual interface")
+        return create_manual_llm(question_hash=question_hash, **kwargs)
     else:
         raise ValueError(f"Unsupported interface: {interface}")
 
@@ -230,7 +240,7 @@ def call_model(
         )
 
     except Exception as e:
-        raise LLMError(f"Error calling model {provider}:{model}: {e!s}")
+        raise LLMError(f"Error calling model {provider}:{model}: {e!s}") from e
 
 
 def get_session(session_id: str) -> ChatSession | None:

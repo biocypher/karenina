@@ -80,12 +80,22 @@ def run_single_model_verification(
         Answer = inject_question_id_into_answer_class(RawAnswer, question_id)
 
         # Step 2: Initialize answering model
-        answering_llm = init_chat_model_unified(
-            model=answering_model.model_name,
-            provider=answering_model.model_provider,
-            temperature=answering_model.temperature,
-            interface=answering_model.interface,
-        )
+        # For manual interface, pass the question_id as question_hash
+        if answering_model.interface == "manual":
+            answering_llm = init_chat_model_unified(
+                model=answering_model.model_name,
+                provider=answering_model.model_provider,
+                temperature=answering_model.temperature,
+                interface=answering_model.interface,
+                question_hash=question_id,
+            )
+        else:
+            answering_llm = init_chat_model_unified(
+                model=answering_model.model_name,
+                provider=answering_model.model_provider,
+                temperature=answering_model.temperature,
+                interface=answering_model.interface,
+            )
 
         # Step 3: Get LLM response
         messages = []
