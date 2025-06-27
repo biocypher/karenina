@@ -7,7 +7,6 @@ managing conversation sessions, and handling LLM-related operations.
 import os
 import uuid
 from datetime import datetime
-from typing import Dict, List, Optional
 
 from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -49,9 +48,9 @@ class ChatRequest(BaseModel):
     model: str
     provider: str
     message: str
-    session_id: Optional[str] = None
-    system_message: Optional[str] = None
-    temperature: Optional[float] = 0.7
+    session_id: str | None = None
+    system_message: str | None = None
+    temperature: float | None = 0.7
 
 
 class ChatResponse(BaseModel):
@@ -72,7 +71,7 @@ class ChatSession:
         self.model = model
         self.provider = provider
         self.temperature = temperature
-        self.messages: List = []
+        self.messages: list = []
         self.llm = None
         self.created_at = datetime.now()
         self.last_used = datetime.now()
@@ -103,7 +102,7 @@ class ChatSession:
 
 
 # Global chat session storage
-chat_sessions: Dict[str, ChatSession] = {}
+chat_sessions: dict[str, ChatSession] = {}
 
 
 class ChatOpenRouter(ChatOpenAI):
@@ -164,8 +163,8 @@ def call_model(
     model: str,
     provider: str,
     message: str,
-    session_id: Optional[str] = None,
-    system_message: Optional[str] = None,
+    session_id: str | None = None,
+    system_message: str | None = None,
     temperature: float = 0.7,
 ) -> ChatResponse:
     """
@@ -234,12 +233,12 @@ def call_model(
         raise LLMError(f"Error calling model {provider}:{model}: {e!s}")
 
 
-def get_session(session_id: str) -> Optional[ChatSession]:
+def get_session(session_id: str) -> ChatSession | None:
     """Get a chat session by ID."""
     return chat_sessions.get(session_id)
 
 
-def list_sessions() -> List[Dict]:
+def list_sessions() -> list[dict]:
     """List all active chat sessions."""
     return [
         {

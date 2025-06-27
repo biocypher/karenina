@@ -1,10 +1,11 @@
 import json
 import re
 from pathlib import Path
-from typing import List, Literal
+from typing import Literal
 
 from pydantic import Field
 
+from karenina.answers.generator import inject_question_id_into_answer_class
 from karenina.schemas.answer_class import BaseAnswer
 
 
@@ -20,7 +21,7 @@ def read_answer_templates(answers_json_path: str | Path) -> dict:
         in the form of Answer classes (pydantic models)
     """
 
-    namespace = {"BaseAnswer": BaseAnswer, "Field": Field, "Literal": Literal, "List": List}
+    namespace = {"BaseAnswer": BaseAnswer, "Field": Field, "Literal": Literal, "List": list}
 
     answer_dict = {}
 
@@ -30,7 +31,10 @@ def read_answer_templates(answers_json_path: str | Path) -> dict:
     idx = 1
     for key, value in answer_templates.items():
         exec(re.sub(r"^class Answer", f"class Answer{idx}", value), namespace)
-        answer_dict[key] = namespace["Answer" + str(idx)]
+        Answer = namespace["Answer" + str(idx)]
+        # Inject the question ID programmatically
+        AnswerWithID = inject_question_id_into_answer_class(Answer, key)
+        answer_dict[key] = AnswerWithID
         idx += 1
 
     return answer_dict

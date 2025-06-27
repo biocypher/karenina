@@ -1,6 +1,6 @@
 """Data models for benchmark verification system."""
 
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -19,22 +19,22 @@ class ModelConfiguration(BaseModel):
 class VerificationConfig(BaseModel):
     """Configuration for verification run with multiple models."""
 
-    answering_models: List[ModelConfiguration]
-    parsing_models: List[ModelConfiguration]
+    answering_models: list[ModelConfiguration]
+    parsing_models: list[ModelConfiguration]
     replicate_count: int = 1  # Number of times to run each test combination
 
     # Legacy fields for backward compatibility (deprecated)
-    answering_model_provider: Optional[str] = None
-    answering_model_name: Optional[str] = None
-    answering_temperature: Optional[float] = None
-    answering_interface: Optional[str] = None
-    answering_system_prompt: Optional[str] = None
+    answering_model_provider: str | None = None
+    answering_model_name: str | None = None
+    answering_temperature: float | None = None
+    answering_interface: str | None = None
+    answering_system_prompt: str | None = None
 
-    parsing_model_provider: Optional[str] = None
-    parsing_model_name: Optional[str] = None
-    parsing_temperature: Optional[float] = None
-    parsing_interface: Optional[str] = None
-    parsing_system_prompt: Optional[str] = None
+    parsing_model_provider: str | None = None
+    parsing_model_name: str | None = None
+    parsing_temperature: float | None = None
+    parsing_interface: str | None = None
+    parsing_system_prompt: str | None = None
 
     def __init__(self, **data):
         """Initialize with backward compatibility for single model configs."""
@@ -75,32 +75,32 @@ class VerificationResult(BaseModel):
 
     question_id: str
     success: bool
-    error: Optional[str] = None
+    error: str | None = None
 
     # Raw data
     question_text: str
     raw_llm_response: str
-    parsed_response: Optional[Dict[str, Any]] = None
+    parsed_response: dict[str, Any] | None = None
 
     # Verification outcomes
-    verify_result: Optional[Any] = None
-    verify_granular_result: Optional[Any] = None
+    verify_result: Any | None = None
+    verify_granular_result: Any | None = None
 
     # Metadata
     answering_model: str
     parsing_model: str
     execution_time: float
     timestamp: str
-    answering_system_prompt: Optional[str] = None
-    parsing_system_prompt: Optional[str] = None
+    answering_system_prompt: str | None = None
+    parsing_system_prompt: str | None = None
 
     # Run identification
-    run_name: Optional[str] = None
-    job_id: Optional[str] = None
+    run_name: str | None = None
+    job_id: str | None = None
 
     # Replicate tracking
-    answering_replicate: Optional[int] = None  # Replicate number for answering model (1, 2, 3, ...)
-    parsing_replicate: Optional[int] = None  # Replicate number for parsing model (1, 2, 3, ...)
+    answering_replicate: int | None = None  # Replicate number for answering model (1, 2, 3, ...)
+    parsing_replicate: int | None = None  # Replicate number for parsing model (1, 2, 3, ...)
 
 
 class VerificationJob(BaseModel):
@@ -118,15 +118,15 @@ class VerificationJob(BaseModel):
     failed_count: int = 0
     percentage: float = 0.0
     current_question: str = ""
-    estimated_time_remaining: Optional[float] = None
+    estimated_time_remaining: float | None = None
 
     # Timing
-    start_time: Optional[float] = None
-    end_time: Optional[float] = None
+    start_time: float | None = None
+    end_time: float | None = None
 
     # Results
-    results: Dict[str, VerificationResult] = Field(default_factory=dict)
-    error_message: Optional[str] = None
+    results: dict[str, VerificationResult] = Field(default_factory=dict)
+    error_message: str | None = None
 
     def to_dict(self):
         """Convert job to dictionary for API response."""
@@ -162,8 +162,8 @@ class VerificationRequest(BaseModel):
     """Request to start verification."""
 
     config: VerificationConfig
-    question_ids: Optional[List[str]] = None  # If None, verify all finished templates
-    run_name: Optional[str] = None  # Optional user-defined run name
+    question_ids: list[str] | None = None  # If None, verify all finished templates
+    run_name: str | None = None  # Optional user-defined run name
 
 
 class VerificationStatusResponse(BaseModel):
@@ -178,9 +178,9 @@ class VerificationStatusResponse(BaseModel):
     total_count: int
     successful_count: int
     failed_count: int
-    estimated_time_remaining: Optional[float] = None
-    error: Optional[str] = None
-    results: Optional[Dict[str, VerificationResult]] = None
+    estimated_time_remaining: float | None = None
+    error: str | None = None
+    results: dict[str, VerificationResult] | None = None
 
 
 class VerificationStartResponse(BaseModel):

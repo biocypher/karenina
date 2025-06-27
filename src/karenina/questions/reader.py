@@ -1,14 +1,13 @@
 import importlib.util
 import os
 import sys
-from typing import Dict, List, Union
 
 from karenina.schemas.question_class import Question
 
 
 def read_questions_from_file(
     questions_py_path: str, return_dict: bool = False
-) -> Union[List[Question], Dict[str, Question]]:
+) -> list[Question] | dict[str, Question]:
     """
     Dynamically import all_questions from a questions.py file.
 

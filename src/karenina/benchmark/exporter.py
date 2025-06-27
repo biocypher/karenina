@@ -4,7 +4,7 @@ import csv
 import json
 import time
 from io import StringIO
-from typing import Any, Dict
+from typing import Any
 
 from .models import VerificationJob, VerificationResult
 
@@ -19,7 +19,7 @@ def get_karenina_version() -> str:
         return "unknown"
 
 
-def export_verification_results_json(job: VerificationJob, results: Dict[str, VerificationResult]) -> str:
+def export_verification_results_json(job: VerificationJob, results: dict[str, VerificationResult]) -> str:
     """
     Export verification results to JSON format with metadata.
 
@@ -87,7 +87,7 @@ def export_verification_results_json(job: VerificationJob, results: Dict[str, Ve
     return json.dumps(export_data, indent=2, ensure_ascii=False)
 
 
-def export_verification_results_csv(job: VerificationJob, results: Dict[str, VerificationResult]) -> str:
+def export_verification_results_csv(job: VerificationJob, results: dict[str, VerificationResult]) -> str:
     """
     Export verification results to CSV format.
 
