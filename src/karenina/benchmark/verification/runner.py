@@ -4,6 +4,7 @@ import time
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from ...answers.generator import inject_question_id_into_answer_class
 from ...llm.interface import init_chat_model_unified
 from ..models import ModelConfiguration, VerificationResult
 from .validation import validate_answer_template
@@ -55,7 +56,7 @@ def run_single_model_verification(
 
     try:
         # Step 1: Validate the template
-        is_valid, error_msg, Answer = validate_answer_template(template_code)
+        is_valid, error_msg, RawAnswer = validate_answer_template(template_code)
         if not is_valid:
             return VerificationResult(
                 question_id=question_id,
@@ -74,6 +75,9 @@ def run_single_model_verification(
                 answering_replicate=answering_replicate,
                 parsing_replicate=parsing_replicate,
             )
+
+        # Step 1.5: Inject question ID into the Answer class
+        Answer = inject_question_id_into_answer_class(RawAnswer, question_id)
 
         # Step 2: Initialize answering model
         answering_llm = init_chat_model_unified(
