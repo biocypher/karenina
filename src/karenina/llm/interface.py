@@ -1,0 +1,268 @@
+"""LLM interface and session management functionality.
+
+This module provides a unified interface for calling language models,
+managing conversation sessions, and handling LLM-related operations.
+"""
+
+import os
+import uuid
+from datetime import datetime
+from typing import Dict, List, Optional
+
+from dotenv import load_dotenv
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field, SecretStr
+
+load_dotenv()
+
+# LangChain imports
+try:
+    from langchain.chat_models import init_chat_model
+
+    LANGCHAIN_AVAILABLE = True
+except ImportError:
+    LANGCHAIN_AVAILABLE = False
+
+
+class LLMError(Exception):
+    """Base exception for LLM-related errors."""
+
+    pass
+
+
+class LLMNotAvailableError(LLMError):
+    """Raised when LangChain is not available."""
+
+    pass
+
+
+class SessionError(LLMError):
+    """Raised when there's an error with session management."""
+
+    pass
+
+
+class ChatRequest(BaseModel):
+    """Request model for chat API."""
+
+    model: str
+    provider: str
+    message: str
+    session_id: Optional[str] = None
+    system_message: Optional[str] = None
+    temperature: Optional[float] = 0.7
+
+
+class ChatResponse(BaseModel):
+    """Response model for chat API."""
+
+    session_id: str
+    message: str
+    model: str
+    provider: str
+    timestamp: str
+
+
+class ChatSession:
+    """Manages a conversation session with an LLM."""
+
+    def __init__(self, session_id: str, model: str, provider: str, temperature: float = 0.7):
+        self.session_id = session_id
+        self.model = model
+        self.provider = provider
+        self.temperature = temperature
+        self.messages: List = []
+        self.llm = None
+        self.created_at = datetime.now()
+        self.last_used = datetime.now()
+
+    def initialize_llm(self):
+        """Initialize the LLM if not already done."""
+        if self.llm is None:
+            self.llm = init_chat_model_unified(
+                model=self.model, provider=self.provider, interface="langchain", temperature=self.temperature
+            )
+
+    def add_message(self, message, is_human: bool = True):
+        """Add a message to the conversation history."""
+        if is_human:
+            self.messages.append(HumanMessage(content=message))
+        else:
+            self.messages.append(AIMessage(content=message))
+        self.last_used = datetime.now()
+
+    def add_system_message(self, message: str):
+        """Add a system message to the conversation."""
+        # Insert system message at the beginning if it doesn't exist
+        if not self.messages or not isinstance(self.messages[0], SystemMessage):
+            self.messages.insert(0, SystemMessage(content=message))
+        else:
+            # Update existing system message
+            self.messages[0] = SystemMessage(content=message)
+
+
+# Global chat session storage
+chat_sessions: Dict[str, ChatSession] = {}
+
+
+class ChatOpenRouter(ChatOpenAI):
+    openai_api_key: SecretStr | None = Field(
+        alias="api_key", default_factory=lambda: os.environ.get("OPENROUTER_API_KEY")
+    )
+
+    @property
+    def lc_secrets(self) -> dict[str, str]:
+        return {"openai_api_key": "OPENROUTER_API_KEY"}
+
+    def __init__(self, openai_api_key: str | None = None, **kwargs):
+        openai_api_key = openai_api_key or os.environ.get("OPENROUTER_API_KEY")
+        super().__init__(base_url="https://openrouter.ai/api/v1", openai_api_key=openai_api_key, **kwargs)
+
+
+def init_chat_model_unified(model: str, provider: str = None, interface: str = "langchain", **kwargs) -> ChatSession:
+    """Initialize a chat model using the unified interface.
+
+    This function provides a unified way to initialize different chat models
+    across various interfaces (LangChain, OpenRouter, etc.) with consistent
+    parameter handling.
+
+    Args:
+        model: The model name (e.g., "gemini-2.0-flash", "gpt-4", "claude-3-sonnet")
+        provider: The model provider (e.g., "google_genai", "openai", "anthropic").
+                 Optional for OpenRouter interface.
+        interface: The interface to use for model initialization.
+                  Supported values: "langchain", "openrouter"
+        **kwargs: Additional keyword arguments passed to the underlying model
+                 initialization (e.g., temperature, max_tokens, api_key)
+
+    Returns:
+        ChatSession: An initialized chat model instance ready for inference
+
+    Raises:
+        ValueError: If an unsupported interface is specified
+
+    Examples:
+        Initialize a Google Gemini model via LangChain:
+        >>> model = init_chat_model_unified("gemini-2.0-flash", "google_genai")
+
+        Initialize an OpenAI model via OpenRouter:
+        >>> model = init_chat_model_unified("gpt-4", interface="openrouter")
+
+        Initialize with custom temperature:
+        >>> model = init_chat_model_unified("claude-3-sonnet", "anthropic", temperature=0.2)
+    """
+    if interface == "langchain":
+        return init_chat_model(model=model, model_provider=provider, **kwargs)
+    elif interface == "openrouter":
+        return ChatOpenRouter(model=model, **kwargs)
+    else:
+        raise ValueError(f"Unsupported interface: {interface}")
+
+
+def call_model(
+    model: str,
+    provider: str,
+    message: str,
+    session_id: Optional[str] = None,
+    system_message: Optional[str] = None,
+    temperature: float = 0.7,
+) -> ChatResponse:
+    """
+    Call a language model and return the response, supporting conversational context.
+
+    Args:
+        model: The model name (e.g., "gemini-2.0-flash", "gpt-4")
+        provider: The model provider (e.g., "google_genai", "openai")
+        message: The user message to send
+        session_id: Optional session ID for continuing a conversation
+        system_message: Optional system message to set context
+        temperature: Model temperature for response generation
+
+    Returns:
+        ChatResponse with the model's response and session information
+
+    Raises:
+        LLMNotAvailableError: If LangChain is not available
+        SessionError: If there's an error with session management
+        LLMError: For other LLM-related errors
+    """
+    if not LANGCHAIN_AVAILABLE:
+        raise LLMNotAvailableError("LangChain is not available. Please install langchain dependencies.")
+
+    # Create new session or get existing one
+    if session_id is None or session_id not in chat_sessions:
+        session_id = str(uuid.uuid4())
+        chat_sessions[session_id] = ChatSession(session_id, model, provider, temperature)
+
+    session = chat_sessions[session_id]
+
+    # Validate that model and provider match for existing sessions
+    if session.model != model or session.provider != provider:
+        raise SessionError(
+            f"Session {session_id} is configured for {session.provider}:{session.model}, "
+            f"but request is for {provider}:{model}"
+        )
+
+    try:
+        # Initialize LLM if needed
+        session.initialize_llm()
+
+        # Add system message if provided
+        if system_message:
+            session.add_system_message(system_message)
+
+        # Add user message to conversation
+        session.add_message(message, is_human=True)
+
+        # Get response from model
+        response = session.llm.invoke(session.messages)
+        response_content = response.content
+
+        # Add AI response to conversation
+        session.add_message(response_content, is_human=False)
+
+        return ChatResponse(
+            session_id=session_id,
+            message=response_content,
+            model=model,
+            provider=provider,
+            timestamp=datetime.now().isoformat(),
+        )
+
+    except Exception as e:
+        raise LLMError(f"Error calling model {provider}:{model}: {e!s}")
+
+
+def get_session(session_id: str) -> Optional[ChatSession]:
+    """Get a chat session by ID."""
+    return chat_sessions.get(session_id)
+
+
+def list_sessions() -> List[Dict]:
+    """List all active chat sessions."""
+    return [
+        {
+            "session_id": session.session_id,
+            "model": session.model,
+            "provider": session.provider,
+            "created_at": session.created_at.isoformat(),
+            "last_used": session.last_used.isoformat(),
+            "message_count": len([msg for msg in session.messages if not isinstance(msg, SystemMessage)]),
+        }
+        for session in chat_sessions.values()
+    ]
+
+
+def delete_session(session_id: str) -> bool:
+    """Delete a chat session."""
+    if session_id in chat_sessions:
+        del chat_sessions[session_id]
+        return True
+    return False
+
+
+def clear_all_sessions():
+    """Clear all chat sessions."""
+    global chat_sessions
+    chat_sessions = {}

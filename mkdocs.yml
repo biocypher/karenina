@@ -1,0 +1,92 @@
+site_name: Karenina Documentation
+site_description: Technical documentation for the Karenina LLM benchmarking library
+site_url: https://example.com
+repo_url: https://github.com/example/karenina
+repo_name: karenina
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.top
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.select
+  palette:
+    - scheme: default
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            show_source: false
+            show_root_heading: true
+            show_root_full_path: false
+            show_signature_annotations: true
+            separate_signature: true
+            filters: ["!^_"]
+            members_order: source
+            docstring_section_style: table
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Architecture: architecture.md
+  - API Reference:
+    - LLM Interface: api/llm.md
+    - Questions: api/questions.md
+    - Answers: api/answers.md
+    - Benchmark: api/benchmark.md
+    - Schemas: api/schemas.md
+    - Utils: api/utils.md
+  - Guides:
+    - Question Extraction: guides/question-extraction.md
+    - Answer Generation: guides/answer-generation.md
+    - Benchmark Execution: guides/benchmark-execution.md
+    - LLM Providers: guides/llm-providers.md
+  - Examples:
+    - Basic Usage: examples/basic-usage.md
+    - Custom Workflows: examples/custom-workflows.md
+    - Integration: examples/integration.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/example/karenina

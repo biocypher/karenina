@@ -1,0 +1,78 @@
+"""Template validation logic for verification system."""
+
+import inspect
+from typing import Optional, Tuple
+
+from ...schemas.answer_class import BaseAnswer
+
+
+def validate_answer_template(template_code: str) -> Tuple[bool, Optional[str], Optional[type]]:
+    """
+    Validate that template code defines a proper Answer class.
+
+    Returns:
+        (is_valid, error_message, Answer_class)
+    """
+    try:
+        # Execute the template code to get the Answer class
+        # Create a namespace with necessary imports
+        global_ns = {
+            "__builtins__": __builtins__,
+            "BaseAnswer": BaseAnswer,
+        }
+
+        # Import commonly used pydantic and typing components
+        try:
+            from pydantic import Field
+
+            global_ns["Field"] = Field
+        except ImportError:
+            pass
+
+        try:
+            from typing import Any, Dict, List, Literal, Optional, Union
+
+            global_ns.update({
+                "List": List,
+                "Dict": Dict,
+                "Optional": Optional,
+                "Union": Union,
+                "Any": Any,
+                "Literal": Literal,
+            })
+        except ImportError:
+            pass
+
+        local_ns = {}
+
+        # Execute the template code
+        exec(template_code, global_ns, local_ns)
+
+        # Check if Answer class was defined
+        if "Answer" not in local_ns:
+            return False, "No 'Answer' class found", None
+
+        Answer = local_ns["Answer"]
+
+        # Check if it's a class
+        if not inspect.isclass(Answer):
+            return False, "Answer is not a class", None
+
+        # Check if it inherits from BaseAnswer
+        if not issubclass(Answer, BaseAnswer):
+            return False, "Answer class must inherit from BaseAnswer", None
+
+        # Check if it has a verify method
+        if not hasattr(Answer, "verify"):
+            return False, "does not have a 'verify' method", None
+
+        # Check if verify method is callable
+        if not callable(getattr(Answer, "verify")):
+            return False, "verify must be a callable method", None
+
+        return True, None, Answer
+
+    except SyntaxError as e:
+        return False, f"Error executing template code: {e}", None
+    except Exception as e:
+        return False, f"Error executing template code: {e}", None
