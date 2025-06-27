@@ -1,6 +1,5 @@
 """Orchestration logic for multi-model verification."""
 
-from typing import Dict
 
 from ..models import ModelConfiguration, VerificationConfig, VerificationResult
 from .runner import run_single_model_verification
@@ -8,7 +7,7 @@ from .runner import run_single_model_verification
 
 def run_question_verification(
     question_id: str, question_text: str, template_code: str, config: VerificationConfig
-) -> Dict[str, VerificationResult]:
+) -> dict[str, VerificationResult]:
     """
     Run verification for a single question with all model combinations.
 

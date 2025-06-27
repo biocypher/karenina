@@ -139,9 +139,7 @@ def test_run_benchmark_llm_init_parameters():
         run_benchmark(question_dict, response_dict, answer_templates)
 
         # Verify LLM was initialized with expected parameters
-        mock_init.assert_called_once_with(
-            model="gemini-2.5-flash-preview-05-20", model_provider="google_genai"
-        )
+        mock_init.assert_called_once_with(model="gemini-2.5-flash-preview-05-20", model_provider="google_genai")
 
 
 def test_run_benchmark_message_format():

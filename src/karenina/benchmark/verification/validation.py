@@ -1,12 +1,11 @@
 """Template validation logic for verification system."""
 
 import inspect
-from typing import Optional, Tuple
 
 from ...schemas.answer_class import BaseAnswer
 
 
-def validate_answer_template(template_code: str) -> Tuple[bool, Optional[str], Optional[type]]:
+def validate_answer_template(template_code: str) -> tuple[bool, str | None, type | None]:
     """
     Validate that template code defines a proper Answer class.
 
@@ -32,14 +31,16 @@ def validate_answer_template(template_code: str) -> Tuple[bool, Optional[str], O
         try:
             from typing import Any, Dict, List, Literal, Optional, Union
 
-            global_ns.update({
-                "List": List,
-                "Dict": Dict,
-                "Optional": Optional,
-                "Union": Union,
-                "Any": Any,
-                "Literal": Literal,
-            })
+            global_ns.update(
+                {
+                    "List": list,
+                    "Dict": dict,
+                    "Optional": Optional,
+                    "Union": Union,
+                    "Any": Any,
+                    "Literal": Literal,
+                }
+            )
         except ImportError:
             pass
 
@@ -67,7 +68,7 @@ def validate_answer_template(template_code: str) -> Tuple[bool, Optional[str], O
             return False, "does not have a 'verify' method", None
 
         # Check if verify method is callable
-        if not callable(getattr(Answer, "verify")):
+        if not callable(Answer.verify):
             return False, "verify must be a callable method", None
 
         return True, None, Answer

@@ -1,7 +1,6 @@
 """Single model verification runner."""
 
 import time
-from typing import Optional
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -16,10 +15,10 @@ def run_single_model_verification(
     template_code: str,
     answering_model: ModelConfiguration,
     parsing_model: ModelConfiguration,
-    run_name: Optional[str] = None,
-    job_id: Optional[str] = None,
-    answering_replicate: Optional[int] = None,
-    parsing_replicate: Optional[int] = None,
+    run_name: str | None = None,
+    job_id: str | None = None,
+    answering_replicate: int | None = None,
+    parsing_replicate: int | None = None,
 ) -> VerificationResult:
     """
     Run verification for a single question with specific answering and parsing models.
@@ -187,7 +186,9 @@ Follow the schema exactly as defined."""
                 raw_llm_response=raw_llm_response,
                 answering_model=answering_model_str,
                 parsing_model=parsing_model_str,
-                parsed_response=parsed_answer.model_dump() if hasattr(parsed_answer, "model_dump") else str(parsed_answer),
+                parsed_response=parsed_answer.model_dump()
+                if hasattr(parsed_answer, "model_dump")
+                else str(parsed_answer),
                 execution_time=time.time() - start_time,
                 timestamp=timestamp,
                 answering_system_prompt=answering_model.system_prompt,
