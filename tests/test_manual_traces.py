@@ -78,14 +78,14 @@ class TestManualTraceManager:
         """Test loading empty trace data."""
         manager = ManualTraceManager()
 
-        with pytest.raises(ManualTraceError, match="Trace data cannot be empty"):
+        with pytest.raises(ManualTraceError, match="Empty trace data"):
             manager.load_traces_from_json({})
 
     def test_load_non_dict_data(self):
         """Test loading non-dictionary data."""
         manager = ManualTraceManager()
 
-        with pytest.raises(ManualTraceError, match="Trace data must be a JSON object"):
+        with pytest.raises(ManualTraceError, match="Invalid trace data format"):
             manager.load_traces_from_json(["not", "a", "dict"])
 
     def test_clear_traces(self):

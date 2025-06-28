@@ -54,8 +54,16 @@ class ManualLLM:
         trace = get_manual_trace(self.question_hash)
 
         if trace is None:
+            from .manual_traces import get_manual_trace_count
+            trace_count = get_manual_trace_count()
+            
             raise ManualTraceNotFoundError(
-                f"No manual trace found for question hash: {self.question_hash}"
+                f"No manual trace found for question hash: '{self.question_hash}'. "
+                f"Currently loaded {trace_count} trace(s). "
+                "To resolve this issue: "
+                "1) Upload a JSON file containing manual traces using the GUI upload feature, or "
+                "2) Use load_manual_traces() to load traces programmatically, or "
+                "3) Verify that the question hash matches one of your uploaded traces."
             )
 
         return AIMessage(content=trace)
@@ -86,8 +94,16 @@ class ManualLLM:
         trace = get_manual_trace(self.question_hash)
 
         if trace is None:
+            from .manual_traces import get_manual_trace_count
+            trace_count = get_manual_trace_count()
+            
             raise ManualTraceNotFoundError(
-                f"No manual trace found for question hash: {self.question_hash}"
+                f"No manual trace found for question hash: '{self.question_hash}'. "
+                f"Currently loaded {trace_count} trace(s). "
+                "To resolve this issue: "
+                "1) Upload a JSON file containing manual traces using the GUI upload feature, or "
+                "2) Use load_manual_traces() to load traces programmatically, or "
+                "3) Verify that the question hash matches one of your uploaded traces."
             )
 
         return trace

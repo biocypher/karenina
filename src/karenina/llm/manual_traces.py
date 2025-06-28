@@ -187,10 +187,19 @@ class ManualTraceManager:
             ManualTraceError: If validation fails
         """
         if not isinstance(json_data, dict):
-            raise ManualTraceError("Trace data must be a JSON object")
+            raise ManualTraceError(
+                "Invalid trace data format: Expected a JSON object with question hash keys. "
+                f"Received {type(json_data).__name__}. "
+                "Please ensure your file contains a JSON object like: "
+                '{"hash1": "trace1", "hash2": "trace2"}'
+            )
 
         if not json_data:
-            raise ManualTraceError("Trace data cannot be empty")
+            raise ManualTraceError(
+                "Empty trace data: No traces found in the uploaded file. "
+                "Please ensure your JSON file contains question hash to trace mappings like: "
+                '{"d41d8cd98f00b204e9800998ecf8427e": "Your answer trace here"}'
+            )
 
         # Validate each entry
         for key, value in json_data.items():
@@ -198,14 +207,19 @@ class ManualTraceManager:
             if not self._is_valid_md5_hash(key):
                 raise ManualTraceError(
                     f"Invalid question hash format: '{key}'. "
-                    "Must be a 32-character hexadecimal MD5 hash."
+                    "Question hashes must be 32-character hexadecimal MD5 hashes. "
+                    "These are typically generated during question extraction. "
+                    "Example of valid hash: 'd41d8cd98f00b204e9800998ecf8427e'. "
+                    "Use the 'Download CSV mapper' feature to see valid hashes for your questions."
                 )
 
             # Validate trace content
             if not isinstance(value, str) or not value.strip():
                 raise ManualTraceError(
                     f"Invalid trace content for question hash '{key}'. "
-                    "Trace must be a non-empty string."
+                    f"Expected a non-empty string, but got {type(value).__name__}. "
+                    "Trace content should be the precomputed answer text from your LLM. "
+                    "Example: 'This is the answer to the question.'"
                 )
 
     def _is_valid_md5_hash(self, hash_string: str) -> bool:
