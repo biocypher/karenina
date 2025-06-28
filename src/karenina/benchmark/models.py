@@ -12,7 +12,7 @@ class ModelConfiguration(BaseModel):
     model_provider: str
     model_name: str
     temperature: float = 0.1
-    interface: Literal["langchain", "openrouter"] = "langchain"
+    interface: Literal["langchain", "openrouter", "manual"] = "langchain"
     system_prompt: str
 
 
