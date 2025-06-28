@@ -1,6 +1,8 @@
 """Manual trace management for precomputed answer traces."""
 
 import re
+import time
+import threading
 from typing import Any
 
 
@@ -15,12 +17,24 @@ class ManualTraceError(LLMError):
 
 
 class ManualTraceManager:
-    """Manages precomputed answer traces for manual verification."""
+    """Manages precomputed answer traces for manual verification with memory management."""
 
-    def __init__(self):
-        """Initialize the trace manager."""
+    def __init__(self, session_timeout_seconds: int = 3600):
+        """
+        Initialize the trace manager.
+        
+        Args:
+            session_timeout_seconds: Timeout for trace session in seconds (default: 1 hour)
+        """
         # Session-based storage for manual traces
         self._traces: dict[str, str] = {}
+        self._trace_timestamps: dict[str, float] = {}
+        self._session_timeout = session_timeout_seconds
+        self._cleanup_timer: threading.Timer | None = None
+        self._last_access = time.time()
+        
+        # Start automatic cleanup
+        self._start_cleanup_timer()
 
     def load_traces_from_json(self, json_data: dict[str, Any]) -> None:
         """
@@ -34,9 +48,14 @@ class ManualTraceManager:
         """
         self._validate_trace_data(json_data)
 
-        # Store traces after validation
+        # Store traces after validation with timestamps
+        current_time = time.time()
         for question_hash, trace in json_data.items():
             self._traces[question_hash] = str(trace)
+            self._trace_timestamps[question_hash] = current_time
+        
+        self._last_access = current_time
+        self._restart_cleanup_timer()
 
     def get_trace(self, question_hash: str) -> str | None:
         """
@@ -48,6 +67,7 @@ class ManualTraceManager:
         Returns:
             The precomputed trace or None if not found
         """
+        self._last_access = time.time()
         return self._traces.get(question_hash)
 
     def has_trace(self, question_hash: str) -> bool:
@@ -60,6 +80,7 @@ class ManualTraceManager:
         Returns:
             True if trace exists, False otherwise
         """
+        self._last_access = time.time()
         return question_hash in self._traces
 
     def get_all_traces(self) -> dict[str, str]:
@@ -72,12 +93,72 @@ class ManualTraceManager:
         return self._traces.copy()
 
     def clear_traces(self) -> None:
-        """Clear all loaded traces."""
+        """Clear all loaded traces and stop cleanup timer."""
         self._traces.clear()
+        self._trace_timestamps.clear()
+        if self._cleanup_timer:
+            self._cleanup_timer.cancel()
+            self._cleanup_timer = None
 
     def get_trace_count(self) -> int:
         """Get the number of loaded traces."""
         return len(self._traces)
+    
+    def get_memory_usage_info(self) -> dict[str, Any]:
+        """
+        Get information about current memory usage.
+        
+        Returns:
+            Dictionary with memory usage statistics
+        """
+        total_traces = len(self._traces)
+        total_chars = sum(len(trace) for trace in self._traces.values())
+        estimated_bytes = total_chars * 4  # Rough estimate for UTF-8
+        
+        return {
+            "trace_count": total_traces,
+            "total_characters": total_chars,
+            "estimated_memory_bytes": estimated_bytes,
+            "session_timeout_seconds": self._session_timeout,
+            "last_access_timestamp": self._last_access,
+            "seconds_since_last_access": time.time() - self._last_access,
+        }
+    
+    def _start_cleanup_timer(self) -> None:
+        """Start the automatic cleanup timer."""
+        if self._cleanup_timer:
+            self._cleanup_timer.cancel()
+        
+        self._cleanup_timer = threading.Timer(self._session_timeout, self._cleanup_expired_traces)
+        self._cleanup_timer.daemon = True
+        self._cleanup_timer.start()
+    
+    def _restart_cleanup_timer(self) -> None:
+        """Restart the cleanup timer after activity."""
+        self._start_cleanup_timer()
+    
+    def _cleanup_expired_traces(self) -> None:
+        """Clean up expired traces based on session timeout."""
+        current_time = time.time()
+        
+        # Check if the entire session has expired
+        if current_time - self._last_access >= self._session_timeout:
+            self.clear_traces()
+            return
+        
+        # Clean up individual expired traces
+        expired_hashes = [
+            hash_key for hash_key, timestamp in self._trace_timestamps.items()
+            if current_time - timestamp >= self._session_timeout
+        ]
+        
+        for hash_key in expired_hashes:
+            self._traces.pop(hash_key, None)
+            self._trace_timestamps.pop(hash_key, None)
+        
+        # Restart timer if we still have traces
+        if self._traces:
+            self._start_cleanup_timer()
 
     def _validate_trace_data(self, json_data: dict[str, Any]) -> None:
         """
@@ -185,3 +266,8 @@ def clear_manual_traces() -> None:
 def get_manual_trace_count() -> int:
     """Get the number of loaded manual traces."""
     return _trace_manager.get_trace_count()
+
+
+def get_memory_usage_info() -> dict[str, Any]:
+    """Get memory usage information for manual traces."""
+    return _trace_manager.get_memory_usage_info()
