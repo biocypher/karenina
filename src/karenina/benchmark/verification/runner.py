@@ -1,5 +1,6 @@
 """Single model verification runner."""
 
+import re
 import time
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -8,6 +9,24 @@ from ...answers.generator import inject_question_id_into_answer_class
 from ...llm.interface import init_chat_model_unified
 from ..models import ModelConfiguration, VerificationResult
 from .validation import validate_answer_template
+
+
+def _is_valid_md5_hash(hash_string: str) -> bool:
+    """
+    Validate that a string is a proper MD5 hash format.
+    
+    Args:
+        hash_string: String to validate
+        
+    Returns:
+        True if valid MD5 hash format, False otherwise
+    """
+    if not isinstance(hash_string, str):
+        return False
+    
+    # MD5 hash is exactly 32 hexadecimal characters
+    md5_pattern = re.compile(r'^[a-fA-F0-9]{32}$')
+    return bool(md5_pattern.match(hash_string))
 
 
 def run_single_model_verification(
@@ -25,7 +44,8 @@ def run_single_model_verification(
     Run verification for a single question with specific answering and parsing models.
 
     Args:
-        question_id: Unique identifier for the question
+        question_id: Unique identifier for the question. For manual interface, this MUST be 
+                    a 32-character hexadecimal MD5 hash (generated during question extraction).
         question_text: The question to ask the LLM
         template_code: Python code defining the Answer class
         answering_model: Configuration for the answering model
@@ -37,6 +57,9 @@ def run_single_model_verification(
 
     Returns:
         VerificationResult with all details
+    
+    Raises:
+        ValueError: If question_id is not a valid MD5 hash when using manual interface
     """
     from datetime import datetime
 
@@ -81,7 +104,16 @@ def run_single_model_verification(
 
         # Step 2: Initialize answering model
         # For manual interface, pass the question_id as question_hash
+        # Note: question_id should be an MD5 hash from the question extraction process
         if answering_model.interface == "manual":
+            # Validate that question_id is indeed an MD5 hash for manual interface
+            if not _is_valid_md5_hash(question_id):
+                raise ValueError(
+                    f"Invalid question_id format for manual interface: '{question_id}'. "
+                    "question_id must be a 32-character hexadecimal MD5 hash when using manual interface. "
+                    "This hash is typically generated during question extraction from the question text."
+                )
+            
             answering_llm = init_chat_model_unified(
                 model=answering_model.model_name,
                 provider=answering_model.model_provider,
