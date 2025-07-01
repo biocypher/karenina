@@ -3,7 +3,7 @@
 from unittest.mock import Mock, patch
 
 from karenina.benchmark.models import VerificationConfig
-from karenina.benchmark.verification.runner import _strip_markdown_fences
+from karenina.benchmark.verification.runner import _strip_markdown_fences, _system_prompt_compose
 from karenina.benchmark.verifier import run_question_verification, validate_answer_template
 
 
@@ -354,3 +354,45 @@ def test_strip_markdown_fences():
     # Test with non-string input
     assert _strip_markdown_fences(None) is None
     assert _strip_markdown_fences(123) == 123
+
+
+def test_system_prompt_compose():
+    """Test system prompt composition functionality."""
+    # Test with both system prompt and format instructions
+    system_prompt = "You are a helpful assistant."
+    format_instructions = "Please format your response as JSON."
+    result = _system_prompt_compose(system_prompt, format_instructions)
+
+    expected = """<general_instructions>
+You are a helpful assistant.
+</general_instructions>
+
+<format_instructions>
+Please format your response as JSON.
+</format_instructions>
+"""
+    assert result == expected
+
+    # Test with None system prompt
+    result = _system_prompt_compose(None, format_instructions)
+    expected = """<general_instructions>
+
+</general_instructions>
+
+<format_instructions>
+Please format your response as JSON.
+</format_instructions>
+"""
+    assert result == expected
+
+    # Test with empty system prompt
+    result = _system_prompt_compose("", format_instructions)
+    expected = """<general_instructions>
+
+</general_instructions>
+
+<format_instructions>
+Please format your response as JSON.
+</format_instructions>
+"""
+    assert result == expected
