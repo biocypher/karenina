@@ -15,7 +15,7 @@ def get_karenina_version() -> str:
         import karenina
 
         return getattr(karenina, "__version__", "unknown")
-    except:
+    except ImportError:
         return "unknown"
 
 
@@ -132,7 +132,7 @@ def export_verification_results_csv(job: VerificationJob, results: dict[str, Ver
     karenina_version = get_karenina_version()
 
     # Write data rows
-    for question_id, result in results.items():
+    for _question_id, result in results.items():
         row = {
             "question_id": result.question_id,
             "success": result.success,
@@ -175,7 +175,7 @@ def _serialize_verification_result(result: Any) -> str:
 
     try:
         # Try to serialize as JSON if it's a complex object
-        if isinstance(result, (dict, list)):
+        if isinstance(result, dict | list):
             return json.dumps(result)
         elif hasattr(result, "model_dump"):
             # Pydantic model

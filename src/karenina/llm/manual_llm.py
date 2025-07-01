@@ -56,7 +56,7 @@ class ManualLLM:
         if trace is None:
             from .manual_traces import get_manual_trace_count
             trace_count = get_manual_trace_count()
-            
+
             raise ManualTraceNotFoundError(
                 f"No manual trace found for question hash: '{self.question_hash}'. "
                 f"Currently loaded {trace_count} trace(s). "
@@ -96,7 +96,7 @@ class ManualLLM:
         if trace is None:
             from .manual_traces import get_manual_trace_count
             trace_count = get_manual_trace_count()
-            
+
             raise ManualTraceNotFoundError(
                 f"No manual trace found for question hash: '{self.question_hash}'. "
                 f"Currently loaded {trace_count} trace(s). "

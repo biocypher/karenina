@@ -23,7 +23,7 @@ def _is_valid_md5_hash(hash_string: str) -> bool:
     """
     if not isinstance(hash_string, str):
         return False
-    
+
     # MD5 hash is exactly 32 hexadecimal characters
     md5_pattern = re.compile(r'^[a-fA-F0-9]{32}$')
     return bool(md5_pattern.match(hash_string))
@@ -113,7 +113,7 @@ def run_single_model_verification(
                     "question_id must be a 32-character hexadecimal MD5 hash when using manual interface. "
                     "This hash is typically generated during question extraction from the question text."
                 )
-            
+
             answering_llm = init_chat_model_unified(
                 model=answering_model.model_name,
                 provider=answering_model.model_provider,
