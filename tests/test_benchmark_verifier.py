@@ -3,6 +3,7 @@
 from unittest.mock import Mock, patch
 
 from karenina.benchmark.models import VerificationConfig
+from karenina.benchmark.verification.runner import _strip_markdown_fences
 from karenina.benchmark.verifier import run_question_verification, validate_answer_template
 
 
@@ -15,7 +16,7 @@ from pydantic import Field
 class Answer(BaseAnswer):
     """Answer for a simple question."""
     response: str = Field(description="The answer response")
-    
+
     def verify(self):
         return len(self.response) > 0
 '''
@@ -39,7 +40,7 @@ class Answer(BaseAnswer):
     """Answer with Literal type."""
     status: Literal["success", "failure"] = Field(description="The status")
     response: str = Field(description="The response")
-    
+
     def verify(self):
         return self.status in ["success", "failure"] and len(self.response) > 0
 '''
@@ -137,16 +138,14 @@ def test_run_question_verification_success(mock_init_model):
     # Mock the LLM responses
     mock_answering_llm = Mock()
     mock_parsing_llm = Mock()
-    mock_structured_llm = Mock()
 
     mock_answering_llm.invoke.return_value.content = "The answer is 4"
-    mock_parsing_llm.with_structured_output.return_value = mock_structured_llm
+    mock_parsing_llm.invoke.return_value.content = '{"response": "4"}'
 
     # Create a mock answer instance
     mock_answer = Mock()
     mock_answer.model_dump.return_value = {"response": "4"}
     mock_answer.verify.return_value = True
-    mock_structured_llm.invoke.return_value = mock_answer
 
     # Setup the init_chat_model_unified mock to return different models
     def mock_init_side_effect(*args, **kwargs):
@@ -158,40 +157,200 @@ def test_run_question_verification_success(mock_init_model):
         lambda **kwargs: mock_answering_llm if mock_init_model.call_count <= 1 else mock_parsing_llm
     )
 
-    config = VerificationConfig(
-        answering_model_provider="google_genai",
-        answering_model_name="gemini-2.0-flash",
-        answering_temperature=0.1,
-        answering_interface="langchain",
-        parsing_model_provider="google_genai",
-        parsing_model_name="gemini-2.0-flash",
-        parsing_temperature=0.1,
-        parsing_interface="langchain",
-    )
+    # Mock the PydanticOutputParser
+    with patch("karenina.benchmark.verification.runner.PydanticOutputParser") as mock_parser_class:
+        mock_parser = Mock()
+        mock_parser.get_format_instructions.return_value = "Format the response as JSON with the following structure..."
+        mock_parser.parse.return_value = mock_answer
+        mock_parser_class.return_value = mock_parser
 
-    valid_template = """
+        config = VerificationConfig(
+            answering_model_provider="google_genai",
+            answering_model_name="gemini-2.0-flash",
+            answering_temperature=0.1,
+            answering_interface="langchain",
+            parsing_model_provider="google_genai",
+            parsing_model_name="gemini-2.0-flash",
+            parsing_temperature=0.1,
+            parsing_interface="langchain",
+        )
+
+        valid_template = """
 from karenina.schemas.answer_class import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
     response: str = Field(description="The answer")
-    
+
     def verify(self):
         return True
 """
 
-    results = run_question_verification(
-        question_id="test_id", question_text="What is 2+2?", template_code=valid_template, config=config
+        results = run_question_verification(
+            question_id="test_id", question_text="What is 2+2?", template_code=valid_template, config=config
+        )
+
+        # Get the single result from the dictionary
+        assert len(results) == 1
+        result = list(results.values())[0]
+
+        assert result.success is True
+        assert result.error is None
+        assert result.question_id == "test_id"
+        assert result.question_text == "What is 2+2?"
+        assert result.raw_llm_response == "The answer is 4"
+        assert result.parsed_response == {"response": "4"}
+        assert result.verify_result is True
+
+
+@patch("karenina.llm.interface.init_chat_model")
+def test_run_question_verification_markdown_fenced_json(mock_init_model):
+    """Test successful parsing of markdown-fenced JSON response."""
+    # Mock the LLM responses with markdown fences
+    mock_answering_llm = Mock()
+    mock_parsing_llm = Mock()
+
+    mock_answering_llm.invoke.return_value.content = "The answer is 4"
+    mock_parsing_llm.invoke.return_value.content = '```json\n{"response": "4"}\n```'
+
+    # Create a mock answer instance
+    mock_answer = Mock()
+    mock_answer.model_dump.return_value = {"response": "4"}
+    mock_answer.verify.return_value = True
+
+    mock_init_model.side_effect = (
+        lambda **kwargs: mock_answering_llm if mock_init_model.call_count <= 1 else mock_parsing_llm
     )
 
-    # Get the single result from the dictionary
-    assert len(results) == 1
-    result = list(results.values())[0]
+    # Mock the PydanticOutputParser
+    with patch("karenina.benchmark.verification.runner.PydanticOutputParser") as mock_parser_class:
+        mock_parser = Mock()
+        mock_parser.get_format_instructions.return_value = "Format the response as JSON with the following structure..."
+        mock_parser.parse.return_value = mock_answer
+        mock_parser_class.return_value = mock_parser
 
-    assert result.success is True
-    assert result.error is None
-    assert result.question_id == "test_id"
-    assert result.question_text == "What is 2+2?"
-    assert result.raw_llm_response == "The answer is 4"
-    assert result.parsed_response == {"response": "4"}
-    assert result.verify_result is True
+        config = VerificationConfig(
+            answering_model_provider="google_genai",
+            answering_model_name="gemini-2.0-flash",
+            answering_temperature=0.1,
+            answering_interface="langchain",
+            parsing_model_provider="google_genai",
+            parsing_model_name="gemini-2.0-flash",
+            parsing_temperature=0.1,
+            parsing_interface="langchain",
+        )
+
+        valid_template = """
+from karenina.schemas.answer_class import BaseAnswer
+from pydantic import Field
+
+class Answer(BaseAnswer):
+    response: str = Field(description="The answer")
+
+    def verify(self):
+        return True
+"""
+
+        results = run_question_verification(
+            question_id="test_id", question_text="What is 2+2?", template_code=valid_template, config=config
+        )
+
+        # Get the single result from the dictionary
+        assert len(results) == 1
+        result = list(results.values())[0]
+
+        assert result.success is True
+        assert result.error is None
+        assert result.question_id == "test_id"
+        assert result.question_text == "What is 2+2?"
+        assert result.raw_llm_response == "The answer is 4"
+        assert result.parsed_response == {"response": "4"}
+        assert result.verify_result is True
+
+        # Verify that the parser was called with cleaned JSON (without markdown fences)
+        mock_parser.parse.assert_called_once_with('{"response": "4"}')
+
+
+@patch("karenina.llm.interface.init_chat_model")
+def test_run_question_verification_malformed_json(mock_init_model):
+    """Test handling of malformed JSON from LLM."""
+    # Mock the LLM responses with malformed JSON
+    mock_answering_llm = Mock()
+    mock_parsing_llm = Mock()
+
+    mock_answering_llm.invoke.return_value.content = "The answer is 4"
+    mock_parsing_llm.invoke.return_value.content = '{"response": "4"'  # Missing closing brace
+
+    mock_init_model.side_effect = (
+        lambda **kwargs: mock_answering_llm if mock_init_model.call_count <= 1 else mock_parsing_llm
+    )
+
+    # Mock the PydanticOutputParser to raise an exception
+    with patch("karenina.benchmark.verification.runner.PydanticOutputParser") as mock_parser_class:
+        mock_parser = Mock()
+        mock_parser.get_format_instructions.return_value = "Format the response as JSON with the following structure..."
+        mock_parser.parse.side_effect = Exception("Invalid JSON format")
+        mock_parser_class.return_value = mock_parser
+
+        config = VerificationConfig(
+            answering_model_provider="google_genai",
+            answering_model_name="gemini-2.0-flash",
+            answering_temperature=0.1,
+            answering_interface="langchain",
+            parsing_model_provider="google_genai",
+            parsing_model_name="gemini-2.0-flash",
+            parsing_temperature=0.1,
+            parsing_interface="langchain",
+        )
+
+        valid_template = """
+from karenina.schemas.answer_class import BaseAnswer
+from pydantic import Field
+
+class Answer(BaseAnswer):
+    response: str = Field(description="The answer")
+
+    def verify(self):
+        return True
+"""
+
+        results = run_question_verification(
+            question_id="test_id", question_text="What is 2+2?", template_code=valid_template, config=config
+        )
+
+        # Get the single result from the dictionary
+        assert len(results) == 1
+        result = list(results.values())[0]
+
+        assert result.success is False
+        assert "Parsing failed: Invalid JSON format" in result.error
+        assert result.question_id == "test_id"
+        assert result.question_text == "What is 2+2?"
+        assert result.raw_llm_response == "The answer is 4"
+
+
+def test_strip_markdown_fences():
+    """Test markdown fence stripping functionality."""
+    # Test with ```json fences
+    json_with_fences = '```json\n{"response": "test"}\n```'
+    assert _strip_markdown_fences(json_with_fences) == '{"response": "test"}'
+
+    # Test with regular ``` fences
+    json_with_regular_fences = '```\n{"response": "test"}\n```'
+    assert _strip_markdown_fences(json_with_regular_fences) == '{"response": "test"}'
+
+    # Test with only opening fence
+    json_with_opening_fence = '```json\n{"response": "test"}'
+    assert _strip_markdown_fences(json_with_opening_fence) == '{"response": "test"}'
+
+    # Test with only closing fence
+    json_with_closing_fence = '{"response": "test"}\n```'
+    assert _strip_markdown_fences(json_with_closing_fence) == '{"response": "test"}'
+
+    # Test with no fences
+    plain_json = '{"response": "test"}'
+    assert _strip_markdown_fences(plain_json) == '{"response": "test"}'
+
+    # Test with non-string input
+    assert _strip_markdown_fences(None) is None
+    assert _strip_markdown_fences(123) == 123
