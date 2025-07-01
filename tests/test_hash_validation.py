@@ -1,8 +1,9 @@
 """Test hash validation in verification runner."""
 
 import pytest
-from karenina.benchmark.verification.runner import run_single_model_verification, _is_valid_md5_hash
+
 from karenina.benchmark.models import ModelConfiguration
+from karenina.benchmark.verification.runner import _is_valid_md5_hash, run_single_model_verification
 
 
 def test_is_valid_md5_hash():
@@ -12,18 +13,18 @@ def test_is_valid_md5_hash():
     assert _is_valid_md5_hash("c4ca4238a0b923820dcc509a6f75849b") == True
     assert _is_valid_md5_hash("ABCDEF1234567890123456789012345") == False  # 31 chars
     assert _is_valid_md5_hash("ABCDEF123456789012345678901234567") == False  # 33 chars
-    
+
     # Valid format with different cases
     assert _is_valid_md5_hash("ABCDEF123456789012345678901234ab") == True  # Mixed case
     assert _is_valid_md5_hash("abcdef123456789012345678901234AB") == True  # Mixed case
-    
+
     # Invalid formats
     assert _is_valid_md5_hash("not-a-hash") == False
     assert _is_valid_md5_hash("") == False
     assert _is_valid_md5_hash("g41d8cd98f00b204e9800998ecf8427e") == False  # Invalid char 'g'
     assert _is_valid_md5_hash("d41d8cd98f00b204e9800998ecf8427z") == False  # Invalid char 'z'
     assert _is_valid_md5_hash("d41d8cd9-8f00-b204-e980-0998ecf8427e") == False  # Dashes
-    
+
     # Non-string inputs
     assert _is_valid_md5_hash(None) == False
     assert _is_valid_md5_hash(123) == False
@@ -32,18 +33,18 @@ def test_is_valid_md5_hash():
 
 def test_manual_interface_valid_hash():
     """Test that manual interface accepts valid MD5 hash as question_id."""
-    from karenina.llm.manual_traces import load_manual_traces, clear_manual_traces
-    
+    from karenina.llm.manual_traces import clear_manual_traces, load_manual_traces
+
     # Clear any existing traces
     clear_manual_traces()
-    
+
     # Load test traces
     question_hash = "d41d8cd98f00b204e9800998ecf8427e"
     test_traces = {
         question_hash: "Test manual trace response"
     }
     load_manual_traces(test_traces)
-    
+
     # Create manual model configuration
     manual_model = ModelConfiguration(
         id="test-manual-model",
@@ -53,7 +54,7 @@ def test_manual_interface_valid_hash():
         temperature=0.0,
         system_prompt="",
     )
-    
+
     # Create parsing model (can be any valid model)
     parsing_model = ModelConfiguration(
         id="test-parsing-model",
@@ -63,7 +64,7 @@ def test_manual_interface_valid_hash():
         temperature=0.0,
         system_prompt="",
     )
-    
+
     # Simple answer template
     template_code = '''
 from karenina.schemas.answer_class import BaseAnswer
@@ -75,7 +76,7 @@ class Answer(BaseAnswer):
     def verify(self):
         return len(self.result) > 0
 '''
-    
+
     # This should work without raising an exception
     try:
         result = run_single_model_verification(
@@ -87,7 +88,7 @@ class Answer(BaseAnswer):
         )
         # Verify that the result includes our manual trace
         assert result.raw_answer == "Test manual trace response"
-        assert result.success == True
+        assert result.success
     except Exception as e:
         # If it fails for other reasons (like missing dependencies), that's okay
         # We're just testing that the hash validation doesn't raise ValueError
@@ -104,22 +105,22 @@ def test_manual_interface_invalid_hash():
     manual_model = ModelConfiguration(
         id="test-manual-model",
         interface="manual",
-        model_name="manual", 
+        model_name="manual",
         model_provider="manual",
         temperature=0.0,
         system_prompt="",
     )
-    
+
     # Create parsing model
     parsing_model = ModelConfiguration(
         id="test-parsing-model",
         interface="langchain",
         model_name="gpt-3.5-turbo",
-        model_provider="openai", 
+        model_provider="openai",
         temperature=0.0,
         system_prompt="",
     )
-    
+
     # Simple answer template
     template_code = '''
 from karenina.schemas.answer_class import BaseAnswer
@@ -131,7 +132,7 @@ class Answer(BaseAnswer):
     def verify(self):
         return len(self.result) > 0
 '''
-    
+
     # Test various invalid question_id formats
     invalid_hashes = [
         "not-a-hash",
@@ -143,7 +144,7 @@ class Answer(BaseAnswer):
         "",  # Empty string
         "12345",  # Too short
     ]
-    
+
     for invalid_hash in invalid_hashes:
         result = run_single_model_verification(
             question_id=invalid_hash,
@@ -153,7 +154,7 @@ class Answer(BaseAnswer):
             parsing_model=parsing_model,
         )
         # Check that verification failed due to hash validation
-        assert result.success == False
+        assert not result.success
         assert result.error is not None
         assert "Invalid question_id format for manual interface" in result.error
 
@@ -169,7 +170,7 @@ def test_non_manual_interface_ignores_hash_validation():
         temperature=0.0,
         system_prompt="",
     )
-    
+
     # Simple answer template
     template_code = '''
 from karenina.schemas.answer_class import BaseAnswer
@@ -181,14 +182,14 @@ class Answer(BaseAnswer):
     def verify(self):
         return len(self.result) > 0
 '''
-    
+
     # Use invalid hash format - should not raise ValueError for non-manual interface
     invalid_hash = "not-a-hash-at-all"
-    
+
     try:
         result = run_single_model_verification(
             question_id=invalid_hash,  # Invalid hash format
-            question_text="Test question", 
+            question_text="Test question",
             template_code=template_code,
             answering_model=langchain_model,
             parsing_model=langchain_model,
@@ -208,11 +209,11 @@ def test_hash_validation_error_message():
         id="test-manual-model",
         interface="manual",
         model_name="manual",
-        model_provider="manual", 
+        model_provider="manual",
         temperature=0.0,
         system_prompt="",
     )
-    
+
     parsing_model = ModelConfiguration(
         id="test-parsing-model",
         interface="langchain",
@@ -221,7 +222,7 @@ def test_hash_validation_error_message():
         temperature=0.0,
         system_prompt="",
     )
-    
+
     template_code = '''
 from karenina.schemas.answer_class import BaseAnswer
 from pydantic import Field
@@ -232,17 +233,17 @@ class Answer(BaseAnswer):
     def verify(self):
         return len(self.result) > 0
 '''
-    
+
     result = run_single_model_verification(
         question_id="invalid-hash",
         question_text="Test question",
-        template_code=template_code, 
+        template_code=template_code,
         answering_model=manual_model,
         parsing_model=parsing_model,
     )
-    
+
     # Check that verification failed due to hash validation
-    assert result.success == False
+    assert not result.success
     assert result.error is not None
     error_message = result.error
     assert "Invalid question_id format for manual interface" in error_message
