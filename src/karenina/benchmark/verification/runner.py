@@ -2,8 +2,10 @@
 
 import re
 import time
+from typing import Any
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.output_parsers import PydanticOutputParser
 
 from ...answers.generator import inject_question_id_into_answer_class
 from ...llm.interface import init_chat_model_unified
@@ -14,10 +16,10 @@ from .validation import validate_answer_template
 def _is_valid_md5_hash(hash_string: str) -> bool:
     """
     Validate that a string is a proper MD5 hash format.
-    
+
     Args:
         hash_string: String to validate
-        
+
     Returns:
         True if valid MD5 hash format, False otherwise
     """
@@ -28,6 +30,52 @@ def _is_valid_md5_hash(hash_string: str) -> bool:
     md5_pattern = re.compile(r'^[a-fA-F0-9]{32}$')
     return bool(md5_pattern.match(hash_string))
 
+
+def _strip_markdown_fences(text: str) -> str:
+    """
+    Remove markdown JSON code fences from LLM response text.
+
+    Args:
+        text: Raw text response from LLM that may contain markdown fences
+
+    Returns:
+        Cleaned text with markdown fences removed
+    """
+    if not isinstance(text, str):
+        return text
+
+    # Strip leading and trailing markdown JSON fences
+    cleaned = text.strip()
+    if cleaned.startswith('```json'):
+        cleaned = cleaned[7:]  # Remove ```json
+    elif cleaned.startswith('```'):
+        cleaned = cleaned[3:]  # Remove ```
+
+    if cleaned.endswith('```'):
+        cleaned = cleaned[:-3]  # Remove trailing ```
+
+    return cleaned.strip()
+
+def _system_prompt_compose(system_prompt: str | None, format_instructions: str) -> str:
+    """
+    Compose a system prompt with format instructions.
+
+    Args:
+        system_prompt: The system prompt to compose
+        format_instructions: The format instructions to compose
+
+    Returns:
+        The composed system prompt
+    """
+    prompt = f"""<general_instructions>
+{system_prompt if system_prompt else ""}
+</general_instructions>
+
+<format_instructions>
+{format_instructions}
+</format_instructions>
+"""
+    return prompt
 
 def run_single_model_verification(
     question_id: str,
@@ -44,7 +92,7 @@ def run_single_model_verification(
     Run verification for a single question with specific answering and parsing models.
 
     Args:
-        question_id: Unique identifier for the question. For manual interface, this MUST be 
+        question_id: Unique identifier for the question. For manual interface, this MUST be
                     a 32-character hexadecimal MD5 hash (generated during question extraction).
         question_text: The question to ask the LLM
         template_code: Python code defining the Answer class
@@ -57,7 +105,7 @@ def run_single_model_verification(
 
     Returns:
         VerificationResult with all details
-    
+
     Raises:
         ValueError: If question_id is not a valid MD5 hash when using manual interface
     """
@@ -80,7 +128,7 @@ def run_single_model_verification(
     try:
         # Step 1: Validate the template
         is_valid, error_msg, RawAnswer = validate_answer_template(template_code)
-        if not is_valid:
+        if not is_valid or RawAnswer is None:
             return VerificationResult(
                 question_id=question_id,
                 success=False,
@@ -130,7 +178,7 @@ def run_single_model_verification(
             )
 
         # Step 3: Get LLM response
-        messages = []
+        messages: list[BaseMessage] = []
         if answering_model.system_prompt:
             messages.append(SystemMessage(content=answering_model.system_prompt))
         messages.append(HumanMessage(content=question_text))
@@ -165,14 +213,14 @@ def run_single_model_verification(
             interface=parsing_model.interface,
         )
 
-        # Create structured output parser
+        # Create PydanticOutputParser
         try:
-            structured_llm = parsing_llm.with_structured_output(Answer)
+            parser: Any = PydanticOutputParser(pydantic_object=Answer)
         except Exception as e:
             return VerificationResult(
                 question_id=question_id,
                 success=False,
-                error=f"Failed to create structured output parser: {e}",
+                error=f"Failed to create PydanticOutputParser: {e}",
                 question_text=question_text,
                 raw_llm_response=raw_llm_response,
                 answering_model=answering_model_str,
@@ -187,20 +235,27 @@ def run_single_model_verification(
                 parsing_replicate=parsing_replicate,
             )
 
-        # Create parsing prompt
-        parsing_prompt = f"""Parse the following response into the specified format.
+        # Create parsing prompt with format instructions
+        format_instructions = parser.get_format_instructions()
+        combined_system_prompt = _system_prompt_compose(parsing_model.system_prompt, format_instructions)
+        parsing_prompt = f"""<response_to_parse>
+{raw_llm_response}
+</response_to_parse>
+"""
 
-Response to parse: {raw_llm_response}
-
-Follow the schema exactly as defined."""
-
-        parsing_messages = []
-        if parsing_model.system_prompt:
-            parsing_messages.append(SystemMessage(content=parsing_model.system_prompt))
+        parsing_messages: list[BaseMessage] = []
+        if combined_system_prompt:
+            parsing_messages.append(SystemMessage(content=combined_system_prompt))
         parsing_messages.append(HumanMessage(content=parsing_prompt))
 
         try:
-            parsed_answer = structured_llm.invoke(parsing_messages)
+            # Get raw text response from parsing LLM
+            parsing_response = parsing_llm.invoke(parsing_messages)
+            raw_parsing_response = parsing_response.content if hasattr(parsing_response, "content") else str(parsing_response)
+
+            # Strip markdown fences and parse with PydanticOutputParser
+            cleaned_response = _strip_markdown_fences(raw_parsing_response)
+            parsed_answer = parser.parse(cleaned_response)
         except Exception as e:
             return VerificationResult(
                 question_id=question_id,
@@ -234,7 +289,7 @@ Follow the schema exactly as defined."""
                 parsing_model=parsing_model_str,
                 parsed_response=parsed_answer.model_dump()
                 if hasattr(parsed_answer, "model_dump")
-                else str(parsed_answer),
+                else None,
                 execution_time=time.time() - start_time,
                 timestamp=timestamp,
                 answering_system_prompt=answering_model.system_prompt,
@@ -253,7 +308,7 @@ Follow the schema exactly as defined."""
             raw_llm_response=raw_llm_response,
             answering_model=answering_model_str,
             parsing_model=parsing_model_str,
-            parsed_response=parsed_answer.model_dump() if hasattr(parsed_answer, "model_dump") else str(parsed_answer),
+            parsed_response=parsed_answer.model_dump() if hasattr(parsed_answer, "model_dump") else None,
             execution_time=time.time() - start_time,
             timestamp=timestamp,
             answering_system_prompt=answering_model.system_prompt,
