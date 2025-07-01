@@ -29,7 +29,7 @@ def validate_answer_template(template_code: str) -> tuple[bool, str | None, type
             pass
 
         try:
-            from typing import Any, Dict, List, Literal, Optional, Union
+            from typing import Any, Literal, Optional, Union
 
             global_ns.update(
                 {
