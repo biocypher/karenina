@@ -56,6 +56,26 @@ def _strip_markdown_fences(text: str) -> str:
 
     return cleaned.strip()
 
+def _system_prompt_compose(system_prompt: str | None, format_instructions: str) -> str:
+    """
+    Compose a system prompt with format instructions.
+
+    Args:
+        system_prompt: The system prompt to compose
+        format_instructions: The format instructions to compose
+
+    Returns:
+        The composed system prompt
+    """
+    prompt = f"""<general_instructions>
+{system_prompt if system_prompt else ""}
+</general_instructions>
+
+<format_instructions>
+{format_instructions}
+</format_instructions>
+"""
+    return prompt
 
 def run_single_model_verification(
     question_id: str,
@@ -217,15 +237,15 @@ def run_single_model_verification(
 
         # Create parsing prompt with format instructions
         format_instructions = parser.get_format_instructions()
-        parsing_prompt = f"""Parse the following response into the specified format.
-
-Response to parse: {raw_llm_response}
-
-{format_instructions}"""
+        combined_system_prompt = _system_prompt_compose(parsing_model.system_prompt, format_instructions)
+        parsing_prompt = f"""<response_to_parse>
+{raw_llm_response}
+</response_to_parse>
+"""
 
         parsing_messages: list[BaseMessage] = []
-        if parsing_model.system_prompt:
-            parsing_messages.append(SystemMessage(content=parsing_model.system_prompt))
+        if combined_system_prompt:
+            parsing_messages.append(SystemMessage(content=combined_system_prompt))
         parsing_messages.append(HumanMessage(content=parsing_prompt))
 
         try:
