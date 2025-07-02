@@ -9,7 +9,9 @@ from langchain_core.output_parsers import PydanticOutputParser
 
 from ...answers.generator import inject_question_id_into_answer_class
 from ...llm.interface import init_chat_model_unified
+from ...schemas.rubric_class import Rubric
 from ..models import ModelConfiguration, VerificationResult
+from .rubric_evaluator import RubricEvaluator
 from .validation import validate_answer_template
 
 
@@ -87,6 +89,7 @@ def run_single_model_verification(
     job_id: str | None = None,
     answering_replicate: int | None = None,
     parsing_replicate: int | None = None,
+    rubric: Rubric | None = None,
 ) -> VerificationResult:
     """
     Run verification for a single question with specific answering and parsing models.
@@ -102,9 +105,10 @@ def run_single_model_verification(
         job_id: Optional job ID for tracking
         answering_replicate: Optional replicate number for answering model
         parsing_replicate: Optional replicate number for parsing model
+        rubric: Optional rubric for qualitative evaluation
 
     Returns:
-        VerificationResult with all details
+        VerificationResult with all details and optional rubric scores
 
     Raises:
         ValueError: If question_id is not a valid MD5 hash when using manual interface
@@ -300,10 +304,27 @@ def run_single_model_verification(
                 parsing_replicate=parsing_replicate,
             )
 
+        # Step 6: Run rubric evaluation (optional)
+        rubric_result = None
+        if rubric and rubric.traits:
+            try:
+                # Use parsing model for rubric evaluation
+                evaluator = RubricEvaluator(parsing_model)
+                rubric_result = evaluator.evaluate_rubric(
+                    question=question_text,
+                    answer=raw_llm_response,
+                    rubric=rubric
+                )
+            except Exception as e:
+                # Don't fail the entire verification if rubric evaluation fails
+                print(f"Warning: Rubric evaluation failed for question {question_id}: {e}")
+                rubric_result = None
+
         return VerificationResult(
             question_id=question_id,
             success=True,
             verify_result=verification_result,
+            verify_rubric=rubric_result,
             question_text=question_text,
             raw_llm_response=raw_llm_response,
             answering_model=answering_model_str,
