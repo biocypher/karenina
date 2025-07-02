@@ -16,7 +16,7 @@ class RubricTrait(BaseModel):
     A trait can be either boolean (true/false) or score-based (1-5 scale).
     """
 
-    name: str = Field(..., description="Human readable identifier for the trait")
+    name: str = Field(..., min_length=1, description="Human readable identifier for the trait")
     description: str | None = Field(None, description="Detailed description shown to user/LLM")
     kind: TraitKind = Field(..., description="Type of trait: 'boolean' or 'score'")
     min_score: int | None = Field(1, description="Lower bound for score traits (default: 1)")
