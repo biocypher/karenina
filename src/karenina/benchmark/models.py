@@ -22,6 +22,10 @@ class VerificationConfig(BaseModel):
     answering_models: list[ModelConfiguration]
     parsing_models: list[ModelConfiguration]
     replicate_count: int = 1  # Number of times to run each test combination
+    
+    # Rubric evaluation settings
+    rubric_enabled: bool = False
+    rubric_trait_names: list[str] | None = None  # Optional filter for specific traits
 
     # Legacy fields for backward compatibility (deprecated)
     answering_model_provider: str | None = None
@@ -85,6 +89,7 @@ class VerificationResult(BaseModel):
     # Verification outcomes
     verify_result: Any | None = None
     verify_granular_result: Any | None = None
+    verify_rubric: dict[str, int | bool] | None = None  # Rubric trait scores
 
     # Metadata
     answering_model: str
