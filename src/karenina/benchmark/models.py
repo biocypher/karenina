@@ -22,7 +22,7 @@ class VerificationConfig(BaseModel):
     answering_models: list[ModelConfiguration]
     parsing_models: list[ModelConfiguration]
     replicate_count: int = 1  # Number of times to run each test combination
-    
+
     # Rubric evaluation settings
     rubric_enabled: bool = False
     rubric_trait_names: list[str] | None = None  # Optional filter for specific traits
@@ -161,6 +161,7 @@ class FinishedTemplate(BaseModel):
     template_code: str
     last_modified: str
     finished: bool = True
+    question_rubric: dict | None = None  # Question-specific rubric as dict
 
 
 class VerificationRequest(BaseModel):

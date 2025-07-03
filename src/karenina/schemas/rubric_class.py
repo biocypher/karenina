@@ -78,3 +78,40 @@ class RubricEvaluation(BaseModel):
     trait_scores: dict[str, int | bool] = Field(..., description="Scores for each trait")
 
     model_config = ConfigDict(extra="forbid")
+
+
+def merge_rubrics(global_rubric: "Rubric | None", question_rubric: "Rubric | None") -> "Rubric | None":
+    """
+    Merge global and question-specific rubrics.
+
+    Args:
+        global_rubric: The global rubric (applied to all questions)
+        question_rubric: Question-specific rubric (overrides/adds to global)
+
+    Returns:
+        Merged rubric with global traits + question-specific traits, or None if both are None
+
+    Raises:
+        ValueError: If there are trait name conflicts between global and question rubrics
+    """
+    if not global_rubric and not question_rubric:
+        return None
+
+    if not global_rubric:
+        return question_rubric
+
+    if not question_rubric:
+        return global_rubric
+
+    # Check for trait name conflicts
+    global_trait_names = {trait.name for trait in global_rubric.traits}
+    question_trait_names = {trait.name for trait in question_rubric.traits}
+    conflicts = global_trait_names.intersection(question_trait_names)
+
+    if conflicts:
+        raise ValueError(f"Trait name conflicts between global and question rubrics: {conflicts}")
+
+    # Merge traits
+    merged_traits = list(global_rubric.traits) + list(question_rubric.traits)
+
+    return Rubric(traits=merged_traits)
