@@ -44,7 +44,6 @@ class Rubric(BaseModel):
     beyond basic correctness checking.
     """
 
-    title: str = Field(..., description="Human readable title for the rubric")
     traits: list[RubricTrait] = Field(default_factory=list, description="List of evaluation traits")
 
     model_config = ConfigDict(extra="forbid")
@@ -76,7 +75,6 @@ class RubricEvaluation(BaseModel):
     Result of applying a rubric to a specific question-answer pair.
     """
 
-    rubric_title: str = Field(..., description="Title of the rubric that was applied")
     trait_scores: dict[str, int | bool] = Field(..., description="Scores for each trait")
 
     model_config = ConfigDict(extra="forbid")
