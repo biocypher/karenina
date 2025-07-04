@@ -1,12 +1,13 @@
 """Orchestration logic for multi-model verification."""
 
 
+from ...schemas.rubric_class import Rubric
 from ..models import ModelConfiguration, VerificationConfig, VerificationResult
 from .runner import run_single_model_verification
 
 
 def run_question_verification(
-    question_id: str, question_text: str, template_code: str, config: VerificationConfig
+    question_id: str, question_text: str, template_code: str, config: VerificationConfig, rubric: Rubric | None = None
 ) -> dict[str, VerificationResult]:
     """
     Run verification for a single question with all model combinations.
@@ -16,6 +17,7 @@ def run_question_verification(
         question_text: The question to ask the LLM
         template_code: Python code defining the Answer class
         config: Verification configuration with multiple models
+        rubric: Optional rubric for qualitative evaluation
 
     Returns:
         Dictionary of VerificationResult keyed by combination ID
@@ -58,6 +60,7 @@ def run_question_verification(
                     parsing_model=parsing_model,
                     run_name=getattr(config, "run_name", None),
                     job_id=getattr(config, "job_id", None),
+                    rubric=rubric,
                 )
             else:
                 # Include replicate numbers for multiple replicates
@@ -72,6 +75,7 @@ def run_question_verification(
                     job_id=getattr(config, "job_id", None),
                     answering_replicate=replicate,
                     parsing_replicate=replicate,
+                    rubric=rubric,
                 )
 
     else:
@@ -94,6 +98,7 @@ def run_question_verification(
                             parsing_model=parsing_model,
                             run_name=getattr(config, "run_name", None),
                             job_id=getattr(config, "job_id", None),
+                            rubric=rubric,
                         )
                     else:
                         # Include replicate numbers for multiple replicates
@@ -108,6 +113,7 @@ def run_question_verification(
                             job_id=getattr(config, "job_id", None),
                             answering_replicate=replicate,
                             parsing_replicate=replicate,
+                            rubric=rubric,
                         )
 
     return results

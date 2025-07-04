@@ -72,6 +72,7 @@ def export_verification_results_json(job: VerificationJob, results: dict[str, Ve
             "parsed_response": result.parsed_response,
             "verify_result": _serialize_verification_result(result.verify_result),
             "verify_granular_result": _serialize_verification_result(result.verify_granular_result),
+            "verify_rubric": result.verify_rubric,
             "answering_model": result.answering_model,
             "parsing_model": result.parsing_model,
             "answering_replicate": result.answering_replicate,
@@ -100,7 +101,16 @@ def export_verification_results_csv(job: VerificationJob, results: dict[str, Ver
     """
     output = StringIO()
 
-    # Define CSV headers with all result fields
+    # Collect all unique rubric trait names across all results
+    all_rubric_traits = set()
+    for result in results.values():
+        if result.verify_rubric:
+            all_rubric_traits.update(result.verify_rubric.keys())
+
+    # Sort trait names for consistent column ordering
+    sorted_traits = sorted(all_rubric_traits)
+
+    # Define CSV headers with all result fields + dynamic rubric columns
     headers = [
         "question_id",
         "success",
@@ -110,19 +120,28 @@ def export_verification_results_csv(job: VerificationJob, results: dict[str, Ver
         "parsed_response",
         "verify_result",
         "verify_granular_result",
-        "answering_model",
-        "parsing_model",
-        "answering_replicate",
-        "parsing_replicate",
-        "execution_time",
-        "timestamp",
-        "answering_system_prompt",
-        "parsing_system_prompt",
-        "run_name",
-        "export_timestamp",
-        "karenina_version",
-        "job_id",
     ]
+
+    # Add rubric trait columns (prefixed with 'rubric_')
+    headers.extend([f"rubric_{trait}" for trait in sorted_traits])
+
+    # Add remaining standard columns
+    headers.extend(
+        [
+            "answering_model",
+            "parsing_model",
+            "answering_replicate",
+            "parsing_replicate",
+            "execution_time",
+            "timestamp",
+            "answering_system_prompt",
+            "parsing_system_prompt",
+            "run_name",
+            "export_timestamp",
+            "karenina_version",
+            "job_id",
+        ]
+    )
 
     writer = csv.DictWriter(output, fieldnames=headers)
     writer.writeheader()
@@ -155,6 +174,14 @@ def export_verification_results_csv(job: VerificationJob, results: dict[str, Ver
             "karenina_version": karenina_version,
             "job_id": job.job_id,
         }
+
+        # Add rubric trait values
+        for trait in sorted_traits:
+            rubric_value = ""
+            if result.verify_rubric and trait in result.verify_rubric:
+                rubric_value = result.verify_rubric[trait]
+            row[f"rubric_{trait}"] = rubric_value
+
         writer.writerow(row)
 
     return output.getvalue()
