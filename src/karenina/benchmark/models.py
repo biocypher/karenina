@@ -87,7 +87,8 @@ class VerificationConfig(BaseModel):
 
         # Validate model configurations
         for model in self.answering_models + self.parsing_models:
-            if not model.model_provider:
+            # Model provider is optional for OpenRouter and manual interfaces
+            if model.interface not in ["openrouter", "manual"] and not model.model_provider:
                 raise ValueError(f"Model provider is required for model {model.id}")
             if not model.model_name:
                 raise ValueError(f"Model name is required for model {model.id}")
