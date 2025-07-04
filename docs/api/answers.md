@@ -14,7 +14,7 @@ Generate a single answer template for a question using an LLM.
 - `question` (str): Question text to generate template for
 - `question_json` (str): JSON representation of Question object
 - `model` (str): LLM model name (default: "gemini-2.0-flash")
-- `model_provider` (str): Provider identifier (default: "google_genai")  
+- `model_provider` (str): Provider identifier (default: "google_genai")
 - `temperature` (float): Sampling temperature (default: 0)
 - `custom_system_prompt` (Optional[str]): Override default system prompt
 - `interface` (str): LLM interface ("langchain" or "openrouter")
@@ -237,18 +237,18 @@ for q_id, AnswerClass in templates.items():
 def validate_template_quality(templates: Dict[str, type]) -> Dict[str, bool]:
     """Validate generated templates meet quality standards."""
     results = {}
-    
+
     for q_id, AnswerClass in templates.items():
         try:
             # Check if class has required fields
             fields = AnswerClass.model_fields
             has_description = all(f.description for f in fields.values())
             has_validation = any(f.constraints for f in fields.values())
-            
+
             results[q_id] = has_description and len(fields) > 0
         except Exception:
             results[q_id] = False
-    
+
     return results
 
 # Use validation
@@ -281,27 +281,27 @@ from pathlib import Path
 
 def cached_template_generation(questions_file: str, cache_dir: str = "cache") -> Dict[str, type]:
     """Generate templates with file-based caching."""
-    
+
     cache_path = Path(cache_dir)
     cache_path.mkdir(exist_ok=True)
-    
+
     # Generate cache key from questions file
     questions_hash = hash_question(Path(questions_file).read_text())
     cache_file = cache_path / f"templates_{questions_hash}.json"
-    
+
     if cache_file.exists():
         print("Loading templates from cache")
         return load_answer_templates_from_json(str(cache_file))
-    
+
     print("Generating new templates")
     templates, code_blocks = generate_answer_templates_from_questions_file(
         questions_file, return_blocks=True
     )
-    
+
     # Save to cache
     with open(cache_file, "w") as f:
         json.dump(code_blocks, f, indent=2)
-    
+
     return templates
 ```
 
@@ -328,7 +328,7 @@ async def generate_templates_endpoint(questions_file: str):
         templates, code_blocks = generate_answer_templates_from_questions_file(
             questions_file, return_blocks=True
         )
-        
+
         return {
             "success": True,
             "template_count": len(templates),

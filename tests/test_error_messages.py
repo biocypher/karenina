@@ -43,9 +43,7 @@ def test_manual_trace_manager_helpful_error_messages():
 
     # Test invalid trace content error (non-string)
     with pytest.raises(ManualTraceError) as exc_info:
-        manager.load_traces_from_json({
-            "d41d8cd98f00b204e9800998ecf8427e": 123
-        })
+        manager.load_traces_from_json({"d41d8cd98f00b204e9800998ecf8427e": 123})
 
     error_msg = str(exc_info.value)
     assert "Invalid trace content" in error_msg
@@ -56,9 +54,7 @@ def test_manual_trace_manager_helpful_error_messages():
 
     # Test invalid trace content error (empty string)
     with pytest.raises(ManualTraceError) as exc_info:
-        manager.load_traces_from_json({
-            "d41d8cd98f00b204e9800998ecf8427e": ""
-        })
+        manager.load_traces_from_json({"d41d8cd98f00b204e9800998ecf8427e": ""})
 
     error_msg = str(exc_info.value)
     assert "Invalid trace content" in error_msg
@@ -85,10 +81,7 @@ def test_manual_llm_helpful_error_messages():
     assert "Verify that the question hash matches" in error_msg
 
     # Test with some traces loaded but not the one we're looking for
-    load_manual_traces({
-        "c4ca4238a0b923820dcc509a6f75849b": "Trace 1",
-        "c81e728d9d4c2f636f067f89cc14862c": "Trace 2"
-    })
+    load_manual_traces({"c4ca4238a0b923820dcc509a6f75849b": "Trace 1", "c81e728d9d4c2f636f067f89cc14862c": "Trace 2"})
 
     with pytest.raises(ManualTraceNotFoundError) as exc_info:
         manual_llm.invoke([])
@@ -163,11 +156,7 @@ def test_error_messages_include_actionable_guidance():
         manual_llm.invoke([])
 
     error_msg = str(exc_info.value)
-    resolution_options = [
-        "Upload a JSON file",
-        "load_manual_traces()",
-        "Verify that the question hash matches"
-    ]
+    resolution_options = ["Upload a JSON file", "load_manual_traces()", "Verify that the question hash matches"]
 
     for option in resolution_options:
         assert option in error_msg, f"Missing resolution option: {option}"

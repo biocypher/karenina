@@ -145,7 +145,7 @@ uv run pytest --tb=short
 
 ### Summary
 - Ruff issues fixed: X/Y
-- Mypy errors resolved: A/B  
+- Mypy errors resolved: A/B
 - Dead code removed: N lines
 - Failing tests fixed: P/Q
 

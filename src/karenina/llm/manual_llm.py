@@ -12,11 +12,13 @@ else:
     # Avoid circular import at runtime
     class LLMError(Exception):
         """Base exception for LLM-related errors."""
+
         pass
 
 
 class ManualTraceNotFoundError(LLMError):
     """Raised when a manual trace is not found for a question."""
+
     pass
 
 
@@ -55,6 +57,7 @@ class ManualLLM:
 
         if trace is None:
             from .manual_traces import get_manual_trace_count
+
             trace_count = get_manual_trace_count()
 
             raise ManualTraceNotFoundError(
@@ -95,6 +98,7 @@ class ManualLLM:
 
         if trace is None:
             from .manual_traces import get_manual_trace_count
+
             trace_count = get_manual_trace_count()
 
             raise ManualTraceNotFoundError(

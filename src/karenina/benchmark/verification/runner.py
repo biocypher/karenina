@@ -29,7 +29,7 @@ def _is_valid_md5_hash(hash_string: str) -> bool:
         return False
 
     # MD5 hash is exactly 32 hexadecimal characters
-    md5_pattern = re.compile(r'^[a-fA-F0-9]{32}$')
+    md5_pattern = re.compile(r"^[a-fA-F0-9]{32}$")
     return bool(md5_pattern.match(hash_string))
 
 
@@ -48,15 +48,16 @@ def _strip_markdown_fences(text: str) -> str:
 
     # Strip leading and trailing markdown JSON fences
     cleaned = text.strip()
-    if cleaned.startswith('```json'):
+    if cleaned.startswith("```json"):
         cleaned = cleaned[7:]  # Remove ```json
-    elif cleaned.startswith('```'):
+    elif cleaned.startswith("```"):
         cleaned = cleaned[3:]  # Remove ```
 
-    if cleaned.endswith('```'):
+    if cleaned.endswith("```"):
         cleaned = cleaned[:-3]  # Remove trailing ```
 
     return cleaned.strip()
+
 
 def _system_prompt_compose(system_prompt: str | None, format_instructions: str) -> str:
     """
@@ -78,6 +79,7 @@ def _system_prompt_compose(system_prompt: str | None, format_instructions: str) 
 </format_instructions>
 """
     return prompt
+
 
 def run_single_model_verification(
     question_id: str,
@@ -255,7 +257,9 @@ def run_single_model_verification(
         try:
             # Get raw text response from parsing LLM
             parsing_response = parsing_llm.invoke(parsing_messages)
-            raw_parsing_response = parsing_response.content if hasattr(parsing_response, "content") else str(parsing_response)
+            raw_parsing_response = (
+                parsing_response.content if hasattr(parsing_response, "content") else str(parsing_response)
+            )
 
             # Strip markdown fences and parse with PydanticOutputParser
             cleaned_response = _strip_markdown_fences(raw_parsing_response)
@@ -291,9 +295,7 @@ def run_single_model_verification(
                 raw_llm_response=raw_llm_response,
                 answering_model=answering_model_str,
                 parsing_model=parsing_model_str,
-                parsed_response=parsed_answer.model_dump()
-                if hasattr(parsed_answer, "model_dump")
-                else None,
+                parsed_response=parsed_answer.model_dump() if hasattr(parsed_answer, "model_dump") else None,
                 execution_time=time.time() - start_time,
                 timestamp=timestamp,
                 answering_system_prompt=answering_model.system_prompt,
@@ -311,9 +313,7 @@ def run_single_model_verification(
                 # Use parsing model for rubric evaluation
                 evaluator = RubricEvaluator(parsing_model)
                 rubric_result = evaluator.evaluate_rubric(
-                    question=question_text,
-                    answer=raw_llm_response,
-                    rubric=rubric
+                    question=question_text, answer=raw_llm_response, rubric=rubric
                 )
             except (ValueError, RuntimeError) as e:
                 # Handle specific rubric evaluator errors

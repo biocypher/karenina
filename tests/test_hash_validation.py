@@ -40,9 +40,7 @@ def test_manual_interface_valid_hash():
 
     # Load test traces
     question_hash = "d41d8cd98f00b204e9800998ecf8427e"
-    test_traces = {
-        question_hash: "Test manual trace response"
-    }
+    test_traces = {question_hash: "Test manual trace response"}
     load_manual_traces(test_traces)
 
     # Create manual model configuration
@@ -66,7 +64,7 @@ def test_manual_interface_valid_hash():
     )
 
     # Simple answer template
-    template_code = '''
+    template_code = """
 from karenina.schemas.answer_class import BaseAnswer
 from pydantic import Field
 
@@ -75,7 +73,7 @@ class Answer(BaseAnswer):
 
     def verify(self):
         return len(self.result) > 0
-'''
+"""
 
     # This should work without raising an exception
     try:
@@ -122,7 +120,7 @@ def test_manual_interface_invalid_hash():
     )
 
     # Simple answer template
-    template_code = '''
+    template_code = """
 from karenina.schemas.answer_class import BaseAnswer
 from pydantic import Field
 
@@ -131,7 +129,7 @@ class Answer(BaseAnswer):
 
     def verify(self):
         return len(self.result) > 0
-'''
+"""
 
     # Test various invalid question_id formats
     invalid_hashes = [
@@ -172,7 +170,7 @@ def test_non_manual_interface_ignores_hash_validation():
     )
 
     # Simple answer template
-    template_code = '''
+    template_code = """
 from karenina.schemas.answer_class import BaseAnswer
 from pydantic import Field
 
@@ -181,7 +179,7 @@ class Answer(BaseAnswer):
 
     def verify(self):
         return len(self.result) > 0
-'''
+"""
 
     # Use invalid hash format - should not raise ValueError for non-manual interface
     invalid_hash = "not-a-hash-at-all"
@@ -222,7 +220,7 @@ def test_hash_validation_error_message():
         system_prompt="",
     )
 
-    template_code = '''
+    template_code = """
 from karenina.schemas.answer_class import BaseAnswer
 from pydantic import Field
 
@@ -231,7 +229,7 @@ class Answer(BaseAnswer):
 
     def verify(self):
         return len(self.result) > 0
-'''
+"""
 
     result = run_single_model_verification(
         question_id="invalid-hash",

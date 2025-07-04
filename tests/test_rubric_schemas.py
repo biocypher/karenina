@@ -11,11 +11,7 @@ class TestRubricTrait:
 
     def test_boolean_trait_creation(self):
         """Test creating a boolean trait."""
-        trait = RubricTrait(
-            name="clarity",
-            description="Is the response clear and understandable?",
-            kind="boolean"
-        )
+        trait = RubricTrait(name="clarity", description="Is the response clear and understandable?", kind="boolean")
 
         assert trait.name == "clarity"
         assert trait.description == "Is the response clear and understandable?"
@@ -26,11 +22,7 @@ class TestRubricTrait:
     def test_score_trait_creation(self):
         """Test creating a score-based trait."""
         trait = RubricTrait(
-            name="completeness",
-            description="How complete is the response?",
-            kind="score",
-            min_score=1,
-            max_score=5
+            name="completeness", description="How complete is the response?", kind="score", min_score=1, max_score=5
         )
 
         assert trait.name == "completeness"
@@ -41,11 +33,7 @@ class TestRubricTrait:
 
     def test_score_trait_default_range(self):
         """Test that score traits get default min/max values."""
-        trait = RubricTrait(
-            name="relevance",
-            description="How relevant is the response?",
-            kind="score"
-        )
+        trait = RubricTrait(name="relevance", description="How relevant is the response?", kind="score")
 
         assert trait.min_score == 1
         assert trait.max_score == 5
@@ -60,15 +48,12 @@ class TestRubricTrait:
             RubricTrait(
                 name="",  # Empty name should be rejected
                 description="Valid description",
-                kind="boolean"
+                kind="boolean",
             )
 
     def test_missing_description(self):
         """Test trait creation without description."""
-        trait = RubricTrait(
-            name="accuracy",
-            kind="boolean"
-        )
+        trait = RubricTrait(name="accuracy", kind="boolean")
 
         assert trait.name == "accuracy"
         assert trait.description is None
@@ -78,13 +63,7 @@ class TestRubricTrait:
         """Test validation of score ranges."""
         # min_score > max_score should be allowed at creation
         # (validation logic would be in business logic, not schema)
-        trait = RubricTrait(
-            name="test",
-            description="Test trait",
-            kind="score",
-            min_score=5,
-            max_score=1
-        )
+        trait = RubricTrait(name="test", description="Test trait", kind="score", min_score=5, max_score=1)
 
         assert trait.min_score == 5
         assert trait.max_score == 1
@@ -97,12 +76,10 @@ class TestRubric:
         """Test creating a complete rubric."""
         traits = [
             RubricTrait(name="clarity", description="Clear response", kind="boolean"),
-            RubricTrait(name="completeness", description="Complete response", kind="score", min_score=1, max_score=5)
+            RubricTrait(name="completeness", description="Complete response", kind="score", min_score=1, max_score=5),
         ]
 
-        rubric = Rubric(
-            traits=traits
-        )
+        rubric = Rubric(traits=traits)
 
         assert len(rubric.traits) == 2
         assert rubric.traits[0].name == "clarity"
@@ -110,45 +87,31 @@ class TestRubric:
 
     def test_rubric_without_description(self):
         """Test creating a rubric without description."""
-        traits = [
-            RubricTrait(name="accuracy", description="Accurate response", kind="boolean")
-        ]
+        traits = [RubricTrait(name="accuracy", description="Accurate response", kind="boolean")]
 
-        rubric = Rubric(
-            traits=traits
-        )
+        rubric = Rubric(traits=traits)
 
         # No description field in Rubric model
         assert len(rubric.traits) == 1
 
     def test_empty_rubric_title(self):
         """Test that empty titles are allowed by Pydantic."""
-        traits = [
-            RubricTrait(name="test", description="Test trait", kind="boolean")
-        ]
+        traits = [RubricTrait(name="test", description="Test trait", kind="boolean")]
 
         # Empty traits list is allowed
-        Rubric(
-            traits=traits
-        )
+        Rubric(traits=traits)
 
     def test_empty_traits_list(self):
         """Test rubric with empty traits list."""
-        rubric = Rubric(
-            traits=[]
-        )
+        rubric = Rubric(traits=[])
 
         assert len(rubric.traits) == 0
 
     def test_rubric_serialization(self):
         """Test that rubric can be serialized to dict."""
-        traits = [
-            RubricTrait(name="clarity", description="Clear response", kind="boolean")
-        ]
+        traits = [RubricTrait(name="clarity", description="Clear response", kind="boolean")]
 
-        rubric = Rubric(
-            traits=traits
-        )
+        rubric = Rubric(traits=traits)
 
         rubric_dict = rubric.model_dump()
 
@@ -163,23 +126,14 @@ class TestRubricEvaluation:
 
     def test_evaluation_creation(self):
         """Test creating a rubric evaluation."""
-        evaluation = RubricEvaluation(
-            trait_scores={"clarity": True, "completeness": 4}
-        )
+        evaluation = RubricEvaluation(trait_scores={"clarity": True, "completeness": 4})
 
         assert evaluation.trait_scores["clarity"] is True
         assert evaluation.trait_scores["completeness"] == 4
 
     def test_evaluation_with_mixed_scores(self):
         """Test evaluation with boolean and numeric scores."""
-        evaluation = RubricEvaluation(
-            trait_scores={
-                "accuracy": True,
-                "relevance": False,
-                "depth": 3,
-                "clarity": 5
-            }
-        )
+        evaluation = RubricEvaluation(trait_scores={"accuracy": True, "relevance": False, "depth": 3, "clarity": 5})
 
         assert len(evaluation.trait_scores) == 4
         assert evaluation.trait_scores["accuracy"] is True
@@ -189,17 +143,13 @@ class TestRubricEvaluation:
 
     def test_empty_trait_scores(self):
         """Test evaluation with empty trait scores."""
-        evaluation = RubricEvaluation(
-            trait_scores={}
-        )
+        evaluation = RubricEvaluation(trait_scores={})
 
         assert len(evaluation.trait_scores) == 0
 
     def test_evaluation_serialization(self):
         """Test that evaluation can be serialized to dict."""
-        evaluation = RubricEvaluation(
-            trait_scores={"test_trait": True}
-        )
+        evaluation = RubricEvaluation(trait_scores={"test_trait": True})
 
         eval_dict = evaluation.model_dump()
 
@@ -211,17 +161,9 @@ class TestTraitKind:
 
     def test_valid_trait_kinds(self):
         """Test that valid trait kinds work."""
-        boolean_trait = RubricTrait(
-            name="test_bool",
-            description="Test boolean trait",
-            kind="boolean"
-        )
+        boolean_trait = RubricTrait(name="test_bool", description="Test boolean trait", kind="boolean")
 
-        score_trait = RubricTrait(
-            name="test_score",
-            description="Test score trait",
-            kind="score"
-        )
+        score_trait = RubricTrait(name="test_score", description="Test score trait", kind="score")
 
         assert boolean_trait.kind == "boolean"
         assert score_trait.kind == "score"
@@ -232,7 +174,7 @@ class TestTraitKind:
             RubricTrait(
                 name="invalid_trait",
                 description="Invalid trait",
-                kind="invalid_kind"  # Not a valid TraitKind
+                kind="invalid_kind",  # Not a valid TraitKind
             )
 
 
@@ -243,38 +185,22 @@ class TestRubricIntegration:
         """Test a complete workflow with all rubric schemas."""
         # Create traits
         traits = [
-            RubricTrait(
-                name="accuracy",
-                description="Is the information factually correct?",
-                kind="boolean"
-            ),
+            RubricTrait(name="accuracy", description="Is the information factually correct?", kind="boolean"),
             RubricTrait(
                 name="completeness",
                 description="How complete is the response (1-5)?",
                 kind="score",
                 min_score=1,
-                max_score=5
+                max_score=5,
             ),
-            RubricTrait(
-                name="clarity",
-                description="Is the response clear and well-written?",
-                kind="boolean"
-            )
+            RubricTrait(name="clarity", description="Is the response clear and well-written?", kind="boolean"),
         ]
 
         # Create rubric
-        rubric = Rubric(
-            traits=traits
-        )
+        rubric = Rubric(traits=traits)
 
         # Create evaluation
-        evaluation = RubricEvaluation(
-            trait_scores={
-                "accuracy": True,
-                "completeness": 4,
-                "clarity": True
-            }
-        )
+        evaluation = RubricEvaluation(trait_scores={"accuracy": True, "completeness": 4, "clarity": True})
 
         # Verify the complete workflow
         assert len(rubric.traits) == 3
@@ -299,13 +225,9 @@ class TestRubricIntegration:
         """Test that rubric can be serialized to JSON and back."""
         import json
 
-        traits = [
-            RubricTrait(name="test_trait", description="Test", kind="boolean")
-        ]
+        traits = [RubricTrait(name="test_trait", description="Test", kind="boolean")]
 
-        original_rubric = Rubric(
-            traits=traits
-        )
+        original_rubric = Rubric(traits=traits)
 
         # Serialize to JSON
         json_str = json.dumps(original_rubric.model_dump())

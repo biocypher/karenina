@@ -14,7 +14,7 @@ The `karenina.schemas` module defines core data models using Pydantic for type v
 **Fields:**
 - `id` (str): MD5 hash identifier of the question text
 - `question` (str): Question content (minimum length: 1)
-- `raw_answer` (str): Expected answer text (minimum length: 1)  
+- `raw_answer` (str): Expected answer text (minimum length: 1)
 - `tags` (list[str | None]): Classification tags for the question
 
 **Usage Examples:**
@@ -121,7 +121,7 @@ class GeographyAnswer(BaseAnswer):
 # Usage
 answer = GeographyAnswer(
     city_name="Paris",
-    country="France", 
+    country="France",
     confidence=0.95,
     population=2161000
 )
@@ -149,7 +149,7 @@ from karenina.schemas.answer_class import BaseAnswer
 
 class Answer(BaseAnswer):
     capital_city: str = Field(description="The capital city name")
-    country_name: str = Field(description="The country name") 
+    country_name: str = Field(description="The country name")
     continent: str = Field(description="The continent")
     confidence_score: float = Field(ge=0.0, le=1.0, description="Answer confidence")
 '''
@@ -269,7 +269,7 @@ class ValidatedQuestion(Question):
     def validate_tags(cls, v):
         # Remove None values and empty strings
         return [tag for tag in v if tag and tag.strip()]
-    
+
     @validator('question')
     def validate_question_format(cls, v):
         if not v.endswith('?'):
@@ -306,7 +306,7 @@ class Question(BaseModel):
     question: str = Field(min_length=1)
     raw_answer: str = Field(min_length=1)
     tags: list[str | None] = Field(default_factory=list)  # New field with default
-    
+
     # Migration from V1
     @classmethod
     def from_v1(cls, v1_data: dict):
@@ -328,7 +328,7 @@ from pydantic import BaseModel
 
 class SchemaRegistry:
     """Registry for managing schema versions."""
-    
+
     _schemas: Dict[str, Dict[str, Type[BaseModel]]] = {
         "question": {
             "v1": QuestionV1,
@@ -338,19 +338,19 @@ class SchemaRegistry:
             "v1": BaseAnswer
         }
     }
-    
+
     @classmethod
     def get_schema(cls, schema_type: str, version: str = "latest"):
         if schema_type not in cls._schemas:
             raise ValueError(f"Unknown schema type: {schema_type}")
-        
+
         versions = cls._schemas[schema_type]
         if version == "latest":
             version = max(versions.keys())
-        
+
         if version not in versions:
             raise ValueError(f"Unknown version {version} for {schema_type}")
-        
+
         return versions[version]
 
 # Usage

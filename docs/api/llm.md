@@ -20,13 +20,13 @@ class ChatSession:
         self.llm = None
         self.created_at = datetime.now()
         self.last_used = datetime.now()
-    
+
     def initialize_llm(self):
         """Initialize the LLM if not already done."""
-        
+
     def add_message(self, message, is_human: bool = True):
         """Add a message to the conversation history."""
-        
+
     def add_system_message(self, message: str):
         """Add a system message to the conversation."""
 ```
@@ -82,16 +82,16 @@ Unified LLM initialization across providers.
 ```python
 def init_chat_model_unified(model: str, provider: str = None, interface: str = "langchain", **kwargs) -> ChatSession:
     """Initialize a chat model using the unified interface.
-    
+
     Args:
         model: The model name (e.g., "gemini-2.0-flash", "gpt-4", "claude-3-sonnet")
         provider: The model provider (e.g., "google_genai", "openai", "anthropic")
         interface: The interface to use for model initialization ("langchain", "openrouter")
         **kwargs: Additional keyword arguments passed to model initialization
-    
+
     Returns:
         ChatSession: An initialized chat model instance ready for inference
-    
+
     Raises:
         ValueError: If an unsupported interface is specified
     """
@@ -125,7 +125,7 @@ def call_model(
     temperature: float = 0.7,
 ) -> ChatResponse:
     """Call a language model and return the response, supporting conversational context.
-    
+
     Args:
         model: The model name (e.g., "gemini-2.0-flash", "gpt-4")
         provider: The model provider (e.g., "google_genai", "openai")
@@ -133,10 +133,10 @@ def call_model(
         session_id: Optional session ID for continuing a conversation
         system_message: Optional system message to set context
         temperature: Model temperature for response generation
-    
+
     Returns:
         ChatResponse with the model's response and session information
-    
+
     Raises:
         LLMNotAvailableError: If LangChain is not available
         SessionError: If there's an error with session management
@@ -170,7 +170,7 @@ print(response.message)  # "Paris"
 # Continuing conversation
 response2 = call_model(
     model="gpt-4",
-    provider="openai", 
+    provider="openai",
     message="What's its population?",
     session_id=response.session_id
 )

@@ -8,11 +8,13 @@ from typing import Any
 
 class LLMError(Exception):
     """Base exception for LLM-related errors."""
+
     pass
 
 
 class ManualTraceError(LLMError):
     """Raised when there's an error with manual trace operations."""
+
     pass
 
 
@@ -164,7 +166,8 @@ class ManualTraceManager:
 
             # Clean up individual expired traces
             expired_hashes = [
-                hash_key for hash_key, timestamp in self._trace_timestamps.items()
+                hash_key
+                for hash_key, timestamp in self._trace_timestamps.items()
                 if current_time - timestamp >= self._session_timeout
             ]
 
@@ -236,7 +239,7 @@ class ManualTraceManager:
             return False
 
         # MD5 hash is exactly 32 hexadecimal characters
-        md5_pattern = re.compile(r'^[a-fA-F0-9]{32}$')
+        md5_pattern = re.compile(r"^[a-fA-F0-9]{32}$")
         return bool(md5_pattern.match(hash_string))
 
 

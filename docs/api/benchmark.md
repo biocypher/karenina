@@ -150,7 +150,7 @@ all_results = {}
 for model in models_to_test:
     # Get responses from each model
     responses = get_model_responses(questions, model)
-    
+
     # Run benchmark
     results = run_benchmark(questions, responses, templates)
     all_results[model] = results
@@ -164,17 +164,17 @@ compare_models(all_results)
 ```python
 def analyze_results(results: dict):
     """Analyze benchmark results for insights."""
-    
+
     for question_id, result in results.items():
         print(f"\nQuestion ID: {question_id}")
-        
+
         # Access structured fields
         if hasattr(result, 'confidence'):
             print(f"Confidence: {result.confidence}")
-        
+
         if hasattr(result, 'accuracy'):
             print(f"Accuracy: {result.accuracy}")
-            
+
         # Convert to dict for full analysis
         result_dict = result.model_dump()
         print(f"Full result: {result_dict}")
@@ -199,32 +199,32 @@ except Exception as e:
 # Validate inputs before running
 def validate_benchmark_inputs(questions, responses, templates):
     """Validate input dictionaries for benchmark."""
-    
+
     q_keys = set(questions.keys())
     r_keys = set(responses.keys())
     t_keys = set(templates.keys())
-    
+
     if not q_keys:
         raise ValueError("Questions dictionary is empty")
-    
+
     if not r_keys:
         raise ValueError("Responses dictionary is empty")
-        
+
     if not t_keys:
         raise ValueError("Templates dictionary is empty")
-    
+
     common = q_keys & r_keys & t_keys
     if not common:
         raise ValueError("No common keys found across input dictionaries")
-    
+
     missing_in_responses = q_keys - r_keys
     if missing_in_responses:
         print(f"Warning: Missing responses for questions: {missing_in_responses}")
-    
+
     missing_templates = q_keys - t_keys
     if missing_templates:
         print(f"Warning: Missing templates for questions: {missing_templates}")
-    
+
     return common
 
 # Use validation
@@ -238,14 +238,14 @@ print(f"Will evaluate {len(common_keys)} questions")
 # Handle template validation failures
 def safe_benchmark_run(questions, responses, templates):
     """Run benchmark with error handling for individual questions."""
-    
+
     results = {}
     errors = {}
-    
+
     for q_id in questions.keys():
         if q_id not in responses or q_id not in templates:
             continue
-            
+
         try:
             # Single question benchmark
             single_result = run_benchmark(
@@ -254,11 +254,11 @@ def safe_benchmark_run(questions, responses, templates):
                 {q_id: templates[q_id]}
             )
             results[q_id] = single_result[q_id]
-            
+
         except Exception as e:
             errors[q_id] = str(e)
             print(f"Error processing question {q_id}: {e}")
-    
+
     return results, errors
 
 # Usage with error tracking
@@ -279,29 +279,29 @@ from functools import partial
 
 def parallel_benchmark(questions, responses, templates, max_workers=4):
     """Run benchmark with parallel processing."""
-    
+
     # Split into chunks
     question_items = list(questions.items())
     chunk_size = len(question_items) // max_workers
-    
+
     def process_chunk(chunk_items):
         chunk_questions = dict(chunk_items)
         chunk_responses = {k: responses[k] for k in chunk_questions.keys() if k in responses}
         chunk_templates = {k: templates[k] for k in chunk_questions.keys() if k in templates}
-        
+
         return run_benchmark(chunk_questions, chunk_responses, chunk_templates)
-    
+
     # Process chunks in parallel
     chunks = [question_items[i:i+chunk_size] for i in range(0, len(question_items), chunk_size)]
-    
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         chunk_results = executor.map(process_chunk, chunks)
-    
+
     # Combine results
     combined_results = {}
     for chunk_result in chunk_results:
         combined_results.update(chunk_result)
-    
+
     return combined_results
 ```
 
@@ -312,22 +312,22 @@ For large datasets, consider streaming processing:
 ```python
 def streaming_benchmark(questions, responses, templates, batch_size=100):
     """Process benchmark in batches to manage memory usage."""
-    
+
     all_results = {}
     question_ids = list(questions.keys())
-    
+
     for i in range(0, len(question_ids), batch_size):
         batch_ids = question_ids[i:i+batch_size]
-        
+
         batch_questions = {k: questions[k] for k in batch_ids}
         batch_responses = {k: responses[k] for k in batch_ids if k in responses}
         batch_templates = {k: templates[k] for k in batch_ids if k in templates}
-        
+
         batch_results = run_benchmark(batch_questions, batch_responses, batch_templates)
         all_results.update(batch_results)
-        
+
         print(f"Processed batch {i//batch_size + 1}/{(len(question_ids)-1)//batch_size + 1}")
-    
+
     return all_results
 ```
 
@@ -338,33 +338,33 @@ def streaming_benchmark(questions, responses, templates, batch_size=100):
 ```python
 def enhanced_benchmark_analysis(results: dict):
     """Analyze benchmark results with custom metrics."""
-    
+
     metrics = {
         'total_questions': len(results),
         'field_completion_rates': {},
         'confidence_distribution': [],
         'validation_errors': 0
     }
-    
+
     for q_id, result in results.items():
         # Analyze field completion
         result_dict = result.model_dump()
         for field, value in result_dict.items():
             if field not in metrics['field_completion_rates']:
                 metrics['field_completion_rates'][field] = {'completed': 0, 'total': 0}
-            
+
             metrics['field_completion_rates'][field]['total'] += 1
             if value is not None and value != "":
                 metrics['field_completion_rates'][field]['completed'] += 1
-        
+
         # Track confidence if available
         if hasattr(result, 'confidence') and result.confidence is not None:
             metrics['confidence_distribution'].append(result.confidence)
-    
+
     # Calculate completion rates
     for field in metrics['field_completion_rates']:
         rate_data = metrics['field_completion_rates'][field]
         rate_data['rate'] = rate_data['completed'] / rate_data['total']
-    
+
     return metrics
 ```

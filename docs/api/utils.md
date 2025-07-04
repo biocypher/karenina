@@ -48,11 +48,11 @@ print(combined_code)
 # Output:
 # from pydantic import BaseModel, Field
 # from karenina.schemas.answer_class import BaseAnswer
-# 
+#
 # class Answer(BaseAnswer):
-#     city_name: str = Field(description="Capital city name") 
+#     city_name: str = Field(description="Capital city name")
 #     confidence: float = Field(ge=0.0, le=1.0)
-# 
+#
 # def validate_city(city: str) -> bool:
 #     return len(city) > 0
 ```
@@ -69,7 +69,7 @@ print("Hello World")
 ```
 '''
 
-# Generic code blocks  
+# Generic code blocks
 text_with_generic = '''
 ```
 x = 42
@@ -142,22 +142,22 @@ from io import StringIO
 
 def safe_execute_code(code: str) -> tuple[dict, str]:
     """Safely execute code and capture output."""
-    
+
     # Capture stdout
     old_stdout = sys.stdout
     sys.stdout = captured_output = StringIO()
-    
+
     # Execute in isolated namespace
     local_ns = {}
     error_msg = ""
-    
+
     try:
         exec(code, {"__builtins__": {}}, local_ns)
     except Exception as e:
         error_msg = str(e)
     finally:
         sys.stdout = old_stdout
-    
+
     output = captured_output.getvalue()
     return local_ns, output, error_msg
 
@@ -178,10 +178,10 @@ else:
 ```python
 def analyze_extracted_code(code: str) -> dict:
     """Analyze extracted code for quality metrics."""
-    
+
     lines = code.split('\n')
     non_empty_lines = [line for line in lines if line.strip()]
-    
+
     metrics = {
         'total_lines': len(lines),
         'code_lines': len(non_empty_lines),
@@ -191,13 +191,13 @@ def analyze_extracted_code(code: str) -> dict:
         'has_pydantic_fields': any('Field(' in line for line in lines),
         'class_names': []
     }
-    
+
     # Extract class names
     for line in lines:
         if 'class ' in line and ':' in line:
             class_name = line.split('class ')[1].split('(')[0].split(':')[0].strip()
             metrics['class_names'].append(class_name)
-    
+
     return metrics
 
 # Usage
@@ -213,13 +213,13 @@ print(f"Code analysis: {analysis}")
 ```python
 def extract_code_blocks_separately(text: str) -> list[str]:
     """Extract code blocks as separate strings instead of combining."""
-    
+
     import re
-    
+
     # Pattern for code blocks
     pattern = r'```(?:python)?\n(.*?)\n```'
     matches = re.findall(pattern, text, re.DOTALL)
-    
+
     return [match.strip() for match in matches]
 
 # Usage
@@ -231,7 +231,7 @@ class Answer(BaseAnswer):
 ```
 
 Then, a helper function:
-```python  
+```python
 def helper():
     return "help"
 ```
@@ -276,26 +276,26 @@ except SyntaxError as e:
 ```python
 def robust_code_extraction(llm_response: str) -> tuple[str, bool, str]:
     """Robust code extraction with error handling."""
-    
+
     try:
         # Extract code
         code = extract_and_combine_codeblocks(llm_response)
-        
+
         if not code.strip():
             return "", False, "No code blocks found"
-        
+
         # Validate syntax
         ast.parse(code)
-        
+
         # Check for required elements
         if 'class Answer' not in code:
             return code, False, "No Answer class found in code"
-        
+
         if 'BaseAnswer' not in code:
             return code, False, "Answer class doesn't inherit from BaseAnswer"
-        
+
         return code, True, "Code extraction successful"
-        
+
     except SyntaxError as e:
         return code if 'code' in locals() else "", False, f"Syntax error: {e}"
     except Exception as e:
@@ -304,10 +304,10 @@ def robust_code_extraction(llm_response: str) -> tuple[str, bool, str]:
 # Usage in answer generation pipeline
 def safe_answer_template_generation(question: str, question_json: str):
     """Generate answer template with robust error handling."""
-    
+
     llm_response = generate_answer_template(question, question_json)
     code, success, message = robust_code_extraction(llm_response)
-    
+
     if success:
         local_ns = {}
         exec(code, globals(), local_ns)
@@ -328,18 +328,18 @@ logger = logging.getLogger(__name__)
 
 def logged_code_extraction(text: str) -> str:
     """Code extraction with detailed logging."""
-    
+
     logger.info("Starting code extraction")
-    
+
     code = extract_and_combine_codeblocks(text)
-    
+
     if code:
         lines = len(code.split('\n'))
         logger.info(f"Extracted {lines} lines of code")
         logger.debug(f"Extracted code:\n{code}")
     else:
         logger.warning("No code blocks found in text")
-    
+
     return code
 ```
 
@@ -352,36 +352,36 @@ from pathlib import Path
 
 class CodeExtractionCache:
     """Cache extracted code to avoid re-processing."""
-    
+
     def __init__(self, cache_dir: str = "code_cache"):
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(exist_ok=True)
-    
+
     def _get_cache_key(self, text: str) -> str:
         return hashlib.md5(text.encode()).hexdigest()
-    
+
     def get_cached_code(self, text: str) -> str | None:
         cache_key = self._get_cache_key(text)
         cache_file = self.cache_dir / f"{cache_key}.pkl"
-        
+
         if cache_file.exists():
             with open(cache_file, 'rb') as f:
                 return pickle.load(f)
         return None
-    
+
     def cache_code(self, text: str, code: str):
         cache_key = self._get_cache_key(text)
         cache_file = self.cache_dir / f"{cache_key}.pkl"
-        
+
         with open(cache_file, 'wb') as f:
             pickle.dump(code, f)
-    
+
     def extract_with_cache(self, text: str) -> str:
         # Check cache first
         cached_code = self.get_cached_code(text)
         if cached_code is not None:
             return cached_code
-        
+
         # Extract and cache
         code = extract_and_combine_codeblocks(text)
         self.cache_code(text, code)

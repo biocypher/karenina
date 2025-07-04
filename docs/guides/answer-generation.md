@@ -62,7 +62,7 @@ AnswerClass = local_ns["Answer"]
 # Test the generated template
 test_data = {
     "capital_city": "Paris",
-    "country": "France", 
+    "country": "France",
     "confidence": 0.95
 }
 
@@ -108,7 +108,7 @@ templates = generate_answer_templates_from_questions_file(
 
 # GPT-3.5 for faster generation
 templates = generate_answer_templates_from_questions_file(
-    "questions.py", 
+    "questions.py",
     model="gpt-3.5-turbo",
     model_provider="openai"
 )
@@ -202,9 +202,9 @@ creative_template = generate_answer_template(
 ```python
 def test_template_quality(templates: dict) -> dict:
     """Test generated templates for quality and functionality."""
-    
+
     results = {}
-    
+
     for question_id, AnswerClass in templates.items():
         test_result = {
             "has_fields": len(AnswerClass.model_fields) > 0,
@@ -212,13 +212,13 @@ def test_template_quality(templates: dict) -> dict:
             "instantiable": False,
             "validation_errors": []
         }
-        
+
         # Check field descriptions
         for field_name, field_info in AnswerClass.model_fields.items():
             if not field_info.description:
                 test_result["has_descriptions"] = False
                 break
-        
+
         # Test instantiation
         try:
             # Try with minimal data
@@ -226,7 +226,7 @@ def test_template_quality(templates: dict) -> dict:
             test_result["instantiable"] = True
         except Exception as e:
             test_result["validation_errors"].append(f"Instantiation failed: {e}")
-        
+
         # Test with sample data
         try:
             sample_data = {}
@@ -238,14 +238,14 @@ def test_template_quality(templates: dict) -> dict:
                 elif field_info.annotation == float:
                     sample_data[field_name] = 0.5
                 # Add more type handling as needed
-            
+
             test_instance = AnswerClass(**sample_data)
-            
+
         except Exception as e:
             test_result["validation_errors"].append(f"Sample data failed: {e}")
-        
+
         results[question_id] = test_result
-    
+
     return results
 
 # Usage
@@ -263,14 +263,14 @@ print(f"Template quality: {passed}/{total} passed all tests")
 ```python
 def inspect_template(AnswerClass: type) -> dict:
     """Inspect a generated answer template."""
-    
+
     inspection = {
         "class_name": AnswerClass.__name__,
         "fields": {},
         "inherits_from_base": issubclass(AnswerClass, BaseAnswer),
         "total_fields": len(AnswerClass.model_fields)
     }
-    
+
     for field_name, field_info in AnswerClass.model_fields.items():
         inspection["fields"][field_name] = {
             "type": str(field_info.annotation),
@@ -278,7 +278,7 @@ def inspect_template(AnswerClass: type) -> dict:
             "required": field_info.is_required(),
             "default": field_info.default if hasattr(field_info, 'default') else None
         }
-    
+
     return inspection
 
 # Usage
@@ -300,10 +300,10 @@ import json
 
 def save_templates_to_json(templates: dict, code_blocks: dict, output_file: str):
     """Save generated templates as JSON for later use."""
-    
+
     with open(output_file, 'w') as f:
         json.dump(code_blocks, f, indent=2)
-    
+
     print(f"Saved {len(templates)} templates to {output_file}")
 
 # Generate with code blocks
@@ -336,11 +336,11 @@ for question_id, AnswerClass in templates.items():
 ```python
 def incremental_template_generation(questions_file: str, cache_file: str):
     """Generate templates incrementally, using cache when available."""
-    
+
     from karenina.questions.reader import read_questions_from_file
     import json
     from pathlib import Path
-    
+
     # Load existing cache
     existing_templates = {}
     if Path(cache_file).exists():
@@ -349,41 +349,41 @@ def incremental_template_generation(questions_file: str, cache_file: str):
         existing_templates = load_answer_templates_from_json(cache_file)
     else:
         existing_code_blocks = {}
-    
+
     # Read all questions
     all_questions = read_questions_from_file(questions_file)
-    
+
     # Find missing templates
     all_question_ids = {q.id for q in all_questions}
     cached_ids = set(existing_templates.keys())
     missing_ids = all_question_ids - cached_ids
-    
+
     print(f"Found {len(cached_ids)} cached templates")
     print(f"Need to generate {len(missing_ids)} new templates")
-    
+
     if missing_ids:
         # Generate only missing templates
         missing_questions = [q for q in all_questions if q.id in missing_ids]
-        
+
         new_code_blocks = {}
         for question in missing_questions:
             print(f"Generating template for: {question.question[:50]}...")
-            
+
             template_code = generate_answer_template(
                 question.question,
                 question.model_dump_json()
             )
-            
+
             code_blocks = extract_and_combine_codeblocks(template_code)
             new_code_blocks[question.id] = code_blocks
-        
+
         # Merge with existing cache
         existing_code_blocks.update(new_code_blocks)
-        
+
         # Save updated cache
         with open(cache_file, 'w') as f:
             json.dump(existing_code_blocks, f, indent=2)
-    
+
     # Load complete set
     return load_answer_templates_from_json(cache_file)
 
@@ -398,14 +398,14 @@ templates = incremental_template_generation("questions.py", "template_cache.json
 ```python
 def robust_template_generation(questions_file: str):
     """Generate templates with comprehensive error handling."""
-    
+
     from karenina.questions.reader import read_questions_from_file
-    
+
     all_questions = read_questions_from_file(questions_file)
-    
+
     successful_templates = {}
     failed_questions = {}
-    
+
     for question in all_questions:
         try:
             # Generate template
@@ -413,46 +413,46 @@ def robust_template_generation(questions_file: str):
                 question.question,
                 question.model_dump_json()
             )
-            
+
             # Extract code
             code_blocks = extract_and_combine_codeblocks(template_code)
-            
+
             if not code_blocks.strip():
                 failed_questions[question.id] = "No code blocks found"
                 continue
-            
+
             # Validate syntax
             import ast
             ast.parse(code_blocks)
-            
+
             # Execute safely
             local_ns = {}
             exec(code_blocks, globals(), local_ns)
-            
+
             if "Answer" not in local_ns:
                 failed_questions[question.id] = "No Answer class found"
                 continue
-            
+
             AnswerClass = local_ns["Answer"]
-            
+
             # Test instantiation
             test_instance = AnswerClass()
-            
+
             successful_templates[question.id] = AnswerClass
-            
+
         except SyntaxError as e:
             failed_questions[question.id] = f"Syntax error: {e}"
         except Exception as e:
             failed_questions[question.id] = f"Generation error: {e}"
-    
+
     print(f"Successfully generated: {len(successful_templates)}")
     print(f"Failed: {len(failed_questions)}")
-    
+
     if failed_questions:
         print("\nFailed questions:")
         for q_id, error in list(failed_questions.items())[:5]:
             print(f"  {q_id}: {error}")
-    
+
     return successful_templates, failed_questions
 
 # Usage
@@ -467,18 +467,18 @@ import random
 
 def generate_with_retry(question: str, question_json: str, max_retries: int = 3):
     """Generate template with retry logic for transient failures."""
-    
+
     for attempt in range(max_retries):
         try:
             template_code = generate_answer_template(question, question_json)
-            
+
             # Validate the result
             code_blocks = extract_and_combine_codeblocks(template_code)
             if code_blocks.strip():
                 return template_code
             else:
                 raise ValueError("No code blocks generated")
-                
+
         except Exception as e:
             if attempt < max_retries - 1:
                 wait_time = (2 ** attempt) + random.uniform(0, 1)
@@ -487,7 +487,7 @@ def generate_with_retry(question: str, question_json: str, max_retries: int = 3)
             else:
                 print(f"All {max_retries} attempts failed for question: {question[:50]}...")
                 raise
-    
+
     return None
 ```
 
@@ -498,23 +498,23 @@ def generate_with_retry(question: str, question_json: str, max_retries: int = 3)
 ```python
 def complete_benchmark_pipeline(input_file: str):
     """Complete pipeline from file to benchmark results."""
-    
+
     from karenina.questions.extractor import extract_and_generate_questions
     from karenina.benchmark.runner import run_benchmark
-    
+
     # Step 1: Extract questions
     extract_and_generate_questions(input_file, "questions.py")
-    
+
     # Step 2: Generate answer templates
     templates = generate_answer_templates_from_questions_file("questions.py")
-    
+
     # Step 3: Collect model responses (implementation depends on your needs)
     questions_dict = {}  # Load questions as dict
     responses_dict = {}  # Get responses from your model
-    
+
     # Step 4: Run benchmark
     results = run_benchmark(questions_dict, responses_dict, templates)
-    
+
     return results
 ```
 
@@ -534,7 +534,7 @@ class TemplateGenerationRequest(BaseModel):
 @app.post("/generate_templates")
 async def generate_templates_endpoint(request: TemplateGenerationRequest):
     """API endpoint for template generation."""
-    
+
     try:
         templates, code_blocks = generate_answer_templates_from_questions_file(
             request.questions_file,
@@ -542,7 +542,7 @@ async def generate_templates_endpoint(request: TemplateGenerationRequest):
             model_provider=request.provider,
             return_blocks=True
         )
-        
+
         return {
             "success": True,
             "template_count": len(templates),
@@ -550,22 +550,22 @@ async def generate_templates_endpoint(request: TemplateGenerationRequest):
             "provider": request.provider,
             "code_blocks": code_blocks
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/validate_template/{question_id}")
 async def validate_template(question_id: str, response_data: dict):
     """Validate response data against template."""
-    
+
     # Load templates (implement caching in production)
     templates = load_answer_templates_from_json("templates.json")
-    
+
     if question_id not in templates:
         raise HTTPException(status_code=404, detail="Template not found")
-    
+
     AnswerClass = templates[question_id]
-    
+
     try:
         validated = AnswerClass(**response_data)
         return {
@@ -589,39 +589,39 @@ from functools import partial
 
 def parallel_template_generation(questions_file: str, max_workers: int = 4):
     """Generate templates in parallel for better performance."""
-    
+
     from karenina.questions.reader import read_questions_from_file
-    
+
     all_questions = read_questions_from_file(questions_file)
-    
+
     def generate_single_template(question):
         return question.id, generate_answer_template(
             question.question,
             question.model_dump_json()
         )
-    
+
     templates = {}
-    
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_question = {
-            executor.submit(generate_single_template, q): q 
+            executor.submit(generate_single_template, q): q
             for q in all_questions
         }
-        
+
         for future in concurrent.futures.as_completed(future_to_question):
             question = future_to_question[future]
             try:
                 question_id, template_code = future.result()
-                
+
                 # Process template code
                 code_blocks = extract_and_combine_codeblocks(template_code)
                 local_ns = {}
                 exec(code_blocks, globals(), local_ns)
-                
+
                 templates[question_id] = local_ns["Answer"]
-                
+
             except Exception as e:
                 print(f"Error generating template for {question.id}: {e}")
-    
+
     return templates
 ```

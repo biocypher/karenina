@@ -136,7 +136,7 @@ def test_read_questions_from_file_spec_creation_fails():
 
     try:
         # Mock importlib.util.spec_from_file_location to return None
-        with patch("otarbench.questions.reader.importlib.util.spec_from_file_location", return_value=None):
+        with patch("karenina.questions.reader.importlib.util.spec_from_file_location", return_value=None):
             with pytest.raises(ImportError) as exc_info:
                 read_questions_from_file(tmp_path)
 
@@ -157,7 +157,7 @@ def test_read_questions_from_file_spec_loader_none():
         class MockSpec:
             loader = None
 
-        with patch("otarbench.questions.reader.importlib.util.spec_from_file_location", return_value=MockSpec()):
+        with patch("karenina.questions.reader.importlib.util.spec_from_file_location", return_value=MockSpec()):
             with pytest.raises(ImportError) as exc_info:
                 read_questions_from_file(tmp_path)
 

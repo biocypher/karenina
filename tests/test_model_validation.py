@@ -23,7 +23,7 @@ class TestModelConfigurationValidation:
             model_name="gpt-3.5-turbo",
             temperature=0.1,
             interface=INTERFACE_LANGCHAIN,
-            system_prompt="You are a helpful assistant."
+            system_prompt="You are a helpful assistant.",
         )
 
         # Should not raise any errors
@@ -39,7 +39,7 @@ class TestModelConfigurationValidation:
             model_name="openrouter/model",
             temperature=0.2,
             interface=INTERFACE_OPENROUTER,
-            system_prompt="You are a helpful assistant."
+            system_prompt="You are a helpful assistant.",
         )
 
         # Should not raise any errors
@@ -55,7 +55,7 @@ class TestModelConfigurationValidation:
             model_name="manual-model",
             temperature=0.0,
             interface=INTERFACE_MANUAL,
-            system_prompt="You are a helpful assistant."
+            system_prompt="You are a helpful assistant.",
         )
 
         # Should not raise any errors
@@ -74,7 +74,7 @@ class TestModelConfigurationValidation:
                         model_name="gpt-3.5-turbo",
                         temperature=0.1,
                         interface=INTERFACE_LANGCHAIN,
-                        system_prompt="You are a helpful assistant."
+                        system_prompt="You are a helpful assistant.",
                     )
                 ],
                 parsing_models=[
@@ -84,9 +84,9 @@ class TestModelConfigurationValidation:
                         model_name="gpt-3.5-turbo",
                         temperature=0.1,
                         interface=INTERFACE_LANGCHAIN,
-                        system_prompt="You are a validator."
+                        system_prompt="You are a validator.",
                     )
-                ]
+                ],
             )
 
     def test_missing_model_name(self):
@@ -100,7 +100,7 @@ class TestModelConfigurationValidation:
                         model_name="",  # Empty model name should fail
                         temperature=0.1,
                         interface=INTERFACE_LANGCHAIN,
-                        system_prompt="You are a helpful assistant."
+                        system_prompt="You are a helpful assistant.",
                     )
                 ],
                 parsing_models=[
@@ -110,9 +110,9 @@ class TestModelConfigurationValidation:
                         model_name="gpt-3.5-turbo",
                         temperature=0.1,
                         interface=INTERFACE_LANGCHAIN,
-                        system_prompt="You are a validator."
+                        system_prompt="You are a validator.",
                     )
-                ]
+                ],
             )
 
     def test_missing_system_prompt(self):
@@ -126,7 +126,7 @@ class TestModelConfigurationValidation:
                         model_name="gpt-3.5-turbo",
                         temperature=0.1,
                         interface=INTERFACE_LANGCHAIN,
-                        system_prompt=""  # Empty system prompt should fail
+                        system_prompt="",  # Empty system prompt should fail
                     )
                 ],
                 parsing_models=[
@@ -136,9 +136,9 @@ class TestModelConfigurationValidation:
                         model_name="gpt-3.5-turbo",
                         temperature=0.1,
                         interface=INTERFACE_LANGCHAIN,
-                        system_prompt="You are a validator."
+                        system_prompt="You are a validator.",
                     )
-                ]
+                ],
             )
 
     def test_no_answering_models(self):
@@ -153,9 +153,9 @@ class TestModelConfigurationValidation:
                         model_name="gpt-3.5-turbo",
                         temperature=0.1,
                         interface=INTERFACE_LANGCHAIN,
-                        system_prompt="You are a validator."
+                        system_prompt="You are a validator.",
                     )
-                ]
+                ],
             )
 
     def test_no_parsing_models(self):
@@ -169,10 +169,10 @@ class TestModelConfigurationValidation:
                         model_name="gpt-3.5-turbo",
                         temperature=0.1,
                         interface=INTERFACE_LANGCHAIN,
-                        system_prompt="You are a helpful assistant."
+                        system_prompt="You are a helpful assistant.",
                     )
                 ],
-                parsing_models=[]  # Empty parsing models should fail
+                parsing_models=[],  # Empty parsing models should fail
             )
 
     def test_rubric_enabled_without_parsing_models(self):
@@ -186,11 +186,11 @@ class TestModelConfigurationValidation:
                         model_name="gpt-3.5-turbo",
                         temperature=0.1,
                         interface=INTERFACE_LANGCHAIN,
-                        system_prompt="You are a helpful assistant."
+                        system_prompt="You are a helpful assistant.",
                     )
                 ],
                 parsing_models=[],  # Empty parsing models with rubric enabled should fail
-                rubric_enabled=True
+                rubric_enabled=True,
             )
 
     def test_rubric_enabled_with_invalid_replicate_count(self):
@@ -204,7 +204,7 @@ class TestModelConfigurationValidation:
                         model_name="gpt-3.5-turbo",
                         temperature=0.1,
                         interface=INTERFACE_LANGCHAIN,
-                        system_prompt="You are a helpful assistant."
+                        system_prompt="You are a helpful assistant.",
                     )
                 ],
                 parsing_models=[
@@ -214,11 +214,11 @@ class TestModelConfigurationValidation:
                         model_name="gpt-3.5-turbo",
                         temperature=0.1,
                         interface=INTERFACE_LANGCHAIN,
-                        system_prompt="You are a validator."
+                        system_prompt="You are a validator.",
                     )
                 ],
                 rubric_enabled=True,
-                replicate_count=0  # Invalid replicate count
+                replicate_count=0,  # Invalid replicate count
             )
 
     def test_valid_rubric_configuration(self):
@@ -231,7 +231,7 @@ class TestModelConfigurationValidation:
                     model_name="gpt-3.5-turbo",
                     temperature=0.1,
                     interface=INTERFACE_LANGCHAIN,
-                    system_prompt="You are a helpful assistant."
+                    system_prompt="You are a helpful assistant.",
                 )
             ],
             parsing_models=[
@@ -241,11 +241,11 @@ class TestModelConfigurationValidation:
                     model_name="gpt-3.5-turbo",
                     temperature=0.1,
                     interface=INTERFACE_LANGCHAIN,
-                    system_prompt="You are a validator."
+                    system_prompt="You are a validator.",
                 )
             ],
             rubric_enabled=True,
-            replicate_count=3
+            replicate_count=3,
         )
 
         # Should not raise any errors
@@ -262,7 +262,7 @@ class TestModelConfigurationValidation:
                     model_name="gpt-3.5-turbo",
                     temperature=0.1,
                     interface=INTERFACE_LANGCHAIN,
-                    system_prompt="You are a helpful assistant."
+                    system_prompt="You are a helpful assistant.",
                 ),
                 ModelConfiguration(
                     id="openrouter-model",
@@ -270,8 +270,8 @@ class TestModelConfigurationValidation:
                     model_name="openrouter/model",
                     temperature=0.2,
                     interface=INTERFACE_OPENROUTER,
-                    system_prompt="You are a helpful assistant."
-                )
+                    system_prompt="You are a helpful assistant.",
+                ),
             ],
             parsing_models=[
                 ModelConfiguration(
@@ -280,9 +280,9 @@ class TestModelConfigurationValidation:
                     model_name="manual-model",
                     temperature=0.0,
                     interface=INTERFACE_MANUAL,
-                    system_prompt="You are a validator."
+                    system_prompt="You are a validator.",
                 )
-            ]
+            ],
         )
 
         # Should not raise any errors
@@ -316,9 +316,9 @@ class TestLegacyConfigurationSupport:
                     model_name="gpt-3.5-turbo",
                     temperature=0.1,
                     interface=INTERFACE_LANGCHAIN,
-                    system_prompt="You are a validator."
+                    system_prompt="You are a validator.",
                 )
-            ]
+            ],
         )
 
         # Should convert legacy fields to answering_models array
@@ -340,14 +340,14 @@ class TestLegacyConfigurationSupport:
                     model_name="gpt-3.5-turbo",
                     temperature=0.1,
                     interface=INTERFACE_LANGCHAIN,
-                    system_prompt="You are a helpful assistant."
+                    system_prompt="You are a helpful assistant.",
                 )
             ],
             parsing_model_provider="anthropic",
             parsing_model_name="claude-3-haiku",
             parsing_temperature=0.0,
             parsing_interface=INTERFACE_MANUAL,
-            parsing_system_prompt="Custom parsing prompt"
+            parsing_system_prompt="Custom parsing prompt",
         )
 
         # Should convert legacy fields to parsing_models array
@@ -366,7 +366,7 @@ class TestLegacyConfigurationSupport:
             answering_model_name="gpt-3.5-turbo",
             # Other fields use defaults
             parsing_model_provider="openai",
-            parsing_model_name="gpt-3.5-turbo"
+            parsing_model_name="gpt-3.5-turbo",
         )
 
         answering_model = config.answering_models[0]
@@ -380,4 +380,3 @@ class TestLegacyConfigurationSupport:
         assert parsing_model.temperature == 0.1
         assert parsing_model.interface == INTERFACE_LANGCHAIN
         assert "validation assistant" in parsing_model.system_prompt.lower()
-

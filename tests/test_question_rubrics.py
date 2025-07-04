@@ -18,7 +18,9 @@ class TestQuestionRubrics:
         global_rubric = Rubric(
             traits=[
                 RubricTrait(name="clarity", description="Is the answer clear?", kind="boolean"),
-                RubricTrait(name="accuracy", description="Is the answer accurate?", kind="score", min_score=1, max_score=5)
+                RubricTrait(
+                    name="accuracy", description="Is the answer accurate?", kind="score", min_score=1, max_score=5
+                ),
             ]
         )
 
@@ -43,14 +45,18 @@ class TestQuestionRubrics:
         global_rubric = Rubric(
             traits=[
                 RubricTrait(name="clarity", description="Is the answer clear?", kind="boolean"),
-                RubricTrait(name="accuracy", description="Is the answer accurate?", kind="score", min_score=1, max_score=5)
+                RubricTrait(
+                    name="accuracy", description="Is the answer accurate?", kind="score", min_score=1, max_score=5
+                ),
             ]
         )
 
         question_rubric = Rubric(
             traits=[
                 RubricTrait(name="specificity", description="Is the answer specific to this question?", kind="boolean"),
-                RubricTrait(name="depth", description="How deep is the analysis?", kind="score", min_score=1, max_score=3)
+                RubricTrait(
+                    name="depth", description="How deep is the analysis?", kind="score", min_score=1, max_score=3
+                ),
             ]
         )
 
@@ -73,14 +79,22 @@ class TestQuestionRubrics:
         global_rubric = Rubric(
             traits=[
                 RubricTrait(name="clarity", description="Is the answer clear?", kind="boolean"),
-                RubricTrait(name="accuracy", description="Is the answer accurate?", kind="score", min_score=1, max_score=5)
+                RubricTrait(
+                    name="accuracy", description="Is the answer accurate?", kind="score", min_score=1, max_score=5
+                ),
             ]
         )
 
         question_rubric = Rubric(
             traits=[
-                RubricTrait(name="clarity", description="Different definition of clarity", kind="score", min_score=1, max_score=3),
-                RubricTrait(name="specificity", description="Is the answer specific?", kind="boolean")
+                RubricTrait(
+                    name="clarity",
+                    description="Different definition of clarity",
+                    kind="score",
+                    min_score=1,
+                    max_score=3,
+                ),
+                RubricTrait(name="specificity", description="Is the answer specific?", kind="boolean"),
             ]
         )
 
@@ -89,15 +103,13 @@ class TestQuestionRubrics:
 
     def test_merge_rubrics_preserves_trait_properties(self):
         """Test that trait properties are preserved during merging."""
-        global_rubric = Rubric(
-            traits=[
-                RubricTrait(name="clarity", description="Is the answer clear?", kind="boolean")
-            ]
-        )
+        global_rubric = Rubric(traits=[RubricTrait(name="clarity", description="Is the answer clear?", kind="boolean")])
 
         question_rubric = Rubric(
             traits=[
-                RubricTrait(name="depth", description="How deep is the analysis?", kind="score", min_score=2, max_score=10)
+                RubricTrait(
+                    name="depth", description="How deep is the analysis?", kind="score", min_score=2, max_score=10
+                )
             ]
         )
 
@@ -131,11 +143,7 @@ class TestQuestionRubrics:
 
     def test_merge_rubrics_mixed_empty(self):
         """Test merging when one rubric is empty."""
-        global_rubric = Rubric(
-            traits=[
-                RubricTrait(name="clarity", description="Is the answer clear?", kind="boolean")
-            ]
-        )
+        global_rubric = Rubric(traits=[RubricTrait(name="clarity", description="Is the answer clear?", kind="boolean")])
         empty_question = Rubric(traits=[])
 
         result = merge_rubrics(global_rubric, empty_question)
@@ -146,9 +154,7 @@ class TestQuestionRubrics:
         # Test reverse
         empty_global = Rubric(traits=[])
         question_rubric = Rubric(
-            traits=[
-                RubricTrait(name="specificity", description="Is the answer specific?", kind="boolean")
-            ]
+            traits=[RubricTrait(name="specificity", description="Is the answer specific?", kind="boolean")]
         )
 
         result = merge_rubrics(empty_global, question_rubric)

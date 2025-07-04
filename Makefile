@@ -5,6 +5,7 @@ help:
 	@echo "  make install         Install the package"
 	@echo "  make dev             Install the package in development mode with all extras"
 	@echo "  make test            Run tests"
+	@echo "  make test-changed    Run only tests affected by changes (testmon)"
 	@echo "  make lint            Run linting"
 	@echo "  make format          Format code"
 	@echo "  make type-check      Run type checking"
@@ -28,6 +29,9 @@ test:
 
 test-cov:
 	uv run pytest --cov=karenina --cov-report=html --cov-report=term
+
+test-changed:
+	uv run pytest --testmon -v
 
 lint:
 	uv run ruff check src/karenina tests

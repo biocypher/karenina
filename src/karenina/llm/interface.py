@@ -108,10 +108,8 @@ class ChatSession:
 chat_sessions: dict[str, ChatSession] = {}
 
 
-class ChatOpenRouter(ChatOpenAI):
-    openai_api_key: SecretStr | None = Field(
-        alias="api_key", default=None
-    )
+class ChatOpenRouter(ChatOpenAI):  # type: ignore[misc]
+    openai_api_key: SecretStr | None = Field(alias="api_key", default=None)
 
     @property
     def lc_secrets(self) -> dict[str, str]:
@@ -119,10 +117,20 @@ class ChatOpenRouter(ChatOpenAI):
 
     def __init__(self, openai_api_key: str | None = None, **kwargs: Any) -> None:
         openai_api_key = openai_api_key or os.environ.get("OPENROUTER_API_KEY")
-        super().__init__(base_url="https://openrouter.ai/api/v1", api_key=SecretStr(openai_api_key) if openai_api_key else None, **kwargs)
+        super().__init__(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=SecretStr(openai_api_key) if openai_api_key else None,
+            **kwargs,
+        )
 
 
-def init_chat_model_unified(model: str, provider: str | None = None, interface: str = "langchain", question_hash: str | None = None, **kwargs: Any) -> Any:
+def init_chat_model_unified(
+    model: str,
+    provider: str | None = None,
+    interface: str = "langchain",
+    question_hash: str | None = None,
+    **kwargs: Any,
+) -> Any:
     """Initialize a chat model using the unified interface.
 
     This function provides a unified way to initialize different chat models
