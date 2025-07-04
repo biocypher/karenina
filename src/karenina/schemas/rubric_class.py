@@ -3,8 +3,8 @@ Rubric data models for qualitative evaluation traits.
 """
 
 from typing import Literal
-from pydantic import BaseModel, ConfigDict, Field
 
+from pydantic import BaseModel, ConfigDict, Field
 
 TraitKind = Literal["boolean", "score"]
 
