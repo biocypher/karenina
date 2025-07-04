@@ -3,6 +3,7 @@ Rubric evaluation for qualitative assessment of LLM responses.
 """
 
 import json
+import logging
 import re
 from typing import Any
 
@@ -10,7 +11,9 @@ from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 from ...llm.interface import init_chat_model_unified
 from ...schemas.rubric_class import Rubric, RubricTrait
-from ..models import ModelConfiguration
+from ..models import INTERFACES_NO_PROVIDER_REQUIRED, ModelConfiguration
+
+logger = logging.getLogger(__name__)
 
 
 class RubricEvaluator:
@@ -21,10 +24,10 @@ class RubricEvaluator:
     def __init__(self, model_config: ModelConfiguration):
         """
         Initialize the rubric evaluator with an LLM model.
-        
+
         Args:
             model_config: Configuration for the evaluation model
-            
+
         Raises:
             ValueError: If model configuration is invalid
             RuntimeError: If LLM initialization fails
@@ -35,8 +38,13 @@ class RubricEvaluator:
         if not model_config.model_name:
             raise ValueError("Model name is required in model configuration")
 
-        if not model_config.model_provider:
-            raise ValueError("Model provider is required in model configuration")
+        # Model provider is optional for OpenRouter and manual interfaces
+        if model_config.interface not in INTERFACES_NO_PROVIDER_REQUIRED and not model_config.model_provider:
+            raise ValueError(
+                f"Model provider is required for model {model_config.id} "
+                f"(interface: {model_config.interface}). Only {INTERFACES_NO_PROVIDER_REQUIRED} "
+                f"interfaces allow empty providers."
+            )
 
         self.model_config = model_config
 
@@ -58,15 +66,15 @@ class RubricEvaluator:
     ) -> dict[str, int | bool]:
         """
         Evaluate an answer against a rubric's traits.
-        
+
         Args:
             question: The original question asked
             answer: The LLM's response to evaluate
             rubric: The rubric containing evaluation traits
-            
+
         Returns:
             Dictionary mapping trait names to their evaluated scores
-            
+
         Raises:
             Exception: If evaluation fails completely
         """
@@ -82,8 +90,8 @@ class RubricEvaluator:
                 return self._evaluate_sequential(question, answer, rubric)
             except Exception as seq_error:
                 # Log both errors and raise the sequential one
-                print(f"Batch evaluation failed: {batch_error}")
-                print(f"Sequential evaluation failed: {seq_error}")
+                logger.error(f"Batch evaluation failed: {batch_error}")
+                logger.error(f"Sequential evaluation failed: {seq_error}")
                 raise seq_error
 
     def _evaluate_batch(
@@ -124,9 +132,9 @@ class RubricEvaluator:
                 score = self._evaluate_single_trait(question, answer, trait)
                 results[trait.name] = score
             except Exception as e:
-                print(f"Failed to evaluate trait '{trait.name}': {e}")
+                logger.warning(f"Failed to evaluate trait '{trait.name}': {e}")
                 # Continue with other traits, mark this one as None
-                results[trait.name] = None
+                results[trait.name] = None  # type: ignore[assignment]
 
         return results
 
@@ -203,7 +211,7 @@ JSON Response:"""
         """Build system prompt for single trait evaluation."""
         if trait.kind == "boolean":
             return f"""You are evaluating responses for the trait: {trait.name}
-            
+
 Description: {trait.description or 'Boolean evaluation'}
 
 Respond with only "true" or "false" based on whether the answer meets this criteria."""
@@ -211,7 +219,7 @@ Respond with only "true" or "false" based on whether the answer meets this crite
             min_score = trait.min_score or 1
             max_score = trait.max_score or 5
             return f"""You are evaluating responses for the trait: {trait.name}
-            
+
 Description: {trait.description or 'Score-based evaluation'}
 
 Rate the answer on a scale from {min_score} to {max_score}, where:
@@ -240,7 +248,7 @@ Please evaluate this answer for the trait "{trait.name}": {trait.description or 
         try:
             result = json.loads(json_match.group())
         except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid JSON in response: {e}")
+            raise ValueError(f"Invalid JSON in response: {e}") from e
 
         # Validate and convert the results
         validated_results = {}
@@ -255,7 +263,7 @@ Please evaluate this answer for the trait "{trait.name}": {trait.description or 
         # Add None for missing traits
         for trait in traits:
             if trait.name not in validated_results:
-                validated_results[trait.name] = None
+                validated_results[trait.name] = None  # type: ignore[assignment]
 
         return validated_results
 
@@ -290,20 +298,20 @@ Please evaluate this answer for the trait "{trait.name}": {trait.description or 
         if trait.kind == "boolean":
             if isinstance(score, bool):
                 return score
-            elif isinstance(score, (int, str)):
+            elif isinstance(score, int | str):
                 return bool(score) and str(score).lower() not in ["false", "0", "no"]
             else:
                 return bool(score)
         else:
-            if not isinstance(score, (int, float)):
+            if not isinstance(score, int | float):
                 try:
                     score = int(score)
-                except (ValueError, TypeError):
-                    raise ValueError(f"Invalid score type for trait {trait.name}: {type(score)}")
+                except (ValueError, TypeError) as e:
+                    raise ValueError(f"Invalid score type for trait {trait.name}: {type(score)}") from e
 
             min_score = trait.min_score or 1
             max_score = trait.max_score or 5
 
             # Clamp score to valid range
-            score = max(min_score, min(max_score, int(score)))
-            return score
+            clamped_score = max(min_score, min(max_score, int(score)))
+            return clamped_score

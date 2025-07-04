@@ -4,6 +4,12 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+# Interface constants
+INTERFACE_OPENROUTER = "openrouter"
+INTERFACE_MANUAL = "manual"
+INTERFACE_LANGCHAIN = "langchain"
+INTERFACES_NO_PROVIDER_REQUIRED = [INTERFACE_OPENROUTER, INTERFACE_MANUAL]
+
 
 class ModelConfiguration(BaseModel):
     """Configuration for a single model."""
@@ -40,7 +46,7 @@ class VerificationConfig(BaseModel):
     parsing_interface: str | None = None
     parsing_system_prompt: str | None = None
 
-    def __init__(self, **data):
+    def __init__(self, **data: Any) -> None:
         """Initialize with backward compatibility for single model configs."""
         # If legacy single model fields are provided, convert to arrays
         if "answering_models" not in data and any(k.startswith("answering_") for k in data):
@@ -49,7 +55,7 @@ class VerificationConfig(BaseModel):
                 model_provider=data.get("answering_model_provider", ""),
                 model_name=data.get("answering_model_name", ""),
                 temperature=data.get("answering_temperature", 0.1),
-                interface=data.get("answering_interface", "langchain"),
+                interface=data.get("answering_interface", INTERFACE_LANGCHAIN),
                 system_prompt=data.get(
                     "answering_system_prompt",
                     "You are an expert assistant. Answer the question accurately and concisely.",
@@ -63,7 +69,7 @@ class VerificationConfig(BaseModel):
                 model_provider=data.get("parsing_model_provider", ""),
                 model_name=data.get("parsing_model_name", ""),
                 temperature=data.get("parsing_temperature", 0.1),
-                interface=data.get("parsing_interface", "langchain"),
+                interface=data.get("parsing_interface", INTERFACE_LANGCHAIN),
                 system_prompt=data.get(
                     "parsing_system_prompt",
                     "You are a validation assistant. Parse and validate responses against the given Pydantic template.",
@@ -76,8 +82,19 @@ class VerificationConfig(BaseModel):
         # Validate configuration after initialization
         self._validate_config()
 
-    def _validate_config(self):
-        """Validate configuration, especially for rubric-enabled scenarios."""
+    def _validate_config(self) -> None:
+        """
+        Validate configuration, especially for rubric-enabled scenarios.
+
+        Validates that:
+        - At least one answering and parsing model is configured
+        - Required fields are present for each model
+        - Model provider is provided for interfaces that require it
+        - Rubric-specific requirements are met when enabled
+
+        Raises:
+            ValueError: If any validation rule fails
+        """
         # Check that we have at least one answering and parsing model
         if not self.answering_models:
             raise ValueError("At least one answering model must be configured")
@@ -88,8 +105,12 @@ class VerificationConfig(BaseModel):
         # Validate model configurations
         for model in self.answering_models + self.parsing_models:
             # Model provider is optional for OpenRouter and manual interfaces
-            if model.interface not in ["openrouter", "manual"] and not model.model_provider:
-                raise ValueError(f"Model provider is required for model {model.id}")
+            if model.interface not in INTERFACES_NO_PROVIDER_REQUIRED and not model.model_provider:
+                raise ValueError(
+                    f"Model provider is required for model {model.id} "
+                    f"(interface: {model.interface}). Only {INTERFACES_NO_PROVIDER_REQUIRED} "
+                    f"interfaces allow empty providers."
+                )
             if not model.model_name:
                 raise ValueError(f"Model name is required for model {model.id}")
             if not model.system_prompt:
@@ -165,7 +186,7 @@ class VerificationJob(BaseModel):
     results: dict[str, VerificationResult] = Field(default_factory=dict)
     error_message: str | None = None
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         """Convert job to dictionary for API response."""
         return {
             "job_id": self.job_id,
@@ -193,7 +214,7 @@ class FinishedTemplate(BaseModel):
     template_code: str
     last_modified: str
     finished: bool = True
-    question_rubric: dict | None = None  # Question-specific rubric as dict
+    question_rubric: dict[str, Any] | None = None  # Question-specific rubric as dict
 
 
 class VerificationRequest(BaseModel):
