@@ -1,4 +1,4 @@
-.PHONY: help install dev test lint format type-check clean docs build version release release-dry
+.PHONY: help install dev test lint format type-check dead-code clean docs build version release release-dry
 
 help:
 	@echo "Available commands:"
@@ -8,6 +8,7 @@ help:
 	@echo "  make lint            Run linting"
 	@echo "  make format          Format code"
 	@echo "  make type-check      Run type checking"
+	@echo "  make dead-code       Find dead code with vulture"
 	@echo "  make clean           Clean build artifacts"
 	@echo "  make docs            Build documentation"
 	@echo "  make build           Build distribution packages"
@@ -23,19 +24,22 @@ dev:
 	pre-commit install
 
 test:
-	pytest -v
+	uv run pytest -v
 
 test-cov:
-	pytest --cov=karenina --cov-report=html --cov-report=term
+	uv run pytest --cov=karenina --cov-report=html --cov-report=term
 
 lint:
-	ruff check src/karenina tests
+	uv run ruff check src/karenina tests
 
 format:
-	ruff format src/karenina tests
+	uv run ruff format src/karenina tests
 
 type-check:
-	mypy src/karenina
+	uv run mypy src/karenina
+
+dead-code:
+	uv run vulture src/karenina
 
 clean:
 	rm -rf build/
@@ -59,7 +63,7 @@ build:
 	uv pip install build
 	python -m build
 
-check: lint type-check test
+check: lint type-check dead-code test
 
 version:
 	@echo "Analyzing commits for next version..."

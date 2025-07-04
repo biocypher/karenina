@@ -48,6 +48,7 @@ dev = [
     "pytest-mock>=3.10.0",
     "ruff>=0.1.0",
     "mypy>=1.0.0",
+    "vulture>=2.0.0",
     "pre-commit>=3.0.0",
     "mkdocs>=1.5.0",
     "mkdocs-material>=9.0.0",
@@ -134,6 +135,14 @@ known-first-party = ["karenina"]
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["ARG001"]  # Unused function argument
 
+[tool.vulture]
+# Configure vulture for dead code detection
+paths = ["src", "tests"]
+min_confidence = 80
+ignore_decorators = ["@pytest.fixture", "@property", "@abstractmethod"]
+ignore_names = ["test_*", "setUp", "tearDown"]
+make_whitelist = true
+
 [dependency-groups]
 dev = [
     "build>=1.2.2.post1",
@@ -144,6 +153,7 @@ dev = [
     "python-semantic-release>=10.1.0",
     "ruff>=0.12.0",
     "twine>=6.1.0",
+    "vulture>=2.0.0",
 ]
 
 [tool.semantic_release]
