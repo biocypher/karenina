@@ -73,6 +73,37 @@ class VerificationConfig(BaseModel):
 
         super().__init__(**data)
 
+        # Validate configuration after initialization
+        self._validate_config()
+
+    def _validate_config(self):
+        """Validate configuration, especially for rubric-enabled scenarios."""
+        # Check that we have at least one answering and parsing model
+        if not self.answering_models:
+            raise ValueError("At least one answering model must be configured")
+
+        if not self.parsing_models:
+            raise ValueError("At least one parsing model must be configured")
+
+        # Validate model configurations
+        for model in self.answering_models + self.parsing_models:
+            if not model.model_provider:
+                raise ValueError(f"Model provider is required for model {model.id}")
+            if not model.model_name:
+                raise ValueError(f"Model name is required for model {model.id}")
+            if not model.system_prompt:
+                raise ValueError(f"System prompt is required for model {model.id}")
+
+        # Additional validation for rubric-enabled scenarios
+        if self.rubric_enabled:
+            # Ensure parsing models are configured since they're needed for rubric evaluation
+            if not self.parsing_models:
+                raise ValueError("Parsing models are required when rubric evaluation is enabled")
+
+            # Check that replicate count is valid
+            if self.replicate_count < 1:
+                raise ValueError("Replicate count must be at least 1")
+
 
 class VerificationResult(BaseModel):
     """Result of verifying a single question."""

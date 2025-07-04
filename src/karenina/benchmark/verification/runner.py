@@ -315,6 +315,10 @@ def run_single_model_verification(
                     answer=raw_llm_response,
                     rubric=rubric
                 )
+            except (ValueError, RuntimeError) as e:
+                # Handle specific rubric evaluator errors
+                print(f"Warning: Rubric evaluator initialization/configuration failed for question {question_id}: {e}")
+                rubric_result = None
             except Exception as e:
                 # Don't fail the entire verification if rubric evaluation fails
                 print(f"Warning: Rubric evaluation failed for question {question_id}: {e}")
