@@ -45,7 +45,7 @@ def read_questions_from_file(
     if not hasattr(questions_module, "all_questions"):
         raise AttributeError(f"Module {module_name} does not contain 'all_questions' variable")
 
-    all_questions = questions_module.all_questions
+    all_questions: list[Question] = questions_module.all_questions
 
     if return_dict:
         # Return a dictionary with question IDs as keys and Question objects as values

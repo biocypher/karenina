@@ -23,15 +23,15 @@ class ManualTraceNotFoundError(LLMError):
 class ManualLLM:
     """
     LLM implementation that returns precomputed manual traces.
-    
+
     This class mimics the behavior of a real LLM but instead of making
     API calls, it retrieves precomputed answer traces based on question hashes.
     """
 
-    def __init__(self, question_hash: str, **_kwargs):
+    def __init__(self, question_hash: str, **_kwargs: Any) -> None:
         """
         Initialize the ManualLLM.
-        
+
         Args:
             question_hash: MD5 hash of the question this LLM will answer
             **kwargs: Additional arguments for compatibility (ignored)
@@ -41,13 +41,13 @@ class ManualLLM:
     def invoke(self, _messages: list[BaseMessage]) -> AIMessage:
         """
         Return precomputed trace for the question.
-        
+
         Args:
             messages: List of messages (ignored for manual traces)
-            
+
         Returns:
             AIMessage containing the precomputed trace
-            
+
         Raises:
             ManualTraceNotFoundError: If no trace is found for the question hash
         """
@@ -71,10 +71,10 @@ class ManualLLM:
     def with_structured_output(self, _schema: Any) -> "ManualLLM":
         """
         Return self for compatibility with structured output interface.
-        
+
         Args:
             schema: Output schema (ignored for compatibility)
-            
+
         Returns:
             Self for method chaining
         """
@@ -84,10 +84,10 @@ class ManualLLM:
     def content(self) -> str:
         """
         Get the trace content directly.
-        
+
         Returns:
             The precomputed trace content
-            
+
         Raises:
             ManualTraceNotFoundError: If no trace is found
         """
@@ -109,14 +109,14 @@ class ManualLLM:
         return trace
 
 
-def create_manual_llm(question_hash: str, **_kwargs) -> ManualLLM:
+def create_manual_llm(question_hash: str, **_kwargs: Any) -> ManualLLM:
     """
     Create a ManualLLM instance for a specific question hash.
-    
+
     Args:
         question_hash: MD5 hash of the question
         **kwargs: Additional arguments for compatibility
-        
+
     Returns:
         ManualLLM instance configured for the question
     """

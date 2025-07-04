@@ -22,7 +22,7 @@ question_1 = Question(
 )
 
 question_2 = Question(
-    id="test2", 
+    id="test2",
     question="Test question 2?",
     raw_answer="No",
     tags=[],
@@ -239,7 +239,7 @@ question_1 = Question(
 )
 
 question_2 = Question(
-    id="hash2", 
+    id="hash2",
     question="Second question?",
     raw_answer="Second answer",
     tags=["tag2"],

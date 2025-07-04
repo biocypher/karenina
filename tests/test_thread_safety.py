@@ -80,7 +80,7 @@ def test_concurrent_read_write():
     def reader_thread():
         """Continuously read traces."""
         try:
-            for i in range(10):
+            for _i in range(10):
                 trace = manager.get_trace("d41d8cd98f00b204e9800998ecf8427e")
                 count = manager.get_trace_count()
                 read_results.append((trace is not None, count))
@@ -135,7 +135,7 @@ def test_concurrent_read_write():
     assert len(write_results) > 0, "No write results"
 
     # All reads should have succeeded
-    for trace_found, count in read_results:
+    for _trace_found, count in read_results:
         assert isinstance(count, int) and count >= 0
 
     # Clean up
@@ -152,7 +152,7 @@ def test_concurrent_memory_usage():
     def check_memory_usage(thread_id: int):
         """Check memory usage from a thread."""
         try:
-            for i in range(5):
+            for _i in range(5):
                 info = manager.get_memory_usage_info()
                 assert isinstance(info["trace_count"], int)
                 assert isinstance(info["total_characters"], int)

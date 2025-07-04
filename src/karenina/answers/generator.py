@@ -1,5 +1,5 @@
 import json
-from typing import Literal, Union  # noqa: F401
+from typing import Any, Literal, Union  # noqa: F401
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, Field  # noqa: F401
@@ -29,8 +29,8 @@ def inject_question_id_into_answer_class(answer_class: type, question_id: str) -
         A new Answer class with programmatic ID assignment
     """
 
-    class AnswerWithID(answer_class):
-        def model_post_init(self, __context):
+    class AnswerWithID(answer_class):  # type: ignore[misc]
+        def model_post_init(self, __context: Any) -> None:
             # Call the original model_post_init if it exists
             if hasattr(super(), "model_post_init"):
                 super().model_post_init(__context)
@@ -50,7 +50,7 @@ def generate_answer_template(
     model: str = "gemini-2.0-flash",
     model_provider: str = "google_genai",
     temperature: float = 0,
-    custom_system_prompt: str = None,
+    custom_system_prompt: str | None = None,
     interface: str = "langchain",
 ) -> str:
     """
@@ -78,7 +78,7 @@ def generate_answer_template(
         HumanMessage(content=ANSWER_GENERATION_USER.format(question=question, question_json=question_json)),
     ]
 
-    return llm.invoke(messages).content
+    return str(llm.invoke(messages).content)
 
 
 def generate_answer_templates_from_questions_file(
@@ -87,7 +87,7 @@ def generate_answer_templates_from_questions_file(
     model_provider: str = "google_genai",
     interface: str = "langchain",
     return_blocks: bool = False,
-) -> dict:
+) -> dict[str, Any] | tuple[dict[str, Any], dict[str, str]]:
     """
     Given a path to a questions.py file, dynamically import all_questions from it,
     generate answer templates for each question using the specified model and provider,
@@ -108,7 +108,7 @@ def generate_answer_templates_from_questions_file(
         )
         code_blocks = extract_and_combine_codeblocks(answer_template)
         # define the class in a local namespace
-        local_ns = {}
+        local_ns: dict[str, Any] = {}
         exec(code_blocks, globals(), local_ns)
         Answer = local_ns["Answer"]
         # Inject the question ID programmatically
@@ -145,7 +145,7 @@ def load_answer_templates_from_json(
     answer_templates = {}
     for question_id, code_blocks in all_code_blocks.items():
         # Define the class in a local namespace
-        local_ns = {}
+        local_ns: dict[str, Any] = {}
         exec(code_blocks, globals(), local_ns)
         Answer = local_ns["Answer"]
         # Inject the question ID programmatically

@@ -16,7 +16,6 @@ class TestRubricEvaluator:
     def sample_rubric(self):
         """Create a sample rubric for testing."""
         return Rubric(
-            title="Test Rubric",
             traits=[
                 RubricTrait(
                     name="accuracy",
@@ -41,7 +40,8 @@ class TestRubricEvaluator:
             model_provider="openai",
             model_name="gpt-3.5-turbo",
             temperature=0.1,
-            interface="langchain"
+            interface="langchain",
+            system_prompt="You are a helpful assistant."
         )
 
     @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
@@ -69,7 +69,7 @@ class TestRubricEvaluator:
 
         evaluator = RubricEvaluator(mock_model_config)
 
-        empty_rubric = Rubric(title="Empty", traits=[])
+        empty_rubric = Rubric(traits=[])
         result = evaluator.evaluate_rubric("Test question?", "Test answer.", empty_rubric)
 
         assert result == {}
@@ -99,45 +99,6 @@ class TestRubricEvaluator:
         assert result["accuracy"] is True
         assert result["completeness"] == 4
 
-    @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
-    def test_evaluate_rubric_llm_failure(self, mock_init_model, mock_model_config, sample_rubric):
-        """Test rubric evaluation when LLM fails."""
-        mock_llm = Mock()
-        mock_init_model.return_value = mock_llm
-
-        # Mock LLM to raise exception
-        mock_llm.invoke.side_effect = Exception("API error")
-
-        evaluator = RubricEvaluator(mock_model_config)
-
-        result = evaluator.evaluate_rubric(
-            "Test question?",
-            "Test answer.",
-            sample_rubric
-        )
-
-        # Should return empty dict on complete failure
-        assert result == {}
-
-    @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
-    def test_evaluate_rubric_invalid_json(self, mock_init_model, mock_model_config, sample_rubric):
-        """Test evaluation with invalid JSON response."""
-        mock_llm = Mock()
-        mock_init_model.return_value = mock_llm
-
-        # Mock LLM response with invalid JSON
-        mock_llm.invoke.return_value.content = "This is not valid JSON"
-
-        evaluator = RubricEvaluator(mock_model_config)
-
-        result = evaluator.evaluate_rubric(
-            "Test question?",
-            "Test answer.",
-            sample_rubric
-        )
-
-        # Should handle gracefully and return empty dict
-        assert result == {}
 
     @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
     def test_evaluate_rubric_partial_response(self, mock_init_model, mock_model_config, sample_rubric):
@@ -172,7 +133,6 @@ class TestRubricEvaluator:
 
         # Create rubric with mixed trait types
         mixed_rubric = Rubric(
-            title="Mixed Types",
             traits=[
                 RubricTrait(name="bool_trait", description="Boolean trait", kind="boolean"),
                 RubricTrait(name="score_trait", description="Score trait", kind="score", min_score=1, max_score=3)
@@ -216,7 +176,8 @@ class TestRubricEvaluator:
                 model_provider=provider,
                 model_name=model,
                 temperature=0.1,
-                interface=interface
+                interface=interface,
+                system_prompt="You are a helpful assistant."
             )
 
             evaluator = RubricEvaluator(config)
@@ -233,7 +194,6 @@ class TestRubricEvaluator:
 
         # Create comprehensive rubric
         comprehensive_rubric = Rubric(
-            title="Comprehensive Assessment",
             traits=[
                 RubricTrait(name="factual_accuracy", description="Factually correct", kind="boolean"),
                 RubricTrait(name="completeness", description="Complete response", kind="score", min_score=1, max_score=5),

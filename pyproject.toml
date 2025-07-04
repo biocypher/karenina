@@ -108,6 +108,8 @@ ignore_missing_imports = true
 [tool.ruff]
 target-version = "py311"
 line-length = 120
+
+[tool.ruff.lint]
 select = [
     "E",   # pycodestyle errors
     "W",   # pycodestyle warnings
@@ -126,10 +128,10 @@ ignore = [
     "W191",  # indentation contains tabs
 ]
 
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 known-first-party = ["karenina"]
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 "tests/*" = ["ARG001"]  # Unused function argument
 
 [dependency-groups]

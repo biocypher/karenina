@@ -9,7 +9,7 @@ from karenina.answers.generator import inject_question_id_into_answer_class
 from karenina.schemas.answer_class import BaseAnswer
 
 
-def read_answer_templates(answers_json_path: str | Path) -> dict:
+def read_answer_templates(answers_json_path: str | Path) -> dict[str, type]:
     """
     Read answer templates from a JSON file and return a dictionary of answer templates.
 
@@ -33,7 +33,7 @@ def read_answer_templates(answers_json_path: str | Path) -> dict:
         exec(re.sub(r"^class Answer", f"class Answer{idx}", value), namespace)
         Answer = namespace["Answer" + str(idx)]
         # Inject the question ID programmatically
-        AnswerWithID = inject_question_id_into_answer_class(Answer, key)
+        AnswerWithID = inject_question_id_into_answer_class(Answer, key)  # type: ignore[arg-type]
         answer_dict[key] = AnswerWithID
         idx += 1
 

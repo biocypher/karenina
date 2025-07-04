@@ -51,14 +51,17 @@ class TestRubricTrait:
         assert trait.max_score == 5
 
     def test_invalid_trait_name(self):
-        """Test that empty trait names are allowed by Pydantic."""
-        # Empty names are actually allowed by the schema
-        trait = RubricTrait(
-            name="",  # Empty name is allowed
-            description="Valid description",
-            kind="boolean"
-        )
-        assert trait.name == ""
+        """Test that empty trait names are rejected by Pydantic."""
+        import pytest
+        from pydantic import ValidationError
+
+        # Empty names should be rejected by the schema
+        with pytest.raises(ValidationError):
+            RubricTrait(
+                name="",  # Empty name should be rejected
+                description="Valid description",
+                kind="boolean"
+            )
 
     def test_missing_description(self):
         """Test trait creation without description."""
@@ -98,11 +101,9 @@ class TestRubric:
         ]
 
         rubric = Rubric(
-            title="Response Quality Rubric",
             traits=traits
         )
 
-        assert rubric.title == "Response Quality Rubric"
         assert len(rubric.traits) == 2
         assert rubric.traits[0].name == "clarity"
         assert rubric.traits[1].name == "completeness"
@@ -114,11 +115,9 @@ class TestRubric:
         ]
 
         rubric = Rubric(
-            title="Test Rubric",
             traits=traits
         )
 
-        assert rubric.title == "Test Rubric"
         # No description field in Rubric model
         assert len(rubric.traits) == 1
 
@@ -128,21 +127,17 @@ class TestRubric:
             RubricTrait(name="test", description="Test trait", kind="boolean")
         ]
 
-        # Empty titles are actually allowed by the schema
-        rubric = Rubric(
-            title="",  # Empty title is allowed
+        # Empty traits list is allowed
+        Rubric(
             traits=traits
         )
-        assert rubric.title == ""
 
     def test_empty_traits_list(self):
         """Test rubric with empty traits list."""
         rubric = Rubric(
-            title="Empty Rubric",
             traits=[]
         )
 
-        assert rubric.title == "Empty Rubric"
         assert len(rubric.traits) == 0
 
     def test_rubric_serialization(self):
@@ -152,14 +147,12 @@ class TestRubric:
         ]
 
         rubric = Rubric(
-            title="Test Rubric",
             traits=traits
         )
 
         rubric_dict = rubric.model_dump()
 
-        assert rubric_dict["title"] == "Test Rubric"
-        # No description field in Rubric model
+        # No title field in current Rubric model
         assert len(rubric_dict["traits"]) == 1
         assert rubric_dict["traits"][0]["name"] == "clarity"
         assert rubric_dict["traits"][0]["kind"] == "boolean"
@@ -171,18 +164,15 @@ class TestRubricEvaluation:
     def test_evaluation_creation(self):
         """Test creating a rubric evaluation."""
         evaluation = RubricEvaluation(
-            rubric_title="Test Rubric",
             trait_scores={"clarity": True, "completeness": 4}
         )
 
-        assert evaluation.rubric_title == "Test Rubric"
         assert evaluation.trait_scores["clarity"] is True
         assert evaluation.trait_scores["completeness"] == 4
 
     def test_evaluation_with_mixed_scores(self):
         """Test evaluation with boolean and numeric scores."""
         evaluation = RubricEvaluation(
-            rubric_title="Mixed Scores Test",
             trait_scores={
                 "accuracy": True,
                 "relevance": False,
@@ -200,23 +190,19 @@ class TestRubricEvaluation:
     def test_empty_trait_scores(self):
         """Test evaluation with empty trait scores."""
         evaluation = RubricEvaluation(
-            rubric_title="Empty Test",
             trait_scores={}
         )
 
-        assert evaluation.rubric_title == "Empty Test"
         assert len(evaluation.trait_scores) == 0
 
     def test_evaluation_serialization(self):
         """Test that evaluation can be serialized to dict."""
         evaluation = RubricEvaluation(
-            rubric_title="Serialize Test",
             trait_scores={"test_trait": True}
         )
 
         eval_dict = evaluation.model_dump()
 
-        assert eval_dict["rubric_title"] == "Serialize Test"
         assert eval_dict["trait_scores"]["test_trait"] is True
 
 
@@ -278,13 +264,11 @@ class TestRubricIntegration:
 
         # Create rubric
         rubric = Rubric(
-            title="Content Quality Assessment",
             traits=traits
         )
 
         # Create evaluation
         evaluation = RubricEvaluation(
-            rubric_title="Content Quality Assessment",
             trait_scores={
                 "accuracy": True,
                 "completeness": 4,
@@ -294,7 +278,6 @@ class TestRubricIntegration:
 
         # Verify the complete workflow
         assert len(rubric.traits) == 3
-        assert rubric.title == "Content Quality Assessment"
 
         # Verify trait types
         boolean_traits = [t for t in rubric.traits if t.kind == "boolean"]
@@ -321,7 +304,6 @@ class TestRubricIntegration:
         ]
 
         original_rubric = Rubric(
-            title="JSON Test",
             traits=traits
         )
 
@@ -333,8 +315,7 @@ class TestRubricIntegration:
         restored_rubric = Rubric(**rubric_data)
 
         # Verify round trip
-        assert restored_rubric.title == original_rubric.title
-        # No description field in Rubric model
+        # No title field in current Rubric model
         assert len(restored_rubric.traits) == len(original_rubric.traits)
         assert restored_rubric.traits[0].name == original_rubric.traits[0].name
         assert restored_rubric.traits[0].kind == original_rubric.traits[0].kind

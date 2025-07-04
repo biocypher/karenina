@@ -7,9 +7,10 @@ managing conversation sessions, and handling LLM-related operations.
 import os
 import uuid
 from datetime import datetime
+from typing import Any
 
 from dotenv import load_dotenv
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field, SecretStr
 
@@ -73,19 +74,19 @@ class ChatSession:
         self.model = model
         self.provider = provider
         self.temperature = temperature
-        self.messages: list = []
+        self.messages: list[BaseMessage] = []
         self.llm = None
         self.created_at = datetime.now()
         self.last_used = datetime.now()
 
-    def initialize_llm(self):
+    def initialize_llm(self) -> None:
         """Initialize the LLM if not already done."""
         if self.llm is None:
             self.llm = init_chat_model_unified(
                 model=self.model, provider=self.provider, interface="langchain", temperature=self.temperature
             )
 
-    def add_message(self, message, is_human: bool = True):
+    def add_message(self, message: str, is_human: bool = True) -> None:
         """Add a message to the conversation history."""
         if is_human:
             self.messages.append(HumanMessage(content=message))
@@ -93,7 +94,7 @@ class ChatSession:
             self.messages.append(AIMessage(content=message))
         self.last_used = datetime.now()
 
-    def add_system_message(self, message: str):
+    def add_system_message(self, message: str) -> None:
         """Add a system message to the conversation."""
         # Insert system message at the beginning if it doesn't exist
         if not self.messages or not isinstance(self.messages[0], SystemMessage):
@@ -109,19 +110,19 @@ chat_sessions: dict[str, ChatSession] = {}
 
 class ChatOpenRouter(ChatOpenAI):
     openai_api_key: SecretStr | None = Field(
-        alias="api_key", default_factory=lambda: os.environ.get("OPENROUTER_API_KEY")
+        alias="api_key", default=None
     )
 
     @property
     def lc_secrets(self) -> dict[str, str]:
         return {"openai_api_key": "OPENROUTER_API_KEY"}
 
-    def __init__(self, openai_api_key: str | None = None, **kwargs):
+    def __init__(self, openai_api_key: str | None = None, **kwargs: Any) -> None:
         openai_api_key = openai_api_key or os.environ.get("OPENROUTER_API_KEY")
-        super().__init__(base_url="https://openrouter.ai/api/v1", openai_api_key=openai_api_key, **kwargs)
+        super().__init__(base_url="https://openrouter.ai/api/v1", api_key=SecretStr(openai_api_key) if openai_api_key else None, **kwargs)
 
 
-def init_chat_model_unified(model: str, provider: str = None, interface: str = "langchain", question_hash: str = None, **kwargs):
+def init_chat_model_unified(model: str, provider: str | None = None, interface: str = "langchain", question_hash: str | None = None, **kwargs: Any) -> Any:
     """Initialize a chat model using the unified interface.
 
     This function provides a unified way to initialize different chat models
@@ -225,6 +226,8 @@ def call_model(
         session.add_message(message, is_human=True)
 
         # Get response from model
+        if session.llm is None:
+            raise ValueError("LLM not initialized")
         response = session.llm.invoke(session.messages)
         response_content = response.content
 
@@ -248,7 +251,7 @@ def get_session(session_id: str) -> ChatSession | None:
     return chat_sessions.get(session_id)
 
 
-def list_sessions() -> list[dict]:
+def list_sessions() -> list[dict[str, Any]]:
     """List all active chat sessions."""
     return [
         {
@@ -271,7 +274,7 @@ def delete_session(session_id: str) -> bool:
     return False
 
 
-def clear_all_sessions():
+def clear_all_sessions() -> None:
     """Clear all chat sessions."""
     global chat_sessions
     chat_sessions = {}

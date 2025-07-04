@@ -9,26 +9,26 @@ from karenina.benchmark.verification.runner import _is_valid_md5_hash, run_singl
 def test_is_valid_md5_hash():
     """Test MD5 hash validation function."""
     # Valid MD5 hashes
-    assert _is_valid_md5_hash("d41d8cd98f00b204e9800998ecf8427e") == True
-    assert _is_valid_md5_hash("c4ca4238a0b923820dcc509a6f75849b") == True
-    assert _is_valid_md5_hash("ABCDEF1234567890123456789012345") == False  # 31 chars
-    assert _is_valid_md5_hash("ABCDEF123456789012345678901234567") == False  # 33 chars
+    assert _is_valid_md5_hash("d41d8cd98f00b204e9800998ecf8427e")
+    assert _is_valid_md5_hash("c4ca4238a0b923820dcc509a6f75849b")
+    assert not _is_valid_md5_hash("ABCDEF1234567890123456789012345")  # 31 chars
+    assert not _is_valid_md5_hash("ABCDEF123456789012345678901234567")  # 33 chars
 
     # Valid format with different cases
-    assert _is_valid_md5_hash("ABCDEF123456789012345678901234ab") == True  # Mixed case
-    assert _is_valid_md5_hash("abcdef123456789012345678901234AB") == True  # Mixed case
+    assert _is_valid_md5_hash("ABCDEF123456789012345678901234ab")  # Mixed case
+    assert _is_valid_md5_hash("abcdef123456789012345678901234AB")  # Mixed case
 
     # Invalid formats
-    assert _is_valid_md5_hash("not-a-hash") == False
-    assert _is_valid_md5_hash("") == False
-    assert _is_valid_md5_hash("g41d8cd98f00b204e9800998ecf8427e") == False  # Invalid char 'g'
-    assert _is_valid_md5_hash("d41d8cd98f00b204e9800998ecf8427z") == False  # Invalid char 'z'
-    assert _is_valid_md5_hash("d41d8cd9-8f00-b204-e980-0998ecf8427e") == False  # Dashes
+    assert not _is_valid_md5_hash("not-a-hash")
+    assert not _is_valid_md5_hash("")
+    assert not _is_valid_md5_hash("g41d8cd98f00b204e9800998ecf8427e")  # Invalid char 'g'
+    assert not _is_valid_md5_hash("d41d8cd98f00b204e9800998ecf8427z")  # Invalid char 'z'
+    assert not _is_valid_md5_hash("d41d8cd9-8f00-b204-e980-0998ecf8427e")  # Dashes
 
     # Non-string inputs
-    assert _is_valid_md5_hash(None) == False
-    assert _is_valid_md5_hash(123) == False
-    assert _is_valid_md5_hash([]) == False
+    assert not _is_valid_md5_hash(None)
+    assert not _is_valid_md5_hash(123)
+    assert not _is_valid_md5_hash([])
 
 
 def test_manual_interface_valid_hash():
@@ -72,7 +72,7 @@ from pydantic import Field
 
 class Answer(BaseAnswer):
     result: str = Field(description="The answer result")
-    
+
     def verify(self):
         return len(self.result) > 0
 '''
@@ -128,7 +128,7 @@ from pydantic import Field
 
 class Answer(BaseAnswer):
     result: str = Field(description="The answer result")
-    
+
     def verify(self):
         return len(self.result) > 0
 '''
@@ -178,7 +178,7 @@ from pydantic import Field
 
 class Answer(BaseAnswer):
     result: str = Field(description="The answer result")
-    
+
     def verify(self):
         return len(self.result) > 0
 '''
@@ -195,9 +195,8 @@ class Answer(BaseAnswer):
             parsing_model=langchain_model,
         )
         # Check that if it failed, it wasn't due to hash validation
-        if not result.success and result.error:
-            if "Invalid question_id format for manual interface" in result.error:
-                pytest.fail("Hash validation should not apply to non-manual interfaces")
+        if not result.success and result.error and "Invalid question_id format for manual interface" in result.error:
+            pytest.fail("Hash validation should not apply to non-manual interfaces")
     except Exception:
         # Other exceptions (like missing API keys, etc.) are fine for this test
         pass
@@ -229,7 +228,7 @@ from pydantic import Field
 
 class Answer(BaseAnswer):
     result: str = Field(description="The answer result")
-    
+
     def verify(self):
         return len(self.result) > 0
 '''

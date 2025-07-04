@@ -22,6 +22,7 @@ Usage:
 
 import hashlib
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
@@ -68,7 +69,7 @@ def read_file_to_dataframe(file_path: str, sheet_name: str | None = None) -> pd.
         raise ValueError(f"Unsupported file format: {file_extension}")
 
 
-def get_file_preview(file_path: str, sheet_name: str | None = None, max_rows: int = 100) -> dict:
+def get_file_preview(file_path: str, sheet_name: str | None = None, max_rows: int = 100) -> dict[str, Any]:
     """
     Get a preview of the file with column information and sample data.
 
@@ -171,7 +172,7 @@ def extract_questions_from_excel(excel_path: str) -> list[Question]:
     )
 
 
-def generate_questions_file(questions: list[Question], output_path: str):
+def generate_questions_file(questions: list[Question], output_path: str) -> None:
     """Generate the questions.py file with all extracted questions."""
 
     # Create the file content
@@ -205,7 +206,7 @@ def generate_questions_file(questions: list[Question], output_path: str):
         f.write(content)
 
 
-def questions_to_json(questions: list[Question]) -> dict:
+def questions_to_json(questions: list[Question]) -> dict[str, Any]:
     """
     Convert questions to JSON format compatible with the webapp.
 
@@ -232,7 +233,7 @@ def extract_and_generate_questions(
     answer_column: str = "Answer",
     sheet_name: str | None = None,
     return_json: bool = False,
-) -> dict | None:
+) -> dict[str, Any] | None:
     """
     Extract questions from file and generate a Python file with Question instances.
 

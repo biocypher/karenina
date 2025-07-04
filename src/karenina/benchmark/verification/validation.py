@@ -44,7 +44,7 @@ def validate_answer_template(template_code: str) -> tuple[bool, str | None, type
         except ImportError:
             pass
 
-        local_ns = {}
+        local_ns: dict[str, Any] = {}
 
         # Execute the template code
         exec(template_code, global_ns, local_ns)
@@ -68,7 +68,7 @@ def validate_answer_template(template_code: str) -> tuple[bool, str | None, type
             return False, "does not have a 'verify' method", None
 
         # Check if verify method is callable
-        if not callable(Answer.verify):
+        if not callable(getattr(Answer, "verify", None)):
             return False, "verify must be a callable method", None
 
         return True, None, Answer
