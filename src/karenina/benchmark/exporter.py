@@ -88,13 +88,16 @@ def export_verification_results_json(job: VerificationJob, results: dict[str, Ve
     return json.dumps(export_data, indent=2, ensure_ascii=False)
 
 
-def export_verification_results_csv(job: VerificationJob, results: dict[str, VerificationResult]) -> str:
+def export_verification_results_csv(
+    job: VerificationJob, results: dict[str, VerificationResult], global_rubric: Any = None
+) -> str:
     """
     Export verification results to CSV format.
 
     Args:
         job: The verification job
         results: Dictionary of verification results
+        global_rubric: Optional global rubric for distinguishing global vs question-specific traits
 
     Returns:
         CSV string with results
@@ -107,8 +110,14 @@ def export_verification_results_csv(job: VerificationJob, results: dict[str, Ver
         if result.verify_rubric:
             all_rubric_traits.update(result.verify_rubric.keys())
 
-    # Sort trait names for consistent column ordering
-    sorted_traits = sorted(all_rubric_traits)
+    # Determine global vs question-specific rubrics
+    global_trait_names: set[str] = set()
+    if global_rubric and hasattr(global_rubric, "get_trait_names"):
+        global_trait_names = set(global_rubric.get_trait_names())
+
+    # Separate traits into global and question-specific
+    global_traits = sorted(all_rubric_traits.intersection(global_trait_names))
+    question_specific_traits = sorted(all_rubric_traits - global_trait_names)
 
     # Define CSV headers with all result fields + dynamic rubric columns
     headers = [
@@ -122,8 +131,12 @@ def export_verification_results_csv(job: VerificationJob, results: dict[str, Ver
         "verify_granular_result",
     ]
 
-    # Add rubric trait columns (prefixed with 'rubric_')
-    headers.extend([f"rubric_{trait}" for trait in sorted_traits])
+    # Add global rubric trait columns (prefixed with 'rubric_')
+    headers.extend([f"rubric_{trait}" for trait in global_traits])
+
+    # Add single column for question-specific rubrics
+    if question_specific_traits:
+        headers.append("question_specific_rubrics")
 
     # Add remaining standard columns
     headers.extend(
@@ -175,12 +188,21 @@ def export_verification_results_csv(job: VerificationJob, results: dict[str, Ver
             "job_id": job.job_id,
         }
 
-        # Add rubric trait values
-        for trait in sorted_traits:
+        # Add global rubric trait values
+        for trait in global_traits:
             rubric_value = ""
             if result.verify_rubric and trait in result.verify_rubric:
                 rubric_value = str(result.verify_rubric[trait])
             row[f"rubric_{trait}"] = rubric_value
+
+        # Add question-specific rubrics as JSON
+        if question_specific_traits:
+            question_specific_rubrics = {}
+            if result.verify_rubric:
+                for trait in question_specific_traits:
+                    if trait in result.verify_rubric:
+                        question_specific_rubrics[trait] = result.verify_rubric[trait]
+            row["question_specific_rubrics"] = json.dumps(question_specific_rubrics)
 
         writer.writerow(row)
 
