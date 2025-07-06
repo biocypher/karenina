@@ -17,9 +17,7 @@ def test_concurrent_access():
     def load_traces(thread_id: int):
         """Load traces from a thread."""
         try:
-            test_traces = {
-                f"d41d8cd98f00b204e9800998ecf8427{thread_id % 10}": f"Trace from thread {thread_id}"
-            }
+            test_traces = {f"d41d8cd98f00b204e9800998ecf8427{thread_id % 10}": f"Trace from thread {thread_id}"}
             manager.load_traces_from_json(test_traces)
             results.append(f"Thread {thread_id} loaded traces")
         except Exception as e:
@@ -68,9 +66,7 @@ def test_concurrent_read_write():
     manager = ManualTraceManager(session_timeout_seconds=10)
 
     # Load initial traces
-    initial_traces = {
-        "d41d8cd98f00b204e9800998ecf8427e": "Initial trace"
-    }
+    initial_traces = {"d41d8cd98f00b204e9800998ecf8427e": "Initial trace"}
     manager.load_traces_from_json(initial_traces)
 
     read_results = []
@@ -80,7 +76,7 @@ def test_concurrent_read_write():
     def reader_thread():
         """Continuously read traces."""
         try:
-            for i in range(10):
+            for _i in range(10):
                 trace = manager.get_trace("d41d8cd98f00b204e9800998ecf8427e")
                 count = manager.get_trace_count()
                 read_results.append((trace is not None, count))
@@ -93,16 +89,26 @@ def test_concurrent_read_write():
         try:
             # Use valid 32-character MD5 hashes
             valid_hashes = [
-                ["c4ca4238a0b923820dcc509a6f75849b", "c81e728d9d4c2f636f067f89cc14862c", "eccbc87e4b5ce2fe28308fd9f2a7baf3"],
-                ["a87ff679a2f3e71d9181a67b7542122c", "e4da3b7fbbce2345d7772b0674a318d5", "1679091c5a880faf6fb5e6087eb1b2dc"],
-                ["8f14e45fceea167a5a36dedd4bea2543", "c9f0f895fb98ab9159f51fd0297e236d", "45c48cce2e2d7fbdea1afc51c7c6ad26"]
+                [
+                    "c4ca4238a0b923820dcc509a6f75849b",
+                    "c81e728d9d4c2f636f067f89cc14862c",
+                    "eccbc87e4b5ce2fe28308fd9f2a7baf3",
+                ],
+                [
+                    "a87ff679a2f3e71d9181a67b7542122c",
+                    "e4da3b7fbbce2345d7772b0674a318d5",
+                    "1679091c5a880faf6fb5e6087eb1b2dc",
+                ],
+                [
+                    "8f14e45fceea167a5a36dedd4bea2543",
+                    "c9f0f895fb98ab9159f51fd0297e236d",
+                    "45c48cce2e2d7fbdea1afc51c7c6ad26",
+                ],
             ][thread_id % 3]
 
             for i in range(3):
                 hash_key = valid_hashes[i]
-                new_traces = {
-                    hash_key: f"New trace {thread_id}-{i}"
-                }
+                new_traces = {hash_key: f"New trace {thread_id}-{i}"}
                 manager.load_traces_from_json(new_traces)
                 write_results.append(f"Writer {thread_id} iteration {i}")
                 time.sleep(0.02)  # Small delay
@@ -135,7 +141,7 @@ def test_concurrent_read_write():
     assert len(write_results) > 0, "No write results"
 
     # All reads should have succeeded
-    for trace_found, count in read_results:
+    for _trace_found, count in read_results:
         assert isinstance(count, int) and count >= 0
 
     # Clean up
@@ -152,7 +158,7 @@ def test_concurrent_memory_usage():
     def check_memory_usage(thread_id: int):
         """Check memory usage from a thread."""
         try:
-            for i in range(5):
+            for _i in range(5):
                 info = manager.get_memory_usage_info()
                 assert isinstance(info["trace_count"], int)
                 assert isinstance(info["total_characters"], int)
@@ -172,7 +178,7 @@ def test_concurrent_memory_usage():
                 "c81e728d9d4c2f636f067f89cc14862c",
                 "eccbc87e4b5ce2fe28308fd9f2a7baf3",
                 "a87ff679a2f3e71d9181a67b7542122c",
-                "e4da3b7fbbce2345d7772b0674a318d5"
+                "e4da3b7fbbce2345d7772b0674a318d5",
             ]
             test_traces = {
                 valid_hashes[thread_id % len(valid_hashes)]: f"Long trace content from thread {thread_id} " * 10
@@ -221,13 +227,11 @@ def test_concurrent_cleanup():
             valid_hashes = [
                 "d41d8cd98f00b204e9800998ecf8427e",
                 "c4ca4238a0b923820dcc509a6f75849b",
-                "c81e728d9d4c2f636f067f89cc14862c"
+                "c81e728d9d4c2f636f067f89cc14862c",
             ]
             for i in range(20):
                 # Load traces
-                test_traces = {
-                    valid_hashes[i % 3]: f"Trace {i}"
-                }
+                test_traces = {valid_hashes[i % 3]: f"Trace {i}"}
                 manager.load_traces_from_json(test_traces)
 
                 # Access traces
@@ -266,9 +270,7 @@ def test_lock_type():
     assert manager._lock.__class__.__name__ == "RLock", "Should use RLock for reentrant access"
 
     # Test reentrant access (calling method that calls another method with lock)
-    test_traces = {
-        "d41d8cd98f00b204e9800998ecf8427e": "Test trace"
-    }
+    test_traces = {"d41d8cd98f00b204e9800998ecf8427e": "Test trace"}
 
     # This should work without deadlock
     manager.load_traces_from_json(test_traces)

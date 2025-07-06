@@ -102,7 +102,7 @@ def export_verification_results_csv(job: VerificationJob, results: dict[str, Ver
     output = StringIO()
 
     # Collect all unique rubric trait names across all results
-    all_rubric_traits = set()
+    all_rubric_traits: set[str] = set()
     for result in results.values():
         if result.verify_rubric:
             all_rubric_traits.update(result.verify_rubric.keys())
@@ -179,7 +179,7 @@ def export_verification_results_csv(job: VerificationJob, results: dict[str, Ver
         for trait in sorted_traits:
             rubric_value = ""
             if result.verify_rubric and trait in result.verify_rubric:
-                rubric_value = result.verify_rubric[trait]
+                rubric_value = str(result.verify_rubric[trait])
             row[f"rubric_{trait}"] = rubric_value
 
         writer.writerow(row)

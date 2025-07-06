@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v5.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
@@ -9,17 +9,31 @@ repos:
       - id: check-merge-conflict
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.1.8
+    rev: v0.12.2
     hooks:
       - id: ruff
         args: [--fix]
       - id: ruff-format
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.7.1
+    rev: v1.16.1
     hooks:
       - id: mypy
+        files: ^src/
         additional_dependencies:
           - pydantic>=2.0.0
           - types-requests
-        args: [--ignore-missing-imports]
+        args: [--config-file=pyproject.toml]
+
+  # Vulture for dead code detection
+  - repo: local
+    hooks:
+      - id: vulture
+        name: vulture-dead-code
+        entry: uv run vulture
+        language: system
+        files: ^src/
+        args: [src/karenina]
+
+  # Note: pytest-testmon available via 'make test-changed' command
+  # Excluded from pre-commit due to 0-test runs being treated as modifications

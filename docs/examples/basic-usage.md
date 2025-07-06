@@ -43,7 +43,7 @@ else:
 # CSV with different column names
 extract_and_generate_questions(
     file_path="data/qa_pairs.csv",
-    output_path="csv_questions.py", 
+    output_path="csv_questions.py",
     question_column="query",
     answer_column="response"
 )
@@ -80,7 +80,7 @@ templates = generate_answer_templates_from_questions_file(
 # Use Claude for template generation
 templates = generate_answer_templates_from_questions_file(
     "my_questions.py",
-    model="claude-3-sonnet", 
+    model="claude-3-sonnet",
     model_provider="anthropic"
 )
 ```
@@ -134,29 +134,29 @@ from karenina.questions.reader import read_questions_from_file
 
 def complete_benchmark_example():
     """Complete example from file to results."""
-    
+
     # Step 1: Extract questions from Excel
     print("1. Extracting questions...")
     extract_and_generate_questions(
         file_path="data/sample_questions.xlsx",
         output_path="extracted_questions.py"
     )
-    
+
     # Step 2: Generate answer templates
     print("2. Generating answer templates...")
     templates = generate_answer_templates_from_questions_file("extracted_questions.py")
     print(f"   Generated {len(templates)} templates")
-    
+
     # Step 3: Load questions and collect responses
     print("3. Collecting model responses...")
     questions = read_questions_from_file("extracted_questions.py")
-    
+
     questions_dict = {}
     responses_dict = {}
-    
+
     for question in questions[:3]:  # Test with first 3 questions
         questions_dict[question.id] = question.question
-        
+
         # Get response from GPT-3.5
         try:
             response = call_model(
@@ -169,11 +169,11 @@ def complete_benchmark_example():
         except Exception as e:
             print(f"   Error getting response: {e}")
             responses_dict[question.id] = "No response available"
-    
+
     # Step 4: Run benchmark
     print("4. Running benchmark...")
     results = run_benchmark(questions_dict, responses_dict, templates)
-    
+
     # Step 5: Display results
     print("5. Results:")
     for q_id, result in results.items():
@@ -182,7 +182,7 @@ def complete_benchmark_example():
         print(f"   Response: {responses_dict[q_id][:50]}...")
         print(f"   Structured Result: {result}")
         print("   ---")
-    
+
     return results
 
 # Run the complete example
@@ -208,7 +208,7 @@ print("OpenAI says:", response.message)
 # Simple call to Google AI
 response = call_model(
     model="gemini-2.0-flash",
-    provider="google_genai", 
+    provider="google_genai",
     message="What is machine learning?"
 )
 print("Google AI says:", response.message)
@@ -229,15 +229,15 @@ from karenina.llm.interface import call_model
 
 def simple_conversation():
     """Simple conversation with session management."""
-    
+
     session_id = None
-    
+
     messages = [
         "Hello, what's your name?",
         "Can you help me with Python?",
         "What's a good way to learn it?"
     ]
-    
+
     for message in messages:
         response = call_model(
             model="gpt-3.5-turbo",
@@ -245,9 +245,9 @@ def simple_conversation():
             message=message,
             session_id=session_id
         )
-        
+
         session_id = response.session_id
-        
+
         print(f"User: {message}")
         print(f"AI: {response.message}")
         print()
@@ -265,28 +265,28 @@ from karenina.questions.extractor import extract_questions_from_file
 
 def safe_extraction():
     """Extract questions with error handling."""
-    
+
     try:
         questions = extract_questions_from_file(
             "data/questions.xlsx",
-            "Question", 
+            "Question",
             "Answer"
         )
         print(f"Successfully extracted {len(questions)} questions")
         return questions
-        
+
     except FileNotFoundError:
         print("Error: File not found")
     except ValueError as e:
         print(f"Error: {e}")
     except Exception as e:
         print(f"Unexpected error: {e}")
-    
+
     return []
 
 def safe_llm_call():
     """Make LLM call with error handling."""
-    
+
     try:
         response = call_model(
             model="gpt-3.5-turbo",
@@ -294,14 +294,14 @@ def safe_llm_call():
             message="Hello!"
         )
         return response.message
-        
+
     except LLMNotAvailableError:
         print("Error: LangChain not available")
     except LLMError as e:
         print(f"LLM Error: {e}")
     except Exception as e:
         print(f"Unexpected error: {e}")
-    
+
     return None
 
 # Usage
@@ -323,7 +323,7 @@ from karenina.questions.extractor import extract_questions_from_file
 excel_questions = extract_questions_from_file(
     "data/questions.xlsx",
     "Question",
-    "Answer", 
+    "Answer",
     sheet_name="Easy"  # Specific sheet
 )
 
@@ -336,13 +336,13 @@ csv_questions = extract_questions_from_file(
 
 # TSV file
 tsv_questions = extract_questions_from_file(
-    "data/questions.tsv", 
+    "data/questions.tsv",
     "Q",
     "A"
 )
 
 print(f"Excel: {len(excel_questions)} questions")
-print(f"CSV: {len(csv_questions)} questions") 
+print(f"CSV: {len(csv_questions)} questions")
 print(f"TSV: {len(tsv_questions)} questions")
 ```
 
@@ -414,13 +414,13 @@ except Exception as e:
 ```python
 def validate_template(AnswerClass, test_data: dict):
     """Test template validation."""
-    
+
     try:
         validated = AnswerClass(**test_data)
         print("✓ Validation successful")
         print("  Validated data:", validated.model_dump())
         return True
-        
+
     except Exception as e:
         print("✗ Validation failed:", e)
         return False
@@ -442,19 +442,19 @@ success = validate_template(AnswerClass, test_data)
 ```python
 def custom_benchmark_workflow(input_file: str, target_model: str):
     """Custom workflow with specific requirements."""
-    
+
     # Custom question filtering
     print("Extracting and filtering questions...")
     all_questions = extract_questions_from_file(input_file, "Question", "Answer")
-    
+
     # Filter questions (example: only questions with "what" or "how")
     filtered_questions = [
-        q for q in all_questions 
+        q for q in all_questions
         if any(word in q.question.lower() for word in ['what', 'how'])
     ]
-    
+
     print(f"Filtered to {len(filtered_questions)} questions")
-    
+
     # Generate templates with specific model
     print("Generating templates with Claude...")
     templates = {}
@@ -465,18 +465,18 @@ def custom_benchmark_workflow(input_file: str, target_model: str):
             model="claude-3-sonnet",
             model_provider="anthropic"
         )
-        
+
         # Execute template
         code_blocks = extract_and_combine_codeblocks(template_code)
         local_ns = {}
         exec(code_blocks, globals(), local_ns)
         templates[question.id] = local_ns["Answer"]
-    
+
     # Collect responses from target model
     print(f"Collecting responses from {target_model}...")
     questions_dict = {q.id: q.question for q in filtered_questions[:5]}
     responses_dict = {}
-    
+
     for q_id, question in questions_dict.items():
         response = call_model(
             model=target_model,
@@ -484,11 +484,11 @@ def custom_benchmark_workflow(input_file: str, target_model: str):
             message=question
         )
         responses_dict[q_id] = response.message
-    
+
     # Run benchmark
     print("Running benchmark...")
     results = run_benchmark(questions_dict, responses_dict, templates)
-    
+
     # Custom analysis
     print("Custom analysis:")
     for q_id, result in results.items():
@@ -496,7 +496,7 @@ def custom_benchmark_workflow(input_file: str, target_model: str):
         confidence = result_dict.get('confidence', 'N/A')
         print(f"  Q: {questions_dict[q_id][:30]}...")
         print(f"  Confidence: {confidence}")
-    
+
     return results
 
 # Usage
@@ -508,41 +508,41 @@ custom_results = custom_benchmark_workflow("data/questions.xlsx", "gpt-4")
 ```python
 def process_multiple_files(file_list: list):
     """Process multiple question files in batch."""
-    
+
     all_results = {}
-    
+
     for file_path in file_list:
         print(f"Processing {file_path}...")
-        
+
         try:
             # Extract questions
             base_name = file_path.split('/')[-1].split('.')[0]
             questions_file = f"{base_name}_questions.py"
-            
+
             extract_and_generate_questions(file_path, questions_file)
-            
+
             # Generate templates
             templates = generate_answer_templates_from_questions_file(questions_file)
-            
+
             # Store results
             all_results[base_name] = {
                 'questions_file': questions_file,
                 'template_count': len(templates),
                 'templates': templates
             }
-            
+
             print(f"  ✓ Generated {len(templates)} templates")
-            
+
         except Exception as e:
             print(f"  ✗ Error processing {file_path}: {e}")
             all_results[base_name] = {'error': str(e)}
-    
+
     return all_results
 
 # Usage
 files_to_process = [
     "data/math_questions.xlsx",
-    "data/science_questions.csv", 
+    "data/science_questions.csv",
     "data/history_questions.tsv"
 ]
 

@@ -21,7 +21,7 @@ questions = extract_questions_from_file(
 
 # Specific sheet
 questions = extract_questions_from_file(
-    file_path="data/workbook.xlsx", 
+    file_path="data/workbook.xlsx",
     question_column="Question",
     answer_column="Answer",
     sheet_name="Hard_Questions"
@@ -43,7 +43,7 @@ questions = extract_questions_from_file(
 # Tab-separated values
 questions = extract_questions_from_file(
     file_path="data/questions.tsv",
-    question_column="question_text", 
+    question_column="question_text",
     answer_column="expected_answer"
 )
 ```
@@ -61,7 +61,7 @@ preview = get_file_preview("data/questions.xlsx", max_rows=5)
 if preview["success"]:
     print(f"File contains {preview['total_rows']} rows")
     print(f"Available columns: {preview['columns']}")
-    
+
     # Display sample data
     for i, row in enumerate(preview['data'][:3]):
         print(f"Row {i+1}: {row}")
@@ -83,7 +83,7 @@ mappings = {
         "answer_column": "Expected_Response"
     },
     "qa_format": {
-        "question_column": "Q", 
+        "question_column": "Q",
         "answer_column": "A"
     },
     "benchmark_format": {
@@ -144,7 +144,7 @@ question_1 = Question(
 )
 
 question_2 = Question(
-    id="098f6bcd4621d373cade4e832627b4f6", 
+    id="098f6bcd4621d373cade4e832627b4f6",
     question="What is 2 + 2?",
     raw_answer="4",
     tags=[]
@@ -179,7 +179,7 @@ assert hash_question(question_text) == question_id
 The extraction process automatically:
 
 1. **Removes NaN values** from required columns
-2. **Strips whitespace** from text fields  
+2. **Strips whitespace** from text fields
 3. **Filters empty strings** in questions or answers
 4. **Converts to string type** for consistency
 
@@ -195,7 +195,7 @@ raw_data = pd.DataFrame({
 
 # After extraction (conceptual)
 # Row 1: ✓ Kept (valid question and answer)
-# Row 2: ✗ Removed (empty question after strip)  
+# Row 2: ✗ Removed (empty question after strip)
 # Row 3: ✗ Removed (NaN question)
 # Row 4: ✓ Kept (valid question and answer)
 ```
@@ -210,37 +210,37 @@ from pathlib import Path
 
 def batch_extract_questions(data_dir: str, output_dir: str):
     """Extract questions from all files in a directory."""
-    
+
     data_path = Path(data_dir)
     output_path = Path(output_dir)
     output_path.mkdir(exist_ok=True)
-    
+
     results = {}
-    
+
     for file_path in data_path.glob("*.xlsx"):
         try:
             # Get file preview to understand structure
             preview = get_file_preview(str(file_path))
-            
+
             if not preview["success"]:
                 continue
-                
+
             # Assume standard column names, adapt as needed
             questions = extract_questions_from_file(
                 str(file_path),
-                "Question", 
+                "Question",
                 "Answer"
             )
-            
+
             # Generate output file
             output_file = output_path / f"{file_path.stem}_questions.py"
             generate_questions_file(questions, str(output_file))
-            
+
             results[file_path.name] = len(questions)
-            
+
         except Exception as e:
             print(f"Error processing {file_path.name}: {e}")
-    
+
     return results
 
 # Usage
@@ -258,7 +258,7 @@ questions_json = extract_and_generate_questions(
     file_path="data/questions.xlsx",
     output_path="",  # Not used when return_json=True
     question_column="Question",
-    answer_column="Answer", 
+    answer_column="Answer",
     return_json=True
 )
 
@@ -280,25 +280,25 @@ for q_id, q_data in list(questions_json.items())[:2]:
 ```python
 def extract_with_custom_validation(file_path: str) -> list:
     """Extract questions with custom validation rules."""
-    
+
     questions = extract_questions_from_file(file_path, "Question", "Answer")
-    
+
     validated_questions = []
-    
+
     for q in questions:
         # Custom validation rules
         if len(q.question) < 10:
             print(f"Skipping short question: {q.question}")
             continue
-            
+
         if not q.question.endswith('?'):
             print(f"Skipping non-question: {q.question}")
             continue
-            
+
         if len(q.raw_answer) < 2:
             print(f"Skipping minimal answer: {q.raw_answer}")
             continue
-        
+
         # Add custom tags based on content
         tags = []
         if any(word in q.question.lower() for word in ['what', 'which', 'where']):
@@ -307,11 +307,11 @@ def extract_with_custom_validation(file_path: str) -> list:
             tags.append('explanatory')
         if any(word in q.question.lower() for word in ['calculate', 'compute', 'solve']):
             tags.append('computational')
-            
+
         # Update question with tags
         q.tags = tags
         validated_questions.append(q)
-    
+
     return validated_questions
 
 # Usage
@@ -349,32 +349,32 @@ from pathlib import Path
 
 def safe_file_extraction(file_path: str):
     """Safely extract with format detection."""
-    
+
     path_obj = Path(file_path)
-    
+
     if not path_obj.exists():
         return {"error": "File not found"}
-    
+
     # Check file size
     file_size = path_obj.stat().st_size
     if file_size == 0:
         return {"error": "Empty file"}
-    
+
     if file_size > 100 * 1024 * 1024:  # 100MB
         return {"error": "File too large (>100MB)"}
-    
+
     # Try extraction
     try:
         preview = get_file_preview(file_path, max_rows=10)
-        
+
         if not preview["success"]:
             return {"error": f"Cannot read file: {preview['error']}"}
-        
+
         # Suggest column mappings
         columns = preview["columns"]
         question_candidates = [col for col in columns if 'question' in col.lower()]
         answer_candidates = [col for col in columns if any(word in col.lower() for word in ['answer', 'response', 'reply'])]
-        
+
         return {
             "success": True,
             "columns": columns,
@@ -382,7 +382,7 @@ def safe_file_extraction(file_path: str):
             "answer_candidates": answer_candidates,
             "preview": preview["data"][:3]
         }
-        
+
     except Exception as e:
         return {"error": str(e)}
 
@@ -402,27 +402,27 @@ else:
 ```python
 def extract_large_file(file_path: str, chunk_size: int = 1000):
     """Process large files in chunks."""
-    
+
     import pandas as pd
-    
+
     # Read file in chunks for memory efficiency
     chunk_reader = pd.read_csv(file_path, chunksize=chunk_size)
-    
+
     all_questions = []
-    
+
     for chunk_num, chunk in enumerate(chunk_reader):
         print(f"Processing chunk {chunk_num + 1}")
-        
+
         # Process chunk as temporary file
         temp_file = f"temp_chunk_{chunk_num}.csv"
         chunk.to_csv(temp_file, index=False)
-        
+
         try:
             chunk_questions = extract_questions_from_file(temp_file, "Question", "Answer")
             all_questions.extend(chunk_questions)
         finally:
             os.remove(temp_file)
-    
+
     return all_questions
 ```
 
@@ -434,19 +434,19 @@ from functools import partial
 
 def parallel_file_extraction(file_paths: list, question_col: str, answer_col: str):
     """Extract questions from multiple files in parallel."""
-    
+
     extract_func = partial(
         extract_questions_from_file,
         question_column=question_col,
         answer_column=answer_col
     )
-    
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
         future_to_file = {
-            executor.submit(extract_func, file_path): file_path 
+            executor.submit(extract_func, file_path): file_path
             for file_path in file_paths
         }
-        
+
         results = {}
         for future in concurrent.futures.as_completed(future_to_file):
             file_path = future_to_file[future]
@@ -456,7 +456,7 @@ def parallel_file_extraction(file_paths: list, question_col: str, answer_col: st
             except Exception as e:
                 print(f"Error processing {file_path}: {e}")
                 results[file_path] = []
-    
+
     return results
 
 # Usage
@@ -475,7 +475,7 @@ from karenina.answers.generator import generate_answer_templates_from_questions_
 # Complete pipeline
 def question_to_templates_pipeline(input_file: str, questions_file: str):
     """Full pipeline from file to answer templates."""
-    
+
     # Step 1: Extract questions
     extract_and_generate_questions(
         file_path=input_file,
@@ -483,10 +483,10 @@ def question_to_templates_pipeline(input_file: str, questions_file: str):
         question_column="Question",
         answer_column="Answer"
     )
-    
+
     # Step 2: Generate answer templates
     templates = generate_answer_templates_from_questions_file(questions_file)
-    
+
     print(f"Generated {len(templates)} answer templates")
     return templates
 

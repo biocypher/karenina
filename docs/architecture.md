@@ -12,7 +12,7 @@ graph TD
     D --> E[Pydantic Templates]
     E --> F[Benchmark Runner]
     F --> G[Structured Results]
-    
+
     H[LLM Providers] --> D
     H --> F
 ```
@@ -64,7 +64,7 @@ The LLM interface provides unified access to multiple providers:
 # Unified initialization across providers
 llm = init_chat_model_unified(
     model="gpt-4",
-    provider="openai", 
+    provider="openai",
     interface="langchain"
 )
 

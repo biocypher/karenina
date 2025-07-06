@@ -63,11 +63,7 @@ class Rubric(BaseModel):
 
         # Check that each score is valid for its trait
         trait_map = {trait.name: trait for trait in self.traits}
-        for name, value in evaluation.items():
-            if not trait_map[name].validate_score(value):
-                return False
-
-        return True
+        return all(trait_map[name].validate_score(value) for name, value in evaluation.items())
 
 
 class RubricEvaluation(BaseModel):

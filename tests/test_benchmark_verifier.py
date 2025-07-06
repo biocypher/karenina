@@ -154,7 +154,7 @@ def test_run_question_verification_success(mock_init_model):
         return mock_parsing_llm
 
     mock_init_model.side_effect = (
-        lambda **kwargs: mock_answering_llm if mock_init_model.call_count <= 1 else mock_parsing_llm
+        lambda **_kwargs: mock_answering_llm if mock_init_model.call_count <= 1 else mock_parsing_llm
     )
 
     # Mock the PydanticOutputParser
@@ -219,7 +219,7 @@ def test_run_question_verification_markdown_fenced_json(mock_init_model):
     mock_answer.verify.return_value = True
 
     mock_init_model.side_effect = (
-        lambda **kwargs: mock_answering_llm if mock_init_model.call_count <= 1 else mock_parsing_llm
+        lambda **_kwargs: mock_answering_llm if mock_init_model.call_count <= 1 else mock_parsing_llm
     )
 
     # Mock the PydanticOutputParser
@@ -282,7 +282,7 @@ def test_run_question_verification_malformed_json(mock_init_model):
     mock_parsing_llm.invoke.return_value.content = '{"response": "4"'  # Missing closing brace
 
     mock_init_model.side_effect = (
-        lambda **kwargs: mock_answering_llm if mock_init_model.call_count <= 1 else mock_parsing_llm
+        lambda **_kwargs: mock_answering_llm if mock_init_model.call_count <= 1 else mock_parsing_llm
     )
 
     # Mock the PydanticOutputParser to raise an exception

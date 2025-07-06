@@ -58,12 +58,7 @@ class RubricEvaluator:
         except Exception as e:
             raise RuntimeError(f"Failed to initialize LLM for rubric evaluation: {e}") from e
 
-    def evaluate_rubric(
-        self,
-        question: str,
-        answer: str,
-        rubric: Rubric
-    ) -> dict[str, int | bool]:
+    def evaluate_rubric(self, question: str, answer: str, rubric: Rubric) -> dict[str, int | bool]:
         """
         Evaluate an answer against a rubric's traits.
 
@@ -94,34 +89,21 @@ class RubricEvaluator:
                 logger.error(f"Sequential evaluation failed: {seq_error}")
                 raise seq_error
 
-    def _evaluate_batch(
-        self,
-        question: str,
-        answer: str,
-        rubric: Rubric
-    ) -> dict[str, int | bool]:
+    def _evaluate_batch(self, question: str, answer: str, rubric: Rubric) -> dict[str, int | bool]:
         """
         Evaluate all traits in a single LLM call (more efficient).
         """
         system_prompt = self._build_batch_system_prompt()
         user_prompt = self._build_batch_user_prompt(question, answer, rubric.traits)
 
-        messages: list[BaseMessage] = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=user_prompt)
-        ]
+        messages: list[BaseMessage] = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
 
         response = self.llm.invoke(messages)
         raw_response = response.content if hasattr(response, "content") else str(response)
 
         return self._parse_batch_response(raw_response, rubric.traits)
 
-    def _evaluate_sequential(
-        self,
-        question: str,
-        answer: str,
-        rubric: Rubric
-    ) -> dict[str, int | bool]:
+    def _evaluate_sequential(self, question: str, answer: str, rubric: Rubric) -> dict[str, int | bool]:
         """
         Evaluate traits one by one (fallback method).
         """
@@ -138,22 +120,14 @@ class RubricEvaluator:
 
         return results
 
-    def _evaluate_single_trait(
-        self,
-        question: str,
-        answer: str,
-        trait: RubricTrait
-    ) -> int | bool:
+    def _evaluate_single_trait(self, question: str, answer: str, trait: RubricTrait) -> int | bool:
         """
         Evaluate a single trait.
         """
         system_prompt = self._build_single_trait_system_prompt(trait)
         user_prompt = self._build_single_trait_user_prompt(question, answer, trait)
 
-        messages: list[BaseMessage] = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=user_prompt)
-        ]
+        messages: list[BaseMessage] = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
 
         response = self.llm.invoke(messages)
         raw_response = response.content if hasattr(response, "content") else str(response)
@@ -212,7 +186,7 @@ JSON Response:"""
         if trait.kind == "boolean":
             return f"""You are evaluating responses for the trait: {trait.name}
 
-Description: {trait.description or 'Boolean evaluation'}
+Description: {trait.description or "Boolean evaluation"}
 
 Respond with only "true" or "false" based on whether the answer meets this criteria."""
         else:
@@ -220,7 +194,7 @@ Respond with only "true" or "false" based on whether the answer meets this crite
             max_score = trait.max_score or 5
             return f"""You are evaluating responses for the trait: {trait.name}
 
-Description: {trait.description or 'Score-based evaluation'}
+Description: {trait.description or "Score-based evaluation"}
 
 Rate the answer on a scale from {min_score} to {max_score}, where:
 - {min_score} = Poor/Does not meet criteria
@@ -236,12 +210,12 @@ Respond with only the numeric score ({min_score}-{max_score})."""
 ANSWER TO EVALUATE:
 {answer}
 
-Please evaluate this answer for the trait "{trait.name}": {trait.description or 'No description provided'}"""
+Please evaluate this answer for the trait "{trait.name}": {trait.description or "No description provided"}"""
 
     def _parse_batch_response(self, response: str, traits: list[RubricTrait]) -> dict[str, int | bool]:
         """Parse the batch evaluation response."""
         # Try to extract JSON from the response
-        json_match = re.search(r'\{.*\}', response, re.DOTALL)
+        json_match = re.search(r"\{.*\}", response, re.DOTALL)
         if not json_match:
             raise ValueError(f"No JSON found in response: {response}")
 
@@ -286,7 +260,7 @@ Please evaluate this answer for the trait "{trait.name}": {trait.description or 
                     raise ValueError(f"Could not parse boolean from: {response}")
         else:
             # Extract numeric score
-            numbers = re.findall(r'\d+', response)
+            numbers = re.findall(r"\d+", response)
             if not numbers:
                 raise ValueError(f"No numeric score found in: {response}")
 

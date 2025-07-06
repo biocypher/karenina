@@ -8,11 +8,13 @@ from typing import Any
 
 class LLMError(Exception):
     """Base exception for LLM-related errors."""
+
     pass
 
 
 class ManualTraceError(LLMError):
     """Raised when there's an error with manual trace operations."""
+
     pass
 
 
@@ -22,7 +24,7 @@ class ManualTraceManager:
     def __init__(self, session_timeout_seconds: int = 3600):
         """
         Initialize the trace manager.
-        
+
         Args:
             session_timeout_seconds: Timeout for trace session in seconds (default: 1 hour)
         """
@@ -42,10 +44,10 @@ class ManualTraceManager:
     def load_traces_from_json(self, json_data: dict[str, Any]) -> None:
         """
         Load manual traces from JSON data.
-        
+
         Args:
             json_data: Dictionary with question hashes as keys and traces as values
-            
+
         Raises:
             ManualTraceError: If validation fails
         """
@@ -64,10 +66,10 @@ class ManualTraceManager:
     def get_trace(self, question_hash: str) -> str | None:
         """
         Get a manual trace for a specific question hash.
-        
+
         Args:
             question_hash: MD5 hash of the question
-            
+
         Returns:
             The precomputed trace or None if not found
         """
@@ -78,10 +80,10 @@ class ManualTraceManager:
     def has_trace(self, question_hash: str) -> bool:
         """
         Check if a trace exists for a question hash.
-        
+
         Args:
             question_hash: MD5 hash of the question
-            
+
         Returns:
             True if trace exists, False otherwise
         """
@@ -92,7 +94,7 @@ class ManualTraceManager:
     def get_all_traces(self) -> dict[str, str]:
         """
         Get all loaded traces.
-        
+
         Returns:
             Dictionary of all traces keyed by question hash
         """
@@ -116,7 +118,7 @@ class ManualTraceManager:
     def get_memory_usage_info(self) -> dict[str, Any]:
         """
         Get information about current memory usage.
-        
+
         Returns:
             Dictionary with memory usage statistics
         """
@@ -164,7 +166,8 @@ class ManualTraceManager:
 
             # Clean up individual expired traces
             expired_hashes = [
-                hash_key for hash_key, timestamp in self._trace_timestamps.items()
+                hash_key
+                for hash_key, timestamp in self._trace_timestamps.items()
                 if current_time - timestamp >= self._session_timeout
             ]
 
@@ -179,10 +182,10 @@ class ManualTraceManager:
     def _validate_trace_data(self, json_data: dict[str, Any]) -> None:
         """
         Validate the structure and content of trace data.
-        
+
         Args:
             json_data: The trace data to validate
-            
+
         Raises:
             ManualTraceError: If validation fails
         """
@@ -225,10 +228,10 @@ class ManualTraceManager:
     def _is_valid_md5_hash(self, hash_string: str) -> bool:
         """
         Check if a string is a valid MD5 hash.
-        
+
         Args:
             hash_string: String to validate
-            
+
         Returns:
             True if valid MD5 hash, False otherwise
         """
@@ -236,7 +239,7 @@ class ManualTraceManager:
             return False
 
         # MD5 hash is exactly 32 hexadecimal characters
-        md5_pattern = re.compile(r'^[a-fA-F0-9]{32}$')
+        md5_pattern = re.compile(r"^[a-fA-F0-9]{32}$")
         return bool(md5_pattern.match(hash_string))
 
 
@@ -252,10 +255,10 @@ def get_trace_manager() -> ManualTraceManager:
 def load_manual_traces(json_data: dict[str, Any]) -> None:
     """
     Load manual traces from JSON data into the global manager.
-    
+
     Args:
         json_data: Dictionary with question hashes as keys and traces as values
-        
+
     Raises:
         ManualTraceError: If validation fails
     """
@@ -265,10 +268,10 @@ def load_manual_traces(json_data: dict[str, Any]) -> None:
 def get_manual_trace(question_hash: str) -> str | None:
     """
     Get a manual trace for a specific question hash.
-    
+
     Args:
         question_hash: MD5 hash of the question
-        
+
     Returns:
         The precomputed trace or None if not found
     """
@@ -278,10 +281,10 @@ def get_manual_trace(question_hash: str) -> str | None:
 def has_manual_trace(question_hash: str) -> bool:
     """
     Check if a manual trace exists for a question hash.
-    
+
     Args:
         question_hash: MD5 hash of the question
-        
+
     Returns:
         True if trace exists, False otherwise
     """

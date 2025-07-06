@@ -63,7 +63,7 @@ Extract Question objects from file with flexible column mapping.
 **Parameters:**
 - `file_path` (str): Input file path
 - `question_column` (str): Question column name
-- `answer_column` (str): Answer column name  
+- `answer_column` (str): Answer column name
 - `sheet_name` (Optional[str]): Excel sheet name
 
 **Returns:**
@@ -199,7 +199,7 @@ question_1 = Question(
 )
 
 question_2 = Question(
-    id="hash2", 
+    id="hash2",
     question="Question text 2",
     raw_answer="Answer text 2",
     tags=[]
@@ -230,7 +230,7 @@ Convert Question objects to webapp-compatible JSON format.
         # Note: answer_template added later by generator
     },
     "question_hash_2": {
-        "question": "Question text 2", 
+        "question": "Question text 2",
         "raw_answer": "Answer text 2"
     }
 }

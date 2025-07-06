@@ -97,7 +97,7 @@ def test_extract_and_combine_codeblocks_with_whitespace():
 def test_extract_and_combine_codeblocks_with_trailing_whitespace_after_language():
     """Test extracting code blocks with trailing whitespace after the language identifier."""
     text = """
-    ```python   
+    ```python
     def foo():
         return 42
     ```

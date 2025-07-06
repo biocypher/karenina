@@ -1,6 +1,5 @@
 """Tests for manual trace functionality."""
 
-
 import pytest
 
 from karenina.benchmark.models import ModelConfiguration
@@ -31,7 +30,7 @@ class TestManualTraceManager:
         manager = ManualTraceManager()
         trace_data = {
             "d41d8cd98f00b204e9800998ecf8427e": "Answer trace 1",
-            "5d41402abc4b2a76b9719d911017c592": "Answer trace 2"
+            "5d41402abc4b2a76b9719d911017c592": "Answer trace 2",
         }
 
         manager.load_traces_from_json(trace_data)
@@ -91,9 +90,7 @@ class TestManualTraceManager:
     def test_clear_traces(self):
         """Test clearing traces."""
         manager = ManualTraceManager()
-        manager.load_traces_from_json({
-            "d41d8cd98f00b204e9800998ecf8427e": "trace"
-        })
+        manager.load_traces_from_json({"d41d8cd98f00b204e9800998ecf8427e": "trace"})
 
         assert manager.get_trace_count() == 1
         manager.clear_traces()
@@ -106,10 +103,12 @@ class TestManualLLM:
     def setup_method(self):
         """Set up test traces before each test."""
         clear_manual_traces()
-        load_manual_traces({
-            "d41d8cd98f00b204e9800998ecf8427e": "Test answer trace 1",
-            "5d41402abc4b2a76b9719d911017c592": "Test answer trace 2"
-        })
+        load_manual_traces(
+            {
+                "d41d8cd98f00b204e9800998ecf8427e": "Test answer trace 1",
+                "5d41402abc4b2a76b9719d911017c592": "Test answer trace 2",
+            }
+        )
 
     def teardown_method(self):
         """Clean up traces after each test."""
@@ -189,9 +188,7 @@ class TestIntegrationWithLLMInterface:
     def setup_method(self):
         """Set up test traces before each test."""
         clear_manual_traces()
-        load_manual_traces({
-            "d41d8cd98f00b204e9800998ecf8427e": "Manual trace response"
-        })
+        load_manual_traces({"d41d8cd98f00b204e9800998ecf8427e": "Manual trace response"})
 
     def teardown_method(self):
         """Clean up traces after each test."""
@@ -200,9 +197,7 @@ class TestIntegrationWithLLMInterface:
     def test_init_chat_model_unified_manual(self):
         """Test initializing manual interface through unified function."""
         llm = init_chat_model_unified(
-            model="manual",
-            interface="manual",
-            question_hash="d41d8cd98f00b204e9800998ecf8427e"
+            model="manual", interface="manual", question_hash="d41d8cd98f00b204e9800998ecf8427e"
         )
 
         assert isinstance(llm, ManualLLM)
@@ -212,10 +207,7 @@ class TestIntegrationWithLLMInterface:
     def test_init_chat_model_unified_missing_hash(self):
         """Test manual interface without question_hash."""
         with pytest.raises(ValueError, match="question_hash is required for manual interface"):
-            init_chat_model_unified(
-                model="manual",
-                interface="manual"
-            )
+            init_chat_model_unified(model="manual", interface="manual")
 
 
 class TestModelConfiguration:
@@ -228,7 +220,7 @@ class TestModelConfiguration:
             model_provider="manual",
             model_name="manual",
             interface="manual",
-            system_prompt="Test prompt"
+            system_prompt="Test prompt",
         )
 
         assert config.interface == "manual"
