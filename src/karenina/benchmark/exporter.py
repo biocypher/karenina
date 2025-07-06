@@ -2,11 +2,83 @@
 
 import csv
 import json
+import logging
 import time
 from io import StringIO
-from typing import Any
+from typing import Any, Protocol
 
 from .models import VerificationJob, VerificationResult
+
+
+class HasTraitNames(Protocol):
+    """Protocol for objects that can provide trait names."""
+
+    def get_trait_names(self) -> list[str]:
+        """Get list of trait names from the rubric."""
+        ...
+
+
+# Set up logger
+logger = logging.getLogger(__name__)
+
+
+def _validate_trait_name(trait_name: str) -> bool:
+    """Validate that a trait name is safe for use in CSV headers and JSON.
+
+    Args:
+        trait_name: The trait name to validate
+
+    Returns:
+        True if the trait name is valid, False otherwise
+    """
+    if not trait_name or not isinstance(trait_name, str):
+        return False
+
+    # Check for reasonable length (CSV headers should be reasonable)
+    if len(trait_name) > 255:
+        logger.warning("Trait name too long (>255 chars): %s...", trait_name[:50])
+        return False
+
+    # Check for problematic characters that might cause CSV parsing issues
+    problematic_chars = ["\n", "\r", "\0"]
+    if any(char in trait_name for char in problematic_chars):
+        logger.warning("Trait name contains problematic characters: %s", repr(trait_name))
+        return False
+
+    return True
+
+
+def _safe_json_serialize(data: Any, question_id: str, field_name: str) -> str:
+    """Safely serialize data to JSON string with error handling.
+
+    Args:
+        data: The data to serialize
+        question_id: The question ID for logging context
+        field_name: The field name for logging context
+
+    Returns:
+        JSON string or fallback representation
+    """
+    if not data:
+        return ""
+
+    try:
+        return json.dumps(data)
+    except (TypeError, ValueError) as e:
+        logger.warning(
+            "Failed to serialize %s for question %s (%s: %s). Using string representation instead.",
+            field_name,
+            question_id,
+            type(e).__name__,
+            e,
+        )
+        try:
+            return str(data)
+        except Exception as str_error:
+            logger.error(
+                "Critical: Failed to convert %s to string for question %s: %s", field_name, question_id, str_error
+            )
+            return f"<serialization_failed:{type(data).__name__}>"
 
 
 def get_karenina_version() -> str:
@@ -89,35 +161,126 @@ def export_verification_results_json(job: VerificationJob, results: dict[str, Ve
 
 
 def export_verification_results_csv(
-    job: VerificationJob, results: dict[str, VerificationResult], global_rubric: Any = None
+    job: VerificationJob, results: dict[str, VerificationResult], global_rubric: HasTraitNames | None = None
 ) -> str:
     """
-    Export verification results to CSV format.
+    Export verification results to CSV format with rubric consolidation.
 
     Args:
         job: The verification job
         results: Dictionary of verification results
-        global_rubric: Optional global rubric for distinguishing global vs question-specific traits
+        global_rubric: Optional global rubric object that implements HasTraitNames protocol
+                      for distinguishing global vs question-specific traits. If None,
+                      all rubric traits will be consolidated into question_specific_rubrics.
 
     Returns:
-        CSV string with results
+        CSV string with results. Global rubric traits appear as dedicated columns
+        (rubric_TraitName), while question-specific traits are consolidated into
+        a single JSON column (question_specific_rubrics).
+
+    Note:
+        The function gracefully handles errors in trait name extraction and JSON
+        serialization, logging warnings and continuing with fallback values.
     """
+    # Input validation
+    if not results:
+        logger.warning("No results provided for CSV export. Generating empty CSV.")
+        # Return minimal CSV with headers only
+        output = StringIO()
+        csv_writer = csv.writer(output)
+        csv_writer.writerow(
+            [
+                "question_id",
+                "success",
+                "error",
+                "question_text",
+                "raw_llm_response",
+                "export_timestamp",
+                "karenina_version",
+                "job_id",
+            ]
+        )
+        return output.getvalue()
+
+    if not isinstance(results, dict):
+        raise ValueError(f"Results must be a dictionary, got {type(results).__name__}")
+
+    # Log export summary
+    logger.info("Starting CSV export for %d results", len(results))
+
     output = StringIO()
 
-    # Collect all unique rubric trait names across all results
+    # Collect all unique rubric trait names across all results with validation
     all_rubric_traits: set[str] = set()
+    invalid_trait_count = 0
     for result in results.values():
         if result.verify_rubric:
-            all_rubric_traits.update(result.verify_rubric.keys())
+            for trait_name in result.verify_rubric:
+                if _validate_trait_name(trait_name):
+                    all_rubric_traits.add(trait_name)
+                else:
+                    invalid_trait_count += 1
+                    logger.warning("Skipping invalid trait name '%s' in question %s", trait_name, result.question_id)
+
+    if invalid_trait_count > 0:
+        logger.info("Skipped %d invalid trait names during CSV export", invalid_trait_count)
 
     # Determine global vs question-specific rubrics
     global_trait_names: set[str] = set()
-    if global_rubric and hasattr(global_rubric, "get_trait_names"):
-        global_trait_names = set(global_rubric.get_trait_names())
+    if global_rubric:
+        try:
+            if hasattr(global_rubric, "get_trait_names") and callable(global_rubric.get_trait_names):
+                trait_names = global_rubric.get_trait_names()
+                if isinstance(trait_names, list):
+                    # Validate each trait name from global rubric
+                    valid_global_traits = []
+                    for trait_name in trait_names:
+                        if _validate_trait_name(trait_name):
+                            valid_global_traits.append(trait_name)
+                        else:
+                            logger.warning("Skipping invalid global trait name '%s' from global_rubric", trait_name)
+                    global_trait_names = set(valid_global_traits)
 
-    # Separate traits into global and question-specific
+                    if len(valid_global_traits) != len(trait_names):
+                        logger.info(
+                            "Global rubric had %d traits, %d were valid for CSV export",
+                            len(trait_names),
+                            len(valid_global_traits),
+                        )
+                else:
+                    logger.warning(
+                        "Global rubric get_trait_names() returned %s instead of list. "
+                        "All rubric traits will be treated as question-specific.",
+                        type(trait_names).__name__,
+                    )
+            else:
+                logger.warning(
+                    "Global rubric object does not have a callable get_trait_names method. "
+                    "All rubric traits will be treated as question-specific."
+                )
+        except (AttributeError, TypeError, ValueError) as e:
+            logger.warning(
+                "Error accessing global rubric trait names (%s: %s). "
+                "All rubric traits will be treated as question-specific.",
+                type(e).__name__,
+                e,
+            )
+            # Continue with empty set - graceful degradation
+
+    # Separate traits into global and question-specific (with performance optimization)
     global_traits = sorted(all_rubric_traits.intersection(global_trait_names))
     question_specific_traits = sorted(all_rubric_traits - global_trait_names)
+
+    # Pre-compute set for faster lookups during row processing
+    question_specific_traits_set = set(question_specific_traits)
+
+    # Log export configuration
+    logger.debug(
+        "CSV export configuration: %d global traits, %d question-specific traits, %d total results",
+        len(global_traits),
+        len(question_specific_traits),
+        len(results),
+    )
 
     # Define CSV headers with all result fields + dynamic rubric columns
     headers = [
@@ -156,7 +319,7 @@ def export_verification_results_csv(
         ]
     )
 
-    writer = csv.DictWriter(output, fieldnames=headers)
+    writer: csv.DictWriter[str] = csv.DictWriter(output, fieldnames=headers)
     writer.writeheader()
 
     # Metadata for each row
@@ -171,7 +334,7 @@ def export_verification_results_csv(
             "error": result.error or "",
             "question_text": result.question_text,
             "raw_llm_response": result.raw_llm_response,
-            "parsed_response": json.dumps(result.parsed_response) if result.parsed_response else "",
+            "parsed_response": _safe_json_serialize(result.parsed_response, result.question_id, "parsed_response"),
             "verify_result": _serialize_verification_result(result.verify_result),
             "verify_granular_result": _serialize_verification_result(result.verify_granular_result),
             "answering_model": result.answering_model,
@@ -188,23 +351,39 @@ def export_verification_results_csv(
             "job_id": job.job_id,
         }
 
-        # Add global rubric trait values
-        for trait in global_traits:
-            rubric_value = ""
-            if result.verify_rubric and trait in result.verify_rubric:
-                rubric_value = str(result.verify_rubric[trait])
-            row[f"rubric_{trait}"] = rubric_value
+        # Add global rubric trait values (optimized with dictionary comprehension)
+        if result.verify_rubric:
+            # Use pre-computed set for faster membership testing
+            for trait in global_traits:
+                row[f"rubric_{trait}"] = str(result.verify_rubric.get(trait, ""))
+        else:
+            # Set all global traits to empty when no rubric data
+            for trait in global_traits:
+                row[f"rubric_{trait}"] = ""
 
-        # Add question-specific rubrics as JSON
-        if question_specific_traits:
-            question_specific_rubrics = {}
+        # Add question-specific rubrics as JSON (optimized)
+        if question_specific_traits_set:
             if result.verify_rubric:
-                for trait in question_specific_traits:
-                    if trait in result.verify_rubric:
-                        question_specific_rubrics[trait] = result.verify_rubric[trait]
-            row["question_specific_rubrics"] = json.dumps(question_specific_rubrics)
+                # Use dictionary comprehension for better performance
+                question_specific_rubrics = {
+                    trait: result.verify_rubric[trait]
+                    for trait in question_specific_traits_set
+                    if trait in result.verify_rubric
+                }
+            else:
+                question_specific_rubrics = {}
+
+            # Safe JSON serialization with error handling
+            serialized = _safe_json_serialize(
+                question_specific_rubrics, result.question_id, "question_specific_rubrics"
+            )
+            row["question_specific_rubrics"] = serialized if serialized else "{}"
 
         writer.writerow(row)
+
+    # Log completion summary
+    result_count = len(results)
+    logger.info("CSV export completed successfully for %d results", result_count)
 
     return output.getvalue()
 
