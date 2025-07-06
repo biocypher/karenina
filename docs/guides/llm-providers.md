@@ -93,7 +93,7 @@ response = call_model(
 # Basic usage
 response = call_model(
     model="gpt-4",
-    provider="openai", 
+    provider="openai",
     message="What is machine learning?"
 )
 print(response.message)
@@ -161,7 +161,7 @@ response = call_model(
 # Gemini Pro (more capable)
 response = call_model(
     model="gemini-pro",
-    provider="google_genai", 
+    provider="google_genai",
     message="Write a detailed analysis of climate change impacts",
     temperature=0.5
 )
@@ -186,7 +186,7 @@ configurations = {
         "system_message": "Provide accurate, factual answers."
     },
     "creative_writing": {
-        "model": "gemini-pro", 
+        "model": "gemini-pro",
         "temperature": 0.8,
         "system_message": "Be creative and engaging in your responses."
     },
@@ -250,7 +250,7 @@ response = call_model(
 
 # Claude 3 Opus (for complex reasoning)
 response = call_model(
-    model="claude-3-opus", 
+    model="claude-3-opus",
     provider="anthropic",
     message="Analyze the philosophical implications of artificial intelligence",
     temperature=0.5,
@@ -272,13 +272,13 @@ response = call_model(
 # Long-form content generation
 def generate_essay(topic: str, length: str = "medium"):
     """Generate essay using Claude's writing capabilities."""
-    
+
     system_prompts = {
         "short": "Write a concise 200-word essay.",
         "medium": "Write a well-structured 500-word essay.",
         "long": "Write a comprehensive 1000-word essay."
     }
-    
+
     response = call_model(
         model="claude-3-sonnet",
         provider="anthropic",
@@ -286,13 +286,13 @@ def generate_essay(topic: str, length: str = "medium"):
         system_message=system_prompts.get(length, system_prompts["medium"]),
         temperature=0.7
     )
-    
+
     return response.message
 
 # Code review with Claude
 def code_review(code: str):
     """Use Claude for comprehensive code review."""
-    
+
     response = call_model(
         model="claude-3.5-sonnet",
         provider="anthropic",
@@ -305,7 +305,7 @@ def code_review(code: str):
         5. Suggestions for improvement""",
         temperature=0.2
     )
-    
+
     return response.message
 
 # Usage
@@ -345,9 +345,9 @@ response = call_model(
 # Model comparison through OpenRouter
 def compare_models_via_openrouter(question: str, models: list):
     """Compare responses from multiple models via OpenRouter."""
-    
+
     results = {}
-    
+
     for model in models:
         try:
             response = call_model(
@@ -357,11 +357,11 @@ def compare_models_via_openrouter(question: str, models: list):
                 temperature=0.3
             )
             results[model] = response.message
-            
+
         except Exception as e:
             print(f"Error with {model}: {e}")
             results[model] = None
-    
+
     return results
 
 # Usage
@@ -394,21 +394,21 @@ provider_profiles = {
     },
     "google_genai": {
         "strengths": ["Fast inference", "Multimodal capabilities", "Cost-effective"],
-        "best_for": ["Quick responses", "Factual QA", "Content generation"], 
+        "best_for": ["Quick responses", "Factual QA", "Content generation"],
         "latency": "Low",
         "cost": "Low"
     },
     "anthropic": {
         "strengths": ["Safety focused", "Long context", "Reasoning ability"],
         "best_for": ["Complex analysis", "Safety-critical apps", "Long documents"],
-        "latency": "Medium-High", 
+        "latency": "Medium-High",
         "cost": "Medium-High"
     }
 }
 
 def select_optimal_provider(task_type: str, priority: str):
     """Select optimal provider based on task and priorities."""
-    
+
     recommendations = {
         "factual_qa": {
             "speed": ("google_genai", "gemini-2.0-flash"),
@@ -426,10 +426,10 @@ def select_optimal_provider(task_type: str, priority: str):
             "cost": ("google_genai", "gemini-pro")
         }
     }
-    
+
     if task_type in recommendations and priority in recommendations[task_type]:
         return recommendations[task_type][priority]
-    
+
     return ("openai", "gpt-3.5-turbo")  # Default
 
 # Usage
@@ -442,12 +442,12 @@ print(f"Recommended: {provider} with {model}")
 ```python
 def robust_provider_call(model: str, provider: str, message: str, fallback_providers: list = None):
     """Call LLM with fallback providers for reliability."""
-    
+
     if fallback_providers is None:
         fallback_providers = ["openai", "google_genai", "anthropic"]
-    
+
     providers_to_try = [provider] + [p for p in fallback_providers if p != provider]
-    
+
     for attempt_provider in providers_to_try:
         try:
             response = call_model(
@@ -456,14 +456,14 @@ def robust_provider_call(model: str, provider: str, message: str, fallback_provi
                 message=message,
                 temperature=0.3
             )
-            
+
             if response.message.strip():  # Successful response
                 return response, attempt_provider
-                
+
         except Exception as e:
             print(f"Provider {attempt_provider} failed: {e}")
             continue
-    
+
     raise Exception("All providers failed")
 
 # Usage with fallback
@@ -475,7 +475,7 @@ try:
         fallback_providers=["google_genai", "anthropic"]
     )
     print(f"Success with {used_provider}: {response.message}")
-    
+
 except Exception as e:
     print(f"All providers failed: {e}")
 ```
@@ -489,16 +489,16 @@ from karenina.llm.interface import list_sessions, get_session, delete_session
 
 def manage_provider_sessions():
     """Demonstrate session management across providers."""
-    
+
     # Start sessions with different providers
     providers_config = [
         ("gpt-3.5-turbo", "openai"),
         ("gemini-2.0-flash", "google_genai"),
         ("claude-3-haiku", "anthropic")
     ]
-    
+
     session_ids = []
-    
+
     for model, provider in providers_config:
         response = call_model(
             model=model,
@@ -508,25 +508,25 @@ def manage_provider_sessions():
         )
         session_ids.append(response.session_id)
         print(f"Started session {response.session_id} with {provider}:{model}")
-    
+
     # List all active sessions
     sessions = list_sessions()
     print(f"\nActive sessions: {len(sessions)}")
     for session in sessions:
         print(f"  {session['session_id']}: {session['provider']}:{session['model']}")
-    
+
     # Continue conversations
     for session_id in session_ids:
         session = get_session(session_id)
         if session:
             response = call_model(
                 model=session.model,
-                provider=session.provider, 
+                provider=session.provider,
                 message="What's your model name?",
                 session_id=session_id
             )
             print(f"\n{session.provider}:{session.model} says: {response.message}")
-    
+
     # Clean up sessions
     for session_id in session_ids:
         delete_session(session_id)
@@ -541,7 +541,7 @@ manage_provider_sessions()
 ```python
 def create_specialized_sessions():
     """Create sessions optimized for different providers."""
-    
+
     session_configs = {
         "openai_coding": {
             "model": "gpt-4",
@@ -551,7 +551,7 @@ def create_specialized_sessions():
         },
         "google_factual": {
             "model": "gemini-2.0-flash",
-            "provider": "google_genai", 
+            "provider": "google_genai",
             "system_message": "Provide accurate, concise factual information.",
             "temperature": 0.0
         },
@@ -562,9 +562,9 @@ def create_specialized_sessions():
             "temperature": 0.4
         }
     }
-    
+
     sessions = {}
-    
+
     for session_name, config in session_configs.items():
         response = call_model(
             model=config["model"],
@@ -573,10 +573,10 @@ def create_specialized_sessions():
             system_message=config["system_message"],
             temperature=config["temperature"]
         )
-        
+
         sessions[session_name] = response.session_id
         print(f"Created {session_name}: {response.session_id}")
-    
+
     return sessions
 
 # Usage
@@ -591,7 +591,7 @@ coding_response = call_model(
 )
 
 factual_response = call_model(
-    model="gemini-2.0-flash", 
+    model="gemini-2.0-flash",
     provider="google_genai",
     message="What is the population of Tokyo?",
     session_id=specialized_sessions["google_factual"]
@@ -605,7 +605,7 @@ factual_response = call_model(
 ```python
 def estimate_costs(message_length: int, response_length: int, model: str, provider: str):
     """Estimate costs for different providers (approximate rates)."""
-    
+
     # Approximate costs per 1K tokens (as of 2024)
     cost_estimates = {
         "openai": {
@@ -621,25 +621,25 @@ def estimate_costs(message_length: int, response_length: int, model: str, provid
             "claude-3-haiku": {"input": 0.00025, "output": 0.00125}
         }
     }
-    
+
     if provider in cost_estimates and model in cost_estimates[provider]:
         rates = cost_estimates[provider][model]
-        
+
         # Rough token estimation (1 token ≈ 4 characters)
         input_tokens = message_length / 4
         output_tokens = response_length / 4
-        
+
         input_cost = (input_tokens / 1000) * rates["input"]
         output_cost = (output_tokens / 1000) * rates["output"]
         total_cost = input_cost + output_cost
-        
+
         return {
             "input_cost": input_cost,
             "output_cost": output_cost,
             "total_cost": total_cost,
             "currency": "USD"
         }
-    
+
     return {"error": "Unknown provider/model combination"}
 
 # Usage
@@ -657,7 +657,7 @@ print(f"Estimated cost: ${cost['total_cost']:.6f}")
 ```python
 def cost_optimized_call(message: str, quality_threshold: str = "medium"):
     """Select provider based on cost optimization and quality requirements."""
-    
+
     quality_tiers = {
         "low": [
             ("gemini-2.0-flash", "google_genai"),
@@ -675,9 +675,9 @@ def cost_optimized_call(message: str, quality_threshold: str = "medium"):
             ("claude-3-sonnet", "anthropic")
         ]
     }
-    
+
     providers_to_try = quality_tiers.get(quality_threshold, quality_tiers["medium"])
-    
+
     for model, provider in providers_to_try:
         try:
             response = call_model(
@@ -686,21 +686,21 @@ def cost_optimized_call(message: str, quality_threshold: str = "medium"):
                 message=message,
                 temperature=0.3
             )
-            
+
             # Estimate cost
             cost = estimate_costs(len(message), len(response.message), model, provider)
-            
+
             return {
                 "response": response,
                 "model": model,
                 "provider": provider,
                 "estimated_cost": cost.get("total_cost", 0)
             }
-            
+
         except Exception as e:
             print(f"Failed with {provider}:{model}: {e}")
             continue
-    
+
     raise Exception("All providers failed")
 
 # Usage

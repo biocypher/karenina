@@ -13,13 +13,13 @@ def test_read_answer_templates_success():
     answer_templates = {
         "test1": """class Answer(BaseAnswer):
     answer: bool = Field(description="Test answer")
-    
+
     def model_post_init(self, __context):
         self.id = "test1"
         self.correct = True""",
         "test2": """class Answer(BaseAnswer):
     answer: str = Field(description="String answer")
-    
+
     def model_post_init(self, __context):
         self.id = "test2"
         self.correct = False""",
@@ -62,7 +62,7 @@ def test_read_answer_templates_with_pathlib():
     answer_templates = {
         "path_test": """class Answer(BaseAnswer):
     answer: int = Field(description="Integer answer")
-    
+
     def model_post_init(self, __context):
         self.id = "path_test"
         self.correct = True"""
@@ -92,18 +92,18 @@ def test_read_answer_templates_multiple_classes():
         "class1": '''class Answer(BaseAnswer):
     value: str = Field(description="String value")
     count: int = Field(default=0, description="Count value")
-    
+
     def model_post_init(self, __context):
         self.id = "class1"''',
         "class2": '''class Answer(BaseAnswer):
     items: List[str] = Field(description="List of items")
     category: Literal["A", "B", "C"] = Field(description="Category")
-    
+
     def model_post_init(self, __context):
         self.id = "class2"''',
         "class3": '''class Answer(BaseAnswer):
     is_valid: bool = Field(description="Validity flag")
-    
+
     def model_post_init(self, __context):
         self.id = "class3"''',
     }

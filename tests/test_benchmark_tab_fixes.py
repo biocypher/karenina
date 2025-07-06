@@ -122,13 +122,13 @@ class TestBenchmarkResultsAccumulation:
         accumulated_results = {**existing_results, **new_result}
 
         # Verify the newer result overwrote the old one
-        assert accumulated_results["q1"]["success"] == False
+        assert not accumulated_results["q1"]["success"]
         assert accumulated_results["q1"]["raw_llm_response"] == "5"
         assert accumulated_results["q1"]["answering_model"] == "gpt-3.5"
         assert accumulated_results["q1"]["run_name"] == "test_run_2"
 
         # Verify other results are unaffected
-        assert accumulated_results["q2"]["success"] == True
+        assert accumulated_results["q2"]["success"]
         assert accumulated_results["q2"]["run_name"] == "test_run_1"
 
     def test_historical_results_merge_with_current_session(
@@ -329,7 +329,7 @@ class TestBenchmarkTabIntegration:
 
         # Verify filtering doesn't lose data integrity
         for result in successful_results.values():
-            assert result["success"] == True
+            assert result["success"]
             assert "question_id" in result
             assert "timestamp" in result
 

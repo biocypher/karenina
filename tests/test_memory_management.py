@@ -32,7 +32,7 @@ def test_memory_usage_info():
     # Load some traces
     test_traces = {
         "d41d8cd98f00b204e9800998ecf8427e": "Short trace",
-        "c4ca4238a0b923820dcc509a6f75849b": "A longer trace with more content"
+        "c4ca4238a0b923820dcc509a6f75849b": "A longer trace with more content",
     }
 
     manager.load_traces_from_json(test_traces)
@@ -49,9 +49,7 @@ def test_automatic_cleanup_timer():
     manager = ManualTraceManager(session_timeout_seconds=1)  # 1 second timeout
 
     # Load traces
-    test_traces = {
-        "d41d8cd98f00b204e9800998ecf8427e": "Test trace"
-    }
+    test_traces = {"d41d8cd98f00b204e9800998ecf8427e": "Test trace"}
     manager.load_traces_from_json(test_traces)
 
     # Verify traces are loaded
@@ -72,7 +70,7 @@ def test_manual_cleanup():
     # Load traces
     test_traces = {
         "d41d8cd98f00b204e9800998ecf8427e": "Test trace 1",
-        "c4ca4238a0b923820dcc509a6f75849b": "Test trace 2"
+        "c4ca4238a0b923820dcc509a6f75849b": "Test trace 2",
     }
     manager.load_traces_from_json(test_traces)
 
@@ -93,9 +91,7 @@ def test_access_updates_last_access():
     """Test that accessing traces updates the last access timestamp."""
     manager = ManualTraceManager()
 
-    test_traces = {
-        "d41d8cd98f00b204e9800998ecf8427e": "Test trace"
-    }
+    test_traces = {"d41d8cd98f00b204e9800998ecf8427e": "Test trace"}
     manager.load_traces_from_json(test_traces)
 
     initial_access = manager._last_access
@@ -118,9 +114,7 @@ def test_global_memory_usage_function():
     clear_manual_traces()
 
     # Load traces
-    test_traces = {
-        "d41d8cd98f00b204e9800998ecf8427e": "Global test trace"
-    }
+    test_traces = {"d41d8cd98f00b204e9800998ecf8427e": "Global test trace"}
     load_manual_traces(test_traces)
 
     # Check memory usage
@@ -137,18 +131,14 @@ def test_timer_restart_on_activity():
     manager = ManualTraceManager(session_timeout_seconds=10)
 
     # Load initial traces
-    test_traces = {
-        "d41d8cd98f00b204e9800998ecf8427e": "Test trace 1"
-    }
+    test_traces = {"d41d8cd98f00b204e9800998ecf8427e": "Test trace 1"}
     manager.load_traces_from_json(test_traces)
 
     initial_timer = manager._cleanup_timer
     time.sleep(0.1)
 
     # Load more traces - should restart timer
-    more_traces = {
-        "c4ca4238a0b923820dcc509a6f75849b": "Test trace 2"
-    }
+    more_traces = {"c4ca4238a0b923820dcc509a6f75849b": "Test trace 2"}
     manager.load_traces_from_json(more_traces)
 
     # Timer should be different (restarted)

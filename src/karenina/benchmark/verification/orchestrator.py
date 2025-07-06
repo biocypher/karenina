@@ -1,5 +1,6 @@
 """Orchestration logic for multi-model verification."""
 
+from typing import Literal, cast
 
 from ...schemas.rubric_class import Rubric
 from ..models import ModelConfiguration, VerificationConfig, VerificationResult
@@ -29,20 +30,20 @@ def run_question_verification(
         # Legacy single model mode - create single model configs and handle replicates
         answering_model = ModelConfiguration(
             id="answering-legacy",
-            model_provider=config.answering_model_provider,
-            model_name=config.answering_model_name,
+            model_provider=config.answering_model_provider or "",
+            model_name=config.answering_model_name or "",
             temperature=config.answering_temperature or 0.1,
-            interface=config.answering_interface or "langchain",
+            interface=cast(Literal["langchain", "openrouter", "manual"], config.answering_interface or "langchain"),
             system_prompt=config.answering_system_prompt
             or "You are an expert assistant. Answer the question accurately and concisely.",
         )
 
         parsing_model = ModelConfiguration(
             id="parsing-legacy",
-            model_provider=config.parsing_model_provider,
-            model_name=config.parsing_model_name,
+            model_provider=config.parsing_model_provider or "",
+            model_name=config.parsing_model_name or "",
             temperature=config.parsing_temperature or 0.1,
-            interface=config.parsing_interface or "langchain",
+            interface=cast(Literal["langchain", "openrouter", "manual"], config.parsing_interface or "langchain"),
             system_prompt=config.parsing_system_prompt
             or "You are a validation assistant. Parse and validate responses against the given Pydantic template.",
         )

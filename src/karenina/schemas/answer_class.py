@@ -5,7 +5,6 @@ all answer templates in the benchmark. It provides common functionality and
 validation for answer structures.
 """
 
-
 from pydantic import BaseModel, ConfigDict
 
 

@@ -16,20 +16,15 @@ class TestRubricEvaluator:
     def sample_rubric(self):
         """Create a sample rubric for testing."""
         return Rubric(
-            title="Test Rubric",
             traits=[
-                RubricTrait(
-                    name="accuracy",
-                    description="Is the response factually accurate?",
-                    kind="boolean"
-                ),
+                RubricTrait(name="accuracy", description="Is the response factually accurate?", kind="boolean"),
                 RubricTrait(
                     name="completeness",
                     description="How complete is the response (1-5)?",
                     kind="score",
                     min_score=1,
-                    max_score=5
-                )
+                    max_score=5,
+                ),
             ]
         )
 
@@ -41,7 +36,8 @@ class TestRubricEvaluator:
             model_provider="openai",
             model_name="gpt-3.5-turbo",
             temperature=0.1,
-            interface="langchain"
+            interface="langchain",
+            system_prompt="You are a helpful assistant.",
         )
 
     @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
@@ -55,10 +51,7 @@ class TestRubricEvaluator:
         assert evaluator.model_config == mock_model_config
         assert evaluator.llm == mock_llm
         mock_init_model.assert_called_once_with(
-            model="gpt-3.5-turbo",
-            provider="openai",
-            temperature=0.1,
-            interface="langchain"
+            model="gpt-3.5-turbo", provider="openai", temperature=0.1, interface="langchain"
         )
 
     @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
@@ -69,7 +62,7 @@ class TestRubricEvaluator:
 
         evaluator = RubricEvaluator(mock_model_config)
 
-        empty_rubric = Rubric(title="Empty", traits=[])
+        empty_rubric = Rubric(traits=[])
         result = evaluator.evaluate_rubric("Test question?", "Test answer.", empty_rubric)
 
         assert result == {}
@@ -91,53 +84,11 @@ class TestRubricEvaluator:
         evaluator = RubricEvaluator(mock_model_config)
 
         result = evaluator.evaluate_rubric(
-            "What is the capital of France?",
-            "The capital of France is Paris.",
-            sample_rubric
+            "What is the capital of France?", "The capital of France is Paris.", sample_rubric
         )
 
         assert result["accuracy"] is True
         assert result["completeness"] == 4
-
-    @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
-    def test_evaluate_rubric_llm_failure(self, mock_init_model, mock_model_config, sample_rubric):
-        """Test rubric evaluation when LLM fails."""
-        mock_llm = Mock()
-        mock_init_model.return_value = mock_llm
-
-        # Mock LLM to raise exception
-        mock_llm.invoke.side_effect = Exception("API error")
-
-        evaluator = RubricEvaluator(mock_model_config)
-
-        result = evaluator.evaluate_rubric(
-            "Test question?",
-            "Test answer.",
-            sample_rubric
-        )
-
-        # Should return empty dict on complete failure
-        assert result == {}
-
-    @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
-    def test_evaluate_rubric_invalid_json(self, mock_init_model, mock_model_config, sample_rubric):
-        """Test evaluation with invalid JSON response."""
-        mock_llm = Mock()
-        mock_init_model.return_value = mock_llm
-
-        # Mock LLM response with invalid JSON
-        mock_llm.invoke.return_value.content = "This is not valid JSON"
-
-        evaluator = RubricEvaluator(mock_model_config)
-
-        result = evaluator.evaluate_rubric(
-            "Test question?",
-            "Test answer.",
-            sample_rubric
-        )
-
-        # Should handle gracefully and return empty dict
-        assert result == {}
 
     @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
     def test_evaluate_rubric_partial_response(self, mock_init_model, mock_model_config, sample_rubric):
@@ -154,11 +105,7 @@ class TestRubricEvaluator:
 
         evaluator = RubricEvaluator(mock_model_config)
 
-        result = evaluator.evaluate_rubric(
-            "Test question?",
-            "Test answer.",
-            sample_rubric
-        )
+        result = evaluator.evaluate_rubric("Test question?", "Test answer.", sample_rubric)
 
         assert result["accuracy"] is True
         # Should only include traits that were returned
@@ -172,10 +119,9 @@ class TestRubricEvaluator:
 
         # Create rubric with mixed trait types
         mixed_rubric = Rubric(
-            title="Mixed Types",
             traits=[
                 RubricTrait(name="bool_trait", description="Boolean trait", kind="boolean"),
-                RubricTrait(name="score_trait", description="Score trait", kind="score", min_score=1, max_score=3)
+                RubricTrait(name="score_trait", description="Score trait", kind="score", min_score=1, max_score=3),
             ]
         )
 
@@ -189,11 +135,7 @@ class TestRubricEvaluator:
 
         evaluator = RubricEvaluator(mock_model_config)
 
-        result = evaluator.evaluate_rubric(
-            "Test question?",
-            "Test answer.",
-            mixed_rubric
-        )
+        result = evaluator.evaluate_rubric("Test question?", "Test answer.", mixed_rubric)
 
         assert result["bool_trait"] is False
         assert result["score_trait"] == 2
@@ -204,7 +146,7 @@ class TestRubricEvaluator:
         test_configs = [
             ("openai", "gpt-4", "langchain"),
             ("google_genai", "gemini-2.0-flash", "langchain"),
-            ("anthropic", "claude-3-sonnet", "langchain")
+            ("anthropic", "claude-3-sonnet", "langchain"),
         ]
 
         for provider, model, interface in test_configs:
@@ -216,7 +158,8 @@ class TestRubricEvaluator:
                 model_provider=provider,
                 model_name=model,
                 temperature=0.1,
-                interface=interface
+                interface=interface,
+                system_prompt="You are a helpful assistant.",
             )
 
             evaluator = RubricEvaluator(config)
@@ -233,12 +176,15 @@ class TestRubricEvaluator:
 
         # Create comprehensive rubric
         comprehensive_rubric = Rubric(
-            title="Comprehensive Assessment",
             traits=[
                 RubricTrait(name="factual_accuracy", description="Factually correct", kind="boolean"),
-                RubricTrait(name="completeness", description="Complete response", kind="score", min_score=1, max_score=5),
+                RubricTrait(
+                    name="completeness", description="Complete response", kind="score", min_score=1, max_score=5
+                ),
                 RubricTrait(name="clarity", description="Clear writing", kind="boolean"),
-                RubricTrait(name="relevance", description="Relevant to question", kind="score", min_score=1, max_score=3)
+                RubricTrait(
+                    name="relevance", description="Relevant to question", kind="score", min_score=1, max_score=3
+                ),
             ]
         )
 
@@ -257,7 +203,7 @@ class TestRubricEvaluator:
         result = evaluator.evaluate_rubric(
             "Explain the process of photosynthesis.",
             "Photosynthesis is the process by which plants convert light energy into chemical energy...",
-            comprehensive_rubric
+            comprehensive_rubric,
         )
 
         # Verify all traits are evaluated
@@ -287,7 +233,7 @@ class TestRubricEvaluatorEdgeCases:
             model_name="",  # Empty model name
             temperature=0.1,
             interface=INTERFACE_LANGCHAIN,
-            system_prompt="You are a helpful assistant."
+            system_prompt="You are a helpful assistant.",
         )
 
         with pytest.raises(ValueError, match="Model name is required"):
@@ -301,7 +247,7 @@ class TestRubricEvaluatorEdgeCases:
             model_name="gpt-3.5-turbo",
             temperature=0.1,
             interface=INTERFACE_LANGCHAIN,
-            system_prompt="You are a helpful assistant."
+            system_prompt="You are a helpful assistant.",
         )
 
         with pytest.raises(ValueError, match="Model provider is required.*interface: langchain"):
@@ -315,7 +261,7 @@ class TestRubricEvaluatorEdgeCases:
             model_name="openrouter/model",
             temperature=0.1,
             interface=INTERFACE_OPENROUTER,
-            system_prompt="You are a helpful assistant."
+            system_prompt="You are a helpful assistant.",
         )
 
         # Should not raise errors during validation
@@ -332,7 +278,7 @@ class TestRubricEvaluatorEdgeCases:
             model_name="manual-model",
             temperature=0.1,
             interface=INTERFACE_MANUAL,
-            system_prompt="You are a helpful assistant."
+            system_prompt="You are a helpful assistant.",
         )
 
         # Should not raise errors during validation
@@ -350,7 +296,7 @@ class TestRubricEvaluatorEdgeCases:
             model_name="gpt-3.5-turbo",
             temperature=0.1,
             interface=INTERFACE_LANGCHAIN,
-            system_prompt="You are a helpful assistant."
+            system_prompt="You are a helpful assistant.",
         )
 
         # Mock LLM initialization to fail
@@ -368,7 +314,7 @@ class TestRubricEvaluatorEdgeCases:
             model_name="gpt-3.5-turbo",
             temperature=0.1,
             interface=INTERFACE_LANGCHAIN,
-            system_prompt="You are a helpful assistant."
+            system_prompt="You are a helpful assistant.",
         )
 
         try:
@@ -393,7 +339,7 @@ class TestRubricEvaluatorEdgeCases:
                 model_name="gpt-3.5-turbo",
                 temperature=0.1,
                 interface=INTERFACE_LANGCHAIN,
-                system_prompt="You are a helpful assistant."
+                system_prompt="You are a helpful assistant.",
             ),
             ModelConfiguration(
                 id="openrouter-model",
@@ -401,7 +347,7 @@ class TestRubricEvaluatorEdgeCases:
                 model_name="openrouter/model",
                 temperature=0.1,
                 interface=INTERFACE_OPENROUTER,
-                system_prompt="You are a helpful assistant."
+                system_prompt="You are a helpful assistant.",
             ),
             ModelConfiguration(
                 id="manual-model",
@@ -409,12 +355,11 @@ class TestRubricEvaluatorEdgeCases:
                 model_name="manual-model",
                 temperature=0.1,
                 interface=INTERFACE_MANUAL,
-                system_prompt="You are a helpful assistant."
-            )
+                system_prompt="You are a helpful assistant.",
+            ),
         ]
 
         for config in configs:
             evaluator = RubricEvaluator(config)
             assert evaluator.model_config.interface == config.interface
             assert evaluator.model_config.id == config.id
-

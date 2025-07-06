@@ -123,6 +123,9 @@ Thumbs.db
 .env.local
 .env.*.local
 
+# Test monitoring data
+.testmondata
+
 #internal instructions
 RELEASE.md
 SEMANTIC_VERSIONING.md
