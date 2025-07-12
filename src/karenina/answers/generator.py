@@ -46,7 +46,7 @@ def inject_question_id_into_answer_class(answer_class: type, question_id: str) -
 
 def generate_answer_template(
     question: str,
-    question_json: str,
+    raw_answer: str,
     model: str = "gemini-2.0-flash",
     model_provider: str = "google_genai",
     temperature: float = 0,
@@ -54,11 +54,11 @@ def generate_answer_template(
     interface: str = "langchain",
 ) -> str:
     """
-    Generate a answer template for a given question and question json.
+    Generate a answer template for a given question and raw answer.
 
     Args:
         question: The question to generate an answer template for.
-        question_json: The json representation of the question.
+        raw_answer: The raw answer to the question.
         model: The model to use for the answer template.
         model_provider: The provider of the model.
         temperature: The temperature of the model.
@@ -75,7 +75,7 @@ def generate_answer_template(
 
     messages = [
         SystemMessage(content=system_prompt),
-        HumanMessage(content=ANSWER_GENERATION_USER.format(question=question, question_json=question_json)),
+        HumanMessage(content=ANSWER_GENERATION_USER.format(question=question, raw_answer=raw_answer)),
     ]
 
     return str(llm.invoke(messages).content)
@@ -101,7 +101,7 @@ def generate_answer_templates_from_questions_file(
     for _, question in tqdm(enumerate(all_questions)):
         answer_template = generate_answer_template(
             question.question,
-            question.model_dump_json(),
+            question.raw_answer or "",
             model=model,
             model_provider=model_provider,
             interface=interface,
