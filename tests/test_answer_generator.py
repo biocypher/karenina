@@ -33,7 +33,7 @@ def test_generate_answer_template(mock_llm):
     with patch("karenina.llm.interface.init_chat_model", return_value=mock_llm):
         result = generate_answer_template(
             question="Test question?",
-            question_json='{"id": "test_id", "question": "Test question?", "raw_answer": "Yes", "tags": []}',
+            raw_answer="Yes",
             model="test-model",
             model_provider="test_provider",
             temperature=0,
@@ -44,7 +44,7 @@ def test_generate_answer_template(mock_llm):
         messages = mock_llm.invoke.call_args[0][0]
         assert len(messages) == 2
         assert "Test question?" in messages[1].content
-        assert "test_id" in messages[1].content
+        assert "Yes" in messages[1].content
 
         # Verify the result contains the expected code
         assert "class Answer" in result

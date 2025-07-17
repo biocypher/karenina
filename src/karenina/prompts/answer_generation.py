@@ -32,7 +32,7 @@ Your task:
 
 <example_1>
 Raw question:"Is rofecoxib withdrawn?"
-JSON question: '{"id":"0317484267bee22cd3f8539fdfb27b30","question":"Is rofecoxib withdrawn?","raw_answer":"Yes","tags":[]}'
+Answer: Yes
 
 Answer:
 ```python
@@ -40,16 +40,16 @@ class Answer(BaseAnswer):
     answer: bool = Field(description="Answer contains whether rofecoxib is withdrawn - true or false")
 
     def model_post_init(self, __context):
-        self.correct = True
+        self.correct = {"answer": True}
 
     def verify(self) -> bool:
-        return bool(self.answer) is bool(self.correct)
+        return bool(self.answer) is bool(self.correct["answer"])
 ```
 </example_1>
 
 <example_2>
 Raw question:"Why rofecoxib was withdrawn?"
-JSON question: '{"id":"f678ebd11f1fdd9df203c76f6d2d87b2","question":"Why rofecoxib was withdrawn?","raw_answer":"Increased risk of cardiovascular side effects","tags":[]}'
+Answer: Increased risk of cardiovascular side effects
 
 Answer:
 ```python
@@ -59,16 +59,16 @@ class Answer(BaseAnswer):
     )
 
     def model_post_init(self, __context):
-        self.correct = "Increased risk of cardiovascular side effects"
+        self.correct = {"answer": "Increased risk of cardiovascular side effects"}
 
     def verify(self) -> bool:
-        return str(self.answer).strip().lower() == str(self.correct).strip().lower()
+        return str(self.answer).strip().lower() == str(self.correct["answer"]).strip().lower()
 ```
 </example_2>
 
 <example_3>
 Raw question:"How many targets associated with ALS are enzymes or membrane receptors?"
-JSON question>: '{"id":"b71b5912eddade8d4b172557d184e0a7","question":"How many targets associated with ALS are enzymes or membrane receptors?","raw_answer":"324","tags":[]}'
+Answer: 324
 
 Answer:
 ```python
@@ -76,16 +76,16 @@ class Answer(BaseAnswer):
     answer: int = Field(description="Number of targets associated with ALS in the answer")
 
     def model_post_init(self, __context):
-        self.correct = 324
+        self.correct = {"answer": 324}
 
     def verify(self) -> bool:
-        return int(self.answer) == int(self.correct)
+        return int(self.answer) == int(self.correct["answer"])
 ```
 </example_3>
 
 <example_4>
 Raw question:"Ozanezumab is a drug that is undergoing clinical trials for ALS. What is the maximum trial phase? What is the status of that trial?"
-JSON question>: '{"id":"a4ff2c7d7f61ab8c062ff34acb4fc5b5","question":"Ozanezumab is a drug that is undergoing clinical trials for ALS. What is the maximum trial phase? What is the status of that trial?","raw_answer":"Phase II, Completed","tags":[]}'
+Answer: Phase II, Completed
 
 Answer:
 ```python
@@ -118,7 +118,7 @@ class Answer(BaseAnswer):
 
 <example_5>
 Raw question:"Find all drugs approved for Duchenne muscular dystrophy"
-JSON question>: '{"id":"b71d3558119a7990bb6659435d7ddfbe","question":"Find all drugs approved for Duchenne muscular dystrophy","raw_answer":"DEFLAZACORT,ATALUREN,ETEPLIRSEN,CASIMERSEN,GOLODIRSEN,VILTOLARSEN,VAMOROLONE","tags":[]}'
+Answer: DEFLAZACORT,ATALUREN,ETEPLIRSEN,CASIMERSEN,GOLODIRSEN,VILTOLARSEN,VAMOROLONE
 
 Answer:
 ```python
@@ -126,23 +126,25 @@ class Answer(BaseAnswer):
     answer: List[str] = Field(description="Names of all drugs approved for Duchenne muscular dystrophy named in the response")
 
     def model_post_init(self, __context):
-        self.correct = [
-            "DEFLAZACORT",
-            "ATALUREN",
-            "ETEPLIRSEN",
-            "CASIMERSEN",
-            "GOLODIRSEN",
-            "VILTOLARSEN",
-            "VAMOROLONE",
-        ]
+        self.correct = {
+            "answer": [
+                "DEFLAZACORT",
+                "ATALUREN",
+                "ETEPLIRSEN",
+                "CASIMERSEN",
+                "GOLODIRSEN",
+                "VILTOLARSEN",
+                "VAMOROLONE",
+            ]
+        }
 
     def verify(self) -> bool:
-        return set(self.answer) == set(self.correct)
+        return set(self.answer) == set(self.correct["answer"])
 
     def verify_granular(self) -> float:
         score = 0
         n_params = 0
-        for drug in self.correct:
+        for drug in self.correct["answer"]:
             if drug in self.answer:
                 score += 1
                 n_params += 1
@@ -152,7 +154,7 @@ class Answer(BaseAnswer):
 
 <example_6>
 Raw question:"What\'s the ancestry composition of the GWAS study GCST90018784?"
-JSON question>: '{"id":"38c3a1d6683278a48d79dfb881a1d8e7","question":"What\'s the ancestry composition of the GWAS study GCST90018784?","raw_answer":"74% non-finish european and 26% East Asian","tags":[]}'
+Answer: 74% non-finish european and 26% East Asian
 
 Answer:
 ```python
@@ -185,7 +187,7 @@ class Answer(BaseAnswer):
 
 <example_7>
 Raw question:"Can baricitinib be repurposed for alopecia?"
-JSON question>: '{"id":"18560aa613e3a5dcb4b4c16e5e8c4dd8","question":"Can baricitinib be repurposed for alopecia?","raw_answer":"Based on literature evidence of JAK1, JAK2 involvement into disease, yes.","tags":[]}'
+Answer: Based on literature evidence of JAK1, JAK2 involvement into disease, yes.
 
 Answer:
 ```python
@@ -204,7 +206,7 @@ class Answer(BaseAnswer):
 
 <example_8>
 Raw question:"What is the overall association score for FUS and ALS?"
-JSON question>: '{"id":"eba9a8ea710e90be6c6b1959d72d652a","question":"What is the overall association score for FUS and ALS?","raw_answer":"0.84","tags":[]}'
+Answer: 0.84
 
 Answer:
 ```python
@@ -212,16 +214,16 @@ class Answer(BaseAnswer):
     answer: float = Field(description="Overall association score for FUS and ALS returned by the response")
 
     def model_post_init(self, __context):
-        self.correct = 0.84
+        self.correct = {"answer": 0.84}
 
     def verify(self) -> bool:
-        return float(self.answer) == float(self.correct)
+        return float(self.answer) == float(self.correct["answer"])
 ```
 </example_8>
 
 <example_9>
 Raw question:"Are there any drugs that share a molecular target or mechanism of action with Rituximab and are approved for \\t\\nrheumatoid arthritis?"
-JSON question>: '{"id":"338120dd65fe5f25ab14fcd95c3d626e","question":"Are there any drugs that share a molecular target or mechanism of action with Rituximab and are approved for \\t\\nrheumatoid arthritis?","raw_answer":"Yes, OBINUTUZUMAB\\nMOSUNETUZUMAB","tags":[]}'
+Answer: Yes, OBINUTUZUMAB\nMOSUNETUZUMAB
 
 Answer:
 ```python
@@ -257,5 +259,5 @@ class Answer(BaseAnswer):
 ANSWER_GENERATION_USER = """Return the pydantic class code for the following question object:
 
 Raw question:{question}
-JSON question:{question_json}
+Answer: {raw_answer}
 """
