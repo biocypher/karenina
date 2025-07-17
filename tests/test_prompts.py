@@ -34,7 +34,7 @@ def test_answer_generation_prompts_import():
 
     # Test that placeholders are present in user prompt
     assert "{question}" in ANSWER_GENERATION_USER
-    assert "{question_json}" in ANSWER_GENERATION_USER
+    assert "{raw_answer}" in ANSWER_GENERATION_USER
 
 
 def test_prompt_formatting():
@@ -48,8 +48,6 @@ def test_prompt_formatting():
     assert "Sample response" in eval_formatted
 
     # Test answer generation formatting
-    gen_formatted = ANSWER_GENERATION_USER.format(
-        question="Sample question?", question_json='{"id": "test", "question": "Sample question?"}'
-    )
+    gen_formatted = ANSWER_GENERATION_USER.format(question="Sample question?", raw_answer="Sample answer")
     assert "Sample question?" in gen_formatted
-    assert '"id": "test"' in gen_formatted
+    assert "Sample answer" in gen_formatted
