@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Any
 
 from dotenv import load_dotenv
+from langchain.chat_models import init_chat_model
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field, SecretStr
@@ -17,14 +18,6 @@ from pydantic import BaseModel, Field, SecretStr
 from .manual_llm import create_manual_llm
 
 load_dotenv()
-
-# LangChain imports
-try:
-    from langchain.chat_models import init_chat_model
-
-    LANGCHAIN_AVAILABLE = True
-except ImportError:
-    LANGCHAIN_AVAILABLE = False
 
 
 class LLMError(Exception):
@@ -201,12 +194,9 @@ def call_model(
         ChatResponse with the model's response and session information
 
     Raises:
-        LLMNotAvailableError: If LangChain is not available
         SessionError: If there's an error with session management
         LLMError: For other LLM-related errors
     """
-    if not LANGCHAIN_AVAILABLE:
-        raise LLMNotAvailableError("LangChain is not available. Please install langchain dependencies.")
 
     # Create new session or get existing one
     if session_id is None or session_id not in chat_sessions:
