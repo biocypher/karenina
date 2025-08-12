@@ -59,7 +59,6 @@ def test_generate_answer_templates_from_questions_file():
 from karenina.schemas.question_class import Question
 
 question_1 = Question(
-    id="test1",
     question="Test question 1?",
     raw_answer="Yes",
     tags=[],
@@ -92,7 +91,11 @@ all_questions = [question_1]
                 model_provider="test_provider",
             )
             assert len(result) == 1
-            assert "test1" in result
+            # Get the auto-generated ID
+            import hashlib
+
+            expected_id = hashlib.md5(b"Test question 1?").hexdigest()
+            assert expected_id in result
 
             # Test with return_blocks
             result, blocks = generate_answer_templates_from_questions_file(
@@ -103,8 +106,12 @@ all_questions = [question_1]
             )
             assert len(result) == 1
             assert len(blocks) == 1
-            assert "test1" in result
-            assert "class Answer" in blocks["test1"]
+            # Get the auto-generated ID
+            import hashlib
+
+            expected_id = hashlib.md5(b"Test question 1?").hexdigest()
+            assert expected_id in result
+            assert "class Answer" in blocks[expected_id]
 
     finally:
         os.unlink(tmp_path)
@@ -200,7 +207,6 @@ def test_generate_answer_templates_reader_integration():
 from karenina.schemas.question_class import Question
 
 question_1 = Question(
-    id="integration_test",
     question="Integration test question?",
     raw_answer="Yes",
     tags=["integration"],
@@ -216,7 +222,10 @@ all_questions = [question_1]
         # First test that the reader works independently
         questions = read_questions_from_file(tmp_path)
         assert len(questions) == 1
-        assert questions[0].id == "integration_test"
+        import hashlib
+
+        expected_id = hashlib.md5(b"Integration test question?").hexdigest()
+        assert questions[0].id == expected_id
 
         # Mock the LLM response for the generator
         mock_llm = MagicMock()
@@ -234,12 +243,12 @@ all_questions = [question_1]
         with patch("karenina.llm.interface.init_chat_model", return_value=mock_llm):
             result = generate_answer_templates_from_questions_file(tmp_path)
             assert len(result) == 1
-            assert "integration_test" in result
+            assert expected_id in result
 
             # Verify the Answer class was created correctly
-            Answer = result["integration_test"]
+            Answer = result[expected_id]
             answer_instance = Answer(answer=True)
-            assert answer_instance.id == "integration_test"
+            assert answer_instance.id == expected_id
             assert answer_instance.correct is True
 
     finally:
@@ -255,7 +264,6 @@ def test_generate_answer_templates_reader_with_dict_compatibility():
 from karenina.schemas.question_class import Question
 
 question_1 = Question(
-    id="dict_test",
     question="Dictionary compatibility test?",
     raw_answer="Yes",
     tags=["compatibility"],
@@ -274,8 +282,11 @@ all_questions = [question_1]
 
         assert len(questions_list) == 1
         assert len(questions_dict) == 1
-        assert "dict_test" in questions_dict
-        assert questions_list[0].id == questions_dict["dict_test"].id
+        import hashlib
+
+        expected_id = hashlib.md5(b"Dictionary compatibility test?").hexdigest()
+        assert expected_id in questions_dict
+        assert questions_list[0].id == questions_dict[expected_id].id
 
         # Mock the LLM response for the generator
         mock_llm = MagicMock()
@@ -293,7 +304,7 @@ all_questions = [question_1]
         with patch("karenina.llm.interface.init_chat_model", return_value=mock_llm):
             result = generate_answer_templates_from_questions_file(tmp_path)
             assert len(result) == 1
-            assert "dict_test" in result
+            assert expected_id in result
 
     finally:
         os.unlink(tmp_path)

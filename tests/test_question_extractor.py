@@ -9,17 +9,18 @@ from karenina.questions.extractor import (
     extract_and_generate_questions,
     extract_questions_from_excel,
     generate_questions_file,
-    hash_question,
 )
 
 
-def test_hash_question():
-    """Test that hash_question generates consistent hashes."""
-    question = "Test question"
-    hash1 = hash_question(question)
-    hash2 = hash_question(question)
-    assert hash1 == hash2
-    assert len(hash1) == 32  # MD5 hash length
+def test_question_id_hash_consistency():
+    """Test that Question ID hash generation is consistent."""
+    from karenina.schemas.question_class import Question
+
+    q1 = Question(question="Test question", raw_answer="Answer", tags=[])
+    q2 = Question(question="Test question", raw_answer="Answer", tags=[])
+
+    assert q1.id == q2.id
+    assert len(q1.id) == 32  # MD5 hash length
 
 
 def test_extract_questions_from_excel():
@@ -62,13 +63,11 @@ def test_generate_questions_file():
 
     questions = [
         Question(
-            id="test1",
             question="Test question 1",
             raw_answer="Answer 1",
             tags=[],
         ),
         Question(
-            id="test2",
             question="Test question 2",
             raw_answer="Answer 2",
             tags=[],

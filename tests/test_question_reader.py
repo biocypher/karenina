@@ -15,14 +15,12 @@ def test_read_questions_from_file_success():
 from karenina.schemas.question_class import Question
 
 question_1 = Question(
-    id="test1",
     question="Test question 1?",
     raw_answer="Yes",
     tags=["tag1"],
 )
 
 question_2 = Question(
-    id="test2",
     question="Test question 2?",
     raw_answer="No",
     tags=[],
@@ -42,12 +40,18 @@ all_questions = [question_1, question_2]
         assert isinstance(questions[0], Question)
         assert isinstance(questions[1], Question)
 
-        assert questions[0].id == "test1"
+        # Check auto-generated IDs
+        import hashlib
+
+        expected_id1 = hashlib.md5(b"Test question 1?").hexdigest()
+        expected_id2 = hashlib.md5(b"Test question 2?").hexdigest()
+
+        assert questions[0].id == expected_id1
         assert questions[0].question == "Test question 1?"
         assert questions[0].raw_answer == "Yes"
         assert questions[0].tags == ["tag1"]
 
-        assert questions[1].id == "test2"
+        assert questions[1].id == expected_id2
         assert questions[1].question == "Test question 2?"
         assert questions[1].raw_answer == "No"
         assert questions[1].tags == []
@@ -172,7 +176,7 @@ def test_read_questions_from_file_different_filenames():
 from karenina.schemas.question_class import Question
 
 all_questions = [
-    Question(id="test", question="Q?", raw_answer="A", tags=[])
+    Question(question="Q?", raw_answer="A", tags=[])
 ]
 """
 
@@ -185,7 +189,10 @@ all_questions = [
         try:
             questions = read_questions_from_file(tmp_path)
             assert len(questions) == 1
-            assert questions[0].id == "test"
+            import hashlib
+
+            expected_id = hashlib.md5(b"Q?").hexdigest()
+            assert questions[0].id == expected_id
 
         finally:
             os.unlink(tmp_path)
@@ -232,14 +239,12 @@ def test_read_questions_from_file_return_dict():
 from karenina.schemas.question_class import Question
 
 question_1 = Question(
-    id="hash1",
     question="First question?",
     raw_answer="First answer",
     tags=["tag1"],
 )
 
 question_2 = Question(
-    id="hash2",
     question="Second question?",
     raw_answer="Second answer",
     tags=["tag2"],
@@ -259,21 +264,27 @@ all_questions = [question_1, question_2]
         assert isinstance(questions_dict, dict)
         assert len(questions_dict) == 2
 
-        # Verify keys are question IDs and values are Question objects
-        assert "hash1" in questions_dict
-        assert "hash2" in questions_dict
+        # Generate expected IDs
+        import hashlib
 
-        assert isinstance(questions_dict["hash1"], Question)
-        assert isinstance(questions_dict["hash2"], Question)
+        expected_id1 = hashlib.md5(b"First question?").hexdigest()
+        expected_id2 = hashlib.md5(b"Second question?").hexdigest()
+
+        # Verify keys are question IDs and values are Question objects
+        assert expected_id1 in questions_dict
+        assert expected_id2 in questions_dict
+
+        assert isinstance(questions_dict[expected_id1], Question)
+        assert isinstance(questions_dict[expected_id2], Question)
 
         # Verify question content
-        assert questions_dict["hash1"].question == "First question?"
-        assert questions_dict["hash1"].raw_answer == "First answer"
-        assert questions_dict["hash1"].tags == ["tag1"]
+        assert questions_dict[expected_id1].question == "First question?"
+        assert questions_dict[expected_id1].raw_answer == "First answer"
+        assert questions_dict[expected_id1].tags == ["tag1"]
 
-        assert questions_dict["hash2"].question == "Second question?"
-        assert questions_dict["hash2"].raw_answer == "Second answer"
-        assert questions_dict["hash2"].tags == ["tag2"]
+        assert questions_dict[expected_id2].question == "Second question?"
+        assert questions_dict[expected_id2].raw_answer == "Second answer"
+        assert questions_dict[expected_id2].tags == ["tag2"]
 
     finally:
         os.unlink(tmp_path)
@@ -285,7 +296,6 @@ def test_read_questions_from_file_return_dict_vs_list():
 from karenina.schemas.question_class import Question
 
 question_1 = Question(
-    id="id1",
     question="Test question?",
     raw_answer="Test answer",
     tags=[],
@@ -311,7 +321,10 @@ all_questions = [question_1]
         assert len(questions_dict) == 1
 
         question_from_list = questions_list[0]
-        question_from_dict = questions_dict["id1"]
+        import hashlib
+
+        expected_id = hashlib.md5(b"Test question?").hexdigest()
+        question_from_dict = questions_dict[expected_id]
 
         # They should be equivalent
         assert question_from_list.id == question_from_dict.id
@@ -348,7 +361,7 @@ def test_read_questions_from_file_default_behavior_unchanged():
 from karenina.schemas.question_class import Question
 
 all_questions = [
-    Question(id="test", question="Q?", raw_answer="A", tags=[])
+    Question(question="Q?", raw_answer="A", tags=[])
 ]
 """
     with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as tmp:
