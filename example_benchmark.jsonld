@@ -1,0 +1,165 @@
+{
+  "@context": {
+    "@version": 1.1,
+    "@vocab": "http://schema.org/",
+    "Dataset": "Dataset",
+    "DataFeedItem": "DataFeedItem",
+    "Question": "Question",
+    "Answer": "Answer",
+    "SoftwareSourceCode": "SoftwareSourceCode",
+    "Rating": "Rating",
+    "PropertyValue": "PropertyValue",
+    "version": "version",
+    "name": "name",
+    "description": "description",
+    "creator": "creator",
+    "dateCreated": "dateCreated",
+    "dateModified": "dateModified",
+    "hasPart": {
+      "@id": "hasPart",
+      "@container": "@set"
+    },
+    "item": {
+      "@id": "item",
+      "@type": "@id"
+    },
+    "text": "text",
+    "acceptedAnswer": {
+      "@id": "acceptedAnswer",
+      "@type": "@id"
+    },
+    "programmingLanguage": "programmingLanguage",
+    "codeRepository": "codeRepository",
+    "rating": {
+      "@id": "rating",
+      "@container": "@set"
+    },
+    "bestRating": "bestRating",
+    "worstRating": "worstRating",
+    "ratingExplanation": "ratingExplanation",
+    "additionalType": "additionalType",
+    "additionalProperty": {
+      "@id": "additionalProperty",
+      "@container": "@set"
+    },
+    "value": "value",
+    "url": "url",
+    "identifier": "identifier"
+  },
+  "@type": "Dataset",
+  "@id": "urn:uuid:karenina-checkpoint-1755026768.153361",
+  "name": "Python Programming Knowledge Test",
+  "description": "A benchmark to test understanding of Python programming concepts",
+  "version": "1.0.0",
+  "creator": "Karenina Example",
+  "dateCreated": "2025-08-12T21:26:08.153355",
+  "dateModified": "2025-08-12T21:26:08.153511",
+  "rating": [
+    {
+      "@type": "Rating",
+      "name": "clarity",
+      "description": "Is the explanation clear and easy to understand?",
+      "bestRating": 1.0,
+      "worstRating": 0.0,
+      "additionalType": "GlobalRubricTrait"
+    },
+    {
+      "@type": "Rating",
+      "name": "completeness",
+      "description": "How complete is the answer on a scale of 1-5?",
+      "bestRating": 5.0,
+      "worstRating": 1.0,
+      "additionalType": "GlobalRubricTrait"
+    }
+  ],
+  "hasPart": [
+    {
+      "@type": "DataFeedItem",
+      "@id": "urn:uuid:question-what-is-a-python-decorator-30696b2c",
+      "dateCreated": "2025-08-12T21:26:08.153401",
+      "dateModified": "2025-08-12T21:26:08.153401",
+      "item": {
+        "@type": "Question",
+        "text": "What is a Python decorator?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "A decorator is a design pattern that allows you to modify or extend the behavior of functions or classes without permanently modifying them."
+        },
+        "hasPart": {
+          "@type": "SoftwareSourceCode",
+          "name": "What is a Python decorator?... Answer Template",
+          "text": "class Answer(BaseAnswer):\n    \"\"\"Answer template for: What is a Python decorator?...\"\"\"\n    \n    response: str = Field(description=\"The answer response\")\n    \n    def verify(self) -> bool:\n        # TODO: Implement verification logic\n        return True\n",
+          "programmingLanguage": "Python",
+          "codeRepository": "karenina-benchmarks"
+        },
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "finished",
+            "value": false
+          }
+        ]
+      }
+    },
+    {
+      "@type": "DataFeedItem",
+      "@id": "urn:uuid:question-explain-python-list-comprehensions-with-examples-6a28ee77",
+      "dateCreated": "2025-08-12T21:26:08.153427",
+      "dateModified": "2025-08-12T21:26:08.153489",
+      "item": {
+        "@type": "Question",
+        "text": "Explain Python list comprehensions with examples",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "List comprehensions provide a concise way to create lists. They consist of brackets containing an expression followed by a for clause."
+        },
+        "hasPart": {
+          "@type": "SoftwareSourceCode",
+          "name": "Explain Python list comprehens... Answer Template",
+          "text": "class Answer(BaseAnswer):\n    \"\"\"Answer template for list comprehension question.\"\"\"\n    \n    definition: str = Field(description=\"Definition of list comprehension\")\n    syntax_example: str = Field(description=\"Example of list comprehension syntax\")\n    advantages: List[str] = Field(description=\"Advantages over traditional loops\")\n    use_cases: List[str] = Field(description=\"Common use cases\")\n    \n    def verify(self) -> bool:\n        # Check that key concepts are mentioned\n        has_definition = len(self.definition) > 20\n        has_syntax = \"[\" in self.syntax_example and \"]\" in self.syntax_example\n        has_advantages = len(self.advantages) >= 2\n        has_use_cases = len(self.use_cases) >= 1\n        \n        return has_definition and has_syntax and has_advantages and has_use_cases\n",
+          "programmingLanguage": "Python",
+          "codeRepository": "karenina-benchmarks"
+        },
+        "rating": [
+          {
+            "@type": "Rating",
+            "name": "code_examples",
+            "description": "Does the answer include working code examples?",
+            "bestRating": 1.0,
+            "worstRating": 0.0,
+            "additionalType": "QuestionSpecificRubricTrait"
+          }
+        ],
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "finished",
+            "value": true
+          },
+          {
+            "@type": "PropertyValue",
+            "name": "author",
+            "value": "{\"name\": \"Example Author\", \"email\": \"author@example.com\"}"
+          },
+          {
+            "@type": "PropertyValue",
+            "name": "custom_difficulty",
+            "value": "intermediate"
+          },
+          {
+            "@type": "PropertyValue",
+            "name": "custom_topic",
+            "value": "data structures"
+          }
+        ]
+      }
+    }
+  ],
+  "additionalProperty": [
+    {
+      "@type": "PropertyValue",
+      "name": "checkpoint_format_version",
+      "value": "3.0.0-jsonld"
+    }
+  ]
+}
