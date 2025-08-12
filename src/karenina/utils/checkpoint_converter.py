@@ -1,4 +1,4 @@
-"""Checkpoint converter utilities for JSON-LD format.
+"""Benchmark converter utilities for JSON-LD format.
 
 This module provides utilities to convert between internal Python representations
 and the JSON-LD format used by the frontend.
@@ -22,8 +22,8 @@ from ..schemas.checkpoint import (
 from ..schemas.rubric_class import RubricTrait
 
 
-class CheckpointConversionError(Exception):
-    """Raised when checkpoint conversion fails."""
+class BenchmarkConversionError(Exception):
+    """Raised when benchmark conversion fails."""
 
     pass
 
@@ -102,19 +102,19 @@ def convert_rating_to_rubric_trait(rating: SchemaOrgRating) -> RubricTrait:
     )
 
 
-def create_jsonld_checkpoint(
+def create_jsonld_benchmark(
     name: str,
     description: str = "",
     version: str = "0.1.0",
     creator: str = "Karenina Benchmarking System",
 ) -> JsonLdCheckpoint:
     """
-    Create a new empty JSON-LD checkpoint.
+    Create a new empty JSON-LD benchmark.
 
     Args:
-        name: Name of the checkpoint
-        description: Description of the checkpoint
-        version: Version of the checkpoint content
+        name: Name of the benchmark
+        description: Description of the benchmark
+        version: Version of the benchmark content
         creator: Creator name or organization
 
     Returns:
@@ -127,7 +127,7 @@ def create_jsonld_checkpoint(
         "@type": "Dataset",
         "@id": f"urn:uuid:karenina-checkpoint-{datetime.now().timestamp()}",
         "name": name,
-        "description": description or "Checkpoint containing benchmark questions",
+        "description": description or "Benchmark containing questions",
         "version": version,
         "creator": creator,
         "dateCreated": timestamp,
@@ -136,7 +136,7 @@ def create_jsonld_checkpoint(
         "hasPart": [],
         "additionalProperty": [
             SchemaOrgPropertyValue(
-                name="checkpoint_format_version",
+                name="benchmark_format_version",
                 value="3.0.0-jsonld",
             )
         ],
@@ -144,8 +144,8 @@ def create_jsonld_checkpoint(
     return JsonLdCheckpoint.model_validate(checkpoint_dict)
 
 
-def add_question_to_checkpoint(
-    checkpoint: JsonLdCheckpoint,
+def add_question_to_benchmark(
+    benchmark: JsonLdCheckpoint,
     question: str,
     raw_answer: str,
     answer_template: str,
@@ -157,10 +157,10 @@ def add_question_to_checkpoint(
     custom_metadata: dict[str, Any] | None = None,
 ) -> str:
     """
-    Add a question to a JSON-LD checkpoint.
+    Add a question to a JSON-LD benchmark.
 
     Args:
-        checkpoint: The checkpoint to modify
+        benchmark: The benchmark to modify
         question: Question text
         raw_answer: Expected answer text
         answer_template: Python code for the answer template
@@ -182,9 +182,9 @@ def add_question_to_checkpoint(
         question_id = base_id
         counter = 1
 
-        # Extract existing IDs from checkpoint
+        # Extract existing IDs from benchmark
         existing_ids = set()
-        for item in checkpoint.hasPart:
+        for item in benchmark.hasPart:
             if item.id:
                 existing_ids.add(item.id)
             else:
@@ -238,44 +238,44 @@ def add_question_to_checkpoint(
     }
     item = SchemaOrgDataFeedItem.model_validate(item_dict)
 
-    # Add to checkpoint
-    checkpoint.hasPart.append(item)
-    checkpoint.dateModified = timestamp
+    # Add to benchmark
+    benchmark.hasPart.append(item)
+    benchmark.dateModified = timestamp
 
     return question_id
 
 
-def add_global_rubric_to_checkpoint(
-    checkpoint: JsonLdCheckpoint,
+def add_global_rubric_to_benchmark(
+    benchmark: JsonLdCheckpoint,
     rubric_traits: list[RubricTrait],
 ) -> None:
     """
-    Add global rubric traits to a checkpoint.
+    Add global rubric traits to a benchmark.
 
     Args:
-        checkpoint: The checkpoint to modify
+        benchmark: The benchmark to modify
         rubric_traits: List of rubric traits to add as global rubric
     """
     ratings = [convert_rubric_trait_to_rating(trait, "global") for trait in rubric_traits]
-    checkpoint.rating = ratings
-    checkpoint.dateModified = datetime.now().isoformat()
+    benchmark.rating = ratings
+    benchmark.dateModified = datetime.now().isoformat()
 
 
-def extract_questions_from_checkpoint(
-    checkpoint: JsonLdCheckpoint,
+def extract_questions_from_benchmark(
+    benchmark: JsonLdCheckpoint,
 ) -> list[dict[str, Any]]:
     """
-    Extract questions from a JSON-LD checkpoint.
+    Extract questions from a JSON-LD benchmark.
 
     Args:
-        checkpoint: The checkpoint to extract from
+        benchmark: The benchmark to extract from
 
     Returns:
         List of question dictionaries with id, text, answer, template, and metadata
     """
     questions = []
 
-    for item in checkpoint.hasPart:
+    for item in benchmark.hasPart:
         question = item.item
 
         # Extract additional properties
@@ -330,50 +330,50 @@ def extract_questions_from_checkpoint(
     return questions
 
 
-def extract_global_rubric_from_checkpoint(
-    checkpoint: JsonLdCheckpoint,
+def extract_global_rubric_from_benchmark(
+    benchmark: JsonLdCheckpoint,
 ) -> list[RubricTrait] | None:
     """
-    Extract global rubric traits from a checkpoint.
+    Extract global rubric traits from a benchmark.
 
     Args:
-        checkpoint: The checkpoint to extract from
+        benchmark: The benchmark to extract from
 
     Returns:
         List of RubricTrait objects or None if no global rubric
     """
-    if not checkpoint.rating:
+    if not benchmark.rating:
         return None
 
     traits = []
-    for rating in checkpoint.rating:
+    for rating in benchmark.rating:
         if rating.additionalType == "GlobalRubricTrait":
             traits.append(convert_rating_to_rubric_trait(rating))
 
     return traits if traits else None
 
 
-def validate_jsonld_checkpoint(checkpoint: JsonLdCheckpoint) -> tuple[bool, str]:
+def validate_jsonld_benchmark(benchmark: JsonLdCheckpoint) -> tuple[bool, str]:
     """
-    Validate a JSON-LD checkpoint structure.
+    Validate a JSON-LD benchmark structure.
 
     Args:
-        checkpoint: The checkpoint to validate
+        benchmark: The benchmark to validate
 
     Returns:
         Tuple of (is_valid, error_message)
     """
     try:
         # Check required fields
-        if not checkpoint.name:
-            return False, "Checkpoint must have a name"
+        if not benchmark.name:
+            return False, "Benchmark must have a name"
 
-        if not checkpoint.hasPart:
-            # Empty checkpoint is valid
+        if not benchmark.hasPart:
+            # Empty benchmark is valid
             pass
         else:
             # Validate each question
-            for i, item in enumerate(checkpoint.hasPart):
+            for i, item in enumerate(benchmark.hasPart):
                 if not item.item.text:
                     return False, f"Question {i} missing text"
 
@@ -396,15 +396,15 @@ def validate_jsonld_checkpoint(checkpoint: JsonLdCheckpoint) -> tuple[bool, str]
                             )
 
         # Validate global ratings if present
-        if checkpoint.rating:
-            for rating in checkpoint.rating:
+        if benchmark.rating:
+            for rating in benchmark.rating:
                 if rating.additionalType != "GlobalRubricTrait":
                     return (
                         False,
                         f"Dataset-level rating must be GlobalRubricTrait, got {rating.additionalType}",
                     )
 
-        return True, "Valid checkpoint"
+        return True, "Valid benchmark"
 
     except Exception as e:
         return False, f"Validation error: {str(e)}"

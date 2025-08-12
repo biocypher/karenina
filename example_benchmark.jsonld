@@ -47,13 +47,13 @@
     "identifier": "identifier"
   },
   "@type": "Dataset",
-  "@id": "urn:uuid:karenina-checkpoint-1755026768.153361",
+  "@id": "urn:uuid:karenina-checkpoint-1755027772.350984",
   "name": "Python Programming Knowledge Test",
   "description": "A benchmark to test understanding of Python programming concepts",
   "version": "1.0.0",
   "creator": "Karenina Example",
-  "dateCreated": "2025-08-12T21:26:08.153355",
-  "dateModified": "2025-08-12T21:26:08.153511",
+  "dateCreated": "2025-08-12T21:42:52.350978",
+  "dateModified": "2025-08-12T21:42:52.351128",
   "rating": [
     {
       "@type": "Rating",
@@ -76,8 +76,8 @@
     {
       "@type": "DataFeedItem",
       "@id": "urn:uuid:question-what-is-a-python-decorator-30696b2c",
-      "dateCreated": "2025-08-12T21:26:08.153401",
-      "dateModified": "2025-08-12T21:26:08.153401",
+      "dateCreated": "2025-08-12T21:42:52.351024",
+      "dateModified": "2025-08-12T21:42:52.351024",
       "item": {
         "@type": "Question",
         "text": "What is a Python decorator?",
@@ -88,7 +88,7 @@
         "hasPart": {
           "@type": "SoftwareSourceCode",
           "name": "What is a Python decorator?... Answer Template",
-          "text": "class Answer(BaseAnswer):\n    \"\"\"Answer template for: What is a Python decorator?...\"\"\"\n    \n    response: str = Field(description=\"The answer response\")\n    \n    def verify(self) -> bool:\n        # TODO: Implement verification logic\n        return True\n",
+          "text": "class Answer(BaseAnswer):\n    \"\"\"Answer template for: What is a Python decorator?...\"\"\"\n\n    response: str = Field(description=\"The answer response\")\n\n    def verify(self) -> bool:\n        # TODO: Implement verification logic\n        return True\n",
           "programmingLanguage": "Python",
           "codeRepository": "karenina-benchmarks"
         },
@@ -104,8 +104,8 @@
     {
       "@type": "DataFeedItem",
       "@id": "urn:uuid:question-explain-python-list-comprehensions-with-examples-6a28ee77",
-      "dateCreated": "2025-08-12T21:26:08.153427",
-      "dateModified": "2025-08-12T21:26:08.153489",
+      "dateCreated": "2025-08-12T21:42:52.351049",
+      "dateModified": "2025-08-12T21:42:52.351107",
       "item": {
         "@type": "Question",
         "text": "Explain Python list comprehensions with examples",
@@ -116,7 +116,7 @@
         "hasPart": {
           "@type": "SoftwareSourceCode",
           "name": "Explain Python list comprehens... Answer Template",
-          "text": "class Answer(BaseAnswer):\n    \"\"\"Answer template for list comprehension question.\"\"\"\n    \n    definition: str = Field(description=\"Definition of list comprehension\")\n    syntax_example: str = Field(description=\"Example of list comprehension syntax\")\n    advantages: List[str] = Field(description=\"Advantages over traditional loops\")\n    use_cases: List[str] = Field(description=\"Common use cases\")\n    \n    def verify(self) -> bool:\n        # Check that key concepts are mentioned\n        has_definition = len(self.definition) > 20\n        has_syntax = \"[\" in self.syntax_example and \"]\" in self.syntax_example\n        has_advantages = len(self.advantages) >= 2\n        has_use_cases = len(self.use_cases) >= 1\n        \n        return has_definition and has_syntax and has_advantages and has_use_cases\n",
+          "text": "class Answer(BaseAnswer):\n    \"\"\"Answer template for list comprehension question.\"\"\"\n\n    definition: str = Field(description=\"Definition of list comprehension\")\n    syntax_example: str = Field(description=\"Example of list comprehension syntax\")\n    advantages: List[str] = Field(description=\"Advantages over traditional loops\")\n    use_cases: List[str] = Field(description=\"Common use cases\")\n\n    def verify(self) -> bool:\n        # Check that key concepts are mentioned\n        has_definition = len(self.definition) > 20\n        has_syntax = \"[\" in self.syntax_example and \"]\" in self.syntax_example\n        has_advantages = len(self.advantages) >= 2\n        has_use_cases = len(self.use_cases) >= 1\n\n        return has_definition and has_syntax and has_advantages and has_use_cases\n",
           "programmingLanguage": "Python",
           "codeRepository": "karenina-benchmarks"
         },
@@ -158,7 +158,7 @@
   "additionalProperty": [
     {
       "@type": "PropertyValue",
-      "name": "checkpoint_format_version",
+      "name": "benchmark_format_version",
       "value": "3.0.0-jsonld"
     }
   ]

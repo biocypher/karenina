@@ -1,6 +1,6 @@
-"""High-level checkpoint management for Karenina benchmarks.
+"""High-level benchmark management for Karenina benchmarks.
 
-This module provides the main Checkpoint class for creating, loading,
+This module provides the main Benchmark class for creating, loading,
 saving, and executing benchmarks in JSON-LD format.
 """
 
@@ -12,25 +12,25 @@ from typing import Any
 from ..schemas.checkpoint import JsonLdCheckpoint
 from ..schemas.rubric_class import Rubric, RubricTrait
 from ..utils.checkpoint_converter import (
-    add_global_rubric_to_checkpoint,
-    add_question_to_checkpoint,
-    create_jsonld_checkpoint,
-    extract_global_rubric_from_checkpoint,
-    extract_questions_from_checkpoint,
-    validate_jsonld_checkpoint,
+    add_global_rubric_to_benchmark,
+    add_question_to_benchmark,
+    create_jsonld_benchmark,
+    extract_global_rubric_from_benchmark,
+    extract_questions_from_benchmark,
+    validate_jsonld_benchmark,
 )
 from .models import FinishedTemplate, VerificationConfig, VerificationResult
 
 # from .verification.validation import validate_answer_template  # TODO: Create this function
 
 
-class Checkpoint:
+class Benchmark:
     """
     Main class for managing Karenina benchmarks in JSON-LD format.
 
     This class provides a high-level API for:
     - Creating benchmarks manually or automatically
-    - Loading/saving JSON-LD checkpoint files
+    - Loading/saving JSON-LD benchmark files
     - Running verification with existing execution system
     - Full compatibility with frontend GUI exports
     """
@@ -51,7 +51,7 @@ class Checkpoint:
             version: Version of the benchmark content
             creator: Creator name or organization
         """
-        self._checkpoint = create_jsonld_checkpoint(name, description, version, creator)
+        self._checkpoint = create_jsonld_benchmark(name, description, version, creator)
         self._questions_cache: dict[str, dict[str, Any]] = {}
         self._rebuild_cache()
 
@@ -62,9 +62,9 @@ class Checkpoint:
         description: str = "",
         version: str = "0.1.0",
         creator: str = "Karenina Benchmarking System",
-    ) -> "Checkpoint":
+    ) -> "Benchmark":
         """
-        Create a new checkpoint (alias for constructor).
+        Create a new benchmark (alias for constructor).
 
         Args:
             name: Name of the benchmark
@@ -73,20 +73,20 @@ class Checkpoint:
             creator: Creator name or organization
 
         Returns:
-            A new Checkpoint instance
+            A new Benchmark instance
         """
         return cls(name, description, version, creator)
 
     @classmethod
-    def load(cls, path: Path) -> "Checkpoint":
+    def load(cls, path: Path) -> "Benchmark":
         """
-        Load a checkpoint from a JSON-LD file.
+        Load a benchmark from a JSON-LD file.
 
         Args:
-            path: Path to the JSON-LD checkpoint file
+            path: Path to the JSON-LD benchmark file
 
         Returns:
-            A Checkpoint instance loaded from the file
+            A Benchmark instance loaded from the file
 
         Raises:
             ValueError: If the file is not valid JSON-LD
@@ -94,7 +94,7 @@ class Checkpoint:
         """
         path = Path(path)
         if not path.exists():
-            raise FileNotFoundError(f"Checkpoint file not found: {path}")
+            raise FileNotFoundError(f"Benchmark file not found: {path}")
 
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
@@ -103,12 +103,12 @@ class Checkpoint:
         try:
             checkpoint_data = JsonLdCheckpoint(**data)
         except Exception as e:
-            raise ValueError(f"Invalid JSON-LD checkpoint format: {e}") from e
+            raise ValueError(f"Invalid JSON-LD benchmark format: {e}") from e
 
         # Validate structure
-        is_valid, error_msg = validate_jsonld_checkpoint(checkpoint_data)
+        is_valid, error_msg = validate_jsonld_benchmark(checkpoint_data)
         if not is_valid:
-            raise ValueError(f"Invalid checkpoint: {error_msg}")
+            raise ValueError(f"Invalid benchmark: {error_msg}")
 
         # Create instance and set data
         instance = cls.__new__(cls)
@@ -120,10 +120,10 @@ class Checkpoint:
 
     def save(self, path: Path) -> None:
         """
-        Save the checkpoint to a JSON-LD file.
+        Save the benchmark to a JSON-LD file.
 
         Args:
-            path: Path where to save the checkpoint
+            path: Path where to save the benchmark
         """
         path = Path(path)
 
@@ -135,11 +135,11 @@ class Checkpoint:
         self._checkpoint.dateModified = datetime.now().isoformat()
 
         # Convert to dict for JSON serialization
-        checkpoint_dict = self._checkpoint.model_dump(by_alias=True, exclude_none=True)
+        benchmark_dict = self._checkpoint.model_dump(by_alias=True, exclude_none=True)
 
         # Write to file
         with open(path, "w", encoding="utf-8") as f:
-            json.dump(checkpoint_dict, f, indent=2, ensure_ascii=False)
+            json.dump(benchmark_dict, f, indent=2, ensure_ascii=False)
 
     def add_question(
         self,
@@ -153,7 +153,7 @@ class Checkpoint:
         custom_metadata: dict[str, Any] | None = None,
     ) -> str:
         """
-        Add a question to the checkpoint.
+        Add a question to the benchmark.
 
         Args:
             question: The question text
@@ -172,7 +172,7 @@ class Checkpoint:
         if answer_template is None:
             answer_template = self._create_default_template(question)
 
-        q_id = add_question_to_checkpoint(
+        q_id = add_question_to_benchmark(
             self._checkpoint,
             question,
             raw_answer,
@@ -223,14 +223,14 @@ class Checkpoint:
 
     def add_global_rubric_trait(self, trait: RubricTrait) -> None:
         """
-        Add a global rubric trait to the checkpoint.
+        Add a global rubric trait to the benchmark.
 
         Args:
             trait: The rubric trait to add
         """
-        current_traits = extract_global_rubric_from_checkpoint(self._checkpoint) or []
+        current_traits = extract_global_rubric_from_benchmark(self._checkpoint) or []
         current_traits.append(trait)
-        add_global_rubric_to_checkpoint(self._checkpoint, current_traits)
+        add_global_rubric_to_benchmark(self._checkpoint, current_traits)
 
     def add_question_rubric_trait(self, question_id: str, trait: RubricTrait) -> None:
         """
@@ -265,7 +265,7 @@ class Checkpoint:
 
     def get_question_ids(self) -> list[str]:
         """
-        Get all question IDs in the checkpoint.
+        Get all question IDs in the benchmark.
 
         Returns:
             List of question IDs
@@ -291,7 +291,7 @@ class Checkpoint:
 
     def get_all_questions(self) -> list[dict[str, Any]]:
         """
-        Get all questions in the checkpoint.
+        Get all questions in the benchmark.
 
         Returns:
             List of question dictionaries
@@ -329,19 +329,19 @@ class Checkpoint:
 
     def get_global_rubric(self) -> Rubric | None:
         """
-        Get the global rubric from the checkpoint.
+        Get the global rubric from the benchmark.
 
         Returns:
             Rubric object or None if no global rubric
         """
-        traits = extract_global_rubric_from_checkpoint(self._checkpoint)
+        traits = extract_global_rubric_from_benchmark(self._checkpoint)
         if traits:
             return Rubric(traits=traits)
         return None
 
     def set_metadata(self, **metadata: Any) -> None:
         """
-        Set checkpoint metadata.
+        Set benchmark metadata.
 
         Args:
             **metadata: Metadata fields to update (name, description, version, creator)
@@ -353,23 +353,23 @@ class Checkpoint:
 
     def validate(self) -> tuple[bool, str]:
         """
-        Validate the checkpoint structure and all templates.
+        Validate the benchmark structure and all templates.
 
         Returns:
             Tuple of (is_valid, error_message)
         """
-        # Validate checkpoint structure
-        is_valid, error_msg = validate_jsonld_checkpoint(self._checkpoint)
+        # Validate benchmark structure
+        is_valid, error_msg = validate_jsonld_benchmark(self._checkpoint)
         if not is_valid:
             return False, error_msg
 
         # Validate all templates
         for q_id, q_data in self._questions_cache.items():
             template_code = q_data.get("answer_template")
-            if template_code and not template_code.strip():
+            if template_code is not None and not template_code.strip():
                 return False, f"Invalid template for {q_id}: Template cannot be empty"
 
-        return True, "Checkpoint is valid"
+        return True, "Benchmark is valid"
 
     # Integration with existing verification system
     def run_verification(
@@ -378,7 +378,7 @@ class Checkpoint:
         question_ids: list[str] | None = None,
     ) -> dict[str, VerificationResult]:
         """
-        Run verification on the checkpoint using existing execution system.
+        Run verification on the benchmark using existing execution system.
 
         Args:
             config: Verification configuration
@@ -423,9 +423,9 @@ class Checkpoint:
 
     # Private helper methods
     def _rebuild_cache(self) -> None:
-        """Rebuild the internal questions cache from checkpoint data."""
+        """Rebuild the internal questions cache from benchmark data."""
         self._questions_cache = {}
-        questions = extract_questions_from_checkpoint(self._checkpoint)
+        questions = extract_questions_from_benchmark(self._checkpoint)
         for q in questions:
             self._questions_cache[q["id"]] = q
 
@@ -452,5 +452,5 @@ class Checkpoint:
 
     @property
     def jsonld_data(self) -> JsonLdCheckpoint:
-        """Get the raw JSON-LD checkpoint data."""
+        """Get the raw JSON-LD benchmark data."""
         return self._checkpoint
