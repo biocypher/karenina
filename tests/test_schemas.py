@@ -9,19 +9,21 @@ def test_question_schema():
     """Test Question schema validation."""
     # Test valid question
     question = Question(
-        id="test123",
         question="Test question?",
         raw_answer="Test answer",
         tags=["tag1", "tag2"],
     )
-    assert question.id == "test123"
+    # ID should be auto-generated from question text
+    import hashlib
+
+    expected_id = hashlib.md5(b"Test question?").hexdigest()
+    assert question.id == expected_id
     assert question.question == "Test question?"
     assert question.raw_answer == "Test answer"
     assert question.tags == ["tag1", "tag2"]
 
     # Test with empty tags
     question = Question(
-        id="test123",
         question="Test question?",
         raw_answer="Test answer",
         tags=[],
@@ -30,7 +32,6 @@ def test_question_schema():
 
     # Test with None tags
     question = Question(
-        id="test123",
         question="Test question?",
         raw_answer="Test answer",
         tags=[None],
@@ -40,7 +41,6 @@ def test_question_schema():
     # Test validation errors
     with pytest.raises(ValidationError):
         Question(
-            id="test123",
             question="",  # Empty question
             raw_answer="Test answer",
             tags=[],
@@ -48,7 +48,6 @@ def test_question_schema():
 
     with pytest.raises(ValidationError):
         Question(
-            id="test123",
             question="Test question?",
             raw_answer="",  # Empty answer
             tags=[],
