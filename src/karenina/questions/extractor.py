@@ -20,18 +20,12 @@ Usage:
     )
 """
 
-import hashlib
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
 from ..schemas.question_class import Question
-
-
-def hash_question(question_text: str) -> str:
-    """Generate a hash ID for a question."""
-    return hashlib.md5(question_text.encode("utf-8")).hexdigest()
 
 
 def read_file_to_dataframe(file_path: str, sheet_name: str | None = None) -> pd.DataFrame:
@@ -144,13 +138,9 @@ def extract_questions_from_file(
     # Filter out empty questions or answers
     df_filtered = df_filtered[(df_filtered[question_column] != "") & (df_filtered[answer_column] != "")]
 
-    # Generate hashed IDs for all questions at once
-    df_filtered["id"] = df_filtered[question_column].apply(hash_question)
-
-    # Create Question instances using list comprehension
+    # Create Question instances using list comprehension (ID auto-generated)
     questions = [
         Question(
-            id=row["id"],
             question=row[question_column],
             raw_answer=row[answer_column],
             tags=[],  # No tags in the source data

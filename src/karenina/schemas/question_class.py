@@ -5,7 +5,9 @@ with its associated metadata, including unique identifiers, text content,
 and categorization tags.
 """
 
-from pydantic import BaseModel, Field
+import hashlib
+
+from pydantic import BaseModel, Field, computed_field
 
 
 class Question(BaseModel):
@@ -16,7 +18,12 @@ class Question(BaseModel):
     associated metadata.
     """
 
-    id: str = Field(description="Hashed id of the question")
     question: str = Field(description="Question text", min_length=1)
     raw_answer: str = Field(description="Raw answer text", min_length=1)
     tags: list[str | None] = Field(description="Tags of the question")
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def id(self) -> str:
+        """Auto-generated MD5 hash of the question text."""
+        return hashlib.md5(self.question.encode("utf-8")).hexdigest()
