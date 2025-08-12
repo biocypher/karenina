@@ -37,14 +37,42 @@ plugins:
         python:
           paths: [src]
           options:
-            show_source: false
+            # Display options
+            show_source: true
             show_root_heading: true
             show_root_full_path: false
+            show_root_members_full_path: false
+            show_object_full_path: false
+            show_category_heading: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+
+            # Signature options
+            show_signature: true
             show_signature_annotations: true
             separate_signature: true
-            filters: ["!^_"]
-            members_order: source
+            signature_crossrefs: true
+
+            # Member filtering and ordering
+            filters: ["!^_", "!^__", "^__init__$"]
+            members_order: alphabetical
+            group_by_category: true
+
+            # Documentation sections
             docstring_section_style: table
+            docstring_options:
+              ignore_init_summary: true
+              trim_doctest_flags: true
+
+            # Cross-references and links
+            show_bases: true
+            show_inheritance_diagram: false
+            inherited_members: false
+
+            # Additional content
+            heading_level: 2
+            parameter_headings: true
+            show_labels: true
 
 markdown_extensions:
   - admonition
@@ -67,15 +95,25 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Installation: installation.md
-  - Architecture: architecture.md
+  - Getting Started:
+    - Installation: installation.md
+    - Quick Start: quickstart.md
+    - Examples: examples.md
+  - Documentation:
+    - Architecture: architecture.md
+    - API Reference: api-reference.md
+    - Development Guide: development.md
   - API Reference:
-    - LLM Interface: api/llm.md
-    - Questions: api/questions.md
-    - Answers: api/answers.md
-    - Benchmark: api/benchmark.md
-    - Schemas: api/schemas.md
-    - Utils: api/utils.md
+    - Core Modules:
+      - LLM Interface: api/llm.md
+      - Questions: api/questions.md
+      - Answers: api/answers.md
+      - Benchmark: api/benchmark.md
+    - Data Models:
+      - Schemas: api/schemas.md
+    - Supporting:
+      - Prompts: api/prompts.md
+      - Utils: api/utils.md
   - Guides:
     - Question Extraction: guides/question-extraction.md
     - Answer Generation: guides/answer-generation.md
