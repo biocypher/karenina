@@ -12,7 +12,7 @@
 
 ## Overview
 
-Karenina is built as a modular, extensible framework for LLM benchmarking. The architecture follows a three-stage pipeline pattern with clear separation of concerns between data extraction, template generation, and verification.
+Karenina is built as a modular, extensible framework for LLM benchmarking. The architecture follows a three-stage pipeline pattern with clear separation of concerns between data extraction, template generation, and verification. At the top level, the Benchmark class provides a unified interface that orchestrates the entire workflow while maintaining full interoperability with the GUI through JSON-LD format.
 
 ## System Design
 
@@ -23,6 +23,14 @@ Karenina is built as a modular, extensible framework for LLM benchmarking. The a
 │                         Karenina Framework                       │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                   │
+│                   ┌──────────────────────┐                       │
+│                   │   Benchmark Class    │  ← High-level API     │
+│                   │  (JSON-LD Orchestrator) │                    │
+│                   └──────────────────────┘                       │
+│                            │                                     │
+│           ┌────────────────┼────────────────┐                    │
+│           │                │                │                    │
+│           ↓                ↓                ↓                    │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
 │  │   Questions   │  │   Answers    │  │  Benchmark   │          │
 │  │   Module      │→ │   Module     │→ │   Module     │          │
@@ -37,6 +45,8 @@ Karenina is built as a modular, extensible framework for LLM benchmarking. The a
 │                     ┌──────────────┐                            │
 │                     │   Schemas     │                            │
 │                     └──────────────┘                            │
+│                                                                   │
+│ ←─→ JSON-LD Format for GUI Interoperability                      │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -58,6 +68,40 @@ Karenina is built as a modular, extensible framework for LLM benchmarking. The a
    - Output: Verification results with scores and rubric evaluations
 
 ## Core Components
+
+### Benchmark Class (High-Level Orchestration)
+
+The Benchmark class serves as the primary interface for creating, managing, and executing benchmarks. It provides a comprehensive abstraction layer over the underlying modules.
+
+```python
+# Key Components
+benchmark.py            # Main Benchmark class
+├── create()                    # Factory method for new benchmarks
+├── load() / save()            # JSON-LD persistence
+├── add_question()             # Question management
+├── add_answer_template()      # Template management
+├── add_global_rubric_trait()  # Rubric configuration
+├── run_verification()         # Orchestrate verification
+├── get_health_report()        # Readiness assessment
+├── export_questions_python()  # Export capabilities
+├── to_csv() / to_markdown()   # Multiple export formats
+└── filter_questions()         # Query and search
+
+jsonld_converter.py     # JSON-LD serialization
+├── to_jsonld()                # Convert to JSON-LD format
+├── from_jsonld()              # Load from JSON-LD format
+├── validate_schema()          # Schema validation
+└── upgrade_format()           # Format migration
+```
+
+**Key Features:**
+- **JSON-LD Storage**: Uses schema.org vocabulary for standardized linked data
+- **GUI Interoperability**: Full bidirectional compatibility with Karenina GUI
+- **Comprehensive Metadata Management**: Track creation, modification, authorship, and custom properties
+- **Built-in Validation**: Health checks and readiness assessment
+- **Multiple Export Formats**: CSV, Markdown, JSON, Python files
+- **Query and Filtering**: Advanced search and filtering capabilities
+- **Rubric Management**: Global and question-specific evaluation criteria
 
 ### LLM Module (`llm/`)
 
@@ -132,23 +176,35 @@ reader.py           # Template file readers
 
 ### Benchmark Module (`benchmark/`)
 
-Orchestrates verification workflows and manages results.
+Orchestrates verification workflows and manages results. This module is now organized around the high-level Benchmark class with supporting components for verification execution.
 
 ```python
 # Structure
+benchmark.py        # Main Benchmark class (high-level orchestration)
+├── Benchmark                  # Primary interface class
+├── create()                   # Factory methods
+├── load() / save()           # JSON-LD persistence
+└── verification orchestration # Workflow management
+
+jsonld_converter.py # JSON-LD format handling
+├── to_jsonld()               # Serialization to JSON-LD
+├── from_jsonld()             # Deserialization from JSON-LD
+├── validate_jsonld_schema()  # Schema validation
+└── format_migration()        # Version compatibility
+
 models.py           # Configuration models
-├── ModelConfiguration         # Single model config
-├── VerificationConfig        # Multi-model verification config
-└── VerificationResult        # Result data model
+├── ModelConfiguration        # Single model config
+├── VerificationConfig       # Multi-model verification config
+└── VerificationResult       # Result data model
 
 verification/
-├── orchestrator.py           # Multi-model orchestration
+├── orchestrator.py          # Multi-model orchestration
 │   └── run_question_verification()
-├── runner.py                 # Single model execution
+├── runner.py                # Single model execution
 │   └── run_single_model_verification()
-├── validation.py             # Response validation
+├── validation.py            # Response validation
 │   └── validate_answer_template()
-└── rubric_evaluator.py       # Rubric-based evaluation
+└── rubric_evaluator.py      # Rubric-based evaluation
     └── RubricEvaluator
 
 verifier.py         # Legacy verification interface
@@ -156,10 +212,13 @@ exporter.py         # Result export utilities
 ```
 
 **Key Features:**
+- **High-level Benchmark orchestration** with comprehensive workflow management
+- **JSON-LD format support** for standardized data interchange
+- **GUI interoperability** through shared format specification
 - Multi-model testing configurations
 - Replicate support for statistical analysis
 - Rubric-based qualitative evaluation
-- Multiple export formats (JSON, CSV)
+- Multiple export formats (JSON, CSV, Markdown, Python)
 
 ### Schemas Module (`schemas/`)
 
@@ -204,7 +263,46 @@ answer_evaluation.py
 
 ## Data Flow
 
-### Complete Pipeline Flow
+### High-Level Benchmark Class Workflow
+
+```
+1. Benchmark Creation/Loading
+   - Create new benchmark with Benchmark.create()
+   - OR Load existing benchmark from JSON-LD file
+   - OR Load GUI-exported benchmark
+         ↓
+2. Question Management
+   - Add questions directly with add_question()
+   - OR Extract from files and bulk add
+   - Include metadata and custom properties
+         ↓
+3. Template Management
+   - Generate templates with LLM integration
+   - OR Add custom templates manually
+   - Mark questions as finished
+         ↓
+4. Rubric Configuration
+   - Add global rubric traits
+   - Add question-specific rubrics
+   - Configure evaluation criteria
+         ↓
+5. Validation & Health Checks
+   - Assess benchmark readiness
+   - Validate data integrity
+   - Check completion status
+         ↓
+6. Verification Execution
+   - Configure models and parameters
+   - Run verification workflow
+   - Process results
+         ↓
+7. Export & Persistence
+   - Save as JSON-LD for GUI compatibility
+   - Export as CSV, Markdown, or Python
+   - Maintain metadata integrity
+```
+
+### Traditional Pipeline Flow (Lower-Level)
 
 ```
 1. File Input (Excel/CSV/TSV)
@@ -243,6 +341,20 @@ answer_evaluation.py
 8. Export Results
    - JSON format for analysis
    - CSV format for spreadsheets
+```
+
+### JSON-LD Interoperability Flow
+
+```
+Python Benchmark Creation
+         ↓
+Save as JSON-LD (schema.org format)
+         ↓
+Load in GUI → User Modifications → Export from GUI
+         ↓
+Load back in Python → Enhance → Save
+         ↓
+Seamless round-trip data integrity
 ```
 
 ### Session Management Flow
@@ -356,6 +468,13 @@ def run_single_model_verification(
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
 │  questions  │    │   answers   │    │ benchmark   │
 └─────────────┘    └─────────────┘    └─────────────┘
+                                              ↑
+                                              │
+                                    ┌─────────────┐
+                                    │ Benchmark   │
+                                    │   Class     │  ← High-level API
+                                    │(Orchestrator)│
+                                    └─────────────┘
 ```
 
 ### Import Relationships
@@ -366,7 +485,8 @@ def run_single_model_verification(
 - **utils**: Utility functions with minimal dependencies
 - **questions**: Depends on schemas for Question class
 - **answers**: Depends on llm, schemas, prompts, utils
-- **benchmark**: Depends on all other modules
+- **benchmark** (module): Depends on all other modules for verification workflows
+- **Benchmark** (class): High-level orchestrator that depends on benchmark module and provides unified API with JSON-LD format support
 
 ## Key Architectural Decisions
 
@@ -439,6 +559,39 @@ def run_single_model_verification(
 - Fast access patterns
 - No database dependencies
 - Suitable for single-user scenarios
+
+### 8. High-Level Benchmark Class
+
+**Decision**: Create a comprehensive Benchmark class as the primary interface.
+
+**Rationale**:
+- Simplify complex multi-step workflows
+- Provide consistent API for common operations
+- Abstract away implementation details
+- Enable better testing and validation
+- Support both programmatic and interactive usage
+
+### 9. JSON-LD Format Adoption
+
+**Decision**: Use JSON-LD with schema.org vocabulary for data interchange.
+
+**Rationale**:
+- Standardized linked data format with semantic meaning
+- Better interoperability between Python library and GUI
+- Extensible format that supports custom properties
+- Version compatibility and migration support
+- Industry-standard format for structured data
+
+### 10. GUI-Python Bidirectional Compatibility
+
+**Decision**: Ensure full round-trip compatibility between Python library and GUI.
+
+**Rationale**:
+- Users can start work in either environment
+- No data loss during transitions
+- Leverage strengths of both interfaces
+- Flexible workflow support
+- Maximize user adoption and utility
 
 ## Performance Considerations
 

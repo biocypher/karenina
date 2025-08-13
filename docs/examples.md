@@ -4,6 +4,7 @@ This guide provides comprehensive examples for using Karenina in various scenari
 
 ## Table of Contents
 
+- [Working with Benchmarks](#working-with-benchmarks)
 - [Basic Workflow](#basic-workflow)
 - [Question Extraction Examples](#question-extraction-examples)
 - [Answer Template Generation](#answer-template-generation)
@@ -15,6 +16,395 @@ This guide provides comprehensive examples for using Karenina in various scenari
 - [Advanced Configurations](#advanced-configurations)
 - [Error Handling](#error-handling)
 - [Real-World Use Cases](#real-world-use-cases)
+
+## Working with Benchmarks
+
+The Benchmark class provides a high-level interface for managing benchmarks with full GUI compatibility. Here are practical examples for common use cases.
+
+### Creating Benchmarks from Scratch
+
+```python
+from karenina.benchmark import Benchmark
+from karenina.schemas.rubric_class import RubricTrait
+
+# Create a new benchmark
+benchmark = Benchmark.create(
+    name="Python Programming Assessment",
+    description="Comprehensive evaluation of Python programming skills",
+    version="1.0.0",
+    creator="Education Team"
+)
+
+# Add questions with rich metadata
+benchmark.add_question(
+    question="Explain Python decorators and provide an example",
+    raw_answer="Decorators modify function behavior without changing the function itself",
+    finished=True,
+    author={"name": "Dr. Smith", "institution": "Tech University"},
+    custom_metadata={
+        "difficulty": "intermediate",
+        "topic": "python_advanced",
+        "estimated_time": 300,
+        "bloom_taxonomy": "application"
+    }
+)
+
+# Add global rubric for consistent evaluation
+benchmark.add_global_rubric_trait(
+    RubricTrait(
+        name="clarity",
+        description="Is the explanation clear and understandable?",
+        kind="boolean"
+    )
+)
+
+# Set benchmark-level metadata
+benchmark.set_multiple_custom_properties({
+    "domain": "computer_science",
+    "target_audience": "university_students",
+    "difficulty_level": "intermediate",
+    "estimated_duration_minutes": 45
+})
+
+print(f"Created benchmark with {len(benchmark)} questions")
+benchmark.save("python_assessment.jsonld")
+```
+
+### Loading and Enhancing GUI Exports
+
+```python
+# Load a benchmark exported from the Karenina GUI
+gui_benchmark = Benchmark.load("gui_exported_benchmark.jsonld")
+
+# Inspect what was loaded
+print(f"Loaded: {gui_benchmark.name}")
+print(f"Creator: {gui_benchmark.creator}")
+print(f"Questions: {len(gui_benchmark)}")
+print(f"Progress: {gui_benchmark.get_progress():.1f}%")
+
+# Get health assessment
+health = gui_benchmark.get_health_report()
+print(f"Health Score: {health['health_score']}/100")
+print("Recommendations:")
+for rec in health['recommendations'][:3]:
+    print(f"  - {rec}")
+
+# Enhance with additional questions
+gui_benchmark.add_question(
+    "What is the difference between a list and a tuple in Python?",
+    "Lists are mutable while tuples are immutable sequences",
+    custom_metadata={"added_programmatically": True}
+)
+
+# Update metadata
+gui_benchmark.version = "1.1.0"
+gui_benchmark.set_custom_property("enhanced_in_python", True)
+
+# Save enhanced version
+gui_benchmark.save("enhanced_benchmark.jsonld")
+```
+
+### Building from Extracted Questions
+
+```python
+from karenina.questions.extractor import extract_questions_from_file
+
+# Extract questions from Excel file
+questions = extract_questions_from_file(
+    "data/programming_questions.xlsx",
+    "Question",
+    "Expected_Answer"
+)
+
+# Create benchmark and bulk add questions
+benchmark = Benchmark.create("Programming Knowledge Test")
+
+for i, question in enumerate(questions):
+    benchmark.add_question(
+        question=question.question,
+        raw_answer=question.raw_answer,
+        custom_metadata={
+            "source_row": i + 1,
+            "source_file": "programming_questions.xlsx",
+            "difficulty": "varied"  # Could be parsed from additional columns
+        }
+    )
+
+# Analyze what was added
+print(f"Added {len(benchmark)} questions")
+summary = benchmark.get_summary()
+print(f"Average question length: {summary['avg_question_length']:.0f} characters")
+
+# Filter questions by content
+python_questions = benchmark.search_questions("Python")
+algorithm_questions = benchmark.search_questions("algorithm")
+
+print(f"Python-related questions: {len(python_questions)}")
+print(f"Algorithm questions: {len(algorithm_questions)}")
+```
+
+### Template Management Workflow
+
+```python
+# Load benchmark and check template status
+benchmark = Benchmark.load("my_benchmark.jsonld")
+
+# Check which questions need templates
+unfinished = benchmark.get_unfinished_question_ids()
+without_templates = benchmark.get_questions_without_templates()
+
+print(f"Questions needing templates: {len(without_templates)}")
+print(f"Unfinished questions: {len(unfinished)}")
+
+# Add templates manually for specific questions
+template_code = '''
+class Answer(BaseAnswer):
+    """Template for Python concept questions."""
+
+    definition: str = Field(description="Clear definition of the concept")
+    examples: List[str] = Field(description="Code examples")
+    use_cases: List[str] = Field(description="Common use cases")
+
+    def verify(self) -> bool:
+        return (
+            len(self.definition) > 20 and
+            len(self.examples) >= 1 and
+            len(self.use_cases) >= 1
+        )
+'''
+
+# Apply template to multiple questions
+python_q_ids = [q['id'] for q in benchmark.search_questions("Python")]
+for q_id in python_q_ids[:3]:  # First 3 Python questions
+    if not benchmark.has_template(q_id):
+        benchmark.add_answer_template(q_id, template_code)
+        benchmark.mark_finished(q_id)
+
+# Check progress
+print(f"Updated progress: {benchmark.get_progress():.1f}%")
+ready_templates = benchmark.get_finished_templates()
+print(f"Templates ready for verification: {len(ready_templates)}")
+```
+
+### Metadata Management Examples
+
+```python
+# Question-level metadata management
+question_ids = benchmark.get_question_ids()
+first_q_id = question_ids[0]
+
+# Get comprehensive metadata
+metadata = benchmark.get_question_metadata(first_q_id)
+print(f"Question: {metadata['question'][:50]}...")
+print(f"Created: {metadata['date_created']}")
+print(f"Author: {metadata['author']}")
+print(f"Custom metadata: {metadata['custom_metadata']}")
+
+# Update question with rich metadata
+benchmark.update_question_metadata(
+    first_q_id,
+    author={
+        "name": "Prof. Johnson",
+        "email": "johnson@university.edu",
+        "institution": "State University",
+        "department": "Computer Science"
+    },
+    sources=[
+        {
+            "type": "textbook",
+            "title": "Python Programming Fundamentals",
+            "authors": ["Jane Doe", "John Smith"],
+            "chapter": "Advanced Topics",
+            "pages": "234-256"
+        },
+        {
+            "type": "documentation",
+            "title": "Python Official Documentation",
+            "url": "https://docs.python.org/3/tutorial/",
+            "section": "Classes"
+        }
+    ],
+    custom_metadata={
+        "difficulty": "advanced",
+        "bloom_taxonomy": "analysis",
+        "learning_objectives": [
+            "Understand decorator syntax",
+            "Apply decorators to functions",
+            "Create custom decorators"
+        ],
+        "prerequisites": ["functions", "closures"],
+        "estimated_time_seconds": 600
+    }
+)
+
+# Access specific metadata
+author = benchmark.get_question_author(first_q_id)
+sources = benchmark.get_question_sources(first_q_id)
+difficulty = benchmark.get_question_custom_property(first_q_id, "difficulty")
+
+print(f"Author: {author['name']} ({author['institution']})")
+print(f"Difficulty: {difficulty}")
+print(f"Sources: {len(sources)} references")
+```
+
+### Export and Analysis Examples
+
+```python
+# Export benchmark data in different formats
+benchmark = Benchmark.load("completed_benchmark.jsonld")
+
+# Generate comprehensive summary
+summary = benchmark.get_summary()
+print("Benchmark Summary:")
+for key, value in summary.items():
+    print(f"  {key}: {value}")
+
+# Export to CSV for analysis
+csv_data = benchmark.to_csv()
+with open("benchmark_analysis.csv", "w") as f:
+    f.write(csv_data)
+
+# Export to Markdown report
+markdown_report = benchmark.to_markdown()
+with open("benchmark_report.md", "w") as f:
+    f.write(markdown_report)
+
+# Export questions as Python file
+benchmark.export_questions_python("exported_questions.py")
+
+# Filter and export subsets
+advanced_questions = benchmark.filter_questions(
+    custom_property="difficulty",
+    custom_value="advanced"
+)
+
+print(f"Advanced questions: {len(advanced_questions)}")
+
+# Create filtered benchmark
+advanced_benchmark = Benchmark.create("Advanced Questions Only")
+for q_data in advanced_questions:
+    advanced_benchmark.add_question(
+        question=q_data['question'],
+        raw_answer=q_data['raw_answer'],
+        **{k: v for k, v in q_data.items()
+           if k in ['author', 'custom_metadata', 'finished']}
+    )
+
+advanced_benchmark.save("advanced_subset.jsonld")
+```
+
+### Round-Trip Workflow with GUI
+
+```python
+def complete_round_trip_example():
+    """Demonstrate Python → GUI → Python workflow."""
+
+    # 1. Create comprehensive benchmark in Python
+    benchmark = Benchmark.create(
+        name="Round Trip Demonstration",
+        description="Showcasing Python-GUI interoperability",
+        version="1.0.0",
+        creator="Integration Demo"
+    )
+
+    # Add questions with full metadata
+    benchmark.add_question(
+        "What is polymorphism in object-oriented programming?",
+        "Polymorphism allows objects of different types to be treated uniformly",
+        finished=True,
+        author={"name": "OOP Expert"},
+        custom_metadata={"difficulty": "intermediate", "topic": "oop"}
+    )
+
+    # Add rubrics
+    benchmark.add_global_rubric_trait(
+        RubricTrait(name="accuracy", description="Factual correctness", kind="boolean")
+    )
+
+    # Set custom properties
+    benchmark.set_custom_property("python_created", True)
+
+    # Save for GUI import
+    benchmark.save("step1_python_to_gui.jsonld")
+    print("Step 1: Saved benchmark for GUI import")
+
+    # 2. Simulate GUI workflow (user loads, edits, exports)
+    # In practice: User opens step1_python_to_gui.jsonld in GUI,
+    # adds more questions, generates templates, runs verification,
+    # then exports as step2_gui_to_python.jsonld
+
+    # 3. Load GUI modifications back in Python
+    enhanced = Benchmark.load("step1_python_to_gui.jsonld")  # Using same file for demo
+
+    # 4. Make additional Python modifications
+    enhanced.add_question(
+        "Explain the SOLID principles",
+        "SOLID principles are five design principles for object-oriented programming",
+        custom_metadata={"added_in_step_4": True}
+    )
+
+    enhanced.set_custom_property("python_enhanced", True)
+    enhanced.version = "1.1.0"
+
+    # 5. Final save for next GUI session
+    enhanced.save("step3_python_enhanced.jsonld")
+    print("Step 3: Enhanced benchmark ready for next GUI session")
+
+    # Verify data integrity
+    final_check = Benchmark.load("step3_python_enhanced.jsonld")
+    print(f"Final benchmark: {final_check.name}")
+    print(f"Questions: {len(final_check)}")
+    print(f"Python created: {final_check.get_custom_property('python_created')}")
+    print(f"Python enhanced: {final_check.get_custom_property('python_enhanced')}")
+
+# Run the demonstration
+complete_round_trip_example()
+```
+
+### Performance and Bulk Operations
+
+```python
+# Efficient bulk operations for large benchmarks
+large_benchmark = Benchmark.create("Large Scale Assessment")
+
+# Bulk question addition
+questions_data = [
+    ("What is variable scope?", "Variable scope determines where variables can be accessed"),
+    ("Explain exception handling", "Exception handling manages errors during program execution"),
+    ("What are generators?", "Generators are functions that yield values lazily"),
+    # ... many more questions
+]
+
+# Add questions in batch with progress tracking
+for i, (question, answer) in enumerate(questions_data):
+    large_benchmark.add_question(
+        question=question,
+        raw_answer=answer,
+        custom_metadata={"batch_number": i // 10}  # Group in batches of 10
+    )
+
+    if (i + 1) % 10 == 0:
+        print(f"Added {i + 1} questions...")
+
+# Bulk template application
+template = "class Answer(BaseAnswer): pass"  # Simple template
+unfinished_ids = large_benchmark.get_unfinished_question_ids()
+updated_count = large_benchmark.add_template_to_unfinished_questions(template)
+
+print(f"Applied templates to {updated_count} questions")
+
+# Efficient filtering and analysis
+by_batch = {}
+for question_data in large_benchmark:
+    batch = question_data.get('custom_metadata', {}).get('batch_number', 0)
+    if batch not in by_batch:
+        by_batch[batch] = []
+    by_batch[batch].append(question_data)
+
+print(f"Questions organized into {len(by_batch)} batches")
+```
+
+These examples showcase the power and flexibility of the Benchmark class for comprehensive benchmark management, from simple creation to complex workflows with full GUI interoperability.
 
 ## Basic Workflow
 

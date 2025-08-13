@@ -2,6 +2,258 @@
 
 Examples showing how to integrate Karenina with other systems and frameworks.
 
+## Python-GUI Interoperability
+
+The Benchmark class provides seamless integration between Python scripts and the Karenina GUI through JSON-LD format.
+
+### Loading GUI Exports in Python
+
+```python
+from karenina.benchmark import Benchmark
+
+def process_gui_export(gui_file_path):
+    """Process benchmark exported from Karenina GUI."""
+
+    # Load benchmark created/modified in GUI
+    benchmark = Benchmark.load(gui_file_path)
+
+    print(f"Loaded GUI benchmark: {benchmark.name}")
+    print(f"Version: {benchmark.version}")
+    print(f"Questions: {len(benchmark)}")
+    print(f"Progress: {benchmark.get_progress():.1f}%")
+
+    # Check health and readiness
+    health = benchmark.get_health_report()
+    print(f"Health Score: {health['health_score']}/100")
+
+    if health['health_score'] < 80:
+        print("Recommendations:")
+        for rec in health['recommendations'][:3]:
+            print(f"  - {rec}")
+
+    # Add programmatic enhancements
+    benchmark.add_question(
+        "What is continuous integration?",
+        "CI is the practice of frequently integrating code changes",
+        custom_metadata={"added_programmatically": True}
+    )
+
+    # Update metadata
+    benchmark.set_custom_property("processed_in_python", True)
+    benchmark.version = "1.1.0"
+
+    # Save enhanced version for GUI re-import
+    enhanced_path = gui_file_path.replace('.jsonld', '_enhanced.jsonld')
+    benchmark.save(enhanced_path)
+
+    return benchmark, enhanced_path
+
+# Example usage
+benchmark, enhanced_file = process_gui_export("gui_exported_benchmark.jsonld")
+print(f"Enhanced benchmark saved to: {enhanced_file}")
+```
+
+### Creating Benchmarks for GUI Import
+
+```python
+from karenina.benchmark import Benchmark
+from karenina.questions.extractor import extract_questions_from_file
+from karenina.schemas.rubric_class import RubricTrait
+
+def create_benchmark_for_gui(excel_file, output_file):
+    """Create benchmark in Python for GUI consumption."""
+
+    # Extract questions from institutional data
+    questions = extract_questions_from_file(
+        excel_file,
+        "Question",
+        "Expected_Answer"
+    )
+
+    # Create benchmark with institutional metadata
+    benchmark = Benchmark.create(
+        name="CS Department Assessment",
+        description="Computer Science knowledge evaluation",
+        version="2024.1",
+        creator="CS Faculty"
+    )
+
+    # Add questions with rich metadata
+    for i, question in enumerate(questions):
+        benchmark.add_question(
+            question=question.question,
+            raw_answer=question.raw_answer,
+            author={
+                "name": "CS Faculty",
+                "department": "Computer Science",
+                "institution": "University"
+            },
+            custom_metadata={
+                "difficulty": ["easy", "medium", "hard"][i % 3],
+                "topic": f"topic_{(i // 5) + 1}",
+                "learning_objective": f"LO{(i % 10) + 1}",
+                "source_row": i + 1
+            }
+        )
+
+    # Add institutional rubrics
+    benchmark.add_global_rubric_trait(
+        RubricTrait(
+            name="technical_accuracy",
+            description="Is the technical information correct?",
+            kind="boolean"
+        )
+    )
+
+    benchmark.add_global_rubric_trait(
+        RubricTrait(
+            name="clarity_rating",
+            description="Clarity of explanation (1-5)",
+            kind="score",
+            min_score=1,
+            max_score=5
+        )
+    )
+
+    # Set institutional properties
+    benchmark.set_multiple_custom_properties({
+        "institution": "University Name",
+        "department": "Computer Science",
+        "course_code": "CS101",
+        "semester": "Fall 2024",
+        "approval_status": "approved",
+        "created_for_gui": True
+    })
+
+    # Save for GUI import
+    benchmark.save(output_file)
+
+    # Generate summary report
+    summary = {
+        "name": benchmark.name,
+        "questions": len(benchmark),
+        "health_score": benchmark.get_health_report()["health_score"],
+        "custom_properties": len(benchmark.get_all_custom_properties()),
+        "ready_for_gui": True
+    }
+
+    return benchmark, summary
+
+# Create benchmark from Excel file
+benchmark, summary = create_benchmark_for_gui(
+    "institutional_questions.xlsx",
+    "cs_assessment_for_gui.jsonld"
+)
+
+print("Created benchmark for GUI:")
+for key, value in summary.items():
+    print(f"  {key}: {value}")
+```
+
+### Round-Trip Workflow
+
+```python
+def complete_round_trip_workflow():
+    """Demonstrate complete Python ↔ GUI workflow."""
+
+    # Step 1: Create initial benchmark in Python
+    print("Step 1: Creating benchmark in Python...")
+
+    benchmark = Benchmark.create(
+        name="Round Trip Demo",
+        description="Demonstrating Python-GUI interoperability"
+    )
+
+    # Add initial questions
+    benchmark.add_question(
+        "What is polymorphism?",
+        "Polymorphism allows objects of different types to be treated uniformly",
+        finished=True,
+        custom_metadata={"created_in": "python", "step": 1}
+    )
+
+    benchmark.set_custom_property("workflow_step", "python_creation")
+    benchmark.save("step1_python_created.jsonld")
+    print("  ✓ Saved: step1_python_created.jsonld")
+
+    # Step 2: Simulate GUI workflow
+    print("\nStep 2: Processing in GUI (simulated)...")
+    print("  - User loads step1_python_created.jsonld in GUI")
+    print("  - User adds more questions and templates")
+    print("  - User runs verification")
+    print("  - User exports enhanced benchmark")
+
+    # For demo, we'll modify the benchmark to simulate GUI changes
+    gui_modified = Benchmark.load("step1_python_created.jsonld")
+    gui_modified.add_question(
+        "What is encapsulation?",
+        "Encapsulation bundles data and methods together",
+        finished=True,
+        custom_metadata={"created_in": "gui", "step": 2}
+    )
+    gui_modified.set_custom_property("workflow_step", "gui_modified")
+    gui_modified.set_custom_property("gui_enhancements", True)
+    gui_modified.version = "1.1.0"
+    gui_modified.save("step2_gui_modified.jsonld")
+    print("  ✓ Simulated GUI export: step2_gui_modified.jsonld")
+
+    # Step 3: Load back in Python for analysis
+    print("\nStep 3: Loading GUI export back in Python...")
+
+    final_benchmark = Benchmark.load("step2_gui_modified.jsonld")
+
+    # Analyze changes
+    print(f"  Final benchmark: {final_benchmark.name}")
+    print(f"  Version: {final_benchmark.version}")
+    print(f"  Total questions: {len(final_benchmark)}")
+
+    # Check provenance
+    python_questions = len([
+        q for q in final_benchmark
+        if q.get('custom_metadata', {}).get('created_in') == 'python'
+    ])
+    gui_questions = len([
+        q for q in final_benchmark
+        if q.get('custom_metadata', {}).get('created_in') == 'gui'
+    ])
+
+    print(f"  Questions from Python: {python_questions}")
+    print(f"  Questions from GUI: {gui_questions}")
+    print(f"  GUI enhanced: {final_benchmark.get_custom_property('gui_enhancements')}")
+
+    # Add final Python processing
+    final_benchmark.add_question(
+        "What is inheritance?",
+        "Inheritance allows classes to inherit properties from parent classes",
+        custom_metadata={"created_in": "python", "step": 3, "final_processing": True}
+    )
+    final_benchmark.set_custom_property("workflow_step", "python_final")
+    final_benchmark.set_custom_property("round_trip_complete", True)
+    final_benchmark.version = "1.2.0"
+
+    # Generate final analysis
+    analysis = {
+        "workflow_complete": True,
+        "total_questions": len(final_benchmark),
+        "version_history": ["1.0.0", "1.1.0", "1.2.0"],
+        "python_gui_compatibility": "verified",
+        "data_integrity": "maintained",
+        "metadata_preserved": True
+    }
+
+    # Save final version
+    final_benchmark.save("step3_python_final.jsonld")
+    print("\nStep 4: Round-trip complete!")
+    print("  ✓ Final benchmark: step3_python_final.jsonld")
+    print("  ✓ Data integrity maintained throughout workflow")
+
+    return analysis
+
+# Run the demonstration
+analysis = complete_round_trip_workflow()
+print(f"\nWorkflow Analysis: {analysis}")
+```
+
 ## Web Framework Integration
 
 ### FastAPI Integration
