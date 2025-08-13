@@ -1113,3 +1113,193 @@ def test_question_metadata_error_handling():
 
     with pytest.raises(ValueError, match="Question not found"):
         benchmark.get_question_timestamps("nonexistent")
+
+
+def test_benchmark_getitem_by_index():
+    """Test accessing questions by integer index."""
+    benchmark = Benchmark.create("Index Test")
+
+    # Add some questions
+    q1_id = benchmark.add_question("Question 1", "Answer 1")
+    q2_id = benchmark.add_question("Question 2", "Answer 2")
+    q3_id = benchmark.add_question("Question 3", "Answer 3")
+
+    # Test positive indexing
+    first_question = benchmark[0]
+    assert first_question.text == "Question 1"
+    assert first_question.acceptedAnswer.text == "Answer 1"
+    assert first_question.id == q1_id
+
+    second_question = benchmark[1]
+    assert second_question.text == "Question 2"
+    assert second_question.acceptedAnswer.text == "Answer 2"
+    assert second_question.id == q2_id
+
+    third_question = benchmark[2]
+    assert third_question.text == "Question 3"
+    assert third_question.acceptedAnswer.text == "Answer 3"
+    assert third_question.id == q3_id
+
+    # Test negative indexing
+    last_question = benchmark[-1]
+    assert last_question.text == "Question 3"
+    assert last_question.id == q3_id
+
+    second_to_last = benchmark[-2]
+    assert second_to_last.text == "Question 2"
+    assert second_to_last.id == q2_id
+
+
+def test_benchmark_getitem_by_slice():
+    """Test accessing questions by slice."""
+    benchmark = Benchmark.create("Slice Test")
+
+    # Add questions
+    for i in range(5):
+        benchmark.add_question(f"Question {i}", f"Answer {i}")
+
+    # Test simple slice
+    first_three = benchmark[:3]
+    assert len(first_three) == 3
+    assert first_three[0].text == "Question 0"
+    assert first_three[1].text == "Question 1"
+    assert first_three[2].text == "Question 2"
+
+    # Test slice with start and end
+    middle_slice = benchmark[1:4]
+    assert len(middle_slice) == 3
+    assert middle_slice[0].text == "Question 1"
+    assert middle_slice[1].text == "Question 2"
+    assert middle_slice[2].text == "Question 3"
+
+    # Test slice with step
+    every_other = benchmark[::2]
+    assert len(every_other) == 3  # indices 0, 2, 4
+    assert every_other[0].text == "Question 0"
+    assert every_other[1].text == "Question 2"
+    assert every_other[2].text == "Question 4"
+
+    # Test negative slice
+    last_two = benchmark[-2:]
+    assert len(last_two) == 2
+    assert last_two[0].text == "Question 3"
+    assert last_two[1].text == "Question 4"
+
+
+def test_benchmark_getitem_by_string_id():
+    """Test accessing questions by string ID (existing behavior)."""
+    benchmark = Benchmark.create("String ID Test")
+
+    q_id = benchmark.add_question("Test Question", "Test Answer")
+
+    # Access by string ID
+    question = benchmark[q_id]
+    assert question.text == "Test Question"
+    assert question.acceptedAnswer.text == "Test Answer"
+    assert question.id == q_id
+
+
+def test_benchmark_getitem_edge_cases():
+    """Test edge cases and error conditions for __getitem__."""
+    benchmark = Benchmark.create("Edge Cases Test")
+
+    # Test with empty benchmark
+    with pytest.raises(IndexError, match="Question index 0 out of range"):
+        benchmark[0]
+
+    # Add a question
+    benchmark.add_question("Only Question", "Only Answer")
+
+    # Test out of bounds
+    with pytest.raises(IndexError, match="Question index 1 out of range"):
+        benchmark[1]
+
+    with pytest.raises(IndexError, match="Question index -2 out of range"):
+        benchmark[-2]
+
+    # Test invalid key types
+    with pytest.raises(TypeError, match="Invalid key type"):
+        benchmark[1.5]  # float
+
+    with pytest.raises(TypeError, match="Invalid key type"):
+        benchmark[None]  # None
+
+    # Test nonexistent string ID
+    with pytest.raises(ValueError, match="Question not found"):
+        benchmark["nonexistent-id"]
+
+
+def test_benchmark_getitem_returns_schema_org_question():
+    """Test that __getitem__ returns proper SchemaOrgQuestion objects."""
+    from karenina.schemas.checkpoint import SchemaOrgQuestion
+
+    benchmark = Benchmark.create("Schema Test")
+
+    # Add question with custom metadata and template
+    template_code = """from karenina.schemas import BaseAnswer
+from pydantic import Field
+
+class Answer(BaseAnswer):
+    response: str = Field(description="The response")
+
+    def verify(self) -> bool:
+        return True
+"""
+
+    q_id = benchmark.add_question(
+        question="Test Question with Template",
+        raw_answer="Test Answer",
+        answer_template=template_code,
+        finished=True,
+        custom_metadata={"category": "test", "difficulty": 5},
+    )
+
+    # Test by index
+    question_by_index = benchmark[0]
+    assert isinstance(question_by_index, SchemaOrgQuestion)
+    assert question_by_index.text == "Test Question with Template"
+    assert question_by_index.acceptedAnswer.text == "Test Answer"
+    assert question_by_index.hasPart.text == template_code
+
+    # Check additional properties (custom metadata)
+    assert question_by_index.additionalProperty is not None
+    prop_dict = {prop.name: prop.value for prop in question_by_index.additionalProperty}
+    assert prop_dict["finished"] is True
+    assert prop_dict["custom_category"] == "test"
+    assert prop_dict["custom_difficulty"] == 5
+
+    # Test by string ID
+    question_by_id = benchmark[q_id]
+    assert isinstance(question_by_id, SchemaOrgQuestion)
+    assert question_by_id.text == question_by_index.text
+    assert question_by_id.id == question_by_index.id
+
+    # Test by slice
+    questions_by_slice = benchmark[:1]
+    assert len(questions_by_slice) == 1
+    assert isinstance(questions_by_slice[0], SchemaOrgQuestion)
+    assert questions_by_slice[0].text == "Test Question with Template"
+
+
+def test_benchmark_getitem_with_rubric_traits():
+    """Test __getitem__ with question-specific rubric traits."""
+    benchmark = Benchmark.create("Rubric Test")
+
+    # Add question
+    q_id = benchmark.add_question("Question with Rubric", "Answer with Rubric")
+
+    # Add question-specific rubric trait
+    rubric_trait = RubricTrait(
+        name="accuracy", description="How accurate is the answer?", kind="score", min_score=1, max_score=5
+    )
+    benchmark.add_question_rubric_trait(q_id, rubric_trait)
+
+    # Test access
+    question = benchmark[0]
+    assert question.rating is not None
+    assert len(question.rating) == 1
+    assert question.rating[0].name == "accuracy"
+    assert question.rating[0].description == "How accurate is the answer?"
+    assert question.rating[0].bestRating == 5.0
+    assert question.rating[0].worstRating == 1.0
+    assert question.rating[0].additionalType == "QuestionSpecificRubricTrait"

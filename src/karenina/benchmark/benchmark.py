@@ -9,7 +9,10 @@ while maintaining 100% backward compatibility.
 
 from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from ..schemas.checkpoint import SchemaOrgQuestion
 
 from ..schemas.rubric_class import Rubric, RubricTrait
 from .core import (
@@ -739,9 +742,112 @@ class Benchmark:
         """Check if a question ID exists in the benchmark."""
         return question_id in self._base
 
-    def __getitem__(self, question_id: str) -> dict[str, Any]:
-        """Get a question by ID using bracket notation."""
-        return self._base[question_id]
+    def __getitem__(self, key: str | int | slice) -> "SchemaOrgQuestion | list[SchemaOrgQuestion]":
+        """
+        Get question(s) as SchemaOrgQuestion object(s) using bracket notation.
+
+        Supports:
+        - String key: Get question by ID (returns SchemaOrgQuestion)
+        - Integer key: Get question by index (returns SchemaOrgQuestion)
+        - Slice: Get multiple questions by slice (returns list[SchemaOrgQuestion])
+
+        Args:
+            key: Question ID (str), index (int), or slice
+
+        Returns:
+            Single SchemaOrgQuestion or list of SchemaOrgQuestion objects
+
+        Raises:
+            ValueError: If question ID not found
+            IndexError: If index out of range
+            TypeError: If key type not supported
+        """
+
+        # Handle string keys (question ID)
+        if isinstance(key, str):
+            question_data = self._base[key]
+            return self._convert_to_schema_org_question(question_data)
+
+        # Handle integer keys (index)
+        elif isinstance(key, int):
+            question_ids = self.get_question_ids()
+            original_key = key  # Store original for error message
+            if key < 0:
+                key += len(question_ids)  # Support negative indexing
+            if not 0 <= key < len(question_ids):
+                raise IndexError(f"Question index {original_key} out of range (0-{len(question_ids) - 1})")
+            question_id = question_ids[key]
+            question_data = self._base[question_id]
+            return self._convert_to_schema_org_question(question_data)
+
+        # Handle slice objects
+        elif isinstance(key, slice):
+            question_ids = self.get_question_ids()
+            selected_ids = question_ids[key]
+            return [self._convert_to_schema_org_question(self._base[qid]) for qid in selected_ids]
+
+        else:
+            raise TypeError(f"Invalid key type {type(key)}. Expected str, int, or slice.")
+
+    def _convert_to_schema_org_question(self, question_data: dict[str, Any]) -> "SchemaOrgQuestion":
+        """
+        Convert internal question dictionary to SchemaOrgQuestion object.
+
+        Args:
+            question_data: Internal question dictionary
+
+        Returns:
+            SchemaOrgQuestion object
+        """
+        from ..schemas.checkpoint import (
+            SchemaOrgAnswer,
+            SchemaOrgPropertyValue,
+            SchemaOrgQuestion,
+            SchemaOrgSoftwareSourceCode,
+        )
+        from ..utils.checkpoint_converter import convert_rubric_trait_to_rating
+
+        # Create answer object using model_validate to handle aliased fields
+        accepted_answer = SchemaOrgAnswer.model_validate(
+            {"@id": f"{question_data['id']}-answer", "text": question_data["raw_answer"]}
+        )
+
+        # Create software source code (template) object using model_validate
+        has_part = SchemaOrgSoftwareSourceCode.model_validate(
+            {
+                "@id": f"{question_data['id']}-template",
+                "name": f"{question_data['question'][:30]}... Answer Template",
+                "text": question_data.get("answer_template", ""),
+            }
+        )
+
+        # Convert question-specific rubric traits to ratings
+        ratings = None
+        if question_data.get("question_rubric"):
+            ratings = [
+                convert_rubric_trait_to_rating(trait, "question-specific") for trait in question_data["question_rubric"]
+            ]
+
+        # Create additional properties from custom metadata
+        additional_properties = []
+        if question_data.get("finished") is not None:
+            additional_properties.append(SchemaOrgPropertyValue(name="finished", value=question_data["finished"]))
+
+        if question_data.get("custom_metadata"):
+            for key, value in question_data["custom_metadata"].items():
+                additional_properties.append(SchemaOrgPropertyValue(name=f"custom_{key}", value=value))
+
+        # Create SchemaOrgQuestion object using model_validate
+        return SchemaOrgQuestion.model_validate(
+            {
+                "@id": question_data["id"],
+                "text": question_data["question"],
+                "acceptedAnswer": accepted_answer,
+                "hasPart": has_part,
+                "rating": ratings,
+                "additionalProperty": additional_properties if additional_properties else None,
+            }
+        )
 
     def __eq__(self, other: object) -> bool:
         """Compare two benchmarks for equality."""
