@@ -255,18 +255,23 @@ class Answer(BaseAnswer):
 benchmark.add_answer_template(question_id, template_code)
 ```
 
-### Bulk Template Generation
+### Bulk Template Operations
 
 ```python
-# Generate templates for all questions without them
-unfinished_ids = benchmark.get_unfinished_question_ids()
-print(f"Generating templates for {len(unfinished_ids)} questions...")
+# Identify questions that are not finished
+unfinished_ids = benchmark.get_unfinished_questions()
+print(f"Unfinished: {len(unfinished_ids)}")
 
-# This would use LLM to generate templates
-# benchmark.generate_all_templates(
-#     model="gpt-4",
-#     model_provider="openai"
-# )
+# Apply the same template to all questions missing one
+template_code = """
+class Answer(BaseAnswer):
+    response: str
+    def verify(self) -> bool:
+        return bool(self.response)
+"""
+
+updated_ids = benchmark.apply_global_template(template_code)
+print(f"Applied template to {len(updated_ids)} questions")
 
 # Check results
 templates_ready = benchmark.get_finished_templates()
@@ -409,10 +414,9 @@ benchmark.add_question_rubric_trait(
     )
 )
 
-# Get question's rubric traits
-question_rubric = benchmark.get_question_rubric(question_id)
-if question_rubric:
-    print(f"Question-specific traits: {len(question_rubric.traits)}")
+# Check if the question now has rubric traits
+has_rubric = question_id in benchmark.get_questions_with_rubric()
+print(f"Has rubric: {has_rubric}")
 
 # Remove rubric
 # benchmark.remove_question_rubric(question_id)
@@ -451,11 +455,11 @@ print(f"Is complete: {benchmark.is_complete}")
 print(f"Progress: {benchmark.get_progress():.1f}%")
 
 # Get questions that need attention
-unfinished = benchmark.get_unfinished_question_ids()
-without_templates = benchmark.get_questions_without_templates()
+unfinished = benchmark.get_unfinished_questions()
+missing_templates = benchmark.get_missing_templates()
 
 print(f"Unfinished questions: {len(unfinished)}")
-print(f"Missing templates: {len(without_templates)}")
+print(f"Missing templates: {len(missing_templates)}")
 
 # Get ready templates for verification
 ready_templates = benchmark.get_finished_templates()
@@ -496,8 +500,7 @@ benchmark_dict = benchmark.to_dict()
 with open("benchmark_data.json", "w") as f:
     json.dump(benchmark_dict, f, indent=2)
 
-# Export questions as Python file
-benchmark.export_questions_python("exported_questions.py")
+# Export questions as Python file (if needed, see lower-level APIs)
 ```
 
 ## Advanced Features

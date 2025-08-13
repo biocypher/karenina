@@ -97,28 +97,15 @@ nav:
   - Home: index.md
   - Getting Started:
     - Installation: installation.md
-    - Quick Start: quickstart.md
-    - Examples: examples.md
-  - Documentation:
-    - Architecture: architecture.md
-    - API Reference: api-reference.md
-    - Development Guide: development.md
-  - API Reference:
-    - Core Modules:
-      - LLM Interface: api/llm.md
-      - Questions: api/questions.md
-      - Answers: api/answers.md
-      - Benchmark: api/benchmark.md
-    - Data Models:
-      - Schemas: api/schemas.md
-    - Supporting:
-      - Prompts: api/prompts.md
-      - Utils: api/utils.md
-  - Guides:
-    - Question Extraction: guides/question-extraction.md
-    - Answer Generation: guides/answer-generation.md
-    - Benchmark Execution: guides/benchmark-execution.md
+    - Quickstart: quickstart.md
+  - Benchmark Guide:
+    - Overview: guides/benchmark-management.md
+    - Basics: guides/benchmark-execution.md
+    - Datasets & Inputs: guides/question-extraction.md
+    - Templates & Results: guides/answer-generation.md
     - LLM Providers: guides/llm-providers.md
+  - Architecture: architecture.md
+  - API Reference: api-reference.md
   - Examples:
     - Basic Usage: examples/basic-usage.md
     - Custom Workflows: examples/custom-workflows.md

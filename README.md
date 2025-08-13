@@ -91,109 +91,20 @@ pre-commit install
 
 ## 🚀 Quick Start
 
-### 1. Extract Questions from a File
+Use the high-level `Benchmark` API.
 
 ```python
-from karenina.questions.extractor import extract_and_generate_questions
+from karenina.benchmark import Benchmark
 
-# Extract questions from an Excel file
-extract_and_generate_questions(
-    file_path="data/benchmark_questions.xlsx",
-    output_path="questions.py",
-    question_column="Question",
-    answer_column="Expected Answer",
-    sheet_name="Sheet1"  # Optional for Excel files
-)
-```
-
-### 2. Generate Answer Templates
-
-```python
-from karenina.answers.generator import generate_answer_template
-
-# Generate a Pydantic answer template for validation
-template_code = generate_answer_template(
+benchmark = Benchmark.create("Demo")
+benchmark.add_question(
     question="What is the capital of France?",
-    raw_answer="Paris",
-    model="gpt-4",
-    model_provider="openai",
-    temperature=0.0
+    raw_answer="Paris"
 )
-
-print(template_code)
-# Output: Pydantic class definition for answer validation
+benchmark.save("demo.jsonld")
 ```
 
-### 3. Run Benchmark Verification
-
-```python
-from karenina.benchmark.models import VerificationConfig, ModelConfiguration
-from karenina.benchmark.verification.orchestrator import run_question_verification
-
-# Configure models for testing
-config = VerificationConfig(
-    answering_models=[
-        ModelConfiguration(
-            id="gpt4",
-            model_provider="openai",
-            model_name="gpt-4",
-            temperature=0.1,
-            interface="langchain",
-            system_prompt="You are an expert assistant."
-        )
-    ],
-    parsing_models=[
-        ModelConfiguration(
-            id="gpt35",
-            model_provider="openai",
-            model_name="gpt-3.5-turbo",
-            temperature=0.0,
-            interface="langchain",
-            system_prompt="Parse and validate the response."
-        )
-    ],
-    replicate_count=3  # Run each test 3 times
-)
-
-# Run verification
-results = run_question_verification(
-    question_id="q1",
-    question_text="What is the capital of France?",
-    template_code=template_code,
-    config=config
-)
-```
-
-### 4. Using Rubrics for Qualitative Evaluation
-
-```python
-from karenina.schemas.rubric_class import Rubric, RubricTrait
-
-# Define evaluation rubric
-rubric = Rubric(traits=[
-    RubricTrait(
-        name="clarity",
-        description="Response is clear and well-structured",
-        kind="score",
-        min_score=1,
-        max_score=5
-    ),
-    RubricTrait(
-        name="complete",
-        description="Response fully answers the question",
-        kind="boolean"
-    )
-])
-
-# Include rubric in verification
-results = run_question_verification(
-    question_id="q1",
-    question_text="Explain quantum entanglement",
-    template_code=template_code,
-    config=config,
-    rubric=rubric
-)
-```
+See the docs for templates, verification, and results.
 
 ## 🏗️ Architecture
 
@@ -451,15 +362,9 @@ make type-check
 make dead-code
 ```
 
-### Building Documentation
+### Documentation
 
-```bash
-# Build docs
-make docs
-
-# Serve docs locally
-make docs-serve
-```
+See `docs/` or build with `make docs` and open the site.
 
 ## 📖 Documentation
 

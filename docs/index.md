@@ -2,56 +2,9 @@
 
 Karenina is a comprehensive benchmarking system for Large Language Models (LLMs) that provides structured evaluation workflows through question extraction, answer template generation, and benchmark verification.
 
-## Quick Start
+## Quickstart
 
-### Option 1: Simplified Workflow with Benchmark Class (Recommended)
-
-```python
-from karenina.benchmark import Benchmark
-
-# Create and manage benchmarks with full GUI compatibility
-benchmark = Benchmark.create(
-    name="Python Programming Assessment",
-    description="Test understanding of Python concepts",
-    version="1.0.0"
-)
-
-# Add questions directly
-benchmark.add_question(
-    question="What is a Python decorator?",
-    raw_answer="A decorator modifies or extends function behavior"
-)
-
-# Save in JSON-LD format (GUI compatible)
-benchmark.save("python_assessment.jsonld")
-
-# Load and enhance GUI exports
-gui_benchmark = Benchmark.load("gui_exported_benchmark.jsonld")
-gui_benchmark.add_question("New question", "New answer")
-gui_benchmark.save("enhanced_benchmark.jsonld")
-```
-
-### Option 2: Traditional Step-by-Step Workflow
-
-```python
-from karenina.questions.extractor import extract_and_generate_questions
-from karenina.answers.generator import generate_answer_templates_from_questions_file
-from karenina.benchmark.verification.orchestrator import run_question_verification
-
-# Extract questions from file
-questions = extract_and_generate_questions("data/questions.xlsx", "questions.py")
-
-# Generate answer templates
-templates = generate_answer_templates_from_questions_file("questions.py")
-
-# Run benchmark evaluation
-results = run_question_verification(
-    question_id="q1",
-    question_text="What is the capital of France?",
-    template_code=template_code,
-    config=config
-)
-```
+See Quickstart for a minimal Benchmark-only example, or jump to the Benchmark Guide for deeper usage.
 
 ## Core Architecture
 
@@ -81,23 +34,19 @@ Karenina follows a three-stage pipeline:
 ## Documentation
 
 ### Getting Started
-- [Installation](installation.md): Detailed installation instructions
-- [Quick Start](quickstart.md): Get started quickly
-- [Examples](examples.md): Comprehensive usage examples
+- [Installation](installation.md)
+- [Quickstart](quickstart.md)
+- [Examples](examples.md)
 
 ### Technical Documentation
-- [Architecture](architecture.md): System design and data flow
-- [API Reference](api-reference.md): Complete API documentation
-- [Development Guide](development.md): Contributing and development setup
+- [Architecture](architecture.md)
+- [API Reference](api-reference.md)
+- [Development Guide](development.md)
 
 ### Module API Reference
 
-- [`llm`](api/llm.md): LLM interface and session management
-- [`questions`](api/questions.md): File processing and question extraction
-- [`answers`](api/answers.md): Template generation and validation
-- [`benchmark`](api/benchmark.md): Evaluation and verification workflows
-- [`schemas`](api/schemas.md): Data models and validation classes
-- [`utils`](api/utils.md): Utility functions and helpers
+- Benchmark, Core, Verification, Models: see API Reference anchors
+- `questions`, `answers`, `schemas`, `llm`, `utils`: see API Reference
 
 ### User Guides
 

@@ -2,50 +2,41 @@
 
 ## Requirements
 
-- Python 3.8+
-- pip or uv package manager
+- Python 3.11+
 
-## Install from Source
+## Install from PyPI
 
 ```bash
-git clone https://github.com/example/karenina.git
+pip install karenina
+```
+
+## Dev install (contributors)
+
+```bash
+git clone https://github.com/biocypher/karenina.git
 cd karenina
-uv install -e .
+uv sync
+uv pip install -e "[dev]"
+pre-commit install
 ```
 
-## Development Installation
+## Environment
+
+Set provider keys as needed:
 
 ```bash
-cd karenina
-make dev
+export OPENAI_API_KEY=...
+export GOOGLE_API_KEY=...
+export ANTHROPIC_API_KEY=...
+export OPENROUTER_API_KEY=...
 ```
 
-## Dependencies
-
-Core dependencies:
-- `pydantic` - Data validation and settings management
-- `pandas` - Data manipulation and analysis
-- `langchain` - LLM framework and provider abstraction
-- `langchain-openai` - OpenAI integration
-- `langchain-google-genai` - Google AI integration
-- `langchain-anthropic` - Anthropic integration
-- `python-dotenv` - Environment variable management
-- `tqdm` - Progress bars for long-running operations
-
-## Environment Variables
-
-Configure API keys for LLM providers:
-
-```bash
-export OPENAI_API_KEY="your-openai-key"
-export GOOGLE_API_KEY="your-google-key"
-export ANTHROPIC_API_KEY="your-anthropic-key"
-export OPENROUTER_API_KEY="your-openrouter-key"
-```
-
-## Verification
+## Verify install
 
 ```python
 import karenina
+from karenina.benchmark import Benchmark
+
 print(karenina.__version__)
+print(Benchmark.create("_test_"))
 ```

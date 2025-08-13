@@ -6,43 +6,161 @@ This guide covers the complete process of executing benchmarks to evaluate LLM r
 
 Benchmark execution validates LLM responses using generated Pydantic templates, providing structured evaluation results with consistent scoring and analysis.
 
-## Basic Benchmark Execution
+## Configuration with ModelConfiguration and VerificationConfig
 
-### Single Model Evaluation
+Use these models to describe answering/parsing models and overall run settings.
 
 ```python
-from karenina.benchmark.runner import run_benchmark
+from karenina.benchmark.models import ModelConfiguration, VerificationConfig
 
-# Prepare input data
-questions = {
-    "q1_hash": "What is the capital of France?",
-    "q2_hash": "Calculate 15 * 23",
-    "q3_hash": "Explain photosynthesis"
-}
+answering = [
+    ModelConfiguration(
+        id="gpt4",
+        model_provider="openai",
+        model_name="gpt-4",
+        temperature=0.1,
+        interface="langchain",
+        system_prompt="You are an expert assistant."
+    ),
+]
 
-# Model responses to evaluate
-responses = {
-    "q1_hash": "The capital of France is Paris, located in the northern part of the country.",
-    "q2_hash": "15 multiplied by 23 equals 345.",
-    "q3_hash": "Photosynthesis is the process by which plants convert sunlight into energy."
-}
+parsing = [
+    ModelConfiguration(
+        id="gpt35",
+        model_provider="openai",
+        model_name="gpt-3.5-turbo",
+        temperature=0.0,
+        interface="langchain",
+        system_prompt="Parse and validate the response."
+    ),
+]
 
-# Answer templates (previously generated)
-templates = {
-    "q1_hash": GeographyAnswerTemplate,
-    "q2_hash": MathAnswerTemplate,
-    "q3_hash": ScienceAnswerTemplate
-}
+config = VerificationConfig(
+    answering_models=answering,
+    parsing_models=parsing,
+    replicate_count=1,
+    rubric_enabled=False,
+)
+```
 
-# Execute benchmark
-results = run_benchmark(questions, responses, templates)
+### Multiple answering/parsing models
 
-# Analyze results
-for question_id, result in results.items():
-    print(f"Question: {question_id}")
-    print(f"Result: {result}")
-    print(f"Result type: {type(result)}")
-    print("---")
+```python
+answering = [
+    ModelConfiguration(
+        id="gpt4",
+        model_provider="openai",
+        model_name="gpt-4",
+        temperature=0.1,
+        interface="langchain",
+        system_prompt="Be precise."
+    ),
+    ModelConfiguration(
+        id="sonnet",
+        model_provider="anthropic",
+        model_name="claude-3-sonnet",
+        temperature=0.1,
+        interface="langchain",
+        system_prompt="Be precise."
+    ),
+]
+
+parsing = [
+    ModelConfiguration(
+        id="gpt35",
+        model_provider="openai",
+        model_name="gpt-3.5-turbo",
+        temperature=0.0,
+        interface="langchain",
+        system_prompt="Parse strictly."
+    ),
+]
+
+config = VerificationConfig(answering_models=answering, parsing_models=parsing, replicate_count=2)
+```
+
+### OpenRouter and manual interfaces
+
+For `interface="openrouter"` or `interface="manual"`, `model_provider` may be empty.
+
+```python
+openrouter_cfg = ModelConfiguration(
+    id="o1-mini",
+    model_provider="",  # allowed
+    model_name="openrouter/o1-mini",
+    temperature=0.2,
+    interface="openrouter",
+    system_prompt="Be concise."
+)
+
+manual_cfg = ModelConfiguration(
+    id="human",
+    model_provider="",
+    model_name="human-expert",
+    temperature=0.0,
+    interface="manual",
+    system_prompt="N/A"
+)
+
+config = VerificationConfig(answering_models=[openrouter_cfg, manual_cfg], parsing_models=[parsing[0]])
+```
+
+### Rubric options
+
+```python
+from karenina.schemas.rubric_class import RubricTrait
+
+config = VerificationConfig(
+    answering_models=answering,
+    parsing_models=parsing,
+    replicate_count=3,
+    rubric_enabled=True,
+    rubric_trait_names=["clarity", "completeness"],  # optional filter
+)
+```
+
+Validation rules include: at least one answering and parsing model; required fields set; `model_provider` optional only for `openrouter`/`manual` interfaces.
+
+## Basic Benchmark Execution
+
+### Single Model Evaluation (with VerificationConfig)
+
+```python
+from karenina.benchmark import Benchmark
+from karenina.benchmark.models import ModelConfiguration, VerificationConfig
+
+# Minimal benchmark with one question
+bm = Benchmark.create("Exec Demo")
+qid = bm.add_question("What is the capital of France?", "Paris")
+
+# Configure models
+cfg = VerificationConfig(
+    answering_models=[
+        ModelConfiguration(
+            id="gpt4",
+            model_provider="openai",
+            model_name="gpt-4",
+            temperature=0.1,
+            interface="langchain",
+            system_prompt="Answer accurately."
+        )
+    ],
+    parsing_models=[
+        ModelConfiguration(
+            id="gpt35",
+            model_provider="openai",
+            model_name="gpt-3.5-turbo",
+            temperature=0.0,
+            interface="langchain",
+            system_prompt="Parse strictly."
+        )
+    ]
+)
+
+# Run verification on finished templates/questions as appropriate
+# Example: run for specific IDs
+results = bm.verify_questions([qid], cfg)
+print(results[qid].model_dump())
 ```
 
 ### Complete Pipeline Example
