@@ -62,7 +62,7 @@ class Benchmark:
         self._question_manager = QuestionManager(self._base)
         self._rubric_manager = RubricManager(self._base)
         self._template_manager = TemplateManager(self._base)
-        self._results_manager = ResultsManager(self._base, self._metadata_manager)
+        self._results_manager = ResultsManager(self._base)
         self._verification_manager = VerificationManager(self._base, self._rubric_manager)
         # Set the results manager on verification manager for auto-storage
         self._verification_manager._results_manager = self._results_manager
@@ -117,7 +117,7 @@ class Benchmark:
         instance._question_manager = QuestionManager(instance._base)
         instance._rubric_manager = RubricManager(instance._base)
         instance._template_manager = TemplateManager(instance._base)
-        instance._results_manager = ResultsManager(instance._base, instance._metadata_manager)
+        instance._results_manager = ResultsManager(instance._base)
         instance._verification_manager = VerificationManager(instance._base, instance._rubric_manager)
         # Set the results manager on verification manager for auto-storage
         instance._verification_manager._results_manager = instance._results_manager
@@ -465,13 +465,41 @@ class Benchmark:
         question_ids: list[str] | None = None,
         run_name: str | None = None,
         format: str = "json",
+        global_rubric: "Rubric | None" = None,
     ) -> str:
         """Export verification results in specified format."""
-        return self._results_manager.export_verification_results(question_ids, run_name, format)
+        return self._results_manager.export_verification_results(question_ids, run_name, format, global_rubric)
+
+    def export_verification_results_to_file(
+        self,
+        file_path: Path,
+        question_ids: list[str] | None = None,
+        run_name: str | None = None,
+        format: str | None = None,
+        global_rubric: "Rubric | None" = None,
+    ) -> None:
+        """Export verification results directly to a file."""
+        self._results_manager.export_results_to_file(file_path, question_ids, run_name, format, global_rubric)
+
+    def load_verification_results_from_file(
+        self,
+        file_path: Path,
+        run_name: str | None = None,
+    ) -> dict[str, VerificationResult]:
+        """Load verification results from a previously exported file."""
+        return self._results_manager.load_results_from_file(file_path, run_name)
 
     def get_verification_summary(self, run_name: str | None = None) -> dict[str, Any]:
         """Get summary statistics for verification results."""
         return self._results_manager.get_verification_summary(run_name)
+
+    def get_all_run_names(self) -> list[str]:
+        """Get all verification run names."""
+        return self._results_manager.get_all_run_names()
+
+    def get_results_statistics_by_run(self) -> dict[str, dict[str, Any]]:
+        """Get verification statistics for each run."""
+        return self._results_manager.get_results_statistics_by_run()
 
     # Metadata management methods - delegate to MetadataManager
     def get_custom_property(self, name: str) -> Any:
@@ -536,7 +564,7 @@ class Benchmark:
         instance._question_manager = QuestionManager(instance._base)
         instance._rubric_manager = RubricManager(instance._base)
         instance._template_manager = TemplateManager(instance._base)
-        instance._results_manager = ResultsManager(instance._base, instance._metadata_manager)
+        instance._results_manager = ResultsManager(instance._base)
         instance._verification_manager = VerificationManager(instance._base, instance._rubric_manager)
         # Set the results manager on verification manager for auto-storage
         instance._verification_manager._results_manager = instance._results_manager

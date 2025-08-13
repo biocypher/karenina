@@ -328,9 +328,8 @@ class VerificationManager:
         if progress_callback:
             progress_callback(100.0, "Verification complete")
 
-        # Auto-store results if run_name is provided
-        if run_name and self._results_manager:
-            self._results_manager.store_verification_results(results, run_name)
+        # Note: Results are not auto-stored in checkpoint anymore
+        # They remain in memory only and must be explicitly exported if needed
 
         return results
 
