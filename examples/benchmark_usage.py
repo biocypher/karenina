@@ -154,12 +154,125 @@ def main():
     if not is_valid:
         print(f"  Error: {msg}")
 
+    # ========================================
+    # 9. Metadata management
+    # ========================================
+    print("\nMetadata management:")
+
+    # Set benchmark metadata
+    loaded_benchmark.id = "python-knowledge-benchmark-v1"
+    loaded_benchmark.version = "1.1.0"
+    loaded_benchmark.creator = "Enhanced Example"
+
+    # Set custom properties
+    loaded_benchmark.set_multiple_custom_properties(
+        {
+            "domain": "computer_science",
+            "difficulty_level": "intermediate",
+            "estimated_duration_minutes": 30,
+            "requires_python_version": "3.8+",
+            "tags": ["python", "programming", "fundamentals"],
+            "license": "CC-BY-4.0",
+        }
+    )
+
+    print(f"  Benchmark ID: {loaded_benchmark.id}")
+    print(f"  Custom properties: {len(loaded_benchmark.get_all_custom_properties())}")
+    print(f"  Domain: {loaded_benchmark.get_custom_property('domain')}")
+    print(f"  Tags: {loaded_benchmark.get_custom_property('tags')}")
+
+    # Question metadata management
+    print("\nQuestion metadata management:")
+    q_ids = loaded_benchmark.get_question_ids()
+    if q_ids:
+        first_q_id = q_ids[0]
+
+        # Get comprehensive question metadata
+        q_metadata = loaded_benchmark.get_question_metadata(first_q_id)
+        print(f"  Question ID: {q_metadata['id']}")
+        print(f"  Question: {q_metadata['question'][:50]}...")
+        print(f"  Has custom author: {q_metadata['author'] is not None}")
+        print(f"  Finished: {q_metadata['finished']}")
+
+        # Update question metadata
+        loaded_benchmark.update_question_metadata(
+            first_q_id,
+            author={"name": "Enhanced Example", "role": "Demonstration"},
+            custom_metadata={"reviewed": True, "review_date": "2024-01-15", "complexity_score": 8.5},
+        )
+
+        # Access specific metadata
+        author = loaded_benchmark.get_question_author(first_q_id)
+        complexity = loaded_benchmark.get_question_custom_property(first_q_id, "complexity_score")
+        timestamps = loaded_benchmark.get_question_timestamps(first_q_id)
+
+        print(f"  Updated author: {author['name']} ({author['role']})")
+        print(f"  Complexity score: {complexity}")
+        print(f"  Created: {timestamps['created'][:19]}")  # Show date/time only
+
+    # ========================================
+    # 10. Demonstrate enhanced features
+    # ========================================
     print("\n" + "=" * 50)
-    print("Example complete! The benchmark file can be:")
-    print("  - Loaded in the Karenina GUI for visual editing")
-    print("  - Used for benchmark verification with LLMs")
-    print("  - Shared with others as a standard JSON-LD file")
-    print("  - Version controlled with Git")
+    print("ENHANCED FEATURES DEMO")
+    print("=" * 50)
+
+    # Magic methods and properties
+    print(f"String representation: {loaded_benchmark}")
+    print(f"Length (question count): {len(loaded_benchmark)}")
+    print(f"Is complete: {loaded_benchmark.is_complete}")
+    print(f"Progress: {loaded_benchmark.get_progress():.1f}%")
+
+    # Filtering and search
+    finished_questions = loaded_benchmark.filter_questions(finished=True)
+    questions_with_templates = loaded_benchmark.filter_questions(has_template=True)
+    python_questions = loaded_benchmark.search_questions("Python")
+
+    print("\nFiltering results:")
+    print(f"  Finished questions: {len(finished_questions)}")
+    print(f"  Questions with templates: {len(questions_with_templates)}")
+    print(f"  Questions mentioning 'Python': {len(python_questions)}")
+
+    # Health report
+    health = loaded_benchmark.get_health_report()
+    print("\nHealth Report:")
+    print(f"  Score: {health['health_score']}/100 ({health['health_status']})")
+    print(f"  Recommendations: {len(health['recommendations'])}")
+    for i, rec in enumerate(health["recommendations"][:3], 1):
+        print(f"    {i}. {rec}")
+
+    # Export capabilities
+    print("\nExport capabilities:")
+    summary = loaded_benchmark.get_summary()
+    print(f"  Summary keys: {list(summary.keys())}")
+
+    csv_export = loaded_benchmark.to_csv()
+    print(f"  CSV export: {len(csv_export)} characters")
+
+    # Template management
+    q_ids = loaded_benchmark.get_question_ids()
+    if q_ids:
+        first_q_id = q_ids[0]
+        print("\nTemplate management:")
+        print(f"  First question has template: {loaded_benchmark.has_template(first_q_id)}")
+        if loaded_benchmark.has_template(first_q_id):
+            template = loaded_benchmark.get_template(first_q_id)
+            print(f"  Template length: {len(template)} characters")
+
+    print("\n" + "=" * 50)
+    print("Example complete! The enhanced benchmark class provides:")
+    print("  ✓ Intuitive magic methods (__str__, __len__, __iter__, etc.)")
+    print("  ✓ Property accessors for common attributes")
+    print("  ✓ Comprehensive metadata management (benchmark + question level)")
+    print("  ✓ Custom properties system for extensible metadata")
+    print("  ✓ Author and source tracking for questions")
+    print("  ✓ Powerful filtering and search capabilities")
+    print("  ✓ Comprehensive health and readiness checks")
+    print("  ✓ Multiple export formats (dict, CSV, markdown)")
+    print("  ✓ Bulk operations and advanced template management")
+    print("  ✓ Template validation and syntax checking")
+    print("  ✓ Timestamp tracking and modification history")
+    print("  ✓ Full compatibility with GUI JSON-LD format")
     print("=" * 50)
 
 
