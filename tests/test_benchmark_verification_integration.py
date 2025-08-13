@@ -117,7 +117,7 @@ class TestBenchmarkVerificationIntegration:
         assert is_valid
         assert error_msg == "Benchmark is valid"
 
-    @patch("karenina.benchmark.benchmark.run_question_verification")
+    @patch("karenina.benchmark.core.verification_manager.run_question_verification")
     def test_run_verification_basic(self, mock_run_verification, sample_benchmark, sample_config):
         """Test basic run_verification functionality."""
         benchmark, (q1_id, q2_id, q3_id) = sample_benchmark
@@ -158,7 +158,7 @@ class TestBenchmarkVerificationIntegration:
         """Test single question verification."""
         benchmark, (q1_id, q2_id, q3_id) = sample_benchmark
 
-        with patch("karenina.benchmark.benchmark.run_question_verification") as mock_verify:
+        with patch("karenina.benchmark.core.verification_manager.run_question_verification") as mock_verify:
             mock_result = VerificationResult(
                 question_id=q1_id,
                 success=True,
@@ -180,7 +180,7 @@ class TestBenchmarkVerificationIntegration:
         """Test filtered verification."""
         benchmark, (q1_id, q2_id, q3_id) = sample_benchmark
 
-        with patch("karenina.benchmark.benchmark.run_question_verification") as mock_verify:
+        with patch("karenina.benchmark.core.verification_manager.run_question_verification") as mock_verify:
             mock_verify.return_value = {}
 
             # Test filtering by finished status
@@ -197,7 +197,7 @@ class TestBenchmarkVerificationIntegration:
         benchmark, (q1_id, q2_id, q3_id) = sample_benchmark
 
         # Dry run should not call actual verification
-        with patch("karenina.benchmark.benchmark.run_question_verification") as mock_verify:
+        with patch("karenina.benchmark.core.verification_manager.run_question_verification") as mock_verify:
             results = benchmark.verify_dry_run(sample_config)
 
             # Should not call actual verification
@@ -487,7 +487,7 @@ class TestBenchmarkVerificationIntegration:
                 question_ids=[q4_id],
             )
 
-    @patch("karenina.benchmark.benchmark.run_question_verification")
+    @patch("karenina.benchmark.core.verification_manager.run_question_verification")
     def test_verification_with_run_name_storage(self, mock_run_verification, sample_benchmark, sample_config):
         """Test that results are automatically stored when run_name is provided."""
         benchmark, (q1_id, q2_id, q3_id) = sample_benchmark
