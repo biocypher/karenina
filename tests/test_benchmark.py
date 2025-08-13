@@ -401,7 +401,12 @@ def test_statistics_and_summary():
     q1_id = benchmark.add_question("Q1", "A1")
     _ = benchmark.add_question("Q2", "A2")
 
-    template = "class Answer(BaseAnswer): pass"
+    template = """class Answer(BaseAnswer):
+    response: str = Field(description="The response")
+
+    def verify(self) -> bool:
+        return True
+"""
     benchmark.add_answer_template(q1_id, template)
     benchmark.mark_finished(q1_id)
 
@@ -431,7 +436,12 @@ def test_filtering_and_search():
     _ = benchmark.add_question("Explain Python decorators", "Functions that modify functions")
 
     # Add template to one question
-    template = "class Answer(BaseAnswer): pass"
+    template = """class Answer(BaseAnswer):
+    response: str = Field(description="The response")
+
+    def verify(self) -> bool:
+        return True
+"""
     benchmark.add_answer_template(q1_id, template)
     benchmark.mark_finished(q1_id)
 
@@ -488,7 +498,12 @@ def test_bulk_operations():
     assert len(finished) == 2
 
     # Test apply global template
-    template = "class Answer(BaseAnswer): response: str"
+    template = """class Answer(BaseAnswer):
+    response: str = Field(description="Global template response")
+
+    def verify(self) -> bool:
+        return True
+"""
     updated_ids = benchmark.apply_global_template(template)
     assert len(updated_ids) == 3  # All questions should get template
 
@@ -508,7 +523,12 @@ def test_template_management():
     assert not benchmark.has_template(q2_id)
 
     # Add template
-    template1 = "class Answer1(BaseAnswer): pass"
+    template1 = """class Answer(BaseAnswer):
+    response1: str = Field(description="First response")
+
+    def verify(self) -> bool:
+        return True
+"""
     benchmark.add_answer_template(q1_id, template1)
 
     assert benchmark.has_template(q1_id)
@@ -522,7 +542,12 @@ def test_template_management():
         benchmark.get_template(q2_id)
 
     # Test update_template (alias for add_answer_template)
-    template2 = "class Answer2(BaseAnswer): pass"
+    template2 = """class Answer(BaseAnswer):
+    response2: str = Field(description="Second response")
+
+    def verify(self) -> bool:
+        return True
+"""
     benchmark.update_template(q1_id, template2)
     assert benchmark.get_template(q1_id) == template2
 
@@ -603,7 +628,12 @@ def test_export_methods():
     benchmark = Benchmark.create("Export Test", "Test description")
 
     q1_id = benchmark.add_question("What is Python?", "A programming language")
-    template = "class Answer(BaseAnswer): response: str"
+    template = """class Answer(BaseAnswer):
+    response: str = Field(description="Global template response")
+
+    def verify(self) -> bool:
+        return True
+"""
     benchmark.add_answer_template(q1_id, template)
     benchmark.mark_finished(q1_id)
 
@@ -645,7 +675,12 @@ def test_validation_and_health():
     q1_id = benchmark.add_question("Q1", "A1")
 
     # Test template validation
-    valid_template = "class Answer(BaseAnswer): pass"
+    valid_template = """class Answer(BaseAnswer):
+    response: str = Field(description="Valid response")
+
+    def verify(self) -> bool:
+        return True
+"""
     invalid_template = "class Answer(BaseAnswer: pass"  # Missing closing paren
 
     benchmark.add_answer_template(q1_id, valid_template)
@@ -654,16 +689,14 @@ def test_validation_and_health():
     assert valid is True
     assert len(errors) == 0
 
-    # Test with invalid template
-    benchmark.add_answer_template(q1_id, invalid_template)
+    # Test with invalid template - should raise exception during add
+    with pytest.raises(ValueError, match="Invalid template"):
+        benchmark.add_answer_template(q1_id, invalid_template)
 
+    # Template should still be valid since invalid one was rejected
     valid, errors = benchmark.validate_templates()
-    assert valid is False
-    assert len(errors) == 1
-    assert "Syntax error" in errors[0]["error"]
-
-    # Fix template and test readiness
-    benchmark.add_answer_template(q1_id, valid_template)
+    assert valid is True
+    assert len(errors) == 0
     benchmark.mark_finished(q1_id)
 
     readiness = benchmark.check_readiness()
@@ -988,7 +1021,12 @@ def test_question_metadata_persistence():
     )
 
     # Add template to make it more complete
-    template = "class Answer(BaseAnswer): explanation: str = Field(description='Explanation')"
+    template = """class Answer(BaseAnswer):
+    explanation: str = Field(description='Explanation')
+
+    def verify(self) -> bool:
+        return True
+"""
     benchmark.add_answer_template(q_id, template)
     benchmark.mark_finished(q_id)
 

@@ -5,7 +5,7 @@ saving, and executing benchmarks in JSON-LD format.
 """
 
 import json
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -21,8 +21,8 @@ from ..utils.checkpoint_converter import (
     validate_jsonld_benchmark,
 )
 from .models import FinishedTemplate, VerificationConfig, VerificationResult
-
-# from .verification.validation import validate_answer_template  # TODO: Create this function
+from .verification.orchestrator import run_question_verification
+from .verification.validation import validate_answer_template
 
 
 class Benchmark:
@@ -202,10 +202,10 @@ class Benchmark:
         Raises:
             ValueError: If question_id not found or template is invalid
         """
-        # TODO: Validate the template when validate_answer_template function exists
-        # For now, do basic validation that it's not empty
-        if not template_code.strip():
-            raise ValueError("Invalid template: Template cannot be empty")
+        # Validate the template using the verification system
+        is_valid, error_msg, _ = validate_answer_template(template_code)
+        if not is_valid:
+            raise ValueError(f"Invalid template: {error_msg}")
 
         # Find the question in the checkpoint
         found = False
@@ -364,63 +364,834 @@ class Benchmark:
         if not is_valid:
             return False, error_msg
 
-        # Validate all templates
+        # Validate all templates using the verification system
         for q_id, q_data in self._questions_cache.items():
             template_code = q_data.get("answer_template")
-            if template_code is not None and not template_code.strip():
-                return False, f"Invalid template for {q_id}: Template cannot be empty"
+            if template_code is not None:
+                is_valid, error_msg_or_none, _ = validate_answer_template(template_code)
+                error_msg = error_msg_or_none or "Unknown validation error"
+                if not is_valid:
+                    return False, f"Invalid template for {q_id}: {error_msg}"
 
         return True, "Benchmark is valid"
 
     # Integration with existing verification system
-    def run_verification(
+    def verify_question(
+        self,
+        question_id: str,
+        config: VerificationConfig,
+        run_name: str | None = None,
+        job_id: str | None = None,
+    ) -> dict[str, VerificationResult]:
+        """
+        Verify a single question.
+
+        Args:
+            question_id: The question ID to verify
+            config: Verification configuration
+            run_name: Optional run name for tracking
+            job_id: Optional job ID for tracking
+
+        Returns:
+            Dictionary mapping result keys to VerificationResult objects
+
+        Raises:
+            ValueError: If question not found or not ready for verification
+        """
+        return self.run_verification(
+            config=config,
+            question_ids=[question_id],
+            run_name=run_name,
+            job_id=job_id,
+        )
+
+    def verify_questions(
+        self,
+        question_ids: list[str],
+        config: VerificationConfig,
+        run_name: str | None = None,
+        job_id: str | None = None,
+        progress_callback: Callable[[float, str], None] | None = None,
+    ) -> dict[str, VerificationResult]:
+        """
+        Verify multiple specific questions.
+
+        Args:
+            question_ids: List of question IDs to verify
+            config: Verification configuration
+            run_name: Optional run name for tracking
+            job_id: Optional job ID for tracking
+            progress_callback: Optional callback for progress updates
+
+        Returns:
+            Dictionary mapping result keys to VerificationResult objects
+        """
+        return self.run_verification(
+            config=config,
+            question_ids=question_ids,
+            run_name=run_name,
+            job_id=job_id,
+            progress_callback=progress_callback,
+        )
+
+    def verify_filtered(
+        self,
+        config: VerificationConfig,
+        finished: bool | None = True,
+        has_template: bool | None = True,
+        has_rubric: bool | None = None,
+        author: str | None = None,
+        run_name: str | None = None,
+        job_id: str | None = None,
+        progress_callback: Callable[[float, str], None] | None = None,
+    ) -> dict[str, VerificationResult]:
+        """
+        Verify questions matching specific criteria.
+
+        Args:
+            config: Verification configuration
+            finished: Filter by finished status (True/False/None for all)
+            has_template: Filter by template existence (True/False/None for all)
+            has_rubric: Filter by rubric existence (True/False/None for all)
+            author: Filter by author name (None for all)
+            run_name: Optional run name for tracking
+            job_id: Optional job ID for tracking
+            progress_callback: Optional callback for progress updates
+
+        Returns:
+            Dictionary mapping result keys to VerificationResult objects
+        """
+        # Get filtered questions
+        filtered_questions = self.filter_questions(
+            finished=finished,
+            has_template=has_template,
+            has_rubric=has_rubric,
+            author=author,
+        )
+
+        question_ids = [q["id"] for q in filtered_questions]
+
+        return self.run_verification(
+            config=config,
+            question_ids=question_ids,
+            run_name=run_name,
+            job_id=job_id,
+            progress_callback=progress_callback,
+        )
+
+    def verify_all_finished(
+        self,
+        config: VerificationConfig,
+        run_name: str | None = None,
+        job_id: str | None = None,
+        progress_callback: Callable[[float, str], None] | None = None,
+    ) -> dict[str, VerificationResult]:
+        """
+        Verify all finished questions in the benchmark.
+
+        Args:
+            config: Verification configuration
+            run_name: Optional run name for tracking
+            job_id: Optional job ID for tracking
+            progress_callback: Optional callback for progress updates
+
+        Returns:
+            Dictionary mapping result keys to VerificationResult objects
+        """
+        return self.run_verification(
+            config=config,
+            question_ids=None,  # This defaults to all finished questions
+            run_name=run_name,
+            job_id=job_id,
+            progress_callback=progress_callback,
+        )
+
+    def verify_custom(
+        self,
+        question_selector: Callable[[dict[str, Any]], bool],
+        config: VerificationConfig,
+        run_name: str | None = None,
+        job_id: str | None = None,
+        progress_callback: Callable[[float, str], None] | None = None,
+    ) -> dict[str, VerificationResult]:
+        """
+        Verify questions selected by a custom function.
+
+        Args:
+            question_selector: Function that takes question data and returns bool
+            config: Verification configuration
+            run_name: Optional run name for tracking
+            job_id: Optional job ID for tracking
+            progress_callback: Optional callback for progress updates
+
+        Returns:
+            Dictionary mapping result keys to VerificationResult objects
+        """
+        # Select questions using the custom selector
+        selected_questions = []
+        for q_data in self._questions_cache.values():
+            if question_selector(q_data):
+                selected_questions.append(q_data["id"])
+
+        return self.run_verification(
+            config=config,
+            question_ids=selected_questions,
+            run_name=run_name,
+            job_id=job_id,
+            progress_callback=progress_callback,
+        )
+
+    def verify_dry_run(
         self,
         config: VerificationConfig,  # noqa: ARG002
         question_ids: list[str] | None = None,
+    ) -> dict[str, bool]:
+        """
+        Perform a dry run verification (validate without executing).
+
+        Args:
+            config: Verification configuration to validate
+            question_ids: Optional list of question IDs (default: all finished)
+
+        Returns:
+            Dictionary mapping question IDs to readiness status (True/False)
+        """
+        # If no question IDs provided, use all finished questions
+        if question_ids is None:
+            question_ids = [q_id for q_id, q in self._questions_cache.items() if q.get("finished", False)]
+
+        results = {}
+
+        for q_id in question_ids:
+            try:
+                # Check if question exists
+                if q_id not in self._questions_cache:
+                    results[q_id] = False
+                    continue
+
+                q_data = self._questions_cache[q_id]
+                template_code = q_data.get("answer_template")
+
+                # Check if template exists
+                if not template_code:
+                    results[q_id] = False
+                    continue
+
+                # Validate template
+                is_valid, _, _ = validate_answer_template(template_code)
+                results[q_id] = is_valid
+
+            except Exception:
+                results[q_id] = False
+
+        return results
+
+    def run_verification(
+        self,
+        config: VerificationConfig,
+        question_ids: list[str] | None = None,
+        run_name: str | None = None,
+        job_id: str | None = None,
+        progress_callback: Callable[[float, str], None] | None = None,
     ) -> dict[str, VerificationResult]:
         """
         Run verification on the benchmark using existing execution system.
 
         Args:
             config: Verification configuration
-            question_ids: Optional list of question IDs to verify (default: all)
+            question_ids: Optional list of question IDs to verify (default: all finished)
+            run_name: Optional run name for tracking
+            job_id: Optional job ID for tracking
+            progress_callback: Optional callback for progress updates
 
         Returns:
             Dictionary mapping question IDs to VerificationResult objects
         """
-        # TODO: This function doesn't exist yet - create a placeholder
-        # from .verification.orchestrator import run_question_verification
-
+        # If no question IDs provided, verify all finished questions
         if question_ids is None:
             question_ids = [q_id for q_id, q in self._questions_cache.items() if q.get("finished", False)]
 
-        results: dict[str, VerificationResult] = {}
+        # Validate that all requested questions exist and are ready
         for q_id in question_ids:
             if q_id not in self._questions_cache:
-                continue
+                raise ValueError(f"Question not found: {q_id}")
 
             q_data = self._questions_cache[q_id]
             template_code = q_data.get("answer_template")
 
             if not template_code:
-                continue
+                raise ValueError(f"Question {q_id} has no answer template")
 
-            # Create placeholder verification result
-            # TODO: Replace with actual verification call when run_question_verification exists
-            result = VerificationResult(
-                question_id=q_id,
-                success=True,
-                question_text=q_data["question"],
-                raw_llm_response="Mock response for placeholder",
-                answering_model="placeholder",
-                parsing_model="placeholder",
-                execution_time=0.0,
-                timestamp=datetime.now().isoformat(),
-            )
+            # Validate template
+            is_valid, error_msg, _ = validate_answer_template(template_code)
+            if not is_valid:
+                raise ValueError(f"Invalid template for question {q_id}: {error_msg}")
 
-            results[q_id] = result
+        results: dict[str, VerificationResult] = {}
+        total_questions = len(question_ids)
+
+        for i, q_id in enumerate(question_ids):
+            q_data = self._questions_cache[q_id]
+            template_code = q_data["answer_template"]
+
+            # Update progress
+            if progress_callback:
+                progress = (i / total_questions) * 100
+                progress_callback(progress, f"Verifying question {q_id}")
+
+            # Merge global and question-specific rubrics
+            rubric = self._get_merged_rubric_for_question(q_id)
+
+            try:
+                # Run verification for this question using the orchestrator
+                question_results = run_question_verification(
+                    question_id=q_id,
+                    question_text=q_data["question"],
+                    template_code=template_code,
+                    config=config,
+                    rubric=rubric,
+                )
+
+                # Store all results from this question (may be multiple due to model combinations)
+                results.update(question_results)
+
+            except Exception as e:
+                # Create error result for this question
+                error_result = VerificationResult(
+                    question_id=q_id,
+                    success=False,
+                    error=f"Verification failed: {str(e)}",
+                    question_text=q_data["question"],
+                    raw_llm_response="",
+                    answering_model="unknown",
+                    parsing_model="unknown",
+                    execution_time=0.0,
+                    timestamp=datetime.now().isoformat(),
+                    run_name=run_name,
+                    job_id=job_id,
+                )
+                results[q_id] = error_result
+
+        # Final progress update
+        if progress_callback:
+            progress_callback(100.0, "Verification complete")
+
+        # Store results in benchmark metadata if we have a run name
+        if run_name and results:
+            self.store_verification_results(results, run_name)
 
         return results
+
+    def _get_merged_rubric_for_question(self, question_id: str) -> Rubric | None:
+        """
+        Get merged rubric for a question (global + question-specific traits).
+
+        Args:
+            question_id: The question ID
+
+        Returns:
+            Merged rubric with both global and question-specific traits, or None if no rubrics
+        """
+        # Get global rubric traits
+        global_traits = extract_global_rubric_from_benchmark(self._checkpoint) or []
+
+        # Get question-specific rubric traits
+        question_traits = []
+        if question_id in self._questions_cache:
+            q_data = self._questions_cache[question_id]
+            question_rubric = q_data.get("question_rubric")
+            if question_rubric:
+                question_traits = question_rubric
+
+        # Merge traits (question-specific traits override global ones with same name)
+        merged_traits = list(global_traits)  # Start with global traits
+
+        # Add question-specific traits, replacing any with the same name
+        for q_trait in question_traits:
+            # Remove any global trait with the same name
+            merged_traits = [t for t in merged_traits if t.name != q_trait.name]
+            # Add the question-specific trait
+            merged_traits.append(q_trait)
+
+        # Return merged rubric if we have any traits
+        if merged_traits:
+            return Rubric(traits=merged_traits)
+
+        return None
+
+    # Verification result storage and querying
+    def store_verification_results(
+        self,
+        results: dict[str, VerificationResult],
+        run_name: str | None = None,
+    ) -> None:
+        """
+        Store verification results in the benchmark metadata.
+
+        Args:
+            results: Dictionary of verification results to store
+            run_name: Optional run name for organizing results
+        """
+        # Store results in benchmark custom properties
+        results_data = {}
+        for result_key, result in results.items():
+            results_data[result_key] = result.model_dump()
+
+        # Create a timestamp-based key if no run name provided
+        if run_name is None:
+            run_name = f"verification_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+        # Store in benchmark custom properties
+        verification_results_key = f"verification_results_{run_name}"
+        self.set_custom_property(verification_results_key, results_data)
+
+    def get_verification_results(
+        self,
+        question_ids: list[str] | None = None,
+        run_name: str | None = None,
+    ) -> dict[str, VerificationResult]:
+        """
+        Get verification results for specific questions and/or runs.
+
+        Args:
+            question_ids: Optional list of question IDs to filter by
+            run_name: Optional run name to filter by
+
+        Returns:
+            Dictionary of verification results
+        """
+        all_results = {}
+
+        # Get all verification result properties
+        all_props = self.get_all_custom_properties()
+
+        for prop_name, prop_value in all_props.items():
+            if prop_name.startswith("verification_results_"):
+                # Check if this matches the run name filter
+                if run_name is not None:
+                    expected_key = f"verification_results_{run_name}"
+                    if prop_name != expected_key:
+                        continue
+
+                # Parse the stored results
+                try:
+                    stored_results = prop_value
+                    if isinstance(stored_results, dict):
+                        for result_key, result_data in stored_results.items():
+                            # Reconstruct VerificationResult object
+                            if isinstance(result_data, dict):
+                                verification_result = VerificationResult(**result_data)
+
+                                # Check if this matches question ID filter
+                                if question_ids is not None and verification_result.question_id not in question_ids:
+                                    continue
+
+                                all_results[result_key] = verification_result
+                except Exception:
+                    # Skip malformed result data
+                    continue
+
+        return all_results
+
+    def get_verification_history(self, question_id: str | None = None) -> dict[str, dict[str, VerificationResult]]:
+        """
+        Get verification history organized by run name.
+
+        Args:
+            question_id: Optional question ID to filter by
+
+        Returns:
+            Dictionary mapping run names to their results
+        """
+        history = {}
+
+        # Get all verification result properties
+        all_props = self.get_all_custom_properties()
+
+        for prop_name, prop_value in all_props.items():
+            if prop_name.startswith("verification_results_"):
+                run_name = prop_name[len("verification_results_") :]
+
+                try:
+                    stored_results = prop_value
+                    if isinstance(stored_results, dict):
+                        run_results = {}
+                        for result_key, result_data in stored_results.items():
+                            if isinstance(result_data, dict):
+                                verification_result = VerificationResult(**result_data)
+
+                                # Check if this matches question ID filter
+                                if question_id is not None and verification_result.question_id != question_id:
+                                    continue
+
+                                run_results[result_key] = verification_result
+
+                        if run_results:  # Only add if we have results
+                            history[run_name] = run_results
+                except Exception:
+                    # Skip malformed result data
+                    continue
+
+        return history
+
+    def clear_verification_results(
+        self,
+        question_ids: list[str] | None = None,
+        run_name: str | None = None,
+    ) -> int:
+        """
+        Clear verification results.
+
+        Args:
+            question_ids: Optional list of question IDs to clear (None = all)
+            run_name: Optional run name to clear (None = all runs)
+
+        Returns:
+            Number of result entries that were cleared
+        """
+        cleared_count = 0
+
+        # Get all verification result properties
+        all_props = self.get_all_custom_properties()
+        props_to_remove = []
+        props_to_update = {}
+
+        for prop_name, prop_value in all_props.items():
+            if prop_name.startswith("verification_results_"):
+                # Check if this matches the run name filter
+                if run_name is not None:
+                    expected_key = f"verification_results_{run_name}"
+                    if prop_name != expected_key:
+                        continue
+
+                try:
+                    stored_results = prop_value
+                    if isinstance(stored_results, dict):
+                        updated_results = {}
+
+                        for result_key, result_data in stored_results.items():
+                            if isinstance(result_data, dict):
+                                verification_result = VerificationResult(**result_data)
+
+                                # Check if this should be cleared
+                                should_clear = False
+                                if question_ids is None:
+                                    should_clear = True  # Clear all
+                                elif verification_result.question_id in question_ids:
+                                    should_clear = True
+
+                                if should_clear:
+                                    cleared_count += 1
+                                else:
+                                    updated_results[result_key] = result_data
+
+                        # Update or remove the property
+                        if not updated_results:
+                            props_to_remove.append(prop_name)
+                        else:
+                            props_to_update[prop_name] = updated_results
+                except Exception:
+                    # Skip malformed result data
+                    continue
+
+        # Apply the changes
+        for prop_name in props_to_remove:
+            self.remove_custom_property(prop_name)
+
+        for prop_name, updated_value in props_to_update.items():
+            self.set_custom_property(prop_name, updated_value)
+
+        return cleared_count
+
+    def export_verification_results(
+        self,
+        question_ids: list[str] | None = None,
+        run_name: str | None = None,
+        format: str = "json",
+    ) -> str:
+        """
+        Export verification results in specified format.
+
+        Args:
+            question_ids: Optional list of question IDs to export
+            run_name: Optional run name to export
+            format: Export format ("json" or "csv")
+
+        Returns:
+            Exported data as string
+
+        Raises:
+            ValueError: If format is not supported
+        """
+        results = self.get_verification_results(question_ids, run_name)
+
+        if format.lower() == "json":
+            # Convert to JSON
+            export_data = {}
+            for result_key, result in results.items():
+                export_data[result_key] = result.model_dump()
+            return json.dumps(export_data, indent=2, ensure_ascii=False)
+
+        elif format.lower() == "csv":
+            # Convert to CSV
+            import csv
+            from io import StringIO
+
+            output = StringIO()
+            writer = csv.writer(output)
+
+            # Header
+            if results:
+                # Get field names from first result
+                sample_result = next(iter(results.values()))
+                fieldnames = list(sample_result.model_dump().keys())
+                writer.writerow(["result_key"] + fieldnames)
+
+                # Data rows
+                for result_key, result in results.items():
+                    row_data = [result_key]
+                    result_dict = result.model_dump()
+                    for field in fieldnames:
+                        value = result_dict.get(field, "")
+                        # Convert complex objects to string
+                        if isinstance(value, dict | list):
+                            value = json.dumps(value)
+                        row_data.append(str(value))
+                    writer.writerow(row_data)
+
+            return output.getvalue()
+
+        else:
+            raise ValueError(f"Unsupported export format: {format}. Supported formats: json, csv")
+
+    # Advanced verification methods
+    def verify_with_mixed_configs(
+        self,
+        question_configs: dict[str, VerificationConfig],
+        progress_callback: Callable[[float, str], None] | None = None,
+    ) -> dict[str, dict[str, VerificationResult]]:
+        """
+        Verify different questions with different configurations.
+
+        Args:
+            question_configs: Dictionary mapping question IDs to their configurations
+            progress_callback: Optional callback for progress updates
+
+        Returns:
+            Dictionary mapping question IDs to their verification results
+        """
+        all_results = {}
+        total_questions = len(question_configs)
+
+        for i, (question_id, config) in enumerate(question_configs.items()):
+            # Update progress
+            if progress_callback:
+                progress = (i / total_questions) * 100
+                progress_callback(progress, f"Verifying question {question_id} with custom config")
+
+            try:
+                question_results = self.verify_question(
+                    question_id=question_id,
+                    config=config,
+                    run_name=f"mixed_config_{question_id}",
+                )
+                all_results[question_id] = question_results
+            except Exception as e:
+                # Create error result
+                error_result = VerificationResult(
+                    question_id=question_id,
+                    success=False,
+                    error=f"Mixed config verification failed: {str(e)}",
+                    question_text=self._questions_cache.get(question_id, {}).get("question", ""),
+                    raw_llm_response="",
+                    answering_model="unknown",
+                    parsing_model="unknown",
+                    execution_time=0.0,
+                    timestamp=datetime.now().isoformat(),
+                )
+                all_results[question_id] = {f"{question_id}_error": error_result}
+
+        # Final progress update
+        if progress_callback:
+            progress_callback(100.0, "Mixed config verification complete")
+
+        return all_results
+
+    def verify_comparative(
+        self,
+        question_ids: list[str],
+        configs: list[VerificationConfig],
+        run_names: list[str],
+        progress_callback: Callable[[float, str], None] | None = None,
+    ) -> dict[str, dict[str, VerificationResult]]:
+        """
+        Run same questions with multiple configurations for comparison.
+
+        Args:
+            question_ids: List of question IDs to verify
+            configs: List of configurations to test
+            run_names: List of run names for each configuration
+            progress_callback: Optional callback for progress updates
+
+        Returns:
+            Dictionary mapping run names to their results
+        """
+        if len(configs) != len(run_names):
+            raise ValueError("Number of configs must match number of run names")
+
+        all_results = {}
+        total_runs = len(configs)
+
+        for i, (config, run_name) in enumerate(zip(configs, run_names, strict=False)):
+            # Update progress
+            if progress_callback:
+                progress = (i / total_runs) * 100
+                progress_callback(progress, f"Running comparative verification: {run_name}")
+
+            try:
+                run_results = self.verify_questions(
+                    question_ids=question_ids,
+                    config=config,
+                    run_name=run_name,
+                )
+                all_results[run_name] = run_results
+            except Exception as e:
+                # Create error results for this run
+                error_results = {}
+                for q_id in question_ids:
+                    error_result = VerificationResult(
+                        question_id=q_id,
+                        success=False,
+                        error=f"Comparative verification failed: {str(e)}",
+                        question_text=self._questions_cache.get(q_id, {}).get("question", ""),
+                        raw_llm_response="",
+                        answering_model="unknown",
+                        parsing_model="unknown",
+                        execution_time=0.0,
+                        timestamp=datetime.now().isoformat(),
+                        run_name=run_name,
+                    )
+                    error_results[f"{q_id}_error"] = error_result
+                all_results[run_name] = error_results
+
+        # Final progress update
+        if progress_callback:
+            progress_callback(100.0, "Comparative verification complete")
+
+        return all_results
+
+    def verify_progressive(
+        self,
+        config: VerificationConfig,
+        batch_size: int = 5,
+        run_name: str | None = None,
+        resume_from: str | None = None,
+        progress_callback: Callable[[float, str], None] | None = None,
+    ) -> dict[str, VerificationResult]:
+        """
+        Verify questions in batches with ability to resume from interruptions.
+
+        Args:
+            config: Verification configuration
+            batch_size: Number of questions to verify per batch
+            run_name: Optional run name for tracking
+            resume_from: Optional question ID to resume from
+            progress_callback: Optional callback for progress updates
+
+        Returns:
+            Dictionary mapping result keys to VerificationResult objects
+        """
+        # Get all finished questions
+        finished_questions = [q_id for q_id, q in self._questions_cache.items() if q.get("finished", False)]
+
+        # If resuming, find the starting point
+        start_index = 0
+        if resume_from and resume_from in finished_questions:
+            start_index = finished_questions.index(resume_from)
+
+        # Process in batches
+        all_results = {}
+        remaining_questions = finished_questions[start_index:]
+        total_batches = (len(remaining_questions) + batch_size - 1) // batch_size
+
+        for batch_num in range(total_batches):
+            start_idx = batch_num * batch_size
+            end_idx = min(start_idx + batch_size, len(remaining_questions))
+            batch_questions = remaining_questions[start_idx:end_idx]
+
+            # Update progress
+            if progress_callback:
+                batch_progress = (batch_num / total_batches) * 100
+                progress_callback(batch_progress, f"Processing batch {batch_num + 1}/{total_batches}")
+
+            try:
+                batch_results = self.verify_questions(
+                    question_ids=batch_questions,
+                    config=config,
+                    run_name=f"{run_name}_batch_{batch_num + 1}" if run_name else None,
+                )
+                all_results.update(batch_results)
+
+                # Save intermediate results after each batch
+                if run_name:
+                    self.store_verification_results(batch_results, f"{run_name}_partial")
+
+            except Exception as e:
+                # Log the error but continue with remaining batches
+                if progress_callback:
+                    progress_callback(
+                        (batch_num / total_batches) * 100, f"Batch {batch_num + 1} failed: {str(e)[:50]}..."
+                    )
+                continue
+
+        # Final progress update
+        if progress_callback:
+            progress_callback(100.0, "Progressive verification complete")
+
+        return all_results
+
+    def get_verification_summary(self, run_name: str | None = None) -> dict[str, Any]:
+        """
+        Get summary statistics for verification results.
+
+        Args:
+            run_name: Optional run name to filter by
+
+        Returns:
+            Dictionary with verification statistics
+        """
+        results = self.get_verification_results(run_name=run_name)
+
+        if not results:
+            return {
+                "total_results": 0,
+                "successful_count": 0,
+                "failed_count": 0,
+                "success_rate": 0.0,
+                "unique_questions": 0,
+                "average_execution_time": 0.0,
+                "model_combinations": 0,
+            }
+
+        successful_count = sum(1 for r in results.values() if r.success)
+        failed_count = len(results) - successful_count
+        unique_questions = len({r.question_id for r in results.values()})
+        total_execution_time = sum(r.execution_time for r in results.values() if r.execution_time)
+        average_execution_time = total_execution_time / len(results) if results else 0.0
+
+        # Count unique model combinations
+        model_combinations = len({f"{r.answering_model}:{r.parsing_model}" for r in results.values()})
+
+        return {
+            "total_results": len(results),
+            "successful_count": successful_count,
+            "failed_count": failed_count,
+            "success_rate": (successful_count / len(results)) * 100 if results else 0.0,
+            "unique_questions": unique_questions,
+            "average_execution_time": round(average_execution_time, 2),
+            "total_execution_time": round(total_execution_time, 2),
+            "model_combinations": model_combinations,
+        }
 
     # Private helper methods
     def _rebuild_cache(self) -> None:
