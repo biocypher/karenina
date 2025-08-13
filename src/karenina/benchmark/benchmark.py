@@ -7,6 +7,7 @@ This is the refactored version that uses the core submodule managers
 while maintaining 100% backward compatibility.
 """
 
+import json
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -14,7 +15,9 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from ..schemas.checkpoint import SchemaOrgQuestion
 
+from ..answers.generator import generate_answer_template, load_answer_templates_from_json
 from ..schemas.rubric_class import Rubric, RubricTrait
+from ..utils.code_parser import extract_and_combine_codeblocks
 from .core import (
     BenchmarkBase,
     ExportManager,
@@ -295,6 +298,273 @@ class Benchmark:
     def validate_templates(self) -> tuple[bool, list[dict[str, str]]]:
         """Validate all templates are valid Python code."""
         return self._template_manager.validate_templates()
+
+    # Template generation methods using LLMs
+    def generate_template_for_question(
+        self,
+        question_id: str,
+        model: str = "gemini-2.0-flash",
+        model_provider: str = "google_genai",
+        temperature: float = 0,
+        custom_system_prompt: str | None = None,
+        interface: str = "langchain",
+        force_regenerate: bool = False,
+    ) -> dict[str, Any]:
+        """
+        Generate an answer template for a specific question using LLM.
+
+        Args:
+            question_id: The question ID to generate template for
+            model: The model to use for generation (default: gemini-2.0-flash)
+            model_provider: The provider of the model (default: google_genai)
+            temperature: The temperature for generation (default: 0)
+            custom_system_prompt: Optional custom system prompt
+            interface: The interface to use (default: langchain)
+            force_regenerate: If True, regenerate even if template exists (default: False)
+
+        Returns:
+            Dict with 'success', 'template_code', 'error', and 'raw_response' keys
+
+        Raises:
+            ValueError: If question_id not found
+        """
+        # Check if question exists
+        if question_id not in self._questions_cache:
+            raise ValueError(f"Question not found: {question_id}")
+
+        # Check if template already exists and force_regenerate is False
+        if not force_regenerate and self.has_template(question_id):
+            return {
+                "success": True,
+                "template_code": self.get_template(question_id),
+                "error": "Template already exists (use force_regenerate=True to override)",
+                "raw_response": None,
+                "skipped": True,
+            }
+
+        try:
+            question_data = self._questions_cache[question_id]
+            question_text = question_data.get("question", "")
+            raw_answer = question_data.get("raw_answer", "")
+
+            # Generate template using the generator function
+            raw_template_response = generate_answer_template(
+                question=question_text,
+                raw_answer=raw_answer,
+                model=model,
+                model_provider=model_provider,
+                temperature=temperature,
+                custom_system_prompt=custom_system_prompt,
+                interface=interface,
+            )
+
+            # Extract code blocks from the response
+            template_code = extract_and_combine_codeblocks(raw_template_response)
+
+            # If no code blocks found, return error
+            if not template_code.strip():
+                return {
+                    "success": False,
+                    "template_code": "",
+                    "error": "No valid code blocks found in LLM response",
+                    "raw_response": raw_template_response,
+                    "skipped": False,
+                }
+
+            # Save the template to the benchmark
+            self.add_answer_template(question_id, template_code)
+            error_msg = None
+
+            return {
+                "success": True,
+                "template_code": template_code,
+                "error": error_msg,
+                "raw_response": raw_template_response,
+                "skipped": False,
+            }
+
+        except Exception as e:
+            return {
+                "success": False,
+                "template_code": "",
+                "error": str(e),
+                "raw_response": None,
+                "skipped": False,
+            }
+
+    def generate_templates(
+        self,
+        question_ids: list[str],
+        model: str = "gemini-2.0-flash",
+        model_provider: str = "google_genai",
+        temperature: float = 0,
+        custom_system_prompt: str | None = None,
+        interface: str = "langchain",
+        force_regenerate: bool = False,
+        progress_callback: Callable[[float, str], None] | None = None,
+    ) -> dict[str, dict[str, Any]]:
+        """
+        Generate templates for multiple questions using LLM.
+
+        Args:
+            question_ids: List of question IDs to generate templates for
+            model: The model to use for generation
+            model_provider: The provider of the model
+            temperature: The temperature for generation
+            custom_system_prompt: Optional custom system prompt
+            interface: The interface to use
+            force_regenerate: If True, regenerate even if templates exist
+            progress_callback: Optional callback for progress updates (percentage, message)
+
+        Returns:
+            Dict mapping question_id to generation result dict
+
+        Raises:
+            ValueError: If any question_id not found
+        """
+        # Validate all question IDs first
+        invalid_ids = [qid for qid in question_ids if qid not in self._questions_cache]
+        if invalid_ids:
+            raise ValueError(f"Questions not found: {invalid_ids}")
+
+        results = {}
+        total_questions = len(question_ids)
+
+        for i, question_id in enumerate(question_ids):
+            # Update progress
+            if progress_callback:
+                percentage = (i / total_questions) * 100
+                question_text = self._questions_cache[question_id].get("question", "")
+                message = f"Processing: {question_text[:50]}..."
+                progress_callback(percentage, message)
+
+            # Generate template for this question
+            result = self.generate_template_for_question(
+                question_id=question_id,
+                model=model,
+                model_provider=model_provider,
+                temperature=temperature,
+                custom_system_prompt=custom_system_prompt,
+                interface=interface,
+                force_regenerate=force_regenerate,
+            )
+            results[question_id] = result
+
+        # Final progress update
+        if progress_callback:
+            progress_callback(100.0, "Template generation completed")
+
+        return results
+
+    def generate_all_templates(
+        self,
+        model: str = "gemini-2.0-flash",
+        model_provider: str = "google_genai",
+        temperature: float = 0,
+        custom_system_prompt: str | None = None,
+        interface: str = "langchain",
+        force_regenerate: bool = False,
+        progress_callback: Callable[[float, str], None] | None = None,
+        only_missing: bool = True,
+    ) -> dict[str, dict[str, Any]]:
+        """
+        Generate templates for all questions in the benchmark using LLM.
+
+        Args:
+            model: The model to use for generation
+            model_provider: The provider of the model
+            temperature: The temperature for generation
+            custom_system_prompt: Optional custom system prompt
+            interface: The interface to use
+            force_regenerate: If True, regenerate even if templates exist
+            progress_callback: Optional callback for progress updates
+            only_missing: If True, only generate for questions without templates
+
+        Returns:
+            Dict mapping question_id to generation result dict
+        """
+        if only_missing and not force_regenerate:
+            # Get questions that don't have templates
+            question_ids = self.get_missing_templates()
+        else:
+            # Get all question IDs
+            question_ids = self.get_question_ids()
+
+        if not question_ids:
+            return {}
+
+        return self.generate_templates(
+            question_ids=question_ids,
+            model=model,
+            model_provider=model_provider,
+            temperature=temperature,
+            custom_system_prompt=custom_system_prompt,
+            interface=interface,
+            force_regenerate=force_regenerate,
+            progress_callback=progress_callback,
+        )
+
+    def export_generated_templates(self, file_path: Path) -> None:
+        """
+        Export all generated templates to a JSON file.
+
+        Args:
+            file_path: Path where to save the JSON file
+
+        The exported format is compatible with load_answer_templates_from_json.
+        """
+        templates_dict = {}
+
+        for question_id in self.get_question_ids():
+            if self.has_template(question_id):
+                templates_dict[question_id] = self.get_template(question_id)
+
+        with file_path.open("w") as f:
+            json.dump(templates_dict, f, indent=2)
+
+    def import_generated_templates(self, file_path: Path, force_overwrite: bool = False) -> dict[str, bool]:
+        """
+        Import templates from a JSON file generated by export_generated_templates.
+
+        Args:
+            file_path: Path to the JSON file to load
+            force_overwrite: If True, overwrite existing templates
+
+        Returns:
+            Dict mapping question_id to success status (True if imported, False if skipped)
+
+        Raises:
+            FileNotFoundError: If file doesn't exist
+            ValueError: If file format is invalid
+        """
+        # Load templates using the generator function
+        answer_templates = load_answer_templates_from_json(str(file_path), return_blocks=True)
+        if isinstance(answer_templates, tuple):
+            _, code_blocks = answer_templates
+        else:
+            raise ValueError("Unable to load code blocks from JSON file")
+
+        results = {}
+
+        for question_id, template_code in code_blocks.items():
+            # Check if question exists in benchmark
+            if question_id not in self._questions_cache:
+                results[question_id] = False
+                continue
+
+            # Check if template already exists
+            if not force_overwrite and self.has_template(question_id):
+                results[question_id] = False
+                continue
+
+            try:
+                # Add template to benchmark
+                self.add_answer_template(question_id, template_code)
+                results[question_id] = True
+            except Exception:
+                results[question_id] = False
+
+        return results
 
     # Rubric management methods - delegate to RubricManager
     def add_global_rubric_trait(self, trait: RubricTrait) -> None:
