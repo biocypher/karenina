@@ -1,8 +1,11 @@
 """Data models for benchmark verification system."""
 
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from ..utils.async_utils import AsyncConfig
 
 # Interface constants
 INTERFACE_OPENROUTER = "openrouter"
@@ -169,6 +172,7 @@ class VerificationJob(BaseModel):
     run_name: str  # User-defined or auto-generated run name
     status: Literal["pending", "running", "completed", "failed", "cancelled"]
     config: VerificationConfig
+    async_config: "AsyncConfig | None" = None
 
     # Progress tracking
     total_questions: int
