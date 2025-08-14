@@ -9,6 +9,8 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, TypeVar
 
+from pydantic import BaseModel
+
 T = TypeVar("T")
 R = TypeVar("R")
 
@@ -223,35 +225,15 @@ def run_sync_with_progress(
     return results
 
 
-class AsyncConfig:
+class AsyncConfig(BaseModel):
     """Configuration for async processing behavior."""
 
-    def __init__(
-        self,
-        enabled: bool = True,
-        chunk_size: int = 5,
-        max_workers: int | None = None,
-        batch_size: int | None = None,
-        concurrent_batches: int | None = None,
-        delay_between_batches: float = 0.5,
-    ):
-        """
-        Initialize async configuration.
-
-        Args:
-            enabled: Whether async processing is enabled
-            chunk_size: Default chunk size for parallel processing
-            max_workers: Maximum number of worker threads
-            batch_size: Batch size for batched processing (optional)
-            concurrent_batches: Number of concurrent batches (optional)
-            delay_between_batches: Delay between batch submissions
-        """
-        self.enabled = enabled
-        self.chunk_size = chunk_size
-        self.max_workers = max_workers
-        self.batch_size = batch_size
-        self.concurrent_batches = concurrent_batches
-        self.delay_between_batches = delay_between_batches
+    enabled: bool = True
+    chunk_size: int = 5
+    max_workers: int | None = None
+    batch_size: int | None = None
+    concurrent_batches: int | None = None
+    delay_between_batches: float = 0.5
 
     @classmethod
     def from_env(cls) -> "AsyncConfig":
