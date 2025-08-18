@@ -1,39 +1,89 @@
 # API Reference
 
-This page is auto-generated from docstrings via `mkdocstrings`. Prefer navigating by module anchors below.
+This page provides comprehensive API documentation for all Karenina classes, methods, and functions.
 
-## Benchmark
+## Core Classes
 
-::: karenina.benchmark
+::: karenina.benchmark.Benchmark
+    options:
+      show_source: true
+      heading_level: 3
 
-## Benchmark Core Components
+::: karenina.schemas.Question
+    options:
+      show_source: true
+      heading_level: 3
 
-::: karenina.benchmark.core
+::: karenina.schemas.BaseAnswer
+    options:
+      show_source: true
+      heading_level: 3
 
-## Verification
+## Configuration Classes
 
-::: karenina.benchmark.verification
+::: karenina.benchmark.ModelConfig
+    options:
+      show_source: true
+      heading_level: 3
 
-## Models
+::: karenina.benchmark.VerificationConfig
+    options:
+      show_source: true
+      heading_level: 3
 
-::: karenina.benchmark.models
+::: karenina.benchmark.VerificationResult
+    options:
+      show_source: true
+      heading_level: 3
 
-## Questions
+## Rubric Classes
 
-::: karenina.questions
+::: karenina.schemas.Rubric
+    options:
+      show_source: true
+      heading_level: 3
 
-## Answers
+::: karenina.schemas.RubricTrait
+    options:
+      show_source: true
+      heading_level: 3
 
-::: karenina.answers
-
-## Schemas
-
-::: karenina.schemas
+::: karenina.schemas.RubricEvaluation
+    options:
+      show_source: true
+      heading_level: 3
 
 ## LLM Interface
 
-::: karenina.llm
+::: karenina.llm.interface
+    options:
+      show_source: true
+      heading_level: 3
 
-## Utils
+## Question Utilities
 
-::: karenina.utils
+::: karenina.questions.extractor
+    options:
+      show_source: true
+      heading_level: 3
+
+## Answer Generation
+
+::: karenina.answers.generator
+    options:
+      show_source: true
+      heading_level: 3
+
+## Verification System
+
+::: karenina.benchmark.verifier
+    options:
+      show_source: true
+      heading_level: 3
+
+## Checkpoint and Serialization
+
+::: karenina.schemas.JsonLdCheckpoint
+    options:
+      show_source: true
+      heading_level: 3

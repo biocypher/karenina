@@ -95,21 +95,17 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Getting Started:
-    - Installation: installation.md
-    - Quickstart: quickstart.md
-  - Benchmark Guide:
-    - Overview: guides/benchmark-management.md
-    - Basics: guides/benchmark-execution.md
-    - Datasets & Inputs: guides/question-extraction.md
-    - Templates & Results: guides/answer-generation.md
-    - LLM Providers: guides/llm-providers.md
-  - Architecture: architecture.md
+  - Install: install.md
+  - Quick Start: quickstart.md
+  - Using Karenina:
+    - Defining a Benchmark: using-karenina/defining-benchmark.md
+    - Adding Questions: using-karenina/adding-questions.md
+    - Accessing and Filtering: using-karenina/accessing-filtering.md
+    - Templates: using-karenina/templates.md
+    - Rubrics: using-karenina/rubrics.md
+    - Running Verification: using-karenina/verification.md
+    - Saving and Loading: using-karenina/saving-loading.md
   - API Reference: api-reference.md
-  - Examples:
-    - Basic Usage: examples/basic-usage.md
-    - Custom Workflows: examples/custom-workflows.md
-    - Integration: examples/integration.md
 
 extra:
   social:
