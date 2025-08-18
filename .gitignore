@@ -129,3 +129,6 @@ Thumbs.db
 #internal instructions
 RELEASE.md
 SEMANTIC_VERSIONING.md
+
+examples/
+docs_old/

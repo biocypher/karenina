@@ -10,7 +10,7 @@ from langchain_core.output_parsers import PydanticOutputParser
 from ...answers.generator import inject_question_id_into_answer_class
 from ...llm.interface import init_chat_model_unified
 from ...schemas.rubric_class import Rubric
-from ..models import ModelConfiguration, VerificationResult
+from ..models import ModelConfig, VerificationResult
 from .rubric_evaluator import RubricEvaluator
 from .validation import validate_answer_template
 
@@ -85,8 +85,8 @@ def run_single_model_verification(
     question_id: str,
     question_text: str,
     template_code: str,
-    answering_model: ModelConfiguration,
-    parsing_model: ModelConfiguration,
+    answering_model: ModelConfig,
+    parsing_model: ModelConfig,
     run_name: str | None = None,
     job_id: str | None = None,
     answering_replicate: int | None = None,

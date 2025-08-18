@@ -1,99 +1,102 @@
-# Quick Start Guide
+# Quick Start
 
-Get up and running with Karenina in minutes.
+Get started with Karenina in just a few minutes! This guide will walk you through creating your first benchmark, adding questions, configuring models, and running verification.
 
-## Installation
+## Create a Benchmark
 
-```bash
-# Using pip
-pip install karenina
-
-# Using uv (recommended)
-uv add karenina
-```
-
-## Environment Setup
-
-Set up your LLM provider API keys:
-
-```bash
-export OPENAI_API_KEY="your-openai-api-key"
-export GOOGLE_API_KEY="your-google-api-key"
-export ANTHROPIC_API_KEY="your-anthropic-api-key"
-```
-
-## Basic Usage
-
-### 1. Extract Questions
+First, let's create a new benchmark:
 
 ```python
-from karenina.questions.extractor import extract_and_generate_questions
+from karenina import Benchmark
 
-# Extract questions from Excel/CSV/TSV
-questions = extract_and_generate_questions(
-    file_path="data/questions.xlsx",
-    output_path="questions.py",
-    question_column="Question",
-    answer_column="Answer"
+# Create a new benchmark
+benchmark = Benchmark.create(
+        name="Test benchmark",
+        description="Simple quick intro",
+        version="1.0.0",
+        creator="Karenina Example",
 )
 ```
 
-### 2. Generate Answer Templates
+## Add a Couple of Questions
+
+Now let's add some questions to our benchmark:
 
 ```python
-from karenina.answers.generator import generate_answer_template
+# Add questions manually
+question = "What is the capital of France?"
+raw_answer = "Paris"
 
-# Generate validation template
-template_code = generate_answer_template(
-    question="What is the capital of France?",
-    raw_answer="Paris",
-    model="gpt-4",
-    model_provider="openai"
+# Define the answer template manually
+template_code = '''class Answer(BaseAnswer):
+    answer: str = Field(description="the name of the city in the response")
+
+    def model_post_init(self, __context):
+        self.correct = {"answer": "Paris"}
+
+    def verify(self) -> bool:
+        return self.answer == self.correct["answer"]'''
+
+# Add the question to the benchmark
+qid = benchmark.add_question(
+    question=question,
+    raw_answer=raw_answer,
+    answer_template=template_code,
+    finished=True,  # Mark as ready for verification
+    author={"name": "Example Author", "email": "author@example.com"},
 )
 ```
 
-### 3. Run Verification
+## Add a Configuration
+
+Configure which model will be used for verification:
 
 ```python
-from karenina.benchmark.models import VerificationConfig, ModelConfiguration
-from karenina.benchmark.verification.orchestrator import run_question_verification
+from karenina.schemas import ModelConfig
 
-# Configure models
-config = VerificationConfig(
-    answering_models=[
-        ModelConfiguration(
-            id="gpt4",
-            model_provider="openai",
-            model_name="gpt-4",
+# Set up model configuration
+answering_models=[
+        ModelConfig(
+            id="gemini-2.5-flash",
+            model_provider="google_genai",
+            model_name="gemini-2.5-flash",
             temperature=0.1,
             interface="langchain",
-            system_prompt="You are an expert assistant."
-        )
-    ],
-    parsing_models=[
-        ModelConfiguration(
-            id="gpt35",
-            model_provider="openai",
-            model_name="gpt-3.5-turbo",
-            temperature=0.0,
-            interface="langchain",
-            system_prompt="Parse responses accurately."
+            system_prompt="You are a helpful assistant."
         )
     ]
-)
 
-# Run verification
-results = run_question_verification(
-    question_id="q1",
-    question_text="What is the capital of France?",
-    template_code=template_code,
-    config=config
+parsing_models=[
+        ModelConfig(
+            id="gemini-2.5-flash",
+            model_provider="google_genai",
+            model_name="gemini-2.5-flash",
+            temperature=0.0,
+            interface="langchain",
+            system_prompt="You are an LLM judge and, given a template, will judge the answer to the question"
+        )
+    ]
+
+config = VerificationConfig(
+    answering_models=answering_models,
+    parsing_models=parsing_models
 )
+```
+
+## Run the Verification
+
+Finally, let's run the verification process:
+
+```python
+# Run verification
+results = benchmark.run_verification([qid],config)
 ```
 
 ## Next Steps
 
-- See [Examples](examples.md) for comprehensive usage examples
-- Check [Architecture](architecture.md) to understand system design
-- Review [API Reference](api-reference.md) for detailed function documentation
-- Read [Development Guide](development.md) if you want to contribute
+Congratulations! You've created your first Karenina benchmark. To learn more about:
+
+- **Advanced benchmark creation**: See [Defining a Benchmark](using-karenina/defining-benchmark.md)
+- **Question management**: Check out [Adding Questions](using-karenina/adding-questions.md)
+- **Template customization**: Read about [Templates](using-karenina/templates.md)
+- **Evaluation criteria**: Learn about [Rubrics](using-karenina/rubrics.md)

@@ -4,6 +4,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from ..utils.async_utils import AsyncConfig
+
 # Interface constants
 INTERFACE_OPENROUTER = "openrouter"
 INTERFACE_MANUAL = "manual"
@@ -11,7 +13,7 @@ INTERFACE_LANGCHAIN = "langchain"
 INTERFACES_NO_PROVIDER_REQUIRED = [INTERFACE_OPENROUTER, INTERFACE_MANUAL]
 
 
-class ModelConfiguration(BaseModel):
+class ModelConfig(BaseModel):
     """Configuration for a single model."""
 
     id: str
@@ -25,8 +27,8 @@ class ModelConfiguration(BaseModel):
 class VerificationConfig(BaseModel):
     """Configuration for verification run with multiple models."""
 
-    answering_models: list[ModelConfiguration]
-    parsing_models: list[ModelConfiguration]
+    answering_models: list[ModelConfig]
+    parsing_models: list[ModelConfig]
     replicate_count: int = 1  # Number of times to run each test combination
 
     # Rubric evaluation settings
@@ -50,7 +52,7 @@ class VerificationConfig(BaseModel):
         """Initialize with backward compatibility for single model configs."""
         # If legacy single model fields are provided, convert to arrays
         if "answering_models" not in data and any(k.startswith("answering_") for k in data):
-            answering_model = ModelConfiguration(
+            answering_model = ModelConfig(
                 id="answering-legacy",
                 model_provider=data.get("answering_model_provider", ""),
                 model_name=data.get("answering_model_name", ""),
@@ -64,7 +66,7 @@ class VerificationConfig(BaseModel):
             data["answering_models"] = [answering_model]
 
         if "parsing_models" not in data and any(k.startswith("parsing_") for k in data):
-            parsing_model = ModelConfiguration(
+            parsing_model = ModelConfig(
                 id="parsing-legacy",
                 model_provider=data.get("parsing_model_provider", ""),
                 model_name=data.get("parsing_model_name", ""),
@@ -169,6 +171,7 @@ class VerificationJob(BaseModel):
     run_name: str  # User-defined or auto-generated run name
     status: Literal["pending", "running", "completed", "failed", "cancelled"]
     config: VerificationConfig
+    async_config: AsyncConfig | None = None
 
     # Progress tracking
     total_questions: int
