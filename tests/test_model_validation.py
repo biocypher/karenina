@@ -7,7 +7,7 @@ from karenina.benchmark.models import (
     INTERFACE_MANUAL,
     INTERFACE_OPENROUTER,
     INTERFACES_NO_PROVIDER_REQUIRED,
-    ModelConfiguration,
+    ModelConfig,
     VerificationConfig,
 )
 
@@ -17,7 +17,7 @@ class TestModelConfigurationValidation:
 
     def test_valid_langchain_model_config(self):
         """Test valid configuration for langchain interface."""
-        config = ModelConfiguration(
+        config = ModelConfig(
             id="test-model",
             model_provider="openai",
             model_name="gpt-3.5-turbo",
@@ -33,7 +33,7 @@ class TestModelConfigurationValidation:
 
     def test_valid_openrouter_model_config(self):
         """Test valid configuration for openrouter interface (no provider required)."""
-        config = ModelConfiguration(
+        config = ModelConfig(
             id="test-openrouter",
             model_provider="",  # Empty provider is allowed for openrouter
             model_name="openrouter/model",
@@ -49,7 +49,7 @@ class TestModelConfigurationValidation:
 
     def test_valid_manual_model_config(self):
         """Test valid configuration for manual interface (no provider required)."""
-        config = ModelConfiguration(
+        config = ModelConfig(
             id="test-manual",
             model_provider="",  # Empty provider is allowed for manual
             model_name="manual-model",
@@ -68,7 +68,7 @@ class TestModelConfigurationValidation:
         with pytest.raises(ValueError, match="Model provider is required.*interface: langchain"):
             VerificationConfig(
                 answering_models=[
-                    ModelConfiguration(
+                    ModelConfig(
                         id="test-model",
                         model_provider="",  # Empty provider should fail for langchain
                         model_name="gpt-3.5-turbo",
@@ -78,7 +78,7 @@ class TestModelConfigurationValidation:
                     )
                 ],
                 parsing_models=[
-                    ModelConfiguration(
+                    ModelConfig(
                         id="parsing-model",
                         model_provider="openai",
                         model_name="gpt-3.5-turbo",
@@ -94,7 +94,7 @@ class TestModelConfigurationValidation:
         with pytest.raises(ValueError, match="Model name is required"):
             VerificationConfig(
                 answering_models=[
-                    ModelConfiguration(
+                    ModelConfig(
                         id="test-model",
                         model_provider="openai",
                         model_name="",  # Empty model name should fail
@@ -104,7 +104,7 @@ class TestModelConfigurationValidation:
                     )
                 ],
                 parsing_models=[
-                    ModelConfiguration(
+                    ModelConfig(
                         id="parsing-model",
                         model_provider="openai",
                         model_name="gpt-3.5-turbo",
@@ -120,7 +120,7 @@ class TestModelConfigurationValidation:
         with pytest.raises(ValueError, match="System prompt is required"):
             VerificationConfig(
                 answering_models=[
-                    ModelConfiguration(
+                    ModelConfig(
                         id="test-model",
                         model_provider="openai",
                         model_name="gpt-3.5-turbo",
@@ -130,7 +130,7 @@ class TestModelConfigurationValidation:
                     )
                 ],
                 parsing_models=[
-                    ModelConfiguration(
+                    ModelConfig(
                         id="parsing-model",
                         model_provider="openai",
                         model_name="gpt-3.5-turbo",
@@ -147,7 +147,7 @@ class TestModelConfigurationValidation:
             VerificationConfig(
                 answering_models=[],  # Empty answering models should fail
                 parsing_models=[
-                    ModelConfiguration(
+                    ModelConfig(
                         id="parsing-model",
                         model_provider="openai",
                         model_name="gpt-3.5-turbo",
@@ -163,7 +163,7 @@ class TestModelConfigurationValidation:
         with pytest.raises(ValueError, match="At least one parsing model must be configured"):
             VerificationConfig(
                 answering_models=[
-                    ModelConfiguration(
+                    ModelConfig(
                         id="answering-model",
                         model_provider="openai",
                         model_name="gpt-3.5-turbo",
@@ -180,7 +180,7 @@ class TestModelConfigurationValidation:
         with pytest.raises(ValueError, match="At least one parsing model must be configured"):
             VerificationConfig(
                 answering_models=[
-                    ModelConfiguration(
+                    ModelConfig(
                         id="answering-model",
                         model_provider="openai",
                         model_name="gpt-3.5-turbo",
@@ -198,7 +198,7 @@ class TestModelConfigurationValidation:
         with pytest.raises(ValueError, match="Replicate count must be at least 1"):
             VerificationConfig(
                 answering_models=[
-                    ModelConfiguration(
+                    ModelConfig(
                         id="answering-model",
                         model_provider="openai",
                         model_name="gpt-3.5-turbo",
@@ -208,7 +208,7 @@ class TestModelConfigurationValidation:
                     )
                 ],
                 parsing_models=[
-                    ModelConfiguration(
+                    ModelConfig(
                         id="parsing-model",
                         model_provider="openai",
                         model_name="gpt-3.5-turbo",
@@ -225,7 +225,7 @@ class TestModelConfigurationValidation:
         """Test valid rubric-enabled configuration."""
         config = VerificationConfig(
             answering_models=[
-                ModelConfiguration(
+                ModelConfig(
                     id="answering-model",
                     model_provider="openai",
                     model_name="gpt-3.5-turbo",
@@ -235,7 +235,7 @@ class TestModelConfigurationValidation:
                 )
             ],
             parsing_models=[
-                ModelConfiguration(
+                ModelConfig(
                     id="parsing-model",
                     model_provider="openai",
                     model_name="gpt-3.5-turbo",
@@ -256,7 +256,7 @@ class TestModelConfigurationValidation:
         """Test configuration with mixed interface types."""
         config = VerificationConfig(
             answering_models=[
-                ModelConfiguration(
+                ModelConfig(
                     id="langchain-model",
                     model_provider="openai",
                     model_name="gpt-3.5-turbo",
@@ -264,7 +264,7 @@ class TestModelConfigurationValidation:
                     interface=INTERFACE_LANGCHAIN,
                     system_prompt="You are a helpful assistant.",
                 ),
-                ModelConfiguration(
+                ModelConfig(
                     id="openrouter-model",
                     model_provider="",  # Empty provider for openrouter
                     model_name="openrouter/model",
@@ -274,7 +274,7 @@ class TestModelConfigurationValidation:
                 ),
             ],
             parsing_models=[
-                ModelConfiguration(
+                ModelConfig(
                     id="manual-model",
                     model_provider="",  # Empty provider for manual
                     model_name="manual-model",
@@ -310,7 +310,7 @@ class TestLegacyConfigurationSupport:
             answering_interface=INTERFACE_LANGCHAIN,
             answering_system_prompt="Custom answering prompt",
             parsing_models=[
-                ModelConfiguration(
+                ModelConfig(
                     id="parsing-model",
                     model_provider="openai",
                     model_name="gpt-3.5-turbo",
@@ -334,7 +334,7 @@ class TestLegacyConfigurationSupport:
         """Test conversion from legacy parsing model fields."""
         config = VerificationConfig(
             answering_models=[
-                ModelConfiguration(
+                ModelConfig(
                     id="answering-model",
                     model_provider="openai",
                     model_name="gpt-3.5-turbo",

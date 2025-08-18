@@ -11,7 +11,7 @@ from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 from ...llm.interface import init_chat_model_unified
 from ...schemas.rubric_class import Rubric, RubricTrait
-from ..models import INTERFACES_NO_PROVIDER_REQUIRED, ModelConfiguration
+from ..models import INTERFACES_NO_PROVIDER_REQUIRED, ModelConfig
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ class RubricEvaluator:
     Evaluates LLM responses against a defined rubric using qualitative traits.
     """
 
-    def __init__(self, model_config: ModelConfiguration):
+    def __init__(self, model_config: ModelConfig):
         """
         Initialize the rubric evaluator with an LLM model.
 

@@ -95,34 +95,17 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Getting Started:
-    - Installation: installation.md
-    - Quick Start: quickstart.md
-    - Examples: examples.md
-  - Documentation:
-    - Architecture: architecture.md
-    - API Reference: api-reference.md
-    - Development Guide: development.md
-  - API Reference:
-    - Core Modules:
-      - LLM Interface: api/llm.md
-      - Questions: api/questions.md
-      - Answers: api/answers.md
-      - Benchmark: api/benchmark.md
-    - Data Models:
-      - Schemas: api/schemas.md
-    - Supporting:
-      - Prompts: api/prompts.md
-      - Utils: api/utils.md
-  - Guides:
-    - Question Extraction: guides/question-extraction.md
-    - Answer Generation: guides/answer-generation.md
-    - Benchmark Execution: guides/benchmark-execution.md
-    - LLM Providers: guides/llm-providers.md
-  - Examples:
-    - Basic Usage: examples/basic-usage.md
-    - Custom Workflows: examples/custom-workflows.md
-    - Integration: examples/integration.md
+  - Install: install.md
+  - Quick Start: quickstart.md
+  - Using Karenina:
+    - Defining a Benchmark: using-karenina/defining-benchmark.md
+    - Adding Questions: using-karenina/adding-questions.md
+    - Accessing and Filtering: using-karenina/accessing-filtering.md
+    - Templates: using-karenina/templates.md
+    - Rubrics: using-karenina/rubrics.md
+    - Running Verification: using-karenina/verification.md
+    - Saving and Loading: using-karenina/saving-loading.md
+  - API Reference: api-reference.md
 
 extra:
   social:

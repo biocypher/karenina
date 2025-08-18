@@ -2,7 +2,7 @@
 
 import pytest
 
-from karenina.benchmark.models import ModelConfiguration
+from karenina.benchmark.models import ModelConfig
 from karenina.benchmark.verification.runner import _is_valid_md5_hash, run_single_model_verification
 
 
@@ -44,7 +44,7 @@ def test_manual_interface_valid_hash():
     load_manual_traces(test_traces)
 
     # Create manual model configuration
-    manual_model = ModelConfiguration(
+    manual_model = ModelConfig(
         id="test-manual-model",
         interface="manual",
         model_name="manual",
@@ -54,7 +54,7 @@ def test_manual_interface_valid_hash():
     )
 
     # Create parsing model (can be any valid model)
-    parsing_model = ModelConfiguration(
+    parsing_model = ModelConfig(
         id="test-parsing-model",
         interface="langchain",
         model_name="gpt-3.5-turbo",
@@ -100,7 +100,7 @@ class Answer(BaseAnswer):
 def test_manual_interface_invalid_hash():
     """Test that manual interface rejects invalid question_id formats."""
     # Create manual model configuration
-    manual_model = ModelConfiguration(
+    manual_model = ModelConfig(
         id="test-manual-model",
         interface="manual",
         model_name="manual",
@@ -110,7 +110,7 @@ def test_manual_interface_invalid_hash():
     )
 
     # Create parsing model
-    parsing_model = ModelConfiguration(
+    parsing_model = ModelConfig(
         id="test-parsing-model",
         interface="langchain",
         model_name="gpt-3.5-turbo",
@@ -160,7 +160,7 @@ class Answer(BaseAnswer):
 def test_non_manual_interface_ignores_hash_validation():
     """Test that non-manual interfaces don't validate question_id format."""
     # Create non-manual model configuration
-    langchain_model = ModelConfiguration(
+    langchain_model = ModelConfig(
         id="test-langchain-model",
         interface="langchain",
         model_name="gpt-3.5-turbo",
@@ -202,7 +202,7 @@ class Answer(BaseAnswer):
 
 def test_hash_validation_error_message():
     """Test that hash validation provides helpful error message."""
-    manual_model = ModelConfiguration(
+    manual_model = ModelConfig(
         id="test-manual-model",
         interface="manual",
         model_name="manual",
@@ -211,7 +211,7 @@ def test_hash_validation_error_message():
         system_prompt="",
     )
 
-    parsing_model = ModelConfiguration(
+    parsing_model = ModelConfig(
         id="test-parsing-model",
         interface="langchain",
         model_name="gpt-3.5-turbo",
