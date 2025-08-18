@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from karenina.benchmark.models import INTERFACE_LANGCHAIN, INTERFACE_MANUAL, INTERFACE_OPENROUTER, ModelConfiguration
+from karenina.benchmark.models import INTERFACE_LANGCHAIN, INTERFACE_MANUAL, INTERFACE_OPENROUTER, ModelConfig
 from karenina.benchmark.verification.rubric_evaluator import RubricEvaluator
 from karenina.schemas.rubric_class import Rubric, RubricTrait
 
@@ -31,7 +31,7 @@ class TestRubricEvaluator:
     @pytest.fixture
     def mock_model_config(self):
         """Create a mock model configuration."""
-        return ModelConfiguration(
+        return ModelConfig(
             id="test-model",
             model_provider="openai",
             model_name="gpt-3.5-turbo",
@@ -153,7 +153,7 @@ class TestRubricEvaluator:
             mock_llm = Mock()
             mock_init_model.return_value = mock_llm
 
-            config = ModelConfiguration(
+            config = ModelConfig(
                 id=f"test-{provider}",
                 model_provider=provider,
                 model_name=model,
@@ -227,7 +227,7 @@ class TestRubricEvaluatorEdgeCases:
 
     def test_evaluator_initialization_missing_model_name(self):
         """Test RubricEvaluator initialization with missing model name."""
-        config = ModelConfiguration(
+        config = ModelConfig(
             id="test-model",
             model_provider="openai",
             model_name="",  # Empty model name
@@ -241,7 +241,7 @@ class TestRubricEvaluatorEdgeCases:
 
     def test_evaluator_initialization_missing_provider_langchain(self):
         """Test RubricEvaluator initialization with missing provider for langchain."""
-        config = ModelConfiguration(
+        config = ModelConfig(
             id="test-model",
             model_provider="",  # Empty provider for langchain interface
             model_name="gpt-3.5-turbo",
@@ -255,7 +255,7 @@ class TestRubricEvaluatorEdgeCases:
 
     def test_evaluator_initialization_openrouter_no_provider(self):
         """Test RubricEvaluator initialization with OpenRouter interface (no provider required)."""
-        config = ModelConfiguration(
+        config = ModelConfig(
             id="test-openrouter",
             model_provider="",  # Empty provider allowed for OpenRouter
             model_name="openrouter/model",
@@ -272,7 +272,7 @@ class TestRubricEvaluatorEdgeCases:
 
     def test_evaluator_initialization_manual_no_provider(self):
         """Test RubricEvaluator initialization with manual interface (no provider required)."""
-        config = ModelConfiguration(
+        config = ModelConfig(
             id="test-manual",
             model_provider="",  # Empty provider allowed for manual
             model_name="manual-model",
@@ -290,7 +290,7 @@ class TestRubricEvaluatorEdgeCases:
     @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
     def test_evaluator_initialization_llm_failure(self, mock_init_model):
         """Test RubricEvaluator initialization with LLM initialization failure."""
-        config = ModelConfiguration(
+        config = ModelConfig(
             id="test-model",
             model_provider="openai",
             model_name="gpt-3.5-turbo",
@@ -308,7 +308,7 @@ class TestRubricEvaluatorEdgeCases:
     @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
     def test_evaluator_initialization_provider_validation_error_message(self, _mock_init_model):
         """Test that provider validation error message includes interface information."""
-        config = ModelConfiguration(
+        config = ModelConfig(
             id="test-model-123",
             model_provider="",  # Empty provider for langchain
             model_name="gpt-3.5-turbo",
@@ -333,7 +333,7 @@ class TestRubricEvaluatorEdgeCases:
         mock_init_model.return_value = Mock()
 
         configs = [
-            ModelConfiguration(
+            ModelConfig(
                 id="langchain-model",
                 model_provider="openai",
                 model_name="gpt-3.5-turbo",
@@ -341,7 +341,7 @@ class TestRubricEvaluatorEdgeCases:
                 interface=INTERFACE_LANGCHAIN,
                 system_prompt="You are a helpful assistant.",
             ),
-            ModelConfiguration(
+            ModelConfig(
                 id="openrouter-model",
                 model_provider="",
                 model_name="openrouter/model",
@@ -349,7 +349,7 @@ class TestRubricEvaluatorEdgeCases:
                 interface=INTERFACE_OPENROUTER,
                 system_prompt="You are a helpful assistant.",
             ),
-            ModelConfiguration(
+            ModelConfig(
                 id="manual-model",
                 model_provider="",
                 model_name="manual-model",

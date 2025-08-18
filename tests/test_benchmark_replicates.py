@@ -2,7 +2,7 @@
 
 from unittest.mock import Mock, patch
 
-from karenina.benchmark.models import ModelConfiguration, VerificationConfig
+from karenina.benchmark.models import ModelConfig, VerificationConfig
 from karenina.benchmark.verifier import run_question_verification
 
 
@@ -10,7 +10,7 @@ def test_verification_config_replicate_count():
     """Test that VerificationConfig properly handles replicate_count."""
     config = VerificationConfig(
         answering_models=[
-            ModelConfiguration(
+            ModelConfig(
                 id="test-answering",
                 model_provider="test",
                 model_name="test-model",
@@ -20,7 +20,7 @@ def test_verification_config_replicate_count():
             )
         ],
         parsing_models=[
-            ModelConfiguration(
+            ModelConfig(
                 id="test-parsing",
                 model_provider="test",
                 model_name="test-model",
@@ -62,7 +62,7 @@ def test_run_question_verification_with_replicates(mock_init_model):
 
         config = VerificationConfig(
             answering_models=[
-                ModelConfiguration(
+                ModelConfig(
                     id="test-answering",
                     model_provider="test",
                     model_name="test-model",
@@ -72,7 +72,7 @@ def test_run_question_verification_with_replicates(mock_init_model):
                 )
             ],
             parsing_models=[
-                ModelConfiguration(
+                ModelConfig(
                     id="test-parsing",
                     model_provider="test",
                     model_name="test-model",
@@ -148,7 +148,7 @@ def test_run_question_verification_single_replicate(mock_init_model):
 
         config = VerificationConfig(
             answering_models=[
-                ModelConfiguration(
+                ModelConfig(
                     id="test-answering",
                     model_provider="test",
                     model_name="test-model",
@@ -158,7 +158,7 @@ def test_run_question_verification_single_replicate(mock_init_model):
                 )
             ],
             parsing_models=[
-                ModelConfiguration(
+                ModelConfig(
                     id="test-parsing",
                     model_provider="test",
                     model_name="test-model",
@@ -205,7 +205,7 @@ def test_verification_config_default_replicate_count():
     """Test that VerificationConfig defaults to 1 replicate."""
     config = VerificationConfig(
         answering_models=[
-            ModelConfiguration(
+            ModelConfig(
                 id="test-answering",
                 model_provider="test",
                 model_name="test-model",
@@ -215,7 +215,7 @@ def test_verification_config_default_replicate_count():
             )
         ],
         parsing_models=[
-            ModelConfiguration(
+            ModelConfig(
                 id="test-parsing",
                 model_provider="test",
                 model_name="test-model",

@@ -5,7 +5,7 @@ import json
 import pytest
 
 from karenina.benchmark.exporter import export_verification_results_csv, export_verification_results_json
-from karenina.benchmark.models import ModelConfiguration, VerificationConfig, VerificationJob, VerificationResult
+from karenina.benchmark.models import ModelConfig, VerificationConfig, VerificationJob, VerificationResult
 from karenina.schemas.rubric_class import Rubric, RubricTrait
 
 
@@ -31,7 +31,7 @@ def mock_global_rubric() -> Rubric:
 @pytest.fixture
 def mock_verification_job() -> VerificationJob:
     """Create a mock verification job."""
-    answering_model = ModelConfiguration(
+    answering_model = ModelConfig(
         id="answering-test",
         model_provider="openai",
         model_name="gpt-4",
@@ -40,7 +40,7 @@ def mock_verification_job() -> VerificationJob:
         system_prompt="You are a helpful assistant.",
     )
 
-    parsing_model = ModelConfiguration(
+    parsing_model = ModelConfig(
         id="parsing-test",
         model_provider="openai",
         model_name="gpt-4",

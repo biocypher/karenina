@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from karenina.benchmark.benchmark import Benchmark
-from karenina.benchmark.models import ModelConfiguration, VerificationConfig, VerificationResult
+from karenina.benchmark.models import ModelConfig, VerificationConfig, VerificationResult
 from karenina.schemas.rubric_class import RubricTrait
 
 
@@ -59,7 +59,7 @@ def sample_benchmark():
 @pytest.fixture
 def sample_config():
     """Create a sample verification configuration."""
-    answering_model = ModelConfiguration(
+    answering_model = ModelConfig(
         id="test-answering",
         model_provider="openai",
         model_name="gpt-3.5-turbo",
@@ -68,7 +68,7 @@ def sample_config():
         system_prompt="You are a helpful assistant.",
     )
 
-    parsing_model = ModelConfiguration(
+    parsing_model = ModelConfig(
         id="test-parsing",
         model_provider="openai",
         model_name="gpt-3.5-turbo",

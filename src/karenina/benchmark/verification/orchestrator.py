@@ -5,7 +5,7 @@ from typing import Any, Literal, cast
 
 from ...schemas.rubric_class import Rubric
 from ...utils.async_utils import AsyncConfig, execute_with_config
-from ..models import ModelConfiguration, VerificationConfig, VerificationResult
+from ..models import ModelConfig, VerificationConfig, VerificationResult
 from .runner import run_single_model_verification
 
 
@@ -13,8 +13,8 @@ def _create_verification_task(
     question_id: str,
     question_text: str,
     template_code: str,
-    answering_model: ModelConfiguration,
-    parsing_model: ModelConfiguration,
+    answering_model: ModelConfig,
+    parsing_model: ModelConfig,
     run_name: str | None,
     job_id: str | None,
     answering_replicate: int | None,
@@ -98,7 +98,7 @@ def run_question_verification(
     # Handle legacy single model config
     if hasattr(config, "answering_model_provider") and config.answering_model_provider:
         # Legacy single model mode - create single model configs and handle replicates
-        answering_model = ModelConfiguration(
+        answering_model = ModelConfig(
             id="answering-legacy",
             model_provider=config.answering_model_provider or "",
             model_name=config.answering_model_name or "",
@@ -108,7 +108,7 @@ def run_question_verification(
             or "You are an expert assistant. Answer the question accurately and concisely.",
         )
 
-        parsing_model = ModelConfiguration(
+        parsing_model = ModelConfig(
             id="parsing-legacy",
             model_provider=config.parsing_model_provider or "",
             model_name=config.parsing_model_name or "",

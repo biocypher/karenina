@@ -2,7 +2,7 @@
 
 import pytest
 
-from karenina.benchmark.models import ModelConfiguration
+from karenina.benchmark.models import ModelConfig
 from karenina.llm.interface import init_chat_model_unified
 from karenina.llm.manual_llm import ManualLLM, ManualTraceNotFoundError, create_manual_llm
 from karenina.llm.manual_traces import (
@@ -215,7 +215,7 @@ class TestModelConfiguration:
 
     def test_model_config_manual_interface(self):
         """Test creating ModelConfiguration with manual interface."""
-        config = ModelConfiguration(
+        config = ModelConfig(
             id="test-manual",
             model_provider="manual",
             model_name="manual",
