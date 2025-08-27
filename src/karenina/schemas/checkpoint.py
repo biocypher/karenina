@@ -117,11 +117,11 @@ class DatasetMetadata(BaseModel):
     identifier: str | None = None
 
 
-# Schema.org Dataset (root container)
-class SchemaOrgDataset(BaseModel):
-    """Schema.org Dataset as root container."""
+# Schema.org DataFeed (root container)
+class SchemaOrgDataFeed(BaseModel):
+    """Schema.org DataFeed as root container."""
 
-    type: Literal["Dataset"] = Field(alias="@type", default="Dataset")
+    type: Literal["DataFeed"] = Field(alias="@type", default="DataFeed")
     id: str | None = Field(alias="@id", default=None)
     name: str
     description: str | None = None
@@ -130,7 +130,7 @@ class SchemaOrgDataset(BaseModel):
     dateCreated: str  # ISO timestamp
     dateModified: str  # ISO timestamp
     rating: list[SchemaOrgRating] | None = None  # Global rubric traits
-    hasPart: list[SchemaOrgDataFeedItem]  # The questions
+    dataFeedElement: list[SchemaOrgDataFeedItem]  # The questions
     additionalProperty: list[SchemaOrgPropertyValue] | None = None
 
 
@@ -145,7 +145,7 @@ class JsonLdCheckpoint(BaseModel):
     """Complete JSON-LD checkpoint format matching frontend exactly."""
 
     context: dict[str, Any] = Field(alias="@context")
-    type: Literal["Dataset"] = Field(alias="@type", default="Dataset")
+    type: Literal["DataFeed"] = Field(alias="@type", default="DataFeed")
     id: str | None = Field(alias="@id", default=None)
     name: str
     description: str | None = None
@@ -154,7 +154,7 @@ class JsonLdCheckpoint(BaseModel):
     dateCreated: str
     dateModified: str
     rating: list[SchemaOrgRating] | None = None  # Global rubric
-    hasPart: list[SchemaOrgDataFeedItem]  # Questions
+    dataFeedElement: list[SchemaOrgDataFeedItem]  # Questions
     additionalProperty: list[SchemaOrgPropertyValue] | None = None
 
     class Config:
@@ -177,7 +177,7 @@ class Rubric(BaseModel):
 SCHEMA_ORG_CONTEXT = {
     "@version": 1.1,
     "@vocab": "http://schema.org/",
-    "Dataset": "Dataset",
+    "DataFeed": "DataFeed",
     "DataFeedItem": "DataFeedItem",
     "Question": "Question",
     "Answer": "Answer",
@@ -190,7 +190,7 @@ SCHEMA_ORG_CONTEXT = {
     "creator": "creator",
     "dateCreated": "dateCreated",
     "dateModified": "dateModified",
-    "hasPart": {"@id": "hasPart", "@container": "@set"},
+    "dataFeedElement": {"@id": "dataFeedElement", "@container": "@set"},
     "item": {"@id": "item", "@type": "@id"},
     "text": "text",
     "acceptedAnswer": {"@id": "acceptedAnswer", "@type": "@id"},

@@ -133,7 +133,7 @@ class BenchmarkBase:
     def _update_question_property(self, question_id: str, property_name: str, value: Any) -> None:
         """Update a property in the underlying JSON-LD structure."""
         # Find the DataFeedItem for this question
-        for item in self._checkpoint.hasPart:
+        for item in self._checkpoint.dataFeedElement:
             if self._get_item_id(item) == question_id:
                 # Update dateModified
                 item.dateModified = datetime.now().isoformat()

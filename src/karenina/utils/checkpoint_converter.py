@@ -124,7 +124,7 @@ def create_jsonld_benchmark(
 
     checkpoint_dict = {
         "@context": SCHEMA_ORG_CONTEXT,
-        "@type": "Dataset",
+        "@type": "DataFeed",
         "@id": f"urn:uuid:karenina-checkpoint-{datetime.now().timestamp()}",
         "name": name,
         "description": description or "Benchmark containing questions",
@@ -133,7 +133,7 @@ def create_jsonld_benchmark(
         "dateCreated": timestamp,
         "dateModified": timestamp,
         "rating": None,
-        "hasPart": [],
+        "dataFeedElement": [],
         "additionalProperty": [
             SchemaOrgPropertyValue(
                 name="benchmark_format_version",
@@ -184,7 +184,7 @@ def add_question_to_benchmark(
 
         # Extract existing IDs from benchmark
         existing_ids = set()
-        for item in benchmark.hasPart:
+        for item in benchmark.dataFeedElement:
             if item.id:
                 existing_ids.add(item.id)
             else:
@@ -239,7 +239,7 @@ def add_question_to_benchmark(
     item = SchemaOrgDataFeedItem.model_validate(item_dict)
 
     # Add to benchmark
-    benchmark.hasPart.append(item)
+    benchmark.dataFeedElement.append(item)
     benchmark.dateModified = timestamp
 
     return question_id
@@ -275,7 +275,7 @@ def extract_questions_from_benchmark(
     """
     questions = []
 
-    for item in benchmark.hasPart:
+    for item in benchmark.dataFeedElement:
         question = item.item
 
         # Extract additional properties
@@ -368,12 +368,12 @@ def validate_jsonld_benchmark(benchmark: JsonLdCheckpoint) -> tuple[bool, str]:
         if not benchmark.name:
             return False, "Benchmark must have a name"
 
-        if not benchmark.hasPart:
+        if not benchmark.dataFeedElement:
             # Empty benchmark is valid
             pass
         else:
             # Validate each question
-            for i, item in enumerate(benchmark.hasPart):
+            for i, item in enumerate(benchmark.dataFeedElement):
                 if not item.item.text:
                     return False, f"Question {i} missing text"
 
