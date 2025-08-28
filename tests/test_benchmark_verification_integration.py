@@ -28,6 +28,7 @@ def sample_benchmark():
         raw_answer="4",
         answer_template="""class Answer(BaseAnswer):
     result: int = Field(description="The arithmetic result")
+    correct: dict = Field(description="Correct answer")
 
     def verify(self) -> bool:
         return self.result == 4
@@ -40,6 +41,7 @@ def sample_benchmark():
         raw_answer="Paris",
         answer_template="""class Answer(BaseAnswer):
     capital: str = Field(description="The capital city")
+    correct: dict = Field(description="Correct answer")
 
     def verify(self) -> bool:
         return self.capital.lower() == "paris"
@@ -94,6 +96,7 @@ class TestBenchmarkVerificationIntegration:
         # Test valid template
         valid_template = """class Answer(BaseAnswer):
     response: str = Field(description="A response")
+    correct: dict = Field(description="Correct answer")
 
     def verify(self) -> bool:
         return True
@@ -104,6 +107,7 @@ class TestBenchmarkVerificationIntegration:
         # Test invalid template (missing verify method)
         invalid_template = """class Answer(BaseAnswer):
     response: str = Field(description="A response")
+    correct: dict = Field(description="Correct answer")
 """
         with pytest.raises(ValueError, match="Invalid template"):
             benchmark.add_answer_template(q3_id, invalid_template)

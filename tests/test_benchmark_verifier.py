@@ -16,6 +16,7 @@ from pydantic import Field
 class Answer(BaseAnswer):
     """Answer for a simple question."""
     response: str = Field(description="The answer response")
+    correct: dict = Field(description="The correct answer")
 
     def verify(self):
         return len(self.response) > 0
@@ -27,6 +28,7 @@ class Answer(BaseAnswer):
     assert error_msg is None
     assert Answer is not None
     assert hasattr(Answer, "verify")
+    assert "correct" in Answer.__annotations__
 
 
 def test_validate_answer_template_with_literal():
@@ -40,6 +42,7 @@ class Answer(BaseAnswer):
     """Answer with Literal type."""
     status: Literal["success", "failure"] = Field(description="The status")
     response: str = Field(description="The response")
+    correct: dict = Field(description="The correct answer")
 
     def verify(self):
         return self.status in ["success", "failure"] and len(self.response) > 0
@@ -76,6 +79,7 @@ from karenina.schemas.answer_class import BaseAnswer
 
 class Answer(BaseAnswer):
     response: str = "test"
+    correct: dict = {}
 """
 
     is_valid, error_msg, Answer = validate_answer_template(template_code)
@@ -181,6 +185,7 @@ from pydantic import Field
 
 class Answer(BaseAnswer):
     response: str = Field(description="The answer")
+    correct: dict = Field(description="The correct answer")
 
     def verify(self):
         return True
@@ -246,6 +251,7 @@ from pydantic import Field
 
 class Answer(BaseAnswer):
     response: str = Field(description="The answer")
+    correct: dict = Field(description="The correct answer")
 
     def verify(self):
         return True
@@ -309,6 +315,7 @@ from pydantic import Field
 
 class Answer(BaseAnswer):
     response: str = Field(description="The answer")
+    correct: dict = Field(description="The correct answer")
 
     def verify(self):
         return True
@@ -396,3 +403,84 @@ Please format your response as JSON.
 </format_instructions>
 """
     assert result == expected
+
+
+def test_validate_answer_template_no_correct_field():
+    """Test validation fails when Answer class has no correct field."""
+    template_code = """
+from karenina.schemas.answer_class import BaseAnswer
+from pydantic import Field
+
+class Answer(BaseAnswer):
+    response: str = Field(description="The answer response")
+
+    def verify(self):
+        return len(self.response) > 0
+"""
+
+    is_valid, error_msg, Answer = validate_answer_template(template_code)
+
+    assert is_valid is False
+    assert "Answer class must have a 'correct' field" in error_msg
+    assert Answer is None
+
+
+def test_validate_answer_template_correct_dict_annotation():
+    """Test validation passes with various dict type annotations."""
+    # Test with plain dict annotation
+    template_code1 = """
+from karenina.schemas.answer_class import BaseAnswer
+from pydantic import Field
+
+class Answer(BaseAnswer):
+    response: str = Field(description="The answer response")
+    correct: dict = Field(description="The correct answer")
+
+    def verify(self):
+        return len(self.response) > 0
+"""
+
+    is_valid, error_msg, Answer = validate_answer_template(template_code1)
+    assert is_valid is True
+    assert error_msg is None
+    assert Answer is not None
+
+    # Test with Dict type annotation
+    template_code2 = """
+from karenina.schemas.answer_class import BaseAnswer
+from pydantic import Field
+from typing import Dict, Any
+
+class Answer(BaseAnswer):
+    response: str = Field(description="The answer response")
+    correct: Dict[str, Any] = Field(description="The correct answer")
+
+    def verify(self):
+        return len(self.response) > 0
+"""
+
+    is_valid, error_msg, Answer = validate_answer_template(template_code2)
+    assert is_valid is True
+    assert error_msg is None
+    assert Answer is not None
+
+
+def test_validate_answer_template_correct_invalid_type():
+    """Test validation fails with non-dict type for correct field."""
+    template_code = """
+from karenina.schemas.answer_class import BaseAnswer
+from pydantic import Field
+
+class Answer(BaseAnswer):
+    response: str = Field(description="The answer response")
+    correct: str = Field(description="The correct answer")
+
+    def verify(self):
+        return len(self.response) > 0
+"""
+
+    is_valid, error_msg, Answer = validate_answer_template(template_code)
+
+    assert is_valid is False
+    assert "Answer class 'correct' field must be annotated as dict type" in error_msg
+    assert Answer is None

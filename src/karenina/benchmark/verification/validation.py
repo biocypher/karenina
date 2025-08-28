@@ -1,8 +1,31 @@
 """Template validation logic for verification system."""
 
 import inspect
+from typing import Any, get_origin
 
 from ...schemas.answer_class import BaseAnswer
+
+
+def _is_dict_type(annotation: Any) -> bool:
+    """Check if a type annotation represents a dictionary type."""
+    # Direct dict type
+    if annotation is dict:
+        return True
+
+    # typing.Dict or Dict from globals
+    if hasattr(annotation, "__name__") and annotation.__name__ == "Dict":
+        return True
+
+    # Generic types like Dict[str, Any], dict[str, Any]
+    origin = get_origin(annotation)
+    if origin is dict:
+        return True
+
+    # Handle string annotations
+    if isinstance(annotation, str):
+        return annotation.lower().startswith(("dict", "Dict"))
+
+    return False
 
 
 def validate_answer_template(template_code: str) -> tuple[bool, str | None, type | None]:
@@ -70,6 +93,16 @@ def validate_answer_template(template_code: str) -> tuple[bool, str | None, type
         # Check if verify method is callable
         if not callable(getattr(Answer, "verify", None)):
             return False, "verify must be a callable method", None
+
+        # Check if it has a 'correct' field annotation
+        if not hasattr(Answer, "__annotations__") or "correct" not in Answer.__annotations__:
+            return False, "Answer class must have a 'correct' field", None
+
+        # Check if 'correct' is annotated as a dictionary type
+        correct_annotation = Answer.__annotations__["correct"]
+        # Handle various dictionary type annotations
+        if not _is_dict_type(correct_annotation):
+            return False, "Answer class 'correct' field must be annotated as dict type", None
 
         return True, None, Answer
 

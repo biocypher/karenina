@@ -505,6 +505,7 @@ class QuestionManager:
     """Answer template for: {question[:50]}..."""
 
     response: str = Field(description="The answer response")
+    correct: dict = Field(description="The correct answer")
 
     def verify(self) -> bool:
         # TODO: Implement verification logic

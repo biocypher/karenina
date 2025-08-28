@@ -678,6 +678,7 @@ def test_validation_and_health():
     # Test template validation
     valid_template = """class Answer(BaseAnswer):
     response: str = Field(description="Valid response")
+    correct: dict = Field(description="Correct answer")
 
     def verify(self) -> bool:
         return True
