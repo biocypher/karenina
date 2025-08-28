@@ -334,7 +334,7 @@ def test_magic_methods():
 
     # Test __getitem__
     question = benchmark[q1_id]
-    assert question["question"] == "What is AI?"
+    assert question.text == "What is AI?"
 
     with pytest.raises(ValueError):
         _ = benchmark["nonexistent"]
@@ -342,6 +342,7 @@ def test_magic_methods():
     # Test __iter__
     questions_from_iter = list(benchmark)
     assert len(questions_from_iter) == 2
+    # __iter__ returns dictionary objects, not SchemaOrgQuestion objects
     assert all("question" in q for q in questions_from_iter)
 
 
