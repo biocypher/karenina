@@ -46,7 +46,7 @@ class RubricManager:
 
         # Find the question
         found = False
-        for item in self.base._checkpoint.hasPart:
+        for item in self.base._checkpoint.dataFeedElement:
             if self.base._get_item_id(item) == question_id:
                 rating = convert_rubric_trait_to_rating(trait, "question-specific")
                 if item.item.rating is None:
@@ -148,7 +148,7 @@ class RubricManager:
         Returns:
             True if rubric was removed, False if not found
         """
-        for item in self.base._checkpoint.hasPart:
+        for item in self.base._checkpoint.dataFeedElement:
             if self.base._get_item_id(item) == question_id and item.item.rating:
                 item.item.rating = None
                 item.dateModified = datetime.now().isoformat()
@@ -171,7 +171,7 @@ class RubricManager:
             count += 1
 
         # Clear question-specific rubrics
-        for item in self.base._checkpoint.hasPart:
+        for item in self.base._checkpoint.dataFeedElement:
             if item.item.rating:
                 item.item.rating = None
                 item.dateModified = datetime.now().isoformat()

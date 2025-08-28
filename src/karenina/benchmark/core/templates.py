@@ -36,7 +36,7 @@ class TemplateManager:
 
         # Find the question in the checkpoint
         found = False
-        for item in self.base._checkpoint.hasPart:
+        for item in self.base._checkpoint.dataFeedElement:
             if self.base._get_item_id(item) == question_id:
                 item.item.hasPart.text = template_code
                 item.dateModified = datetime.now().isoformat()

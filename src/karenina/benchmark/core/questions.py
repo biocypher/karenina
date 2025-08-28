@@ -83,13 +83,13 @@ class QuestionManager:
 
         # Remove from checkpoint data
         items_to_remove = []
-        for i, item in enumerate(self.base._checkpoint.hasPart):
+        for i, item in enumerate(self.base._checkpoint.dataFeedElement):
             if self.base._get_item_id(item) == question_id:
                 items_to_remove.append(i)
 
         # Remove in reverse order to maintain indices
         for i in reversed(items_to_remove):
-            del self.base._checkpoint.hasPart[i]
+            del self.base._checkpoint.dataFeedElement[i]
 
         self.base._checkpoint.dateModified = datetime.now().isoformat()
         return True
@@ -150,7 +150,7 @@ class QuestionManager:
         if "question" in metadata:
             question_data["question"] = metadata["question"]
             # Update underlying JSON-LD structure
-            for item in self.base._checkpoint.hasPart:
+            for item in self.base._checkpoint.dataFeedElement:
                 if self.base._get_item_id(item) == question_id:
                     item.item.text = metadata["question"]
                     break
@@ -158,7 +158,7 @@ class QuestionManager:
         if "raw_answer" in metadata:
             question_data["raw_answer"] = metadata["raw_answer"]
             # Update underlying JSON-LD structure
-            for item in self.base._checkpoint.hasPart:
+            for item in self.base._checkpoint.dataFeedElement:
                 if self.base._get_item_id(item) == question_id:
                     item.item.acceptedAnswer.text = metadata["raw_answer"]
                     break
@@ -179,7 +179,7 @@ class QuestionManager:
 
         # Update modification timestamp
         question_data["date_modified"] = datetime.now().isoformat()
-        for item in self.base._checkpoint.hasPart:
+        for item in self.base._checkpoint.dataFeedElement:
             if self.base._get_item_id(item) == question_id:
                 item.dateModified = question_data["date_modified"]
                 break
@@ -282,7 +282,7 @@ class QuestionManager:
         question_data["custom_metadata"] = custom_metadata if custom_metadata else None
 
         # Remove from underlying JSON-LD structure
-        for item in self.base._checkpoint.hasPart:
+        for item in self.base._checkpoint.dataFeedElement:
             if self.base._get_item_id(item) == question_id:
                 if item.item.additionalProperty:
                     for i, prop in enumerate(item.item.additionalProperty):
@@ -337,7 +337,7 @@ class QuestionManager:
         """
         count = len(self.base._questions_cache)
         self.base._questions_cache.clear()
-        self.base._checkpoint.hasPart.clear()
+        self.base._checkpoint.dataFeedElement.clear()
         self.base._checkpoint.dateModified = datetime.now().isoformat()
         return count
 
