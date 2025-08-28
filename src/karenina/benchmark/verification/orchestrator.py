@@ -20,6 +20,7 @@ def _create_verification_task(
     answering_replicate: int | None,
     parsing_replicate: int | None,
     rubric: Rubric | None,
+    keywords: list[str] | None = None,
 ) -> dict[str, Any]:
     """Create a verification task dictionary from parameters."""
     return {
@@ -33,6 +34,7 @@ def _create_verification_task(
         "answering_replicate": answering_replicate,
         "parsing_replicate": parsing_replicate,
         "rubric": rubric,
+        "keywords": keywords,
     }
 
 
@@ -62,6 +64,7 @@ def _execute_verification_task(task: dict[str, Any]) -> tuple[str, VerificationR
         answering_replicate=task["answering_replicate"],
         parsing_replicate=task["parsing_replicate"],
         rubric=task["rubric"],
+        keywords=task.get("keywords"),
     )
 
     return result_key, result
@@ -74,6 +77,7 @@ def run_question_verification(
     config: VerificationConfig,
     rubric: Rubric | None = None,
     async_config: AsyncConfig | None = None,
+    keywords: list[str] | None = None,
 ) -> dict[str, VerificationResult]:
     """
     Run verification for a single question with all model combinations.
@@ -135,6 +139,7 @@ def run_question_verification(
                 answering_replicate=answering_replicate,
                 parsing_replicate=parsing_replicate,
                 rubric=rubric,
+                keywords=keywords,
             )
             verification_tasks.append(task)
 
@@ -162,6 +167,7 @@ def run_question_verification(
                         answering_replicate=answering_replicate,
                         parsing_replicate=parsing_replicate,
                         rubric=rubric,
+                        keywords=keywords,
                     )
                     verification_tasks.append(task)
 

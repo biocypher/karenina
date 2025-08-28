@@ -145,6 +145,7 @@ def export_verification_results_json(job: VerificationJob, results: dict[str, Ve
             "verify_result": _serialize_verification_result(result.verify_result),
             "verify_granular_result": _serialize_verification_result(result.verify_granular_result),
             "verify_rubric": result.verify_rubric,
+            "keywords": result.keywords,
             "answering_model": result.answering_model,
             "parsing_model": result.parsing_model,
             "answering_replicate": result.answering_replicate,
@@ -195,6 +196,7 @@ def export_verification_results_csv(
                 "error",
                 "question_text",
                 "raw_llm_response",
+                "keywords",
                 "export_timestamp",
                 "karenina_version",
                 "job_id",
@@ -292,6 +294,7 @@ def export_verification_results_csv(
         "parsed_response",
         "verify_result",
         "verify_granular_result",
+        "keywords",
     ]
 
     # Add global rubric trait columns (prefixed with 'rubric_')
@@ -337,6 +340,7 @@ def export_verification_results_csv(
             "parsed_response": _safe_json_serialize(result.parsed_response, result.question_id, "parsed_response"),
             "verify_result": _serialize_verification_result(result.verify_result),
             "verify_granular_result": _serialize_verification_result(result.verify_granular_result),
+            "keywords": _safe_json_serialize(result.keywords, result.question_id, "keywords"),
             "answering_model": result.answering_model,
             "parsing_model": result.parsing_model,
             "answering_replicate": result.answering_replicate or "",

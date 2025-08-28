@@ -102,19 +102,34 @@ def get_file_preview(file_path: str, sheet_name: str | None = None, max_rows: in
 
 
 def extract_questions_from_file(
-    file_path: str, question_column: str, answer_column: str, sheet_name: str | None = None
-) -> list[Question]:
+    file_path: str,
+    question_column: str,
+    answer_column: str,
+    sheet_name: str | None = None,
+    author_name_column: str | None = None,
+    author_email_column: str | None = None,
+    author_affiliation_column: str | None = None,
+    url_column: str | None = None,
+    keywords_column: str | None = None,
+    keywords_separator: str = ",",
+) -> list[tuple[Question, dict[str, Any]]]:
     """
-    Extract questions from a file with flexible column selection.
+    Extract questions from a file with flexible column selection and optional metadata.
 
     Args:
         file_path: Path to the file
         question_column: Name of the column containing questions
         answer_column: Name of the column containing answers
         sheet_name: Sheet name for Excel files (optional)
+        author_name_column: Optional column name for author names
+        author_email_column: Optional column name for author emails
+        author_affiliation_column: Optional column name for author affiliations
+        url_column: Optional column name for URLs
+        keywords_column: Optional column name for keywords
+        keywords_separator: Separator for splitting keywords (default: ",")
 
     Returns:
-        List of Question instances
+        List of tuples containing (Question, metadata_dict)
 
     Raises:
         ValueError: If required columns are missing
@@ -128,27 +143,83 @@ def extract_questions_from_file(
     if missing_columns:
         raise ValueError(f"Missing columns in file: {missing_columns}")
 
-    # Filter to only required columns and drop rows with missing data
-    df_filtered = df[[question_column, answer_column]].dropna()
+    # Collect all columns we want to use (required + optional metadata)
+    columns_to_use = [question_column, answer_column]
+    metadata_columns = {}
+    
+    # Add metadata columns if they exist in the file
+    if author_name_column and author_name_column in df.columns:
+        columns_to_use.append(author_name_column)
+        metadata_columns['author_name'] = author_name_column
+    
+    if author_email_column and author_email_column in df.columns:
+        columns_to_use.append(author_email_column)
+        metadata_columns['author_email'] = author_email_column
+        
+    if author_affiliation_column and author_affiliation_column in df.columns:
+        columns_to_use.append(author_affiliation_column)
+        metadata_columns['author_affiliation'] = author_affiliation_column
+        
+    if url_column and url_column in df.columns:
+        columns_to_use.append(url_column)
+        metadata_columns['url'] = url_column
+        
+    if keywords_column and keywords_column in df.columns:
+        columns_to_use.append(keywords_column)
+        metadata_columns['keywords'] = keywords_column
 
-    # Convert to string and strip whitespace using vectorized operations
+    # Filter to only the columns we need and drop rows with missing required data
+    df_filtered = df[columns_to_use].dropna(subset=[question_column, answer_column])
+
+    # Convert to string and strip whitespace for required columns
     df_filtered[question_column] = df_filtered[question_column].astype(str).str.strip()
     df_filtered[answer_column] = df_filtered[answer_column].astype(str).str.strip()
 
     # Filter out empty questions or answers
     df_filtered = df_filtered[(df_filtered[question_column] != "") & (df_filtered[answer_column] != "")]
 
-    # Create Question instances using list comprehension (ID auto-generated)
-    questions = [
-        Question(
+    # Create Question instances with metadata
+    results = []
+    for _, row in df_filtered.iterrows():
+        # Create the Question
+        question = Question(
             question=row[question_column],
             raw_answer=row[answer_column],
             tags=[],  # No tags in the source data
         )
-        for row in df_filtered.to_dict("records")
-    ]
+        
+        # Extract metadata
+        metadata = {}
+        
+        # Author metadata
+        author_data = {}
+        if 'author_name' in metadata_columns and pd.notna(row[metadata_columns['author_name']]):
+            author_data['name'] = str(row[metadata_columns['author_name']]).strip()
+        if 'author_email' in metadata_columns and pd.notna(row[metadata_columns['author_email']]):
+            author_data['email'] = str(row[metadata_columns['author_email']]).strip()
+        if 'author_affiliation' in metadata_columns and pd.notna(row[metadata_columns['author_affiliation']]):
+            author_data['affiliation'] = str(row[metadata_columns['author_affiliation']]).strip()
+            
+        if author_data:
+            metadata['author'] = {'@type': 'Person', **author_data}
+        
+        # URL metadata
+        if 'url' in metadata_columns and pd.notna(row[metadata_columns['url']]):
+            url_value = str(row[metadata_columns['url']]).strip()
+            if url_value:
+                metadata['url'] = url_value
+        
+        # Keywords metadata
+        if 'keywords' in metadata_columns and pd.notna(row[metadata_columns['keywords']]):
+            keywords_value = str(row[metadata_columns['keywords']]).strip()
+            if keywords_value:
+                keywords_list = [k.strip() for k in keywords_value.split(keywords_separator) if k.strip()]
+                if keywords_list:
+                    metadata['keywords'] = keywords_list
+        
+        results.append((question, metadata))
 
-    return questions
+    return results
 
 
 def extract_questions_from_excel(excel_path: str) -> list[Question]:
@@ -157,12 +228,14 @@ def extract_questions_from_excel(excel_path: str) -> list[Question]:
 
     This function is kept for backward compatibility.
     """
-    return extract_questions_from_file(
+    results = extract_questions_from_file(
         file_path=excel_path, question_column="Question", answer_column="Answer", sheet_name="Easy"
     )
+    # Extract just the Question objects for backward compatibility
+    return [question for question, _ in results]
 
 
-def generate_questions_file(questions: list[Question], output_path: str) -> None:
+def generate_questions_file(questions: list[Question] | list[tuple[Question, dict[str, Any]]], output_path: str) -> None:
     """Generate the questions.py file with all extracted questions."""
 
     # Create the file content
@@ -173,8 +246,15 @@ def generate_questions_file(questions: list[Question], output_path: str) -> None
 """
 
     # Add each question as a variable
-    for i, question in enumerate(questions):
+    question_objects = []
+    for i, item in enumerate(questions):
+        if isinstance(item, tuple):
+            question, _ = item  # Ignore metadata for Python file generation
+        else:
+            question = item
+            
         var_name = f"question_{i + 1}"
+        question_objects.append(var_name)
         content += f'''{var_name} = Question(
     id="{question.id}",
     question="""{question.question}""",
@@ -187,8 +267,8 @@ def generate_questions_file(questions: list[Question], output_path: str) -> None
     # Add a list containing all questions
     content += "# List of all questions\n"
     content += "all_questions = [\n"
-    for i in range(len(questions)):
-        content += f"    question_{i + 1},\n"
+    for var_name in question_objects:
+        content += f"    {var_name},\n"
     content += "]\n"
 
     # Write to file
@@ -196,23 +276,40 @@ def generate_questions_file(questions: list[Question], output_path: str) -> None
         f.write(content)
 
 
-def questions_to_json(questions: list[Question]) -> dict[str, Any]:
+def questions_to_json(questions: list[Question] | list[tuple[Question, dict[str, Any]]]) -> dict[str, Any]:
     """
     Convert questions to JSON format compatible with the webapp.
 
     Args:
-        questions: List of Question instances
+        questions: List of Question instances or tuples of (Question, metadata_dict)
 
     Returns:
         Dictionary in the format expected by the webapp
     """
     result = {}
-    for question in questions:
-        result[question.id] = {
-            "question": question.question,
-            "raw_answer": question.raw_answer,
-            # No answer_template - this should only be added after template generation
-        }
+    for item in questions:
+        if isinstance(item, tuple):
+            # New format: (Question, metadata)
+            question, metadata = item
+            question_data = {
+                "question": question.question,
+                "raw_answer": question.raw_answer,
+                # No answer_template - this should only be added after template generation
+            }
+            
+            # Add metadata if present
+            if metadata:
+                question_data["metadata"] = metadata
+                
+            result[question.id] = question_data
+        else:
+            # Legacy format: just Question
+            question = item
+            result[question.id] = {
+                "question": question.question,
+                "raw_answer": question.raw_answer,
+                # No answer_template - this should only be added after template generation
+            }
     return result
 
 
@@ -223,6 +320,13 @@ def extract_and_generate_questions(
     answer_column: str = "Answer",
     sheet_name: str | None = None,
     return_json: bool = False,
+    # Optional metadata columns
+    author_name_column: str | None = None,
+    author_email_column: str | None = None,
+    author_affiliation_column: str | None = None,
+    url_column: str | None = None,
+    keywords_column: str | None = None,
+    keywords_separator: str = ",",
 ) -> dict[str, Any] | None:
     """
     Extract questions from file and generate a Python file with Question instances.
@@ -234,6 +338,12 @@ def extract_and_generate_questions(
         answer_column: Name of the column containing answers
         sheet_name: Sheet name for Excel files (optional)
         return_json: If True, return JSON format instead of generating Python file
+        author_name_column: Optional column name for author names
+        author_email_column: Optional column name for author emails
+        author_affiliation_column: Optional column name for author affiliations
+        url_column: Optional column name for URLs
+        keywords_column: Optional column name for keywords
+        keywords_separator: Separator for splitting keywords (default: ",")
 
     Returns:
         If return_json is True, returns dictionary in webapp format
@@ -248,9 +358,18 @@ def extract_and_generate_questions(
     if not Path(file_path).exists():
         raise FileNotFoundError(f"File not found: {file_path}")
 
-    # Extract questions
+    # Extract questions with optional metadata
     questions = extract_questions_from_file(
-        file_path=file_path, question_column=question_column, answer_column=answer_column, sheet_name=sheet_name
+        file_path=file_path,
+        question_column=question_column,
+        answer_column=answer_column,
+        sheet_name=sheet_name,
+        author_name_column=author_name_column,
+        author_email_column=author_email_column,
+        author_affiliation_column=author_affiliation_column,
+        url_column=url_column,
+        keywords_column=keywords_column,
+        keywords_separator=keywords_separator,
     )
 
     if not questions:
