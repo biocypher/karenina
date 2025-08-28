@@ -209,7 +209,7 @@ class Benchmark:
 
         # Find the question in the checkpoint
         found = False
-        for item in self._checkpoint.hasPart:
+        for item in self._checkpoint.dataFeedElement:
             if self._get_item_id(item) == question_id:
                 item.item.hasPart.text = template_code
                 item.dateModified = datetime.now().isoformat()
@@ -248,7 +248,7 @@ class Benchmark:
 
         # Find the question
         found = False
-        for item in self._checkpoint.hasPart:
+        for item in self._checkpoint.dataFeedElement:
             if self._get_item_id(item) == question_id:
                 rating = convert_rubric_trait_to_rating(trait, "question-specific")
                 if item.item.rating is None:
@@ -1225,7 +1225,7 @@ class Benchmark:
     def _update_question_property(self, question_id: str, property_name: str, value: Any) -> None:
         """Update a property in the underlying JSON-LD structure."""
         # Find the DataFeedItem for this question
-        for item in self._checkpoint.hasPart:
+        for item in self._checkpoint.dataFeedElement:
             if self._get_item_id(item) == question_id:
                 # Update dateModified
                 item.dateModified = datetime.now().isoformat()
@@ -1493,7 +1493,7 @@ class Benchmark:
         if "question" in metadata:
             question_data["question"] = metadata["question"]
             # Update underlying JSON-LD structure
-            for item in self._checkpoint.hasPart:
+            for item in self._checkpoint.dataFeedElement:
                 if self._get_item_id(item) == question_id:
                     item.item.text = metadata["question"]
                     break
@@ -1501,7 +1501,7 @@ class Benchmark:
         if "raw_answer" in metadata:
             question_data["raw_answer"] = metadata["raw_answer"]
             # Update underlying JSON-LD structure
-            for item in self._checkpoint.hasPart:
+            for item in self._checkpoint.dataFeedElement:
                 if self._get_item_id(item) == question_id:
                     item.item.acceptedAnswer.text = metadata["raw_answer"]
                     break
@@ -1522,7 +1522,7 @@ class Benchmark:
 
         # Update modification timestamp
         question_data["date_modified"] = datetime.now().isoformat()
-        for item in self._checkpoint.hasPart:
+        for item in self._checkpoint.dataFeedElement:
             if self._get_item_id(item) == question_id:
                 item.dateModified = question_data["date_modified"]
                 break
@@ -1597,7 +1597,7 @@ class Benchmark:
         question_data["custom_metadata"] = custom_metadata if custom_metadata else None
 
         # Remove from underlying JSON-LD structure
-        for item in self._checkpoint.hasPart:
+        for item in self._checkpoint.dataFeedElement:
             if self._get_item_id(item) == question_id:
                 if item.item.additionalProperty:
                     for i, prop in enumerate(item.item.additionalProperty):
@@ -1885,13 +1885,13 @@ class Benchmark:
 
         # Remove from checkpoint data
         items_to_remove = []
-        for i, item in enumerate(self._checkpoint.hasPart):
+        for i, item in enumerate(self._checkpoint.dataFeedElement):
             if self._get_item_id(item) == question_id:
                 items_to_remove.append(i)
 
         # Remove in reverse order to maintain indices
         for i in reversed(items_to_remove):
-            del self._checkpoint.hasPart[i]
+            del self._checkpoint.dataFeedElement[i]
 
         self._checkpoint.dateModified = datetime.now().isoformat()
         return True
@@ -1905,7 +1905,7 @@ class Benchmark:
         """
         count = len(self._questions_cache)
         self._questions_cache.clear()
-        self._checkpoint.hasPart.clear()
+        self._checkpoint.dataFeedElement.clear()
         self._checkpoint.dateModified = datetime.now().isoformat()
         return count
 
@@ -1932,7 +1932,7 @@ class Benchmark:
         Returns:
             True if rubric was removed, False if not found
         """
-        for item in self._checkpoint.hasPart:
+        for item in self._checkpoint.dataFeedElement:
             if self._get_item_id(item) == question_id and item.item.rating:
                 item.item.rating = None
                 item.dateModified = datetime.now().isoformat()
@@ -1955,7 +1955,7 @@ class Benchmark:
             count += 1
 
         # Clear question-specific rubrics
-        for item in self._checkpoint.hasPart:
+        for item in self._checkpoint.dataFeedElement:
             if item.item.rating:
                 item.item.rating = None
                 item.dateModified = datetime.now().isoformat()

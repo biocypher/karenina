@@ -171,12 +171,12 @@ def test_json_ld_format():
         # Verify JSON-LD structure
         assert "@context" in data
         assert "@type" in data
-        assert data["@type"] == "Dataset"
-        assert "hasPart" in data
-        assert len(data["hasPart"]) == 1
+        assert data["@type"] == "DataFeed"
+        assert "dataFeedElement" in data
+        assert len(data["dataFeedElement"]) == 1
 
         # Verify question structure
-        item = data["hasPart"][0]
+        item = data["dataFeedElement"][0]
         assert item["@type"] == "DataFeedItem"
         assert "item" in item
         assert item["item"]["@type"] == "Question"
@@ -232,7 +232,7 @@ def test_validate_benchmark():
     q_id = benchmark.add_question(question="Question with bad template", raw_answer="Answer")
 
     # Directly modify the template to be invalid (bypassing validation)
-    for item in benchmark._checkpoint.hasPart:
+    for item in benchmark._checkpoint.dataFeedElement:
         if benchmark._get_item_id(item) == q_id:
             item.item.hasPart.text = ""  # Empty template should fail validation
             break
