@@ -146,27 +146,27 @@ def extract_questions_from_file(
     # Collect all columns we want to use (required + optional metadata)
     columns_to_use = [question_column, answer_column]
     metadata_columns = {}
-    
+
     # Add metadata columns if they exist in the file
     if author_name_column and author_name_column in df.columns:
         columns_to_use.append(author_name_column)
-        metadata_columns['author_name'] = author_name_column
-    
+        metadata_columns["author_name"] = author_name_column
+
     if author_email_column and author_email_column in df.columns:
         columns_to_use.append(author_email_column)
-        metadata_columns['author_email'] = author_email_column
-        
+        metadata_columns["author_email"] = author_email_column
+
     if author_affiliation_column and author_affiliation_column in df.columns:
         columns_to_use.append(author_affiliation_column)
-        metadata_columns['author_affiliation'] = author_affiliation_column
-        
+        metadata_columns["author_affiliation"] = author_affiliation_column
+
     if url_column and url_column in df.columns:
         columns_to_use.append(url_column)
-        metadata_columns['url'] = url_column
-        
+        metadata_columns["url"] = url_column
+
     if keywords_column and keywords_column in df.columns:
         columns_to_use.append(keywords_column)
-        metadata_columns['keywords'] = keywords_column
+        metadata_columns["keywords"] = keywords_column
 
     # Filter to only the columns we need and drop rows with missing required data
     df_filtered = df[columns_to_use].dropna(subset=[question_column, answer_column])
@@ -187,36 +187,36 @@ def extract_questions_from_file(
             raw_answer=row[answer_column],
             tags=[],  # No tags in the source data
         )
-        
+
         # Extract metadata
-        metadata = {}
-        
+        metadata: dict[str, Any] = {}
+
         # Author metadata
-        author_data = {}
-        if 'author_name' in metadata_columns and pd.notna(row[metadata_columns['author_name']]):
-            author_data['name'] = str(row[metadata_columns['author_name']]).strip()
-        if 'author_email' in metadata_columns and pd.notna(row[metadata_columns['author_email']]):
-            author_data['email'] = str(row[metadata_columns['author_email']]).strip()
-        if 'author_affiliation' in metadata_columns and pd.notna(row[metadata_columns['author_affiliation']]):
-            author_data['affiliation'] = str(row[metadata_columns['author_affiliation']]).strip()
-            
+        author_data: dict[str, str] = {}
+        if "author_name" in metadata_columns and pd.notna(row[metadata_columns["author_name"]]):
+            author_data["name"] = str(row[metadata_columns["author_name"]]).strip()
+        if "author_email" in metadata_columns and pd.notna(row[metadata_columns["author_email"]]):
+            author_data["email"] = str(row[metadata_columns["author_email"]]).strip()
+        if "author_affiliation" in metadata_columns and pd.notna(row[metadata_columns["author_affiliation"]]):
+            author_data["affiliation"] = str(row[metadata_columns["author_affiliation"]]).strip()
+
         if author_data:
-            metadata['author'] = {'@type': 'Person', **author_data}
-        
+            metadata["author"] = {"@type": "Person", **author_data}
+
         # URL metadata
-        if 'url' in metadata_columns and pd.notna(row[metadata_columns['url']]):
-            url_value = str(row[metadata_columns['url']]).strip()
+        if "url" in metadata_columns and pd.notna(row[metadata_columns["url"]]):
+            url_value = str(row[metadata_columns["url"]]).strip()
             if url_value:
-                metadata['url'] = url_value
-        
+                metadata["url"] = url_value
+
         # Keywords metadata
-        if 'keywords' in metadata_columns and pd.notna(row[metadata_columns['keywords']]):
-            keywords_value = str(row[metadata_columns['keywords']]).strip()
+        if "keywords" in metadata_columns and pd.notna(row[metadata_columns["keywords"]]):
+            keywords_value = str(row[metadata_columns["keywords"]]).strip()
             if keywords_value:
                 keywords_list = [k.strip() for k in keywords_value.split(keywords_separator) if k.strip()]
                 if keywords_list:
-                    metadata['keywords'] = keywords_list
-        
+                    metadata["keywords"] = keywords_list
+
         results.append((question, metadata))
 
     return results
@@ -235,7 +235,9 @@ def extract_questions_from_excel(excel_path: str) -> list[Question]:
     return [question for question, _ in results]
 
 
-def generate_questions_file(questions: list[Question] | list[tuple[Question, dict[str, Any]]], output_path: str) -> None:
+def generate_questions_file(
+    questions: list[Question] | list[tuple[Question, dict[str, Any]]], output_path: str
+) -> None:
     """Generate the questions.py file with all extracted questions."""
 
     # Create the file content
@@ -252,7 +254,7 @@ def generate_questions_file(questions: list[Question] | list[tuple[Question, dic
             question, _ = item  # Ignore metadata for Python file generation
         else:
             question = item
-            
+
         var_name = f"question_{i + 1}"
         question_objects.append(var_name)
         content += f'''{var_name} = Question(
@@ -291,16 +293,16 @@ def questions_to_json(questions: list[Question] | list[tuple[Question, dict[str,
         if isinstance(item, tuple):
             # New format: (Question, metadata)
             question, metadata = item
-            question_data = {
+            question_data: dict[str, Any] = {
                 "question": question.question,
                 "raw_answer": question.raw_answer,
                 # No answer_template - this should only be added after template generation
             }
-            
+
             # Add metadata if present
             if metadata:
                 question_data["metadata"] = metadata
-                
+
             result[question.id] = question_data
         else:
             # Legacy format: just Question
