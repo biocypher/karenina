@@ -141,7 +141,8 @@ def export_verification_results_json(job: VerificationJob, results: dict[str, Ve
             "error": result.error,
             "question_text": result.question_text,
             "raw_llm_response": result.raw_llm_response,
-            "parsed_response": result.parsed_response,
+            "parsed_gt_response": result.parsed_gt_response,
+            "parsed_llm_response": result.parsed_llm_response,
             "verify_result": _serialize_verification_result(result.verify_result),
             "verify_granular_result": _serialize_verification_result(result.verify_granular_result),
             "verify_rubric": result.verify_rubric,
@@ -291,7 +292,8 @@ def export_verification_results_csv(
         "error",
         "question_text",
         "raw_llm_response",
-        "parsed_response",
+        "parsed_gt_response",
+        "parsed_llm_response",
         "verify_result",
         "verify_granular_result",
         "keywords",
@@ -337,7 +339,12 @@ def export_verification_results_csv(
             "error": result.error or "",
             "question_text": result.question_text,
             "raw_llm_response": result.raw_llm_response,
-            "parsed_response": _safe_json_serialize(result.parsed_response, result.question_id, "parsed_response"),
+            "parsed_gt_response": _safe_json_serialize(
+                result.parsed_gt_response, result.question_id, "parsed_gt_response"
+            ),
+            "parsed_llm_response": _safe_json_serialize(
+                result.parsed_llm_response, result.question_id, "parsed_llm_response"
+            ),
             "verify_result": _serialize_verification_result(result.verify_result),
             "verify_granular_result": _serialize_verification_result(result.verify_granular_result),
             "keywords": _safe_json_serialize(result.keywords, result.question_id, "keywords"),

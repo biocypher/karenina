@@ -139,7 +139,8 @@ class VerificationResult(BaseModel):
     # Raw data
     question_text: str
     raw_llm_response: str
-    parsed_response: dict[str, Any] | None = None
+    parsed_gt_response: dict[str, Any] | None = None  # Ground truth from 'correct' field
+    parsed_llm_response: dict[str, Any] | None = None  # LLM extracted fields (excluding 'id' and 'correct')
 
     # Verification outcomes
     verify_result: Any | None = None

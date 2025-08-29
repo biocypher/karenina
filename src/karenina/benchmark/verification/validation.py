@@ -1,31 +1,9 @@
 """Template validation logic for verification system."""
 
 import inspect
-from typing import Any, get_origin
+from typing import get_args, get_origin
 
 from ...schemas.answer_class import BaseAnswer
-
-
-def _is_dict_type(annotation: Any) -> bool:
-    """Check if a type annotation represents a dictionary type."""
-    # Direct dict type
-    if annotation is dict:
-        return True
-
-    # typing.Dict or Dict from globals
-    if hasattr(annotation, "__name__") and annotation.__name__ == "Dict":
-        return True
-
-    # Generic types like Dict[str, Any], dict[str, Any]
-    origin = get_origin(annotation)
-    if origin is dict:
-        return True
-
-    # Handle string annotations
-    if isinstance(annotation, str):
-        return annotation.lower().startswith(("dict", "Dict"))
-
-    return False
 
 
 def validate_answer_template(template_code: str) -> tuple[bool, str | None, type | None]:
@@ -94,15 +72,49 @@ def validate_answer_template(template_code: str) -> tuple[bool, str | None, type
         if not callable(getattr(Answer, "verify", None)):
             return False, "verify must be a callable method", None
 
-        # Check if it has a 'correct' field annotation
-        if not hasattr(Answer, "__annotations__") or "correct" not in Answer.__annotations__:
-            return False, "Answer class must have a 'correct' field", None
+        # The 'correct' field is optional, but if present via model_post_init, it must be a dict
+        if "model_post_init" in Answer.__dict__:
+            try:
+                from typing import Any
 
-        # Check if 'correct' is annotated as a dictionary type
-        correct_annotation = Answer.__annotations__["correct"]
-        # Handle various dictionary type annotations
-        if not _is_dict_type(correct_annotation):
-            return False, "Answer class 'correct' field must be annotated as dict type", None
+                # Get required fields to create a valid test instance
+                required_fields: dict[str, Any] = {}
+                if hasattr(Answer, "__annotations__"):
+                    for field_name, field_type in Answer.__annotations__.items():
+                        if field_name != "correct":  # Skip correct field as it might be set by model_post_init
+                            # Provide dummy values for required fields
+                            if field_type is int or str(field_type) == "int":
+                                required_fields[field_name] = 0
+                            elif field_type is str or str(field_type) == "str":
+                                required_fields[field_name] = ""
+                            elif field_type is float or str(field_type) == "float":
+                                required_fields[field_name] = 0.0
+                            elif field_type is bool or str(field_type) == "bool":
+                                required_fields[field_name] = False
+                            else:
+                                # Handle Literal and other complex types
+                                origin = get_origin(field_type)
+                                if origin is not None:
+                                    # Handle Literal types
+                                    if str(origin) == "typing.Literal":
+                                        # Get the first literal value
+                                        args = get_args(field_type)
+                                        if args:
+                                            required_fields[field_name] = args[0]
+                                        else:
+                                            required_fields[field_name] = ""
+                                    else:
+                                        # Default to empty string for unknown types
+                                        required_fields[field_name] = ""
+                                else:
+                                    # Default to empty string for unknown types
+                                    required_fields[field_name] = ""
+
+                test_instance = Answer(**required_fields)
+                if hasattr(test_instance, "correct") and not isinstance(test_instance.correct, dict):
+                    return False, "model_post_init must assign 'self.correct' as a dictionary", None
+            except Exception as e:
+                return False, f"Error testing model_post_init: {e}", None
 
         return True, None, Answer
 
