@@ -155,6 +155,7 @@ def add_question_to_benchmark(
     author: dict[str, Any] | None = None,
     sources: list[dict[str, Any]] | None = None,
     custom_metadata: dict[str, Any] | None = None,
+    keywords: list[str] | None = None,
 ) -> str:
     """
     Add a question to a JSON-LD benchmark.
@@ -170,6 +171,7 @@ def add_question_to_benchmark(
         author: Optional author information
         sources: Optional source documents
         custom_metadata: Optional custom metadata
+        keywords: Optional keywords list
 
     Returns:
         The question ID that was added
@@ -235,6 +237,7 @@ def add_question_to_benchmark(
         "dateCreated": timestamp,
         "dateModified": timestamp,
         "item": question_obj,
+        "keywords": keywords,
     }
     item = SchemaOrgDataFeedItem.model_validate(item_dict)
 
@@ -324,6 +327,7 @@ def extract_questions_from_benchmark(
                 "sources": sources,
                 "custom_metadata": custom_metadata if custom_metadata else None,
                 "question_rubric": question_rubric,
+                "keywords": item.keywords,
             }
         )
 

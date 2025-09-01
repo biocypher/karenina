@@ -17,6 +17,9 @@ class Answer(BaseAnswer):
     """Answer for a simple question."""
     response: str = Field(description="The answer response")
 
+    def model_post_init(self, __context):
+        self.correct = {"expected": "test"}
+
     def verify(self):
         return len(self.response) > 0
 '''
@@ -27,6 +30,7 @@ class Answer(BaseAnswer):
     assert error_msg is None
     assert Answer is not None
     assert hasattr(Answer, "verify")
+    assert "model_post_init" in Answer.__dict__
 
 
 def test_validate_answer_template_with_literal():
@@ -40,6 +44,9 @@ class Answer(BaseAnswer):
     """Answer with Literal type."""
     status: Literal["success", "failure"] = Field(description="The status")
     response: str = Field(description="The response")
+
+    def model_post_init(self, __context):
+        self.correct = {"status": "success", "response": "expected"}
 
     def verify(self):
         return self.status in ["success", "failure"] and len(self.response) > 0
@@ -76,6 +83,7 @@ from karenina.schemas.answer_class import BaseAnswer
 
 class Answer(BaseAnswer):
     response: str = "test"
+    correct: dict = {}
 """
 
     is_valid, error_msg, Answer = validate_answer_template(template_code)
@@ -182,6 +190,9 @@ from pydantic import Field
 class Answer(BaseAnswer):
     response: str = Field(description="The answer")
 
+    def model_post_init(self, __context):
+        self.correct = {"response": "expected"}
+
     def verify(self):
         return True
 """
@@ -199,7 +210,8 @@ class Answer(BaseAnswer):
         assert result.question_id == "test_id"
         assert result.question_text == "What is 2+2?"
         assert result.raw_llm_response == "The answer is 4"
-        assert result.parsed_response == {"response": "4"}
+        assert result.parsed_llm_response == {"response": "4"}
+        # Note: parsed_gt_response would contain the 'correct' field content if it exists
         assert result.verify_result is True
 
 
@@ -247,6 +259,9 @@ from pydantic import Field
 class Answer(BaseAnswer):
     response: str = Field(description="The answer")
 
+    def model_post_init(self, __context):
+        self.correct = {"response": "expected"}
+
     def verify(self):
         return True
 """
@@ -264,7 +279,8 @@ class Answer(BaseAnswer):
         assert result.question_id == "test_id"
         assert result.question_text == "What is 2+2?"
         assert result.raw_llm_response == "The answer is 4"
-        assert result.parsed_response == {"response": "4"}
+        assert result.parsed_llm_response == {"response": "4"}
+        # Note: parsed_gt_response would contain the 'correct' field content if it exists
         assert result.verify_result is True
 
         # Verify that the parser was called with cleaned JSON (without markdown fences)
@@ -309,6 +325,9 @@ from pydantic import Field
 
 class Answer(BaseAnswer):
     response: str = Field(description="The answer")
+
+    def model_post_init(self, __context):
+        self.correct = {"response": "expected"}
 
     def verify(self):
         return True
@@ -396,3 +415,68 @@ Please format your response as JSON.
 </format_instructions>
 """
     assert result == expected
+
+
+def test_validate_answer_template_no_correct_field():
+    """Test validation passes when Answer class has no correct field (optional)."""
+    template_code = """
+from karenina.schemas.answer_class import BaseAnswer
+from pydantic import Field
+
+class Answer(BaseAnswer):
+    response: str = Field(description="The answer response")
+
+    def verify(self):
+        return len(self.response) > 0
+"""
+
+    is_valid, error_msg, Answer = validate_answer_template(template_code)
+
+    assert is_valid is True
+    assert error_msg is None
+    assert Answer is not None
+
+
+def test_validate_answer_template_model_post_init_dict():
+    """Test validation passes with model_post_init assigning dict to correct."""
+    template_code = """
+from karenina.schemas.answer_class import BaseAnswer
+from pydantic import Field
+
+class Answer(BaseAnswer):
+    response: str = Field(description="The answer response")
+
+    def model_post_init(self, __context):
+        self.correct = {"expected": "test"}
+
+    def verify(self):
+        return len(self.response) > 0
+"""
+
+    is_valid, error_msg, Answer = validate_answer_template(template_code)
+    assert is_valid is True
+    assert error_msg is None
+    assert Answer is not None
+
+
+def test_validate_answer_template_correct_non_dict():
+    """Test validation fails when model_post_init assigns non-dict to correct."""
+    template_code = """
+from karenina.schemas.answer_class import BaseAnswer
+from pydantic import Field
+
+class Answer(BaseAnswer):
+    response: str = Field(description="The answer response")
+
+    def model_post_init(self, __context):
+        self.correct = "not a dict"
+
+    def verify(self):
+        return len(self.response) > 0
+"""
+
+    is_valid, error_msg, Answer = validate_answer_template(template_code)
+
+    assert is_valid is False
+    assert "model_post_init must assign 'self.correct' as a dictionary" in error_msg
+    assert Answer is None

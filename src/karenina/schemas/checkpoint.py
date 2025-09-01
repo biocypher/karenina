@@ -101,6 +101,7 @@ class SchemaOrgDataFeedItem(BaseModel):
     dateCreated: str  # ISO timestamp
     dateModified: str  # ISO timestamp
     item: SchemaOrgQuestion
+    keywords: list[str] | None = None  # Schema.org keywords property
 
 
 # Dataset metadata
@@ -205,4 +206,5 @@ SCHEMA_ORG_CONTEXT = {
     "value": "value",
     "url": "url",
     "identifier": "identifier",
+    "keywords": {"@id": "keywords", "@container": "@set"},
 }
