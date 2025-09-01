@@ -21,6 +21,8 @@ def _create_verification_task(
     parsing_replicate: int | None,
     rubric: Rubric | None,
     keywords: list[str] | None = None,
+    few_shot_examples: list[dict[str, str]] | None = None,
+    few_shot_enabled: bool = False,
 ) -> dict[str, Any]:
     """Create a verification task dictionary from parameters."""
     return {
@@ -35,6 +37,8 @@ def _create_verification_task(
         "parsing_replicate": parsing_replicate,
         "rubric": rubric,
         "keywords": keywords,
+        "few_shot_examples": few_shot_examples,
+        "few_shot_enabled": few_shot_enabled,
     }
 
 
@@ -65,6 +69,8 @@ def _execute_verification_task(task: dict[str, Any]) -> tuple[str, VerificationR
         parsing_replicate=task["parsing_replicate"],
         rubric=task["rubric"],
         keywords=task.get("keywords"),
+        few_shot_examples=task.get("few_shot_examples"),
+        few_shot_enabled=task.get("few_shot_enabled", False),
     )
 
     return result_key, result
@@ -78,6 +84,7 @@ def run_question_verification(
     rubric: Rubric | None = None,
     async_config: AsyncConfig | None = None,
     keywords: list[str] | None = None,
+    few_shot_examples: list[dict[str, str]] | None = None,
 ) -> dict[str, VerificationResult]:
     """
     Run verification for a single question with all model combinations.
@@ -140,6 +147,8 @@ def run_question_verification(
                 parsing_replicate=parsing_replicate,
                 rubric=rubric,
                 keywords=keywords,
+                few_shot_examples=few_shot_examples,
+                few_shot_enabled=getattr(config, "few_shot_enabled", False),
             )
             verification_tasks.append(task)
 
@@ -168,6 +177,8 @@ def run_question_verification(
                         parsing_replicate=parsing_replicate,
                         rubric=rubric,
                         keywords=keywords,
+                        few_shot_examples=few_shot_examples,
+                        few_shot_enabled=getattr(config, "few_shot_enabled", False),
                     )
                     verification_tasks.append(task)
 

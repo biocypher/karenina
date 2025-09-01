@@ -35,6 +35,11 @@ class VerificationConfig(BaseModel):
     rubric_enabled: bool = False
     rubric_trait_names: list[str] | None = None  # Optional filter for specific traits
 
+    # Few-shot prompting settings (disabled by default for backward compatibility)
+    few_shot_enabled: bool = False
+    few_shot_mode: Literal["all", "k-shot", "individual"] = "all"
+    few_shot_k: int = 3  # Number of examples to use in k-shot mode
+
     # Legacy fields for backward compatibility (deprecated)
     answering_model_provider: str | None = None
     answering_model_name: str | None = None
@@ -127,6 +132,10 @@ class VerificationConfig(BaseModel):
             # Check that replicate count is valid
             if self.replicate_count < 1:
                 raise ValueError("Replicate count must be at least 1")
+
+        # Additional validation for few-shot prompting scenarios
+        if self.few_shot_enabled and self.few_shot_mode == "k-shot" and self.few_shot_k < 1:
+            raise ValueError("Few-shot k value must be at least 1 when using k-shot mode")
 
 
 class VerificationResult(BaseModel):
