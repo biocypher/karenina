@@ -70,6 +70,7 @@ from pydantic import Field
 
 class Answer(BaseAnswer):
     result: str = Field(description="The answer result")
+    correct: dict = Field(description="Correct answer")
 
     def verify(self):
         return len(self.result) > 0
@@ -126,6 +127,7 @@ from pydantic import Field
 
 class Answer(BaseAnswer):
     result: str = Field(description="The answer result")
+    correct: dict = Field(description="Correct answer")
 
     def verify(self):
         return len(self.result) > 0
@@ -176,6 +178,7 @@ from pydantic import Field
 
 class Answer(BaseAnswer):
     result: str = Field(description="The answer result")
+    correct: dict = Field(description="Correct answer")
 
     def verify(self):
         return len(self.result) > 0
@@ -226,6 +229,7 @@ from pydantic import Field
 
 class Answer(BaseAnswer):
     result: str = Field(description="The answer result")
+    correct: dict = Field(description="Correct answer")
 
     def verify(self):
         return len(self.result) > 0

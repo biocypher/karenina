@@ -15,6 +15,31 @@ from .rubric_evaluator import RubricEvaluator
 from .validation import validate_answer_template
 
 
+def _split_parsed_response(parsed_answer: Any) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """Split parsed answer into ground truth and LLM response components.
+
+    Args:
+        parsed_answer: The parsed answer object from LLM
+
+    Returns:
+        Tuple of (parsed_gt_response, parsed_llm_response)
+        - parsed_gt_response: The 'correct' field content (ground truth)
+        - parsed_llm_response: All other fields except 'id' and 'correct'
+    """
+    if not parsed_answer or not hasattr(parsed_answer, "model_dump"):
+        return None, None
+
+    parsed_dict = parsed_answer.model_dump()
+
+    # Extract ground truth from 'correct' field
+    parsed_gt_response = parsed_dict.get("correct")
+
+    # Create LLM response by excluding 'id' and 'correct'
+    parsed_llm_response = {k: v for k, v in parsed_dict.items() if k not in ("id", "correct")}
+
+    return parsed_gt_response, parsed_llm_response
+
+
 def _is_valid_md5_hash(hash_string: str) -> bool:
     """
     Validate that a string is a proper MD5 hash format.
@@ -92,6 +117,7 @@ def run_single_model_verification(
     answering_replicate: int | None = None,
     parsing_replicate: int | None = None,
     rubric: Rubric | None = None,
+    keywords: list[str] | None = None,
 ) -> VerificationResult:
     """
     Run verification for a single question with specific answering and parsing models.
@@ -139,8 +165,11 @@ def run_single_model_verification(
                 question_id=question_id,
                 success=False,
                 error=f"Template validation failed: {error_msg}",
+                keywords=keywords,
                 question_text=question_text,
                 raw_llm_response="",
+                parsed_gt_response=None,
+                parsed_llm_response=None,
                 answering_model=answering_model_str,
                 parsing_model=parsing_model_str,
                 evaluation_rubric=rubric.model_dump() if rubric else None,
@@ -198,8 +227,11 @@ def run_single_model_verification(
                 question_id=question_id,
                 success=False,
                 error=f"LLM call failed: {e}",
+                keywords=keywords,
                 question_text=question_text,
                 raw_llm_response="",
+                parsed_gt_response=None,
+                parsed_llm_response=None,
                 answering_model=answering_model_str,
                 parsing_model=parsing_model_str,
                 evaluation_rubric=rubric.model_dump() if rubric else None,
@@ -229,8 +261,11 @@ def run_single_model_verification(
                 question_id=question_id,
                 success=False,
                 error=f"Failed to create PydanticOutputParser: {e}",
+                keywords=keywords,
                 question_text=question_text,
                 raw_llm_response=raw_llm_response,
+                parsed_gt_response=None,
+                parsed_llm_response=None,
                 answering_model=answering_model_str,
                 parsing_model=parsing_model_str,
                 evaluation_rubric=rubric.model_dump() if rubric else None,
@@ -272,8 +307,11 @@ def run_single_model_verification(
                 question_id=question_id,
                 success=False,
                 error=f"Parsing failed: {e}",
+                keywords=keywords,
                 question_text=question_text,
                 raw_llm_response=raw_llm_response,
+                parsed_gt_response=None,
+                parsed_llm_response=None,
                 answering_model=answering_model_str,
                 parsing_model=parsing_model_str,
                 evaluation_rubric=rubric.model_dump() if rubric else None,
@@ -295,11 +333,13 @@ def run_single_model_verification(
                 question_id=question_id,
                 success=False,
                 error=f"Verification failed: {e}",
+                keywords=keywords,
                 question_text=question_text,
                 raw_llm_response=raw_llm_response,
                 answering_model=answering_model_str,
                 parsing_model=parsing_model_str,
-                parsed_response=parsed_answer.model_dump() if hasattr(parsed_answer, "model_dump") else None,
+                parsed_gt_response=_split_parsed_response(parsed_answer)[0],
+                parsed_llm_response=_split_parsed_response(parsed_answer)[1],
                 evaluation_rubric=rubric.model_dump() if rubric else None,
                 execution_time=time.time() - start_time,
                 timestamp=timestamp,
@@ -335,11 +375,13 @@ def run_single_model_verification(
             verify_result=verification_result,
             verify_rubric=rubric_result,
             evaluation_rubric=rubric.model_dump() if rubric else None,
+            keywords=keywords,
             question_text=question_text,
             raw_llm_response=raw_llm_response,
             answering_model=answering_model_str,
             parsing_model=parsing_model_str,
-            parsed_response=parsed_answer.model_dump() if hasattr(parsed_answer, "model_dump") else None,
+            parsed_gt_response=_split_parsed_response(parsed_answer)[0],
+            parsed_llm_response=_split_parsed_response(parsed_answer)[1],
             execution_time=time.time() - start_time,
             timestamp=timestamp,
             answering_system_prompt=answering_model.system_prompt,
@@ -355,8 +397,11 @@ def run_single_model_verification(
             question_id=question_id,
             success=False,
             error=f"Unexpected error: {e}",
+            keywords=keywords,
             question_text=question_text,
             raw_llm_response="",
+            parsed_gt_response=None,
+            parsed_llm_response=None,
             answering_model=answering_model_str,
             parsing_model=parsing_model_str,
             evaluation_rubric=rubric.model_dump() if rubric else None,

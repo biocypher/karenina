@@ -139,13 +139,17 @@ class VerificationResult(BaseModel):
     # Raw data
     question_text: str
     raw_llm_response: str
-    parsed_response: dict[str, Any] | None = None
+    parsed_gt_response: dict[str, Any] | None = None  # Ground truth from 'correct' field
+    parsed_llm_response: dict[str, Any] | None = None  # LLM extracted fields (excluding 'id' and 'correct')
 
     # Verification outcomes
     verify_result: Any | None = None
     verify_granular_result: Any | None = None
     verify_rubric: dict[str, int | bool] | None = None  # Rubric trait scores
     evaluation_rubric: dict[str, Any] | None = None  # The merged rubric used for evaluation
+
+    # Question metadata
+    keywords: list[str] | None = None  # Keywords associated with the question
 
     # Metadata
     answering_model: str
@@ -219,6 +223,7 @@ class FinishedTemplate(BaseModel):
     last_modified: str
     finished: bool = True
     question_rubric: dict[str, Any] | None = None  # Question-specific rubric as dict
+    keywords: list[str] | None = None  # Keywords associated with the question
 
 
 class VerificationRequest(BaseModel):

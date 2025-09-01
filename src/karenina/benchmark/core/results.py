@@ -438,7 +438,8 @@ class ResultsManager:
             "question_id",
             "question_text",
             "raw_llm_response",
-            "parsed_response",
+            "parsed_gt_response",
+            "parsed_llm_response",
             "verify_result",
             "verify_granular_result",
             *global_rubric_headers,
@@ -497,7 +498,8 @@ class ResultsManager:
                 self._escape_csv_field(result.question_id),
                 self._escape_csv_field(result.question_text),
                 self._escape_csv_field(result.raw_llm_response),
-                self._escape_csv_field(json.dumps(result.parsed_response) if result.parsed_response else ""),
+                self._escape_csv_field(json.dumps(result.parsed_gt_response) if result.parsed_gt_response else ""),
+                self._escape_csv_field(json.dumps(result.parsed_llm_response) if result.parsed_llm_response else ""),
                 self._escape_csv_field(json.dumps(result.verify_result) if result.verify_result is not None else "N/A"),
                 self._escape_csv_field(
                     json.dumps(result.verify_granular_result) if result.verify_granular_result is not None else "N/A"
@@ -631,7 +633,8 @@ class ResultsManager:
                         continue  # Skip these fields as they're processed separately
 
                     if (
-                        field in ["parsed_response", "verify_result", "verify_granular_result"]
+                        field
+                        in ["parsed_gt_response", "parsed_llm_response", "verify_result", "verify_granular_result"]
                         and value
                         and value != "N/A"
                     ):
