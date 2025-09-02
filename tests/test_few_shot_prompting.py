@@ -153,9 +153,8 @@ class TestVerificationConfigWithFewShot:
             parsing_models=[self._create_test_model("parsing")],
         )
 
-        assert config.few_shot_enabled is False
-        assert config.few_shot_mode == "all"
-        assert config.few_shot_k == 3
+        assert config.is_few_shot_enabled() is False
+        assert config.get_few_shot_config() is None
 
     def test_verification_config_with_few_shot_enabled(self):
         """Test creating VerificationConfig with few-shot enabled."""
@@ -173,7 +172,7 @@ class TestVerificationConfigWithFewShot:
 
     def test_verification_config_few_shot_validation_k_shot_positive(self):
         """Test that k-shot validation requires positive k value."""
-        with pytest.raises(ValueError, match="Few-shot k value must be at least 1"):
+        with pytest.raises(ValueError, match="Global few-shot k value must be at least 1"):
             VerificationConfig(
                 answering_models=[self._create_test_model("answering")],
                 parsing_models=[self._create_test_model("parsing")],
@@ -184,7 +183,7 @@ class TestVerificationConfigWithFewShot:
 
     def test_verification_config_few_shot_validation_k_shot_negative(self):
         """Test that k-shot validation rejects negative k values."""
-        with pytest.raises(ValueError, match="Few-shot k value must be at least 1"):
+        with pytest.raises(ValueError, match="Global few-shot k value must be at least 1"):
             VerificationConfig(
                 answering_models=[self._create_test_model("answering")],
                 parsing_models=[self._create_test_model("parsing")],

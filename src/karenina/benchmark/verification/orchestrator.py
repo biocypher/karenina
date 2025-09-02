@@ -148,7 +148,7 @@ def run_question_verification(
                 rubric=rubric,
                 keywords=keywords,
                 few_shot_examples=few_shot_examples,
-                few_shot_enabled=getattr(config, "few_shot_enabled", False),
+                few_shot_enabled=config.is_few_shot_enabled(),
             )
             verification_tasks.append(task)
 
@@ -178,7 +178,7 @@ def run_question_verification(
                         rubric=rubric,
                         keywords=keywords,
                         few_shot_examples=few_shot_examples,
-                        few_shot_enabled=getattr(config, "few_shot_enabled", False),
+                        few_shot_enabled=config.is_few_shot_enabled(),
                     )
                     verification_tasks.append(task)
 

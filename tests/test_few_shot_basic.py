@@ -129,10 +129,14 @@ def test_verification_config_few_shot_defaults():
         parsing_models=[parsing_model],
     )
 
-    # Few-shot should be disabled by default
-    assert config.few_shot_enabled is False
-    assert config.few_shot_mode == "all"
-    assert config.few_shot_k == 3
+    # Few-shot should be disabled by default (new API)
+    assert config.is_few_shot_enabled() is False
+    assert config.get_few_shot_config() is None
+
+    # Legacy fields should be None
+    assert config.few_shot_enabled is None
+    assert config.few_shot_mode is None
+    assert config.few_shot_k is None
 
 
 def test_verification_config_k_shot_validation():
@@ -155,8 +159,8 @@ def test_verification_config_k_shot_validation():
         system_prompt="Test parsing prompt",
     )
 
-    # Test that k must be positive for k-shot mode
-    with pytest.raises(ValueError, match="Few-shot k value must be at least 1"):
+    # Test that k must be positive for k-shot mode (updated error message)
+    with pytest.raises(ValueError, match="Global few-shot k value must be at least 1"):
         VerificationConfig(
             answering_models=[answering_model],
             parsing_models=[parsing_model],
