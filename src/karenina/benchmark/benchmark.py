@@ -146,10 +146,34 @@ class Benchmark:
         author: dict[str, Any] | None = None,
         sources: list[dict[str, Any]] | None = None,
         custom_metadata: dict[str, Any] | None = None,
+        few_shot_examples: list[dict[str, str]] | None = None,
     ) -> str:
-        """Add a question to the benchmark."""
+        """Add a question to the benchmark with optional few-shot examples.
+
+        Args:
+            question: The question text
+            raw_answer: The expected answer text
+            answer_template: Optional Python code for answer template
+            question_id: Optional question ID (will be generated if not provided)
+            finished: Whether the template is finished
+            author: Optional author information
+            sources: Optional source documents
+            custom_metadata: Optional custom metadata
+            few_shot_examples: Optional list of few-shot examples with 'question' and 'answer' keys
+
+        Returns:
+            The question ID
+        """
         return self._question_manager.add_question(
-            question, raw_answer, answer_template, question_id, finished, author, sources, custom_metadata
+            question,
+            raw_answer,
+            answer_template,
+            question_id,
+            finished,
+            author,
+            sources,
+            custom_metadata,
+            few_shot_examples,
         )
 
     def get_question_ids(self) -> list[str]:

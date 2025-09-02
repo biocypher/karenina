@@ -21,6 +21,9 @@ class Question(BaseModel):
     question: str = Field(description="Question text", min_length=1)
     raw_answer: str = Field(description="Raw answer text", min_length=1)
     tags: list[str | None] = Field(default_factory=list, description="Tags of the question")
+    few_shot_examples: list[dict[str, str]] | None = Field(
+        default=None, description="Optional few-shot examples as question-answer pairs"
+    )
 
     @computed_field  # type: ignore[prop-decorator]
     @property

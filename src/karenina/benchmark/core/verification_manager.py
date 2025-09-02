@@ -294,6 +294,15 @@ class VerificationManager:
             # Merge global and question-specific rubrics
             rubric = self.rubric_manager.get_merged_rubric_for_question(q_id)
 
+            # Extract and resolve few-shot examples for this question
+            few_shot_examples = None
+            if config.few_shot_config and config.few_shot_config.enabled:
+                # Get available examples from question data
+                available_examples = q_data.get("few_shot_examples", [])
+                if available_examples:
+                    # Resolve examples using FewShotConfig
+                    few_shot_examples = config.few_shot_config.resolve_examples_for_question(q_id, available_examples)
+
             try:
                 # Run verification for this question using the orchestrator
                 question_results = run_question_verification(
@@ -302,6 +311,7 @@ class VerificationManager:
                     template_code=template_code,
                     config=config,
                     rubric=rubric,
+                    few_shot_examples=few_shot_examples,
                 )
 
                 # Store all results from this question (may be multiple due to model combinations)
