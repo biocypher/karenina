@@ -27,6 +27,7 @@ class QuestionManager:
         author: dict[str, Any] | None = None,
         sources: list[dict[str, Any]] | None = None,
         custom_metadata: dict[str, Any] | None = None,
+        few_shot_examples: list[dict[str, str]] | None = None,
     ) -> str:
         """
         Add a question to the benchmark.
@@ -40,6 +41,7 @@ class QuestionManager:
             author: Optional author information
             sources: Optional source documents
             custom_metadata: Optional custom metadata
+            few_shot_examples: Optional list of few-shot examples with 'question' and 'answer' keys
 
         Returns:
             The question ID
@@ -59,6 +61,8 @@ class QuestionManager:
             author,
             sources,
             custom_metadata,
+            None,  # keywords added separately if needed
+            few_shot_examples,
         )
 
         # Update cache
