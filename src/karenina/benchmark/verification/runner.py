@@ -84,6 +84,39 @@ def _strip_markdown_fences(text: str) -> str:
     return cleaned.strip()
 
 
+def _construct_few_shot_prompt(
+    question_text: str, few_shot_examples: list[dict[str, str]] | None, few_shot_enabled: bool
+) -> str:
+    """
+    Construct a prompt with few-shot examples if enabled.
+
+    Args:
+        question_text: The main question to ask
+        few_shot_examples: List of question-answer pairs for few-shot prompting
+        few_shot_enabled: Whether few-shot prompting is enabled
+
+    Returns:
+        The constructed prompt with optional few-shot examples
+    """
+    if not few_shot_enabled or not few_shot_examples:
+        return question_text
+
+    # Build the prompt with examples
+    prompt_parts = []
+
+    for example in few_shot_examples:
+        if "question" in example and "answer" in example:
+            prompt_parts.append(f"Question: {example['question']}")
+            prompt_parts.append(f"Answer: {example['answer']}")
+            prompt_parts.append("")  # Empty line for separation
+
+    # Add the actual question
+    prompt_parts.append(f"Question: {question_text}")
+    prompt_parts.append("Answer:")
+
+    return "\n".join(prompt_parts)
+
+
 def _system_prompt_compose(system_prompt: str | None, format_instructions: str) -> str:
     """
     Compose a system prompt with format instructions.
@@ -118,6 +151,8 @@ def run_single_model_verification(
     parsing_replicate: int | None = None,
     rubric: Rubric | None = None,
     keywords: list[str] | None = None,
+    few_shot_examples: list[dict[str, str]] | None = None,
+    few_shot_enabled: bool = False,
 ) -> VerificationResult:
     """
     Run verification for a single question with specific answering and parsing models.
@@ -134,6 +169,8 @@ def run_single_model_verification(
         answering_replicate: Optional replicate number for answering model
         parsing_replicate: Optional replicate number for parsing model
         rubric: Optional rubric for qualitative evaluation
+        few_shot_examples: Optional list of question-answer pairs for few-shot prompting
+        few_shot_enabled: Whether to use few-shot prompting (disabled by default)
 
     Returns:
         VerificationResult with all details and optional rubric scores
@@ -217,7 +254,10 @@ def run_single_model_verification(
         messages: list[BaseMessage] = []
         if answering_model.system_prompt:
             messages.append(SystemMessage(content=answering_model.system_prompt))
-        messages.append(HumanMessage(content=question_text))
+
+        # Construct prompt with optional few-shot examples
+        constructed_prompt = _construct_few_shot_prompt(question_text, few_shot_examples, few_shot_enabled)
+        messages.append(HumanMessage(content=constructed_prompt))
 
         try:
             response = answering_llm.invoke(messages)

@@ -156,6 +156,7 @@ def add_question_to_benchmark(
     sources: list[dict[str, Any]] | None = None,
     custom_metadata: dict[str, Any] | None = None,
     keywords: list[str] | None = None,
+    few_shot_examples: list[dict[str, str]] | None = None,
 ) -> str:
     """
     Add a question to a JSON-LD benchmark.
@@ -172,6 +173,7 @@ def add_question_to_benchmark(
         sources: Optional source documents
         custom_metadata: Optional custom metadata
         keywords: Optional keywords list
+        few_shot_examples: Optional list of few-shot examples with 'question' and 'answer' keys
 
     Returns:
         The question ID that was added
@@ -213,6 +215,9 @@ def add_question_to_benchmark(
     if custom_metadata:
         for key, value in custom_metadata.items():
             additional_props.append(SchemaOrgPropertyValue(name=f"custom_{key}", value=value))
+
+    if few_shot_examples:
+        additional_props.append(SchemaOrgPropertyValue(name="few_shot_examples", value=json.dumps(few_shot_examples)))
 
     # Convert question-specific rubric traits to ratings
     ratings = None
@@ -286,6 +291,7 @@ def extract_questions_from_benchmark(
         author = None
         sources = None
         custom_metadata = {}
+        few_shot_examples = None
 
         if question.additionalProperty:
             for prop in question.additionalProperty:
@@ -301,6 +307,11 @@ def extract_questions_from_benchmark(
                         sources = json.loads(prop.value)
                     except (json.JSONDecodeError, TypeError):
                         sources = prop.value
+                elif prop.name == "few_shot_examples":
+                    try:
+                        few_shot_examples = json.loads(prop.value)
+                    except (json.JSONDecodeError, TypeError):
+                        few_shot_examples = prop.value
                 elif prop.name.startswith("custom_"):
                     key = prop.name.replace("custom_", "")
                     custom_metadata[key] = prop.value
@@ -328,6 +339,7 @@ def extract_questions_from_benchmark(
                 "custom_metadata": custom_metadata if custom_metadata else None,
                 "question_rubric": question_rubric,
                 "keywords": item.keywords,
+                "few_shot_examples": few_shot_examples,
             }
         )
 
