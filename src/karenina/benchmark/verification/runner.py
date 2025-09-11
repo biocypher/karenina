@@ -131,26 +131,43 @@ def _construct_few_shot_prompt(
     return "\n".join(prompt_parts)
 
 
-def _system_prompt_compose(system_prompt: str | None, format_instructions: str) -> str:
+def _system_prompt_compose(
+    system_prompt: str | None, format_instructions: str, ground_truth: dict[str, Any] | None = None
+) -> str:
     """
-    Compose a system prompt with format instructions.
+    Compose a system prompt with format instructions and optional ground truth information.
 
     Args:
         system_prompt: The system prompt to compose
         format_instructions: The format instructions to compose
+        ground_truth: Optional ground truth information to include for parsing assistance
 
     Returns:
         The composed system prompt
     """
-    prompt = f"""<general_instructions>
-{system_prompt if system_prompt else ""}
-</general_instructions>
+    prompt_parts = [
+        f"<general_instructions>\n{system_prompt if system_prompt else ''}\n</general_instructions>",
+        f"<format_instructions>\n{format_instructions}\n</format_instructions>",
+    ]
 
-<format_instructions>
-{format_instructions}
-</format_instructions>
-"""
-    return prompt
+    # Add ground truth instructions if provided
+    if ground_truth is not None:
+        import json
+
+        ground_truth_str = json.dumps(ground_truth, indent=2, default=str)
+
+        ground_truth_section = f"""<ground_truth_reference>
+The following ground truth information is provided as reference to help with semantic matching and disambiguation.
+Use this information carefully - do not blindly copy it, but it may help resolve ambiguities when the trace
+and template are semantically close but differ in exact wording.
+
+Ground Truth:
+{ground_truth_str}
+</ground_truth_reference>"""
+
+        prompt_parts.append(ground_truth_section)
+
+    return "\n\n".join(prompt_parts)
 
 
 def run_single_model_verification(
@@ -333,50 +350,27 @@ def run_single_model_verification(
                 parsing_replicate=parsing_replicate,
             )
 
-        # Create parsing prompt with format instructions
-        format_instructions = parser.get_format_instructions()
-        combined_system_prompt = _system_prompt_compose(parsing_model.system_prompt, format_instructions)
-
-        # Construct the parsing prompt, optionally including ground truth
-        parsing_prompt_parts = [
-            f"""<response_to_parse>
-{raw_llm_response}
-</response_to_parse>"""
-        ]
-
-        # Optionally include ground truth for parsing assistance
+        # Extract ground truth if enabled
+        ground_truth = None
         if _should_expose_ground_truth():
             try:
                 from .template_utils import create_test_instance_from_answer_class
 
                 # Create test instance and extract ground truth
-                _, ground_truth = create_test_instance_from_answer_class(Answer)
-
-                # Include ground truth if it exists
-                if ground_truth is not None:
-                    import json
-
-                    ground_truth_str = json.dumps(ground_truth, indent=2, default=str)
-
-                    parsing_prompt_parts.insert(
-                        0,
-                        f"""<ground_truth_reference>
-The following ground truth information is provided as reference to help with semantic matching and disambiguation.
-Use this information carefully - do not blindly copy it, but it may help resolve ambiguities when the trace
-and template are semantically close but differ in exact wording.
-
-Ground Truth:
-{ground_truth_str}
-</ground_truth_reference>
-
-""",
-                    )
+                _, ground_truth = create_test_instance_from_answer_class(RawAnswer)
             except Exception as e:
                 # If we can't extract ground truth, continue without it
                 # This ensures the feature is robust and doesn't break existing functionality
                 print(f"Warning: Could not extract ground truth for question {question_id}: {e}")
 
-        parsing_prompt = "".join(parsing_prompt_parts)
+        # Create parsing prompt with format instructions and optional ground truth
+        format_instructions = parser.get_format_instructions()
+        combined_system_prompt = _system_prompt_compose(parsing_model.system_prompt, format_instructions, ground_truth)
+
+        # Construct the parsing prompt (user message)
+        parsing_prompt = f"""<response_to_parse>
+{raw_llm_response}
+</response_to_parse>"""
 
         parsing_messages: list[BaseMessage] = []
         if combined_system_prompt:

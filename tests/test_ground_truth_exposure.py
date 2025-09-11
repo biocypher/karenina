@@ -121,20 +121,28 @@ class TestGroundTruthExposure:
         parsing_call_args = mock_parsing_llm.invoke.call_args[0]
         parsing_messages = parsing_call_args[0]
 
-        # Find the human message (parsing prompt)
+        # Find the system message (should contain ground truth)
+        system_message = None
         human_message = None
         for msg in parsing_messages:
-            if hasattr(msg, "content") and "<response_to_parse>" in msg.content:
-                human_message = msg
-                break
+            if hasattr(msg, "content"):
+                if "<ground_truth_reference>" in msg.content:
+                    system_message = msg
+                elif "<response_to_parse>" in msg.content:
+                    human_message = msg
 
+        assert system_message is not None, "Expected to find system message with ground truth reference"
         assert human_message is not None, "Expected to find human message with parsing prompt"
 
-        # Check that ground truth reference is included
-        assert "<ground_truth_reference>" in human_message.content
-        assert "Ground Truth:" in human_message.content
-        assert '"answer": 42' in human_message.content
-        assert "semantic matching and disambiguation" in human_message.content
+        # Check that ground truth reference is in the system message
+        assert "<ground_truth_reference>" in system_message.content
+        assert "Ground Truth:" in system_message.content
+        assert '"answer": 42' in system_message.content
+        assert "semantic matching and disambiguation" in system_message.content
+
+        # Check that human message only contains the response to parse
+        assert "<response_to_parse>" in human_message.content
+        assert "<ground_truth_reference>" not in human_message.content
 
     @patch("karenina.benchmark.verification.runner._should_expose_ground_truth")
     @patch("karenina.benchmark.verification.runner.init_chat_model_unified")
@@ -205,18 +213,24 @@ class TestGroundTruthExposure:
         parsing_call_args = mock_parsing_llm.invoke.call_args[0]
         parsing_messages = parsing_call_args[0]
 
-        # Find the human message (parsing prompt)
+        # Find the system and human messages
+        system_message = None
         human_message = None
         for msg in parsing_messages:
-            if hasattr(msg, "content") and "<response_to_parse>" in msg.content:
-                human_message = msg
-                break
+            if hasattr(msg, "content"):
+                if msg.content and ("<general_instructions>" in msg.content or "<format_instructions>" in msg.content):
+                    system_message = msg
+                elif "<response_to_parse>" in msg.content:
+                    human_message = msg
 
         assert human_message is not None, "Expected to find human message with parsing prompt"
+        assert system_message is not None, "Expected to find system message"
 
-        # Check that ground truth reference is NOT included
+        # Check that ground truth reference is NOT included anywhere
         assert "<ground_truth_reference>" not in human_message.content
         assert "Ground Truth:" not in human_message.content
+        assert "<ground_truth_reference>" not in system_message.content
+        assert "Ground Truth:" not in system_message.content
 
     @patch("karenina.benchmark.verification.runner._should_expose_ground_truth")
     @patch("karenina.benchmark.verification.runner.init_chat_model_unified")
@@ -291,19 +305,19 @@ class TestGroundTruthExposure:
         assert result.success is True
         assert mock_parsing_llm.invoke.called
 
-        # Check that ground truth was included in parsing prompt
+        # Check that ground truth was included in system prompt
         parsing_call_args = mock_parsing_llm.invoke.call_args[0]
         parsing_messages = parsing_call_args[0]
 
-        human_message = None
+        system_message = None
         for msg in parsing_messages:
             if hasattr(msg, "content") and "<ground_truth_reference>" in msg.content:
-                human_message = msg
+                system_message = msg
                 break
 
-        assert human_message is not None
-        assert '"phase": "Phase II"' in human_message.content
-        assert '"status": "Completed"' in human_message.content
+        assert system_message is not None, "Expected to find system message with ground truth reference"
+        assert '"phase": "Phase II"' in system_message.content
+        assert '"status": "Completed"' in system_message.content
 
     @patch("karenina.benchmark.verification.runner._should_expose_ground_truth")
     @patch("karenina.benchmark.verification.runner.init_chat_model_unified")
