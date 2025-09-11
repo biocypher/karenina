@@ -1,8 +1,9 @@
 """Single model verification runner."""
 
+import os
 import re
 import time
-from typing import Any
+from typing import Any, get_args, get_origin
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_core.output_parsers import PydanticOutputParser
@@ -13,6 +14,19 @@ from ...schemas.rubric_class import Rubric
 from ..models import ModelConfig, VerificationResult
 from .rubric_evaluator import RubricEvaluator
 from .validation import validate_answer_template
+
+
+def _should_expose_ground_truth() -> bool:
+    """
+    Check if ground truth should be exposed to the parser model.
+
+    Reads from the KARENINA_EXPOSE_GROUND_TRUTH environment variable.
+    Defaults to False for backward compatibility.
+
+    Returns:
+        True if ground truth should be exposed, False otherwise
+    """
+    return os.getenv("KARENINA_EXPOSE_GROUND_TRUTH", "false").lower() in ("true", "1", "yes", "on")
 
 
 def _split_parsed_response(parsed_answer: Any) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
@@ -322,10 +336,84 @@ def run_single_model_verification(
         # Create parsing prompt with format instructions
         format_instructions = parser.get_format_instructions()
         combined_system_prompt = _system_prompt_compose(parsing_model.system_prompt, format_instructions)
-        parsing_prompt = f"""<response_to_parse>
+
+        # Construct the parsing prompt, optionally including ground truth
+        parsing_prompt_parts = [
+            f"""<response_to_parse>
 {raw_llm_response}
-</response_to_parse>
-"""
+</response_to_parse>"""
+        ]
+
+        # Optionally include ground truth for parsing assistance
+        if _should_expose_ground_truth():
+            try:
+                # Create a dummy instance of the Answer class to extract ground truth
+                # We need to provide dummy values for required fields
+                required_fields: dict[str, Any] = {}
+                if hasattr(Answer, "__annotations__"):
+                    for field_name, field_type in Answer.__annotations__.items():
+                        if field_name not in ("id", "correct"):  # Skip id and correct fields
+                            # Provide default values based on type
+                            if field_type is int or str(field_type) == "int":
+                                required_fields[field_name] = 0
+                            elif field_type is str or str(field_type) == "str":
+                                required_fields[field_name] = ""
+                            elif field_type is float or str(field_type) == "float":
+                                required_fields[field_name] = 0.0
+                            elif field_type is bool or str(field_type) == "bool":
+                                required_fields[field_name] = False
+                            elif field_type is list or str(field_type) == "list":
+                                required_fields[field_name] = []
+                            else:
+                                # Handle Literal and other complex types
+                                origin = get_origin(field_type)
+                                if origin is not None:
+                                    # Handle Literal types
+                                    if str(origin) == "typing.Literal":
+                                        # Get the first literal value
+                                        args = get_args(field_type)
+                                        if args:
+                                            required_fields[field_name] = args[0]
+                                        else:
+                                            required_fields[field_name] = ""
+                                    # Handle List types
+                                    elif origin is list:
+                                        required_fields[field_name] = []
+                                    else:
+                                        # Default to empty string for unknown types
+                                        required_fields[field_name] = ""
+                                else:
+                                    # Default to empty string for unknown types
+                                    required_fields[field_name] = ""
+
+                # Create test instance to extract ground truth
+                test_instance = Answer(**required_fields)
+
+                # Extract ground truth if it exists
+                if hasattr(test_instance, "correct") and test_instance.correct is not None:
+                    import json
+
+                    ground_truth_str = json.dumps(test_instance.correct, indent=2, default=str)
+
+                    parsing_prompt_parts.insert(
+                        0,
+                        f"""<ground_truth_reference>
+The following ground truth information is provided as reference to help with semantic matching and disambiguation.
+Use this information carefully - do not blindly copy it, but it may help resolve ambiguities when the trace
+and template are semantically close but differ in exact wording.
+
+Ground Truth:
+{ground_truth_str}
+</ground_truth_reference>
+
+""",
+                    )
+            except Exception as e:
+                # If we can't extract ground truth, continue without it
+                # This ensures the feature is robust and doesn't break existing functionality
+                print(f"Warning: Could not extract ground truth for question {question_id}: {e}")
+
+        parsing_prompt = "".join(parsing_prompt_parts)
 
         parsing_messages: list[BaseMessage] = []
         if combined_system_prompt:
