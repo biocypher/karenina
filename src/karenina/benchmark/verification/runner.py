@@ -3,7 +3,7 @@
 import os
 import re
 import time
-from typing import Any, get_args, get_origin
+from typing import Any
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_core.output_parsers import PydanticOutputParser
@@ -347,53 +347,16 @@ def run_single_model_verification(
         # Optionally include ground truth for parsing assistance
         if _should_expose_ground_truth():
             try:
-                # Create a dummy instance of the Answer class to extract ground truth
-                # We need to provide dummy values for required fields
-                required_fields: dict[str, Any] = {}
-                if hasattr(Answer, "__annotations__"):
-                    for field_name, field_type in Answer.__annotations__.items():
-                        if field_name not in ("id", "correct"):  # Skip id and correct fields
-                            # Provide default values based on type
-                            if field_type is int or str(field_type) == "int":
-                                required_fields[field_name] = 0
-                            elif field_type is str or str(field_type) == "str":
-                                required_fields[field_name] = ""
-                            elif field_type is float or str(field_type) == "float":
-                                required_fields[field_name] = 0.0
-                            elif field_type is bool or str(field_type) == "bool":
-                                required_fields[field_name] = False
-                            elif field_type is list or str(field_type) == "list":
-                                required_fields[field_name] = []
-                            else:
-                                # Handle Literal and other complex types
-                                origin = get_origin(field_type)
-                                if origin is not None:
-                                    # Handle Literal types
-                                    if str(origin) == "typing.Literal":
-                                        # Get the first literal value
-                                        args = get_args(field_type)
-                                        if args:
-                                            required_fields[field_name] = args[0]
-                                        else:
-                                            required_fields[field_name] = ""
-                                    # Handle List types
-                                    elif origin is list:
-                                        required_fields[field_name] = []
-                                    else:
-                                        # Default to empty string for unknown types
-                                        required_fields[field_name] = ""
-                                else:
-                                    # Default to empty string for unknown types
-                                    required_fields[field_name] = ""
+                from .template_utils import create_test_instance_from_answer_class
 
-                # Create test instance to extract ground truth
-                test_instance = Answer(**required_fields)
+                # Create test instance and extract ground truth
+                _, ground_truth = create_test_instance_from_answer_class(Answer)
 
-                # Extract ground truth if it exists
-                if hasattr(test_instance, "correct") and test_instance.correct is not None:
+                # Include ground truth if it exists
+                if ground_truth is not None:
                     import json
 
-                    ground_truth_str = json.dumps(test_instance.correct, indent=2, default=str)
+                    ground_truth_str = json.dumps(ground_truth, indent=2, default=str)
 
                     parsing_prompt_parts.insert(
                         0,
