@@ -159,7 +159,8 @@ def _system_prompt_compose(
         ground_truth_section = f"""<ground_truth_reference>
 The following ground truth information is provided as reference to help with semantic matching and disambiguation.
 Use this information carefully - do not blindly copy it, but it may help resolve ambiguities when the trace
-and template are semantically close but differ in exact wording.
+and template are semantically close but differ in exact wording. IF AND ONLY IF the answer is very close to the ground truth,
+use the ground truth as final answer.
 
 Ground Truth:
 {ground_truth_str}
