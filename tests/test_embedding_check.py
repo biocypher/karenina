@@ -352,11 +352,77 @@ class TestEmbeddingCheckIntegration:
         """Test that embedding utilities can be imported successfully."""
         from karenina.benchmark.verification.embedding_utils import (
             check_semantic_equivalence,
+            clear_embedding_model_cache,
             compute_embedding_similarity,
             perform_embedding_check,
+            preload_embedding_model,
         )
 
         # Just verify imports work
         assert compute_embedding_similarity is not None
         assert check_semantic_equivalence is not None
         assert perform_embedding_check is not None
+        assert preload_embedding_model is not None
+        assert clear_embedding_model_cache is not None
+
+
+class TestEmbeddingModelCaching:
+    """Test embedding model caching functionality."""
+
+    def test_cache_management(self):
+        """Test cache preloading and cleanup."""
+        from karenina.benchmark.verification.embedding_utils import (
+            _embedding_model_cache,
+            clear_embedding_model_cache,
+            preload_embedding_model,
+        )
+
+        # Start with clean cache
+        clear_embedding_model_cache()
+        assert len(_embedding_model_cache) == 0
+
+        # Enable embedding check for test
+        with patch.dict(os.environ, {"EMBEDDING_CHECK": "true"}):
+            # Test preloading
+            try:
+                model_name = preload_embedding_model()
+                assert model_name
+                assert len(_embedding_model_cache) == 1
+            except ImportError:
+                # Skip if sentence-transformers not available
+                pytest.skip("sentence-transformers not available")
+
+            # Test cleanup
+            clear_embedding_model_cache()
+            assert len(_embedding_model_cache) == 0
+
+    def test_cache_reuse(self):
+        """Test that cached models are reused across calls."""
+        from karenina.benchmark.verification.embedding_utils import (
+            _embedding_model_cache,
+            _get_cached_embedding_model,
+            _get_embedding_model_name,
+            clear_embedding_model_cache,
+        )
+
+        # Start with clean cache
+        clear_embedding_model_cache()
+
+        with patch.dict(os.environ, {"EMBEDDING_CHECK": "true"}):
+            try:
+                # Use the actual configured model name
+                model_name = _get_embedding_model_name()
+
+                # First call should load model
+                model1 = _get_cached_embedding_model(model_name)
+                assert len(_embedding_model_cache) == 1
+
+                # Second call should reuse cached model
+                model2 = _get_cached_embedding_model(model_name)
+                assert model1 is model2  # Same object reference
+                assert len(_embedding_model_cache) == 1
+
+            except ImportError:
+                pytest.skip("sentence-transformers not available")
+            finally:
+                clear_embedding_model_cache()

@@ -2,12 +2,80 @@
 
 import json
 import os
+import threading
 from typing import Any
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 from ...llm.interface import init_chat_model_unified
 from ..models import ModelConfig
+
+# Global cache for embedding models (thread-safe)
+_embedding_model_cache: dict[str, Any] = {}
+_cache_lock = threading.Lock()
+
+
+def preload_embedding_model() -> str:
+    """
+    Preload the embedding model for the current job.
+
+    Returns:
+        Model name that was loaded
+
+    Raises:
+        ImportError: If sentence-transformers is not available
+        RuntimeError: If model loading fails
+    """
+    model_name = _get_embedding_model_name()
+
+    with _cache_lock:
+        if model_name in _embedding_model_cache:
+            return model_name
+
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError as e:
+            raise ImportError(
+                "sentence-transformers is required for embedding check. Install it with: uv add sentence-transformers"
+            ) from e
+
+        try:
+            model = SentenceTransformer(model_name)
+            _embedding_model_cache[model_name] = model
+            return model_name
+        except Exception as e:
+            raise RuntimeError(f"Failed to preload embedding model {model_name}: {e}") from e
+
+
+def clear_embedding_model_cache() -> None:
+    """Clear the embedding model cache to free memory."""
+    with _cache_lock:
+        _embedding_model_cache.clear()
+
+
+def _get_cached_embedding_model(model_name: str) -> Any:
+    """
+    Get a cached embedding model or load it if not cached.
+
+    Args:
+        model_name: Name of the embedding model
+
+    Returns:
+        The SentenceTransformer model instance
+
+    Raises:
+        ImportError: If sentence-transformers is not available
+        RuntimeError: If model loading fails
+    """
+    with _cache_lock:
+        if model_name in _embedding_model_cache:
+            return _embedding_model_cache[model_name]
+
+    # Model not cached, preload it
+    preload_embedding_model()
+
+    with _cache_lock:
+        return _embedding_model_cache[model_name]
 
 
 def _should_use_embedding_check() -> bool:
@@ -83,13 +151,6 @@ def compute_embedding_similarity(
         ImportError: If sentence-transformers is not available
         RuntimeError: If embedding computation fails
     """
-    try:
-        from sentence_transformers import SentenceTransformer
-    except ImportError as e:
-        raise ImportError(
-            "sentence-transformers is required for embedding check. Install it with: uv add sentence-transformers"
-        ) from e
-
     if not ground_truth_data or not llm_response_data:
         return 0.0, _get_embedding_model_name()
 
@@ -103,8 +164,8 @@ def compute_embedding_similarity(
     model_name = _get_embedding_model_name()
 
     try:
-        # Load the embedding model
-        model = SentenceTransformer(model_name)
+        # Get the cached embedding model (loads if not cached)
+        model = _get_cached_embedding_model(model_name)
 
         # Compute embeddings
         embeddings = model.encode([gt_text, llm_text])
