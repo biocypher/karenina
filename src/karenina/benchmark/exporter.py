@@ -157,6 +157,11 @@ def export_verification_results_json(job: VerificationJob, results: dict[str, Ve
             "parsing_system_prompt": result.parsing_system_prompt,
             "run_name": result.run_name,
             "job_id": result.job_id,
+            # Embedding check fields
+            "embedding_check_performed": result.embedding_check_performed,
+            "embedding_similarity_score": result.embedding_similarity_score,
+            "embedding_override_applied": result.embedding_override_applied,
+            "embedding_model_used": result.embedding_model_used,
         }
 
     return json.dumps(export_data, indent=2, ensure_ascii=False)
@@ -321,6 +326,11 @@ def export_verification_results_csv(
             "export_timestamp",
             "karenina_version",
             "job_id",
+            # Embedding check fields
+            "embedding_check_performed",
+            "embedding_similarity_score",
+            "embedding_override_applied",
+            "embedding_model_used",
         ]
     )
 
@@ -360,6 +370,11 @@ def export_verification_results_csv(
             "export_timestamp": export_timestamp,
             "karenina_version": karenina_version,
             "job_id": job.job_id,
+            # Embedding check fields
+            "embedding_check_performed": result.embedding_check_performed,
+            "embedding_similarity_score": result.embedding_similarity_score or "",
+            "embedding_override_applied": result.embedding_override_applied,
+            "embedding_model_used": result.embedding_model_used or "",
         }
 
         # Add global rubric trait values (optimized with dictionary comprehension)
