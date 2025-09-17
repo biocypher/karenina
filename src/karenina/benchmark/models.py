@@ -593,7 +593,6 @@ class VerificationResult(BaseModel):
     embedding_similarity_score: float | None = None  # Similarity score (0.0 to 1.0)
     embedding_override_applied: bool = False  # Whether embedding check overrode the result
     embedding_model_used: str | None = None  # Name of the embedding model used
-    semantic_check_details: str | None = None  # Details from the semantic equivalence check
 
 
 class VerificationJob(BaseModel):

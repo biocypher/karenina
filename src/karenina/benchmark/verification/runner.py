@@ -256,7 +256,6 @@ def run_single_model_verification(
                 embedding_similarity_score=None,
                 embedding_override_applied=False,
                 embedding_model_used=None,
-                semantic_check_details=None,
             )
 
         # Step 1.5: Inject question ID into the Answer class
@@ -327,7 +326,6 @@ def run_single_model_verification(
                 embedding_similarity_score=None,
                 embedding_override_applied=False,
                 embedding_model_used=None,
-                semantic_check_details=None,
             )
 
         # Step 4: Initialize parsing model and parse response
@@ -367,7 +365,6 @@ def run_single_model_verification(
                 embedding_similarity_score=None,
                 embedding_override_applied=False,
                 embedding_model_used=None,
-                semantic_check_details=None,
             )
 
         # Extract ground truth if enabled
@@ -433,7 +430,6 @@ def run_single_model_verification(
                 embedding_similarity_score=None,
                 embedding_override_applied=False,
                 embedding_model_used=None,
-                semantic_check_details=None,
             )
 
         # Step 5: Run verification
@@ -445,21 +441,19 @@ def run_single_model_verification(
             embedding_similarity_score = None
             embedding_model_used = None
             embedding_override_applied = False
-            semantic_check_details = None
 
             if not verification_result:
                 # Extract ground truth and LLM response for embedding check
                 parsed_gt_response, parsed_llm_response = _split_parsed_response(parsed_answer)
 
                 # Perform embedding check
-                (should_override, similarity_score, model_name, check_performed, check_details) = (
-                    perform_embedding_check(parsed_gt_response, parsed_llm_response, parsing_model, question_text)
+                (should_override, similarity_score, model_name, check_performed) = perform_embedding_check(
+                    parsed_gt_response, parsed_llm_response, parsing_model, question_text
                 )
 
                 embedding_check_performed = check_performed
                 embedding_similarity_score = similarity_score
                 embedding_model_used = model_name
-                semantic_check_details = check_details
 
                 if should_override:
                     verification_result = True
@@ -491,7 +485,6 @@ def run_single_model_verification(
                 embedding_similarity_score=None,
                 embedding_override_applied=False,
                 embedding_model_used=None,
-                semantic_check_details=None,
             )
 
         # Step 6: Run rubric evaluation (optional)
@@ -538,7 +531,6 @@ def run_single_model_verification(
             embedding_similarity_score=embedding_similarity_score,
             embedding_override_applied=embedding_override_applied,
             embedding_model_used=embedding_model_used,
-            semantic_check_details=semantic_check_details,
         )
 
     except Exception as e:

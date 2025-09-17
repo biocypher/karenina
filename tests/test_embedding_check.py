@@ -174,10 +174,9 @@ class TestSemanticEquivalence:
         gt_data = {"answer": "The capital is Paris"}
         llm_data = {"answer": "Paris is the capital"}
 
-        is_equiv, details = check_semantic_equivalence(gt_data, llm_data, model_config, "What is the capital?")
+        is_equiv = check_semantic_equivalence(gt_data, llm_data, model_config, "What is the capital?")
 
         assert is_equiv is True
-        assert "YES" in details
         mock_init_chat.assert_called_once()
         mock_llm.invoke.assert_called_once()
 
@@ -197,10 +196,9 @@ class TestSemanticEquivalence:
         gt_data = {"answer": "Paris"}
         llm_data = {"answer": "London"}
 
-        is_equiv, details = check_semantic_equivalence(gt_data, llm_data, model_config, "What is the capital?")
+        is_equiv = check_semantic_equivalence(gt_data, llm_data, model_config, "What is the capital?")
 
         assert is_equiv is False
-        assert "NO" in details
 
     @patch("karenina.benchmark.verification.embedding_utils.init_chat_model_unified")
     def test_check_semantic_equivalence_error(self, mock_init_chat):
@@ -226,13 +224,12 @@ class TestPerformEmbeddingCheck:
             )
 
             result = perform_embedding_check({"a": 1}, {"b": 2}, model_config, "Test question")
-            should_override, similarity, model_name, check_performed, details = result
+            should_override, similarity, model_name, check_performed = result
 
             assert not should_override
             assert similarity is None
             assert model_name is None
             assert not check_performed
-            assert details is None
 
     @patch("karenina.benchmark.verification.embedding_utils.compute_embedding_similarity")
     @patch("karenina.benchmark.verification.embedding_utils.check_semantic_equivalence")
@@ -240,20 +237,19 @@ class TestPerformEmbeddingCheck:
     def test_perform_embedding_check_above_threshold_equivalent(self, mock_semantic_check, mock_similarity):
         """Test embedding check with high similarity and semantic equivalence."""
         mock_similarity.return_value = (0.9, "test-model")
-        mock_semantic_check.return_value = (True, "Semantically equivalent")
+        mock_semantic_check.return_value = True
 
         model_config = ModelConfig(
             id="test", model_provider="openai", model_name="gpt-4", temperature=0.1, system_prompt="Test prompt"
         )
 
         result = perform_embedding_check({"answer": "A"}, {"answer": "B"}, model_config, "What is the answer?")
-        should_override, similarity, model_name, check_performed, details = result
+        should_override, similarity, model_name, check_performed = result
 
         assert should_override is True
         assert similarity == 0.9
         assert model_name == "test-model"
         assert check_performed is True
-        assert "equivalent" in details
 
     @patch("karenina.benchmark.verification.embedding_utils.compute_embedding_similarity")
     @patch("karenina.benchmark.verification.embedding_utils.check_semantic_equivalence")
@@ -261,20 +257,19 @@ class TestPerformEmbeddingCheck:
     def test_perform_embedding_check_above_threshold_not_equivalent(self, mock_semantic_check, mock_similarity):
         """Test embedding check with high similarity but no semantic equivalence."""
         mock_similarity.return_value = (0.9, "test-model")
-        mock_semantic_check.return_value = (False, "Not semantically equivalent")
+        mock_semantic_check.return_value = False
 
         model_config = ModelConfig(
             id="test", model_provider="openai", model_name="gpt-4", temperature=0.1, system_prompt="Test prompt"
         )
 
         result = perform_embedding_check({"answer": "A"}, {"answer": "B"}, model_config, "What is the answer?")
-        should_override, similarity, model_name, check_performed, details = result
+        should_override, similarity, model_name, check_performed = result
 
         assert should_override is False
         assert similarity == 0.9
         assert model_name == "test-model"
         assert check_performed is True
-        assert "Not semantically equivalent" in details
 
     @patch("karenina.benchmark.verification.embedding_utils.compute_embedding_similarity")
     @patch.dict(os.environ, {"EMBEDDING_CHECK": "true", "EMBEDDING_CHECK_THRESHOLD": "0.8"})
@@ -287,13 +282,12 @@ class TestPerformEmbeddingCheck:
         )
 
         result = perform_embedding_check({"answer": "A"}, {"answer": "B"}, model_config, "What is the answer?")
-        should_override, similarity, model_name, check_performed, details = result
+        should_override, similarity, model_name, check_performed = result
 
         assert should_override is False
         assert similarity == 0.7
         assert model_name == "test-model"
         assert check_performed is True
-        assert "below threshold" in details
 
     @patch("karenina.benchmark.verification.embedding_utils.compute_embedding_similarity")
     @patch("karenina.benchmark.verification.embedding_utils.check_semantic_equivalence")
@@ -308,13 +302,12 @@ class TestPerformEmbeddingCheck:
         )
 
         result = perform_embedding_check({"answer": "A"}, {"answer": "B"}, model_config, "What is the answer?")
-        should_override, similarity, model_name, check_performed, details = result
+        should_override, similarity, model_name, check_performed = result
 
         assert should_override is False
         assert similarity == 0.9
         assert model_name == "test-model"
         assert check_performed is True
-        assert "Semantic check failed" in details
 
     @patch("karenina.benchmark.verification.embedding_utils.compute_embedding_similarity")
     @patch.dict(os.environ, {"EMBEDDING_CHECK": "true"})
@@ -327,13 +320,12 @@ class TestPerformEmbeddingCheck:
         )
 
         result = perform_embedding_check({"answer": "A"}, {"answer": "B"}, model_config, "What is the answer?")
-        should_override, similarity, model_name, check_performed, details = result
+        should_override, similarity, model_name, check_performed = result
 
         assert should_override is False
         assert similarity is None
         assert model_name is None
         assert check_performed is True
-        assert "Embedding check failed" in details
 
 
 class TestEmbeddingCheckIntegration:

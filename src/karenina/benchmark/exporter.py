@@ -162,7 +162,6 @@ def export_verification_results_json(job: VerificationJob, results: dict[str, Ve
             "embedding_similarity_score": result.embedding_similarity_score,
             "embedding_override_applied": result.embedding_override_applied,
             "embedding_model_used": result.embedding_model_used,
-            "semantic_check_details": result.semantic_check_details,
         }
 
     return json.dumps(export_data, indent=2, ensure_ascii=False)
@@ -332,7 +331,6 @@ def export_verification_results_csv(
             "embedding_similarity_score",
             "embedding_override_applied",
             "embedding_model_used",
-            "semantic_check_details",
         ]
     )
 
@@ -377,7 +375,6 @@ def export_verification_results_csv(
             "embedding_similarity_score": result.embedding_similarity_score or "",
             "embedding_override_applied": result.embedding_override_applied,
             "embedding_model_used": result.embedding_model_used or "",
-            "semantic_check_details": result.semantic_check_details or "",
         }
 
         # Add global rubric trait values (optimized with dictionary comprehension)

@@ -189,7 +189,7 @@ def check_semantic_equivalence(
     llm_response_data: dict[str, Any] | None,
     parsing_model: ModelConfig,
     question_text: str | None = None,
-) -> tuple[bool, str]:
+) -> bool:
     """
     Check semantic equivalence between ground truth and LLM response using parsing LLM.
 
@@ -200,13 +200,13 @@ def check_semantic_equivalence(
         question_text: The original question text for context (optional but recommended)
 
     Returns:
-        Tuple of (is_semantically_equivalent, check_details)
+        True if responses are semantically equivalent, False otherwise
 
     Raises:
         RuntimeError: If semantic equivalence check fails
     """
     if not ground_truth_data or not llm_response_data:
-        return False, "Missing data for semantic equivalence check"
+        return False
 
     try:
         # Initialize parsing LLM
@@ -263,9 +263,7 @@ Are these two responses semantically equivalent?"""
         response_clean = response_text.strip().upper()
         is_equivalent = response_clean.startswith("YES")
 
-        details = f"LLM semantic check result: {response_text.strip()}"
-
-        return is_equivalent, details
+        return is_equivalent
 
     except Exception as e:
         raise RuntimeError(f"Failed to perform semantic equivalence check: {e}") from e
@@ -276,7 +274,7 @@ def perform_embedding_check(
     llm_response_data: dict[str, Any] | None,
     parsing_model: ModelConfig,
     question_text: str | None = None,
-) -> tuple[bool, float | None, str | None, bool, str | None]:
+) -> tuple[bool, float | None, str | None, bool]:
     """
     Perform complete embedding check with fallback to semantic equivalence.
 
@@ -291,12 +289,11 @@ def perform_embedding_check(
             should_override_result,
             similarity_score,
             embedding_model_used,
-            embedding_check_performed,
-            semantic_check_details
+            embedding_check_performed
         )
     """
     if not _should_use_embedding_check():
-        return False, None, None, False, None
+        return False, None, None, False
 
     try:
         # Compute embedding similarity
@@ -308,7 +305,7 @@ def perform_embedding_check(
         if similarity_score >= threshold:
             # Perform semantic equivalence check
             try:
-                is_equivalent, check_details = check_semantic_equivalence(
+                is_equivalent = check_semantic_equivalence(
                     ground_truth_data, llm_response_data, parsing_model, question_text
                 )
 
@@ -317,7 +314,6 @@ def perform_embedding_check(
                     similarity_score,
                     model_name,
                     True,  # embedding_check_performed
-                    check_details,
                 )
 
             except RuntimeError:
@@ -327,7 +323,6 @@ def perform_embedding_check(
                     similarity_score,
                     model_name,
                     True,  # embedding_check_performed
-                    "Semantic check failed - falling back to original result",
                 )
         else:
             # Similarity below threshold - don't override
@@ -336,15 +331,13 @@ def perform_embedding_check(
                 similarity_score,
                 model_name,
                 True,  # embedding_check_performed
-                f"Similarity {similarity_score:.3f} below threshold {threshold:.3f}",
             )
 
-    except (ImportError, RuntimeError) as e:
+    except (ImportError, RuntimeError):
         # If embedding check fails entirely, return no override but log the attempt
         return (
             False,  # should_override_result
             None,
             None,
             True,  # embedding_check_performed (we tried)
-            f"Embedding check failed: {e}",
         )
