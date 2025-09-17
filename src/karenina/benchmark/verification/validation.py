@@ -1,7 +1,6 @@
 """Template validation logic for verification system."""
 
 import inspect
-from typing import get_args, get_origin
 
 from ...schemas.answer_class import BaseAnswer
 
@@ -75,43 +74,10 @@ def validate_answer_template(template_code: str) -> tuple[bool, str | None, type
         # The 'correct' field is optional, but if present via model_post_init, it must be a dict
         if "model_post_init" in Answer.__dict__:
             try:
-                from typing import Any
+                from .template_utils import create_test_instance_from_answer_class
 
-                # Get required fields to create a valid test instance
-                required_fields: dict[str, Any] = {}
-                if hasattr(Answer, "__annotations__"):
-                    for field_name, field_type in Answer.__annotations__.items():
-                        if field_name != "correct":  # Skip correct field as it might be set by model_post_init
-                            # Provide dummy values for required fields
-                            if field_type is int or str(field_type) == "int":
-                                required_fields[field_name] = 0
-                            elif field_type is str or str(field_type) == "str":
-                                required_fields[field_name] = ""
-                            elif field_type is float or str(field_type) == "float":
-                                required_fields[field_name] = 0.0
-                            elif field_type is bool or str(field_type) == "bool":
-                                required_fields[field_name] = False
-                            else:
-                                # Handle Literal and other complex types
-                                origin = get_origin(field_type)
-                                if origin is not None:
-                                    # Handle Literal types
-                                    if str(origin) == "typing.Literal":
-                                        # Get the first literal value
-                                        args = get_args(field_type)
-                                        if args:
-                                            required_fields[field_name] = args[0]
-                                        else:
-                                            required_fields[field_name] = ""
-                                    else:
-                                        # Default to empty string for unknown types
-                                        required_fields[field_name] = ""
-                                else:
-                                    # Default to empty string for unknown types
-                                    required_fields[field_name] = ""
-
-                test_instance = Answer(**required_fields)
-                if hasattr(test_instance, "correct") and not isinstance(test_instance.correct, dict):
+                test_instance, ground_truth = create_test_instance_from_answer_class(Answer)
+                if ground_truth is not None and not isinstance(ground_truth, dict):
                     return False, "model_post_init must assign 'self.correct' as a dictionary", None
             except Exception as e:
                 return False, f"Error testing model_post_init: {e}", None

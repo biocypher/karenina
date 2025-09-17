@@ -1,5 +1,6 @@
 """Single model verification runner."""
 
+import os
 import re
 import time
 from typing import Any
@@ -11,8 +12,22 @@ from ...answers.generator import inject_question_id_into_answer_class
 from ...llm.interface import init_chat_model_unified
 from ...schemas.rubric_class import Rubric
 from ..models import ModelConfig, VerificationResult
+from .embedding_utils import perform_embedding_check
 from .rubric_evaluator import RubricEvaluator
 from .validation import validate_answer_template
+
+
+def _should_expose_ground_truth() -> bool:
+    """
+    Check if ground truth should be exposed to the parser model.
+
+    Reads from the KARENINA_EXPOSE_GROUND_TRUTH environment variable.
+    Defaults to False for backward compatibility.
+
+    Returns:
+        True if ground truth should be exposed, False otherwise
+    """
+    return os.getenv("KARENINA_EXPOSE_GROUND_TRUTH", "false").lower() in ("true", "1", "yes", "on")
 
 
 def _split_parsed_response(parsed_answer: Any) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
@@ -117,26 +132,44 @@ def _construct_few_shot_prompt(
     return "\n".join(prompt_parts)
 
 
-def _system_prompt_compose(system_prompt: str | None, format_instructions: str) -> str:
+def _system_prompt_compose(
+    system_prompt: str | None, format_instructions: str, ground_truth: dict[str, Any] | None = None
+) -> str:
     """
-    Compose a system prompt with format instructions.
+    Compose a system prompt with format instructions and optional ground truth information.
 
     Args:
         system_prompt: The system prompt to compose
         format_instructions: The format instructions to compose
+        ground_truth: Optional ground truth information to include for parsing assistance
 
     Returns:
         The composed system prompt
     """
-    prompt = f"""<general_instructions>
-{system_prompt if system_prompt else ""}
-</general_instructions>
+    prompt_parts = [
+        f"<general_instructions>\n{system_prompt if system_prompt else ''}\n</general_instructions>",
+        f"<format_instructions>\n{format_instructions}\n</format_instructions>",
+    ]
 
-<format_instructions>
-{format_instructions}
-</format_instructions>
-"""
-    return prompt
+    # Add ground truth instructions if provided
+    if ground_truth is not None:
+        import json
+
+        ground_truth_str = json.dumps(ground_truth, indent=2, default=str)
+
+        ground_truth_section = f"""<ground_truth_reference>
+The following ground truth information is provided as reference to help with semantic matching and disambiguation.
+Use this information carefully - do not blindly copy it, but it may help resolve ambiguities when the trace
+and template are semantically close but differ in exact wording. IF AND ONLY IF the answer is very close to the ground truth,
+use the ground truth as final answer.
+
+Ground Truth:
+{ground_truth_str}
+</ground_truth_reference>"""
+
+        prompt_parts.append(ground_truth_section)
+
+    return "\n\n".join(prompt_parts)
 
 
 def run_single_model_verification(
@@ -218,6 +251,11 @@ def run_single_model_verification(
                 job_id=job_id,
                 answering_replicate=answering_replicate,
                 parsing_replicate=parsing_replicate,
+                # Embedding check metadata (defaults for error cases)
+                embedding_check_performed=False,
+                embedding_similarity_score=None,
+                embedding_override_applied=False,
+                embedding_model_used=None,
             )
 
         # Step 1.5: Inject question ID into the Answer class
@@ -283,6 +321,11 @@ def run_single_model_verification(
                 job_id=job_id,
                 answering_replicate=answering_replicate,
                 parsing_replicate=parsing_replicate,
+                # Embedding check metadata (defaults for error cases)
+                embedding_check_performed=False,
+                embedding_similarity_score=None,
+                embedding_override_applied=False,
+                embedding_model_used=None,
             )
 
         # Step 4: Initialize parsing model and parse response
@@ -317,15 +360,34 @@ def run_single_model_verification(
                 job_id=job_id,
                 answering_replicate=answering_replicate,
                 parsing_replicate=parsing_replicate,
+                # Embedding check metadata (defaults for error cases)
+                embedding_check_performed=False,
+                embedding_similarity_score=None,
+                embedding_override_applied=False,
+                embedding_model_used=None,
             )
 
-        # Create parsing prompt with format instructions
+        # Extract ground truth if enabled
+        ground_truth = None
+        if _should_expose_ground_truth():
+            try:
+                from .template_utils import create_test_instance_from_answer_class
+
+                # Create test instance and extract ground truth
+                _, ground_truth = create_test_instance_from_answer_class(RawAnswer)
+            except Exception as e:
+                # If we can't extract ground truth, continue without it
+                # This ensures the feature is robust and doesn't break existing functionality
+                print(f"Warning: Could not extract ground truth for question {question_id}: {e}")
+
+        # Create parsing prompt with format instructions and optional ground truth
         format_instructions = parser.get_format_instructions()
-        combined_system_prompt = _system_prompt_compose(parsing_model.system_prompt, format_instructions)
+        combined_system_prompt = _system_prompt_compose(parsing_model.system_prompt, format_instructions, ground_truth)
+
+        # Construct the parsing prompt (user message)
         parsing_prompt = f"""<response_to_parse>
 {raw_llm_response}
-</response_to_parse>
-"""
+</response_to_parse>"""
 
         parsing_messages: list[BaseMessage] = []
         if combined_system_prompt:
@@ -363,11 +425,40 @@ def run_single_model_verification(
                 job_id=job_id,
                 answering_replicate=answering_replicate,
                 parsing_replicate=parsing_replicate,
+                # Embedding check metadata (defaults for error cases)
+                embedding_check_performed=False,
+                embedding_similarity_score=None,
+                embedding_override_applied=False,
+                embedding_model_used=None,
             )
 
         # Step 5: Run verification
         try:
             verification_result = parsed_answer.verify()
+
+            # Step 5.5: Embedding check fallback if verification failed
+            embedding_check_performed = False
+            embedding_similarity_score = None
+            embedding_model_used = None
+            embedding_override_applied = False
+
+            if not verification_result:
+                # Extract ground truth and LLM response for embedding check
+                parsed_gt_response, parsed_llm_response = _split_parsed_response(parsed_answer)
+
+                # Perform embedding check
+                (should_override, similarity_score, model_name, check_performed) = perform_embedding_check(
+                    parsed_gt_response, parsed_llm_response, parsing_model, question_text
+                )
+
+                embedding_check_performed = check_performed
+                embedding_similarity_score = similarity_score
+                embedding_model_used = model_name
+
+                if should_override:
+                    verification_result = True
+                    embedding_override_applied = True
+
         except Exception as e:
             return VerificationResult(
                 question_id=question_id,
@@ -389,6 +480,11 @@ def run_single_model_verification(
                 job_id=job_id,
                 answering_replicate=answering_replicate,
                 parsing_replicate=parsing_replicate,
+                # Embedding check metadata (defaults for error cases)
+                embedding_check_performed=False,
+                embedding_similarity_score=None,
+                embedding_override_applied=False,
+                embedding_model_used=None,
             )
 
         # Step 6: Run rubric evaluation (optional)
@@ -430,6 +526,11 @@ def run_single_model_verification(
             job_id=job_id,
             answering_replicate=answering_replicate,
             parsing_replicate=parsing_replicate,
+            # Embedding check metadata
+            embedding_check_performed=embedding_check_performed,
+            embedding_similarity_score=embedding_similarity_score,
+            embedding_override_applied=embedding_override_applied,
+            embedding_model_used=embedding_model_used,
         )
 
     except Exception as e:

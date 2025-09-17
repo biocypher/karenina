@@ -6,6 +6,7 @@ from typing import Any, Literal, cast
 from ...schemas.rubric_class import Rubric
 from ...utils.async_utils import AsyncConfig, execute_with_config
 from ..models import ModelConfig, VerificationConfig, VerificationResult
+from .embedding_utils import clear_embedding_model_cache, preload_embedding_model
 from .runner import run_single_model_verification
 
 
@@ -102,6 +103,16 @@ def run_question_verification(
     """
     if async_config is None:
         async_config = AsyncConfig.from_env()
+
+    # Preload embedding model if embedding check is enabled
+    try:
+        from .embedding_utils import _should_use_embedding_check
+
+        if _should_use_embedding_check():
+            preload_embedding_model()
+    except Exception:
+        # If preloading fails, embedding check will handle it gracefully per question
+        pass
 
     # Build list of all verification tasks
     verification_tasks = []
@@ -214,5 +225,15 @@ def run_question_verification(
 
         result_key, verification_result = task_result
         results[result_key] = verification_result
+
+    # Clean up embedding model cache after job completion
+    try:
+        from .embedding_utils import _should_use_embedding_check
+
+        if _should_use_embedding_check():
+            clear_embedding_model_cache()
+    except Exception:
+        # Cleanup failure is not critical
+        pass
 
     return results
