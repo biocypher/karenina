@@ -588,6 +588,13 @@ class VerificationResult(BaseModel):
     answering_replicate: int | None = None  # Replicate number for answering model (1, 2, 3, ...)
     parsing_replicate: int | None = None  # Replicate number for parsing model (1, 2, 3, ...)
 
+    # Embedding check metadata
+    embedding_check_performed: bool = False  # Whether embedding check was attempted
+    embedding_similarity_score: float | None = None  # Similarity score (0.0 to 1.0)
+    embedding_override_applied: bool = False  # Whether embedding check overrode the result
+    embedding_model_used: str | None = None  # Name of the embedding model used
+    semantic_check_details: str | None = None  # Details from the semantic equivalence check
+
 
 class VerificationJob(BaseModel):
     """Represents a verification job."""
