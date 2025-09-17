@@ -157,6 +157,12 @@ def export_verification_results_json(job: VerificationJob, results: dict[str, Ve
             "parsing_system_prompt": result.parsing_system_prompt,
             "run_name": result.run_name,
             "job_id": result.job_id,
+            # Embedding check fields
+            "embedding_check_performed": result.embedding_check_performed,
+            "embedding_similarity_score": result.embedding_similarity_score,
+            "embedding_override_applied": result.embedding_override_applied,
+            "embedding_model_used": result.embedding_model_used,
+            "semantic_check_details": result.semantic_check_details,
         }
 
     return json.dumps(export_data, indent=2, ensure_ascii=False)

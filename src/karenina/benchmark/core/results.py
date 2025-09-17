@@ -410,7 +410,7 @@ class ResultsManager:
             CSV string in frontend format
         """
         if not results:
-            return "row_index,question_id,question_text,success,error,execution_time,timestamp\n"
+            return "row_index,question_id,question_text,success,error,execution_time,timestamp,embedding_check_performed,embedding_similarity_score,embedding_override_applied,embedding_model_used,semantic_check_details\n"
 
         # Extract all unique rubric trait names from results
         all_rubric_trait_names: set[str] = set()
@@ -457,6 +457,12 @@ class ResultsManager:
             "timestamp",
             "run_name",
             "job_id",
+            # Embedding check fields
+            "embedding_check_performed",
+            "embedding_similarity_score",
+            "embedding_override_applied",
+            "embedding_model_used",
+            "semantic_check_details",
         ]
 
         output = StringIO()
@@ -519,6 +525,12 @@ class ResultsManager:
                 self._escape_csv_field(result.timestamp),
                 self._escape_csv_field(result.run_name or ""),
                 self._escape_csv_field(result.job_id or ""),
+                # Embedding check fields
+                self._escape_csv_field(result.embedding_check_performed),
+                self._escape_csv_field(result.embedding_similarity_score or ""),
+                self._escape_csv_field(result.embedding_override_applied),
+                self._escape_csv_field(result.embedding_model_used or ""),
+                self._escape_csv_field(result.semantic_check_details or ""),
             ]
             writer.writerow(row)
 
