@@ -30,7 +30,6 @@ class StepEval(BaseModel):
         default_factory=dict,
         description="Question verification results: question_id -> list of results for multiple responses",
     )
-    failure_modes: list[str] = Field(default_factory=list, description="Failure modes derived from rubric outcomes")
 
 
 class TaskEvalResult(BaseModel):

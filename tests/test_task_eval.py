@@ -403,7 +403,6 @@ class TestTaskEvalIntegration:
         assert response_result["success"] is True  # Evaluation succeeded
         assert len(step_eval.rubric_scores) == 2  # Both traits evaluated
         # Failure modes functionality was removed as requested
-        assert isinstance(step_eval.failure_modes, list)  # Should be empty list
 
     def test_evaluate_no_questions(self):
         """Test evaluation with no questions."""
@@ -422,7 +421,7 @@ class TestTaskEvalIntegration:
         assert result.global_eval is not None
         assert result.global_eval.rubric_scores == {}
         assert result.global_eval.question_verification == {}  # Empty dict, not None
-        assert result.global_eval.failure_modes == []
+        # Failure modes functionality was removed as requested
 
     def test_evaluate_global_triggers_step_evaluations(self):
         """Test that global evaluation automatically evaluates all available steps."""
