@@ -312,129 +312,19 @@ class TestTaskEvalFailureModes:
         assert "Low score trait: clarity (score: 2)" in failure_modes
 
 
-class TestTaskEvalTemplateGeneration:
-    """Test template generation functionality."""
+class TestTaskEvalSimplifiedLogging:
+    """Test TaskEval simplified logging and evaluation with regular log() calls."""
 
-    def test_generate_minimal_template(self):
-        """Test generating a minimal template."""
-        task = TaskEval()
-        question_dict = {"raw_answer": "Paris", "question": "What is the capital of France?"}
-
-        template = task._generate_minimal_template(question_dict)
-
-        assert "class Answer(BaseModel):" in template
-        assert "correct: str" in template
-        assert '"Paris"' in template
-
-    def test_prepare_for_verification_with_template(self):
-        """Test preparing question with existing template."""
-        task = TaskEval()
-        question_dict = {"id": "q1", "question": "Test question", "answer_template": "class Answer(BaseModel): pass"}
-
-        q_id, q_text, template = task._prepare_for_verification(question_dict)
-
-        assert q_id == "q1"
-        assert q_text == "Test question"
-        assert template == "class Answer(BaseModel): pass"
-
-    def test_prepare_for_verification_without_template(self):
-        """Test preparing question without template (generates minimal)."""
-        task = TaskEval()
-        question_dict = {"id": "q1", "question": "Test question", "raw_answer": "Test answer"}
-
-        q_id, q_text, template = task._prepare_for_verification(question_dict)
-
-        assert q_id == "q1"
-        assert q_text == "Test question"
-        assert "class Answer(BaseModel):" in template
-        assert '"Test answer"' in template
-
-
-class TestTaskEvalAgentOutputs:
-    """Test TaskEval agent output logging and evaluation philosophy."""
-
-    def test_log_agent_output_global(self):
-        """Test logging agent output globally."""
-        task = TaskEval()
-
-        agent_response = "The answer is 42 because 20 + 22 = 42"
-        task.log_agent_output(agent_output=agent_response, question_id="q1", output_type="answer")
-
-        assert len(task.global_logs) == 1
-        log = task.global_logs[0]
-        assert log.text == agent_response
-        assert log.question_id == "q1"
-        assert log.is_agent_output is True
-        assert log.output_type == "answer"
-        assert log.level == "info"
-
-    def test_log_agent_output_step(self):
-        """Test logging agent output to specific step."""
-        task = TaskEval()
-
-        agent_response = "I understand the problem: calculate 15 + 23"
-        task.log_agent_output(
-            agent_output=agent_response, question_id="understanding_q1", step_id="understanding", target="step"
-        )
-
-        assert len(task.global_logs) == 0
-        assert len(task.step_logs) == 1
-        assert "understanding" in task.step_logs
-
-        step_logs = task.step_logs["understanding"]
-        assert len(step_logs) == 1
-        assert step_logs[0].text == agent_response
-        assert step_logs[0].is_agent_output is True
-        assert step_logs[0].question_id == "understanding_q1"
-
-    def test_log_agent_output_both_targets(self):
-        """Test logging agent output to both global and step."""
-        task = TaskEval()
-
-        agent_response = "Final answer: 25"
-        task.log_agent_output(agent_output=agent_response, question_id="final_q", step_id="execution", target="both")
-
-        # Should appear in both global and step logs
-        assert len(task.global_logs) == 1
-        assert task.global_logs[0].text == agent_response
-        assert task.global_logs[0].is_agent_output is True
-
-        assert len(task.step_logs) == 1
-        step_logs = task.step_logs["execution"]
-        assert len(step_logs) == 1
-        assert step_logs[0].text == agent_response
-        assert step_logs[0].is_agent_output is True
-
-    def test_find_agent_output_for_question(self):
-        """Test finding logged agent output for a specific question."""
-        task = TaskEval()
-
-        # Log some regular logs and agent outputs
-        task.log("Starting task", level="info")
-        task.log_agent_output("Answer to Q1: 42", question_id="q1")
-        task.log_agent_output("Answer to Q2: 24", question_id="q2")
-        task.log("Task completed", level="info")
-
-        # Test finding specific agent outputs (now returns lists)
-        outputs_q1 = task._find_agent_outputs_for_question("q1", task.global_logs)
-        outputs_q2 = task._find_agent_outputs_for_question("q2", task.global_logs)
-        outputs_missing = task._find_agent_outputs_for_question("q3", task.global_logs)
-
-        assert outputs_q1 == ["Answer to Q1: 42"]
-        assert outputs_q2 == ["Answer to Q2: 24"]
-        assert outputs_missing == []
-
-    def test_evaluation_uses_logged_outputs(self):
-        """Test that evaluation uses logged agent outputs, not new generation."""
-        task = TaskEval(task_id="agent_run_001")
+    def test_evaluation_with_simple_logs(self):
+        """Test that evaluation works with simple log() calls."""
+        task = TaskEval(task_id="simple_eval_test")
 
         # Add question
         question = {"id": "math_q1", "question": "What is 10 + 5?", "raw_answer": "15"}
         task.add_question(question)
 
-        # Log agent output (this is the answer TaskEval should evaluate)
-        agent_answer = "To solve 10 + 5, I add them: 10 + 5 = 15"
-        task.log_agent_output(agent_answer, question_id="math_q1")
+        # Use simple log() calls - this is the key improvement
+        task.log("To solve 10 + 5, I add them: 10 + 5 = 15")
 
         # Create config with parsing models only
         config = VerificationConfig(
@@ -449,30 +339,30 @@ class TestTaskEvalAgentOutputs:
             parsing_only=True,
         )
 
-        # Evaluate (this should use the logged output, not generate new ones)
+        # Evaluate
         result = task.evaluate(config)
 
-        # Verify the evaluation found the logged output
-        assert result.task_id == "agent_run_001"
+        # Verify evaluation works with simple logs
+        assert result.task_id == "simple_eval_test"
         assert result.global_eval is not None
 
-        # The evaluation should have processed the logged agent output
+        # The evaluation should have processed the logged text
         verification = result.global_eval.question_verification
         assert verification is not None
         assert "math_q1" in verification  # Question ID should be in results
 
-        # Check the first (and only) response for this question
+        # Check the response result
         question_results = verification["math_q1"]
         assert len(question_results) == 1  # Should have one logged response
         response_result = question_results[0]
         assert response_result["success"] is True
         assert "agent_output" in response_result["details"]
 
-    def test_evaluation_missing_agent_output(self):
-        """Test evaluation when no agent output is logged for a question."""
+    def test_evaluation_missing_logs(self):
+        """Test evaluation when no logs are available for a question."""
         task = TaskEval()
 
-        # Add question but don't log any agent output for it
+        # Add question but don't log anything
         question = {"id": "missing_q", "question": "What is 5 + 5?", "raw_answer": "10"}
         task.add_question(question)
 
@@ -485,18 +375,18 @@ class TestTaskEvalAgentOutputs:
 
         result = task.evaluate(config)
 
-        # Should handle missing agent output gracefully
+        # Should handle missing logs gracefully
         assert result.global_eval is not None
         verification = result.global_eval.question_verification
         assert verification is not None
         assert "missing_q" in verification  # Question ID should be in results
 
-        # Check the error response for missing output
+        # Check the error response for missing logs
         question_results = verification["missing_q"]
         assert len(question_results) == 1  # Should have one error result
         error_result = question_results[0]
         assert error_result["success"] is False
-        assert "Missing agent output for question" in error_result["error"]
+        assert "No logs available" in error_result["error"]
 
 
 class TestTaskEvalIntegration:
@@ -518,8 +408,8 @@ class TestTaskEvalIntegration:
             )
         )
 
-        # Log agent output (this is what TaskEval evaluates)
-        task.log_agent_output("The answer is Test! which is correct and clear", question_id="q1")
+        # Log output (this is what TaskEval evaluates)
+        task.log("The answer is Test! which is correct and clear")
 
         # Setup config
         config = VerificationConfig(
@@ -566,8 +456,8 @@ class TestTaskEvalIntegration:
             step_id="step1",
         )
 
-        # Log agent output for this step (incorrect answer to test failure modes)
-        task.log_agent_output("Wrong answer here", question_id="q1", step_id="step1")
+        # Log output for this step (incorrect answer to test failure modes)
+        task.log("Wrong answer here", step_id="step1")
 
         # Setup config
         config = VerificationConfig(
@@ -617,3 +507,49 @@ class TestTaskEvalIntegration:
         assert result.global_eval.rubric_scores == {}
         assert result.global_eval.question_verification == {}  # Empty dict, not None
         assert result.global_eval.failure_modes == []
+
+    def test_evaluate_global_triggers_step_evaluations(self):
+        """Test that global evaluation automatically evaluates all available steps."""
+        task = TaskEval()
+
+        # Add global question and log
+        task.add_question({"id": "global_q", "question": "Global question?", "raw_answer": "Global answer"})
+        task.log("Global response")
+
+        # Add step-specific questions and logs
+        task.add_question(
+            {"id": "step1_q", "question": "Step 1 question?", "raw_answer": "Step 1 answer"}, step_id="step1"
+        )
+        task.log("Step 1 response", step_id="step1")
+
+        task.add_question(
+            {"id": "step2_q", "question": "Step 2 question?", "raw_answer": "Step 2 answer"}, step_id="step2"
+        )
+        task.log("Step 2 response", step_id="step2")
+
+        config = VerificationConfig(
+            parsing_models=[
+                ModelConfig(id="parsing", model_provider="openai", model_name="gpt-4", system_prompt="Parse prompt")
+            ],
+            parsing_only=True,
+        )
+
+        # Evaluate globally (should trigger step evaluations automatically)
+        result = task.evaluate(config)
+
+        # Verify global evaluation was performed
+        assert result.global_eval is not None
+        assert "global_q" in result.global_eval.question_verification
+
+        # Verify step evaluations were automatically triggered
+        assert len(result.per_step) == 2
+        assert "step1" in result.per_step
+        assert "step2" in result.per_step
+
+        # Verify step-specific evaluations contain correct questions
+        assert "step1_q" in result.per_step["step1"].question_verification
+        assert "step2_q" in result.per_step["step2"].question_verification
+
+        # Verify step evaluations are isolated (step1 doesn't have step2's question)
+        assert "step2_q" not in result.per_step["step1"].question_verification
+        assert "step1_q" not in result.per_step["step2"].question_verification
