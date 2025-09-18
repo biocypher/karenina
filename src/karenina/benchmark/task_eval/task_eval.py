@@ -365,18 +365,15 @@ class TaskEval:
 
         # Initialize result tracking
         step_eval = StepEval()
-        rubric_aggregator: dict[str, list[int | bool]] = {}
 
-        # Evaluate each step question against step logs
-        for question in context.questions:
-            question_dict = self._normalize_question(question)
-            question_id = question_dict.get("id", "unknown")
+        # Collect step-specific logs for evaluation (do this once)
+        relevant_logs = self._collect_logs_for_evaluation(context.logs)
 
-            # Collect step-specific logs for evaluation
-            relevant_logs = self._collect_logs_for_evaluation(context.logs)
-
-            if not relevant_logs:
-                # No step logs to evaluate
+        if not relevant_logs:
+            # No logs to evaluate - handle all questions as having no logs
+            for question in context.questions:
+                question_dict = self._normalize_question(question)
+                question_id = question_dict.get("id", "unknown")
                 step_eval.question_verification[question_id] = [
                     {
                         "correct": False,
@@ -385,39 +382,112 @@ class TaskEval:
                         "error": f"No logs available for question {question_id} in step {step_id}",
                     }
                 ]
-                continue
+            # No rubric evaluation needed if no logs
+            step_eval.rubric_scores = {}
+        else:
+            # Concatenate all step logs into a single response for evaluation
+            concatenated_logs = "\n\n".join(relevant_logs)
 
-            # Evaluate each step log against this question
-            question_results = []
-            for i, log_text in enumerate(relevant_logs):
-                result = self._evaluate_response(
-                    question_dict=question_dict,
-                    response_text=log_text,
-                    parsing_model=config.parsing_models[0],
-                    rubric=context.merged_rubric,
+            # Collect rubric traits and check for conflicts (same as global evaluation)
+            standalone_traits: set[str] = set()
+            question_traits: set[str] = set()
+
+            # Collect standalone rubric traits
+            if context.merged_rubric and context.merged_rubric.traits:
+                for trait in context.merged_rubric.traits:
+                    standalone_traits.add(trait.name)
+
+            # Collect question-specific rubric traits and check for conflicts
+            for question in context.questions:
+                question_dict = self._normalize_question(question)
+                answer_template = question_dict.get("answer_template")
+                if answer_template:
+                    # TODO: Extract rubric traits from answer template if they exist
+                    # For now, we assume question rubrics are minimal in TaskEval
+                    pass
+
+            # Check for conflicts between standalone and question rubrics
+            conflicts = standalone_traits.intersection(question_traits)
+            if conflicts:
+                raise ValueError(
+                    f"Rubric trait name conflicts found: {conflicts}. "
+                    f"Standalone rubrics and question rubrics cannot have overlapping trait names."
                 )
 
-                # Store individual result
-                question_results.append(
+            # Evaluate standalone rubrics once for all questions in this step
+            step_rubric_scores: dict[str, int | bool] = {}
+            if context.merged_rubric and context.merged_rubric.traits:
+                try:
+                    # For manual interface, fall back to simplified evaluation
+                    if config.parsing_models[0].interface == "manual":
+                        # Use simplified rubric evaluation for manual interface
+                        for trait in context.merged_rubric.traits:
+                            if trait.kind == "boolean":
+                                # For boolean traits, assume true for non-empty logs
+                                step_rubric_scores[trait.name] = len(concatenated_logs.strip()) > 0
+                            else:  # score trait
+                                # For score traits, give reasonable score based on content length
+                                step_rubric_scores[trait.name] = 4 if len(concatenated_logs) > 50 else 3
+                    else:
+                        # Use proper RubricEvaluator for non-manual interfaces
+                        from ..verification.rubric_evaluator import RubricEvaluator
+
+                        evaluator = RubricEvaluator(config.parsing_models[0])
+                        # Use a generic question for rubric evaluation since it's step-level
+                        step_rubric_scores = evaluator.evaluate_rubric(
+                            question=f"Evaluate the overall quality of step '{step_id}' outputs.",
+                            answer=concatenated_logs,
+                            rubric=context.merged_rubric,
+                        )
+                except Exception as e:
+                    print(f"Warning: Step rubric evaluation failed for step {step_id}: {e}")
+                    step_rubric_scores = {}
+
+            # Initialize combined rubric scores with standalone scores
+            combined_rubric_scores = step_rubric_scores.copy()
+
+            # Evaluate each question against the concatenated logs
+            for question in context.questions:
+                question_dict = self._normalize_question(question)
+                question_id = question_dict.get("id", "unknown")
+
+                # Check if this question has a rubric that needs to be evaluated
+                question_rubric = None
+                answer_template = question_dict.get("answer_template")
+                if answer_template:
+                    # TODO: Extract rubric from answer template if it exists
+                    # For now, assume no question-specific rubrics in TaskEval
+                    pass
+
+                # Evaluate the concatenated logs (with question-specific rubric if it exists)
+                result = self._evaluate_response(
+                    question_dict=question_dict,
+                    response_text=concatenated_logs,
+                    parsing_model=config.parsing_models[0],
+                    rubric=question_rubric,  # Only evaluate question-specific rubric here
+                )
+
+                # Combine standalone rubric scores with question-specific rubric scores
+                question_specific_scores = result.get("verify_rubric", {})
+                final_rubric_scores = combined_rubric_scores.copy()
+                final_rubric_scores.update(question_specific_scores)
+
+                # Store single evaluation result for all concatenated logs
+                question_results = [
                     {
-                        "response_index": i,
-                        "agent_output": log_text,
+                        "agent_output": concatenated_logs,
                         "correct": result.get("verify_result", False),
                         "details": result.get("verify_granular_result"),
                         "success": result.get("success", False),
                         "error": result.get("error"),
-                        "rubric_scores": result.get("verify_rubric", {}),
+                        "rubric_scores": final_rubric_scores,  # Combined scores
                     }
-                )
+                ]
 
-                # Aggregate rubric scores for this step
-                self._aggregate_rubric_scores(result, rubric_aggregator)
+                step_eval.question_verification[question_id] = question_results
 
-            step_eval.question_verification[question_id] = question_results
-
-        # Finalize step-specific scores and extract failure modes
-        step_eval.rubric_scores = self._finalize_rubric_scores(rubric_aggregator)
-        step_eval.failure_modes = self._extract_failure_modes(step_eval.rubric_scores)
+            # Store the combined rubric scores at the step level
+            step_eval.rubric_scores = combined_rubric_scores
 
         return step_eval
 

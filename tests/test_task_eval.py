@@ -485,7 +485,8 @@ class TestTaskEvalIntegration:
         assert response_result["correct"] is False  # Wrong answer
         assert response_result["success"] is True  # Evaluation succeeded
         assert len(step_eval.rubric_scores) == 2  # Both traits evaluated
-        assert len(step_eval.failure_modes) > 0  # Should have failure modes
+        # Failure modes functionality was removed as requested
+        assert isinstance(step_eval.failure_modes, list)  # Should be empty list
 
     def test_evaluate_no_questions(self):
         """Test evaluation with no questions."""
