@@ -215,18 +215,16 @@ class TestTaskEvalRubrics:
         assert "accuracy" in trait_names
 
     def test_merge_rubrics_duplicate_names(self):
-        """Test merging rubrics with duplicate trait names (later overrides earlier)."""
+        """Test merging rubrics with duplicate trait names raises an error."""
         task = TaskEval()
         rubric1 = Rubric(traits=[RubricTrait(name="clarity", description="First clarity", kind="score")])
         rubric2 = Rubric(traits=[RubricTrait(name="clarity", description="Second clarity", kind="boolean")])
 
-        result = task._merge_rubrics([rubric1, rubric2])
+        # Should raise ValueError due to duplicate trait names
+        import pytest
 
-        assert result is not None
-        assert len(result.traits) == 1
-        assert result.traits[0].name == "clarity"
-        assert result.traits[0].description == "Second clarity"
-        assert result.traits[0].kind == "boolean"
+        with pytest.raises(ValueError, match="Duplicate rubric trait names found"):
+            task._merge_rubrics([rubric1, rubric2])
 
 
 class TestTaskEvalFailureModes:
@@ -715,3 +713,52 @@ class Answer(BaseAnswer):
         # Check that rubric evaluation structure is present
         rubric_scores = response_result.get("rubric_scores", {})
         assert isinstance(rubric_scores, dict)
+
+    def test_rubric_conflict_detection(self):
+        """Test that duplicate rubric trait names raise an error."""
+        task = TaskEval(task_id="conflict_test")
+
+        # Add two rubrics with the same trait name
+        from karenina.schemas.rubric_class import Rubric, RubricTrait
+
+        rubric1 = Rubric(
+            traits=[
+                RubricTrait(name="accuracy", description="Is the answer accurate?", kind="boolean"),
+            ]
+        )
+        rubric2 = Rubric(
+            traits=[
+                RubricTrait(
+                    name="accuracy", description="Different accuracy definition", kind="score", min_score=1, max_score=5
+                ),
+            ]
+        )
+
+        # Add both rubrics
+        task.add_rubric(rubric1)
+        task.add_rubric(rubric2)
+
+        # Add a question and log
+        question = {"id": "conflict_q", "question": "Test question", "raw_answer": "Test"}
+        task.add_question(question)
+        task.log("Test response")
+
+        # Create config
+        config = VerificationConfig(
+            parsing_models=[
+                ModelConfig(
+                    id="test_parser",
+                    model_provider="mock",
+                    model_name="mock",
+                    interface="manual",
+                    system_prompt="Parse responses",
+                )
+            ],
+            parsing_only=True,
+        )
+
+        # Evaluation should raise an error due to conflicting trait names
+        import pytest
+
+        with pytest.raises(ValueError, match="Duplicate rubric trait names found"):
+            task.evaluate(config)
