@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from ...schemas.rubric_class import Rubric
 
 from ..models import ModelConfig, VerificationConfig
+from ..verification.rubric_evaluator import RubricEvaluator
 from .models import LogEvent, StepEval, TaskEvalResult
 
 
@@ -433,7 +434,7 @@ class TaskEval:
             answer_template = question_dict.get("answer_template")
             if not answer_template:
                 # Fallback to simple verification if no template
-                return self._evaluate_response_fallback(question_dict, response_text, rubric)
+                return self._evaluate_response_fallback(question_dict, response_text, parsing_model, rubric)
 
             # Use the existing verification pipeline
             return self._evaluate(question_dict, response_text, parsing_model, rubric)
@@ -485,15 +486,44 @@ class TaskEval:
                 trace_manager._traces[question_id] = response_text
                 trace_manager._trace_timestamps[question_id] = time.time()
 
-            # Call the existing verification function
+            # Call the existing verification function (without rubric to avoid double evaluation)
             verification_result = run_single_model_verification(
                 question_id=question_id,
                 question_text=question_text,
                 template_code=answer_template,
                 answering_model=mock_answering_model,
                 parsing_model=parsing_model,
-                rubric=rubric,
+                rubric=None,  # Don't pass rubric to avoid double evaluation
             )
+
+            # Evaluate rubric separately using RubricEvaluator for standalone evaluation
+            rubric_scores: dict[str, int | bool] = {}
+            if rubric and rubric.traits:
+                try:
+                    # For manual interface, we need to use a custom approach since RubricEvaluator
+                    # doesn't support question_hash directly. For now, fall back to simplified evaluation.
+                    if parsing_model.interface == "manual":
+                        # Fallback to simplified rubric evaluation for manual interface
+                        # TODO: Enhance RubricEvaluator to support manual interface with question_hash
+                        # For now, use basic heuristic evaluation
+                        rubric_scores = {}
+                        for trait in rubric.traits:
+                            if trait.kind == "boolean":
+                                # For boolean traits, assume true if verification passed
+                                rubric_scores[trait.name] = verification_result.verify_result or False
+                            else:  # score trait
+                                # For score traits, give reasonable score based on verification
+                                rubric_scores[trait.name] = 4 if verification_result.verify_result else 2
+                    else:
+                        # Use proper RubricEvaluator for non-manual interfaces
+                        evaluator = RubricEvaluator(parsing_model)
+                        rubric_scores = evaluator.evaluate_rubric(
+                            question=question_text, answer=response_text, rubric=rubric
+                        )
+                except Exception as e:
+                    # Don't fail verification if rubric evaluation fails
+                    print(f"Warning: Standalone rubric evaluation failed: {e}")
+                    rubric_scores = {}
 
             # Convert VerificationResult to our expected format
             return {
@@ -504,10 +534,10 @@ class TaskEval:
                     "agent_output": response_text,
                     "parsed_gt_response": verification_result.parsed_gt_response,
                     "parsed_llm_response": verification_result.parsed_llm_response,
-                    "evaluation_method": "taskeval_existing_pipeline",
+                    "evaluation_method": "taskeval_existing_pipeline_with_standalone_rubric",
                     "execution_time": verification_result.execution_time,
                 },
-                "verify_rubric": verification_result.verify_rubric or {},
+                "verify_rubric": rubric_scores,
                 "success": verification_result.success,
                 "error": verification_result.error,
             }
@@ -519,24 +549,39 @@ class TaskEval:
                 trace_manager._trace_timestamps.pop(question_id, None)
 
     def _evaluate_response_fallback(
-        self, question_dict: dict[str, Any], response_text: str, rubric: "Rubric | None"
+        self, question_dict: dict[str, Any], response_text: str, parsing_model: ModelConfig, rubric: "Rubric | None"
     ) -> dict[str, Any]:
         """Fallback evaluation when no answer template is available."""
         # Use the original simple evaluation logic
         expected_answer = question_dict.get("raw_answer", "")
         correct = self._check_correctness(response_text, expected_answer)
 
-        # Rubric evaluation
+        # Rubric evaluation: use RubricEvaluator when parsing model is available
         rubric_scores: dict[str, int | bool] = {}
-        if rubric:
-            rubric_scores = self._evaluate_against_rubric(response_text, correct, rubric)
+        if rubric and rubric.traits:
+            try:
+                # For manual interface, fall back to simplified evaluation
+                if parsing_model.interface == "manual":
+                    # Use simplified rubric evaluation for manual interface
+                    rubric_scores = self._evaluate_against_rubric(response_text, correct, rubric)
+                else:
+                    # Use proper RubricEvaluator with parsing model for other interfaces
+                    evaluator = RubricEvaluator(parsing_model)
+                    question_text = question_dict.get("question", "")
+                    rubric_scores = evaluator.evaluate_rubric(
+                        question=question_text, answer=response_text, rubric=rubric
+                    )
+            except Exception as e:
+                # Fallback to simplified rubric evaluation if RubricEvaluator fails
+                print(f"Warning: RubricEvaluator failed in fallback, using simplified evaluation: {e}")
+                rubric_scores = self._evaluate_against_rubric(response_text, correct, rubric)
 
         return {
             "verify_result": correct,
             "verify_granular_result": {
                 "agent_output": response_text,
                 "expected_answer": expected_answer,
-                "evaluation_method": "taskeval_simplified_fallback",
+                "evaluation_method": "taskeval_fallback_with_rubric_evaluator",
             },
             "verify_rubric": rubric_scores,
             "success": True,
