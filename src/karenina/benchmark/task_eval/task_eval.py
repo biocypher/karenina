@@ -189,7 +189,6 @@ class TaskEval:
 
         # Initialize result tracking
         step_eval = StepEval()
-        rubric_aggregator: dict[str, list[int | bool]] = {}
 
         # Evaluate each question against all global logs
         for question in context.questions:
@@ -211,37 +210,37 @@ class TaskEval:
                 ]
                 continue
 
-            # Evaluate each log output against this question
-            question_results = []
-            for i, log_text in enumerate(relevant_logs):
-                result = self._evaluate_response(
-                    question_dict=question_dict,
-                    response_text=log_text,
-                    parsing_model=config.parsing_models[0],
-                    rubric=context.merged_rubric,
-                )
+            # Concatenate all logs into a single response for global evaluation
+            concatenated_logs = "\n\n".join(relevant_logs)
 
-                # Store individual result
-                question_results.append(
-                    {
-                        "response_index": i,
-                        "agent_output": log_text,
-                        "correct": result.get("verify_result", False),
-                        "details": result.get("verify_granular_result"),
-                        "success": result.get("success", False),
-                        "error": result.get("error"),
-                        "rubric_scores": result.get("verify_rubric", {}),
-                    }
-                )
+            # Evaluate the concatenated logs as a single response
+            result = self._evaluate_response(
+                question_dict=question_dict,
+                response_text=concatenated_logs,
+                parsing_model=config.parsing_models[0],
+                rubric=context.merged_rubric,
+            )
 
-                # Aggregate rubric scores across all responses
-                self._aggregate_rubric_scores(result, rubric_aggregator)
+            # Store single evaluation result for all concatenated logs
+            question_results = [
+                {
+                    "agent_output": concatenated_logs,
+                    "correct": result.get("verify_result", False),
+                    "details": result.get("verify_granular_result"),
+                    "success": result.get("success", False),
+                    "error": result.get("error"),
+                    "rubric_scores": result.get("verify_rubric", {}),
+                }
+            ]
 
             step_eval.question_verification[question_id] = question_results
 
-        # Finalize aggregated scores and extract failure modes
-        step_eval.rubric_scores = self._finalize_rubric_scores(rubric_aggregator)
-        step_eval.failure_modes = self._extract_failure_modes(step_eval.rubric_scores)
+            # Store rubric scores directly (no aggregation needed)
+            if result.get("verify_rubric"):
+                for trait_name, score in result["verify_rubric"].items():
+                    step_eval.rubric_scores[trait_name] = score
+
+        # Rubric scores and failure modes are handled per-question above
 
         # Build result with global evaluation
         task_result = TaskEvalResult(
