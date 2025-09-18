@@ -63,7 +63,11 @@ def check_rubric_conflicts(
 
 
 def evaluate_standalone_rubrics(
-    parsing_model: ModelConfig, merged_rubric: "Rubric | None", concatenated_logs: str, context: str = "global"
+    parsing_model: ModelConfig,
+    merged_rubric: "Rubric | None",
+    concatenated_logs: str,
+    context: str = "global",
+    callable_registry: dict[str, Callable[[str], bool]] | None = None,
 ) -> dict[str, int | bool]:
     """Evaluate standalone rubrics for a given context.
 
@@ -72,15 +76,16 @@ def evaluate_standalone_rubrics(
         merged_rubric: The merged rubric to evaluate
         concatenated_logs: The concatenated logs to evaluate against
         context: Context string for the evaluation question
+        callable_registry: Registry of callable functions for manual trait evaluation
 
     Returns:
         Dictionary of rubric scores
     """
     rubric_scores: dict[str, int | bool] = {}
 
-    if merged_rubric and merged_rubric.traits:
+    if merged_rubric and (merged_rubric.traits or merged_rubric.manual_traits):
         try:
-            evaluator = RubricEvaluator(parsing_model)
+            evaluator = RubricEvaluator(parsing_model, callable_registry)
             question = f"Evaluate the overall quality of the {context} outputs."
             rubric_scores = evaluator.evaluate_rubric(question=question, answer=concatenated_logs, rubric=merged_rubric)
         except Exception as e:
@@ -129,7 +134,6 @@ def process_questions_with_concatenated_logs(
     questions: list[Any],
     concatenated_logs: str,
     parsing_model: ModelConfig,
-    combined_rubric_scores: dict[str, int | bool],
     normalize_question_func: Callable[..., dict[str, Any]],
     extract_traits_func: Callable[[str], list[Any]],
     evaluate_response_func: Callable[..., dict[str, Any]],
@@ -140,7 +144,6 @@ def process_questions_with_concatenated_logs(
         questions: List of questions to process
         concatenated_logs: Concatenated logs text
         parsing_model: Model to use for parsing
-        combined_rubric_scores: Pre-evaluated rubric scores to combine
         normalize_question_func: Function to normalize question format
         extract_traits_func: Function to extract rubric traits
         evaluate_response_func: Function to evaluate responses
@@ -163,10 +166,9 @@ def process_questions_with_concatenated_logs(
             evaluate_response_func=evaluate_response_func,
         )
 
-        # Combine standalone rubric scores with question-specific rubric scores
+        # Only include question-specific rubric scores (NOT global standalone rubrics)
+        # Global standalone rubrics belong at the step level, not individual questions
         question_specific_scores = result.get("verify_rubric", {})
-        final_rubric_scores = combined_rubric_scores.copy()
-        final_rubric_scores.update(question_specific_scores)
 
         # Store single evaluation result for all concatenated logs in TaskEval format
         question_results = [
@@ -176,7 +178,7 @@ def process_questions_with_concatenated_logs(
                 "details": result.get("verify_granular_result"),
                 "success": result.get("success", False),
                 "error": result.get("error"),
-                "rubric_scores": final_rubric_scores,  # Combined scores
+                "rubric_scores": question_specific_scores,  # Only question-specific scores
             }
         ]
 

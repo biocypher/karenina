@@ -11,6 +11,7 @@ Example:
     result = task.evaluate(config)
 """
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Literal, Union
 
 if TYPE_CHECKING:
@@ -36,15 +37,22 @@ class TaskEval:
         - Results reveal WHY responses succeed or fail
     """
 
-    def __init__(self, task_id: str | None = None, metadata: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self,
+        task_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        callable_registry: dict[str, Callable[[str], bool]] | None = None,
+    ) -> None:
         """Initialize TaskEval instance.
 
         Args:
             task_id: Optional task identifier for tracking
             metadata: Optional metadata dictionary
+            callable_registry: Registry of callable functions for manual trait evaluation
         """
         self.task_id = task_id
         self.metadata = metadata or {}
+        self.callable_registry = callable_registry or {}
 
         # Storage for logs, questions, and rubrics
         self.global_logs: list[LogEvent] = []
@@ -145,6 +153,29 @@ class TaskEval:
         else:
             self.global_rubrics.append(rubric_obj)
 
+    def register_callable(self, name: str, func: Callable[[str], bool]) -> None:
+        """
+        Register a callable function for manual trait evaluation.
+
+        Args:
+            name: Name to register the function under
+            func: Function that takes a string and returns a boolean
+
+        Raises:
+            ValueError: If function doesn't have correct signature
+        """
+        # Basic validation of function signature
+        import inspect
+
+        sig = inspect.signature(func)
+        params = list(sig.parameters.keys())
+
+        if len(params) != 1:
+            raise ValueError(f"Callable '{name}' must have exactly one parameter, got {len(params)}")
+
+        # Store the function
+        self.callable_registry[name] = func
+
     def evaluate(self, config: VerificationConfig, step_id: str | None = None) -> TaskEvalResult:
         """Evaluate logged outputs against questions and rubrics.
 
@@ -230,6 +261,7 @@ class TaskEval:
                 merged_rubric=context.merged_rubric,
                 concatenated_logs=concatenated_logs,
                 context="global",
+                callable_registry=self.callable_registry,
             )
 
             # Process all questions against concatenated logs
@@ -239,14 +271,13 @@ class TaskEval:
                 questions=context.questions,
                 concatenated_logs=concatenated_logs,
                 parsing_model=config.parsing_models[0],
-                combined_rubric_scores=global_rubric_scores,
                 normalize_question_func=self._normalize_question,
                 extract_traits_func=extract_rubric_traits_from_template,
                 evaluate_response_func=self._evaluate_response,
             )
 
             # Store the global rubric scores at the step level
-            step_eval.rubric_scores = global_rubric_scores
+            step_eval.rubric_scores.update(global_rubric_scores)
 
         # Build result with global evaluation
         task_result = TaskEvalResult(
@@ -339,6 +370,7 @@ class TaskEval:
                 merged_rubric=context.merged_rubric,
                 concatenated_logs=concatenated_logs,
                 context=f"step '{step_id}'",
+                callable_registry=self.callable_registry,
             )
 
             # Process all questions against concatenated logs
@@ -348,14 +380,13 @@ class TaskEval:
                 questions=context.questions,
                 concatenated_logs=concatenated_logs,
                 parsing_model=config.parsing_models[0],
-                combined_rubric_scores=step_rubric_scores,
                 normalize_question_func=self._normalize_question,
                 extract_traits_func=extract_rubric_traits_from_template,
                 evaluate_response_func=self._evaluate_response,
             )
 
             # Store the step rubric scores at the step level
-            step_eval.rubric_scores = step_rubric_scores
+            step_eval.rubric_scores.update(step_rubric_scores)
 
         return step_eval
 
@@ -508,9 +539,9 @@ class TaskEval:
 
             # Evaluate rubric separately using RubricEvaluator for standalone evaluation
             rubric_scores: dict[str, int | bool] = {}
-            if rubric and rubric.traits:
+            if rubric and (rubric.traits or rubric.manual_traits):
                 try:
-                    evaluator = RubricEvaluator(parsing_model)
+                    evaluator = RubricEvaluator(parsing_model, self.callable_registry)
                     rubric_scores = evaluator.evaluate_rubric(
                         question=question_text, answer=response_text, rubric=rubric
                     )
@@ -552,9 +583,9 @@ class TaskEval:
 
         # Rubric evaluation: use RubricEvaluator
         rubric_scores: dict[str, int | bool] = {}
-        if rubric and rubric.traits:
+        if rubric and (rubric.traits or rubric.manual_traits):
             try:
-                evaluator = RubricEvaluator(parsing_model)
+                evaluator = RubricEvaluator(parsing_model, self.callable_registry)
                 question_text = question_dict.get("question", "")
                 rubric_scores = evaluator.evaluate_rubric(question=question_text, answer=response_text, rubric=rubric)
             except Exception as e:
@@ -603,13 +634,17 @@ class TaskEval:
         if not rubrics:
             return None
 
-        from ...schemas.rubric_class import Rubric
+        from ...schemas.rubric_class import ManualRubricTrait, Rubric, RubricTrait
 
-        # Check for trait name conflicts first
+        # Check for trait name conflicts first (across all trait types)
         all_trait_names = []
         for rubric in rubrics:
+            # Add LLM trait names
             for trait in rubric.traits:
                 all_trait_names.append(trait.name)
+            # Add manual trait names
+            for manual_trait in rubric.manual_traits:
+                all_trait_names.append(manual_trait.name)
 
         # Find duplicates
         seen = set()
@@ -626,12 +661,17 @@ class TaskEval:
             )
 
         # Combine all traits (now guaranteed to be unique)
-        unique_traits = {}
+        unique_llm_traits: dict[str, RubricTrait] = {}
+        unique_manual_traits: dict[str, ManualRubricTrait] = {}
         for rubric in rubrics:
+            # Combine LLM traits
             for trait in rubric.traits:
-                unique_traits[trait.name] = trait
+                unique_llm_traits[trait.name] = trait
+            # Combine manual traits
+            for manual_trait in rubric.manual_traits:
+                unique_manual_traits[manual_trait.name] = manual_trait
 
-        return Rubric(traits=list(unique_traits.values()))
+        return Rubric(traits=list(unique_llm_traits.values()), manual_traits=list(unique_manual_traits.values()))
 
     def _build_result(self, step_eval: StepEval, step_id: str | None) -> TaskEvalResult:
         """Build the final TaskEvalResult."""

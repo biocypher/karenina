@@ -2,9 +2,11 @@
 Rubric data models for qualitative evaluation traits.
 """
 
+import re
+from collections.abc import Callable
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 TraitKind = Literal["boolean", "score"]
 
@@ -36,21 +38,118 @@ class RubricTrait(BaseModel):
             return min_val <= value <= max_val
 
 
+class ManualRubricTrait(BaseModel):
+    """
+    Manual evaluation trait that uses callable functions for validation.
+
+    This trait type allows for deterministic, non-LLM evaluation using:
+    - Regex patterns for simple text matching
+    - Custom callable functions for complex logic
+
+    The trait always returns a boolean result.
+    """
+
+    name: str = Field(..., min_length=1, description="Human readable identifier for the trait")
+    description: str | None = Field(None, description="Detailed description of what this trait evaluates")
+    pattern: str | None = Field(
+        None, description="Regex pattern to match against text (mutually exclusive with callable)"
+    )
+    callable_name: str | None = Field(
+        None, description="Name of registered callable function (mutually exclusive with pattern)"
+    )
+    case_sensitive: bool = Field(True, description="Whether pattern matching should be case sensitive")
+    invert_result: bool = Field(False, description="Whether to invert the boolean result (for negative matching)")
+
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="after")
+    def validate_mutually_exclusive(self) -> "ManualRubricTrait":
+        """Ensure only one of pattern or callable_name is specified."""
+        pattern = self.pattern
+        callable_name = self.callable_name
+
+        if pattern and callable_name:
+            raise ValueError("Only one of 'pattern' or 'callable_name' can be specified, not both")
+
+        if not pattern and not callable_name:
+            raise ValueError("Either 'pattern' or 'callable_name' must be specified")
+
+        return self
+
+    @field_validator("pattern")
+    @classmethod
+    def validate_regex_pattern(cls, v: str | None) -> str | None:
+        """Validate that pattern is a valid regex."""
+        if v is not None:
+            try:
+                re.compile(v)
+            except re.error as e:
+                raise ValueError(f"Invalid regex pattern: {e}") from e
+        return v
+
+    def evaluate(self, text: str, callable_registry: dict[str, Callable[[str], bool]] | None = None) -> bool:
+        """
+        Evaluate the trait against the provided text.
+
+        Args:
+            text: The text to evaluate
+            callable_registry: Registry of available callable functions
+
+        Returns:
+            Boolean evaluation result
+
+        Raises:
+            ValueError: If callable_name is specified but not found in registry
+            RuntimeError: If evaluation fails
+        """
+        try:
+            if self.pattern:
+                flags = 0 if self.case_sensitive else re.IGNORECASE
+                match = re.search(self.pattern, text, flags)
+                result = match is not None
+            elif self.callable_name:
+                if not callable_registry or self.callable_name not in callable_registry:
+                    raise ValueError(f"Callable '{self.callable_name}' not found in registry")
+
+                callable_func = callable_registry[self.callable_name]
+                result = callable_func(text)
+                if not isinstance(result, bool):
+                    raise ValueError(f"Callable '{self.callable_name}' must return boolean, got {type(result)}")
+            else:
+                raise ValueError("Neither pattern nor callable_name is specified")
+
+            return not result if self.invert_result else result
+
+        except Exception as e:
+            raise RuntimeError(f"Failed to evaluate manual trait '{self.name}': {e}") from e
+
+
 class Rubric(BaseModel):
     """
     Collection of evaluation traits applied to all question-answer pairs.
 
     A rubric defines the qualitative criteria used to evaluate LLM responses
-    beyond basic correctness checking.
+    beyond basic correctness checking. Supports both LLM-based and manual traits.
     """
 
-    traits: list[RubricTrait] = Field(default_factory=list, description="List of evaluation traits")
+    traits: list[RubricTrait] = Field(default_factory=list, description="List of LLM-based evaluation traits")
+    manual_traits: list[ManualRubricTrait] = Field(default_factory=list, description="List of manual evaluation traits")
 
     model_config = ConfigDict(extra="forbid")
 
     def get_trait_names(self) -> list[str]:
-        """Get list of trait names in this rubric."""
+        """Get list of all trait names in this rubric (both LLM and manual)."""
+        llm_names = [trait.name for trait in self.traits]
+        manual_names = [trait.name for trait in self.manual_traits]
+        return llm_names + manual_names
+
+    def get_llm_trait_names(self) -> list[str]:
+        """Get list of LLM trait names only."""
         return [trait.name for trait in self.traits]
+
+    def get_manual_trait_names(self) -> list[str]:
+        """Get list of manual trait names only."""
+        return [trait.name for trait in self.manual_traits]
 
     def validate_evaluation(self, evaluation: dict[str, int | bool]) -> bool:
         """Validate that an evaluation result matches this rubric structure."""
@@ -62,8 +161,22 @@ class Rubric(BaseModel):
             return False
 
         # Check that each score is valid for its trait
-        trait_map = {trait.name: trait for trait in self.traits}
-        return all(trait_map[name].validate_score(value) for name, value in evaluation.items())
+        llm_trait_map = {trait.name: trait for trait in self.traits}
+        manual_trait_map = {trait.name: trait for trait in self.manual_traits}
+
+        for name, value in evaluation.items():
+            if name in llm_trait_map:
+                if not llm_trait_map[name].validate_score(value):
+                    return False
+            elif name in manual_trait_map:
+                # Manual traits always return boolean
+                if not isinstance(value, bool):
+                    return False
+            else:
+                # Unknown trait name
+                return False
+
+        return True
 
 
 class RubricEvaluation(BaseModel):
@@ -99,15 +212,16 @@ def merge_rubrics(global_rubric: "Rubric | None", question_rubric: "Rubric | Non
     if not question_rubric:
         return global_rubric
 
-    # Check for trait name conflicts
-    global_trait_names = {trait.name for trait in global_rubric.traits}
-    question_trait_names = {trait.name for trait in question_rubric.traits}
-    conflicts = global_trait_names.intersection(question_trait_names)
+    # Check for trait name conflicts (across all trait types)
+    global_all_names = set(global_rubric.get_trait_names())
+    question_all_names = set(question_rubric.get_trait_names())
+    conflicts = global_all_names.intersection(question_all_names)
 
     if conflicts:
         raise ValueError(f"Trait name conflicts between global and question rubrics: {conflicts}")
 
-    # Merge traits
+    # Merge traits and manual traits separately
     merged_traits = list(global_rubric.traits) + list(question_rubric.traits)
+    merged_manual_traits = list(global_rubric.manual_traits) + list(question_rubric.manual_traits)
 
-    return Rubric(traits=merged_traits)
+    return Rubric(traits=merged_traits, manual_traits=merged_manual_traits)

@@ -5,12 +5,13 @@ Rubric evaluation for qualitative assessment of LLM responses.
 import json
 import logging
 import re
+from collections.abc import Callable
 from typing import Any
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 from ...llm.interface import init_chat_model_unified
-from ...schemas.rubric_class import Rubric, RubricTrait
+from ...schemas.rubric_class import ManualRubricTrait, Rubric, RubricTrait
 from ..models import INTERFACES_NO_PROVIDER_REQUIRED, ModelConfig
 
 logger = logging.getLogger(__name__)
@@ -21,12 +22,13 @@ class RubricEvaluator:
     Evaluates LLM responses against a defined rubric using qualitative traits.
     """
 
-    def __init__(self, model_config: ModelConfig):
+    def __init__(self, model_config: ModelConfig, callable_registry: dict[str, Callable[[str], bool]] | None = None):
         """
         Initialize the rubric evaluator with an LLM model.
 
         Args:
             model_config: Configuration for the evaluation model
+            callable_registry: Registry of callable functions for manual trait evaluation
 
         Raises:
             ValueError: If model configuration is invalid
@@ -47,6 +49,7 @@ class RubricEvaluator:
             )
 
         self.model_config = model_config
+        self.callable_registry = callable_registry or {}
 
         try:
             self.llm = init_chat_model_unified(
@@ -60,7 +63,7 @@ class RubricEvaluator:
 
     def evaluate_rubric(self, question: str, answer: str, rubric: Rubric) -> dict[str, int | bool]:
         """
-        Evaluate an answer against a rubric's traits.
+        Evaluate an answer against a rubric's traits (both LLM and manual).
 
         Args:
             question: The original question asked
@@ -73,21 +76,81 @@ class RubricEvaluator:
         Raises:
             Exception: If evaluation fails completely
         """
-        if not rubric.traits:
-            return {}
+        results: dict[str, int | bool] = {}
 
-        try:
-            # Try batch evaluation first (more efficient)
-            return self._evaluate_batch(question, answer, rubric)
-        except Exception as batch_error:
-            # Fallback to sequential evaluation
+        # Evaluate manual traits first (these are faster and deterministic)
+        if rubric.manual_traits:
+            manual_results = self._evaluate_manual_traits(answer, rubric.manual_traits)
+            results.update(manual_results)
+
+        # Evaluate LLM traits if present
+        if rubric.traits:
             try:
-                return self._evaluate_sequential(question, answer, rubric)
-            except Exception as seq_error:
-                # Log both errors and raise the sequential one
-                logger.error(f"Batch evaluation failed: {batch_error}")
-                logger.error(f"Sequential evaluation failed: {seq_error}")
-                raise seq_error
+                # Try batch evaluation first (more efficient)
+                llm_results = self._evaluate_batch(question, answer, rubric)
+                results.update(llm_results)
+            except Exception as batch_error:
+                # Fallback to sequential evaluation
+                try:
+                    llm_results = self._evaluate_sequential(question, answer, rubric)
+                    results.update(llm_results)
+                except Exception as seq_error:
+                    # Log both errors and raise the sequential one
+                    logger.error(f"Batch evaluation failed: {batch_error}")
+                    logger.error(f"Sequential evaluation failed: {seq_error}")
+                    raise seq_error
+
+        return results
+
+    def register_callable(self, name: str, func: Callable[[str], bool]) -> None:
+        """
+        Register a callable function for manual trait evaluation.
+
+        Args:
+            name: Name to register the function under
+            func: Function that takes a string and returns a boolean
+
+        Raises:
+            ValueError: If function doesn't have correct signature
+        """
+        # Basic validation of function signature
+        import inspect
+
+        sig = inspect.signature(func)
+        params = list(sig.parameters.keys())
+
+        if len(params) != 1:
+            raise ValueError(f"Callable '{name}' must have exactly one parameter, got {len(params)}")
+
+        # Store the function
+        self.callable_registry[name] = func
+
+    def _evaluate_manual_traits(self, answer: str, manual_traits: list[ManualRubricTrait]) -> dict[str, int | bool]:
+        """
+        Evaluate manual traits using regex patterns or callable functions.
+
+        Args:
+            answer: The text to evaluate
+            manual_traits: List of manual traits to evaluate
+
+        Returns:
+            Dictionary mapping trait names to boolean results
+
+        Raises:
+            RuntimeError: If evaluation of any trait fails
+        """
+        results: dict[str, int | bool] = {}
+
+        for trait in manual_traits:
+            try:
+                result = trait.evaluate(answer, self.callable_registry)
+                results[trait.name] = result
+            except Exception as e:
+                logger.warning(f"Failed to evaluate manual trait '{trait.name}': {e}")
+                # Mark failed traits as None for consistency with LLM evaluation
+                results[trait.name] = None  # type: ignore[assignment]
+
+        return results
 
     def _evaluate_batch(self, question: str, answer: str, rubric: Rubric) -> dict[str, int | bool]:
         """
