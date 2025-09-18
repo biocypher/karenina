@@ -212,114 +212,41 @@ class TaskEval:
             # Concatenate all logs into a single response for global evaluation
             concatenated_logs = "\n\n".join(relevant_logs)
 
-            # Collect all rubric traits from standalone rubrics and question-specific rubrics
-            all_rubric_traits = {}
-            standalone_traits: set[str] = set()
-            question_traits: set[str] = set()
-
-            # Collect standalone rubric traits
-            if context.merged_rubric and context.merged_rubric.traits:
-                for trait in context.merged_rubric.traits:
-                    all_rubric_traits[trait.name] = trait
-                    standalone_traits.add(trait.name)
-
-            # Collect question-specific rubric traits and check for conflicts
-            for question in context.questions:
-                question_dict = self._normalize_question(question)
-                answer_template = question_dict.get("answer_template")
-                if answer_template:
-                    # Extract rubric traits from answer template if they exist
-                    extracted_traits = self._extract_rubric_traits_from_template(answer_template)
-                    # Add to collections
-                    for trait in extracted_traits:
-                        all_rubric_traits[trait.name] = trait
-                        question_traits.add(trait.name)
-
             # Check for conflicts between standalone and question rubrics
-            conflicts = standalone_traits.intersection(question_traits)
-            if conflicts:
-                raise ValueError(
-                    f"Rubric trait name conflicts found: {conflicts}. "
-                    f"Standalone rubrics and question rubrics cannot have overlapping trait names."
-                )
+            from ..verification.template_utils import extract_rubric_traits_from_template
+            from .helpers import check_rubric_conflicts
+
+            standalone_traits, question_traits = check_rubric_conflicts(
+                standalone_rubric=context.merged_rubric,
+                questions=context.questions,
+                extract_traits_func=extract_rubric_traits_from_template,
+            )
 
             # Evaluate standalone rubrics once for all questions
-            global_rubric_scores: dict[str, int | bool] = {}
-            if context.merged_rubric and context.merged_rubric.traits:
-                try:
-                    # For manual interface, fall back to simplified evaluation
-                    if config.parsing_models[0].interface == "manual":
-                        # Use simplified rubric evaluation for manual interface
-                        for trait in context.merged_rubric.traits:
-                            if trait.kind == "boolean":
-                                # For boolean traits, assume true for non-empty logs
-                                global_rubric_scores[trait.name] = len(concatenated_logs.strip()) > 0
-                            else:  # score trait
-                                # For score traits, give reasonable score based on content length
-                                global_rubric_scores[trait.name] = 4 if len(concatenated_logs) > 50 else 3
-                    else:
-                        # Use proper RubricEvaluator for non-manual interfaces
-                        from ..verification.rubric_evaluator import RubricEvaluator
+            from .helpers import evaluate_standalone_rubrics
 
-                        evaluator = RubricEvaluator(config.parsing_models[0])
-                        # Use a generic question for rubric evaluation since it's global
-                        global_rubric_scores = evaluator.evaluate_rubric(
-                            question="Evaluate the overall quality of the logged outputs.",
-                            answer=concatenated_logs,
-                            rubric=context.merged_rubric,
-                        )
-                except Exception as e:
-                    print(f"Warning: Global rubric evaluation failed: {e}")
-                    global_rubric_scores = {}
+            global_rubric_scores = evaluate_standalone_rubrics(
+                parsing_model=config.parsing_models[0],
+                merged_rubric=context.merged_rubric,
+                concatenated_logs=concatenated_logs,
+                context="global",
+            )
 
-            # Initialize combined rubric scores with standalone scores
-            combined_rubric_scores = global_rubric_scores.copy()
+            # Process all questions against concatenated logs
+            from .helpers import process_questions_with_concatenated_logs
 
-            # Evaluate each question against the concatenated logs
-            for question in context.questions:
-                question_dict = self._normalize_question(question)
-                question_id = question_dict.get("id", "unknown")
+            step_eval.question_verification = process_questions_with_concatenated_logs(
+                questions=context.questions,
+                concatenated_logs=concatenated_logs,
+                parsing_model=config.parsing_models[0],
+                combined_rubric_scores=global_rubric_scores,
+                normalize_question_func=self._normalize_question,
+                extract_traits_func=extract_rubric_traits_from_template,
+                evaluate_response_func=self._evaluate_response,
+            )
 
-                # Check if this question has a rubric that needs to be evaluated
-                question_rubric = None
-                answer_template = question_dict.get("answer_template")
-                if answer_template:
-                    # Extract rubric from answer template if it exists
-                    question_rubric_traits = self._extract_rubric_traits_from_template(answer_template)
-                    if question_rubric_traits:
-                        from ...schemas.rubric_class import Rubric
-
-                        question_rubric = Rubric(traits=question_rubric_traits)
-
-                # Evaluate the concatenated logs (with question-specific rubric if it exists)
-                result = self._evaluate_response(
-                    question_dict=question_dict,
-                    response_text=concatenated_logs,
-                    parsing_model=config.parsing_models[0],
-                    rubric=question_rubric,  # Only evaluate question-specific rubric here
-                )
-
-                # Combine standalone rubric scores with question-specific rubric scores
-                question_specific_scores = result.get("verify_rubric", {})
-                final_rubric_scores = combined_rubric_scores.copy()
-                final_rubric_scores.update(question_specific_scores)
-
-                # Store single evaluation result for all concatenated logs
-                question_results = [
-                    {
-                        "agent_output": concatenated_logs,
-                        "correct": result.get("verify_result", False),
-                        "details": result.get("verify_granular_result"),
-                        "success": result.get("success", False),
-                        "error": result.get("error"),
-                        "rubric_scores": final_rubric_scores,  # Combined scores
-                    }
-                ]
-
-                step_eval.question_verification[question_id] = question_results
-
-            # Store the combined rubric scores at the step level
-            step_eval.rubric_scores = combined_rubric_scores
+            # Store the global rubric scores at the step level
+            step_eval.rubric_scores = global_rubric_scores
 
         # Build result with global evaluation
         task_result = TaskEvalResult(
@@ -394,110 +321,41 @@ class TaskEval:
             # Concatenate all step logs into a single response for evaluation
             concatenated_logs = "\n\n".join(relevant_logs)
 
-            # Collect rubric traits and check for conflicts (same as global evaluation)
-            standalone_traits: set[str] = set()
-            question_traits: set[str] = set()
-
-            # Collect standalone rubric traits
-            if context.merged_rubric and context.merged_rubric.traits:
-                for trait in context.merged_rubric.traits:
-                    standalone_traits.add(trait.name)
-
-            # Collect question-specific rubric traits and check for conflicts
-            for question in context.questions:
-                question_dict = self._normalize_question(question)
-                answer_template = question_dict.get("answer_template")
-                if answer_template:
-                    # Extract rubric traits from answer template if they exist
-                    extracted_traits = self._extract_rubric_traits_from_template(answer_template)
-                    for trait in extracted_traits:
-                        question_traits.add(trait.name)
-
             # Check for conflicts between standalone and question rubrics
-            conflicts = standalone_traits.intersection(question_traits)
-            if conflicts:
-                raise ValueError(
-                    f"Rubric trait name conflicts found: {conflicts}. "
-                    f"Standalone rubrics and question rubrics cannot have overlapping trait names."
-                )
+            from ..verification.template_utils import extract_rubric_traits_from_template
+            from .helpers import check_rubric_conflicts
+
+            standalone_traits, question_traits = check_rubric_conflicts(
+                standalone_rubric=context.merged_rubric,
+                questions=context.questions,
+                extract_traits_func=extract_rubric_traits_from_template,
+            )
 
             # Evaluate standalone rubrics once for all questions in this step
-            step_rubric_scores: dict[str, int | bool] = {}
-            if context.merged_rubric and context.merged_rubric.traits:
-                try:
-                    # For manual interface, fall back to simplified evaluation
-                    if config.parsing_models[0].interface == "manual":
-                        # Use simplified rubric evaluation for manual interface
-                        for trait in context.merged_rubric.traits:
-                            if trait.kind == "boolean":
-                                # For boolean traits, assume true for non-empty logs
-                                step_rubric_scores[trait.name] = len(concatenated_logs.strip()) > 0
-                            else:  # score trait
-                                # For score traits, give reasonable score based on content length
-                                step_rubric_scores[trait.name] = 4 if len(concatenated_logs) > 50 else 3
-                    else:
-                        # Use proper RubricEvaluator for non-manual interfaces
-                        from ..verification.rubric_evaluator import RubricEvaluator
+            from .helpers import evaluate_standalone_rubrics
 
-                        evaluator = RubricEvaluator(config.parsing_models[0])
-                        # Use a generic question for rubric evaluation since it's step-level
-                        step_rubric_scores = evaluator.evaluate_rubric(
-                            question=f"Evaluate the overall quality of step '{step_id}' outputs.",
-                            answer=concatenated_logs,
-                            rubric=context.merged_rubric,
-                        )
-                except Exception as e:
-                    print(f"Warning: Step rubric evaluation failed for step {step_id}: {e}")
-                    step_rubric_scores = {}
+            step_rubric_scores = evaluate_standalone_rubrics(
+                parsing_model=config.parsing_models[0],
+                merged_rubric=context.merged_rubric,
+                concatenated_logs=concatenated_logs,
+                context=f"step '{step_id}'",
+            )
 
-            # Initialize combined rubric scores with standalone scores
-            combined_rubric_scores = step_rubric_scores.copy()
+            # Process all questions against concatenated logs
+            from .helpers import process_questions_with_concatenated_logs
 
-            # Evaluate each question against the concatenated logs
-            for question in context.questions:
-                question_dict = self._normalize_question(question)
-                question_id = question_dict.get("id", "unknown")
+            step_eval.question_verification = process_questions_with_concatenated_logs(
+                questions=context.questions,
+                concatenated_logs=concatenated_logs,
+                parsing_model=config.parsing_models[0],
+                combined_rubric_scores=step_rubric_scores,
+                normalize_question_func=self._normalize_question,
+                extract_traits_func=extract_rubric_traits_from_template,
+                evaluate_response_func=self._evaluate_response,
+            )
 
-                # Check if this question has a rubric that needs to be evaluated
-                question_rubric = None
-                answer_template = question_dict.get("answer_template")
-                if answer_template:
-                    # Extract rubric from answer template if it exists
-                    question_rubric_traits = self._extract_rubric_traits_from_template(answer_template)
-                    if question_rubric_traits:
-                        from ...schemas.rubric_class import Rubric
-
-                        question_rubric = Rubric(traits=question_rubric_traits)
-
-                # Evaluate the concatenated logs (with question-specific rubric if it exists)
-                result = self._evaluate_response(
-                    question_dict=question_dict,
-                    response_text=concatenated_logs,
-                    parsing_model=config.parsing_models[0],
-                    rubric=question_rubric,  # Only evaluate question-specific rubric here
-                )
-
-                # Combine standalone rubric scores with question-specific rubric scores
-                question_specific_scores = result.get("verify_rubric", {})
-                final_rubric_scores = combined_rubric_scores.copy()
-                final_rubric_scores.update(question_specific_scores)
-
-                # Store single evaluation result for all concatenated logs
-                question_results = [
-                    {
-                        "agent_output": concatenated_logs,
-                        "correct": result.get("verify_result", False),
-                        "details": result.get("verify_granular_result"),
-                        "success": result.get("success", False),
-                        "error": result.get("error"),
-                        "rubric_scores": final_rubric_scores,  # Combined scores
-                    }
-                ]
-
-                step_eval.question_verification[question_id] = question_results
-
-            # Store the combined rubric scores at the step level
-            step_eval.rubric_scores = combined_rubric_scores
+            # Store the step rubric scores at the step level
+            step_eval.rubric_scores = step_rubric_scores
 
         return step_eval
 
@@ -559,95 +417,6 @@ class TaskEval:
             if log.text and len(log.text.strip()) > 0:
                 outputs.append(log.text)
         return outputs
-
-    def _extract_rubric_traits_from_template(self, answer_template: str) -> list[Any]:
-        """Extract rubric traits from answer template code.
-
-        Args:
-            answer_template: The answer template code string
-
-        Returns:
-            List of RubricTrait objects found in the template
-        """
-        try:
-            # Prepare minimal execution environment similar to template validation
-            from ...schemas.answer_class import BaseAnswer
-            from ...schemas.rubric_class import Rubric, RubricTrait
-
-            global_ns = {
-                "__builtins__": __builtins__,
-                "BaseAnswer": BaseAnswer,
-                "Rubric": Rubric,
-                "RubricTrait": RubricTrait,
-            }
-            try:
-                from pydantic import Field
-
-                global_ns["Field"] = Field
-            except Exception:
-                pass
-            try:
-                from typing import Any, ClassVar, Literal, Optional, Union
-
-                global_ns.update(
-                    {
-                        "List": list,
-                        "Dict": dict,
-                        "Optional": Optional,
-                        "Union": Union,
-                        "Any": Any,
-                        "Literal": Literal,
-                        "ClassVar": ClassVar,
-                    }
-                )
-            except Exception:
-                pass
-
-            local_ns: dict[str, Any] = {}
-            exec(answer_template, global_ns, local_ns)
-
-            # Heuristics: check for rubric on Answer class or top-level var
-            extracted_traits: list[RubricTrait] = []
-
-            def _coerce_traits(obj: Any) -> list[RubricTrait]:
-                traits_list: list[RubricTrait] = []
-                if not obj:
-                    return traits_list
-                # If wrapped in Rubric
-                if isinstance(obj, Rubric):
-                    for t in obj.traits:
-                        if isinstance(t, RubricTrait):
-                            traits_list.append(t)
-                    return traits_list
-                # If already list of RubricTrait
-                if isinstance(obj, list):
-                    for item in obj:
-                        if isinstance(item, RubricTrait):
-                            traits_list.append(item)
-                        elif isinstance(item, dict) and "name" in item and "kind" in item:
-                            try:
-                                traits_list.append(RubricTrait(**item))
-                            except Exception:
-                                continue
-                return traits_list
-
-            AnswerCls = local_ns.get("Answer")
-            if AnswerCls is not None:
-                # Common attribute names that might store rubric traits
-                for attr in ("question_rubric", "rubric_traits", "rubric"):
-                    if hasattr(AnswerCls, attr):
-                        extracted_traits = _coerce_traits(getattr(AnswerCls, attr))
-                        if extracted_traits:
-                            break
-
-            # Also allow a top-level constant like QUESTION_RUBRIC
-            if not extracted_traits and "QUESTION_RUBRIC" in local_ns:
-                extracted_traits = _coerce_traits(local_ns.get("QUESTION_RUBRIC"))
-
-            return extracted_traits
-        except Exception:
-            # Silently ignore rubric extraction errors to keep TaskEval lightweight
-            return []
 
     # =============================================================================
     # EVALUATION METHODS
@@ -741,26 +510,10 @@ class TaskEval:
             rubric_scores: dict[str, int | bool] = {}
             if rubric and rubric.traits:
                 try:
-                    # For manual interface, we need to use a custom approach since RubricEvaluator
-                    # doesn't support question_hash directly. For now, fall back to simplified evaluation.
-                    if parsing_model.interface == "manual":
-                        # Fallback to simplified rubric evaluation for manual interface
-                        # TODO: Enhance RubricEvaluator to support manual interface with question_hash
-                        # For now, use basic heuristic evaluation
-                        rubric_scores = {}
-                        for trait in rubric.traits:
-                            if trait.kind == "boolean":
-                                # For boolean traits, assume true if verification passed
-                                rubric_scores[trait.name] = verification_result.verify_result or False
-                            else:  # score trait
-                                # For score traits, give reasonable score based on verification
-                                rubric_scores[trait.name] = 4 if verification_result.verify_result else 2
-                    else:
-                        # Use proper RubricEvaluator for non-manual interfaces
-                        evaluator = RubricEvaluator(parsing_model)
-                        rubric_scores = evaluator.evaluate_rubric(
-                            question=question_text, answer=response_text, rubric=rubric
-                        )
+                    evaluator = RubricEvaluator(parsing_model)
+                    rubric_scores = evaluator.evaluate_rubric(
+                        question=question_text, answer=response_text, rubric=rubric
+                    )
                 except Exception as e:
                     # Don't fail verification if rubric evaluation fails
                     print(f"Warning: Standalone rubric evaluation failed: {e}")
@@ -797,25 +550,16 @@ class TaskEval:
         expected_answer = question_dict.get("raw_answer", "")
         correct = self._check_correctness(response_text, expected_answer)
 
-        # Rubric evaluation: use RubricEvaluator when parsing model is available
+        # Rubric evaluation: use RubricEvaluator
         rubric_scores: dict[str, int | bool] = {}
         if rubric and rubric.traits:
             try:
-                # For manual interface, fall back to simplified evaluation
-                if parsing_model.interface == "manual":
-                    # Use simplified rubric evaluation for manual interface
-                    rubric_scores = self._evaluate_against_rubric(response_text, correct, rubric)
-                else:
-                    # Use proper RubricEvaluator with parsing model for other interfaces
-                    evaluator = RubricEvaluator(parsing_model)
-                    question_text = question_dict.get("question", "")
-                    rubric_scores = evaluator.evaluate_rubric(
-                        question=question_text, answer=response_text, rubric=rubric
-                    )
+                evaluator = RubricEvaluator(parsing_model)
+                question_text = question_dict.get("question", "")
+                rubric_scores = evaluator.evaluate_rubric(question=question_text, answer=response_text, rubric=rubric)
             except Exception as e:
-                # Fallback to simplified rubric evaluation if RubricEvaluator fails
-                print(f"Warning: RubricEvaluator failed in fallback, using simplified evaluation: {e}")
-                rubric_scores = self._evaluate_against_rubric(response_text, correct, rubric)
+                print(f"Warning: RubricEvaluator failed in fallback: {e}")
+                rubric_scores = {}
 
         return {
             "verify_result": correct,
@@ -840,23 +584,6 @@ class TaskEval:
         expected_lower = expected_answer.lower().strip()
 
         return expected_lower in response_lower or response_lower in expected_lower
-
-    def _evaluate_against_rubric(self, response_text: str, is_correct: bool, rubric: "Rubric") -> dict[str, int | bool]:
-        """Evaluate response against rubric traits."""
-        scores: dict[str, int | bool] = {}
-
-        for trait in rubric.traits:
-            if trait.kind == "boolean":
-                # Boolean traits: based on correctness and content quality
-                has_content = len(response_text.strip()) > 10
-                scores[trait.name] = is_correct and has_content
-            else:  # score trait
-                # Score traits: 1-5 scale based on correctness and content quality
-                base_score = 3 if is_correct else 2
-                quality_bonus = 1 if len(response_text) > 50 else 0
-                scores[trait.name] = int(min(5, max(1, base_score + quality_bonus)))
-
-        return scores
 
     # =============================================================================
     # HELPER METHODS
@@ -905,46 +632,6 @@ class TaskEval:
                 unique_traits[trait.name] = trait
 
         return Rubric(traits=list(unique_traits.values()))
-
-    def _aggregate_rubric_scores(self, result: dict[str, Any], aggregator: dict[str, list[int | bool]]) -> None:
-        """Aggregate rubric scores from a single evaluation result."""
-        if result.get("verify_rubric"):
-            for trait_name, score in result["verify_rubric"].items():
-                if trait_name not in aggregator:
-                    aggregator[trait_name] = []
-                aggregator[trait_name].append(score)
-
-    def _finalize_rubric_scores(self, aggregator: dict[str, list[int | bool]]) -> dict[str, int | bool]:
-        """Finalize aggregated rubric scores using appropriate aggregation methods."""
-        final_scores: dict[str, int | bool] = {}
-
-        for trait_name, scores in aggregator.items():
-            if all(isinstance(s, bool) for s in scores):
-                # For boolean traits, use majority vote
-                final_scores[trait_name] = sum(scores) > len(scores) / 2
-            else:
-                # For numeric traits, use average
-                final_scores[trait_name] = int(sum(scores) / len(scores))
-
-        return final_scores
-
-    def _extract_failure_modes(self, rubric_scores: dict[str, int | bool]) -> list[str]:
-        """Extract failure modes from rubric scores.
-
-        Identifies traits that indicate failures:
-        - Boolean traits that are False
-        - Score traits below threshold (< 3)
-        """
-        failure_modes = []
-
-        for trait_name, score in rubric_scores.items():
-            if isinstance(score, bool):
-                if not score:
-                    failure_modes.append(f"Failed trait: {trait_name}")
-            elif isinstance(score, int) and score < 3:
-                failure_modes.append(f"Low score trait: {trait_name} (score: {score})")
-
-        return failure_modes
 
     def _build_result(self, step_eval: StepEval, step_id: str | None) -> TaskEvalResult:
         """Build the final TaskEvalResult."""
