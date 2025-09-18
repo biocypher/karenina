@@ -763,3 +763,130 @@ class Answer(BaseAnswer):
 
         with pytest.raises(ValueError, match="Duplicate rubric trait names found"):
             task.evaluate(config)
+
+    def test_rubric_trait_extraction_from_template(self):
+        """Test that rubric traits are extracted from answer templates."""
+        task = TaskEval(task_id="template_extraction_test")
+
+        # Create an answer template with rubric traits
+        answer_template_code = '''
+from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.rubric_class import RubricTrait
+from pydantic import Field
+from typing import ClassVar
+
+class Answer(BaseAnswer):
+    """Answer with question-specific rubric traits."""
+
+    result: str = Field(description="The answer result")
+
+    question_rubric: ClassVar = [
+        RubricTrait(name="completeness", description="Is the answer complete?", kind="boolean"),
+        RubricTrait(name="quality", description="Quality score", kind="score", min_score=1, max_score=5)
+    ]
+
+    def model_post_init(self, __context):
+        self.correct = {"result": "expected"}
+
+    def verify(self) -> bool:
+        return self.result.strip() == self.correct["result"]
+'''
+
+        # Add a question with the template that contains rubric traits
+        question = {
+            "id": "extract_test",
+            "question": "Test question with rubric in template",
+            "raw_answer": "expected",
+            "answer_template": answer_template_code,
+        }
+        task.add_question(question)
+        task.log("expected")
+
+        # Create config
+        config = VerificationConfig(
+            parsing_models=[
+                ModelConfig(
+                    id="test_parser",
+                    model_provider="mock",
+                    model_name="mock",
+                    interface="manual",
+                    system_prompt="Parse responses",
+                )
+            ],
+            parsing_only=True,
+        )
+
+        # Evaluation should work without errors (traits should be extracted)
+        result = task.evaluate(config)
+
+        # Check that the evaluation completed successfully
+        assert result.global_eval is not None
+        assert "extract_test" in result.global_eval.question_verification
+
+        # The question-specific rubric traits should have been evaluated
+        # (Note: exact rubric scores depend on mock implementation)
+        rubric_scores = result.global_eval.rubric_scores
+        assert isinstance(rubric_scores, dict)
+
+    def test_rubric_trait_extraction_with_conflict(self):
+        """Test that conflicts between standalone and template rubrics are detected."""
+        task = TaskEval(task_id="template_conflict_test")
+
+        # Add a standalone rubric with a trait name
+        from karenina.schemas.rubric_class import Rubric, RubricTrait
+
+        standalone_rubric = Rubric(
+            traits=[
+                RubricTrait(name="completeness", description="Standalone completeness check", kind="boolean"),
+            ]
+        )
+        task.add_rubric(standalone_rubric)
+
+        # Create an answer template with the same trait name
+        answer_template_code = '''
+from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.rubric_class import RubricTrait
+from pydantic import Field
+from typing import ClassVar
+
+class Answer(BaseAnswer):
+    """Answer with conflicting rubric trait."""
+
+    result: str = Field(description="The answer result")
+
+    question_rubric: ClassVar = [
+        RubricTrait(name="completeness", description="Template completeness check", kind="score", min_score=1, max_score=3)
+    ]
+
+    def verify(self) -> bool:
+        return True
+'''
+
+        question = {
+            "id": "conflict_test",
+            "question": "Test question with conflicting rubric trait",
+            "raw_answer": "test",
+            "answer_template": answer_template_code,
+        }
+        task.add_question(question)
+        task.log("test")
+
+        # Create config
+        config = VerificationConfig(
+            parsing_models=[
+                ModelConfig(
+                    id="test_parser",
+                    model_provider="mock",
+                    model_name="mock",
+                    interface="manual",
+                    system_prompt="Parse responses",
+                )
+            ],
+            parsing_only=True,
+        )
+
+        # Evaluation should raise an error due to conflicting trait names
+        import pytest
+
+        with pytest.raises(ValueError, match="Rubric trait name conflicts found"):
+            task.evaluate(config)

@@ -228,9 +228,12 @@ class TaskEval:
                 question_dict = self._normalize_question(question)
                 answer_template = question_dict.get("answer_template")
                 if answer_template:
-                    # TODO: Extract rubric traits from answer template if they exist
-                    # For now, we assume question rubrics are minimal in TaskEval
-                    pass
+                    # Extract rubric traits from answer template if they exist
+                    extracted_traits = self._extract_rubric_traits_from_template(answer_template)
+                    # Add to collections
+                    for trait in extracted_traits:
+                        all_rubric_traits[trait.name] = trait
+                        question_traits.add(trait.name)
 
             # Check for conflicts between standalone and question rubrics
             conflicts = standalone_traits.intersection(question_traits)
@@ -281,9 +284,12 @@ class TaskEval:
                 question_rubric = None
                 answer_template = question_dict.get("answer_template")
                 if answer_template:
-                    # TODO: Extract rubric from answer template if it exists
-                    # For now, assume no question-specific rubrics in TaskEval
-                    pass
+                    # Extract rubric from answer template if it exists
+                    question_rubric_traits = self._extract_rubric_traits_from_template(answer_template)
+                    if question_rubric_traits:
+                        from ...schemas.rubric_class import Rubric
+
+                        question_rubric = Rubric(traits=question_rubric_traits)
 
                 # Evaluate the concatenated logs (with question-specific rubric if it exists)
                 result = self._evaluate_response(
@@ -402,9 +408,10 @@ class TaskEval:
                 question_dict = self._normalize_question(question)
                 answer_template = question_dict.get("answer_template")
                 if answer_template:
-                    # TODO: Extract rubric traits from answer template if they exist
-                    # For now, we assume question rubrics are minimal in TaskEval
-                    pass
+                    # Extract rubric traits from answer template if they exist
+                    extracted_traits = self._extract_rubric_traits_from_template(answer_template)
+                    for trait in extracted_traits:
+                        question_traits.add(trait.name)
 
             # Check for conflicts between standalone and question rubrics
             conflicts = standalone_traits.intersection(question_traits)
@@ -455,9 +462,12 @@ class TaskEval:
                 question_rubric = None
                 answer_template = question_dict.get("answer_template")
                 if answer_template:
-                    # TODO: Extract rubric from answer template if it exists
-                    # For now, assume no question-specific rubrics in TaskEval
-                    pass
+                    # Extract rubric from answer template if it exists
+                    question_rubric_traits = self._extract_rubric_traits_from_template(answer_template)
+                    if question_rubric_traits:
+                        from ...schemas.rubric_class import Rubric
+
+                        question_rubric = Rubric(traits=question_rubric_traits)
 
                 # Evaluate the concatenated logs (with question-specific rubric if it exists)
                 result = self._evaluate_response(
@@ -549,6 +559,95 @@ class TaskEval:
             if log.text and len(log.text.strip()) > 0:
                 outputs.append(log.text)
         return outputs
+
+    def _extract_rubric_traits_from_template(self, answer_template: str) -> list[Any]:
+        """Extract rubric traits from answer template code.
+
+        Args:
+            answer_template: The answer template code string
+
+        Returns:
+            List of RubricTrait objects found in the template
+        """
+        try:
+            # Prepare minimal execution environment similar to template validation
+            from ...schemas.answer_class import BaseAnswer
+            from ...schemas.rubric_class import Rubric, RubricTrait
+
+            global_ns = {
+                "__builtins__": __builtins__,
+                "BaseAnswer": BaseAnswer,
+                "Rubric": Rubric,
+                "RubricTrait": RubricTrait,
+            }
+            try:
+                from pydantic import Field
+
+                global_ns["Field"] = Field
+            except Exception:
+                pass
+            try:
+                from typing import Any, ClassVar, Literal, Optional, Union
+
+                global_ns.update(
+                    {
+                        "List": list,
+                        "Dict": dict,
+                        "Optional": Optional,
+                        "Union": Union,
+                        "Any": Any,
+                        "Literal": Literal,
+                        "ClassVar": ClassVar,
+                    }
+                )
+            except Exception:
+                pass
+
+            local_ns: dict[str, Any] = {}
+            exec(answer_template, global_ns, local_ns)
+
+            # Heuristics: check for rubric on Answer class or top-level var
+            extracted_traits: list[RubricTrait] = []
+
+            def _coerce_traits(obj: Any) -> list[RubricTrait]:
+                traits_list: list[RubricTrait] = []
+                if not obj:
+                    return traits_list
+                # If wrapped in Rubric
+                if isinstance(obj, Rubric):
+                    for t in obj.traits:
+                        if isinstance(t, RubricTrait):
+                            traits_list.append(t)
+                    return traits_list
+                # If already list of RubricTrait
+                if isinstance(obj, list):
+                    for item in obj:
+                        if isinstance(item, RubricTrait):
+                            traits_list.append(item)
+                        elif isinstance(item, dict) and "name" in item and "kind" in item:
+                            try:
+                                traits_list.append(RubricTrait(**item))
+                            except Exception:
+                                continue
+                return traits_list
+
+            AnswerCls = local_ns.get("Answer")
+            if AnswerCls is not None:
+                # Common attribute names that might store rubric traits
+                for attr in ("question_rubric", "rubric_traits", "rubric"):
+                    if hasattr(AnswerCls, attr):
+                        extracted_traits = _coerce_traits(getattr(AnswerCls, attr))
+                        if extracted_traits:
+                            break
+
+            # Also allow a top-level constant like QUESTION_RUBRIC
+            if not extracted_traits and "QUESTION_RUBRIC" in local_ns:
+                extracted_traits = _coerce_traits(local_ns.get("QUESTION_RUBRIC"))
+
+            return extracted_traits
+        except Exception:
+            # Silently ignore rubric extraction errors to keep TaskEval lightweight
+            return []
 
     # =============================================================================
     # EVALUATION METHODS
