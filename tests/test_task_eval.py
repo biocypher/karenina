@@ -415,14 +415,14 @@ class TestTaskEvalAgentOutputs:
         task.log_agent_output("Answer to Q2: 24", question_id="q2")
         task.log("Task completed", level="info")
 
-        # Test finding specific agent outputs
-        output_q1 = task._find_agent_output_for_question("q1", task.global_logs)
-        output_q2 = task._find_agent_output_for_question("q2", task.global_logs)
-        output_missing = task._find_agent_output_for_question("q3", task.global_logs)
+        # Test finding specific agent outputs (now returns lists)
+        outputs_q1 = task._find_agent_outputs_for_question("q1", task.global_logs)
+        outputs_q2 = task._find_agent_outputs_for_question("q2", task.global_logs)
+        outputs_missing = task._find_agent_outputs_for_question("q3", task.global_logs)
 
-        assert output_q1 == "Answer to Q1: 42"
-        assert output_q2 == "Answer to Q2: 24"
-        assert output_missing is None
+        assert outputs_q1 == ["Answer to Q1: 42"]
+        assert outputs_q2 == ["Answer to Q2: 24"]
+        assert outputs_missing == []
 
     def test_evaluation_uses_logged_outputs(self):
         """Test that evaluation uses logged agent outputs, not new generation."""
@@ -459,8 +459,14 @@ class TestTaskEvalAgentOutputs:
         # The evaluation should have processed the logged agent output
         verification = result.global_eval.question_verification
         assert verification is not None
-        assert verification["success"] is True
-        assert "agent_output" in verification["details"]
+        assert "math_q1" in verification  # Question ID should be in results
+
+        # Check the first (and only) response for this question
+        question_results = verification["math_q1"]
+        assert len(question_results) == 1  # Should have one logged response
+        response_result = question_results[0]
+        assert response_result["success"] is True
+        assert "agent_output" in response_result["details"]
 
     def test_evaluation_missing_agent_output(self):
         """Test evaluation when no agent output is logged for a question."""
@@ -483,8 +489,14 @@ class TestTaskEvalAgentOutputs:
         assert result.global_eval is not None
         verification = result.global_eval.question_verification
         assert verification is not None
-        assert verification["success"] is False
-        assert "Missing agent output for question" in verification["error"]
+        assert "missing_q" in verification  # Question ID should be in results
+
+        # Check the error response for missing output
+        question_results = verification["missing_q"]
+        assert len(question_results) == 1  # Should have one error result
+        error_result = question_results[0]
+        assert error_result["success"] is False
+        assert "Missing agent output for question" in error_result["error"]
 
 
 class TestTaskEvalIntegration:
@@ -524,9 +536,18 @@ class TestTaskEvalIntegration:
         # Verify results
         assert result.task_id == "test_task"
         assert result.global_eval is not None
+
         # The evaluation should have processed the logged output
-        assert result.global_eval.question_verification["correct"] is True
-        assert result.global_eval.question_verification["success"] is True
+        verification = result.global_eval.question_verification
+        assert "q1" in verification  # Question ID should be in results
+
+        # Check the response result
+        question_results = verification["q1"]
+        assert len(question_results) == 1  # Should have one logged response
+        response_result = question_results[0]
+        assert response_result["correct"] is True
+        assert response_result["success"] is True
+
         # Rubric scores depend on the simplified evaluation logic
         assert len(result.global_eval.rubric_scores) == 2  # Both traits evaluated
 
@@ -564,8 +585,17 @@ class TestTaskEvalIntegration:
         assert result.global_eval is None
         assert "step1" in result.per_step
         step_eval = result.per_step["step1"]
-        assert step_eval.question_verification["correct"] is False  # Wrong answer
-        assert step_eval.question_verification["success"] is True  # Evaluation succeeded
+
+        # Check the step-specific verification results
+        verification = step_eval.question_verification
+        assert "q1" in verification  # Question ID should be in results
+
+        # Check the response result
+        question_results = verification["q1"]
+        assert len(question_results) == 1  # Should have one logged response
+        response_result = question_results[0]
+        assert response_result["correct"] is False  # Wrong answer
+        assert response_result["success"] is True  # Evaluation succeeded
         assert len(step_eval.rubric_scores) == 2  # Both traits evaluated
         assert len(step_eval.failure_modes) > 0  # Should have failure modes
 
@@ -585,5 +615,5 @@ class TestTaskEvalIntegration:
 
         assert result.global_eval is not None
         assert result.global_eval.rubric_scores == {}
-        assert result.global_eval.question_verification is None
+        assert result.global_eval.question_verification == {}  # Empty dict, not None
         assert result.global_eval.failure_modes == []
