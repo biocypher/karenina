@@ -1,8 +1,6 @@
 """Tests for TaskEval functionality."""
 
-from unittest.mock import patch
-
-from karenina.benchmark.models import ModelConfig, VerificationConfig, VerificationResult
+from karenina.benchmark.models import ModelConfig, VerificationConfig
 from karenina.benchmark.task_eval import TaskEval
 from karenina.schemas.question_class import Question
 from karenina.schemas.rubric_class import Rubric, RubricTrait
@@ -352,43 +350,171 @@ class TestTaskEvalTemplateGeneration:
         assert '"Test answer"' in template
 
 
+class TestTaskEvalAgentOutputs:
+    """Test TaskEval agent output logging and evaluation philosophy."""
+
+    def test_log_agent_output_global(self):
+        """Test logging agent output globally."""
+        task = TaskEval()
+
+        agent_response = "The answer is 42 because 20 + 22 = 42"
+        task.log_agent_output(agent_output=agent_response, question_id="q1", output_type="answer")
+
+        assert len(task.global_logs) == 1
+        log = task.global_logs[0]
+        assert log.text == agent_response
+        assert log.question_id == "q1"
+        assert log.is_agent_output is True
+        assert log.output_type == "answer"
+        assert log.level == "info"
+
+    def test_log_agent_output_step(self):
+        """Test logging agent output to specific step."""
+        task = TaskEval()
+
+        agent_response = "I understand the problem: calculate 15 + 23"
+        task.log_agent_output(
+            agent_output=agent_response, question_id="understanding_q1", step_id="understanding", target="step"
+        )
+
+        assert len(task.global_logs) == 0
+        assert len(task.step_logs) == 1
+        assert "understanding" in task.step_logs
+
+        step_logs = task.step_logs["understanding"]
+        assert len(step_logs) == 1
+        assert step_logs[0].text == agent_response
+        assert step_logs[0].is_agent_output is True
+        assert step_logs[0].question_id == "understanding_q1"
+
+    def test_log_agent_output_both_targets(self):
+        """Test logging agent output to both global and step."""
+        task = TaskEval()
+
+        agent_response = "Final answer: 25"
+        task.log_agent_output(agent_output=agent_response, question_id="final_q", step_id="execution", target="both")
+
+        # Should appear in both global and step logs
+        assert len(task.global_logs) == 1
+        assert task.global_logs[0].text == agent_response
+        assert task.global_logs[0].is_agent_output is True
+
+        assert len(task.step_logs) == 1
+        step_logs = task.step_logs["execution"]
+        assert len(step_logs) == 1
+        assert step_logs[0].text == agent_response
+        assert step_logs[0].is_agent_output is True
+
+    def test_find_agent_output_for_question(self):
+        """Test finding logged agent output for a specific question."""
+        task = TaskEval()
+
+        # Log some regular logs and agent outputs
+        task.log("Starting task", level="info")
+        task.log_agent_output("Answer to Q1: 42", question_id="q1")
+        task.log_agent_output("Answer to Q2: 24", question_id="q2")
+        task.log("Task completed", level="info")
+
+        # Test finding specific agent outputs
+        output_q1 = task._find_agent_output_for_question("q1", task.global_logs)
+        output_q2 = task._find_agent_output_for_question("q2", task.global_logs)
+        output_missing = task._find_agent_output_for_question("q3", task.global_logs)
+
+        assert output_q1 == "Answer to Q1: 42"
+        assert output_q2 == "Answer to Q2: 24"
+        assert output_missing is None
+
+    def test_evaluation_uses_logged_outputs(self):
+        """Test that evaluation uses logged agent outputs, not new generation."""
+        task = TaskEval(task_id="agent_run_001")
+
+        # Add question
+        question = {"id": "math_q1", "question": "What is 10 + 5?", "raw_answer": "15"}
+        task.add_question(question)
+
+        # Log agent output (this is the answer TaskEval should evaluate)
+        agent_answer = "To solve 10 + 5, I add them: 10 + 5 = 15"
+        task.log_agent_output(agent_answer, question_id="math_q1")
+
+        # Create config with parsing models only
+        config = VerificationConfig(
+            parsing_models=[
+                ModelConfig(
+                    id="parser",
+                    model_provider="openai",
+                    model_name="gpt-4",
+                    system_prompt="Parse and evaluate responses",
+                )
+            ],
+            parsing_only=True,
+        )
+
+        # Evaluate (this should use the logged output, not generate new ones)
+        result = task.evaluate(config)
+
+        # Verify the evaluation found the logged output
+        assert result.task_id == "agent_run_001"
+        assert result.global_eval is not None
+
+        # The evaluation should have processed the logged agent output
+        verification = result.global_eval.question_verification
+        assert verification is not None
+        assert verification["success"] is True
+        assert "agent_output" in verification["details"]
+
+    def test_evaluation_missing_agent_output(self):
+        """Test evaluation when no agent output is logged for a question."""
+        task = TaskEval()
+
+        # Add question but don't log any agent output for it
+        question = {"id": "missing_q", "question": "What is 5 + 5?", "raw_answer": "10"}
+        task.add_question(question)
+
+        config = VerificationConfig(
+            parsing_models=[
+                ModelConfig(id="parser", model_provider="openai", model_name="gpt-4", system_prompt="Parse responses")
+            ],
+            parsing_only=True,
+        )
+
+        result = task.evaluate(config)
+
+        # Should handle missing agent output gracefully
+        assert result.global_eval is not None
+        verification = result.global_eval.question_verification
+        assert verification is not None
+        assert verification["success"] is False
+        assert "Missing agent output for question" in verification["error"]
+
+
 class TestTaskEvalIntegration:
     """Test TaskEval integration with verification pipeline."""
 
-    @patch("karenina.benchmark.task_eval.task_eval.run_single_model_verification")
-    def test_evaluate_global_basic(self, mock_verify):
-        """Test basic global evaluation."""
-        # Setup mock
-        mock_result = VerificationResult(
-            question_id="q1",
-            success=True,
-            question_text="Test question",
-            raw_llm_response="Test response",
-            answering_model="test-model",
-            parsing_model="test-parser",
-            execution_time=1.0,
-            timestamp="2023-01-01T00:00:00",
-            verify_result=True,
-            verify_granular_result={"details": "test"},
-            verify_rubric={"accuracy": True, "clarity": 4},
-        )
-        mock_verify.return_value = mock_result
-
+    def test_evaluate_global_basic(self):
+        """Test basic global evaluation with logged agent output."""
         # Setup TaskEval
         task = TaskEval(task_id="test_task")
         task.add_question({"id": "q1", "question": "Test?", "raw_answer": "Test!"})
         task.add_rubric(
-            Rubric(traits=[RubricTrait(name="accuracy", kind="boolean"), RubricTrait(name="clarity", kind="score")])
+            Rubric(
+                traits=[
+                    RubricTrait(name="accuracy", description="Is answer accurate", kind="boolean"),
+                    RubricTrait(
+                        name="clarity", description="Answer clarity 1-5", kind="score", min_score=1, max_score=5
+                    ),
+                ]
+            )
         )
+
+        # Log agent output (this is what TaskEval evaluates)
+        task.log_agent_output("The answer is Test! which is correct and clear", question_id="q1")
 
         # Setup config
         config = VerificationConfig(
-            answering_models=[
-                ModelConfig(id="answering", model_provider="openai", model_name="gpt-4", system_prompt="Test prompt")
-            ],
             parsing_models=[
                 ModelConfig(id="parsing", model_provider="openai", model_name="gpt-4", system_prompt="Parse prompt")
             ],
+            parsing_only=True,
             rubric_enabled=True,
         )
 
@@ -398,50 +524,36 @@ class TestTaskEvalIntegration:
         # Verify results
         assert result.task_id == "test_task"
         assert result.global_eval is not None
-        assert result.global_eval.rubric_scores == {"accuracy": True, "clarity": 4}
+        # The evaluation should have processed the logged output
         assert result.global_eval.question_verification["correct"] is True
-        assert len(result.global_eval.failure_modes) == 0  # No failures
+        assert result.global_eval.question_verification["success"] is True
+        # Rubric scores depend on the simplified evaluation logic
+        assert len(result.global_eval.rubric_scores) == 2  # Both traits evaluated
 
-        # Verify verification was called correctly
-        mock_verify.assert_called_once()
-        call_args = mock_verify.call_args
-        assert call_args[1]["question_id"] == "q1"
-        assert call_args[1]["question_text"] == "Test?"
-
-    @patch("karenina.benchmark.task_eval.task_eval.run_single_model_verification")
-    def test_evaluate_step_specific(self, mock_verify):
-        """Test step-specific evaluation."""
-        # Setup mock
-        mock_result = VerificationResult(
-            question_id="q1",
-            success=True,
-            question_text="Test question",
-            raw_llm_response="Test response",
-            answering_model="test-model",
-            parsing_model="test-parser",
-            execution_time=1.0,
-            timestamp="2023-01-01T00:00:00",
-            verify_result=False,
-            verify_rubric={"accuracy": False, "clarity": 2},
-        )
-        mock_verify.return_value = mock_result
-
-        # Setup TaskEval
+    def test_evaluate_step_specific(self):
+        """Test step-specific evaluation with logged agent output."""
+        # Setup TaskEval with step-specific question and rubric
         task = TaskEval()
         task.add_question({"id": "q1", "question": "Test?", "raw_answer": "Test!"}, step_id="step1")
         task.add_rubric(
-            Rubric(traits=[RubricTrait(name="accuracy", kind="boolean"), RubricTrait(name="clarity", kind="score")]),
+            Rubric(
+                traits=[
+                    RubricTrait(name="accuracy", description="Answer accuracy", kind="boolean"),
+                    RubricTrait(name="clarity", description="Answer clarity", kind="score", min_score=1, max_score=5),
+                ]
+            ),
             step_id="step1",
         )
 
+        # Log agent output for this step (incorrect answer to test failure modes)
+        task.log_agent_output("Wrong answer here", question_id="q1", step_id="step1")
+
         # Setup config
         config = VerificationConfig(
-            answering_models=[
-                ModelConfig(id="answering", model_provider="openai", model_name="gpt-4", system_prompt="Test prompt")
-            ],
             parsing_models=[
                 ModelConfig(id="parsing", model_provider="openai", model_name="gpt-4", system_prompt="Parse prompt")
             ],
+            parsing_only=True,
             rubric_enabled=True,
         )
 
@@ -452,9 +564,10 @@ class TestTaskEvalIntegration:
         assert result.global_eval is None
         assert "step1" in result.per_step
         step_eval = result.per_step["step1"]
-        assert step_eval.rubric_scores == {"accuracy": False, "clarity": 2}
-        assert step_eval.question_verification["correct"] is False
-        assert len(step_eval.failure_modes) == 2  # Both traits failed
+        assert step_eval.question_verification["correct"] is False  # Wrong answer
+        assert step_eval.question_verification["success"] is True  # Evaluation succeeded
+        assert len(step_eval.rubric_scores) == 2  # Both traits evaluated
+        assert len(step_eval.failure_modes) > 0  # Should have failure modes
 
     def test_evaluate_no_questions(self):
         """Test evaluation with no questions."""

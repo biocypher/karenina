@@ -225,7 +225,7 @@ class TestTaskEvalBenchmarkIntegration:
         benchmark = Benchmark.create("TaskEval Test", "Test", "Test")
 
         # Add questions with templates
-        q1_id = benchmark.add_question(question_text="What is 5+3?", raw_answer="8", keywords=["math", "addition"])
+        q1_id = benchmark.add_question(question="What is 5+3?", raw_answer="8")
 
         # Set a template for the question
         template_code = '''from pydantic import BaseModel, Field
