@@ -132,3 +132,93 @@ def extract_ground_truth_from_template_code(template_code: str) -> dict[str, Any
     _, ground_truth = create_test_instance_from_answer_class(Answer)
 
     return ground_truth
+
+
+def extract_rubric_traits_from_template(answer_template: str) -> list[Any]:
+    """Extract rubric traits from answer template code.
+
+    Args:
+        answer_template: The answer template code string
+
+    Returns:
+        List of RubricTrait objects found in the template
+    """
+    try:
+        # Prepare minimal execution environment similar to template validation
+        from ...schemas.answer_class import BaseAnswer
+        from ...schemas.rubric_class import Rubric, RubricTrait
+
+        global_ns = {
+            "__builtins__": __builtins__,
+            "BaseAnswer": BaseAnswer,
+            "Rubric": Rubric,
+            "RubricTrait": RubricTrait,
+        }
+        try:
+            from pydantic import Field
+
+            global_ns["Field"] = Field
+        except Exception:
+            pass
+        try:
+            from typing import Any, ClassVar, Literal, Optional, Union
+
+            global_ns.update(
+                {
+                    "List": list,
+                    "Dict": dict,
+                    "Optional": Optional,
+                    "Union": Union,
+                    "Any": Any,
+                    "Literal": Literal,
+                    "ClassVar": ClassVar,
+                }
+            )
+        except Exception:
+            pass
+
+        local_ns: dict[str, Any] = {}
+        exec(answer_template, global_ns, local_ns)
+
+        # Heuristics: check for rubric on Answer class or top-level var
+        extracted_traits: list[RubricTrait] = []
+
+        def _coerce_traits(obj: Any) -> list[RubricTrait]:
+            traits_list: list[RubricTrait] = []
+            if not obj:
+                return traits_list
+            # If wrapped in Rubric
+            if isinstance(obj, Rubric):
+                for t in obj.traits:
+                    if isinstance(t, RubricTrait):
+                        traits_list.append(t)
+                return traits_list
+            # If already list of RubricTrait
+            if isinstance(obj, list):
+                for item in obj:
+                    if isinstance(item, RubricTrait):
+                        traits_list.append(item)
+                    elif isinstance(item, dict) and "name" in item and "kind" in item:
+                        try:
+                            traits_list.append(RubricTrait(**item))
+                        except Exception:
+                            continue
+            return traits_list
+
+        AnswerCls = local_ns.get("Answer")
+        if AnswerCls is not None:
+            # Common attribute names that might store rubric traits
+            for attr in ("question_rubric", "rubric_traits", "rubric"):
+                if hasattr(AnswerCls, attr):
+                    extracted_traits = _coerce_traits(getattr(AnswerCls, attr))
+                    if extracted_traits:
+                        break
+
+        # Also allow a top-level constant like QUESTION_RUBRIC
+        if not extracted_traits and "QUESTION_RUBRIC" in local_ns:
+            extracted_traits = _coerce_traits(local_ns.get("QUESTION_RUBRIC"))
+
+        return extracted_traits
+    except Exception:
+        # Silently ignore rubric extraction errors to keep TaskEval lightweight
+        return []

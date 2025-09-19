@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ..schemas.checkpoint import SchemaOrgQuestion
+    from ..schemas.question_class import Question
 
 from ..answers.generator import generate_answer_template, load_answer_templates_from_json
 from ..schemas.rubric_class import Rubric, RubricTrait
@@ -187,6 +188,18 @@ class Benchmark:
     def get_all_questions(self) -> list[dict[str, Any]]:
         """Get all questions in the benchmark."""
         return self._question_manager.get_all_questions()
+
+    def get_question_as_object(self, question_id: str) -> "Question":
+        """Get a question as a Question object."""
+        return self._question_manager.get_question_as_object(question_id)
+
+    def get_all_questions_as_objects(self) -> list["Question"]:
+        """Get all questions as Question objects."""
+        return self._question_manager.get_all_questions_as_objects()
+
+    def add_question_from_object(self, question_obj: "Question", **metadata: Any) -> str:
+        """Add a question to the benchmark from a Question object."""
+        return self._question_manager.add_question_from_object(question_obj, **metadata)
 
     def update_question_metadata(self, question_id: str, **metadata: Any) -> None:
         """Update question metadata fields."""

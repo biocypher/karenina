@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from ...schemas.question_class import Question
     from .base import BenchmarkBase
 
 from ...utils.checkpoint_converter import add_question_to_benchmark
@@ -132,6 +133,95 @@ class QuestionManager:
             List of question dictionaries
         """
         return list(self.base._questions_cache.values())
+
+    def get_question_as_object(self, question_id: str) -> "Question":
+        """
+        Get a question as a Question object (for use with TaskEval).
+
+        Args:
+            question_id: The question ID
+
+        Returns:
+            Question object with the question data
+
+        Raises:
+            ValueError: If question not found
+        """
+        from ...schemas.question_class import Question
+
+        q_data = self.get_question(question_id)
+        return Question(
+            question=q_data["question"],
+            raw_answer=q_data["raw_answer"],
+            tags=q_data.get("keywords", []) or [],
+            few_shot_examples=q_data.get("few_shot_examples"),
+        )
+
+    def get_all_questions_as_objects(self) -> list["Question"]:
+        """
+        Get all questions as Question objects.
+
+        Returns:
+            List of Question objects
+        """
+        from ...schemas.question_class import Question
+
+        objects = []
+        for q_data in self.get_all_questions():
+            objects.append(
+                Question(
+                    question=q_data["question"],
+                    raw_answer=q_data["raw_answer"],
+                    tags=q_data.get("keywords", []) or [],
+                    few_shot_examples=q_data.get("few_shot_examples"),
+                )
+            )
+        return objects
+
+    def add_question_from_object(self, question_obj: "Question", **metadata: Any) -> str:
+        """
+        Add a question to the benchmark from a Question object.
+
+        Args:
+            question_obj: Question object to add
+            **metadata: Additional metadata (author, sources, etc.)
+
+        Returns:
+            The question ID that was assigned
+        """
+        from ...schemas.question_class import Question
+
+        if not isinstance(question_obj, Question):
+            raise ValueError("question_obj must be a Question instance")
+
+        # Use the Question object's auto-generated ID
+        question_id = question_obj.id
+
+        # Check if question already exists
+        if question_id in self.base._questions_cache:
+            raise ValueError(f"Question with ID {question_id} already exists")
+
+        # Add to benchmark using existing add_question method with the Question object's ID
+        self.add_question(
+            question=question_obj.question,
+            raw_answer=question_obj.raw_answer,
+            question_id=question_id,  # Use the Question object's auto-generated ID
+            few_shot_examples=question_obj.few_shot_examples,
+            **metadata,
+        )
+
+        # Add keywords separately if provided
+        if question_obj.tags:
+            # Update the question with keywords
+            for item in self.base._checkpoint.dataFeedElement:
+                if self.base._get_item_id(item) == question_id:
+                    # Convert tags to appropriate format, filtering out None values
+                    item.keywords = [tag for tag in question_obj.tags if tag is not None]
+                    break
+            # Rebuild cache to reflect changes
+            self.base._rebuild_cache()
+
+        return question_id
 
     def update_question_metadata(self, question_id: str, **metadata: Any) -> None:
         """
