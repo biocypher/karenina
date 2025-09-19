@@ -366,9 +366,12 @@ class ModelConfig(BaseModel):
 class VerificationConfig(BaseModel):
     """Configuration for verification run with multiple models."""
 
-    answering_models: list[ModelConfig]
+    answering_models: list[ModelConfig] = Field(default_factory=list)
     parsing_models: list[ModelConfig]
     replicate_count: int = 1  # Number of times to run each test combination
+
+    # Parsing-only mode (for TaskEval and similar use cases)
+    parsing_only: bool = False  # When True, only parsing models are required
 
     # Rubric evaluation settings
     rubric_enabled: bool = False
@@ -451,7 +454,8 @@ class VerificationConfig(BaseModel):
         Validate configuration, especially for rubric-enabled scenarios.
 
         Validates that:
-        - At least one answering and parsing model is configured
+        - At least one parsing model is configured
+        - At least one answering model is configured (unless parsing_only=True)
         - Required fields are present for each model
         - Model provider is provided for interfaces that require it
         - Rubric-specific requirements are met when enabled
@@ -459,12 +463,13 @@ class VerificationConfig(BaseModel):
         Raises:
             ValueError: If any validation rule fails
         """
-        # Check that we have at least one answering and parsing model
-        if not self.answering_models:
-            raise ValueError("At least one answering model must be configured")
-
+        # Check that we have at least one parsing model (always required)
         if not self.parsing_models:
             raise ValueError("At least one parsing model must be configured")
+
+        # Check answering models only if not in parsing-only mode
+        if not self.parsing_only and not self.answering_models:
+            raise ValueError("At least one answering model must be configured (unless parsing_only=True)")
 
         # Validate model configurations
         for model in self.answering_models + self.parsing_models:
