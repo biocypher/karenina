@@ -1,5 +1,6 @@
 """Question management functionality for benchmarks."""
 
+import inspect
 from collections.abc import Iterator
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Union
@@ -22,7 +23,7 @@ class QuestionManager:
         self,
         question: Union[str, "Question"],
         raw_answer: str | None = None,
-        answer_template: str | None = None,
+        answer_template: str | type | None = None,
         question_id: str | None = None,
         finished: bool = False,
         author: dict[str, Any] | None = None,
@@ -33,14 +34,15 @@ class QuestionManager:
         """
         Add a question to the benchmark.
 
-        This method supports two usage patterns:
+        This method supports three usage patterns:
         1. Traditional kwargs: add_question("What is 2+2?", "4", ...)
         2. Question object: add_question(Question(...), ...)
+        3. Answer class: add_question("What is 2+2?", "4", answer_template=AnswerClass)
 
         Args:
             question: Either the question text (str) or a Question object
             raw_answer: The expected answer text (required if question is str)
-            answer_template: Optional Python code for answer template
+            answer_template: Optional Python code (str), Answer class (type), or None
             question_id: Optional question ID (will be generated if not provided)
             finished: Whether the template is finished
             author: Optional author information
@@ -58,6 +60,12 @@ class QuestionManager:
             # New usage with Question object
             q_obj = Question(question="What is Python?", raw_answer="A programming language")
             q_id = manager.add_question(q_obj)
+
+            # New usage with Answer class
+            class MyAnswer(BaseAnswer):
+                value: int
+                def verify(self): return self.value == 42
+            q_id = manager.add_question("What is 6*7?", "42", answer_template=MyAnswer)
         """
         # Import Question class here to avoid circular imports
         from ...schemas.question_class import Question
@@ -87,9 +95,33 @@ class QuestionManager:
             # Invalid type
             raise TypeError(f"question must be either a string or Question object, got {type(question)}")
 
+        # Handle Answer class input for answer_template
+        if answer_template is not None and inspect.isclass(answer_template):
+            # Import BaseAnswer here to avoid circular imports
+            from ...schemas.answer_class import BaseAnswer
+
+            # Validate that it's an Answer class
+            if not issubclass(answer_template, BaseAnswer):
+                raise TypeError(f"answer_template class must inherit from BaseAnswer, got {answer_template}")
+
+            # Convert Answer class to source code string
+            try:
+                # First try to get source code using the BaseAnswer method
+                source_code = answer_template.get_source_code()
+                answer_template = source_code if source_code is not None else inspect.getsource(answer_template)
+            except (OSError, TypeError) as e:
+                class_name = getattr(answer_template, "__name__", "Unknown")
+                raise ValueError(
+                    f"Could not extract source code from Answer class {class_name}. "
+                    f"For dynamically created classes, ensure _source_code is set. Error: {e}"
+                ) from e
+
         # If no template provided, create a minimal one
         if answer_template is None:
             answer_template = self._create_default_template(question_text)
+
+        # At this point, answer_template is guaranteed to be a string
+        assert isinstance(answer_template, str), "answer_template should be a string at this point"
 
         q_id = add_question_to_benchmark(
             self.base._checkpoint,

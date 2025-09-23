@@ -141,7 +141,7 @@ class Benchmark:
         self,
         question: Union[str, "Question"],
         raw_answer: str | None = None,
-        answer_template: str | None = None,
+        answer_template: str | type | None = None,
         question_id: str | None = None,
         finished: bool = False,
         author: dict[str, Any] | None = None,
@@ -151,14 +151,15 @@ class Benchmark:
     ) -> str:
         """Add a question to the benchmark.
 
-        This method supports two usage patterns:
+        This method supports three usage patterns:
         1. Traditional kwargs: add_question("What is 2+2?", "4", ...)
         2. Question object: add_question(Question(...), ...)
+        3. Answer class: add_question("What is 2+2?", "4", answer_template=AnswerClass)
 
         Args:
             question: Either the question text (str) or a Question object
             raw_answer: The expected answer text (required if question is str)
-            answer_template: Optional Python code for answer template
+            answer_template: Optional Python code (str), Answer class (type), or None
             question_id: Optional question ID (will be generated if not provided)
             finished: Whether the template is finished
             author: Optional author information
