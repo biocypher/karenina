@@ -408,12 +408,13 @@ class TestBenchmarkVerificationIntegration:
         # Test JSON export
         json_export = benchmark.export_verification_results(format="json")
         exported_data = json.loads(json_export)
-        assert f"{q1_id}_test" in exported_data
+        # Check that the result data is in the exported list
+        assert any(item.get("question_id") == q1_id for item in exported_data)
 
         # Test CSV export
         csv_export = benchmark.export_verification_results(format="csv")
-        assert "result_key" in csv_export
-        assert f"{q1_id}_test" in csv_export
+        assert "question_id" in csv_export  # Check for question_id column
+        assert q1_id in csv_export  # Check that the question ID is in the CSV
 
     def test_verification_summary(self, sample_benchmark):
         """Test verification summary statistics."""

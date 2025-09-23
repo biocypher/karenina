@@ -123,14 +123,18 @@ class TestBenchmarkQuestionObjectMethods:
         assert difficulty == "medium"
 
     def test_add_question_from_object_duplicate_id(self, sample_benchmark):
-        """Test adding a question that already exists."""
-        # Get an existing question as object
-        question_ids = sample_benchmark.get_question_ids()
-        existing_question = sample_benchmark.get_question_as_object(question_ids[0])
+        """Test adding a question object that already exists."""
+        # Create a Question object and add it
+        from karenina.schemas.question_class import Question
 
-        # Try to add it again (same question text = same ID)
+        question_obj = Question(question="Duplicate test question", raw_answer="Duplicate test answer")
+
+        # Add it once
+        sample_benchmark.add_question_from_object(question_obj)
+
+        # Try to add the same Question object again (same ID)
         with pytest.raises(ValueError, match="Question with ID .* already exists"):
-            sample_benchmark.add_question_from_object(existing_question)
+            sample_benchmark.add_question_from_object(question_obj)
 
     def test_add_question_from_object_invalid_type(self, sample_benchmark):
         """Test adding invalid object type."""
@@ -228,14 +232,18 @@ class TestTaskEvalBenchmarkIntegration:
         q1_id = benchmark.add_question(question="What is 5+3?", raw_answer="8")
 
         # Set a template for the question
-        template_code = '''from pydantic import BaseModel, Field
+        template_code = '''from pydantic import Field
+from karenina.schemas.answer_class import BaseAnswer
 
-class Answer(BaseModel):
+class Answer(BaseAnswer):
     """Answer for math question."""
     result: int = Field(description="The numerical result")
     correct: int = Field(description="The correct answer", default=8)
+
+    def verify(self) -> bool:
+        return self.result == self.correct
 '''
-        benchmark.set_answer_template(q1_id, template_code)
+        benchmark.add_answer_template(q1_id, template_code)
 
         return benchmark
 

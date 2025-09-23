@@ -2,7 +2,7 @@
 
 from collections.abc import Iterator
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Union
 
 if TYPE_CHECKING:
     from ...schemas.question_class import Question
@@ -20,8 +20,8 @@ class QuestionManager:
 
     def add_question(
         self,
-        question: str,
-        raw_answer: str,
+        question: Union[str, "Question"],
+        raw_answer: str | None = None,
         answer_template: str | None = None,
         question_id: str | None = None,
         finished: bool = False,
@@ -33,9 +33,13 @@ class QuestionManager:
         """
         Add a question to the benchmark.
 
+        This method supports two usage patterns:
+        1. Traditional kwargs: add_question("What is 2+2?", "4", ...)
+        2. Question object: add_question(Question(...), ...)
+
         Args:
-            question: The question text
-            raw_answer: The expected answer text
+            question: Either the question text (str) or a Question object
+            raw_answer: The expected answer text (required if question is str)
             answer_template: Optional Python code for answer template
             question_id: Optional question ID (will be generated if not provided)
             finished: Whether the template is finished
@@ -46,15 +50,51 @@ class QuestionManager:
 
         Returns:
             The question ID
+
+        Examples:
+            # Traditional usage with kwargs
+            q_id = manager.add_question("What is Python?", "A programming language")
+
+            # New usage with Question object
+            q_obj = Question(question="What is Python?", raw_answer="A programming language")
+            q_id = manager.add_question(q_obj)
         """
+        # Import Question class here to avoid circular imports
+        from ...schemas.question_class import Question
+
+        # Handle Question object input
+        if isinstance(question, Question):
+            question_text = question.question
+            raw_answer_text = question.raw_answer
+            # Use the Question object's auto-generated ID if no ID provided
+            if question_id is None:
+                question_id = question.id
+            # Extract tags/keywords if provided
+            keywords = [tag for tag in question.tags if tag is not None] if question.tags else None
+            # Use few-shot examples from Question object if not overridden
+            if few_shot_examples is None:
+                few_shot_examples = question.few_shot_examples
+        elif isinstance(question, str):
+            # Traditional string input
+            question_text = question
+            raw_answer_text = raw_answer or ""
+            keywords = None
+
+            # Validate required parameters for string input
+            if raw_answer is None:
+                raise ValueError("raw_answer is required when question is a string")
+        else:
+            # Invalid type
+            raise TypeError(f"question must be either a string or Question object, got {type(question)}")
+
         # If no template provided, create a minimal one
         if answer_template is None:
-            answer_template = self._create_default_template(question)
+            answer_template = self._create_default_template(question_text)
 
         q_id = add_question_to_benchmark(
             self.base._checkpoint,
-            question,
-            raw_answer,
+            question_text,
+            raw_answer_text,
             answer_template,
             question_id,
             None,  # question rubric traits added separately
@@ -62,7 +102,7 @@ class QuestionManager:
             author,
             sources,
             custom_metadata,
-            None,  # keywords added separately if needed
+            keywords,  # Pass keywords from Question object if available
             few_shot_examples,
         )
 
@@ -599,7 +639,6 @@ class QuestionManager:
     """Answer template for: {question[:50]}..."""
 
     response: str = Field(description="The answer response")
-    correct: dict = Field(description="The correct answer")
 
     def verify(self) -> bool:
         # TODO: Implement verification logic
