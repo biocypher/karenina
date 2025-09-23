@@ -10,7 +10,7 @@ while maintaining 100% backward compatibility.
 import json
 from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Union
 
 if TYPE_CHECKING:
     from ..schemas.checkpoint import SchemaOrgQuestion
@@ -139,8 +139,8 @@ class Benchmark:
     # Question management methods - delegate to QuestionManager
     def add_question(
         self,
-        question: str,
-        raw_answer: str,
+        question: Union[str, "Question"],
+        raw_answer: str | None = None,
         answer_template: str | None = None,
         question_id: str | None = None,
         finished: bool = False,
@@ -149,11 +149,15 @@ class Benchmark:
         custom_metadata: dict[str, Any] | None = None,
         few_shot_examples: list[dict[str, str]] | None = None,
     ) -> str:
-        """Add a question to the benchmark with optional few-shot examples.
+        """Add a question to the benchmark.
+
+        This method supports two usage patterns:
+        1. Traditional kwargs: add_question("What is 2+2?", "4", ...)
+        2. Question object: add_question(Question(...), ...)
 
         Args:
-            question: The question text
-            raw_answer: The expected answer text
+            question: Either the question text (str) or a Question object
+            raw_answer: The expected answer text (required if question is str)
             answer_template: Optional Python code for answer template
             question_id: Optional question ID (will be generated if not provided)
             finished: Whether the template is finished

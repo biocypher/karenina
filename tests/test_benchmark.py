@@ -418,7 +418,7 @@ def test_statistics_and_summary():
     summary = benchmark.get_summary()
     assert summary["question_count"] == 2
     assert summary["finished_count"] == 1
-    assert summary["has_template_count"] == 1
+    assert summary["has_template_count"] == 1  # Only q1 has a non-default template
     assert summary["progress_percentage"] == 50.0
 
     # Test detailed statistics
