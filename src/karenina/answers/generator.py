@@ -41,6 +41,10 @@ def inject_question_id_into_answer_class(answer_class: type, question_id: str) -
     AnswerWithID.__name__ = answer_class.__name__
     AnswerWithID.__qualname__ = answer_class.__qualname__
 
+    # Preserve the original source code
+    if hasattr(answer_class, "_source_code"):
+        AnswerWithID._source_code = answer_class._source_code
+
     return AnswerWithID
 
 
@@ -111,6 +115,10 @@ def generate_answer_templates_from_questions_file(
         local_ns: dict[str, Any] = {}
         exec(code_blocks, globals(), local_ns)
         Answer = local_ns["Answer"]
+
+        # Store the template code for exec-created classes
+        Answer._source_code = code_blocks
+
         # Inject the question ID programmatically
         AnswerWithID = inject_question_id_into_answer_class(Answer, question.id)
         answer_templates[question.id] = AnswerWithID
@@ -148,6 +156,10 @@ def load_answer_templates_from_json(
         local_ns: dict[str, Any] = {}
         exec(code_blocks, globals(), local_ns)
         Answer = local_ns["Answer"]
+
+        # Store the template code for exec-created classes
+        Answer._source_code = code_blocks
+
         # Inject the question ID programmatically
         AnswerWithID = inject_question_id_into_answer_class(Answer, question_id)
         answer_templates[question_id] = AnswerWithID

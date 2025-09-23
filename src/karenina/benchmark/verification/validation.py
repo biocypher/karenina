@@ -55,6 +55,10 @@ def validate_answer_template(template_code: str) -> tuple[bool, str | None, type
 
         Answer = local_ns["Answer"]
 
+        # Store the template code for exec-created classes
+        # (since inspect.getsource() won't work for them)
+        Answer._source_code = template_code
+
         # Check if it's a class
         if not inspect.isclass(Answer):
             return False, "Answer is not a class", None

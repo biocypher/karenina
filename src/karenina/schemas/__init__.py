@@ -3,7 +3,7 @@
 This module contains Pydantic models for data validation and serialization.
 """
 
-from .answer_class import BaseAnswer
+from .answer_class import BaseAnswer, capture_answer_source
 from .checkpoint import (
     DatasetMetadata,
     JsonLdCheckpoint,
@@ -22,6 +22,7 @@ from .rubric_class import ManualRubricTrait, Rubric, RubricEvaluation, RubricTra
 
 __all__ = [
     "BaseAnswer",
+    "capture_answer_source",
     "Question",
     "Rubric",
     "RubricTrait",
