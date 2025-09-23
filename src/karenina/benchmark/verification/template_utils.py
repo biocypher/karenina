@@ -128,6 +128,9 @@ def extract_ground_truth_from_template_code(template_code: str) -> dict[str, Any
 
     Answer = local_ns["Answer"]
 
+    # Store the template code for exec-created classes
+    Answer._source_code = template_code
+
     # Create test instance and extract ground truth
     _, ground_truth = create_test_instance_from_answer_class(Answer)
 
@@ -179,6 +182,11 @@ def extract_rubric_traits_from_template(answer_template: str) -> list[Any]:
 
         local_ns: dict[str, Any] = {}
         exec(answer_template, global_ns, local_ns)
+
+        # Store the template code for exec-created classes
+        if "Answer" in local_ns:
+            Answer = local_ns["Answer"]
+            Answer._source_code = answer_template
 
         # Heuristics: check for rubric on Answer class or top-level var
         extracted_traits: list[RubricTrait] = []

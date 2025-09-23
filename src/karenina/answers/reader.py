@@ -30,8 +30,13 @@ def read_answer_templates(answers_json_path: str | Path) -> dict[str, type]:
 
     idx = 1
     for key, value in answer_templates.items():
-        exec(re.sub(r"^class Answer", f"class Answer{idx}", value), namespace)
+        exec(re.sub(r"^class Answer", f"class Answer{idx}", value, flags=re.MULTILINE), namespace)
         Answer = namespace["Answer" + str(idx)]
+
+        # Store the template code for exec-created classes
+        if hasattr(Answer, "_source_code"):
+            Answer._source_code = value
+
         # Inject the question ID programmatically
         AnswerWithID = inject_question_id_into_answer_class(Answer, key)  # type: ignore[arg-type]
         answer_dict[key] = AnswerWithID
