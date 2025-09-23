@@ -19,7 +19,7 @@ from ..schemas.checkpoint import (
     SchemaOrgRating,
     SchemaOrgSoftwareSourceCode,
 )
-from ..schemas.rubric_class import RubricTrait
+from ..schemas.rubric_class import ManualRubricTrait, RubricTrait
 
 
 class BenchmarkConversionError(Exception):
@@ -48,17 +48,32 @@ def generate_question_id(question_text: str) -> str:
     return f"urn:uuid:question-{prefix}-{hash_hex[:8]}"
 
 
-def convert_rubric_trait_to_rating(trait: RubricTrait, rubric_type: str = "global") -> SchemaOrgRating:
+def convert_rubric_trait_to_rating(
+    trait: RubricTrait | ManualRubricTrait, rubric_type: str = "global"
+) -> SchemaOrgRating:
     """
-    Convert an internal RubricTrait to a schema.org Rating.
+    Convert an internal RubricTrait or ManualRubricTrait to a schema.org Rating.
 
     Args:
-        trait: The RubricTrait to convert
+        trait: The RubricTrait or ManualRubricTrait to convert
         rubric_type: Either 'global' or 'question-specific'
 
     Returns:
         A SchemaOrgRating object
     """
+    # Handle ManualRubricTrait (always boolean)
+    if isinstance(trait, ManualRubricTrait):
+        return SchemaOrgRating(
+            name=trait.name,
+            description=trait.description,
+            bestRating=1,
+            worstRating=0,
+            additionalType="GlobalManualRubricTrait"
+            if rubric_type == "global"
+            else "QuestionSpecificManualRubricTrait",
+        )
+
+    # Handle RubricTrait
     if trait.kind == "boolean":
         return SchemaOrgRating(
             name=trait.name,
@@ -80,16 +95,28 @@ def convert_rubric_trait_to_rating(trait: RubricTrait, rubric_type: str = "globa
         )
 
 
-def convert_rating_to_rubric_trait(rating: SchemaOrgRating) -> RubricTrait:
+def convert_rating_to_rubric_trait(rating: SchemaOrgRating) -> RubricTrait | ManualRubricTrait:
     """
-    Convert a schema.org Rating back to a RubricTrait.
+    Convert a schema.org Rating back to a RubricTrait or ManualRubricTrait.
 
     Args:
         rating: The SchemaOrgRating to convert
 
     Returns:
-        A RubricTrait object
+        A RubricTrait or ManualRubricTrait object
     """
+    # Check if it's a ManualRubricTrait
+    if rating.additionalType in ["GlobalManualRubricTrait", "QuestionSpecificManualRubricTrait"]:
+        return ManualRubricTrait(
+            name=rating.name,
+            description=rating.description or "",
+            pattern=".*",  # Default pattern that matches everything
+            callable_name=None,
+            case_sensitive=True,
+            invert_result=False,
+        )
+
+    # Handle regular RubricTrait
     # Determine if it's a boolean trait (0-1 range)
     is_boolean = rating.bestRating == 1 and rating.worstRating == 0
 
@@ -255,7 +282,7 @@ def add_question_to_benchmark(
 
 def add_global_rubric_to_benchmark(
     benchmark: JsonLdCheckpoint,
-    rubric_traits: list[RubricTrait],
+    rubric_traits: list[RubricTrait | ManualRubricTrait],
 ) -> None:
     """
     Add global rubric traits to a benchmark.
@@ -348,7 +375,7 @@ def extract_questions_from_benchmark(
 
 def extract_global_rubric_from_benchmark(
     benchmark: JsonLdCheckpoint,
-) -> list[RubricTrait] | None:
+) -> list[RubricTrait | ManualRubricTrait] | None:
     """
     Extract global rubric traits from a benchmark.
 
@@ -356,14 +383,14 @@ def extract_global_rubric_from_benchmark(
         benchmark: The benchmark to extract from
 
     Returns:
-        List of RubricTrait objects or None if no global rubric
+        List of RubricTrait or ManualRubricTrait objects or None if no global rubric
     """
     if not benchmark.rating:
         return None
 
     traits = []
     for rating in benchmark.rating:
-        if rating.additionalType == "GlobalRubricTrait":
+        if rating.additionalType in ["GlobalRubricTrait", "GlobalManualRubricTrait"]:
             traits.append(convert_rating_to_rubric_trait(rating))
 
     return traits if traits else None

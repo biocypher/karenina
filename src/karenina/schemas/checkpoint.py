@@ -55,7 +55,12 @@ class SchemaOrgRating(BaseModel):
     worstRating: float
     ratingValue: float | None = None  # Only present in evaluation results
     ratingExplanation: str | None = None  # Only present in evaluation results
-    additionalType: Literal["GlobalRubricTrait", "QuestionSpecificRubricTrait"]
+    additionalType: Literal[
+        "GlobalRubricTrait",
+        "QuestionSpecificRubricTrait",
+        "GlobalManualRubricTrait",
+        "QuestionSpecificManualRubricTrait",
+    ]
 
 
 # Schema.org SoftwareSourceCode for Pydantic templates

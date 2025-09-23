@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from .base import BenchmarkBase
 
-from ...schemas.rubric_class import Rubric, RubricTrait
+from ...schemas.rubric_class import ManualRubricTrait, Rubric, RubricTrait
 from ...utils.checkpoint_converter import (
     add_global_rubric_to_benchmark,
     extract_global_rubric_from_benchmark,
@@ -20,7 +20,7 @@ class RubricManager:
         """Initialize with reference to benchmark base."""
         self.base = base
 
-    def add_global_rubric_trait(self, trait: RubricTrait) -> None:
+    def add_global_rubric_trait(self, trait: RubricTrait | ManualRubricTrait) -> None:
         """
         Add a global rubric trait to the benchmark.
 
@@ -31,7 +31,7 @@ class RubricManager:
         current_traits.append(trait)
         add_global_rubric_to_benchmark(self.base._checkpoint, current_traits)
 
-    def add_question_rubric_trait(self, question_id: str, trait: RubricTrait) -> None:
+    def add_question_rubric_trait(self, question_id: str, trait: RubricTrait | ManualRubricTrait) -> None:
         """
         Add a question-specific rubric trait.
 
@@ -71,10 +71,13 @@ class RubricManager:
         """
         traits = extract_global_rubric_from_benchmark(self.base._checkpoint)
         if traits:
-            return Rubric(traits=traits)
+            # Separate traits by type
+            rubric_traits = [t for t in traits if isinstance(t, RubricTrait)]
+            manual_traits = [t for t in traits if isinstance(t, ManualRubricTrait)]
+            return Rubric(traits=rubric_traits, manual_traits=manual_traits)
         return None
 
-    def get_question_rubric(self, question_id: str) -> list[RubricTrait] | None:
+    def get_question_rubric(self, question_id: str) -> list[RubricTrait | ManualRubricTrait] | None:
         """
         Get question-specific rubric traits.
 
@@ -121,7 +124,10 @@ class RubricManager:
 
         # Return merged rubric if we have any traits
         if merged_traits:
-            return Rubric(traits=merged_traits)
+            # Separate traits by type
+            rubric_traits = [t for t in merged_traits if isinstance(t, RubricTrait)]
+            manual_traits = [t for t in merged_traits if isinstance(t, ManualRubricTrait)]
+            return Rubric(traits=rubric_traits, manual_traits=manual_traits)
 
         return None
 
@@ -200,6 +206,9 @@ class RubricManager:
                     errors.append("Global rubric trait missing name or description")
                 if trait.kind == "score" and (trait.min_score is None or trait.max_score is None):
                     errors.append(f"Score trait '{trait.name}' missing min/max scores")
+            for manual_trait in global_rubric.manual_traits:
+                if not manual_trait.name or not manual_trait.description:
+                    errors.append("Global manual rubric trait missing name or description")
 
         # Check question-specific rubrics
         for q_id, q_data in self.base._questions_cache.items():
@@ -207,7 +216,12 @@ class RubricManager:
                 for trait in q_data["question_rubric"]:
                     if not trait.name or not trait.description:
                         errors.append(f"Question {q_id} rubric trait missing name or description")
-                    if trait.kind == "score" and (trait.min_score is None or trait.max_score is None):
+                    # Only check score fields for RubricTrait (not ManualRubricTrait)
+                    if (
+                        isinstance(trait, RubricTrait)
+                        and trait.kind == "score"
+                        and (trait.min_score is None or trait.max_score is None)
+                    ):
                         errors.append(f"Question {q_id} score trait '{trait.name}' missing min/max scores")
 
         return len(errors) == 0, errors
@@ -215,7 +229,7 @@ class RubricManager:
     def get_rubric_statistics(self) -> dict[str, Any]:
         """Get statistics about rubrics in the benchmark."""
         global_rubric = self.get_global_rubric()
-        global_traits_count = len(global_rubric.traits) if global_rubric else 0
+        global_traits_count = (len(global_rubric.traits) + len(global_rubric.manual_traits)) if global_rubric else 0
 
         question_rubrics_count = sum(
             1 for q_data in self.base._questions_cache.values() if q_data.get("question_rubric")
@@ -239,7 +253,7 @@ class RubricManager:
         """Get list of question IDs that have question-specific rubrics."""
         return [q_id for q_id, q_data in self.base._questions_cache.items() if q_data.get("question_rubric")]
 
-    def set_global_rubric(self, traits: list[RubricTrait]) -> None:
+    def set_global_rubric(self, traits: list[RubricTrait | ManualRubricTrait]) -> None:
         """
         Set the global rubric with a list of traits.
 
@@ -248,7 +262,7 @@ class RubricManager:
         """
         add_global_rubric_to_benchmark(self.base._checkpoint, traits)
 
-    def update_global_rubric_trait(self, trait_name: str, updated_trait: RubricTrait) -> bool:
+    def update_global_rubric_trait(self, trait_name: str, updated_trait: RubricTrait | ManualRubricTrait) -> bool:
         """
         Update a specific trait in the global rubric.
 
@@ -303,11 +317,19 @@ class RubricManager:
         if question_id is None:
             # Get global trait names
             global_rubric = self.get_global_rubric()
-            return [trait.name for trait in global_rubric.traits] if global_rubric else []
+            if global_rubric:
+                trait_names = [trait.name for trait in global_rubric.traits]
+                trait_names.extend([trait.name for trait in global_rubric.manual_traits])
+                return trait_names
+            return []
         else:
             # Get merged trait names for the question
             merged_rubric = self.get_merged_rubric_for_question(question_id)
-            return [trait.name for trait in merged_rubric.traits] if merged_rubric else []
+            if merged_rubric:
+                trait_names = [trait.name for trait in merged_rubric.traits]
+                trait_names.extend([trait.name for trait in merged_rubric.manual_traits])
+                return trait_names
+            return []
 
     def has_rubric(self, question_id: str | None = None) -> bool:
         """

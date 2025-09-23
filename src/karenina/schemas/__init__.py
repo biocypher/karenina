@@ -18,13 +18,14 @@ from .checkpoint import (
     SchemaOrgSoftwareSourceCode,
 )
 from .question_class import Question
-from .rubric_class import Rubric, RubricEvaluation, RubricTrait, TraitKind
+from .rubric_class import ManualRubricTrait, Rubric, RubricEvaluation, RubricTrait, TraitKind
 
 __all__ = [
     "BaseAnswer",
     "Question",
     "Rubric",
     "RubricTrait",
+    "ManualRubricTrait",
     "RubricEvaluation",
     "TraitKind",
     "JsonLdCheckpoint",

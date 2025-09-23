@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from ..schemas.question_class import Question
 
 from ..answers.generator import generate_answer_template, load_answer_templates_from_json
-from ..schemas.rubric_class import Rubric, RubricTrait
+from ..schemas.rubric_class import ManualRubricTrait, Rubric, RubricTrait
 from ..utils.code_parser import extract_and_combine_codeblocks
 from .core import (
     BenchmarkBase,
@@ -604,13 +604,33 @@ class Benchmark:
         return results
 
     # Rubric management methods - delegate to RubricManager
-    def add_global_rubric_trait(self, trait: RubricTrait) -> None:
+    def add_global_rubric_trait(self, trait: RubricTrait | ManualRubricTrait) -> None:
         """Add a global rubric trait to the benchmark."""
         self._rubric_manager.add_global_rubric_trait(trait)
 
-    def add_question_rubric_trait(self, question_id: str, trait: RubricTrait) -> None:
+    def add_question_rubric_trait(self, question_id: str, trait: RubricTrait | ManualRubricTrait) -> None:
         """Add a question-specific rubric trait."""
         self._rubric_manager.add_question_rubric_trait(question_id, trait)
+
+    def set_global_rubric(self, rubric: Rubric) -> None:
+        """Set the complete global rubric (replaces existing)."""
+        # Clear existing global rubric
+        self.clear_global_rubric()
+        # Add all traits from the rubric
+        for trait in rubric.traits:
+            self.add_global_rubric_trait(trait)
+        for manual_trait in rubric.manual_traits:
+            self.add_global_rubric_trait(manual_trait)
+
+    def set_question_rubric(self, question_id: str, rubric: Rubric) -> None:
+        """Set the complete question-specific rubric (replaces existing)."""
+        # Clear existing question rubric
+        self.remove_question_rubric(question_id)
+        # Add all traits from the rubric
+        for trait in rubric.traits:
+            self.add_question_rubric_trait(question_id, trait)
+        for manual_trait in rubric.manual_traits:
+            self.add_question_rubric_trait(question_id, manual_trait)
 
     def get_global_rubric(self) -> Rubric | None:
         """Get the global rubric from the benchmark."""
