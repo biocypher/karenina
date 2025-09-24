@@ -361,6 +361,7 @@ class ModelConfig(BaseModel):
     temperature: float = 0.1
     interface: Literal["langchain", "openrouter", "manual"] = "langchain"
     system_prompt: str
+    max_retries: int = 2  # Optional max retries for template generation
 
 
 class VerificationConfig(BaseModel):
