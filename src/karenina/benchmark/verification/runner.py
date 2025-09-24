@@ -49,8 +49,8 @@ def _split_parsed_response(parsed_answer: Any) -> tuple[dict[str, Any] | None, d
     # Extract ground truth from 'correct' field
     parsed_gt_response = parsed_dict.get("correct")
 
-    # Create LLM response by excluding 'id' and 'correct'
-    parsed_llm_response = {k: v for k, v in parsed_dict.items() if k not in ("id", "correct")}
+    # Create LLM response by excluding 'id', 'correct', and 'regex' (configuration fields)
+    parsed_llm_response = {k: v for k, v in parsed_dict.items() if k not in ("id", "correct", "regex")}
 
     return parsed_gt_response, parsed_llm_response
 
