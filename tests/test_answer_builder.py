@@ -38,10 +38,11 @@ class TestAnswerBuilder:
         """Test method chaining when adding multiple attributes."""
         builder = AnswerBuilder()
 
-        result = (builder
-                  .add_attribute("field1", "bool", "First field", True)
-                  .add_attribute("field2", "int", "Second field", 42)
-                  .add_attribute("field3", "str", "Third field", "test"))
+        result = (
+            builder.add_attribute("field1", "bool", "First field", True)
+            .add_attribute("field2", "int", "Second field", 42)
+            .add_attribute("field3", "str", "Third field", "test")
+        )
 
         assert result is builder
         assert len(builder.attributes) == 3
@@ -93,7 +94,9 @@ class TestAnswerBuilder:
     def test_add_regex_basic(self):
         """Test adding a basic regex pattern."""
         builder = AnswerBuilder()
-        result = builder.add_regex("citations", r"\[\d+\]", expected=3, match_type="count", description="Citation count")
+        result = builder.add_regex(
+            "citations", r"\[\d+\]", expected=3, match_type="count", description="Citation count"
+        )
 
         # Should return self for chaining
         assert result is builder
@@ -189,7 +192,7 @@ class TestAnswerBuilder:
         assert Answer.__name__ == "Answer"
 
         # Should have source code stored
-        assert hasattr(Answer, '_source_code')
+        assert hasattr(Answer, "_source_code")
         assert Answer._source_code is not None
         assert "class Answer(BaseAnswer):" in Answer._source_code
 
@@ -213,7 +216,7 @@ class TestAnswerBuilder:
 
         # Should have regex field
         answer = Answer()
-        assert hasattr(answer, 'regex')
+        assert hasattr(answer, "regex")
         assert isinstance(answer.regex, dict)
         assert "test_pattern" in answer.regex
 
@@ -241,7 +244,7 @@ class TestAnswerBuilder:
         assert answer.verify() is True
 
         # Should have regex field
-        assert hasattr(answer, 'regex')
+        assert hasattr(answer, "regex")
         assert "citations" in answer.regex
 
         # Test regex verification
@@ -341,12 +344,7 @@ class TestAnswerBuilder:
         Answer = builder.compile()
 
         # Test instantiation with complex values
-        answer = Answer(
-            simple_list=["a", "b", "c"],
-            literal_type="high",
-            float_value=3.14159,
-            dict_value={"key": 123}
-        )
+        answer = Answer(simple_list=["a", "b", "c"], literal_type="high", float_value=3.14159, dict_value={"key": 123})
 
         assert answer.verify() is True
 
@@ -355,7 +353,7 @@ class TestAnswerBuilder:
             simple_list=["x", "y", "z"],  # Wrong list
             literal_type="high",
             float_value=3.14159,
-            dict_value={"key": 123}
+            dict_value={"key": 123},
         )
 
         assert answer_wrong.verify() is False
@@ -381,7 +379,7 @@ class TestAnswerBuilderIntegration:
         question_id = benchmark.add_question(
             question="How many patients were treated in the study?",
             raw_answer="150 patients were treated with the new therapy. PMID: 12345 and PMID: 67890",
-            answer_template=Answer
+            answer_template=Answer,
         )
 
         # Verify question was added successfully
@@ -397,32 +395,37 @@ class TestAnswerBuilderIntegration:
     def test_builder_fluent_interface_realistic_example(self):
         """Test realistic usage with fluent interface."""
         # Realistic medical research question example
-        Answer = (AnswerBuilder()
-                  .add_attribute("mentions_study_drug", "bool",
-                                "Whether response mentions the study drug", True)
-                  .add_attribute("mentions_control_group", "bool",
-                                "Whether response mentions control group", True)
-                  .add_attribute("sample_size", "int",
-                                "Total sample size reported", 245)
-                  .add_attribute("efficacy_category", "Literal['high', 'medium', 'low', 'none']",
-                                "Efficacy level reported", "high")
-                  .add_regex("pmid_references", r"PMID:\s*(\d+)",
-                            expected=3, match_type="count",
-                            description="Should cite 3 PMID references")
-                  .add_regex("p_values", r"p\s*[<>=]\s*0\.\d+",
-                            expected=1, match_type="count",
-                            description="Should report at least one p-value")
-                  .compile())
+        Answer = (
+            AnswerBuilder()
+            .add_attribute("mentions_study_drug", "bool", "Whether response mentions the study drug", True)
+            .add_attribute("mentions_control_group", "bool", "Whether response mentions control group", True)
+            .add_attribute("sample_size", "int", "Total sample size reported", 245)
+            .add_attribute(
+                "efficacy_category", "Literal['high', 'medium', 'low', 'none']", "Efficacy level reported", "high"
+            )
+            .add_regex(
+                "pmid_references",
+                r"PMID:\s*(\d+)",
+                expected=3,
+                match_type="count",
+                description="Should cite 3 PMID references",
+            )
+            .add_regex(
+                "p_values",
+                r"p\s*[<>=]\s*0\.\d+",
+                expected=1,
+                match_type="count",
+                description="Should report at least one p-value",
+            )
+            .compile()
+        )
 
         # Test the compiled class
         assert issubclass(Answer, BaseAnswer)
 
         # Create instance with correct values
         answer = Answer(
-            mentions_study_drug=True,
-            mentions_control_group=True,
-            sample_size=245,
-            efficacy_category="high"
+            mentions_study_drug=True, mentions_control_group=True, sample_size=245, efficacy_category="high"
         )
 
         # Test classical verification

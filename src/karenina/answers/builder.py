@@ -11,8 +11,8 @@ from typing import Any
 
 from .generator import (
     GroundTruthField,
-    _generate_pydantic_class,
     _format_ground_truth_value,
+    _generate_pydantic_class,
 )
 
 
@@ -30,20 +30,14 @@ class AnswerBuilder:
         benchmark.add_question("What is the dosage?", "500mg", answer_template=Answer)
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize an empty AnswerBuilder."""
         self.attributes: list[GroundTruthField] = []
         self.field_descriptions: dict[str, str] = {}
         self.regex_patterns: dict[str, dict[str, Any]] = {}
         self.regex_descriptions: dict[str, str] = {}
 
-    def add_attribute(
-        self,
-        name: str,
-        type_str: str,
-        description: str,
-        ground_truth: Any
-    ) -> 'AnswerBuilder':
+    def add_attribute(self, name: str, type_str: str, description: str, ground_truth: Any) -> "AnswerBuilder":
         """Add a classical Pydantic field attribute.
 
         Args:
@@ -68,18 +62,14 @@ class AnswerBuilder:
             raise ValueError(f"Name '{name}' already used for regex pattern")
 
         # Create GroundTruthField object
-        attribute = GroundTruthField(
-            name=name,
-            type=type_str,
-            ground_truth=ground_truth
-        )
+        attribute = GroundTruthField(name=name, type=type_str, ground_truth=ground_truth)
 
         self.attributes.append(attribute)
         self.field_descriptions[name] = description
 
         return self
 
-    def remove_attribute(self, name: str) -> 'AnswerBuilder':
+    def remove_attribute(self, name: str) -> "AnswerBuilder":
         """Remove a classical attribute by name.
 
         Args:
@@ -101,13 +91,8 @@ class AnswerBuilder:
         raise ValueError(f"Attribute '{name}' not found")
 
     def add_regex(
-        self,
-        name: str,
-        pattern: str,
-        expected: Any,
-        match_type: str = "exact",
-        description: str = ""
-    ) -> 'AnswerBuilder':
+        self, name: str, pattern: str, expected: Any, match_type: str = "exact", description: str = ""
+    ) -> "AnswerBuilder":
         """Add a regex validation pattern.
 
         Args:
@@ -136,25 +121,21 @@ class AnswerBuilder:
         try:
             re.compile(pattern)
         except re.error as e:
-            raise ValueError(f"Invalid regex pattern '{pattern}': {e}")
+            raise ValueError(f"Invalid regex pattern '{pattern}': {e}") from e
 
         # Validate match_type
         valid_match_types = {"exact", "contains", "count", "all"}
         if match_type not in valid_match_types:
             raise ValueError(f"Invalid match_type '{match_type}'. Must be one of: {valid_match_types}")
 
-        self.regex_patterns[name] = {
-            "pattern": pattern,
-            "expected": expected,
-            "match_type": match_type
-        }
+        self.regex_patterns[name] = {"pattern": pattern, "expected": expected, "match_type": match_type}
 
         if description:
             self.regex_descriptions[name] = description
 
         return self
 
-    def remove_regex(self, name: str) -> 'AnswerBuilder':
+    def remove_regex(self, name: str) -> "AnswerBuilder":
         """Remove a regex pattern by name.
 
         Args:
@@ -174,7 +155,7 @@ class AnswerBuilder:
 
         return self
 
-    def compile(self, class_name: str = "Answer") -> type:
+    def compile(self, class_name: str = "Answer") -> type[Any]:
         """Compile the builder into an executable Answer class.
 
         Args:
@@ -191,8 +172,8 @@ class AnswerBuilder:
 
         # Build spec dictionary for _generate_pydantic_class
         spec = {
-            "attributes": [attr.dict() for attr in self.attributes],
-            "field_descriptions": self.field_descriptions.copy()
+            "attributes": [attr.model_dump() for attr in self.attributes],
+            "field_descriptions": self.field_descriptions.copy(),
         }
 
         # Generate base class code
@@ -203,10 +184,7 @@ class AnswerBuilder:
             base_code = self._generate_minimal_class(class_name)
 
         # Modify code to include regex support if needed
-        if self.regex_patterns:
-            final_code = self._add_regex_support(base_code, class_name)
-        else:
-            final_code = base_code
+        final_code = self._add_regex_support(base_code, class_name) if self.regex_patterns else base_code
 
         # Execute the code to create the class
         local_ns: dict[str, Any] = {}
@@ -217,16 +195,18 @@ class AnswerBuilder:
 
         try:
             # Import the required modules
-            from karenina.schemas.answer_class import BaseAnswer
+            from typing import Literal, Union
+
             from pydantic import Field
-            from typing import List, Dict, Literal, Union
+
+            from karenina.schemas.answer_class import BaseAnswer
 
             # Set up globals with necessary imports
             globals_dict = {
                 "BaseAnswer": BaseAnswer,
                 "Field": Field,
-                "List": List,
-                "Dict": Dict,
+                "List": list,
+                "Dict": dict,
                 "Literal": Literal,
                 "Union": Union,
                 "__builtins__": __builtins__,
@@ -246,7 +226,7 @@ class AnswerBuilder:
         """Generate minimal Answer class when only regex patterns exist."""
         regex_dict = self._build_regex_dict()
 
-        return f'''class {class_name}(BaseAnswer):
+        return f"""class {class_name}(BaseAnswer):
     regex: dict = Field(default_factory=dict, description="Regex validation patterns")
 
     def model_post_init(self, __context):
@@ -255,11 +235,11 @@ class AnswerBuilder:
 
     def verify(self) -> bool:
         return True  # Only regex validation
-'''
+"""
 
     def _add_regex_support(self, base_code: str, class_name: str) -> str:
         """Add regex field and initialization to existing class code."""
-        lines = base_code.split('\n')
+        lines = base_code.split("\n")
         modified_lines = []
         in_class = False
         in_model_post_init = False
@@ -275,17 +255,23 @@ class AnswerBuilder:
                 continue
 
             # Add regex field after other Field definitions
-            if (in_class and not added_regex_field and
-                line.strip() and not line.startswith('    ') and
-                not line.strip().startswith('#')):
+            if (
+                in_class
+                and not added_regex_field
+                and line.strip()
+                and not line.startswith("    ")
+                and not line.strip().startswith("#")
+            ):
                 # We've left the field definitions area
-                modified_lines.append('    regex: dict = Field(default_factory=dict, description="Regex validation patterns")')
-                modified_lines.append('')
+                modified_lines.append(
+                    '    regex: dict = Field(default_factory=dict, description="Regex validation patterns")'
+                )
+                modified_lines.append("")
                 added_regex_field = True
 
             if "def model_post_init(self, __context):" in line:
                 in_model_post_init = True
-                model_post_init_indent = line[:len(line) - len(line.lstrip())]
+                model_post_init_indent = line[: len(line) - len(line.lstrip())]
                 modified_lines.append(line)
                 continue
 
@@ -302,11 +288,13 @@ class AnswerBuilder:
         if not added_regex_field:
             for i, line in enumerate(modified_lines):
                 if "def model_post_init(self, __context):" in line:
-                    modified_lines.insert(i, '    regex: dict = Field(default_factory=dict, description="Regex validation patterns")')
-                    modified_lines.insert(i+1, '')
+                    modified_lines.insert(
+                        i, '    regex: dict = Field(default_factory=dict, description="Regex validation patterns")'
+                    )
+                    modified_lines.insert(i + 1, "")
                     break
 
-        return '\n'.join(modified_lines)
+        return "\n".join(modified_lines)
 
     def _build_regex_dict(self) -> str:
         """Build the regex dictionary string for code generation."""
