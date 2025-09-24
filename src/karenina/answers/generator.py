@@ -13,7 +13,7 @@ reliable and standardized approach.
 import json
 from typing import TYPE_CHECKING, Any
 
-from langchain_core.output_parsers import PydanticOutputParser
+from langchain_core.output_parsers import BaseOutputParser, PydanticOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field, ValidationError, field_validator
 from tqdm import tqdm
@@ -74,7 +74,7 @@ class AttributeDescriptions(BaseModel):
     )
 
 
-class JSONOnlyOutputParser:
+class JSONOnlyOutputParser(BaseOutputParser[Any]):
     """Parser ensuring output is valid JSON before delegating to Pydantic parser."""
 
     def __init__(self, inner: PydanticOutputParser[Any]):
@@ -86,6 +86,11 @@ class JSONOnlyOutputParser:
         except json.JSONDecodeError as exc:
             raise ValueError("Model response is not valid JSON") from exc
         return self._inner.parse(text)
+
+    @property
+    def _type(self) -> str:
+        """Return the type of parser for LangChain compatibility."""
+        return "json_only_output_parser"
 
 
 # System prompts adapted from structured_generator.py
@@ -246,7 +251,9 @@ def _generate_with_retry(
                 if stage == "ground_truth":
                     system_prompt = GROUND_TRUTH_SYSTEM_PROMPT + error_context
                     user_template = GROUND_TRUTH_USER_PROMPT_TEMPLATE
-                    parser = JSONOnlyOutputParser(inner=PydanticOutputParser(pydantic_object=GroundTruthSpec))
+                    parser: BaseOutputParser[Any] = JSONOnlyOutputParser(
+                        inner=PydanticOutputParser(pydantic_object=GroundTruthSpec)
+                    )
                 else:
                     system_prompt = FIELD_DESCRIPTION_SYSTEM_PROMPT + error_context
                     user_template = FIELD_DESCRIPTION_USER_PROMPT_TEMPLATE

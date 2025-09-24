@@ -600,6 +600,12 @@ class VerificationResult(BaseModel):
     embedding_override_applied: bool = False  # Whether embedding check overrode the result
     embedding_model_used: str | None = None  # Name of the embedding model used
 
+    # Regex validation metadata
+    regex_validations_performed: bool = False  # Whether regex validation was attempted
+    regex_validation_results: dict[str, bool] | None = None  # Individual regex pattern results
+    regex_validation_details: dict[str, dict[str, Any]] | None = None  # Detailed regex match information
+    regex_overall_success: bool | None = None  # Overall regex validation result
+
 
 class VerificationJob(BaseModel):
     """Represents a verification job."""
