@@ -74,10 +74,10 @@ class AttributeDescriptions(BaseModel):
     )
 
 
-class JSONOnlyOutputParser(BaseOutputParser[Any]):
+class JSONOnlyOutputParser(BaseOutputParser):  # type: ignore
     """Parser ensuring output is valid JSON before delegating to Pydantic parser."""
 
-    def __init__(self, inner: PydanticOutputParser[Any]):
+    def __init__(self, inner: PydanticOutputParser):  # type: ignore
         self._inner = inner
 
     def parse(self, text: str) -> Any:
@@ -251,9 +251,7 @@ def _generate_with_retry(
                 if stage == "ground_truth":
                     system_prompt = GROUND_TRUTH_SYSTEM_PROMPT + error_context
                     user_template = GROUND_TRUTH_USER_PROMPT_TEMPLATE
-                    parser: BaseOutputParser[Any] = JSONOnlyOutputParser(
-                        inner=PydanticOutputParser(pydantic_object=GroundTruthSpec)
-                    )
+                    parser = JSONOnlyOutputParser(inner=PydanticOutputParser(pydantic_object=GroundTruthSpec))
                 else:
                     system_prompt = FIELD_DESCRIPTION_SYSTEM_PROMPT + error_context
                     user_template = FIELD_DESCRIPTION_USER_PROMPT_TEMPLATE

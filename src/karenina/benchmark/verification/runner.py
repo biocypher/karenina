@@ -261,6 +261,7 @@ def run_single_model_verification(
                 regex_validation_results=None,
                 regex_validation_details=None,
                 regex_overall_success=None,
+                regex_extraction_results=None,
             )
 
         # Step 1.5: Inject question ID into the Answer class
@@ -336,6 +337,7 @@ def run_single_model_verification(
                 regex_validation_results=None,
                 regex_validation_details=None,
                 regex_overall_success=None,
+                regex_extraction_results=None,
             )
 
         # Step 4: Initialize parsing model and parse response
@@ -380,6 +382,7 @@ def run_single_model_verification(
                 regex_validation_results=None,
                 regex_validation_details=None,
                 regex_overall_success=None,
+                regex_extraction_results=None,
             )
 
         # Extract ground truth if enabled
@@ -450,6 +453,7 @@ def run_single_model_verification(
                 regex_validation_results=None,
                 regex_validation_details=None,
                 regex_overall_success=None,
+                regex_extraction_results=None,
             )
 
         # Step 5: Run verification
@@ -459,6 +463,12 @@ def run_single_model_verification(
 
             # Step 5.1: Run regex verification on the raw trace
             regex_verification_results = parsed_answer.verify_regex(raw_llm_response)
+
+            # Extract regex results for display (what the regex actually matched)
+            regex_extraction_results = {}
+            if regex_verification_results["details"]:
+                for field_name, details in regex_verification_results["details"].items():
+                    regex_extraction_results[field_name] = details.get("matches_found", [])
 
             # Combine field and regex verification results
             verification_result = field_verification_result and regex_verification_results["success"]
@@ -519,6 +529,7 @@ def run_single_model_verification(
                 regex_validation_results=None,
                 regex_validation_details=None,
                 regex_overall_success=None,
+                regex_extraction_results=None,
             )
 
         # Step 6: Run rubric evaluation (optional)
@@ -570,6 +581,7 @@ def run_single_model_verification(
             regex_validation_results=regex_verification_results["results"],
             regex_validation_details=regex_verification_results["details"],
             regex_overall_success=regex_verification_results["success"],
+            regex_extraction_results=regex_extraction_results,
         )
 
     except Exception as e:

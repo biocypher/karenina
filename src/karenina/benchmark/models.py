@@ -605,6 +605,7 @@ class VerificationResult(BaseModel):
     regex_validation_results: dict[str, bool] | None = None  # Individual regex pattern results
     regex_validation_details: dict[str, dict[str, Any]] | None = None  # Detailed regex match information
     regex_overall_success: bool | None = None  # Overall regex validation result
+    regex_extraction_results: dict[str, Any] | None = None  # What the regex patterns actually extracted
 
 
 class VerificationJob(BaseModel):
