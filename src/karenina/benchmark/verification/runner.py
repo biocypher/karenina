@@ -437,8 +437,14 @@ def run_single_model_verification(
         format_instructions = parser.get_format_instructions()
         combined_system_prompt = _system_prompt_compose(parsing_model.system_prompt, format_instructions, ground_truth)
 
-        # Construct the parsing prompt (user message)
-        parsing_prompt = f"""<response_to_parse>
+        # Construct the parsing prompt (user message) with question context
+        parsing_prompt = f"""<original_question>
+Your task is to parse an answer given to the question reported in this section. Use the question to contextualize the info from the schema fields below:
+
+Original Question: {question_text}
+</original_question>
+
+<response_to_parse>
 {raw_llm_response}
 </response_to_parse>"""
 
