@@ -6,6 +6,7 @@ validation for answer structures.
 """
 
 import inspect
+import re
 from typing import Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict
@@ -124,6 +125,116 @@ class BaseAnswer(BaseModel):
             question_id: The unique identifier for the question this answer relates to.
         """
         self.id = question_id
+
+    def verify_regex(self, raw_trace: str) -> dict[str, Any]:
+        """Verify regex patterns against the raw LLM response trace.
+
+        Args:
+            raw_trace: The complete raw response text from the LLM
+
+        Returns:
+            Dictionary containing regex validation results with keys:
+            - 'success': bool - True if all regex patterns matched successfully
+            - 'results': dict - Individual results for each regex pattern
+            - 'details': dict - Detailed match information for debugging
+        """
+        if not hasattr(self, "regex") or not self.regex:
+            return {"success": True, "results": {}, "details": {}}
+
+        results = {}
+        details = {}
+        all_success = True
+
+        for name, spec in self.regex.items():
+            pattern = spec.get("pattern", "")
+            expected = spec.get("expected")
+            match_type = spec.get("match_type", "exact")
+
+            try:
+                result = self._verify_single_regex_pattern(raw_trace, pattern, expected, match_type)
+                results[name] = result["success"]
+                details[name] = result["details"]
+
+                if not result["success"]:
+                    all_success = False
+
+            except Exception as e:
+                results[name] = False
+                details[name] = {"error": str(e), "pattern": pattern, "expected": expected, "match_type": match_type}
+                all_success = False
+
+        return {"success": all_success, "results": results, "details": details}
+
+    def _verify_single_regex_pattern(self, text: str, pattern: str, expected: Any, match_type: str) -> dict[str, Any]:
+        """Verify a single regex pattern against text.
+
+        Args:
+            text: Text to search in
+            pattern: Regex pattern to apply
+            expected: Expected result (varies by match_type)
+            match_type: Type of matching - 'exact', 'contains', 'count', 'all'
+
+        Returns:
+            Dictionary with 'success' boolean and 'details' dict
+        """
+        matches = re.findall(pattern, text)
+
+        details = {
+            "pattern": pattern,
+            "expected": expected,
+            "match_type": match_type,
+            "matches_found": matches,
+            "match_count": len(matches),
+        }
+
+        if match_type == "exact":
+            # Expected is a single string that should match exactly
+            if len(matches) == 1 and matches[0] == expected:
+                details["success_reason"] = "Single exact match found"
+                return {"success": True, "details": details}
+            else:
+                details["failure_reason"] = (
+                    f"Expected exactly one match of '{expected}', got {len(matches)} matches: {matches}"
+                )
+                return {"success": False, "details": details}
+
+        elif match_type == "contains":
+            # Expected is a string that should be found somewhere
+            if expected in matches:
+                details["success_reason"] = f"Expected pattern '{expected}' found in matches"
+                return {"success": True, "details": details}
+            else:
+                details["failure_reason"] = f"Expected pattern '{expected}' not found in matches: {matches}"
+                return {"success": False, "details": details}
+
+        elif match_type == "count":
+            # Expected is a number - count of matches should equal this
+            if isinstance(expected, int) and len(matches) == expected:
+                details["success_reason"] = f"Found exactly {expected} matches as expected"
+                return {"success": True, "details": details}
+            else:
+                details["failure_reason"] = f"Expected {expected} matches, got {len(matches)}"
+                return {"success": False, "details": details}
+
+        elif match_type == "all":
+            # Expected is a list - all items should be present in matches
+            if isinstance(expected, list):
+                expected_set = set(expected)
+                matches_set = set(matches)
+                if expected_set.issubset(matches_set):
+                    details["success_reason"] = "All expected items found in matches"
+                    return {"success": True, "details": details}
+                else:
+                    missing = expected_set - matches_set
+                    details["failure_reason"] = f"Missing expected items: {list(missing)}"
+                    return {"success": False, "details": details}
+            else:
+                details["failure_reason"] = f"Expected list for 'all' match type, got {type(expected)}"
+                return {"success": False, "details": details}
+
+        else:
+            details["failure_reason"] = f"Unknown match_type: {match_type}"
+            return {"success": False, "details": details}
 
 
 def capture_answer_source(answer_class: type) -> type:

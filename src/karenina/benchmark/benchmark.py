@@ -18,7 +18,6 @@ if TYPE_CHECKING:
 
 from ..answers.generator import generate_answer_template, load_answer_templates_from_json
 from ..schemas.rubric_class import ManualRubricTrait, Rubric, RubricTrait
-from ..utils.code_parser import extract_and_combine_codeblocks
 from .core import (
     BenchmarkBase,
     ExportManager,
@@ -348,7 +347,6 @@ class Benchmark:
         model: str = "gemini-2.0-flash",
         model_provider: str = "google_genai",
         temperature: float = 0,
-        custom_system_prompt: str | None = None,
         interface: str = "langchain",
         force_regenerate: bool = False,
     ) -> dict[str, Any]:
@@ -390,18 +388,17 @@ class Benchmark:
             raw_answer = question_data.get("raw_answer", "")
 
             # Generate template using the generator function
-            raw_template_response = generate_answer_template(
+            template_code = generate_answer_template(
                 question=question_text,
                 raw_answer=raw_answer,
                 model=model,
                 model_provider=model_provider,
                 temperature=temperature,
-                custom_system_prompt=custom_system_prompt,
                 interface=interface,
             )
 
-            # Extract code blocks from the response
-            template_code = extract_and_combine_codeblocks(raw_template_response)
+            # Template code is now returned directly from the generator
+            # No need to extract code blocks as the new generator returns ready-to-use code
 
             # If no code blocks found, return error
             if not template_code.strip():
@@ -409,7 +406,7 @@ class Benchmark:
                     "success": False,
                     "template_code": "",
                     "error": "No valid code blocks found in LLM response",
-                    "raw_response": raw_template_response,
+                    "raw_response": template_code,
                     "skipped": False,
                 }
 
@@ -421,7 +418,7 @@ class Benchmark:
                 "success": True,
                 "template_code": template_code,
                 "error": error_msg,
-                "raw_response": raw_template_response,
+                "raw_response": template_code,
                 "skipped": False,
             }
 
@@ -440,7 +437,6 @@ class Benchmark:
         model: str = "gemini-2.0-flash",
         model_provider: str = "google_genai",
         temperature: float = 0,
-        custom_system_prompt: str | None = None,
         interface: str = "langchain",
         force_regenerate: bool = False,
         progress_callback: Callable[[float, str], None] | None = None,
@@ -486,7 +482,6 @@ class Benchmark:
                 model=model,
                 model_provider=model_provider,
                 temperature=temperature,
-                custom_system_prompt=custom_system_prompt,
                 interface=interface,
                 force_regenerate=force_regenerate,
             )
@@ -503,7 +498,6 @@ class Benchmark:
         model: str = "gemini-2.0-flash",
         model_provider: str = "google_genai",
         temperature: float = 0,
-        custom_system_prompt: str | None = None,
         interface: str = "langchain",
         force_regenerate: bool = False,
         progress_callback: Callable[[float, str], None] | None = None,
@@ -540,7 +534,6 @@ class Benchmark:
             model=model,
             model_provider=model_provider,
             temperature=temperature,
-            custom_system_prompt=custom_system_prompt,
             interface=interface,
             force_regenerate=force_regenerate,
             progress_callback=progress_callback,
