@@ -363,6 +363,7 @@ class ModelConfig(BaseModel):
     system_prompt: str
     max_retries: int = 2  # Optional max retries for template generation
     mcp_urls_dict: dict[str, str] | None = None  # Optional MCP server URLs
+    mcp_tool_filter: list[str] | None = None  # Optional list of MCP tools to include
 
 
 class VerificationConfig(BaseModel):

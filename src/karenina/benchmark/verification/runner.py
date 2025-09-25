@@ -286,6 +286,7 @@ def run_single_model_verification(
                 interface=answering_model.interface,
                 question_hash=question_id,
                 mcp_urls_dict=answering_model.mcp_urls_dict,
+                mcp_tool_filter=answering_model.mcp_tool_filter,
             )
         else:
             answering_llm = init_chat_model_unified(
@@ -294,6 +295,7 @@ def run_single_model_verification(
                 temperature=answering_model.temperature,
                 interface=answering_model.interface,
                 mcp_urls_dict=answering_model.mcp_urls_dict,
+                mcp_tool_filter=answering_model.mcp_tool_filter,
             )
 
         # Step 3: Get LLM response

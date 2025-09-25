@@ -69,12 +69,14 @@ class ChatSession:
         provider: str,
         temperature: float = 0.7,
         mcp_urls_dict: dict[str, str] | None = None,
+        mcp_tool_filter: list[str] | None = None,
     ):
         self.session_id = session_id
         self.model = model
         self.provider = provider
         self.temperature = temperature
         self.mcp_urls_dict = mcp_urls_dict
+        self.mcp_tool_filter = mcp_tool_filter
         self.messages: list[BaseMessage] = []
         self.llm = None
         self.is_agent = False  # Track if LLM is actually a LangGraph agent
@@ -90,6 +92,7 @@ class ChatSession:
                 interface="langchain",
                 temperature=self.temperature,
                 mcp_urls_dict=self.mcp_urls_dict,
+                mcp_tool_filter=self.mcp_tool_filter,
             )
             # Check if we got an agent by looking for 'invoke' vs 'stream' methods
             # Agents typically have additional methods like 'stream' for state management
@@ -139,6 +142,7 @@ def init_chat_model_unified(
     interface: str = "langchain",
     question_hash: str | None = None,
     mcp_urls_dict: dict[str, str] | None = None,
+    mcp_tool_filter: list[str] | None = None,
     **kwargs: Any,
 ) -> Any:
     """Initialize a chat model using the unified interface.
@@ -159,6 +163,9 @@ def init_chat_model_unified(
                       When provided, creates a LangGraph agent with MCP tools.
                       Keys are tool names, values are server URLs.
                       Not supported with manual interface.
+        mcp_tool_filter: Optional list of tool names to include from MCP servers.
+                        If provided, only tools with names in this list will be used.
+                        Ignored if mcp_urls_dict is None.
         **kwargs: Additional keyword arguments passed to the underlying model
                  initialization (e.g., temperature, max_tokens, api_key)
 
@@ -180,6 +187,11 @@ def init_chat_model_unified(
         Initialize with MCP tools:
         >>> mcp_urls = {"biocontext": "https://mcp.biocontext.ai/mcp/"}
         >>> agent = init_chat_model_unified("gpt-4.1-mini", "openai", mcp_urls_dict=mcp_urls)
+
+        Initialize with filtered MCP tools:
+        >>> mcp_urls = {"biocontext": "https://mcp.biocontext.ai/mcp/"}
+        >>> tools_filter = ["search_proteins", "get_interactions"]
+        >>> agent = init_chat_model_unified("gpt-4.1-mini", "openai", mcp_urls_dict=mcp_urls, mcp_tool_filter=tools_filter)
 
         Initialize with custom temperature:
         >>> model = init_chat_model_unified("claude-3-sonnet", "anthropic", temperature=0.2)
@@ -220,7 +232,7 @@ def init_chat_model_unified(
 
     try:
         # Get MCP client and tools
-        _, tools = sync_create_mcp_client_and_tools(mcp_urls_dict)
+        _, tools = sync_create_mcp_client_and_tools(mcp_urls_dict, mcp_tool_filter)
 
         # Create React agent with base model and MCP tools
         agent = create_react_agent(base_model, tools)
@@ -239,6 +251,7 @@ def call_model(
     system_message: str | None = None,
     temperature: float = 0.7,
     mcp_urls_dict: dict[str, str] | None = None,
+    mcp_tool_filter: list[str] | None = None,
 ) -> ChatResponse:
     """
     Call a language model and return the response, supporting conversational context.
@@ -251,6 +264,7 @@ def call_model(
         system_message: Optional system message to set context
         temperature: Model temperature for response generation
         mcp_urls_dict: Optional dictionary mapping tool names to MCP server URLs
+        mcp_tool_filter: Optional list of tool names to include from MCP servers
 
     Returns:
         ChatResponse with the model's response and session information
@@ -263,7 +277,9 @@ def call_model(
     # Create new session or get existing one
     if session_id is None or session_id not in chat_sessions:
         session_id = str(uuid.uuid4())
-        chat_sessions[session_id] = ChatSession(session_id, model, provider, temperature, mcp_urls_dict)
+        chat_sessions[session_id] = ChatSession(
+            session_id, model, provider, temperature, mcp_urls_dict, mcp_tool_filter
+        )
 
     session = chat_sessions[session_id]
 

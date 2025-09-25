@@ -322,6 +322,172 @@ class TestVerificationRunnerWithMCP:
         assert parsing_model.mcp_urls_dict is None
 
 
+class TestToolFiltering:
+    """Test MCP tool filtering functionality."""
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        self.mcp_urls = {"biocontext": "https://mcp.biocontext.ai/mcp/"}
+        self.tool_filter = ["search_proteins", "get_interactions"]
+
+    def test_create_mcp_client_with_tool_filter(self):
+        """Test MCP client creation with tool filtering."""
+        # Mock tools with different names
+        mock_tool1 = Mock()
+        mock_tool1.name = "search_proteins"
+        mock_tool2 = Mock()
+        mock_tool2.name = "get_interactions"
+        mock_tool3 = Mock()
+        mock_tool3.name = "unwanted_tool"
+        all_tools = [mock_tool1, mock_tool2, mock_tool3]
+
+        with patch("karenina.llm.mcp_utils.create_mcp_client_and_tools"), patch("asyncio.run") as mock_run:
+            mock_client = Mock()
+            # Simulate filtering inside the async function
+            filtered_tools = [tool for tool in all_tools if tool.name in self.tool_filter]
+            mock_run.return_value = (mock_client, filtered_tools)
+
+            client, tools = sync_create_mcp_client_and_tools(self.mcp_urls, self.tool_filter)
+
+            # Should only return filtered tools
+            assert len(tools) == 2
+            tool_names = [tool.name for tool in tools]
+            assert "search_proteins" in tool_names
+            assert "get_interactions" in tool_names
+            assert "unwanted_tool" not in tool_names
+
+    def test_init_chat_model_unified_with_tool_filter(self):
+        """Test init_chat_model_unified with tool filtering."""
+        mock_base_model = Mock()
+        mock_agent = Mock()
+
+        # Mock filtered tools
+        mock_tool1 = Mock()
+        mock_tool1.name = "search_proteins"
+        mock_tool2 = Mock()
+        mock_tool2.name = "get_interactions"
+        filtered_tools = [mock_tool1, mock_tool2]
+
+        with (
+            patch("karenina.llm.interface.init_chat_model", return_value=mock_base_model),
+            patch(
+                "karenina.llm.mcp_utils.sync_create_mcp_client_and_tools", return_value=(Mock(), filtered_tools)
+            ) as mock_sync,
+            patch("langgraph.prebuilt.create_react_agent", return_value=mock_agent),
+        ):
+            result = init_chat_model_unified(
+                model="gpt-4",
+                provider="openai",
+                interface="langchain",
+                mcp_urls_dict=self.mcp_urls,
+                mcp_tool_filter=self.tool_filter,
+            )
+
+            assert result == mock_agent
+            # Verify sync_create_mcp_client_and_tools was called with tool filter
+            mock_sync.assert_called_once_with(self.mcp_urls, self.tool_filter)
+
+    def test_model_config_with_tool_filter(self):
+        """Test ModelConfig with tool filtering."""
+        config = ModelConfig(
+            id="test-model",
+            model_provider="openai",
+            model_name="gpt-4",
+            system_prompt="You are a helpful assistant.",
+            mcp_urls_dict=self.mcp_urls,
+            mcp_tool_filter=self.tool_filter,
+        )
+
+        assert config.mcp_tool_filter == self.tool_filter
+        assert config.mcp_urls_dict == self.mcp_urls
+
+    def test_chat_session_with_tool_filter(self):
+        """Test ChatSession with tool filtering."""
+        session = ChatSession(
+            session_id="test-session",
+            model="gpt-4",
+            provider="openai",
+            mcp_urls_dict=self.mcp_urls,
+            mcp_tool_filter=self.tool_filter,
+        )
+
+        assert session.mcp_tool_filter == self.tool_filter
+        assert session.mcp_urls_dict == self.mcp_urls
+
+    def test_call_model_with_tool_filter(self):
+        """Test call_model function with tool filtering."""
+        from unittest.mock import AsyncMock
+
+        # Create mock agent
+        mock_agent = Mock()
+        mock_response = {"messages": [AIMessage(content="Filtered agent response")]}
+        async_mock = AsyncMock(return_value=mock_response)
+        mock_agent.ainvoke = async_mock
+
+        with patch("karenina.llm.interface.init_chat_model_unified", return_value=mock_agent):
+            response = call_model(
+                model="gpt-4",
+                provider="openai",
+                message="Test message",
+                mcp_urls_dict=self.mcp_urls,
+                mcp_tool_filter=self.tool_filter,
+            )
+
+            # Should contain the agent response content
+            assert "Filtered agent response" in response.message
+            assert async_mock.called
+
+    def test_tool_filter_none_returns_all_tools(self):
+        """Test that None tool_filter returns all tools."""
+        mock_tool1 = Mock()
+        mock_tool1.name = "tool1"
+        mock_tool2 = Mock()
+        mock_tool2.name = "tool2"
+        mock_tool3 = Mock()
+        mock_tool3.name = "tool3"
+        all_tools = [mock_tool1, mock_tool2, mock_tool3]
+
+        with patch("karenina.llm.mcp_utils.create_mcp_client_and_tools"), patch("asyncio.run") as mock_run:
+            mock_client = Mock()
+            mock_run.return_value = (mock_client, all_tools)
+
+            client, tools = sync_create_mcp_client_and_tools(self.mcp_urls, None)
+
+            # Should return all tools when filter is None
+            assert len(tools) == 3
+            assert tools == all_tools
+
+    def test_tool_filter_empty_list_returns_no_tools(self):
+        """Test that empty tool_filter list returns no tools."""
+        mock_tool1 = Mock()
+        mock_tool1.name = "tool1"
+
+        with patch("karenina.llm.mcp_utils.create_mcp_client_and_tools"), patch("asyncio.run") as mock_run:
+            mock_client = Mock()
+            # Simulate empty filter behavior
+            mock_run.return_value = (mock_client, [])
+
+            client, tools = sync_create_mcp_client_and_tools(self.mcp_urls, [])
+
+            # Should return no tools when filter is empty
+            assert len(tools) == 0
+
+    def test_tool_filter_nonexistent_tools(self):
+        """Test tool filtering with nonexistent tool names."""
+        mock_tool1 = Mock()
+        mock_tool1.name = "existing_tool"
+
+        with patch("karenina.llm.mcp_utils.create_mcp_client_and_tools"), patch("asyncio.run") as mock_run:
+            mock_client = Mock()
+            # Simulate filtering with nonexistent tool names
+            mock_run.return_value = (mock_client, [])
+
+            client, tools = sync_create_mcp_client_and_tools(self.mcp_urls, ["nonexistent_tool"])
+
+            # Should return no tools when none match the filter
+            assert len(tools) == 0
+
+
 class TestIntegrationScenarios:
     """Integration tests for common MCP scenarios."""
 
@@ -350,6 +516,30 @@ class TestIntegrationScenarios:
         # Should have multiple formatted sections from pretty_print
         lines = harmonized.split("\n")
         assert len(lines) > 1  # Multiple sections due to pretty_print formatting
+
+    def test_biocontext_with_tool_filtering_scenario(self):
+        """Test biocontext.ai scenario with tool filtering."""
+        mcp_urls = {"biocontext": "https://mcp.biocontext.ai/mcp/"}
+        tool_filter = ["search_proteins", "get_interactions"]
+
+        # Test that ModelConfig accepts tool filtering
+        answering_model = ModelConfig(
+            id="biocontext-filtered",
+            model_provider="openai",
+            model_name="gpt-4",
+            system_prompt="Use only protein search and interaction tools.",
+            mcp_urls_dict=mcp_urls,
+            mcp_tool_filter=tool_filter,
+        )
+
+        parsing_model = ModelConfig(
+            id="parsing", model_provider="openai", model_name="gpt-4", system_prompt="Parse the answer."
+        )
+
+        # Verify configuration
+        assert answering_model.mcp_tool_filter == tool_filter
+        assert answering_model.mcp_urls_dict == mcp_urls
+        assert parsing_model.mcp_tool_filter is None
 
     def teardown_method(self):
         """Clean up after tests."""

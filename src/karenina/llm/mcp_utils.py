@@ -139,18 +139,24 @@ def _extract_agent_trace(messages: list[Any]) -> str:
     return "\n".join(trace_parts) if trace_parts else ""
 
 
-async def create_mcp_client_and_tools(mcp_urls_dict: dict[str, str]) -> tuple[Any, list[Any]]:
+async def create_mcp_client_and_tools(
+    mcp_urls_dict: dict[str, str], tool_filter: list[str] | None = None
+) -> tuple[Any, list[Any]]:
     """
     Create an MCP client and fetch tools from the specified servers.
 
     Args:
         mcp_urls_dict: Dictionary mapping tool names to MCP server URLs.
                       Keys are tool names, values are server URLs.
+        tool_filter: Optional list of tool names to include. If provided,
+                    only tools with names in this list will be returned.
+                    Converted to set internally for efficiency.
 
     Returns:
         Tuple of (client, tools) where:
         - client: MultiServerMCPClient instance
-        - tools: List of LangChain-compatible tools fetched from servers
+        - tools: List of LangChain-compatible tools fetched from servers,
+                 optionally filtered by tool_filter
 
     Raises:
         ImportError: If langchain-mcp-adapters is not installed
@@ -160,6 +166,10 @@ async def create_mcp_client_and_tools(mcp_urls_dict: dict[str, str]) -> tuple[An
         >>> mcp_urls = {"biocontext": "https://mcp.biocontext.ai/mcp/"}
         >>> client, tools = await create_mcp_client_and_tools(mcp_urls)
         >>> print(f"Loaded {len(tools)} tools")
+
+        >>> # Filter to specific tools
+        >>> client, tools = await create_mcp_client_and_tools(mcp_urls, ["search_proteins", "get_interactions"])
+        >>> print(f"Loaded {len(tools)} filtered tools")
     """
     try:
         from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -180,6 +190,17 @@ async def create_mcp_client_and_tools(mcp_urls_dict: dict[str, str]) -> tuple[An
         # Add timeout to prevent hanging
         tools = await asyncio.wait_for(client.get_tools(), timeout=30.0)
 
+        # Filter tools if tool_filter is provided
+        if tool_filter is not None:
+            allowed_tools = set(tool_filter)
+            filtered_tools = []
+            for tool in tools:
+                # Check if tool has a name attribute and if it's in the allowed set
+                tool_name: str | None = getattr(tool, "name", None)
+                if tool_name and tool_name in allowed_tools:
+                    filtered_tools.append(tool)
+            tools = filtered_tools
+
         return client, tools
 
     except TimeoutError as e:
@@ -190,7 +211,9 @@ async def create_mcp_client_and_tools(mcp_urls_dict: dict[str, str]) -> tuple[An
         raise Exception(f"Failed to create MCP client or fetch tools: {e}") from e
 
 
-def sync_create_mcp_client_and_tools(mcp_urls_dict: dict[str, str]) -> tuple[Any, list[Any]]:
+def sync_create_mcp_client_and_tools(
+    mcp_urls_dict: dict[str, str], tool_filter: list[str] | None = None
+) -> tuple[Any, list[Any]]:
     """
     Synchronous wrapper for creating MCP client and fetching tools.
 
@@ -199,6 +222,8 @@ def sync_create_mcp_client_and_tools(mcp_urls_dict: dict[str, str]) -> tuple[Any
 
     Args:
         mcp_urls_dict: Dictionary mapping tool names to MCP server URLs
+        tool_filter: Optional list of tool names to include. If provided,
+                    only tools with names in this list will be returned.
 
     Returns:
         Tuple of (client, tools) as in create_mcp_client_and_tools
@@ -214,7 +239,7 @@ def sync_create_mcp_client_and_tools(mcp_urls_dict: dict[str, str]) -> tuple[Any
         if current_loop:
             # We're in an async context, need to run in a separate thread
             def run_in_thread() -> tuple[Any, list[Any]]:
-                return asyncio.run(create_mcp_client_and_tools(mcp_urls_dict))
+                return asyncio.run(create_mcp_client_and_tools(mcp_urls_dict, tool_filter))
 
             result: list[tuple[Any, list[Any]] | None] = [None]
             exception: list[Exception | None] = [None]
@@ -244,4 +269,4 @@ def sync_create_mcp_client_and_tools(mcp_urls_dict: dict[str, str]) -> tuple[Any
         pass
 
     # Create new event loop and run the async function
-    return asyncio.run(create_mcp_client_and_tools(mcp_urls_dict))
+    return asyncio.run(create_mcp_client_and_tools(mcp_urls_dict, tool_filter))
