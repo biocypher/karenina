@@ -362,6 +362,7 @@ class ModelConfig(BaseModel):
     interface: Literal["langchain", "openrouter", "manual"] = "langchain"
     system_prompt: str
     max_retries: int = 2  # Optional max retries for template generation
+    mcp_urls_dict: dict[str, str] | None = None  # Optional MCP server URLs
 
 
 class VerificationConfig(BaseModel):
