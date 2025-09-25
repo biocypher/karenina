@@ -125,6 +125,7 @@ Thumbs.db
 
 # Test monitoring data
 .testmondata
+.testmondata-*
 
 #internal instructions
 RELEASE.md

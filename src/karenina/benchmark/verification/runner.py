@@ -49,8 +49,8 @@ def _split_parsed_response(parsed_answer: Any) -> tuple[dict[str, Any] | None, d
     # Extract ground truth from 'correct' field
     parsed_gt_response = parsed_dict.get("correct")
 
-    # Create LLM response by excluding 'id' and 'correct'
-    parsed_llm_response = {k: v for k, v in parsed_dict.items() if k not in ("id", "correct")}
+    # Create LLM response by excluding 'id', 'correct', and 'regex' (configuration fields)
+    parsed_llm_response = {k: v for k, v in parsed_dict.items() if k not in ("id", "correct", "regex")}
 
     return parsed_gt_response, parsed_llm_response
 
@@ -256,6 +256,12 @@ def run_single_model_verification(
                 embedding_similarity_score=None,
                 embedding_override_applied=False,
                 embedding_model_used=None,
+                # Regex validation metadata (defaults for error cases)
+                regex_validations_performed=False,
+                regex_validation_results=None,
+                regex_validation_details=None,
+                regex_overall_success=None,
+                regex_extraction_results=None,
             )
 
         # Step 1.5: Inject question ID into the Answer class
@@ -326,6 +332,12 @@ def run_single_model_verification(
                 embedding_similarity_score=None,
                 embedding_override_applied=False,
                 embedding_model_used=None,
+                # Regex validation metadata (defaults for error cases)
+                regex_validations_performed=False,
+                regex_validation_results=None,
+                regex_validation_details=None,
+                regex_overall_success=None,
+                regex_extraction_results=None,
             )
 
         # Step 4: Initialize parsing model and parse response
@@ -365,6 +377,12 @@ def run_single_model_verification(
                 embedding_similarity_score=None,
                 embedding_override_applied=False,
                 embedding_model_used=None,
+                # Regex validation metadata (defaults for error cases)
+                regex_validations_performed=False,
+                regex_validation_results=None,
+                regex_validation_details=None,
+                regex_overall_success=None,
+                regex_extraction_results=None,
             )
 
         # Extract ground truth if enabled
@@ -430,11 +448,30 @@ def run_single_model_verification(
                 embedding_similarity_score=None,
                 embedding_override_applied=False,
                 embedding_model_used=None,
+                # Regex validation metadata (defaults for error cases)
+                regex_validations_performed=False,
+                regex_validation_results=None,
+                regex_validation_details=None,
+                regex_overall_success=None,
+                regex_extraction_results=None,
             )
 
         # Step 5: Run verification
         try:
-            verification_result = parsed_answer.verify()
+            # Standard field verification
+            field_verification_result = parsed_answer.verify()
+
+            # Step 5.1: Run regex verification on the raw trace
+            regex_verification_results = parsed_answer.verify_regex(raw_llm_response)
+
+            # Extract regex results for display (what the regex actually matched)
+            regex_extraction_results = {}
+            if regex_verification_results["details"]:
+                for field_name, details in regex_verification_results["details"].items():
+                    regex_extraction_results[field_name] = details.get("matches_found", [])
+
+            # Combine field and regex verification results
+            verification_result = field_verification_result and regex_verification_results["success"]
 
             # Step 5.5: Embedding check fallback if verification failed
             embedding_check_performed = False
@@ -442,7 +479,7 @@ def run_single_model_verification(
             embedding_model_used = None
             embedding_override_applied = False
 
-            if not verification_result:
+            if not field_verification_result:  # Only apply embedding check to field verification failures
                 # Extract ground truth and LLM response for embedding check
                 parsed_gt_response, parsed_llm_response = _split_parsed_response(parsed_answer)
 
@@ -456,7 +493,9 @@ def run_single_model_verification(
                 embedding_model_used = model_name
 
                 if should_override:
-                    verification_result = True
+                    # If embedding check overrides field verification, recalculate overall result
+                    field_verification_result = True
+                    verification_result = True and regex_verification_results["success"]
                     embedding_override_applied = True
 
         except Exception as e:
@@ -485,6 +524,12 @@ def run_single_model_verification(
                 embedding_similarity_score=None,
                 embedding_override_applied=False,
                 embedding_model_used=None,
+                # Regex validation metadata (defaults for error cases)
+                regex_validations_performed=False,
+                regex_validation_results=None,
+                regex_validation_details=None,
+                regex_overall_success=None,
+                regex_extraction_results=None,
             )
 
         # Step 6: Run rubric evaluation (optional)
@@ -531,6 +576,12 @@ def run_single_model_verification(
             embedding_similarity_score=embedding_similarity_score,
             embedding_override_applied=embedding_override_applied,
             embedding_model_used=embedding_model_used,
+            # Regex validation metadata
+            regex_validations_performed=bool(regex_verification_results["results"]),
+            regex_validation_results=regex_verification_results["results"],
+            regex_validation_details=regex_verification_results["details"],
+            regex_overall_success=regex_verification_results["success"],
+            regex_extraction_results=regex_extraction_results,
         )
 
     except Exception as e:
@@ -554,4 +605,14 @@ def run_single_model_verification(
             job_id=job_id,
             answering_replicate=answering_replicate,
             parsing_replicate=parsing_replicate,
+            # Embedding check metadata (defaults for error cases)
+            embedding_check_performed=False,
+            embedding_similarity_score=None,
+            embedding_override_applied=False,
+            embedding_model_used=None,
+            # Regex validation metadata (defaults for error cases)
+            regex_validations_performed=False,
+            regex_validation_results=None,
+            regex_validation_details=None,
+            regex_overall_success=None,
         )

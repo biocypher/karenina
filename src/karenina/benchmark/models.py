@@ -361,6 +361,7 @@ class ModelConfig(BaseModel):
     temperature: float = 0.1
     interface: Literal["langchain", "openrouter", "manual"] = "langchain"
     system_prompt: str
+    max_retries: int = 2  # Optional max retries for template generation
 
 
 class VerificationConfig(BaseModel):
@@ -598,6 +599,13 @@ class VerificationResult(BaseModel):
     embedding_similarity_score: float | None = None  # Similarity score (0.0 to 1.0)
     embedding_override_applied: bool = False  # Whether embedding check overrode the result
     embedding_model_used: str | None = None  # Name of the embedding model used
+
+    # Regex validation metadata
+    regex_validations_performed: bool = False  # Whether regex validation was attempted
+    regex_validation_results: dict[str, bool] | None = None  # Individual regex pattern results
+    regex_validation_details: dict[str, dict[str, Any]] | None = None  # Detailed regex match information
+    regex_overall_success: bool | None = None  # Overall regex validation result
+    regex_extraction_results: dict[str, Any] | None = None  # What the regex patterns actually extracted
 
 
 class VerificationJob(BaseModel):
