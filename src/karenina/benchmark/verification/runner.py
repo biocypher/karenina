@@ -285,6 +285,8 @@ def run_single_model_verification(
                 temperature=answering_model.temperature,
                 interface=answering_model.interface,
                 question_hash=question_id,
+                mcp_urls_dict=answering_model.mcp_urls_dict,
+                mcp_tool_filter=answering_model.mcp_tool_filter,
             )
         else:
             answering_llm = init_chat_model_unified(
@@ -292,6 +294,8 @@ def run_single_model_verification(
                 provider=answering_model.model_provider,
                 temperature=answering_model.temperature,
                 interface=answering_model.interface,
+                mcp_urls_dict=answering_model.mcp_urls_dict,
+                mcp_tool_filter=answering_model.mcp_tool_filter,
             )
 
         # Step 3: Get LLM response
@@ -304,8 +308,39 @@ def run_single_model_verification(
         messages.append(HumanMessage(content=constructed_prompt))
 
         try:
-            response = answering_llm.invoke(messages)
-            raw_llm_response = response.content if hasattr(response, "content") else str(response)
+            # Handle agent vs regular LLM invocation
+            # Check if this is an agent by looking for MCP URLs in the answering model
+            if answering_model.mcp_urls_dict is not None:
+                # LangGraph agents with MCP tools need async invocation
+                import asyncio
+
+                async def invoke_agent_async() -> Any:
+                    return await answering_llm.ainvoke({"messages": messages})
+
+                # Run the async invocation in the event loop
+                try:
+                    asyncio.get_running_loop()
+                    # We're in an async context, use ThreadPoolExecutor
+                    import concurrent.futures
+
+                    def run_in_thread() -> Any:
+                        return asyncio.run(invoke_agent_async())
+
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(run_in_thread)
+                        response = future.result(timeout=120)  # 2 minute timeout for verification
+
+                except RuntimeError:
+                    # No event loop running, safe to use asyncio.run
+                    response = asyncio.run(invoke_agent_async())
+
+                from ...llm.mcp_utils import harmonize_agent_response
+
+                raw_llm_response = harmonize_agent_response(response)
+            else:
+                # Regular LLMs expect the messages list directly
+                response = answering_llm.invoke(messages)
+                raw_llm_response = response.content if hasattr(response, "content") else str(response)
         except Exception as e:
             return VerificationResult(
                 question_id=question_id,
@@ -402,8 +437,14 @@ def run_single_model_verification(
         format_instructions = parser.get_format_instructions()
         combined_system_prompt = _system_prompt_compose(parsing_model.system_prompt, format_instructions, ground_truth)
 
-        # Construct the parsing prompt (user message)
-        parsing_prompt = f"""<response_to_parse>
+        # Construct the parsing prompt (user message) with question context
+        parsing_prompt = f"""<original_question>
+Your task is to parse an answer given to the question reported in this section. Use the question to contextualize the info from the schema fields below:
+
+Original Question: {question_text}
+</original_question>
+
+<response_to_parse>
 {raw_llm_response}
 </response_to_parse>"""
 
