@@ -310,8 +310,25 @@ def call_model(
             # LangGraph agents with MCP tools need async invocation
             import asyncio
 
+            recursion_limit_reached = False
+
             async def invoke_agent_async():
-                return await session.llm.ainvoke({"messages": session.messages})
+                nonlocal recursion_limit_reached
+                try:
+                    return await session.llm.ainvoke({"messages": session.messages})
+                except Exception as e:
+                    # Check if this is a GraphRecursionError
+                    if "GraphRecursionError" in str(type(e).__name__) or "recursion_limit" in str(e).lower():
+                        recursion_limit_reached = True
+                        # Try to extract partial state from the agent
+                        try:
+                            agent_state = session.llm.get_state({"messages": session.messages})
+                            return agent_state
+                        except Exception:
+                            # If we can't get state, return the messages we have so far
+                            return {"messages": session.messages}
+                    else:
+                        raise e
 
             # Run the async invocation in the event loop
             try:
@@ -333,6 +350,10 @@ def call_model(
             from .mcp_utils import harmonize_agent_response
 
             response_content = harmonize_agent_response(response)
+
+            # Add note if recursion limit was reached
+            if recursion_limit_reached:
+                response_content += "\n\n[Note: Recursion limit reached - partial response shown]"
         else:
             # Regular LLMs expect the messages list directly
             response = session.llm.invoke(session.messages)
