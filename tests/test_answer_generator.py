@@ -30,7 +30,20 @@ def mock_llm():
 
 def test_generate_answer_template(mock_llm):
     """Test generating an answer template."""
-    with patch("karenina.llm.interface.init_chat_model", return_value=mock_llm):
+    # Mock at the _build_chain level to return pre-parsed results
+    from karenina.answers.generator import AttributeDescriptions, GroundTruthField, GroundTruthSpec
+
+    # Phase 1 result: ground truth specification
+    gt_spec = GroundTruthSpec(attributes=[GroundTruthField(name="answer", type="bool", ground_truth=True)])
+
+    # Phase 2 result: field descriptions
+    fd_spec = AttributeDescriptions(field_descriptions={"answer": "Whether the condition is true or false"})
+
+    # Create a mock chain that returns these results
+    mock_chain = MagicMock()
+    mock_chain.invoke.side_effect = [gt_spec, fd_spec]
+
+    with patch("karenina.answers.generator._build_chain", return_value=mock_chain):
         result = generate_answer_template(
             question="Test question?",
             raw_answer="Yes",
@@ -39,12 +52,8 @@ def test_generate_answer_template(mock_llm):
             temperature=0,
         )
 
-        # Verify the LLM was called with correct parameters
-        mock_llm.invoke.assert_called_once()
-        messages = mock_llm.invoke.call_args[0][0]
-        assert len(messages) == 2
-        assert "Test question?" in messages[1].content
-        assert "Yes" in messages[1].content
+        # Verify the chain was called twice (ground truth + field descriptions)
+        assert mock_chain.invoke.call_count == 2
 
         # Verify the result contains the expected code
         assert "class Answer" in result
@@ -54,6 +63,8 @@ def test_generate_answer_template(mock_llm):
 
 def test_generate_answer_templates_from_questions_file():
     """Test generating answer templates from a questions file."""
+    from karenina.answers.generator import AttributeDescriptions, GroundTruthField, GroundTruthSpec
+
     # Create a temporary questions.py file
     questions_content = """
 from karenina.schemas.question_class import Question
@@ -71,19 +82,14 @@ all_questions = [question_1]
         tmp_path = tmp.name
 
     try:
-        # Mock the LLM response
-        mock_llm = MagicMock()
-        mock_llm.invoke.return_value.content = """
-        ```python
-        class Answer(BaseAnswer):
-            answer: bool = Field(description="Answer contains whether the condition is true or false")
+        # Mock the chain results
+        gt_spec = GroundTruthSpec(attributes=[GroundTruthField(name="answer", type="bool", ground_truth=True)])
+        fd_spec = AttributeDescriptions(field_descriptions={"answer": "Whether the condition is true or false"})
 
-            def model_post_init(self, __context):
-                self.correct = True
-        ```
-        """
+        mock_chain = MagicMock()
+        mock_chain.invoke.side_effect = [gt_spec, fd_spec] * 2  # Called twice for both tests
 
-        with patch("karenina.llm.interface.init_chat_model", return_value=mock_llm):
+        with patch("karenina.answers.generator._build_chain", return_value=mock_chain):
             # Test without return_blocks
             result = generate_answer_templates_from_questions_file(
                 tmp_path,
@@ -200,6 +206,7 @@ def test_load_answer_templates_from_json_invalid_code():
 
 def test_generate_answer_templates_reader_integration():
     """Test that the generator properly integrates with the new reader module."""
+    from karenina.answers.generator import AttributeDescriptions, GroundTruthField, GroundTruthSpec
     from karenina.questions.reader import read_questions_from_file
 
     # Create a temporary questions.py file
@@ -227,20 +234,15 @@ all_questions = [question_1]
         expected_id = hashlib.md5(b"Integration test question?").hexdigest()
         assert questions[0].id == expected_id
 
-        # Mock the LLM response for the generator
-        mock_llm = MagicMock()
-        mock_llm.invoke.return_value.content = """
-        ```python
-        class Answer(BaseAnswer):
-            answer: bool = Field(description="Integration test answer")
+        # Mock the chain results
+        gt_spec = GroundTruthSpec(attributes=[GroundTruthField(name="answer", type="bool", ground_truth=True)])
+        fd_spec = AttributeDescriptions(field_descriptions={"answer": "Integration test answer"})
 
-            def model_post_init(self, __context):
-                self.correct = True
-        ```
-        """
+        mock_chain = MagicMock()
+        mock_chain.invoke.side_effect = [gt_spec, fd_spec]
 
         # Test that the generator uses the reader correctly
-        with patch("karenina.llm.interface.init_chat_model", return_value=mock_llm):
+        with patch("karenina.answers.generator._build_chain", return_value=mock_chain):
             result = generate_answer_templates_from_questions_file(tmp_path)
             assert len(result) == 1
             assert expected_id in result
@@ -249,7 +251,8 @@ all_questions = [question_1]
             Answer = result[expected_id]
             answer_instance = Answer(answer=True)
             assert answer_instance.id == expected_id
-            assert answer_instance.correct is True
+            # The new structured generation sets correct as a dictionary
+            assert answer_instance.correct == {"answer": True}
 
     finally:
         os.unlink(tmp_path)
@@ -257,6 +260,7 @@ all_questions = [question_1]
 
 def test_generate_answer_templates_reader_with_dict_compatibility():
     """Test that the generator works with the updated reader function (backward compatibility)."""
+    from karenina.answers.generator import AttributeDescriptions, GroundTruthField, GroundTruthSpec
     from karenina.questions.reader import read_questions_from_file
 
     # Create a temporary questions.py file
@@ -288,20 +292,15 @@ all_questions = [question_1]
         assert expected_id in questions_dict
         assert questions_list[0].id == questions_dict[expected_id].id
 
-        # Mock the LLM response for the generator
-        mock_llm = MagicMock()
-        mock_llm.invoke.return_value.content = """
-        ```python
-        class Answer(BaseAnswer):
-            answer: bool = Field(description="Dictionary compatibility test answer")
+        # Mock the chain results
+        gt_spec = GroundTruthSpec(attributes=[GroundTruthField(name="answer", type="bool", ground_truth=True)])
+        fd_spec = AttributeDescriptions(field_descriptions={"answer": "Dictionary compatibility test answer"})
 
-            def model_post_init(self, __context):
-                self.correct = True
-        ```
-        """
+        mock_chain = MagicMock()
+        mock_chain.invoke.side_effect = [gt_spec, fd_spec]
 
         # Test that the generator still works with the reader (uses default list behavior)
-        with patch("karenina.llm.interface.init_chat_model", return_value=mock_llm):
+        with patch("karenina.answers.generator._build_chain", return_value=mock_chain):
             result = generate_answer_templates_from_questions_file(tmp_path)
             assert len(result) == 1
             assert expected_id in result
