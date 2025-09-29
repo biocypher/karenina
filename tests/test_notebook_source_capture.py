@@ -81,11 +81,19 @@ class TestNotebookSourceCapture:
     def test_set_source_code_from_notebook_method(self):
         """Test the set_source_code_from_notebook method directly."""
 
-        class DirectTestAnswer(BaseAnswer):
-            data: int = Field(description="Test data")
+        # Create class dynamically using exec so inspect.getsource fails
+        exec_globals = {"BaseAnswer": BaseAnswer, "Field": Field}
+        exec(
+            """
+class DirectTestAnswer(BaseAnswer):
+    data: int = Field(description="Test data")
 
-            def verify(self) -> bool:
-                return self.data >= 0
+    def verify(self) -> bool:
+        return self.data >= 0
+""",
+            exec_globals,
+        )
+        DirectTestAnswer = exec_globals["DirectTestAnswer"]
 
         # Mock IPython environment with class in history
         mock_ip = MagicMock()
@@ -103,7 +111,7 @@ class TestNotebookSourceCapture:
         mock_ip.history_manager.get_range.return_value = mock_history
 
         with patch("IPython.get_ipython", return_value=mock_ip):
-            # Should start with no source code
+            # Should start with no source code (exec-created class)
             assert DirectTestAnswer.get_source_code() is None
 
             # Capture source code
@@ -117,45 +125,69 @@ class TestNotebookSourceCapture:
     def test_notebook_capture_no_ipython(self):
         """Test behavior when IPython is not available."""
 
-        class NoIPythonAnswer(BaseAnswer):
-            test: bool = Field(description="Test field")
+        # Create class dynamically using exec so inspect.getsource fails
+        exec_globals = {"BaseAnswer": BaseAnswer, "Field": Field}
+        exec(
+            """
+class NoIPythonAnswer(BaseAnswer):
+    test: bool = Field(description="Test field")
 
-            def verify(self) -> bool:
-                return self.test
+    def verify(self) -> bool:
+        return self.test
+""",
+            exec_globals,
+        )
+        NoIPythonAnswer = exec_globals["NoIPythonAnswer"]
 
         # Mock ImportError when trying to import IPython
         with patch("IPython.get_ipython", side_effect=ImportError):
             # Should handle gracefully
             NoIPythonAnswer.set_source_code_from_notebook()
 
-            # Should still be None
+            # Should still be None (no IPython available)
             assert NoIPythonAnswer.get_source_code() is None
 
     def test_notebook_capture_not_in_ipython(self):
         """Test behavior when not in IPython environment."""
 
-        class NotInIPythonAnswer(BaseAnswer):
-            flag: bool = Field(description="Test flag")
+        # Create class dynamically using exec so inspect.getsource fails
+        exec_globals = {"BaseAnswer": BaseAnswer, "Field": Field}
+        exec(
+            """
+class NotInIPythonAnswer(BaseAnswer):
+    flag: bool = Field(description="Test flag")
 
-            def verify(self) -> bool:
-                return self.flag
+    def verify(self) -> bool:
+        return self.flag
+""",
+            exec_globals,
+        )
+        NotInIPythonAnswer = exec_globals["NotInIPythonAnswer"]
 
         # Mock get_ipython returning None (not in IPython)
         with patch("IPython.get_ipython", return_value=None):
             # Should handle gracefully
             NotInIPythonAnswer.set_source_code_from_notebook()
 
-            # Should still be None
+            # Should still be None (not in IPython environment)
             assert NotInIPythonAnswer.get_source_code() is None
 
     def test_notebook_capture_class_not_found(self):
         """Test behavior when class definition is not found in history."""
 
-        class NotFoundAnswer(BaseAnswer):
-            missing: str = Field(description="Missing field")
+        # Create class dynamically using exec so inspect.getsource fails
+        exec_globals = {"BaseAnswer": BaseAnswer, "Field": Field}
+        exec(
+            """
+class NotFoundAnswer(BaseAnswer):
+    missing: str = Field(description="Missing field")
 
-            def verify(self) -> bool:
-                return len(self.missing) > 0
+    def verify(self) -> bool:
+        return len(self.missing) > 0
+""",
+            exec_globals,
+        )
+        NotFoundAnswer = exec_globals["NotFoundAnswer"]
 
         # Mock IPython with empty history
         mock_ip = MagicMock()
@@ -165,7 +197,7 @@ class TestNotebookSourceCapture:
             # Should handle gracefully
             NotFoundAnswer.set_source_code_from_notebook()
 
-            # Should still be None
+            # Should still be None (class not found in history)
             assert NotFoundAnswer.get_source_code() is None
 
     def test_complex_class_extraction(self):
