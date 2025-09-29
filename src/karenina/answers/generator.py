@@ -74,7 +74,7 @@ class AttributeDescriptions(BaseModel):
     )
 
 
-class JSONOnlyOutputParser(BaseOutputParser):
+class JSONOnlyOutputParser(BaseOutputParser):  # type: ignore[misc]
     """Parser ensuring output is valid JSON before delegating to Pydantic parser."""
 
     def __init__(self, inner: PydanticOutputParser):
