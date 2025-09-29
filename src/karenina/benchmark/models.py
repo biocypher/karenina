@@ -608,6 +608,8 @@ class VerificationResult(BaseModel):
     regex_validation_details: dict[str, dict[str, Any]] | None = None  # Detailed regex match information
     regex_overall_success: bool | None = None  # Overall regex validation result
     regex_extraction_results: dict[str, Any] | None = None  # What the regex patterns actually extracted
+    # Recursion limit metadata
+    recursion_limit_reached: bool = False  # Whether agent hit recursion limit
 
 
 class VerificationJob(BaseModel):

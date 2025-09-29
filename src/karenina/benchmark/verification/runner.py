@@ -262,6 +262,8 @@ def run_single_model_verification(
                 regex_validation_details=None,
                 regex_overall_success=None,
                 regex_extraction_results=None,
+                # Recursion limit metadata (defaults for error cases)
+                recursion_limit_reached=False,
             )
 
         # Step 1.5: Inject question ID into the Answer class
@@ -307,6 +309,9 @@ def run_single_model_verification(
         constructed_prompt = _construct_few_shot_prompt(question_text, few_shot_examples, few_shot_enabled)
         messages.append(HumanMessage(content=constructed_prompt))
 
+        # Track recursion limit status
+        recursion_limit_reached = False
+
         try:
             # Handle agent vs regular LLM invocation
             # Check if this is an agent by looking for MCP URLs in the answering model
@@ -315,7 +320,22 @@ def run_single_model_verification(
                 import asyncio
 
                 async def invoke_agent_async() -> Any:
-                    return await answering_llm.ainvoke({"messages": messages})
+                    try:
+                        return await answering_llm.ainvoke({"messages": messages})
+                    except Exception as e:
+                        # Check if this is a GraphRecursionError
+                        if "GraphRecursionError" in str(type(e).__name__) or "recursion_limit" in str(e).lower():
+                            nonlocal recursion_limit_reached
+                            recursion_limit_reached = True
+                            # Try to extract partial state from the agent
+                            try:
+                                agent_state = answering_llm.get_state({"messages": messages})
+                                return agent_state
+                            except Exception:
+                                # If we can't get state, return the messages we have so far
+                                return {"messages": messages}
+                        else:
+                            raise e
 
                 # Run the async invocation in the event loop
                 try:
@@ -337,43 +357,55 @@ def run_single_model_verification(
                 from ...llm.mcp_utils import harmonize_agent_response
 
                 raw_llm_response = harmonize_agent_response(response)
+
+                # Add note if recursion limit was reached
+                if recursion_limit_reached:
+                    raw_llm_response += "\n\n[Note: Recursion limit reached - partial response shown]"
             else:
                 # Regular LLMs expect the messages list directly
                 response = answering_llm.invoke(messages)
                 raw_llm_response = response.content if hasattr(response, "content") else str(response)
         except Exception as e:
-            return VerificationResult(
-                question_id=question_id,
-                success=False,
-                error=f"LLM call failed: {e}",
-                keywords=keywords,
-                question_text=question_text,
-                raw_llm_response="",
-                parsed_gt_response=None,
-                parsed_llm_response=None,
-                answering_model=answering_model_str,
-                parsing_model=parsing_model_str,
-                evaluation_rubric=rubric.model_dump() if rubric else None,
-                execution_time=time.time() - start_time,
-                timestamp=timestamp,
-                answering_system_prompt=answering_model.system_prompt,
-                parsing_system_prompt=parsing_model.system_prompt,
-                run_name=run_name,
-                job_id=job_id,
-                answering_replicate=answering_replicate,
-                parsing_replicate=parsing_replicate,
-                # Embedding check metadata (defaults for error cases)
-                embedding_check_performed=False,
-                embedding_similarity_score=None,
-                embedding_override_applied=False,
-                embedding_model_used=None,
-                # Regex validation metadata (defaults for error cases)
-                regex_validations_performed=False,
-                regex_validation_results=None,
-                regex_validation_details=None,
-                regex_overall_success=None,
-                regex_extraction_results=None,
-            )
+            # Check if this is a recursion limit error that wasn't caught earlier
+            if "GraphRecursionError" in str(type(e).__name__) or "recursion_limit" in str(e).lower():
+                recursion_limit_reached = True
+                raw_llm_response = f"[Note: Recursion limit reached before completion. Error: {e}]"
+                # Continue processing with this partial response
+            else:
+                return VerificationResult(
+                    question_id=question_id,
+                    success=False,
+                    error=f"LLM call failed: {e}",
+                    keywords=keywords,
+                    question_text=question_text,
+                    raw_llm_response="",
+                    parsed_gt_response=None,
+                    parsed_llm_response=None,
+                    answering_model=answering_model_str,
+                    parsing_model=parsing_model_str,
+                    evaluation_rubric=rubric.model_dump() if rubric else None,
+                    execution_time=time.time() - start_time,
+                    timestamp=timestamp,
+                    answering_system_prompt=answering_model.system_prompt,
+                    parsing_system_prompt=parsing_model.system_prompt,
+                    run_name=run_name,
+                    job_id=job_id,
+                    answering_replicate=answering_replicate,
+                    parsing_replicate=parsing_replicate,
+                    # Embedding check metadata (defaults for error cases)
+                    embedding_check_performed=False,
+                    embedding_similarity_score=None,
+                    embedding_override_applied=False,
+                    embedding_model_used=None,
+                    # Regex validation metadata (defaults for error cases)
+                    regex_validations_performed=False,
+                    regex_validation_results=None,
+                    regex_validation_details=None,
+                    regex_overall_success=None,
+                    regex_extraction_results=None,
+                    # Recursion limit metadata (defaults for error cases)
+                    recursion_limit_reached=False,
+                )
 
         # Step 4: Initialize parsing model and parse response
         parsing_llm = init_chat_model_unified(
@@ -418,6 +450,8 @@ def run_single_model_verification(
                 regex_validation_details=None,
                 regex_overall_success=None,
                 regex_extraction_results=None,
+                # Recursion limit metadata (defaults for error cases)
+                recursion_limit_reached=False,
             )
 
         # Extract ground truth if enabled
@@ -495,6 +529,8 @@ Original Question: {question_text}
                 regex_validation_details=None,
                 regex_overall_success=None,
                 regex_extraction_results=None,
+                # Recursion limit metadata (defaults for error cases)
+                recursion_limit_reached=False,
             )
 
         # Step 5: Run verification
@@ -571,6 +607,8 @@ Original Question: {question_text}
                 regex_validation_details=None,
                 regex_overall_success=None,
                 regex_extraction_results=None,
+                # Recursion limit metadata (defaults for error cases)
+                recursion_limit_reached=False,
             )
 
         # Step 6: Run rubric evaluation (optional)
@@ -623,6 +661,8 @@ Original Question: {question_text}
             regex_validation_details=regex_verification_results["details"],
             regex_overall_success=regex_verification_results["success"],
             regex_extraction_results=regex_extraction_results,
+            # Recursion limit metadata
+            recursion_limit_reached=recursion_limit_reached,
         )
 
     except Exception as e:
