@@ -57,25 +57,49 @@ def _extract_agent_trace(messages: list[Any]) -> str:
     """
     Extract the complete agent trace from a list of messages.
 
+    Filters out system messages and the first human message (initial user question),
+    but preserves subsequent human messages that may contain agent reasoning steps.
+
     Args:
         messages: List of LangChain messages
 
     Returns:
-        The pretty-printed trace of all AI and Tool messages, empty string if none found
+        The pretty-printed trace of AI, Tool, and intermediate Human messages (excluding first), empty string if none found
     """
     # Import here to avoid circular imports
     try:
-        from langchain_core.messages import AIMessage, ToolMessage
+        from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
     except ImportError:
-        # Fallback: look for messages with type or role indicating AI or Tool messages
+        # Fallback: look for messages with type or role indicating AI, Tool, or Human messages
         trace_parts = []
+        first_human_found = False
+
         for msg in messages:
             if hasattr(msg, "content") and msg.content:
-                # Check if this looks like an AI or Tool message by type name
+                # Check message type
                 msg_type = type(msg).__name__.lower()
                 role = getattr(msg, "role", "").lower() if hasattr(msg, "role") else ""
 
-                if "ai" in msg_type or role == "assistant" or "tool" in msg_type or role == "tool":
+                # Skip system messages
+                if "system" in msg_type or role == "system":
+                    continue
+
+                # Skip first human message (initial user question)
+                if ("human" in msg_type or role == "user" or role == "human") and not first_human_found:
+                    first_human_found = True
+                    continue  # Skip the first human message
+                # Continue processing subsequent human messages
+
+                # Include AI, Tool, and subsequent Human messages
+                if (
+                    "ai" in msg_type
+                    or role == "assistant"
+                    or "tool" in msg_type
+                    or role == "tool"
+                    or "human" in msg_type
+                    or role == "user"
+                    or role == "human"
+                ):
                     # Try to use pretty_print if available, otherwise use content
                     if hasattr(msg, "pretty_print"):
                         try:
@@ -103,10 +127,23 @@ def _extract_agent_trace(messages: list[Any]) -> str:
 
         return "\n".join(trace_parts) if trace_parts else ""
 
-    # Extract AI and Tool messages and pretty print them
+    # Extract AI, Tool, and intermediate Human messages (skip first Human and all System messages)
     trace_parts = []
+    first_human_found = False
+
     for msg in messages:
-        if isinstance(msg, AIMessage | ToolMessage):
+        # Skip system messages
+        if isinstance(msg, SystemMessage):
+            continue
+
+        # Skip first human message (initial user question)
+        if isinstance(msg, HumanMessage) and not first_human_found:
+            first_human_found = True
+            continue  # Skip the first human message
+        # Continue processing subsequent human messages
+
+        # Include AI, Tool, and subsequent Human messages
+        if isinstance(msg, AIMessage | ToolMessage | HumanMessage):
             try:
                 # Capture pretty_print output using StringIO
                 import io
@@ -196,8 +233,8 @@ async def create_mcp_client_and_tools(
             filtered_tools = []
             for tool in tools:
                 # Check if tool has a name attribute and if it's in the allowed set
-                tool_name: str | None = getattr(tool, "name", None)
-                if tool_name and tool_name in allowed_tools:
+                current_tool_name: str | None = getattr(tool, "name", None)
+                if current_tool_name and current_tool_name in allowed_tools:
                     filtered_tools.append(tool)
             tools = filtered_tools
 

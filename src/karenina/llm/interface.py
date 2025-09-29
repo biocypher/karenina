@@ -120,7 +120,7 @@ class ChatSession:
 chat_sessions: dict[str, ChatSession] = {}
 
 
-class ChatOpenRouter(ChatOpenAI):
+class ChatOpenRouter(ChatOpenAI):  # type: ignore[misc]
     openai_api_key: SecretStr | None = Field(alias="api_key", default=None)
 
     @property
