@@ -154,9 +154,8 @@ class TestSemanticEquivalence:
             id="test", model_provider="openai", model_name="gpt-4", temperature=0.1, system_prompt="Test prompt"
         )
 
-        is_equiv, details = check_semantic_equivalence(None, {"answer": "test"}, model_config, "What is the answer?")
+        is_equiv = check_semantic_equivalence(None, {"answer": "test"}, model_config, "What is the answer?")
         assert not is_equiv
-        assert "Missing data" in details
 
     @patch("karenina.benchmark.verification.embedding_utils.init_chat_model_unified")
     def test_check_semantic_equivalence_yes(self, mock_init_chat):
