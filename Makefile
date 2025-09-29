@@ -34,7 +34,7 @@ test-changed:
 	uv run pytest --testmon -v
 
 lint:
-	uv run ruff check src/karenina tests
+	uv run ruff check --fix src/karenina tests
 
 format:
 	uv run ruff format src/karenina tests

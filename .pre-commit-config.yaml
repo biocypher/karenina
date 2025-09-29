@@ -13,7 +13,9 @@ repos:
     hooks:
       - id: ruff
         args: [--fix]
+        files: ^(src/|tests/)
       - id: ruff-format
+        files: ^(src/|tests/)
 
   # Type checking with mypy using local environment
   - repo: local
