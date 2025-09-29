@@ -79,7 +79,7 @@ class TestRubricEvaluatorManualTraits:
 
         evaluator = RubricEvaluator(mock_model_config)
 
-        def bad_func(text: str, extra: str) -> bool:
+        def bad_func(text: str, _extra: str) -> bool:
             return True
 
         with pytest.raises(ValueError, match="must have exactly one parameter"):

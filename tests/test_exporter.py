@@ -500,7 +500,7 @@ class TestExportVerificationResultsCSV:
         """Test handling of invalid results type."""
 
         with pytest.raises(ValueError, match="Results must be a dictionary"):
-            export_verification_results_csv(mock_verification_job, "not_a_dict")  # type: ignore
+            export_verification_results_csv(mock_verification_job, "not_a_dict")
 
     def test_trait_name_validation_problematic_characters(self, mock_verification_job):
         """Test that trait names with problematic characters are handled properly."""

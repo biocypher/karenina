@@ -24,17 +24,17 @@ repos:
         name: mypy-type-check
         entry: uv run mypy
         language: system
-        files: ^src/
+        files: ^(src/|tests/)
         types: [python]
         pass_filenames: false
-        args: [src/karenina]
+        args: [src/karenina, tests]
 
       - id: vulture
         name: vulture-dead-code
         entry: uv run vulture
         language: system
-        files: ^src/
-        args: [src/karenina]
+        files: ^(src/|tests/)
+        args: [src/karenina, tests]
 
   # Note: pytest-testmon available via 'make test-changed' command
   # Excluded from pre-commit due to 0-test runs being treated as modifications
