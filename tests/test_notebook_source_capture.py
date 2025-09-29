@@ -10,7 +10,7 @@ from karenina.schemas.answer_class import BaseAnswer, capture_answer_source
 class TestNotebookSourceCapture:
     """Test the notebook-specific source code capture functionality."""
 
-    def test_capture_answer_source_decorator(self):
+    def test_capture_answer_source_decorator(self) -> None:
         """Test using capture_answer_source as a decorator."""
 
         # Mock IPython environment
@@ -43,7 +43,7 @@ class TestNotebookSourceCapture:
             assert "class TestAnswer(BaseAnswer):" in source
             assert "value: int = Field" in source
 
-    def test_capture_answer_source_function(self):
+    def test_capture_answer_source_function(self) -> None:
         """Test using capture_answer_source as a function."""
 
         # Mock IPython environment
@@ -78,7 +78,7 @@ class TestNotebookSourceCapture:
             assert "class FunctionTestAnswer(BaseAnswer):" in source
             assert "result: str = Field" in source
 
-    def test_set_source_code_from_notebook_method(self):
+    def test_set_source_code_from_notebook_method(self) -> None:
         """Test the set_source_code_from_notebook method directly."""
 
         # Create class dynamically using exec so inspect.getsource fails
@@ -122,7 +122,7 @@ class DirectTestAnswer(BaseAnswer):
             assert source is not None
             assert "class DirectTestAnswer(BaseAnswer):" in source
 
-    def test_notebook_capture_no_ipython(self):
+    def test_notebook_capture_no_ipython(self) -> None:
         """Test behavior when IPython is not available."""
 
         # Create class dynamically using exec so inspect.getsource fails
@@ -147,7 +147,7 @@ class NoIPythonAnswer(BaseAnswer):
             # Should still be None (no IPython available)
             assert NoIPythonAnswer.get_source_code() is None
 
-    def test_notebook_capture_not_in_ipython(self):
+    def test_notebook_capture_not_in_ipython(self) -> None:
         """Test behavior when not in IPython environment."""
 
         # Create class dynamically using exec so inspect.getsource fails
@@ -172,7 +172,7 @@ class NotInIPythonAnswer(BaseAnswer):
             # Should still be None (not in IPython environment)
             assert NotInIPythonAnswer.get_source_code() is None
 
-    def test_notebook_capture_class_not_found(self):
+    def test_notebook_capture_class_not_found(self) -> None:
         """Test behavior when class definition is not found in history."""
 
         # Create class dynamically using exec so inspect.getsource fails
@@ -200,7 +200,7 @@ class NotFoundAnswer(BaseAnswer):
             # Should still be None (class not found in history)
             assert NotFoundAnswer.get_source_code() is None
 
-    def test_complex_class_extraction(self):
+    def test_complex_class_extraction(self) -> None:
         """Test extracting class with complex indentation and structure."""
 
         class ComplexAnswer(BaseAnswer):
@@ -246,7 +246,7 @@ print("Hello")'''
             # Should not include the print statement after the class
             assert 'print("Hello")' not in source
 
-    def test_multiple_classes_in_history(self):
+    def test_multiple_classes_in_history(self) -> None:
         """Test finding the right class when multiple classes exist in history."""
 
         class SecondAnswer(BaseAnswer):

@@ -243,7 +243,7 @@ class TestExportVerificationResultsCSV:
         assert '""Directness"": 2' in second_row
         assert '""another_specific"": true' in second_row
 
-    def test_handle_empty_question_specific_rubrics(self, mock_verification_job, mock_results_global_only):
+    def test_handle_empty_question_specific_rubrics(self, mock_verification_job, mock_results_global_only) -> None:
         """Test handling empty question-specific rubrics with proper JSON."""
         # Mock global rubric that includes some traits not in all results
         extended_global_rubric = Rubric(
@@ -276,7 +276,7 @@ class TestExportVerificationResultsCSV:
         assert "4" in first_row  # Directness
         # extra_trait should be empty since it's not in the results
 
-    def test_no_rubrics_at_all(self, mock_verification_job, mock_results_no_rubrics):
+    def test_no_rubrics_at_all(self, mock_verification_job, mock_results_no_rubrics) -> None:
         """Test handling when no rubrics exist at all."""
         csv_content = export_verification_results_csv(mock_verification_job, mock_results_no_rubrics)
 
@@ -331,7 +331,7 @@ class TestExportVerificationResultsCSV:
         """Test error handling when global_rubric.get_trait_names() raises an exception."""
 
         class BrokenRubric:
-            def get_trait_names(self):
+            def get_trait_names(self) -> None:
                 raise ValueError("Simulated error in get_trait_names")
 
         broken_rubric = BrokenRubric()
@@ -378,7 +378,7 @@ class TestExportVerificationResultsCSV:
         """Test error handling when get_trait_names returns non-list type."""
 
         class InvalidRubric:
-            def get_trait_names(self):
+            def get_trait_names(self) -> None:
                 return "not_a_list"  # Should return list
 
         invalid_rubric = InvalidRubric()
@@ -396,7 +396,7 @@ class TestExportVerificationResultsCSV:
         assert "rubric_Directness" not in headers
         assert "question_specific_rubrics" in headers
 
-    def test_error_handling_edge_case_special_characters_in_trait_names(self, mock_verification_job):
+    def test_error_handling_edge_case_special_characters_in_trait_names(self, mock_verification_job) -> None:
         """Test handling of special characters in trait names."""
 
         results_with_special_traits = {
@@ -440,7 +440,7 @@ class TestExportVerificationResultsCSV:
         assert "trait_with_underscore" in first_row
         assert "trait-with-dash" in first_row
 
-    def test_error_handling_large_dataset_performance(self, mock_verification_job):
+    def test_error_handling_large_dataset_performance(self, mock_verification_job) -> None:
         """Test that the function handles large datasets without performance issues."""
 
         # Create a larger dataset to test performance characteristics
@@ -483,7 +483,7 @@ class TestExportVerificationResultsCSV:
         assert "question_specific_rubrics" in headers
         assert "rubric_trait_a" not in headers  # Should be in JSON, not separate columns
 
-    def test_input_validation_empty_results(self, mock_verification_job):
+    def test_input_validation_empty_results(self, mock_verification_job) -> None:
         """Test handling of empty results dictionary."""
 
         csv_content = export_verification_results_csv(mock_verification_job, {})
@@ -496,13 +496,13 @@ class TestExportVerificationResultsCSV:
         assert "question_id" in headers
         assert "success" in headers
 
-    def test_input_validation_invalid_results_type(self, mock_verification_job):
+    def test_input_validation_invalid_results_type(self, mock_verification_job) -> None:
         """Test handling of invalid results type."""
 
         with pytest.raises(ValueError, match="Results must be a dictionary"):
             export_verification_results_csv(mock_verification_job, "not_a_dict")
 
-    def test_trait_name_validation_problematic_characters(self, mock_verification_job):
+    def test_trait_name_validation_problematic_characters(self, mock_verification_job) -> None:
         """Test that trait names with problematic characters are handled properly."""
 
         results_with_bad_trait_names = {
@@ -571,7 +571,9 @@ class TestExportVerificationResultsJSON:
             "another_specific": True,
         }
 
-    def test_json_export_includes_metadata(self, mock_verification_job, mock_results_with_global_and_specific_rubrics):
+    def test_json_export_includes_metadata(
+        self, mock_verification_job, mock_results_with_global_and_specific_rubrics
+    ) -> None:
         """Test that JSON export includes comprehensive metadata."""
         json_content = export_verification_results_json(
             mock_verification_job, mock_results_with_global_and_specific_rubrics

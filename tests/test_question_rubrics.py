@@ -8,12 +8,12 @@ from karenina.schemas.rubric_class import Rubric, RubricTrait, merge_rubrics
 class TestQuestionRubrics:
     """Test question-specific rubric merging functionality."""
 
-    def test_merge_rubrics_both_none(self):
+    def test_merge_rubrics_both_none(self) -> None:
         """Test merging when both rubrics are None."""
         result = merge_rubrics(None, None)
         assert result is None
 
-    def test_merge_rubrics_global_only(self):
+    def test_merge_rubrics_global_only(self) -> None:
         """Test merging when only global rubric exists."""
         global_rubric = Rubric(
             traits=[
@@ -28,7 +28,7 @@ class TestQuestionRubrics:
         assert result == global_rubric
         assert len(result.traits) == 2
 
-    def test_merge_rubrics_question_only(self):
+    def test_merge_rubrics_question_only(self) -> None:
         """Test merging when only question rubric exists."""
         question_rubric = Rubric(
             traits=[
@@ -40,7 +40,7 @@ class TestQuestionRubrics:
         assert result == question_rubric
         assert len(result.traits) == 1
 
-    def test_merge_rubrics_both_present(self):
+    def test_merge_rubrics_both_present(self) -> None:
         """Test merging when both rubrics exist."""
         global_rubric = Rubric(
             traits=[
@@ -74,7 +74,7 @@ class TestQuestionRubrics:
         assert result.traits[2].name == "specificity"
         assert result.traits[3].name == "depth"
 
-    def test_merge_rubrics_name_conflicts(self):
+    def test_merge_rubrics_name_conflicts(self) -> None:
         """Test that merging fails when trait names conflict."""
         global_rubric = Rubric(
             traits=[
@@ -101,7 +101,7 @@ class TestQuestionRubrics:
         with pytest.raises(ValueError, match="Trait name conflicts between global and question rubrics: {'clarity'}"):
             merge_rubrics(global_rubric, question_rubric)
 
-    def test_merge_rubrics_preserves_trait_properties(self):
+    def test_merge_rubrics_preserves_trait_properties(self) -> None:
         """Test that trait properties are preserved during merging."""
         global_rubric = Rubric(traits=[RubricTrait(name="clarity", description="Is the answer clear?", kind="boolean")])
 
@@ -132,7 +132,7 @@ class TestQuestionRubrics:
         assert depth_trait.min_score == 2
         assert depth_trait.max_score == 10
 
-    def test_merge_rubrics_empty_rubrics(self):
+    def test_merge_rubrics_empty_rubrics(self) -> None:
         """Test merging rubrics with no traits."""
         empty_global = Rubric(traits=[])
         empty_question = Rubric(traits=[])
@@ -141,7 +141,7 @@ class TestQuestionRubrics:
         assert result is not None
         assert len(result.traits) == 0
 
-    def test_merge_rubrics_mixed_empty(self):
+    def test_merge_rubrics_mixed_empty(self) -> None:
         """Test merging when one rubric is empty."""
         global_rubric = Rubric(traits=[RubricTrait(name="clarity", description="Is the answer clear?", kind="boolean")])
         empty_question = Rubric(traits=[])

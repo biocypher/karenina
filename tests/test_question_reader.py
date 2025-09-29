@@ -8,7 +8,7 @@ from karenina.questions.reader import read_questions_from_file
 from karenina.schemas.question_class import Question
 
 
-def test_read_questions_from_file_success():
+def test_read_questions_from_file_success() -> None:
     """Test successfully reading questions from a valid Python file."""
     # Create a temporary questions.py file
     questions_content = """
@@ -60,7 +60,7 @@ all_questions = [question_1, question_2]
         os.unlink(tmp_path)
 
 
-def test_read_questions_from_file_nonexistent():
+def test_read_questions_from_file_nonexistent() -> None:
     """Test reading from a non-existent file raises FileNotFoundError."""
     non_existent_path = "/path/that/does/not/exist.py"
 
@@ -71,7 +71,7 @@ def test_read_questions_from_file_nonexistent():
     assert non_existent_path in str(exc_info.value)
 
 
-def test_read_questions_from_file_missing_all_questions():
+def test_read_questions_from_file_missing_all_questions() -> None:
     """Test reading from a file without 'all_questions' variable raises AttributeError."""
     # Create a file without all_questions
     questions_content = """
@@ -93,7 +93,7 @@ some_other_variable = "test"
         os.unlink(tmp_path)
 
 
-def test_read_questions_from_file_invalid_python():
+def test_read_questions_from_file_invalid_python() -> None:
     """Test reading from a file with invalid Python syntax raises ImportError."""
     # Create a file with invalid Python syntax
     invalid_content = """
@@ -114,7 +114,7 @@ all_questions = []
         os.unlink(tmp_path)
 
 
-def test_read_questions_from_file_empty_all_questions():
+def test_read_questions_from_file_empty_all_questions() -> None:
     """Test reading from a file with empty all_questions list."""
     questions_content = """
 all_questions = []
@@ -131,7 +131,7 @@ all_questions = []
         os.unlink(tmp_path)
 
 
-def test_read_questions_from_file_spec_creation_fails():
+def test_read_questions_from_file_spec_creation_fails() -> None:
     """Test handling when module spec creation fails."""
     # Create a temporary file that exists but will fail spec creation
     with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as tmp:
@@ -149,7 +149,7 @@ def test_read_questions_from_file_spec_creation_fails():
         os.unlink(tmp_path)
 
 
-def test_read_questions_from_file_spec_loader_none():
+def test_read_questions_from_file_spec_loader_none() -> None:
     """Test handling when module spec has no loader."""
     # Create a temporary file that exists but will have no loader
     with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as tmp:
@@ -170,7 +170,7 @@ def test_read_questions_from_file_spec_loader_none():
         os.unlink(tmp_path)
 
 
-def test_read_questions_from_file_different_filenames():
+def test_read_questions_from_file_different_filenames() -> None:
     """Test reading questions from files with different names."""
     questions_content = """
 from karenina.schemas.question_class import Question
@@ -198,7 +198,7 @@ all_questions = [
             os.unlink(tmp_path)
 
 
-def test_read_questions_from_file_module_sys_registration():
+def test_read_questions_from_file_module_sys_registration() -> None:
     """Test that modules are properly registered in sys.modules."""
     questions_content = """
 from karenina.schemas.question_class import Question
@@ -232,7 +232,7 @@ all_questions = [
             del sys.modules[module_name]
 
 
-def test_read_questions_from_file_return_dict():
+def test_read_questions_from_file_return_dict() -> None:
     """Test reading questions and returning as dictionary with return_dict=True."""
     # Create a temporary questions.py file with multiple questions
     questions_content = """
@@ -290,7 +290,7 @@ all_questions = [question_1, question_2]
         os.unlink(tmp_path)
 
 
-def test_read_questions_from_file_return_dict_vs_list():
+def test_read_questions_from_file_return_dict_vs_list() -> None:
     """Test that return_dict=False returns list and return_dict=True returns dict with same content."""
     questions_content = """
 from karenina.schemas.question_class import Question
@@ -336,7 +336,7 @@ all_questions = [question_1]
         os.unlink(tmp_path)
 
 
-def test_read_questions_from_file_return_dict_empty():
+def test_read_questions_from_file_return_dict_empty() -> None:
     """Test return_dict=True with empty all_questions."""
     questions_content = """
 all_questions = []
@@ -355,7 +355,7 @@ all_questions = []
         os.unlink(tmp_path)
 
 
-def test_read_questions_from_file_default_behavior_unchanged():
+def test_read_questions_from_file_default_behavior_unchanged() -> None:
     """Test that default behavior (return_dict=False) is unchanged."""
     questions_content = """
 from karenina.schemas.question_class import Question

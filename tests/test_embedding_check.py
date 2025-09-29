@@ -20,46 +20,46 @@ from karenina.benchmark.verification.embedding_utils import (
 class TestEmbeddingCheckConfiguration:
     """Test configuration and environment variable handling."""
 
-    def test_should_use_embedding_check_disabled_by_default(self):
+    def test_should_use_embedding_check_disabled_by_default(self) -> None:
         """Test that embedding check is disabled by default."""
         with patch.dict(os.environ, {}, clear=True):
             assert not _should_use_embedding_check()
 
-    def test_should_use_embedding_check_enabled(self):
+    def test_should_use_embedding_check_enabled(self) -> None:
         """Test that embedding check can be enabled."""
         test_cases = ["true", "True", "TRUE", "1", "yes", "on"]
         for value in test_cases:
             with patch.dict(os.environ, {"EMBEDDING_CHECK": value}):
                 assert _should_use_embedding_check()
 
-    def test_should_use_embedding_check_disabled(self):
+    def test_should_use_embedding_check_disabled(self) -> None:
         """Test that embedding check can be explicitly disabled."""
         test_cases = ["false", "False", "FALSE", "0", "no", "off", "invalid"]
         for value in test_cases:
             with patch.dict(os.environ, {"EMBEDDING_CHECK": value}):
                 assert not _should_use_embedding_check()
 
-    def test_get_embedding_model_name_default(self):
+    def test_get_embedding_model_name_default(self) -> None:
         """Test default embedding model name."""
         with patch.dict(os.environ, {}, clear=True):
             assert _get_embedding_model_name() == "all-MiniLM-L6-v2"
 
-    def test_get_embedding_model_name_custom(self):
+    def test_get_embedding_model_name_custom(self) -> None:
         """Test custom embedding model name."""
         with patch.dict(os.environ, {"EMBEDDING_CHECK_MODEL": "custom-model"}):
             assert _get_embedding_model_name() == "custom-model"
 
-    def test_get_embedding_threshold_default(self):
+    def test_get_embedding_threshold_default(self) -> None:
         """Test default embedding threshold."""
         with patch.dict(os.environ, {}, clear=True):
             assert _get_embedding_threshold() == 0.85
 
-    def test_get_embedding_threshold_custom(self):
+    def test_get_embedding_threshold_custom(self) -> None:
         """Test custom embedding threshold."""
         with patch.dict(os.environ, {"EMBEDDING_CHECK_THRESHOLD": "0.9"}):
             assert _get_embedding_threshold() == 0.9
 
-    def test_get_embedding_threshold_clamped(self):
+    def test_get_embedding_threshold_clamped(self) -> None:
         """Test embedding threshold is clamped between 0 and 1."""
         with patch.dict(os.environ, {"EMBEDDING_CHECK_THRESHOLD": "1.5"}):
             assert _get_embedding_threshold() == 1.0
@@ -67,7 +67,7 @@ class TestEmbeddingCheckConfiguration:
         with patch.dict(os.environ, {"EMBEDDING_CHECK_THRESHOLD": "-0.5"}):
             assert _get_embedding_threshold() == 0.0
 
-    def test_get_embedding_threshold_invalid(self):
+    def test_get_embedding_threshold_invalid(self) -> None:
         """Test invalid threshold falls back to default."""
         with patch.dict(os.environ, {"EMBEDDING_CHECK_THRESHOLD": "invalid"}):
             assert _get_embedding_threshold() == 0.85
@@ -76,7 +76,7 @@ class TestEmbeddingCheckConfiguration:
 class TestStringConversion:
     """Test string conversion utilities."""
 
-    def test_convert_to_comparable_string_dict(self):
+    def test_convert_to_comparable_string_dict(self) -> None:
         """Test converting dictionary to comparable string."""
         data = {"key": "value", "number": 42}
         result = _convert_to_comparable_string(data)
@@ -84,7 +84,7 @@ class TestStringConversion:
         assert "value" in result
         assert "42" in result
 
-    def test_convert_to_comparable_string_sorted_keys(self):
+    def test_convert_to_comparable_string_sorted_keys(self) -> None:
         """Test that keys are sorted for consistency."""
         data1 = {"b": 2, "a": 1}
         data2 = {"a": 1, "b": 2}
@@ -92,11 +92,11 @@ class TestStringConversion:
         result2 = _convert_to_comparable_string(data2)
         assert result1 == result2
 
-    def test_convert_to_comparable_string_none(self):
+    def test_convert_to_comparable_string_none(self) -> None:
         """Test converting None returns empty string."""
         assert _convert_to_comparable_string(None) == ""
 
-    def test_convert_to_comparable_string_empty_dict(self):
+    def test_convert_to_comparable_string_empty_dict(self) -> None:
         """Test converting empty dict."""
         result = _convert_to_comparable_string({})
         assert result == "{}"
@@ -109,11 +109,11 @@ class TestEmbeddingSimilarity:
     # The actual functionality can be tested through integration tests
 
     @pytest.mark.skip(reason="Dynamic import mocking is complex - test via integration")
-    def test_compute_embedding_similarity_success(self):
+    def test_compute_embedding_similarity_success(self) -> None:
         """Test successful embedding similarity computation."""
         pass
 
-    def test_compute_embedding_similarity_none_data(self):
+    def test_compute_embedding_similarity_none_data(self) -> None:
         """Test embedding similarity with None data."""
         with patch.dict(os.environ, {}, clear=True):
             similarity, model_name = compute_embedding_similarity(None, {"answer": "test"})
@@ -123,24 +123,24 @@ class TestEmbeddingSimilarity:
             similarity, model_name = compute_embedding_similarity({"answer": "test"}, None)
             assert similarity == 0.0
 
-    def test_compute_embedding_similarity_empty_data(self):
+    def test_compute_embedding_similarity_empty_data(self) -> None:
         """Test embedding similarity with empty data."""
         with patch.dict(os.environ, {}, clear=True):
             similarity, model_name = compute_embedding_similarity({}, {"answer": "test"})
             assert similarity == 0.0
 
     @pytest.mark.skip(reason="Dynamic import mocking is complex - test via integration")
-    def test_compute_embedding_similarity_missing_import(self):
+    def test_compute_embedding_similarity_missing_import(self) -> None:
         """Test handling of missing sentence-transformers import."""
         pass
 
     @pytest.mark.skip(reason="Dynamic import mocking is complex - test via integration")
-    def test_compute_embedding_similarity_model_error(self):
+    def test_compute_embedding_similarity_model_error(self) -> None:
         """Test handling of model loading errors."""
         pass
 
     @pytest.mark.skip(reason="Dynamic import mocking is complex - test via integration")
-    def test_compute_embedding_similarity_clamped(self):
+    def test_compute_embedding_similarity_clamped(self) -> None:
         """Test similarity scores are clamped to [0, 1]."""
         pass
 
@@ -148,7 +148,7 @@ class TestEmbeddingSimilarity:
 class TestSemanticEquivalence:
     """Test semantic equivalence checking."""
 
-    def test_check_semantic_equivalence_none_data(self):
+    def test_check_semantic_equivalence_none_data(self) -> None:
         """Test semantic check with None data."""
         model_config = ModelConfig(
             id="test", model_provider="openai", model_name="gpt-4", temperature=0.1, system_prompt="Test prompt"
@@ -158,7 +158,7 @@ class TestSemanticEquivalence:
         assert not is_equiv
 
     @patch("karenina.benchmark.verification.embedding_utils.init_chat_model_unified")
-    def test_check_semantic_equivalence_yes(self, mock_init_chat):
+    def test_check_semantic_equivalence_yes(self, mock_init_chat) -> None:
         """Test semantic equivalence returning YES."""
         mock_llm = Mock()
         mock_response = Mock()
@@ -180,7 +180,7 @@ class TestSemanticEquivalence:
         mock_llm.invoke.assert_called_once()
 
     @patch("karenina.benchmark.verification.embedding_utils.init_chat_model_unified")
-    def test_check_semantic_equivalence_no(self, mock_init_chat):
+    def test_check_semantic_equivalence_no(self, mock_init_chat) -> None:
         """Test semantic equivalence returning NO."""
         mock_llm = Mock()
         mock_response = Mock()
@@ -200,7 +200,7 @@ class TestSemanticEquivalence:
         assert is_equiv is False
 
     @patch("karenina.benchmark.verification.embedding_utils.init_chat_model_unified")
-    def test_check_semantic_equivalence_error(self, mock_init_chat):
+    def test_check_semantic_equivalence_error(self, mock_init_chat) -> None:
         """Test semantic equivalence check error handling."""
         mock_init_chat.side_effect = RuntimeError("LLM initialization failed")
 
@@ -215,7 +215,7 @@ class TestSemanticEquivalence:
 class TestPerformEmbeddingCheck:
     """Test the complete embedding check workflow."""
 
-    def test_perform_embedding_check_disabled(self):
+    def test_perform_embedding_check_disabled(self) -> None:
         """Test embedding check when disabled."""
         with patch.dict(os.environ, {"EMBEDDING_CHECK": "false"}):
             model_config = ModelConfig(
@@ -233,7 +233,7 @@ class TestPerformEmbeddingCheck:
     @patch("karenina.benchmark.verification.embedding_utils.compute_embedding_similarity")
     @patch("karenina.benchmark.verification.embedding_utils.check_semantic_equivalence")
     @patch.dict(os.environ, {"EMBEDDING_CHECK": "true", "EMBEDDING_CHECK_THRESHOLD": "0.8"})
-    def test_perform_embedding_check_above_threshold_equivalent(self, mock_semantic_check, mock_similarity):
+    def test_perform_embedding_check_above_threshold_equivalent(self, mock_semantic_check, mock_similarity) -> None:
         """Test embedding check with high similarity and semantic equivalence."""
         mock_similarity.return_value = (0.9, "test-model")
         mock_semantic_check.return_value = True
@@ -253,7 +253,7 @@ class TestPerformEmbeddingCheck:
     @patch("karenina.benchmark.verification.embedding_utils.compute_embedding_similarity")
     @patch("karenina.benchmark.verification.embedding_utils.check_semantic_equivalence")
     @patch.dict(os.environ, {"EMBEDDING_CHECK": "true", "EMBEDDING_CHECK_THRESHOLD": "0.8"})
-    def test_perform_embedding_check_above_threshold_not_equivalent(self, mock_semantic_check, mock_similarity):
+    def test_perform_embedding_check_above_threshold_not_equivalent(self, mock_semantic_check, mock_similarity) -> None:
         """Test embedding check with high similarity but no semantic equivalence."""
         mock_similarity.return_value = (0.9, "test-model")
         mock_semantic_check.return_value = False
@@ -272,7 +272,7 @@ class TestPerformEmbeddingCheck:
 
     @patch("karenina.benchmark.verification.embedding_utils.compute_embedding_similarity")
     @patch.dict(os.environ, {"EMBEDDING_CHECK": "true", "EMBEDDING_CHECK_THRESHOLD": "0.8"})
-    def test_perform_embedding_check_below_threshold(self, mock_similarity):
+    def test_perform_embedding_check_below_threshold(self, mock_similarity) -> None:
         """Test embedding check with similarity below threshold."""
         mock_similarity.return_value = (0.7, "test-model")
 
@@ -291,7 +291,7 @@ class TestPerformEmbeddingCheck:
     @patch("karenina.benchmark.verification.embedding_utils.compute_embedding_similarity")
     @patch("karenina.benchmark.verification.embedding_utils.check_semantic_equivalence")
     @patch.dict(os.environ, {"EMBEDDING_CHECK": "true"})
-    def test_perform_embedding_check_semantic_check_fails(self, mock_semantic_check, mock_similarity):
+    def test_perform_embedding_check_semantic_check_fails(self, mock_semantic_check, mock_similarity) -> None:
         """Test embedding check when semantic check fails."""
         mock_similarity.return_value = (0.9, "test-model")
         mock_semantic_check.side_effect = RuntimeError("Semantic check failed")
@@ -310,7 +310,7 @@ class TestPerformEmbeddingCheck:
 
     @patch("karenina.benchmark.verification.embedding_utils.compute_embedding_similarity")
     @patch.dict(os.environ, {"EMBEDDING_CHECK": "true"})
-    def test_perform_embedding_check_embedding_fails(self, mock_similarity):
+    def test_perform_embedding_check_embedding_fails(self, mock_similarity) -> None:
         """Test embedding check when embedding computation fails."""
         mock_similarity.side_effect = RuntimeError("Embedding computation failed")
 
@@ -331,7 +331,7 @@ class TestEmbeddingCheckIntegration:
     """Integration tests for embedding check with verification runner."""
 
     @patch("karenina.benchmark.verification.runner.perform_embedding_check")
-    def test_embedding_check_only_on_failure(self, _mock_embedding_check):
+    def test_embedding_check_only_on_failure(self, _mock_embedding_check) -> None:
         """Test that embedding check is only called when verification fails."""
         # This would be part of the runner integration test
         # For now, just ensure the import works
@@ -339,7 +339,7 @@ class TestEmbeddingCheckIntegration:
 
         assert run_single_model_verification is not None
 
-    def test_embedding_utils_import(self):
+    def test_embedding_utils_import(self) -> None:
         """Test that embedding utilities can be imported successfully."""
         from karenina.benchmark.verification.embedding_utils import (
             check_semantic_equivalence,
@@ -360,7 +360,7 @@ class TestEmbeddingCheckIntegration:
 class TestEmbeddingModelCaching:
     """Test embedding model caching functionality."""
 
-    def test_cache_management(self):
+    def test_cache_management(self) -> None:
         """Test cache preloading and cleanup."""
         from karenina.benchmark.verification.embedding_utils import (
             _embedding_model_cache,
@@ -387,7 +387,7 @@ class TestEmbeddingModelCaching:
             clear_embedding_model_cache()
             assert len(_embedding_model_cache) == 0
 
-    def test_cache_reuse(self):
+    def test_cache_reuse(self) -> None:
         """Test that cached models are reused across calls."""
         from karenina.benchmark.verification.embedding_utils import (
             _embedding_model_cache,

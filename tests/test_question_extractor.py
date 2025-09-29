@@ -12,7 +12,7 @@ from karenina.questions.extractor import (
 )
 
 
-def test_question_id_hash_consistency():
+def test_question_id_hash_consistency() -> None:
     """Test that Question ID hash generation is consistent."""
     from karenina.schemas.question_class import Question
 
@@ -23,7 +23,7 @@ def test_question_id_hash_consistency():
     assert len(q1.id) == 32  # MD5 hash length
 
 
-def test_extract_questions_from_excel():
+def test_extract_questions_from_excel() -> None:
     """Test extracting questions from an Excel file."""
     # Create a temporary Excel file with test data
     with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
@@ -43,7 +43,7 @@ def test_extract_questions_from_excel():
         os.unlink(tmp_path)
 
 
-def test_extract_questions_from_excel_missing_columns():
+def test_extract_questions_from_excel_missing_columns() -> None:
     """Test that missing required columns raise ValueError."""
     with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
         df = pd.DataFrame({"WrongColumn": ["Test"]})
@@ -57,7 +57,7 @@ def test_extract_questions_from_excel_missing_columns():
         os.unlink(tmp_path)
 
 
-def test_generate_questions_file():
+def test_generate_questions_file() -> None:
     """Test generating a Python file with questions."""
     from karenina.schemas.question_class import Question
 
@@ -94,7 +94,7 @@ def test_generate_questions_file():
         os.unlink(tmp_path)
 
 
-def test_extract_and_generate_questions():
+def test_extract_and_generate_questions() -> None:
     """Test the complete question extraction and generation process."""
     # Create a temporary Excel file
     with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as excel_tmp:
@@ -123,7 +123,7 @@ def test_extract_and_generate_questions():
         os.unlink(output_path)
 
 
-def test_extract_and_generate_questions_file_not_found():
+def test_extract_and_generate_questions_file_not_found() -> None:
     """Test that FileNotFoundError is raised for non-existent Excel file."""
     with pytest.raises(FileNotFoundError) as exc_info:
         extract_and_generate_questions("/path/that/does/not/exist.xlsx", "output.py")
@@ -131,7 +131,7 @@ def test_extract_and_generate_questions_file_not_found():
     assert "File not found" in str(exc_info.value)
 
 
-def test_extract_and_generate_questions_no_valid_questions():
+def test_extract_and_generate_questions_no_valid_questions() -> None:
     """Test that ValueError is raised when no valid questions are found."""
     # Create an Excel file with empty/invalid data
     with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as excel_tmp:

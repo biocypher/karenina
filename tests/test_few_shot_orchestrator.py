@@ -4,7 +4,7 @@ from karenina.benchmark.models import ModelConfig, VerificationConfig
 from karenina.benchmark.verification.orchestrator import _create_verification_task
 
 
-def test_create_verification_task_with_few_shot():
+def test_create_verification_task_with_few_shot() -> None:
     """Test that _create_verification_task includes few-shot parameters."""
     # Create test models
     answering_model = ModelConfig(
@@ -57,7 +57,7 @@ def test_create_verification_task_with_few_shot():
     assert task["parsing_model"] == parsing_model
 
 
-def test_create_verification_task_without_few_shot():
+def test_create_verification_task_without_few_shot() -> None:
     """Test that _create_verification_task works without few-shot parameters."""
     # Create test models
     answering_model = ModelConfig(
@@ -103,7 +103,7 @@ def test_create_verification_task_without_few_shot():
     assert task["question_text"] == "What is 2 + 2?"
 
 
-def test_verification_config_includes_few_shot_in_api_format():
+def test_verification_config_includes_few_shot_in_api_format() -> None:
     """Test that VerificationConfig includes few-shot settings."""
     # This test verifies the structure is correct for API calls
     answering_model = ModelConfig(

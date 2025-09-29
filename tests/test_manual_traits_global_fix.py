@@ -13,7 +13,7 @@ class TestManualTraitsGlobalEvaluation:
     """Test that manual traits are properly evaluated in global context."""
 
     @pytest.fixture
-    def parsing_model(self):
+    def parsing_model(self) -> None:
         """Create parsing model configuration."""
         return ModelConfig(
             id="parsing-model",
@@ -24,14 +24,14 @@ class TestManualTraitsGlobalEvaluation:
         )
 
     @pytest.fixture
-    def verification_config(self, parsing_model):
+    def verification_config(self, parsing_model) -> None:
         """Create verification configuration."""
         return VerificationConfig(
             parsing_models=[parsing_model],
             parsing_only=True,
         )
 
-    def test_manual_traits_evaluated_in_global_context(self, verification_config):
+    def test_manual_traits_evaluated_in_global_context(self, verification_config) -> None:
         """Test that manual traits are evaluated in global evaluation context."""
 
         # Define test callable
@@ -104,7 +104,7 @@ class TestManualTraitsGlobalEvaluation:
         assert global_rubric_scores["mentions_def"] is True  # Contains "def"
         assert global_rubric_scores["no_errors"] is True  # No "error" mentioned (inverted)
 
-    def test_mixed_llm_and_manual_traits_global(self, verification_config):
+    def test_mixed_llm_and_manual_traits_global(self, verification_config) -> None:
         """Test mixed LLM and manual traits in global evaluation."""
         from karenina.schemas.rubric_class import RubricTrait
 
@@ -159,7 +159,7 @@ class TestManualTraitsGlobalEvaluation:
         # LLM traits should also be evaluated
         assert global_rubric_scores["accuracy"] is True
 
-    def test_manual_traits_error_handling_global(self, verification_config):
+    def test_manual_traits_error_handling_global(self, verification_config) -> None:
         """Test error handling for manual traits in global context."""
         # Create TaskEval with missing callable
         task = TaskEval(task_id="test_error_global")

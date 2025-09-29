@@ -15,7 +15,7 @@ from karenina.benchmark.models import (
 class TestModelConfigurationValidation:
     """Test ModelConfiguration validation logic."""
 
-    def test_valid_langchain_model_config(self):
+    def test_valid_langchain_model_config(self) -> None:
         """Test valid configuration for langchain interface."""
         config = ModelConfig(
             id="test-model",
@@ -31,7 +31,7 @@ class TestModelConfigurationValidation:
         assert config.model_provider == "openai"
         assert config.interface == INTERFACE_LANGCHAIN
 
-    def test_valid_openrouter_model_config(self):
+    def test_valid_openrouter_model_config(self) -> None:
         """Test valid configuration for openrouter interface (no provider required)."""
         config = ModelConfig(
             id="test-openrouter",
@@ -47,7 +47,7 @@ class TestModelConfigurationValidation:
         assert config.model_provider == ""
         assert config.interface == INTERFACE_OPENROUTER
 
-    def test_valid_manual_model_config(self):
+    def test_valid_manual_model_config(self) -> None:
         """Test valid configuration for manual interface (no provider required)."""
         config = ModelConfig(
             id="test-manual",
@@ -63,7 +63,7 @@ class TestModelConfigurationValidation:
         assert config.model_provider == ""
         assert config.interface == INTERFACE_MANUAL
 
-    def test_missing_model_provider_langchain_interface(self):
+    def test_missing_model_provider_langchain_interface(self) -> None:
         """Test that missing provider fails for langchain interface."""
         with pytest.raises(ValueError, match="Model provider is required.*interface: langchain"):
             VerificationConfig(
@@ -89,7 +89,7 @@ class TestModelConfigurationValidation:
                 ],
             )
 
-    def test_missing_model_name(self):
+    def test_missing_model_name(self) -> None:
         """Test that missing model name fails validation."""
         with pytest.raises(ValueError, match="Model name is required"):
             VerificationConfig(
@@ -115,7 +115,7 @@ class TestModelConfigurationValidation:
                 ],
             )
 
-    def test_missing_system_prompt(self):
+    def test_missing_system_prompt(self) -> None:
         """Test that missing system prompt fails validation."""
         with pytest.raises(ValueError, match="System prompt is required"):
             VerificationConfig(
@@ -141,7 +141,7 @@ class TestModelConfigurationValidation:
                 ],
             )
 
-    def test_no_answering_models(self):
+    def test_no_answering_models(self) -> None:
         """Test that configuration without answering models fails."""
         with pytest.raises(ValueError, match="At least one answering model must be configured"):
             VerificationConfig(
@@ -158,7 +158,7 @@ class TestModelConfigurationValidation:
                 ],
             )
 
-    def test_no_parsing_models(self):
+    def test_no_parsing_models(self) -> None:
         """Test that configuration without parsing models fails."""
         with pytest.raises(ValueError, match="At least one parsing model must be configured"):
             VerificationConfig(
@@ -175,7 +175,7 @@ class TestModelConfigurationValidation:
                 parsing_models=[],  # Empty parsing models should fail
             )
 
-    def test_rubric_enabled_without_parsing_models(self):
+    def test_rubric_enabled_without_parsing_models(self) -> None:
         """Test that rubric-enabled config without parsing models fails."""
         with pytest.raises(ValueError, match="At least one parsing model must be configured"):
             VerificationConfig(
@@ -193,7 +193,7 @@ class TestModelConfigurationValidation:
                 rubric_enabled=True,
             )
 
-    def test_rubric_enabled_with_invalid_replicate_count(self):
+    def test_rubric_enabled_with_invalid_replicate_count(self) -> None:
         """Test that rubric-enabled config with invalid replicate count fails."""
         with pytest.raises(ValueError, match="Replicate count must be at least 1"):
             VerificationConfig(
@@ -221,7 +221,7 @@ class TestModelConfigurationValidation:
                 replicate_count=0,  # Invalid replicate count
             )
 
-    def test_valid_rubric_configuration(self):
+    def test_valid_rubric_configuration(self) -> None:
         """Test valid rubric-enabled configuration."""
         config = VerificationConfig(
             answering_models=[
@@ -252,7 +252,7 @@ class TestModelConfigurationValidation:
         assert config.rubric_enabled is True
         assert config.replicate_count == 3
 
-    def test_mixed_interface_types(self):
+    def test_mixed_interface_types(self) -> None:
         """Test configuration with mixed interface types."""
         config = VerificationConfig(
             answering_models=[
@@ -292,7 +292,7 @@ class TestModelConfigurationValidation:
         assert config.answering_models[1].interface == INTERFACE_OPENROUTER
         assert config.parsing_models[0].interface == INTERFACE_MANUAL
 
-    def test_interfaces_no_provider_required_constant(self):
+    def test_interfaces_no_provider_required_constant(self) -> None:
         """Test that the INTERFACES_NO_PROVIDER_REQUIRED constant is correct."""
         assert INTERFACES_NO_PROVIDER_REQUIRED == [INTERFACE_OPENROUTER, INTERFACE_MANUAL]
         assert INTERFACE_LANGCHAIN not in INTERFACES_NO_PROVIDER_REQUIRED
@@ -301,7 +301,7 @@ class TestModelConfigurationValidation:
 class TestLegacyConfigurationSupport:
     """Test backward compatibility with legacy single-model configurations."""
 
-    def test_legacy_answering_model_conversion(self):
+    def test_legacy_answering_model_conversion(self) -> None:
         """Test conversion from legacy answering model fields."""
         config = VerificationConfig(
             answering_model_provider="openai",
@@ -330,7 +330,7 @@ class TestLegacyConfigurationSupport:
         assert config.answering_models[0].interface == INTERFACE_LANGCHAIN
         assert config.answering_models[0].system_prompt == "Custom answering prompt"
 
-    def test_legacy_parsing_model_conversion(self):
+    def test_legacy_parsing_model_conversion(self) -> None:
         """Test conversion from legacy parsing model fields."""
         config = VerificationConfig(
             answering_models=[
@@ -359,7 +359,7 @@ class TestLegacyConfigurationSupport:
         assert config.parsing_models[0].interface == INTERFACE_MANUAL
         assert config.parsing_models[0].system_prompt == "Custom parsing prompt"
 
-    def test_legacy_defaults(self):
+    def test_legacy_defaults(self) -> None:
         """Test that legacy conversion uses appropriate defaults."""
         config = VerificationConfig(
             answering_model_provider="openai",

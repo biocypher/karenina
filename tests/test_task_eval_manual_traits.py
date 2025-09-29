@@ -13,7 +13,7 @@ class TestTaskEvalManualTraits:
     """Test TaskEval functionality with ManualRubricTrait."""
 
     @pytest.fixture
-    def mock_parsing_model(self):
+    def mock_parsing_model(self) -> None:
         """Create a mock parsing model configuration."""
         return ModelConfig(
             id="parsing-model",
@@ -25,7 +25,7 @@ class TestTaskEvalManualTraits:
         )
 
     @pytest.fixture
-    def verification_config(self, mock_parsing_model):
+    def verification_config(self, mock_parsing_model) -> None:
         """Create verification configuration."""
         return VerificationConfig(
             parsing_models=[mock_parsing_model],
@@ -33,7 +33,7 @@ class TestTaskEvalManualTraits:
         )
 
     @pytest.fixture
-    def sample_callable_registry(self):
+    def sample_callable_registry(self) -> None:
         """Create sample callable functions for testing."""
 
         def has_code_block(text: str) -> bool:
@@ -51,7 +51,7 @@ class TestTaskEvalManualTraits:
             "contains_python": contains_python,
         }
 
-    def test_task_eval_with_callable_registry(self, sample_callable_registry):
+    def test_task_eval_with_callable_registry(self, sample_callable_registry) -> None:
         """Test TaskEval initialization with callable registry."""
         task = TaskEval(
             task_id="test_task",
@@ -61,7 +61,7 @@ class TestTaskEvalManualTraits:
         assert task.callable_registry == sample_callable_registry
         assert "has_code_block" in task.callable_registry
 
-    def test_register_callable_in_task_eval(self):
+    def test_register_callable_in_task_eval(self) -> None:
         """Test registering callable functions in TaskEval."""
         task = TaskEval(task_id="test_task")
 
@@ -73,7 +73,7 @@ class TestTaskEvalManualTraits:
         assert "test_func" in task.callable_registry
         assert task.callable_registry["test_func"] == test_func
 
-    def test_register_callable_invalid_signature(self):
+    def test_register_callable_invalid_signature(self) -> None:
         """Test error when registering callable with wrong signature."""
         task = TaskEval(task_id="test_task")
 
@@ -245,7 +245,7 @@ class TestTaskEvalManualTraits:
         assert rubric_scores["has_code_block"] is True
         assert rubric_scores["contains_python_keyword"] is True
 
-    def test_fallback_evaluation_with_manual_traits(self, verification_config, sample_callable_registry):
+    def test_fallback_evaluation_with_manual_traits(self, verification_config, sample_callable_registry) -> None:
         """Test fallback evaluation (no answer template) with manual traits."""
         # Create TaskEval with callable registry
         task = TaskEval(
@@ -285,7 +285,7 @@ class TestTaskEvalManualTraits:
         assert rubric_scores["mentions_language"] is True
         assert rubric_scores["detailed_response"] is False  # Less than 20 words
 
-    def test_error_handling_with_manual_traits(self, verification_config):
+    def test_error_handling_with_manual_traits(self, verification_config) -> None:
         """Test error handling when manual trait evaluation fails."""
         # Create TaskEval with missing callable
         task = TaskEval(task_id="test_error_manual")
@@ -322,7 +322,7 @@ class TestTaskEvalManualTraits:
         assert rubric_scores["missing_func"] is None  # Failed evaluation
         assert rubric_scores["valid_pattern"] is True  # Successful evaluation
 
-    def test_global_and_step_manual_traits_together(self, verification_config, sample_callable_registry):
+    def test_global_and_step_manual_traits_together(self, verification_config, sample_callable_registry) -> None:
         """Test evaluation with both global and step-specific manual traits."""
         # Create TaskEval with callable registry
         task = TaskEval(

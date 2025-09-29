@@ -7,7 +7,7 @@ from karenina.benchmark.verification.runner import _strip_markdown_fences, _syst
 from karenina.benchmark.verifier import run_question_verification, validate_answer_template
 
 
-def test_validate_answer_template_valid():
+def test_validate_answer_template_valid() -> None:
     """Test validation of a valid answer template."""
     template_code = '''
 from karenina.schemas.answer_class import BaseAnswer
@@ -33,7 +33,7 @@ class Answer(BaseAnswer):
     assert "model_post_init" in Answer.__dict__
 
 
-def test_validate_answer_template_with_literal():
+def test_validate_answer_template_with_literal() -> None:
     """Test validation of a template using Literal type."""
     template_code = '''
 from karenina.schemas.answer_class import BaseAnswer
@@ -60,7 +60,7 @@ class Answer(BaseAnswer):
     assert hasattr(Answer, "verify")
 
 
-def test_validate_answer_template_no_answer_class():
+def test_validate_answer_template_no_answer_class() -> None:
     """Test validation fails when no Answer class is found."""
     template_code = """
 from karenina.schemas.answer_class import BaseAnswer
@@ -76,7 +76,7 @@ class SomeOtherClass(BaseAnswer):
     assert Answer is None
 
 
-def test_validate_answer_template_no_verify_method():
+def test_validate_answer_template_no_verify_method() -> None:
     """Test validation fails when Answer class has no verify method."""
     template_code = """
 from karenina.schemas.answer_class import BaseAnswer
@@ -93,7 +93,7 @@ class Answer(BaseAnswer):
     assert Answer is None
 
 
-def test_validate_answer_template_invalid_syntax():
+def test_validate_answer_template_invalid_syntax() -> None:
     """Test validation fails with invalid Python syntax."""
     template_code = """
 from karenina.schemas.answer_class import BaseAnswer
@@ -111,7 +111,7 @@ class Answer(BaseAnswer):
 
 
 @patch("karenina.llm.interface.init_chat_model")
-def test_run_question_verification_template_validation_failure(mock_init_model):
+def test_run_question_verification_template_validation_failure(mock_init_model) -> None:
     """Test verification with invalid template."""
     config = VerificationConfig(
         answering_model_provider="openai",
@@ -141,7 +141,7 @@ def test_run_question_verification_template_validation_failure(mock_init_model):
 
 
 @patch("karenina.llm.interface.init_chat_model")
-def test_run_question_verification_success(mock_init_model):
+def test_run_question_verification_success(mock_init_model) -> None:
     """Test successful verification run."""
     # Mock the LLM responses
     mock_answering_llm = Mock()
@@ -157,7 +157,7 @@ def test_run_question_verification_success(mock_init_model):
     mock_answer.verify_regex.return_value = {"success": True, "results": {}, "details": {}}
 
     # Setup the init_chat_model_unified mock to return different models
-    def mock_init_side_effect(*args, **kwargs):
+    def mock_init_side_effect(*args, **kwargs) -> None:
         if kwargs.get("model") == "gpt-4.1-mini":
             return mock_answering_llm if "answering" in str(kwargs) else mock_parsing_llm
         return mock_parsing_llm
@@ -217,7 +217,7 @@ class Answer(BaseAnswer):
 
 
 @patch("karenina.llm.interface.init_chat_model")
-def test_run_question_verification_markdown_fenced_json(mock_init_model):
+def test_run_question_verification_markdown_fenced_json(mock_init_model) -> None:
     """Test successful parsing of markdown-fenced JSON response."""
     # Mock the LLM responses with markdown fences
     mock_answering_llm = Mock()
@@ -290,7 +290,7 @@ class Answer(BaseAnswer):
 
 
 @patch("karenina.llm.interface.init_chat_model")
-def test_run_question_verification_malformed_json(mock_init_model):
+def test_run_question_verification_malformed_json(mock_init_model) -> None:
     """Test handling of malformed JSON from LLM."""
     # Mock the LLM responses with malformed JSON
     mock_answering_llm = Mock()
@@ -350,7 +350,7 @@ class Answer(BaseAnswer):
         assert result.raw_llm_response == "The answer is 4"
 
 
-def test_strip_markdown_fences():
+def test_strip_markdown_fences() -> None:
     """Test markdown fence stripping functionality."""
     # Test with ```json fences
     json_with_fences = '```json\n{"response": "test"}\n```'
@@ -377,7 +377,7 @@ def test_strip_markdown_fences():
     assert _strip_markdown_fences(123) == 123
 
 
-def test_system_prompt_compose():
+def test_system_prompt_compose() -> None:
     """Test system prompt composition functionality."""
     # Test with both system prompt and format instructions
     system_prompt = "You are a helpful assistant."
@@ -419,7 +419,7 @@ Please format your response as JSON.
     assert result == expected
 
 
-def test_validate_answer_template_no_correct_field():
+def test_validate_answer_template_no_correct_field() -> None:
     """Test validation passes when Answer class has no correct field (optional)."""
     template_code = """
 from karenina.schemas.answer_class import BaseAnswer
@@ -439,7 +439,7 @@ class Answer(BaseAnswer):
     assert Answer is not None
 
 
-def test_validate_answer_template_model_post_init_dict():
+def test_validate_answer_template_model_post_init_dict() -> None:
     """Test validation passes with model_post_init assigning dict to correct."""
     template_code = """
 from karenina.schemas.answer_class import BaseAnswer
@@ -461,7 +461,7 @@ class Answer(BaseAnswer):
     assert Answer is not None
 
 
-def test_validate_answer_template_correct_non_dict():
+def test_validate_answer_template_correct_non_dict() -> None:
     """Test validation fails when model_post_init assigns non-dict to correct."""
     template_code = """
 from karenina.schemas.answer_class import BaseAnswer

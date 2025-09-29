@@ -15,7 +15,7 @@ class TestResultsSeparation:
     """Test that verification results are kept separate from checkpoint storage."""
 
     @pytest.fixture
-    def sample_benchmark(self):
+    def sample_benchmark(self) -> None:
         """Create a sample benchmark with questions."""
         benchmark = Benchmark(
             name="Test Benchmark", description="Test benchmark for results separation", version="1.0.0"
@@ -38,7 +38,7 @@ class TestResultsSeparation:
         return benchmark
 
     @pytest.fixture
-    def sample_verification_results(self):
+    def sample_verification_results(self) -> None:
         """Create sample verification results."""
         return {
             "q1_result1": VerificationResult(
@@ -65,7 +65,7 @@ class TestResultsSeparation:
             ),
         }
 
-    def test_verification_results_not_saved_to_checkpoint(self, sample_benchmark, sample_verification_results):
+    def test_verification_results_not_saved_to_checkpoint(self, sample_benchmark, sample_verification_results) -> None:
         """Test that verification results are not included when saving checkpoint."""
         # Store some verification results
         sample_benchmark.store_verification_results(sample_verification_results, "test_run")
@@ -98,7 +98,7 @@ class TestResultsSeparation:
             if checkpoint_path.exists():
                 checkpoint_path.unlink()
 
-    def test_results_persist_in_memory_after_save(self, sample_benchmark, sample_verification_results):
+    def test_results_persist_in_memory_after_save(self, sample_benchmark, sample_verification_results) -> None:
         """Test that results remain accessible in memory even after saving checkpoint."""
         # Store verification results
         sample_benchmark.store_verification_results(sample_verification_results, "test_run")
@@ -123,7 +123,7 @@ class TestResultsSeparation:
             if checkpoint_path.exists():
                 checkpoint_path.unlink()
 
-    def test_load_checkpoint_without_results(self, sample_benchmark):
+    def test_load_checkpoint_without_results(self, sample_benchmark) -> None:
         """Test that loading a checkpoint works normally when no results were saved."""
         # Save benchmark without any results
         with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonld", delete=False) as f:
@@ -147,7 +147,7 @@ class TestResultsSeparation:
             if checkpoint_path.exists():
                 checkpoint_path.unlink()
 
-    def test_export_results_to_file_json(self, sample_benchmark, sample_verification_results):
+    def test_export_results_to_file_json(self, sample_benchmark, sample_verification_results) -> None:
         """Test exporting results to a JSON file."""
         # Store verification results
         sample_benchmark.store_verification_results(sample_verification_results, "test_run")
@@ -181,7 +181,7 @@ class TestResultsSeparation:
             if results_path.exists():
                 results_path.unlink()
 
-    def test_export_results_to_file_csv(self, sample_benchmark, sample_verification_results):
+    def test_export_results_to_file_csv(self, sample_benchmark, sample_verification_results) -> None:
         """Test exporting results to a CSV file."""
         # Store verification results
         sample_benchmark.store_verification_results(sample_verification_results, "test_run")
@@ -213,7 +213,7 @@ class TestResultsSeparation:
             if results_path.exists():
                 results_path.unlink()
 
-    def test_load_results_from_file_json(self, sample_benchmark, sample_verification_results):
+    def test_load_results_from_file_json(self, sample_benchmark, sample_verification_results) -> None:
         """Test loading results from a JSON file."""
         # First export results to a file
         sample_benchmark.store_verification_results(sample_verification_results, "original_run")
@@ -251,7 +251,7 @@ class TestResultsSeparation:
             if results_path.exists():
                 results_path.unlink()
 
-    def test_separate_export_import_workflow(self, sample_benchmark, sample_verification_results):
+    def test_separate_export_import_workflow(self, sample_benchmark, sample_verification_results) -> None:
         """Test the complete workflow of separating results from checkpoints."""
         # 1. Store results and save checkpoint
         sample_benchmark.store_verification_results(sample_verification_results, "test_run")

@@ -6,7 +6,7 @@ from karenina.benchmark.models import ModelConfig, VerificationConfig
 from karenina.benchmark.verifier import run_question_verification
 
 
-def test_verification_config_replicate_count():
+def test_verification_config_replicate_count() -> None:
     """Test that VerificationConfig properly handles replicate_count."""
     config = VerificationConfig(
         answering_models=[
@@ -36,7 +36,7 @@ def test_verification_config_replicate_count():
 
 
 @patch("karenina.llm.interface.init_chat_model")
-def test_run_question_verification_with_replicates(mock_init_model):
+def test_run_question_verification_with_replicates(mock_init_model) -> None:
     """Test that verification runs multiple replicates when configured."""
     # Mock the LLM responses
     mock_answering_llm = Mock()
@@ -123,7 +123,7 @@ class Answer(BaseAnswer):
 
 
 @patch("karenina.llm.interface.init_chat_model")
-def test_run_question_verification_single_replicate(mock_init_model):
+def test_run_question_verification_single_replicate(mock_init_model) -> None:
     """Test that single replicate doesn't include replicate numbers."""
     # Mock the LLM responses
     mock_answering_llm = Mock()
@@ -203,7 +203,7 @@ class Answer(BaseAnswer):
         assert result.parsing_replicate is None
 
 
-def test_verification_config_default_replicate_count():
+def test_verification_config_default_replicate_count() -> None:
     """Test that VerificationConfig defaults to 1 replicate."""
     config = VerificationConfig(
         answering_models=[

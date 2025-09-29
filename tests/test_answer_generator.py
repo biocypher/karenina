@@ -13,7 +13,7 @@ from karenina.answers.generator import (
 
 
 @pytest.fixture
-def mock_llm():
+def mock_llm() -> None:
     """Create a mock LLM for testing."""
     mock = MagicMock()
     mock.invoke.return_value.content = """
@@ -28,7 +28,7 @@ def mock_llm():
     return mock
 
 
-def test_generate_answer_template(mock_llm):
+def test_generate_answer_template(mock_llm) -> None:
     """Test generating an answer template."""
     # Mock at the _build_chain level to return pre-parsed results
     from karenina.answers.generator import AttributeDescriptions, GroundTruthField, GroundTruthSpec
@@ -61,7 +61,7 @@ def test_generate_answer_template(mock_llm):
         assert "answer: bool" in result
 
 
-def test_generate_answer_templates_from_questions_file():
+def test_generate_answer_templates_from_questions_file() -> None:
     """Test generating answer templates from a questions file."""
     from karenina.answers.generator import AttributeDescriptions, GroundTruthField, GroundTruthSpec
 
@@ -123,7 +123,7 @@ all_questions = [question_1]
         os.unlink(tmp_path)
 
 
-def test_load_answer_templates_from_json():
+def test_load_answer_templates_from_json() -> None:
     """Test loading answer templates from a JSON file."""
     # Create a temporary JSON file with code blocks
     code_blocks = {
@@ -176,7 +176,7 @@ class Answer(BaseAnswer):
         os.unlink(tmp_path)
 
 
-def test_load_answer_templates_from_json_invalid_file():
+def test_load_answer_templates_from_json_invalid_file() -> None:
     """Test loading answer templates from an invalid JSON file."""
     with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w") as tmp:
         tmp.write("invalid json content")
@@ -189,7 +189,7 @@ def test_load_answer_templates_from_json_invalid_file():
         os.unlink(tmp_path)
 
 
-def test_load_answer_templates_from_json_invalid_code():
+def test_load_answer_templates_from_json_invalid_code() -> None:
     """Test loading answer templates with invalid code blocks."""
     code_blocks = {"test1": "invalid python code"}
 
@@ -204,7 +204,7 @@ def test_load_answer_templates_from_json_invalid_code():
         os.unlink(tmp_path)
 
 
-def test_generate_answer_templates_reader_integration():
+def test_generate_answer_templates_reader_integration() -> None:
     """Test that the generator properly integrates with the new reader module."""
     from karenina.answers.generator import AttributeDescriptions, GroundTruthField, GroundTruthSpec
     from karenina.questions.reader import read_questions_from_file
@@ -258,7 +258,7 @@ all_questions = [question_1]
         os.unlink(tmp_path)
 
 
-def test_generate_answer_templates_reader_with_dict_compatibility():
+def test_generate_answer_templates_reader_with_dict_compatibility() -> None:
     """Test that the generator works with the updated reader function (backward compatibility)."""
     from karenina.answers.generator import AttributeDescriptions, GroundTruthField, GroundTruthSpec
     from karenina.questions.reader import read_questions_from_file

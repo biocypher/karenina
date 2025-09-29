@@ -9,7 +9,7 @@ from karenina.schemas.rubric_class import Rubric, RubricEvaluation, RubricTrait
 class TestRubricTrait:
     """Test RubricTrait schema validation."""
 
-    def test_boolean_trait_creation(self):
+    def test_boolean_trait_creation(self) -> None:
         """Test creating a boolean trait."""
         trait = RubricTrait(name="clarity", description="Is the response clear and understandable?", kind="boolean")
 
@@ -19,7 +19,7 @@ class TestRubricTrait:
         assert trait.min_score == 1  # Default values are applied
         assert trait.max_score == 5
 
-    def test_score_trait_creation(self):
+    def test_score_trait_creation(self) -> None:
         """Test creating a score-based trait."""
         trait = RubricTrait(
             name="completeness", description="How complete is the response?", kind="score", min_score=1, max_score=5
@@ -31,14 +31,14 @@ class TestRubricTrait:
         assert trait.min_score == 1
         assert trait.max_score == 5
 
-    def test_score_trait_default_range(self):
+    def test_score_trait_default_range(self) -> None:
         """Test that score traits get default min/max values."""
         trait = RubricTrait(name="relevance", description="How relevant is the response?", kind="score")
 
         assert trait.min_score == 1
         assert trait.max_score == 5
 
-    def test_invalid_trait_name(self):
+    def test_invalid_trait_name(self) -> None:
         """Test that empty trait names are rejected by Pydantic."""
         import pytest
         from pydantic import ValidationError
@@ -51,7 +51,7 @@ class TestRubricTrait:
                 kind="boolean",
             )
 
-    def test_missing_description(self):
+    def test_missing_description(self) -> None:
         """Test trait creation without description."""
         trait = RubricTrait(name="accuracy", kind="boolean")
 
@@ -59,7 +59,7 @@ class TestRubricTrait:
         assert trait.description is None
         assert trait.kind == "boolean"
 
-    def test_invalid_score_range(self):
+    def test_invalid_score_range(self) -> None:
         """Test validation of score ranges."""
         # min_score > max_score should be allowed at creation
         # (validation logic would be in business logic, not schema)
@@ -72,7 +72,7 @@ class TestRubricTrait:
 class TestRubric:
     """Test Rubric schema validation."""
 
-    def test_rubric_creation(self):
+    def test_rubric_creation(self) -> None:
         """Test creating a complete rubric."""
         traits = [
             RubricTrait(name="clarity", description="Clear response", kind="boolean"),
@@ -85,7 +85,7 @@ class TestRubric:
         assert rubric.traits[0].name == "clarity"
         assert rubric.traits[1].name == "completeness"
 
-    def test_rubric_without_description(self):
+    def test_rubric_without_description(self) -> None:
         """Test creating a rubric without description."""
         traits = [RubricTrait(name="accuracy", description="Accurate response", kind="boolean")]
 
@@ -94,20 +94,20 @@ class TestRubric:
         # No description field in Rubric model
         assert len(rubric.traits) == 1
 
-    def test_empty_rubric_title(self):
+    def test_empty_rubric_title(self) -> None:
         """Test that empty titles are allowed by Pydantic."""
         traits = [RubricTrait(name="test", description="Test trait", kind="boolean")]
 
         # Empty traits list is allowed
         Rubric(traits=traits)
 
-    def test_empty_traits_list(self):
+    def test_empty_traits_list(self) -> None:
         """Test rubric with empty traits list."""
         rubric = Rubric(traits=[])
 
         assert len(rubric.traits) == 0
 
-    def test_rubric_serialization(self):
+    def test_rubric_serialization(self) -> None:
         """Test that rubric can be serialized to dict."""
         traits = [RubricTrait(name="clarity", description="Clear response", kind="boolean")]
 
@@ -124,14 +124,14 @@ class TestRubric:
 class TestRubricEvaluation:
     """Test RubricEvaluation schema validation."""
 
-    def test_evaluation_creation(self):
+    def test_evaluation_creation(self) -> None:
         """Test creating a rubric evaluation."""
         evaluation = RubricEvaluation(trait_scores={"clarity": True, "completeness": 4})
 
         assert evaluation.trait_scores["clarity"] is True
         assert evaluation.trait_scores["completeness"] == 4
 
-    def test_evaluation_with_mixed_scores(self):
+    def test_evaluation_with_mixed_scores(self) -> None:
         """Test evaluation with boolean and numeric scores."""
         evaluation = RubricEvaluation(trait_scores={"accuracy": True, "relevance": False, "depth": 3, "clarity": 5})
 
@@ -141,13 +141,13 @@ class TestRubricEvaluation:
         assert evaluation.trait_scores["depth"] == 3
         assert evaluation.trait_scores["clarity"] == 5
 
-    def test_empty_trait_scores(self):
+    def test_empty_trait_scores(self) -> None:
         """Test evaluation with empty trait scores."""
         evaluation = RubricEvaluation(trait_scores={})
 
         assert len(evaluation.trait_scores) == 0
 
-    def test_evaluation_serialization(self):
+    def test_evaluation_serialization(self) -> None:
         """Test that evaluation can be serialized to dict."""
         evaluation = RubricEvaluation(trait_scores={"test_trait": True})
 
@@ -159,7 +159,7 @@ class TestRubricEvaluation:
 class TestTraitKind:
     """Test TraitKind literal validation."""
 
-    def test_valid_trait_kinds(self):
+    def test_valid_trait_kinds(self) -> None:
         """Test that valid trait kinds work."""
         boolean_trait = RubricTrait(name="test_bool", description="Test boolean trait", kind="boolean")
 
@@ -168,7 +168,7 @@ class TestTraitKind:
         assert boolean_trait.kind == "boolean"
         assert score_trait.kind == "score"
 
-    def test_invalid_trait_kind(self):
+    def test_invalid_trait_kind(self) -> None:
         """Test validation error for invalid trait kind."""
         with pytest.raises(ValidationError):
             RubricTrait(
@@ -181,7 +181,7 @@ class TestTraitKind:
 class TestRubricIntegration:
     """Integration tests for rubric schemas."""
 
-    def test_complete_rubric_workflow(self):
+    def test_complete_rubric_workflow(self) -> None:
         """Test a complete workflow with all rubric schemas."""
         # Create traits
         traits = [
@@ -221,7 +221,7 @@ class TestRubricIntegration:
             elif trait.kind == "score":
                 assert isinstance(evaluation.trait_scores[trait.name], int)
 
-    def test_rubric_json_round_trip(self):
+    def test_rubric_json_round_trip(self) -> None:
         """Test that rubric can be serialized to JSON and back."""
         import json
 

@@ -8,7 +8,7 @@ from karenina.benchmark.models import FewShotConfig, ModelConfig, QuestionFewSho
 class TestFewShotConfig:
     """Test the FewShotConfig class functionality."""
 
-    def test_from_index_selections(self):
+    def test_from_index_selections(self) -> None:
         """Test creating FewShotConfig from index selections."""
         selections = {
             "question_1": [0, 2, 4],
@@ -29,7 +29,7 @@ class TestFewShotConfig:
         assert q2_config.mode == "custom"
         assert q2_config.selected_examples == [1, 3]
 
-    def test_from_hash_selections(self):
+    def test_from_hash_selections(self) -> None:
         """Test creating FewShotConfig from hash selections."""
         selections = {
             "question_1": ["abc123def456789", "ghi789jkl012345"],
@@ -46,7 +46,7 @@ class TestFewShotConfig:
         assert q1_config.mode == "custom"
         assert q1_config.selected_examples == ["abc123def456789", "ghi789jkl012345"]
 
-    def test_k_shot_for_questions(self):
+    def test_k_shot_for_questions(self) -> None:
         """Test creating FewShotConfig with different k values per question."""
         k_mapping = {
             "question_1": 5,
@@ -67,7 +67,7 @@ class TestFewShotConfig:
         assert q2_config.mode == "k-shot"
         assert q2_config.k == 2
 
-    def test_add_selections_by_index(self):
+    def test_add_selections_by_index(self) -> None:
         """Test dynamically adding selections by index."""
         config = FewShotConfig()
 
@@ -82,7 +82,7 @@ class TestFewShotConfig:
         assert config.question_configs["question_1"].selected_examples == [0, 1, 2]
         assert config.question_configs["question_2"].selected_examples == [3, 4]
 
-    def test_add_selections_by_hash(self):
+    def test_add_selections_by_hash(self) -> None:
         """Test dynamically adding selections by hash."""
         config = FewShotConfig()
 
@@ -95,7 +95,7 @@ class TestFewShotConfig:
         assert len(config.question_configs) == 1
         assert config.question_configs["question_1"].selected_examples == ["hash1", "hash2"]
 
-    def test_get_effective_config_inherit(self):
+    def test_get_effective_config_inherit(self) -> None:
         """Test getting effective config with inheritance."""
         config = FewShotConfig(
             global_mode="k-shot",
@@ -107,7 +107,7 @@ class TestFewShotConfig:
         assert effective.mode == "k-shot"
         assert effective.k == 5
 
-    def test_get_effective_config_override(self):
+    def test_get_effective_config_override(self) -> None:
         """Test getting effective config with overrides."""
         config = FewShotConfig(
             global_mode="k-shot",
@@ -124,7 +124,7 @@ class TestFewShotConfig:
         assert effective.mode == "custom"
         assert effective.selected_examples == [0, 1]
 
-    def test_resolve_examples_all_mode(self):
+    def test_resolve_examples_all_mode(self) -> None:
         """Test resolving examples in 'all' mode."""
         config = FewShotConfig(global_mode="all")
         available_examples = [
@@ -136,7 +136,7 @@ class TestFewShotConfig:
         assert len(resolved) == 2
         assert resolved == available_examples
 
-    def test_resolve_examples_k_shot_mode(self):
+    def test_resolve_examples_k_shot_mode(self) -> None:
         """Test resolving examples in 'k-shot' mode."""
         config = FewShotConfig(global_mode="k-shot", global_k=1)
         available_examples = [
@@ -149,7 +149,7 @@ class TestFewShotConfig:
         assert len(resolved) == 1
         assert resolved[0] in available_examples
 
-    def test_resolve_examples_custom_mode_index(self):
+    def test_resolve_examples_custom_mode_index(self) -> None:
         """Test resolving examples in 'custom' mode with indices."""
         config = FewShotConfig.from_index_selections(
             {
@@ -167,7 +167,7 @@ class TestFewShotConfig:
         assert resolved[0] == available_examples[0]
         assert resolved[1] == available_examples[2]
 
-    def test_resolve_examples_custom_mode_hash(self):
+    def test_resolve_examples_custom_mode_hash(self) -> None:
         """Test resolving examples in 'custom' mode with hashes."""
         available_examples = [
             {"question": "What is 1+1?", "answer": "2"},
@@ -188,7 +188,7 @@ class TestFewShotConfig:
         assert len(resolved) == 1
         assert resolved[0] == available_examples[1]
 
-    def test_resolve_examples_with_exclusions(self):
+    def test_resolve_examples_with_exclusions(self) -> None:
         """Test resolving examples with exclusions."""
         config = FewShotConfig(
             global_mode="all",
@@ -209,7 +209,7 @@ class TestFewShotConfig:
         assert len(resolved) == 2
         assert available_examples[1] not in resolved
 
-    def test_resolve_examples_with_external_examples(self):
+    def test_resolve_examples_with_external_examples(self) -> None:
         """Test resolving examples with external examples."""
         config = FewShotConfig(
             global_mode="custom",
@@ -232,7 +232,7 @@ class TestFewShotConfig:
         assert {"question": "Question example", "answer": "Question answer"} in resolved
         assert {"question": "Global example", "answer": "Global answer"} in resolved
 
-    def test_generate_example_hash(self):
+    def test_generate_example_hash(self) -> None:
         """Test MD5 hash generation for examples."""
         hash1 = FewShotConfig.generate_example_hash("What is 1+1?")
         hash2 = FewShotConfig.generate_example_hash("What is 1+1?")
@@ -242,7 +242,7 @@ class TestFewShotConfig:
         assert hash1 != hash3  # Different input = different hash
         assert len(hash1) == 32  # MD5 hash length
 
-    def test_validate_selections(self):
+    def test_validate_selections(self) -> None:
         """Test validation of selections against available examples."""
         config = FewShotConfig.from_index_selections(
             {
@@ -268,7 +268,7 @@ class TestFewShotConfig:
         assert "Index 5 out of range" in errors[0]
         assert "q1" in errors[0]
 
-    def test_disabled_config(self):
+    def test_disabled_config(self) -> None:
         """Test that disabled config returns no examples."""
         config = FewShotConfig(enabled=False, global_mode="all")
         available_examples = [
@@ -282,7 +282,7 @@ class TestFewShotConfig:
 class TestVerificationConfigIntegration:
     """Test integration with VerificationConfig."""
 
-    def test_verification_config_with_few_shot_config(self):
+    def test_verification_config_with_few_shot_config(self) -> None:
         """Test VerificationConfig with new FewShotConfig."""
         answering_model = ModelConfig(
             id="test-answering",
@@ -318,7 +318,7 @@ class TestVerificationConfigIntegration:
         assert config.is_few_shot_enabled() is True
         assert config.get_few_shot_config() == few_shot_config
 
-    def test_legacy_few_shot_compatibility(self):
+    def test_legacy_few_shot_compatibility(self) -> None:
         """Test backward compatibility with legacy few-shot fields."""
         answering_model = ModelConfig(
             id="test-answering",
@@ -354,7 +354,7 @@ class TestVerificationConfigIntegration:
         assert few_shot_config.global_mode == "k-shot"
         assert few_shot_config.global_k == 5
 
-    def test_legacy_custom_mode_support(self):
+    def test_legacy_custom_mode_support(self) -> None:
         """Test that legacy 'custom' mode works correctly."""
         answering_model = ModelConfig(
             id="test-answering",
@@ -386,7 +386,7 @@ class TestVerificationConfigIntegration:
         assert few_shot_config is not None
         assert few_shot_config.global_mode == "custom"
 
-    def test_few_shot_validation_new_config(self):
+    def test_few_shot_validation_new_config(self) -> None:
         """Test validation with new FewShotConfig."""
         answering_model = ModelConfig(
             id="test-answering",
@@ -419,7 +419,7 @@ class TestVerificationConfigIntegration:
                 few_shot_config=few_shot_config,
             )
 
-    def test_is_few_shot_enabled_methods(self):
+    def test_is_few_shot_enabled_methods(self) -> None:
         """Test the few-shot enabled check methods."""
         answering_model = ModelConfig(
             id="test-answering",

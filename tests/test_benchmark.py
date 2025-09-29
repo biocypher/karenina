@@ -10,7 +10,7 @@ from karenina.benchmark.benchmark import Benchmark
 from karenina.schemas.rubric_class import RubricTrait
 
 
-def test_create_benchmark():
+def test_create_benchmark() -> None:
     """Test creating a new benchmark."""
     benchmark = Benchmark.create(
         name="Test Benchmark", description="A test benchmark", version="1.0.0", creator="Test Suite"
@@ -23,7 +23,7 @@ def test_create_benchmark():
     assert len(benchmark.get_question_ids()) == 0
 
 
-def test_add_question():
+def test_add_question() -> None:
     """Test adding questions to a benchmark."""
     benchmark = Benchmark.create("Test")
 
@@ -57,7 +57,7 @@ class Answer(BaseAnswer):
     assert question2["finished"] is True
 
 
-def test_add_answer_template():
+def test_add_answer_template() -> None:
     """Test adding/updating answer templates."""
     benchmark = Benchmark.create("Test")
 
@@ -83,7 +83,7 @@ def test_add_answer_template():
         benchmark.add_answer_template(q_id, invalid_template)
 
 
-def test_rubric_management():
+def test_rubric_management() -> None:
     """Test global and question-specific rubrics."""
     benchmark = Benchmark.create("Test")
 
@@ -113,7 +113,7 @@ def test_rubric_management():
     assert question_data["question_rubric"][0].name == "complexity_analysis"
 
 
-def test_save_and_load():
+def test_save_and_load() -> None:
     """Test saving and loading benchmarks."""
     # Create a benchmark with data
     benchmark = Benchmark.create(name="Save/Load Test", description="Testing save and load")
@@ -151,7 +151,7 @@ def test_save_and_load():
         temp_path.unlink()
 
 
-def test_json_ld_format():
+def test_json_ld_format() -> None:
     """Test that the output is valid JSON-LD."""
     benchmark = Benchmark.create("JSON-LD Test")
 
@@ -189,7 +189,7 @@ def test_json_ld_format():
         temp_path.unlink()
 
 
-def test_get_finished_templates():
+def test_get_finished_templates() -> None:
     """Test getting finished templates for verification."""
     benchmark = Benchmark.create("Test")
 
@@ -214,7 +214,7 @@ def test_get_finished_templates():
     assert templates[0].finished is True
 
 
-def test_validate_benchmark():
+def test_validate_benchmark() -> None:
     """Test benchmark validation."""
     benchmark = Benchmark.create("Test")
 
@@ -244,7 +244,7 @@ def test_validate_benchmark():
     assert "Invalid template" in msg
 
 
-def test_metadata_handling():
+def test_metadata_handling() -> None:
     """Test custom metadata and author/sources."""
     benchmark = Benchmark.create("Test")
 
@@ -285,7 +285,7 @@ def test_metadata_handling():
         temp_path.unlink()
 
 
-def test_question_id_generation():
+def test_question_id_generation() -> None:
     """Test that question IDs are generated consistently."""
     benchmark = Benchmark.create("Test")
 
@@ -305,7 +305,7 @@ def test_question_id_generation():
     assert len(benchmark.get_question_ids()) == 2
 
 
-def test_magic_methods():
+def test_magic_methods() -> None:
     """Test magic methods for better usability."""
     benchmark = Benchmark.create("Test Benchmark", "Testing magic methods")
 
@@ -346,7 +346,7 @@ def test_magic_methods():
     assert all("question" in q for q in questions_from_iter)
 
 
-def test_property_accessors():
+def test_property_accessors() -> None:
     """Test property accessors for common attributes."""
     benchmark = Benchmark.create("Test", "Description", "2.0.0", "Test Creator")
 
@@ -387,7 +387,7 @@ def test_property_accessors():
     assert benchmark.is_complete is False
 
 
-def test_statistics_and_summary():
+def test_statistics_and_summary() -> None:
     """Test statistics and summary methods."""
     benchmark = Benchmark.create("Stats Test")
 
@@ -427,7 +427,7 @@ def test_statistics_and_summary():
     assert stats["avg_template_length"] > 0
 
 
-def test_filtering_and_search():
+def test_filtering_and_search() -> None:
     """Test filtering and search capabilities."""
     benchmark = Benchmark.create("Filter Test")
 
@@ -474,7 +474,7 @@ def test_filtering_and_search():
     assert len(unfinished_questions) == 2
 
 
-def test_bulk_operations():
+def test_bulk_operations() -> None:
     """Test bulk operations."""
     benchmark = Benchmark.create("Bulk Test")
 
@@ -512,7 +512,7 @@ def test_bulk_operations():
     assert len(with_templates) == 3
 
 
-def test_template_management():
+def test_template_management() -> None:
     """Test enhanced template management."""
     benchmark = Benchmark.create("Template Test")
 
@@ -558,7 +558,7 @@ def test_template_management():
     assert benchmark.get_template(q2_id) == template2
 
 
-def test_status_management():
+def test_status_management() -> None:
     """Test status management methods."""
     benchmark = Benchmark.create("Status Test")
 
@@ -589,7 +589,7 @@ def test_status_management():
         benchmark.toggle_finished("nonexistent")
 
 
-def test_clear_and_remove_operations():
+def test_clear_and_remove_operations() -> None:
     """Test clear and remove operations."""
     from karenina.schemas.rubric_class import RubricTrait
 
@@ -624,7 +624,7 @@ def test_clear_and_remove_operations():
     assert cleared is False
 
 
-def test_export_methods():
+def test_export_methods() -> None:
     """Test export capabilities."""
     benchmark = Benchmark.create("Export Test", "Test description")
 
@@ -663,7 +663,7 @@ def test_export_methods():
     assert cloned is not benchmark  # Different objects
 
 
-def test_validation_and_health():
+def test_validation_and_health() -> None:
     """Test validation and health check methods."""
     benchmark = Benchmark.create("Health Test")
 
@@ -713,7 +713,7 @@ def test_validation_and_health():
     assert health["health_status"] == "excellent"
 
 
-def test_comparison_methods():
+def test_comparison_methods() -> None:
     """Test benchmark comparison."""
     b1 = Benchmark.create("Test1", "Desc1", "1.0.0")
     b2 = Benchmark.create("Test1", "Desc1", "1.0.0")
@@ -739,7 +739,7 @@ def test_comparison_methods():
     assert b1.question_count != b2.question_count
 
 
-def test_metadata_properties():
+def test_metadata_properties() -> None:
     """Test all metadata property getters and setters."""
     benchmark = Benchmark.create("Original Name", "Original Description", "1.0.0", "Original Creator")
 
@@ -783,7 +783,7 @@ def test_metadata_properties():
     assert benchmark.modified_at == custom_modified
 
 
-def test_custom_properties():
+def test_custom_properties() -> None:
     """Test custom property management."""
     benchmark = Benchmark.create("Custom Props Test")
 
@@ -832,7 +832,7 @@ def test_custom_properties():
     assert len(remaining) == 5  # benchmark_format_version, category, difficulty, requires_gpu, tags
 
 
-def test_metadata_persistence():
+def test_metadata_persistence() -> None:
     """Test metadata persistence through save/load."""
     import tempfile
     from pathlib import Path
@@ -884,7 +884,7 @@ def test_metadata_persistence():
         temp_path.unlink()
 
 
-def test_question_metadata():
+def test_question_metadata() -> None:
     """Test question metadata management."""
     benchmark = Benchmark.create("Question Metadata Test")
 
@@ -939,7 +939,7 @@ def test_question_metadata():
     assert nonexistent is None
 
 
-def test_question_metadata_updates():
+def test_question_metadata_updates() -> None:
     """Test updating question metadata."""
     benchmark = Benchmark.create("Metadata Updates Test")
 
@@ -996,7 +996,7 @@ def test_question_metadata_updates():
     assert sources[1]["title"] == "Source B"
 
 
-def test_question_metadata_persistence():
+def test_question_metadata_persistence() -> None:
     """Test question metadata persistence through save/load."""
     import tempfile
     from datetime import datetime
@@ -1090,7 +1090,7 @@ def test_question_metadata_persistence():
         temp_path.unlink()
 
 
-def test_question_metadata_error_handling():
+def test_question_metadata_error_handling() -> None:
     """Test error handling for question metadata operations."""
     benchmark = Benchmark.create("Error Handling Test")
 
@@ -1117,7 +1117,7 @@ def test_question_metadata_error_handling():
         benchmark.get_question_timestamps("nonexistent")
 
 
-def test_benchmark_getitem_by_index():
+def test_benchmark_getitem_by_index() -> None:
     """Test accessing questions by integer index."""
     benchmark = Benchmark.create("Index Test")
 
@@ -1152,7 +1152,7 @@ def test_benchmark_getitem_by_index():
     assert second_to_last.id == q2_id
 
 
-def test_benchmark_getitem_by_slice():
+def test_benchmark_getitem_by_slice() -> None:
     """Test accessing questions by slice."""
     benchmark = Benchmark.create("Slice Test")
 
@@ -1188,7 +1188,7 @@ def test_benchmark_getitem_by_slice():
     assert last_two[1].text == "Question 4"
 
 
-def test_benchmark_getitem_by_string_id():
+def test_benchmark_getitem_by_string_id() -> None:
     """Test accessing questions by string ID (existing behavior)."""
     benchmark = Benchmark.create("String ID Test")
 
@@ -1201,7 +1201,7 @@ def test_benchmark_getitem_by_string_id():
     assert question.id == q_id
 
 
-def test_benchmark_getitem_edge_cases():
+def test_benchmark_getitem_edge_cases() -> None:
     """Test edge cases and error conditions for __getitem__."""
     benchmark = Benchmark.create("Edge Cases Test")
 
@@ -1231,7 +1231,7 @@ def test_benchmark_getitem_edge_cases():
         benchmark["nonexistent-id"]
 
 
-def test_benchmark_getitem_returns_schema_org_question():
+def test_benchmark_getitem_returns_schema_org_question() -> None:
     """Test that __getitem__ returns proper SchemaOrgQuestion objects."""
     from karenina.schemas.checkpoint import SchemaOrgQuestion
 
@@ -1283,7 +1283,7 @@ class Answer(BaseAnswer):
     assert questions_by_slice[0].text == "Test Question with Template"
 
 
-def test_benchmark_getitem_with_rubric_traits():
+def test_benchmark_getitem_with_rubric_traits() -> None:
     """Test __getitem__ with question-specific rubric traits."""
     benchmark = Benchmark.create("Rubric Test")
 

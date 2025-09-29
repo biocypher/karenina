@@ -11,7 +11,7 @@ from karenina.benchmark.benchmark import Benchmark
 
 
 @pytest.fixture
-def sample_benchmark():
+def sample_benchmark() -> None:
     """Create a sample benchmark with test questions."""
     benchmark = Benchmark.create("Test Benchmark", "A test benchmark for template generation")
 
@@ -32,7 +32,7 @@ def sample_benchmark():
 
 
 @pytest.fixture
-def mock_llm_response():
+def mock_llm_response() -> None:
     """Mock LLM response with code blocks."""
     return """Here's your answer template:
 
@@ -51,7 +51,7 @@ This template should work well for your question."""
 
 
 @pytest.fixture
-def mock_code_blocks():
+def mock_code_blocks() -> None:
     """Mock extracted code blocks."""
     return """from karenina.schemas.answer_class import BaseAnswer
 from pydantic import Field
@@ -64,7 +64,7 @@ class Answer(BaseAnswer):
 
 
 @pytest.fixture
-def valid_template_code():
+def valid_template_code() -> None:
     """Valid template code for testing."""
     return """from karenina.schemas.answer_class import BaseAnswer
 from pydantic import Field
@@ -80,7 +80,7 @@ class TestSingleQuestionTemplateGeneration:
     """Test single question template generation."""
 
     @patch("karenina.benchmark.benchmark.generate_answer_template")
-    def test_generate_template_for_question_success(self, mock_generate, sample_benchmark, mock_code_blocks):
+    def test_generate_template_for_question_success(self, mock_generate, sample_benchmark, mock_code_blocks) -> None:
         """Test successful template generation for a single question."""
         # Setup mocks - now returns plain Python code directly
         mock_generate.return_value = mock_code_blocks
@@ -110,7 +110,7 @@ class TestSingleQuestionTemplateGeneration:
         )
 
     @patch("karenina.benchmark.benchmark.generate_answer_template")
-    def test_generate_template_for_question_no_code_blocks(self, mock_generate, sample_benchmark):
+    def test_generate_template_for_question_no_code_blocks(self, mock_generate, sample_benchmark) -> None:
         """Test template generation when no code blocks are found."""
         # Setup mocks - returns empty string (no code)
         mock_generate.return_value = ""
@@ -124,7 +124,7 @@ class TestSingleQuestionTemplateGeneration:
         assert "No valid code blocks found" in result["error"]
         assert result["skipped"] is False
 
-    def test_generate_template_for_question_nonexistent(self, sample_benchmark):
+    def test_generate_template_for_question_nonexistent(self, sample_benchmark) -> None:
         """Test template generation for nonexistent question."""
         with pytest.raises(ValueError, match="Question not found: nonexistent"):
             sample_benchmark.generate_template_for_question("nonexistent")
@@ -168,7 +168,7 @@ class TestSingleQuestionTemplateGeneration:
         mock_generate.assert_called_once()
 
     @patch("karenina.benchmark.benchmark.generate_answer_template")
-    def test_generate_template_for_question_llm_error(self, mock_generate, sample_benchmark):
+    def test_generate_template_for_question_llm_error(self, mock_generate, sample_benchmark) -> None:
         """Test template generation when LLM call fails."""
         # Setup mock to raise exception
         mock_generate.side_effect = Exception("LLM API error")
@@ -183,7 +183,9 @@ class TestSingleQuestionTemplateGeneration:
         assert result["skipped"] is False
 
     @patch("karenina.benchmark.benchmark.generate_answer_template")
-    def test_generate_template_for_question_custom_parameters(self, mock_generate, sample_benchmark, mock_code_blocks):
+    def test_generate_template_for_question_custom_parameters(
+        self, mock_generate, sample_benchmark, mock_code_blocks
+    ) -> None:
         """Test template generation with custom parameters."""
         # Setup mocks - returns plain Python code directly
         mock_generate.return_value = mock_code_blocks
@@ -212,7 +214,7 @@ class TestBatchTemplateGeneration:
     """Test batch template generation."""
 
     @patch("karenina.benchmark.benchmark.generate_answer_template")
-    def test_generate_templates_success(self, mock_generate, sample_benchmark, mock_code_blocks):
+    def test_generate_templates_success(self, mock_generate, sample_benchmark, mock_code_blocks) -> None:
         """Test successful batch template generation."""
         # Setup mocks - returns plain Python code directly
         mock_generate.return_value = mock_code_blocks
@@ -232,13 +234,13 @@ class TestBatchTemplateGeneration:
         # Verify generator was called twice
         assert mock_generate.call_count == 2
 
-    def test_generate_templates_invalid_question_ids(self, sample_benchmark):
+    def test_generate_templates_invalid_question_ids(self, sample_benchmark) -> None:
         """Test batch generation with invalid question IDs."""
         with pytest.raises(ValueError, match="Questions not found: \\['nonexistent'\\]"):
             sample_benchmark.generate_templates(["q1", "nonexistent", "q2"])
 
     @patch("karenina.benchmark.benchmark.generate_answer_template")
-    def test_generate_templates_with_progress_callback(self, mock_generate, sample_benchmark, mock_code_blocks):
+    def test_generate_templates_with_progress_callback(self, mock_generate, sample_benchmark, mock_code_blocks) -> None:
         """Test batch generation with progress callback."""
         # Setup mocks - returns plain Python code directly
         mock_generate.return_value = mock_code_blocks
@@ -258,11 +260,11 @@ class TestBatchTemplateGeneration:
         assert "completed" in final_call[0][1].lower()
 
     @patch("karenina.benchmark.benchmark.generate_answer_template")
-    def test_generate_templates_mixed_results(self, mock_generate, sample_benchmark, mock_code_blocks):
+    def test_generate_templates_mixed_results(self, mock_generate, sample_benchmark, mock_code_blocks) -> None:
         """Test batch generation with mixed success/failure results."""
 
         # Setup mock to fail on second question
-        def mock_generate_side_effect(*args, **kwargs):
+        def mock_generate_side_effect(*args, **kwargs) -> None:
             if "machine learning" in kwargs.get("question", ""):
                 raise Exception("API error")
             return mock_code_blocks
@@ -319,7 +321,7 @@ class TestGenerateAllTemplates:
         assert len(results) == 3
         assert all(qid in results for qid in ["q1", "q2", "q3"])
 
-    def test_generate_all_templates_empty_benchmark(self):
+    def test_generate_all_templates_empty_benchmark(self) -> None:
         """Test generating templates on empty benchmark."""
         benchmark = Benchmark.create("Empty Benchmark")
 
@@ -331,7 +333,7 @@ class TestGenerateAllTemplates:
 class TestTemplateExportImport:
     """Test template export and import functionality."""
 
-    def test_export_generated_templates(self, sample_benchmark, valid_template_code):
+    def test_export_generated_templates(self, sample_benchmark, valid_template_code) -> None:
         """Test exporting templates to JSON file."""
         # Add templates to some questions
         sample_benchmark.add_answer_template("q1", valid_template_code)
@@ -359,7 +361,7 @@ class TestTemplateExportImport:
             if tmp_path.exists():
                 tmp_path.unlink()
 
-    def test_export_generated_templates_no_templates(self, sample_benchmark):
+    def test_export_generated_templates_no_templates(self, sample_benchmark) -> None:
         """Test exporting when no templates exist."""
         with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as tmp_file:
             tmp_path = Path(tmp_file.name)
@@ -377,7 +379,7 @@ class TestTemplateExportImport:
                 tmp_path.unlink()
 
     @patch("karenina.benchmark.benchmark.load_answer_templates_from_json")
-    def test_import_generated_templates_success(self, mock_load, sample_benchmark, valid_template_code):
+    def test_import_generated_templates_success(self, mock_load, sample_benchmark, valid_template_code) -> None:
         """Test successful template import."""
         # Setup mock return value
         mock_templates = {}
@@ -398,7 +400,7 @@ class TestTemplateExportImport:
         assert sample_benchmark.has_template("q2")
 
     @patch("karenina.benchmark.benchmark.load_answer_templates_from_json")
-    def test_import_generated_templates_with_existing(self, mock_load, sample_benchmark, valid_template_code):
+    def test_import_generated_templates_with_existing(self, mock_load, sample_benchmark, valid_template_code) -> None:
         """Test import when some templates already exist."""
         # Add existing template
         sample_benchmark.add_answer_template("q1", valid_template_code)
@@ -431,7 +433,7 @@ class Answer(BaseAnswer):
         assert sample_benchmark.get_template("q1") == valid_template_code
 
     @patch("karenina.benchmark.benchmark.load_answer_templates_from_json")
-    def test_import_generated_templates_force_overwrite(self, mock_load, sample_benchmark, valid_template_code):
+    def test_import_generated_templates_force_overwrite(self, mock_load, sample_benchmark, valid_template_code) -> None:
         """Test import with force_overwrite=True."""
         # Add existing template
         sample_benchmark.add_answer_template("q1", valid_template_code)
@@ -460,7 +462,9 @@ class Answer(BaseAnswer):
         assert sample_benchmark.get_template("q1") == import_template
 
     @patch("karenina.benchmark.benchmark.load_answer_templates_from_json")
-    def test_import_generated_templates_nonexistent_questions(self, mock_load, sample_benchmark, valid_template_code):
+    def test_import_generated_templates_nonexistent_questions(
+        self, mock_load, sample_benchmark, valid_template_code
+    ) -> None:
         """Test import with templates for non-existent questions."""
         # Setup mock return value with non-existent question
         mock_templates = {}
@@ -477,7 +481,7 @@ class Answer(BaseAnswer):
         assert results["nonexistent"] is False
 
     @patch("karenina.benchmark.benchmark.load_answer_templates_from_json")
-    def test_import_generated_templates_load_error(self, mock_load, sample_benchmark):
+    def test_import_generated_templates_load_error(self, mock_load, sample_benchmark) -> None:
         """Test import when loading fails."""
         # Setup mock to return invalid format
         mock_load.return_value = {}  # Not a tuple
@@ -492,7 +496,7 @@ class Answer(BaseAnswer):
 class TestTemplateGenerationIntegration:
     """Integration tests for template generation functionality."""
 
-    def test_full_workflow_generate_export_import(self, sample_benchmark, mock_code_blocks):
+    def test_full_workflow_generate_export_import(self, sample_benchmark, mock_code_blocks) -> None:
         """Test complete workflow: generate -> export -> import to new benchmark."""
         # Step 1: Generate templates (mock the LLM calls)
         with patch("karenina.benchmark.benchmark.generate_answer_template") as mock_generate:

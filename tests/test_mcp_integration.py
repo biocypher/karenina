@@ -16,7 +16,7 @@ from karenina.llm.mcp_utils import (
 class TestHarmonizeAgentResponse:
     """Test the agent response harmonization utility."""
 
-    def test_harmonize_single_message_with_content(self):
+    def test_harmonize_single_message_with_content(self) -> None:
         """Test harmonization of single message with content attribute."""
         mock_message = Mock()
         mock_message.content = "Hello, world!"
@@ -24,7 +24,7 @@ class TestHarmonizeAgentResponse:
         result = harmonize_agent_response(mock_message)
         assert result == "Hello, world!"
 
-    def test_harmonize_agent_state_with_messages(self):
+    def test_harmonize_agent_state_with_messages(self) -> None:
         """Test harmonization of agent state dict with messages."""
         # Use real AIMessage objects instead of Mock for proper pretty_print support
         msg1 = AIMessage(content="First message")
@@ -37,7 +37,7 @@ class TestHarmonizeAgentResponse:
         assert "First message" in result
         assert "Second message" in result
 
-    def test_harmonize_list_of_messages(self):
+    def test_harmonize_list_of_messages(self) -> None:
         """Test harmonization of direct list of messages."""
         # Use real AIMessage objects instead of Mock for proper pretty_print support
         msg1 = AIMessage(content="Message one")
@@ -52,7 +52,7 @@ class TestHarmonizeAgentResponse:
         assert "Message two" in result
         assert "Message three" in result
 
-    def test_harmonize_empty_messages(self):
+    def test_harmonize_empty_messages(self) -> None:
         """Test harmonization with empty or None content."""
         msg1 = Mock()
         msg1.content = ""
@@ -62,17 +62,17 @@ class TestHarmonizeAgentResponse:
         result = harmonize_agent_response([msg1, msg2])
         assert result == ""
 
-    def test_harmonize_none_response(self):
+    def test_harmonize_none_response(self) -> None:
         """Test harmonization with None response."""
         result = harmonize_agent_response(None)
         assert result == ""
 
-    def test_harmonize_fallback_to_str(self):
+    def test_harmonize_fallback_to_str(self) -> None:
         """Test fallback to string conversion."""
         result = harmonize_agent_response("plain string")
         assert result == "plain string"
 
-    def test_harmonize_real_langchain_messages(self):
+    def test_harmonize_real_langchain_messages(self) -> None:
         """Test harmonization with real LangChain AIMessage objects."""
         msg1 = AIMessage(content="I need to search for information.")
         msg2 = AIMessage(content="Based on my search, here's the answer: 42")
@@ -86,7 +86,7 @@ class TestHarmonizeAgentResponse:
         # Check for AI message formatting
         assert "=================================" in result or "I need to search for information." in result
 
-    def test_harmonize_agent_trace_with_tool_messages(self):
+    def test_harmonize_agent_trace_with_tool_messages(self) -> None:
         """Test harmonization with complete React agent trace including tools."""
         # Simulate a complete React agent execution with reasoning and tool usage
         messages = [
@@ -120,7 +120,7 @@ class TestHarmonizeAgentResponse:
         lines = result.split("\n")
         assert len(lines) > 1  # Multiple formatted sections
 
-    def test_harmonize_filters_system_and_human_messages(self):
+    def test_harmonize_filters_system_and_human_messages(self) -> None:
         """Test that system messages and first human message are filtered, but subsequent human messages are preserved."""
         messages = [
             SystemMessage(content="You are an assistant."),
@@ -143,7 +143,7 @@ class TestHarmonizeAgentResponse:
         assert "You are an assistant." not in result  # System messages still filtered
         assert "Hello there!" not in result  # First human message still filtered
 
-    def test_harmonize_with_react_agent_intermediate_thoughts(self):
+    def test_harmonize_with_react_agent_intermediate_thoughts(self) -> None:
         """Test React agent scenario where intermediate HumanMessages contain thoughts."""
         # This test demonstrates the issue: React agents might structure their
         # reasoning with intermediate HumanMessages that are currently being filtered out
@@ -192,7 +192,7 @@ class TestHarmonizeAgentResponse:
 class TestMCPUtilities:
     """Test MCP utility functions."""
 
-    def test_sync_create_mcp_client_and_tools_success(self):
+    def test_sync_create_mcp_client_and_tools_success(self) -> None:
         """Test synchronous wrapper for MCP client creation."""
         mock_client = Mock()
         mock_tools = [Mock(), Mock()]
@@ -209,11 +209,11 @@ class TestMCPUtilities:
 class TestInitChatModelUnifiedWithMCP:
     """Test init_chat_model_unified function with MCP support."""
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         """Set up test fixtures."""
         self.mcp_urls = {"biocontext": "https://mcp.biocontext.ai/mcp/"}
 
-    def test_init_without_mcp_returns_base_model(self):
+    def test_init_without_mcp_returns_base_model(self) -> None:
         """Test that without MCP URLs, function returns base model."""
         with patch("karenina.llm.interface.init_chat_model") as mock_init:
             mock_model = Mock()
@@ -224,14 +224,14 @@ class TestInitChatModelUnifiedWithMCP:
             assert result == mock_model
             mock_init.assert_called_once_with(model="gpt-4", model_provider="openai")
 
-    def test_init_with_manual_interface_and_mcp_raises_error(self):
+    def test_init_with_manual_interface_and_mcp_raises_error(self) -> None:
         """Test that MCP with manual interface raises ValueError."""
         with pytest.raises(ValueError, match="MCP integration is not supported with manual interface"):
             init_chat_model_unified(
                 model="manual", interface="manual", question_hash="abc123", mcp_urls_dict=self.mcp_urls
             )
 
-    def test_init_with_mcp_creates_agent(self):
+    def test_init_with_mcp_creates_agent(self) -> None:
         """Test that with MCP URLs, function creates agent."""
         mock_base_model = Mock()
         mock_agent = Mock()
@@ -248,14 +248,14 @@ class TestInitChatModelUnifiedWithMCP:
 
             assert result == mock_agent
 
-    def test_init_with_mcp_missing_dependencies_raises_error(self):
+    def test_init_with_mcp_missing_dependencies_raises_error(self) -> None:
         """Test that missing dependencies raise ImportError."""
         with patch("karenina.llm.interface.init_chat_model", return_value=Mock()):
             # Import error will be raised naturally when langgraph is not available
             # For this test, we'll just verify the base functionality works
             pass
 
-    def test_init_with_mcp_client_creation_error(self):
+    def test_init_with_mcp_client_creation_error(self) -> None:
         """Test error handling during MCP client creation."""
         with (
             patch("karenina.llm.interface.init_chat_model", return_value=Mock()),
@@ -272,20 +272,20 @@ class TestInitChatModelUnifiedWithMCP:
 class TestChatSessionWithMCP:
     """Test ChatSession class with MCP support."""
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         """Set up test fixtures."""
         # Clear any existing sessions
         chat_sessions.clear()
         self.mcp_urls = {"biocontext": "https://mcp.biocontext.ai/mcp/"}
 
-    def test_chat_session_initialization_with_mcp(self):
+    def test_chat_session_initialization_with_mcp(self) -> None:
         """Test ChatSession initialization with MCP URLs."""
         session = ChatSession(session_id="test-session", model="gpt-4", provider="openai", mcp_urls_dict=self.mcp_urls)
 
         assert session.mcp_urls_dict == self.mcp_urls
         assert session.is_agent is False  # Only set to True after LLM initialization
 
-    def test_chat_session_initialize_llm_with_mcp(self):
+    def test_chat_session_initialize_llm_with_mcp(self) -> None:
         """Test LLM initialization in ChatSession with MCP."""
         session = ChatSession(session_id="test-session", model="gpt-4", provider="openai", mcp_urls_dict=self.mcp_urls)
 
@@ -296,7 +296,7 @@ class TestChatSessionWithMCP:
             assert session.llm == mock_agent
             assert session.is_agent is True
 
-    def test_call_model_with_mcp_urls(self):
+    def test_call_model_with_mcp_urls(self) -> None:
         """Test call_model function with MCP URLs."""
         from unittest.mock import AsyncMock
 
@@ -324,7 +324,7 @@ class TestChatSessionWithMCP:
 class TestModelConfigWithMCP:
     """Test ModelConfig with MCP support."""
 
-    def test_model_config_with_mcp_urls(self):
+    def test_model_config_with_mcp_urls(self) -> None:
         """Test ModelConfig creation with MCP URLs."""
         mcp_urls = {"biocontext": "https://mcp.biocontext.ai/mcp/"}
 
@@ -338,7 +338,7 @@ class TestModelConfigWithMCP:
 
         assert config.mcp_urls_dict == mcp_urls
 
-    def test_model_config_without_mcp_urls(self):
+    def test_model_config_without_mcp_urls(self) -> None:
         """Test ModelConfig creation without MCP URLs."""
         config = ModelConfig(
             id="test-model", model_provider="openai", model_name="gpt-4", system_prompt="You are a helpful assistant."
@@ -350,7 +350,7 @@ class TestModelConfigWithMCP:
 class TestVerificationRunnerWithMCP:
     """Test verification runner with MCP integration."""
 
-    def test_run_single_model_verification_with_mcp(self):
+    def test_run_single_model_verification_with_mcp(self) -> None:
         """Test verification runner with MCP-enabled answering model."""
         answering_model = ModelConfig(
             id="mcp-answering",
@@ -372,12 +372,12 @@ class TestVerificationRunnerWithMCP:
 class TestToolFiltering:
     """Test MCP tool filtering functionality."""
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         """Set up test fixtures."""
         self.mcp_urls = {"biocontext": "https://mcp.biocontext.ai/mcp/"}
         self.tool_filter = ["search_proteins", "get_interactions"]
 
-    def test_create_mcp_client_with_tool_filter(self):
+    def test_create_mcp_client_with_tool_filter(self) -> None:
         """Test MCP client creation with tool filtering."""
         # Mock tools with different names
         mock_tool1 = Mock()
@@ -403,7 +403,7 @@ class TestToolFiltering:
             assert "get_interactions" in tool_names
             assert "unwanted_tool" not in tool_names
 
-    def test_init_chat_model_unified_with_tool_filter(self):
+    def test_init_chat_model_unified_with_tool_filter(self) -> None:
         """Test init_chat_model_unified with tool filtering."""
         mock_base_model = Mock()
         mock_agent = Mock()
@@ -434,7 +434,7 @@ class TestToolFiltering:
             # Verify sync_create_mcp_client_and_tools was called with tool filter
             mock_sync.assert_called_once_with(self.mcp_urls, self.tool_filter)
 
-    def test_model_config_with_tool_filter(self):
+    def test_model_config_with_tool_filter(self) -> None:
         """Test ModelConfig with tool filtering."""
         config = ModelConfig(
             id="test-model",
@@ -448,7 +448,7 @@ class TestToolFiltering:
         assert config.mcp_tool_filter == self.tool_filter
         assert config.mcp_urls_dict == self.mcp_urls
 
-    def test_chat_session_with_tool_filter(self):
+    def test_chat_session_with_tool_filter(self) -> None:
         """Test ChatSession with tool filtering."""
         session = ChatSession(
             session_id="test-session",
@@ -461,7 +461,7 @@ class TestToolFiltering:
         assert session.mcp_tool_filter == self.tool_filter
         assert session.mcp_urls_dict == self.mcp_urls
 
-    def test_call_model_with_tool_filter(self):
+    def test_call_model_with_tool_filter(self) -> None:
         """Test call_model function with tool filtering."""
         from unittest.mock import AsyncMock
 
@@ -484,7 +484,7 @@ class TestToolFiltering:
             assert "Filtered agent response" in response.message
             assert async_mock.called
 
-    def test_tool_filter_none_returns_all_tools(self):
+    def test_tool_filter_none_returns_all_tools(self) -> None:
         """Test that None tool_filter returns all tools."""
         mock_tool1 = Mock()
         mock_tool1.name = "tool1"
@@ -504,7 +504,7 @@ class TestToolFiltering:
             assert len(tools) == 3
             assert tools == all_tools
 
-    def test_tool_filter_empty_list_returns_no_tools(self):
+    def test_tool_filter_empty_list_returns_no_tools(self) -> None:
         """Test that empty tool_filter list returns no tools."""
         mock_tool1 = Mock()
         mock_tool1.name = "tool1"
@@ -519,7 +519,7 @@ class TestToolFiltering:
             # Should return no tools when filter is empty
             assert len(tools) == 0
 
-    def test_tool_filter_nonexistent_tools(self):
+    def test_tool_filter_nonexistent_tools(self) -> None:
         """Test tool filtering with nonexistent tool names."""
         mock_tool1 = Mock()
         mock_tool1.name = "existing_tool"
@@ -538,7 +538,7 @@ class TestToolFiltering:
 class TestIntegrationScenarios:
     """Integration tests for common MCP scenarios."""
 
-    def test_biocontext_scenario_mock(self):
+    def test_biocontext_scenario_mock(self) -> None:
         """Test a mock scenario similar to biocontext.ai usage."""
         # Mock agent that simulates biocontext tool usage
         mock_response = {
@@ -564,7 +564,7 @@ class TestIntegrationScenarios:
         lines = harmonized.split("\n")
         assert len(lines) > 1  # Multiple sections due to pretty_print formatting
 
-    def test_biocontext_with_tool_filtering_scenario(self):
+    def test_biocontext_with_tool_filtering_scenario(self) -> None:
         """Test biocontext.ai scenario with tool filtering."""
         mcp_urls = {"biocontext": "https://mcp.biocontext.ai/mcp/"}
         tool_filter = ["search_proteins", "get_interactions"]
@@ -588,6 +588,6 @@ class TestIntegrationScenarios:
         assert answering_model.mcp_urls_dict == mcp_urls
         assert parsing_model.mcp_tool_filter is None
 
-    def teardown_method(self):
+    def teardown_method(self) -> None:
         """Clean up after tests."""
         chat_sessions.clear()

@@ -6,7 +6,7 @@ from karenina.benchmark.models import ModelConfig
 from karenina.benchmark.verification.runner import _is_valid_md5_hash, run_single_model_verification
 
 
-def test_is_valid_md5_hash():
+def test_is_valid_md5_hash() -> None:
     """Test MD5 hash validation function."""
     # Valid MD5 hashes
     assert _is_valid_md5_hash("d41d8cd98f00b204e9800998ecf8427e")
@@ -31,7 +31,7 @@ def test_is_valid_md5_hash():
     assert not _is_valid_md5_hash([])
 
 
-def test_manual_interface_valid_hash():
+def test_manual_interface_valid_hash() -> None:
     """Test that manual interface accepts valid MD5 hash as question_id."""
     from karenina.llm.manual_traces import clear_manual_traces, load_manual_traces
 
@@ -98,7 +98,7 @@ class Answer(BaseAnswer):
         clear_manual_traces()
 
 
-def test_manual_interface_invalid_hash():
+def test_manual_interface_invalid_hash() -> None:
     """Test that manual interface rejects invalid question_id formats."""
     # Create manual model configuration
     manual_model = ModelConfig(
@@ -159,7 +159,7 @@ class Answer(BaseAnswer):
         assert "Invalid question_id format for manual interface" in result.error
 
 
-def test_non_manual_interface_ignores_hash_validation():
+def test_non_manual_interface_ignores_hash_validation() -> None:
     """Test that non-manual interfaces don't validate question_id format."""
     # Create non-manual model configuration
     langchain_model = ModelConfig(
@@ -203,7 +203,7 @@ class Answer(BaseAnswer):
         pass
 
 
-def test_hash_validation_error_message():
+def test_hash_validation_error_message() -> None:
     """Test that hash validation provides helpful error message."""
     manual_model = ModelConfig(
         id="test-manual-model",

@@ -7,7 +7,7 @@ import pytest
 from karenina.answers.reader import read_answer_templates
 
 
-def test_read_answer_templates_success():
+def test_read_answer_templates_success() -> None:
     """Test successfully reading answer templates from a JSON file."""
     # Create test answer templates data
     answer_templates = {
@@ -55,7 +55,7 @@ def test_read_answer_templates_success():
         os.unlink(tmp_path)
 
 
-def test_read_answer_templates_with_pathlib():
+def test_read_answer_templates_with_pathlib() -> None:
     """Test reading answer templates using a pathlib.Path object."""
     from pathlib import Path
 
@@ -86,7 +86,7 @@ def test_read_answer_templates_with_pathlib():
         os.unlink(tmp_path)
 
 
-def test_read_answer_templates_multiple_classes():
+def test_read_answer_templates_multiple_classes() -> None:
     """Test reading multiple answer templates with different class structures."""
     answer_templates = {
         "class1": '''class Answer(BaseAnswer):
@@ -140,13 +140,13 @@ def test_read_answer_templates_multiple_classes():
         os.unlink(tmp_path)
 
 
-def test_read_answer_templates_file_not_found():
+def test_read_answer_templates_file_not_found() -> None:
     """Test that FileNotFoundError is raised for non-existent file."""
     with pytest.raises(FileNotFoundError):
         read_answer_templates("/path/that/does/not/exist.json")
 
 
-def test_read_answer_templates_invalid_json():
+def test_read_answer_templates_invalid_json() -> None:
     """Test handling of invalid JSON file."""
     with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w") as tmp:
         tmp.write("invalid json content")
@@ -159,7 +159,7 @@ def test_read_answer_templates_invalid_json():
         os.unlink(tmp_path)
 
 
-def test_read_answer_templates_invalid_python_code():
+def test_read_answer_templates_invalid_python_code() -> None:
     """Test handling of invalid Python code in answer templates."""
     answer_templates = {"invalid": "this is not valid python code !!!"}
 
@@ -174,7 +174,7 @@ def test_read_answer_templates_invalid_python_code():
         os.unlink(tmp_path)
 
 
-def test_read_answer_templates_empty_file():
+def test_read_answer_templates_empty_file() -> None:
     """Test reading from an empty JSON file."""
     answer_templates = {}
 
