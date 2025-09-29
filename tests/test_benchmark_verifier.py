@@ -114,12 +114,12 @@ class Answer(BaseAnswer):
 def test_run_question_verification_template_validation_failure(mock_init_model):
     """Test verification with invalid template."""
     config = VerificationConfig(
-        answering_model_provider="google_genai",
-        answering_model_name="gemini-2.0-flash",
+        answering_model_provider="openai",
+        answering_model_name="gpt-4.1-mini",
         answering_temperature=0.1,
         answering_interface="langchain",
-        parsing_model_provider="google_genai",
-        parsing_model_name="gemini-2.0-flash",
+        parsing_model_provider="openai",
+        parsing_model_name="gpt-4.1-mini",
         parsing_temperature=0.1,
         parsing_interface="langchain",
     )
@@ -157,7 +157,7 @@ def test_run_question_verification_success(mock_init_model):
 
     # Setup the init_chat_model_unified mock to return different models
     def mock_init_side_effect(*args, **kwargs):
-        if kwargs.get("model") == "gemini-2.0-flash":
+        if kwargs.get("model") == "gpt-4.1-mini":
             return mock_answering_llm if "answering" in str(kwargs) else mock_parsing_llm
         return mock_parsing_llm
 
@@ -173,12 +173,12 @@ def test_run_question_verification_success(mock_init_model):
         mock_parser_class.return_value = mock_parser
 
         config = VerificationConfig(
-            answering_model_provider="google_genai",
-            answering_model_name="gemini-2.0-flash",
+            answering_model_provider="openai",
+            answering_model_name="gpt-4.1-mini",
             answering_temperature=0.1,
             answering_interface="langchain",
-            parsing_model_provider="google_genai",
-            parsing_model_name="gemini-2.0-flash",
+            parsing_model_provider="openai",
+            parsing_model_name="gpt-4.1-mini",
             parsing_temperature=0.1,
             parsing_interface="langchain",
         )
@@ -242,12 +242,12 @@ def test_run_question_verification_markdown_fenced_json(mock_init_model):
         mock_parser_class.return_value = mock_parser
 
         config = VerificationConfig(
-            answering_model_provider="google_genai",
-            answering_model_name="gemini-2.0-flash",
+            answering_model_provider="openai",
+            answering_model_name="gpt-4.1-mini",
             answering_temperature=0.1,
             answering_interface="langchain",
-            parsing_model_provider="google_genai",
-            parsing_model_name="gemini-2.0-flash",
+            parsing_model_provider="openai",
+            parsing_model_name="gpt-4.1-mini",
             parsing_temperature=0.1,
             parsing_interface="langchain",
         )
@@ -309,12 +309,12 @@ def test_run_question_verification_malformed_json(mock_init_model):
         mock_parser_class.return_value = mock_parser
 
         config = VerificationConfig(
-            answering_model_provider="google_genai",
-            answering_model_name="gemini-2.0-flash",
+            answering_model_provider="openai",
+            answering_model_name="gpt-4.1-mini",
             answering_temperature=0.1,
             answering_interface="langchain",
-            parsing_model_provider="google_genai",
-            parsing_model_name="gemini-2.0-flash",
+            parsing_model_provider="openai",
+            parsing_model_name="gpt-4.1-mini",
             parsing_temperature=0.1,
             parsing_interface="langchain",
         )

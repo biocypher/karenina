@@ -18,7 +18,7 @@ class TestRubricEvaluatorManualTraits:
         return ModelConfig(
             id="test-model",
             model_provider="openai",
-            model_name="gpt-3.5-turbo",
+            model_name="gpt-4.1-mini",
             temperature=0.1,
             interface="langchain",
             system_prompt="You are a helpful assistant.",

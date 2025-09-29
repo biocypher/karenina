@@ -64,7 +64,7 @@ def sample_config():
     answering_model = ModelConfig(
         id="test-answering",
         model_provider="openai",
-        model_name="gpt-3.5-turbo",
+        model_name="gpt-4.1-mini",
         temperature=0.1,
         interface="langchain",
         system_prompt="You are a helpful assistant.",
@@ -73,7 +73,7 @@ def sample_config():
     parsing_model = ModelConfig(
         id="test-parsing",
         model_provider="openai",
-        model_name="gpt-3.5-turbo",
+        model_name="gpt-4.1-mini",
         temperature=0.0,
         interface="langchain",
         system_prompt="Parse the response according to the template.",

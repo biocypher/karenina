@@ -18,7 +18,7 @@ class TestManualTraitsGlobalEvaluation:
         return ModelConfig(
             id="parsing-model",
             model_provider="openai",
-            model_name="gpt-4",
+            model_name="gpt-4.1-mini",
             interface="langchain",
             system_prompt="You are a helpful assistant.",
         )

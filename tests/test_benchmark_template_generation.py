@@ -107,8 +107,8 @@ class TestSingleQuestionTemplateGeneration:
         mock_generate.assert_called_once_with(
             question="What is Python?",
             raw_answer="Python is a programming language",
-            model="gemini-2.0-flash",
-            model_provider="google_genai",
+            model="gpt-4.1-mini",
+            model_provider="openai",
             temperature=0,
             custom_system_prompt=None,
             interface="langchain",
@@ -206,7 +206,7 @@ class TestSingleQuestionTemplateGeneration:
         # Generate template with custom parameters
         sample_benchmark.generate_template_for_question(
             question_id="q1",
-            model="gpt-4",
+            model="gpt-4.1-mini",
             model_provider="openai",
             temperature=0.7,
             custom_system_prompt="Custom prompt",
@@ -217,7 +217,7 @@ class TestSingleQuestionTemplateGeneration:
         mock_generate.assert_called_once_with(
             question="What is Python?",
             raw_answer="Python is a programming language",
-            model="gpt-4",
+            model="gpt-4.1-mini",
             model_provider="openai",
             temperature=0.7,
             custom_system_prompt="Custom prompt",

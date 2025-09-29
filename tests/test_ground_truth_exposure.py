@@ -94,14 +94,14 @@ class TestGroundTruthExposure:
         # Configure models
         answering_model = ModelConfig(
             id="answering-model-1",
-            model_name="gpt-4",
+            model_name="gpt-4.1-mini",
             model_provider="openai",
             temperature=0.7,
             system_prompt="You are a helpful assistant.",
         )
         parsing_model = ModelConfig(
             id="parsing-model-1",
-            model_name="gpt-4",
+            model_name="gpt-4.1-mini",
             model_provider="openai",
             temperature=0.1,
             system_prompt="Parse the response into structured format.",
@@ -186,14 +186,14 @@ class TestGroundTruthExposure:
         # Configure models
         answering_model = ModelConfig(
             id="answering-model-1",
-            model_name="gpt-4",
+            model_name="gpt-4.1-mini",
             model_provider="openai",
             temperature=0.7,
             system_prompt="You are a helpful assistant.",
         )
         parsing_model = ModelConfig(
             id="parsing-model-1",
-            model_name="gpt-4",
+            model_name="gpt-4.1-mini",
             model_provider="openai",
             temperature=0.1,
             system_prompt="Parse the response into structured format.",
@@ -279,14 +279,14 @@ class TestGroundTruthExposure:
         # Configure models
         answering_model = ModelConfig(
             id="answering-model-1",
-            model_name="gpt-4",
+            model_name="gpt-4.1-mini",
             model_provider="openai",
             temperature=0.7,
             system_prompt="You are a helpful assistant.",
         )
         parsing_model = ModelConfig(
             id="parsing-model-1",
-            model_name="gpt-4",
+            model_name="gpt-4.1-mini",
             model_provider="openai",
             temperature=0.1,
             system_prompt="Parse the response into structured format.",
@@ -362,14 +362,14 @@ class TestGroundTruthExposure:
         # Configure models
         answering_model = ModelConfig(
             id="answering-model-1",
-            model_name="gpt-4",
+            model_name="gpt-4.1-mini",
             model_provider="openai",
             temperature=0.7,
             system_prompt="You are a helpful assistant.",
         )
         parsing_model = ModelConfig(
             id="parsing-model-1",
-            model_name="gpt-4",
+            model_name="gpt-4.1-mini",
             model_provider="openai",
             temperature=0.1,
             system_prompt="Parse the response into structured format.",

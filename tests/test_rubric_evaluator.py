@@ -34,7 +34,7 @@ class TestRubricEvaluator:
         return ModelConfig(
             id="test-model",
             model_provider="openai",
-            model_name="gpt-3.5-turbo",
+            model_name="gpt-4.1-mini",
             temperature=0.1,
             interface="langchain",
             system_prompt="You are a helpful assistant.",
@@ -51,7 +51,7 @@ class TestRubricEvaluator:
         assert evaluator.model_config == mock_model_config
         assert evaluator.llm == mock_llm
         mock_init_model.assert_called_once_with(
-            model="gpt-3.5-turbo", provider="openai", temperature=0.1, interface="langchain"
+            model="gpt-4.1-mini", provider="openai", temperature=0.1, interface="langchain"
         )
 
     @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
@@ -144,7 +144,7 @@ class TestRubricEvaluator:
     def test_evaluator_with_different_providers(self, mock_init_model):
         """Test evaluator with different model providers."""
         test_configs = [
-            ("openai", "gpt-4", "langchain"),
+            ("openai", "gpt-4.1-mini", "langchain"),
             ("google_genai", "gemini-2.0-flash", "langchain"),
             ("anthropic", "claude-3-sonnet", "langchain"),
         ]
@@ -244,7 +244,7 @@ class TestRubricEvaluatorEdgeCases:
         config = ModelConfig(
             id="test-model",
             model_provider="",  # Empty provider for langchain interface
-            model_name="gpt-3.5-turbo",
+            model_name="gpt-4.1-mini",
             temperature=0.1,
             interface=INTERFACE_LANGCHAIN,
             system_prompt="You are a helpful assistant.",
@@ -293,7 +293,7 @@ class TestRubricEvaluatorEdgeCases:
         config = ModelConfig(
             id="test-model",
             model_provider="openai",
-            model_name="gpt-3.5-turbo",
+            model_name="gpt-4.1-mini",
             temperature=0.1,
             interface=INTERFACE_LANGCHAIN,
             system_prompt="You are a helpful assistant.",
@@ -311,7 +311,7 @@ class TestRubricEvaluatorEdgeCases:
         config = ModelConfig(
             id="test-model-123",
             model_provider="",  # Empty provider for langchain
-            model_name="gpt-3.5-turbo",
+            model_name="gpt-4.1-mini",
             temperature=0.1,
             interface=INTERFACE_LANGCHAIN,
             system_prompt="You are a helpful assistant.",
@@ -336,7 +336,7 @@ class TestRubricEvaluatorEdgeCases:
             ModelConfig(
                 id="langchain-model",
                 model_provider="openai",
-                model_name="gpt-3.5-turbo",
+                model_name="gpt-4.1-mini",
                 temperature=0.1,
                 interface=INTERFACE_LANGCHAIN,
                 system_prompt="You are a helpful assistant.",
