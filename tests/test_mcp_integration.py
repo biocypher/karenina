@@ -121,12 +121,12 @@ class TestHarmonizeAgentResponse:
         assert len(lines) > 1  # Multiple formatted sections
 
     def test_harmonize_filters_system_and_human_messages(self):
-        """Test that system and human messages are properly filtered out."""
+        """Test that system messages and first human message are filtered, but subsequent human messages are preserved."""
         messages = [
             SystemMessage(content="You are an assistant."),
-            HumanMessage(content="Hello there!"),
+            HumanMessage(content="Hello there!"),  # First human message - should be filtered
             AIMessage(content="Hello! How can I help?"),
-            HumanMessage(content="What's 2+2?"),
+            HumanMessage(content="What's 2+2?"),  # Subsequent human message - should be preserved
             AIMessage(content="2+2 equals 4."),
         ]
 
@@ -136,10 +136,57 @@ class TestHarmonizeAgentResponse:
         assert "Hello! How can I help?" in result
         assert "2+2 equals 4." in result
 
-        # Should NOT contain system or human messages
-        assert "You are an assistant." not in result
-        assert "Hello there!" not in result
-        assert "What's 2+2?" not in result
+        # Should contain subsequent human messages (new behavior)
+        assert "What's 2+2?" in result  # Subsequent human messages now preserved
+
+        # Should NOT contain system messages or first human message
+        assert "You are an assistant." not in result  # System messages still filtered
+        assert "Hello there!" not in result  # First human message still filtered
+
+    def test_harmonize_with_react_agent_intermediate_thoughts(self):
+        """Test React agent scenario where intermediate HumanMessages contain thoughts."""
+        # This test demonstrates the issue: React agents might structure their
+        # reasoning with intermediate HumanMessages that are currently being filtered out
+        messages = [
+            SystemMessage(content="You are a helpful assistant with access to tools."),
+            HumanMessage(content="What are the interactors of TP53?"),  # Initial user question
+            AIMessage(content="I need to search for TP53 interactors. Let me use the biocontext tool."),
+            HumanMessage(
+                content="Thought: I should use the protein search function first to get basic info"
+            ),  # React thought
+            AIMessage(content="Tool call: search_proteins(protein='TP53')"),
+            ToolMessage(content="TP53 found: tumor suppressor protein", tool_call_id="call_1"),
+            HumanMessage(
+                content="Thought: Now I need to find its interactors using the interactions tool"
+            ),  # React thought
+            AIMessage(content="Tool call: get_interactions(protein='TP53')"),
+            ToolMessage(content="TP53 interacts with MDM2, MDM4, p21, BRCA1", tool_call_id="call_2"),
+            AIMessage(content="Based on my search, TP53 interacts with MDM2, MDM4, p21, and BRCA1."),
+        ]
+
+        result = harmonize_agent_response({"messages": messages})
+
+        # Should contain AI reasoning and final response
+        assert "I need to search for TP53 interactors" in result
+        assert "Based on my search, TP53 interacts with" in result
+
+        # Should contain tool messages
+        assert "TP53 found: tumor suppressor protein" in result
+        assert "TP53 interacts with MDM2, MDM4, p21, BRCA1" in result
+
+        # NEW BEHAVIOR: React thoughts are now preserved in the trace
+        # The function now only filters the first HumanMessage (initial user question)
+        # but keeps subsequent HumanMessages that contain React reasoning steps:
+        intermediate_thought1 = "Thought: I should use the protein search function first"
+        intermediate_thought2 = "Thought: Now I need to find its interactors"
+
+        # With improved implementation, these intermediate thoughts are preserved:
+        assert intermediate_thought1 in result  # React reasoning preserved ✓
+        assert intermediate_thought2 in result  # React reasoning preserved ✓
+
+        # Should NOT contain initial user question or system prompt
+        assert "What are the interactors of TP53?" not in result  # Initial question should be filtered
+        assert "You are a helpful assistant" not in result  # System prompt should be filtered
 
 
 class TestMCPUtilities:
