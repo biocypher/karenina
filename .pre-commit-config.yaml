@@ -15,19 +15,17 @@ repos:
         args: [--fix]
       - id: ruff-format
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.16.1
-    hooks:
-      - id: mypy
-        files: ^src/
-        additional_dependencies:
-          - pydantic>=2.0.0
-          - types-requests
-        args: [--config-file=pyproject.toml]
-
-  # Vulture for dead code detection
+  # Type checking with mypy using local environment
   - repo: local
     hooks:
+      - id: mypy
+        name: mypy-type-check
+        entry: uv run mypy
+        language: system
+        files: ^src/
+        types: [python]
+        args: [src/karenina]
+
       - id: vulture
         name: vulture-dead-code
         entry: uv run vulture
