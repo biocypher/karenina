@@ -111,16 +111,17 @@ warn_no_return = true
 follow_imports = "normal"
 ignore_missing_imports = true
 
-# Relax strictness for tests during incremental type improvement
-# Once return types are added, enable stricter checking gradually
+# Relax strictness for tests to accommodate test-specific patterns
+# Test code often intentionally violates type rules to test error conditions
 [[tool.mypy.overrides]]
 module = "tests.*"
-disallow_untyped_defs = false
+# Require type annotations on test function signatures
+disallow_untyped_defs = false  # Allow helpers without annotations
 disallow_incomplete_defs = false
-check_untyped_defs = false
-disallow_untyped_calls = false
-warn_return_any = false
-# Suppress errors in test code bodies during transition
+check_untyped_defs = false  # Don't check bodies of untyped functions
+disallow_untyped_calls = false  # Allow calling untyped code
+warn_return_any = false  # Don't warn about Any returns
+# Suppress errors in test bodies - tests intentionally use invalid patterns to test error handling
 disable_error_code = ["call-arg", "attr-defined", "arg-type", "index", "union-attr", "var-annotated", "operator", "assignment", "type-arg", "call-overload", "method-assign", "comparison-overlap", "return-value", "func-returns-value", "misc"]
 
 [tool.ruff]
