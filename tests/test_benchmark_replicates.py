@@ -49,6 +49,7 @@ def test_run_question_verification_with_replicates(mock_init_model):
     mock_answer = Mock()
     mock_answer.model_dump.return_value = {"response": "4"}
     mock_answer.verify.return_value = True
+    mock_answer.verify_regex.return_value = {"success": True, "results": {}, "details": {}}
 
     # Setup the init_chat_model_unified mock
     mock_init_model.side_effect = [mock_answering_llm, mock_parsing_llm] * 6  # 3 replicates × 2 calls each
@@ -135,6 +136,7 @@ def test_run_question_verification_single_replicate(mock_init_model):
     mock_answer = Mock()
     mock_answer.model_dump.return_value = {"response": "4"}
     mock_answer.verify.return_value = True
+    mock_answer.verify_regex.return_value = {"success": True, "results": {}, "details": {}}
 
     # Setup the init_chat_model_unified mock
     mock_init_model.side_effect = [mock_answering_llm, mock_parsing_llm]

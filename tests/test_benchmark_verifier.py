@@ -154,6 +154,7 @@ def test_run_question_verification_success(mock_init_model):
     mock_answer = Mock()
     mock_answer.model_dump.return_value = {"response": "4"}
     mock_answer.verify.return_value = True
+    mock_answer.verify_regex.return_value = {"success": True, "results": {}, "details": {}}
 
     # Setup the init_chat_model_unified mock to return different models
     def mock_init_side_effect(*args, **kwargs):
@@ -229,6 +230,7 @@ def test_run_question_verification_markdown_fenced_json(mock_init_model):
     mock_answer = Mock()
     mock_answer.model_dump.return_value = {"response": "4"}
     mock_answer.verify.return_value = True
+    mock_answer.verify_regex.return_value = {"success": True, "results": {}, "details": {}}
 
     mock_init_model.side_effect = (
         lambda **_kwargs: mock_answering_llm if mock_init_model.call_count <= 1 else mock_parsing_llm

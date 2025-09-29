@@ -280,6 +280,8 @@ class Answer(BaseModel):
             # Configure mocks
             mock_answer_class = Mock()
             mock_answer_class.verify.return_value = True
+            mock_answer_class.verify_regex.return_value = {"success": True, "results": {}, "details": {}}
+            mock_answer_class.model_dump.return_value = {"answer": 4}
             mock_validate.return_value = (True, None, mock_answer_class)
             mock_inject.return_value = mock_answer_class
 
@@ -374,6 +376,8 @@ class Answer(BaseModel):
             # Configure mocks
             mock_answer_class = Mock()
             mock_answer_class.verify.return_value = True
+            mock_answer_class.verify_regex.return_value = {"success": True, "results": {}, "details": {}}
+            mock_answer_class.model_dump.return_value = {"answer": 4}
             mock_validate.return_value = (True, None, mock_answer_class)
             mock_inject.return_value = mock_answer_class
 

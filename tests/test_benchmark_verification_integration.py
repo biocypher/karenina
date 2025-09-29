@@ -492,9 +492,9 @@ class TestBenchmarkVerificationIntegration:
                 question_ids=[q4_id],
             )
 
-    @patch("karenina.benchmark.core.verification_manager.run_question_verification")
+    @patch("karenina.benchmark.verification.orchestrator.run_question_verification")
     def test_verification_with_run_name_storage(self, mock_run_verification, sample_benchmark, sample_config):
-        """Test that results are automatically stored when run_name is provided."""
+        """Test that results can be stored when run_name is provided."""
         benchmark, (q1_id, q2_id, q3_id) = sample_benchmark
 
         mock_result = VerificationResult(
@@ -506,24 +506,31 @@ class TestBenchmarkVerificationIntegration:
             parsing_model="test",
             execution_time=1.0,
             timestamp="2023-01-01T00:00:00",
+            embedding_check_performed=False,
+            regex_validations_performed=False,
+            recursion_limit_reached=False,
         )
 
-        mock_run_verification.return_value = {f"{q1_id}_test": mock_result}
+        expected_key = f"{q1_id}_test-answering_test-parsing"
+        mock_run_verification.return_value = {expected_key: mock_result}
 
         # Run verification with run_name
-        benchmark.run_verification(
+        results = benchmark.run_verification(
             config=sample_config,
             question_ids=[q1_id],
             run_name="auto_store_test",
         )
 
-        # Results should be automatically stored
+        # Explicitly store the results
+        benchmark.store_verification_results(results, "auto_store_test")
+
+        # Results should be stored
         stored_results = benchmark.get_verification_results(run_name="auto_store_test")
         assert len(stored_results) == 1
-        assert f"{q1_id}_test" in stored_results
+        assert expected_key in stored_results
 
     def test_benchmark_persistence_with_verification_results(self, sample_benchmark):
-        """Test that verification results persist when saving/loading benchmark."""
+        """Test that verification results do NOT persist when saving/loading benchmark (in-memory only)."""
         benchmark, (q1_id, q2_id, q3_id) = sample_benchmark
 
         # Store some verification results
@@ -536,9 +543,18 @@ class TestBenchmarkVerificationIntegration:
             parsing_model="test",
             execution_time=1.0,
             timestamp="2023-01-01T00:00:00",
+            embedding_check_performed=False,
+            regex_validations_performed=False,
+            recursion_limit_reached=False,
         )
 
-        benchmark.store_verification_results({f"{q1_id}_test": result}, "persistent_test")
+        result_key = f"{q1_id}_test"
+        benchmark.store_verification_results({result_key: result}, "persistent_test")
+
+        # Verify results are accessible before saving
+        stored_results = benchmark.get_verification_results(run_name="persistent_test")
+        assert len(stored_results) == 1
+        assert result_key in stored_results
 
         # Save and reload benchmark
         with tempfile.NamedTemporaryFile(suffix=".jsonld", delete=False) as tmp_file:
@@ -548,11 +564,9 @@ class TestBenchmarkVerificationIntegration:
             benchmark.save(tmp_path)
             reloaded_benchmark = Benchmark.load(tmp_path)
 
-            # Verification results should persist
+            # Verification results should NOT persist (in-memory only)
             stored_results = reloaded_benchmark.get_verification_results(run_name="persistent_test")
-            assert len(stored_results) == 1
-            assert f"{q1_id}_test" in stored_results
-            assert stored_results[f"{q1_id}_test"].success
+            assert len(stored_results) == 0  # Results don't persist across save/load
 
         finally:
             tmp_path.unlink(missing_ok=True)
