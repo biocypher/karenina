@@ -24,6 +24,7 @@ repos:
         language: system
         files: ^src/
         types: [python]
+        pass_filenames: false
         args: [src/karenina]
 
       - id: vulture

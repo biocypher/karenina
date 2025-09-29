@@ -72,9 +72,9 @@ class BaseAnswer(BaseModel):
         """
         try:
             # Try to get IPython instance (works in Jupyter notebooks)
-            from IPython import get_ipython
+            from IPython import get_ipython  # type: ignore[attr-defined]
 
-            ip = get_ipython()
+            ip = get_ipython()  # type: ignore[no-untyped-call]
             if ip is None:
                 print("Warning: Not in an IPython/Jupyter environment")
                 return
