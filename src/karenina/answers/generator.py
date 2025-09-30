@@ -74,10 +74,10 @@ class AttributeDescriptions(BaseModel):
     )
 
 
-class JSONOnlyOutputParser(BaseOutputParser):  # type: ignore[misc]
+class JSONOnlyOutputParser(BaseOutputParser[Any]):
     """Parser ensuring output is valid JSON before delegating to Pydantic parser."""
 
-    def __init__(self, inner: PydanticOutputParser):
+    def __init__(self, inner: PydanticOutputParser[Any]):
         self._inner = inner
 
     def parse(self, text: str) -> Any:
@@ -567,7 +567,12 @@ def generate_answer_templates_from_questions_file(
             model_provider=model_provider,
             interface=interface,
         )
+        # Try to extract code blocks (for old markdown-wrapped responses)
+        # If no blocks found, use the answer_template directly (new plain Python responses)
         code_blocks = extract_and_combine_codeblocks(answer_template)
+        if not code_blocks:
+            code_blocks = answer_template
+
         # define the class in a local namespace
         local_ns: dict[str, Any] = {}
         exec(code_blocks, globals(), local_ns)

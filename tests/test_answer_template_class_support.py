@@ -13,7 +13,7 @@ from karenina.schemas.question_class import Question
 class TestAnswerClassSupport:
     """Test the new Answer class support in add_question."""
 
-    def test_add_question_with_file_based_answer_class(self):
+    def test_add_question_with_file_based_answer_class(self) -> None:
         """Test passing a file-based Answer class to add_question."""
         benchmark = Benchmark("Test Benchmark")
 
@@ -41,7 +41,7 @@ class TestAnswerClassSupport:
         assert "def verify(self) -> bool:" in template_code
         assert "return self.value == 42" in template_code
 
-    def test_add_question_with_answer_class_preserves_source(self):
+    def test_add_question_with_answer_class_preserves_source(self) -> None:
         """Test that Answer classes with _source_code are handled correctly."""
         benchmark = Benchmark("Test Benchmark")
 
@@ -77,20 +77,20 @@ class Answer(BaseAnswer):
         assert template_code == custom_source
         assert "class Answer(BaseAnswer):" in template_code
 
-    def test_add_question_with_answer_class_inheritance_validation(self):
+    def test_add_question_with_answer_class_inheritance_validation(self) -> None:
         """Test that non-BaseAnswer classes are rejected."""
         benchmark = Benchmark("Test Benchmark")
 
         # Define a class that doesn't inherit from BaseAnswer
         class InvalidAnswer:
-            def __init__(self):
+            def __init__(self) -> None:
                 pass
 
         # Should raise TypeError
         with pytest.raises(TypeError, match="answer_template class must inherit from BaseAnswer"):
             benchmark.add_question(question="Test question", raw_answer="Test answer", answer_template=InvalidAnswer)
 
-    def test_add_question_with_answer_class_no_source_error(self):
+    def test_add_question_with_answer_class_no_source_error(self) -> None:
         """Test error handling when source code cannot be extracted."""
         benchmark = Benchmark("Test Benchmark")
 
@@ -106,7 +106,7 @@ class Answer(BaseAnswer):
         # Mock the get_source_code method to return None and inspect.getsource to fail
         original_get_source = NoSourceAnswer.get_source_code
 
-        def mock_get_source():
+        def mock_get_source() -> None:
             return None
 
         NoSourceAnswer.get_source_code = classmethod(mock_get_source)
@@ -114,7 +114,7 @@ class Answer(BaseAnswer):
         # Mock inspect.getsource to raise OSError
         original_getsource = inspect.getsource
 
-        def mock_getsource(obj):
+        def mock_getsource(obj) -> None:
             raise OSError("source not available")
 
         inspect.getsource = mock_getsource
@@ -130,7 +130,7 @@ class Answer(BaseAnswer):
             NoSourceAnswer.get_source_code = original_get_source
             inspect.getsource = original_getsource
 
-    def test_add_question_with_answer_class_complex_definition(self):
+    def test_add_question_with_answer_class_complex_definition(self) -> None:
         """Test Answer class with complex definition including class variables."""
         benchmark = Benchmark("Test Benchmark")
         from typing import ClassVar
@@ -172,7 +172,7 @@ class Answer(BaseAnswer):
         assert "@classmethod" in template_code
         assert "def create_positive(cls, score: float):" in template_code
 
-    def test_add_question_with_question_object_and_answer_class(self):
+    def test_add_question_with_question_object_and_answer_class(self) -> None:
         """Test using both Question object and Answer class together."""
         benchmark = Benchmark("Test Benchmark")
 
@@ -210,7 +210,7 @@ class Answer(BaseAnswer):
         assert "class LanguageAnswer(BaseAnswer):" in template_code
         assert "language: str = Field(" in template_code
 
-    def test_add_question_answer_class_with_traditional_parameters(self):
+    def test_add_question_answer_class_with_traditional_parameters(self) -> None:
         """Test Answer class with traditional string question and raw_answer."""
         benchmark = Benchmark("Test Benchmark")
 
@@ -250,7 +250,7 @@ class Answer(BaseAnswer):
         assert "class MathAnswer(BaseAnswer):" in template_code
         assert "operation: str = Field(" in template_code
 
-    def test_add_question_string_template_still_works(self):
+    def test_add_question_string_template_still_works(self) -> None:
         """Test that string templates still work as before."""
         benchmark = Benchmark("Test Benchmark")
 
@@ -271,7 +271,7 @@ class Answer(BaseAnswer):
         question_data = benchmark.get_question(q_id)
         assert question_data["answer_template"] == template_code
 
-    def test_add_question_none_template_creates_default(self):
+    def test_add_question_none_template_creates_default(self) -> None:
         """Test that None template still creates default template."""
         benchmark = Benchmark("Test Benchmark")
 
@@ -286,7 +286,7 @@ class Answer(BaseAnswer):
         assert "response: str = Field(" in template_code
         assert "# TODO: Implement verification logic" in template_code
 
-    def test_add_question_non_class_type_raises_error(self):
+    def test_add_question_non_class_type_raises_error(self) -> None:
         """Test that non-class types raise appropriate errors."""
         benchmark = Benchmark("Test Benchmark")
 
@@ -297,7 +297,7 @@ class Answer(BaseAnswer):
             with pytest.raises((TypeError, ValueError)):
                 benchmark.add_question(question="Test question", raw_answer="Test answer", answer_template=invalid_type)
 
-    def test_benchmark_add_question_delegates_correctly(self):
+    def test_benchmark_add_question_delegates_correctly(self) -> None:
         """Test that Benchmark.add_question correctly delegates to QuestionManager."""
         benchmark = Benchmark("Test Benchmark")
 
@@ -320,7 +320,7 @@ class Answer(BaseAnswer):
         assert "class DelegationAnswer(BaseAnswer):" in template_code
         assert "delegated: bool = Field(" in template_code
 
-    def test_answer_with_id_wrapper_pattern_compatibility(self):
+    def test_answer_with_id_wrapper_pattern_compatibility(self) -> None:
         """Test compatibility with AnswerWithID wrapper pattern."""
         benchmark = Benchmark("Test Benchmark")
 
@@ -335,7 +335,7 @@ class Answer(BaseAnswer):
 
         # Simulate AnswerWithID wrapper (like inject_question_id_into_answer_class does)
         class AnswerWithID(OriginalAnswer):
-            def model_post_init(self, __context):
+            def model_post_init(self, __context) -> None:
                 if hasattr(super(), "model_post_init"):
                     super().model_post_init(__context)
                 self.id = "test_question_id"
@@ -368,7 +368,7 @@ class Answer(BaseAnswer):
 class TestAnswerClassIntegration:
     """Integration tests for Answer class support with other benchmark features."""
 
-    def test_answer_class_with_rubrics(self):
+    def test_answer_class_with_rubrics(self) -> None:
         """Test Answer class support with question rubrics."""
         benchmark = Benchmark("Test Benchmark")
 
@@ -402,7 +402,7 @@ class TestAnswerClassIntegration:
         assert "class RubricAnswer(BaseAnswer):" in question_data["answer_template"]
         assert question_data.get("question_rubric") is not None
 
-    def test_answer_class_with_batch_operations(self):
+    def test_answer_class_with_batch_operations(self) -> None:
         """Test Answer class support with batch question operations."""
         benchmark = Benchmark("Test Benchmark")
 
@@ -433,7 +433,7 @@ class TestAnswerClassIntegration:
             assert "class BatchAnswer(BaseAnswer):" in template_code
             assert "batch_id: int = Field(" in template_code
 
-    def test_answer_class_with_export_operations(self):
+    def test_answer_class_with_export_operations(self) -> None:
         """Test Answer class support with benchmark export operations."""
         benchmark = Benchmark("Test Benchmark")
 

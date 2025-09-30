@@ -1,10 +1,10 @@
 """Prompt templates for Karenina.
 
 This package contains prompt templates used for various LLM interactions,
-including answer generation, question processing, and other benchmark-related
-tasks.
+including question processing and other benchmark-related tasks.
+
+Note: Answer generation now uses a structured two-phase approach and no longer
+relies on prompt templates. See karenina.answers.generator for details.
 """
 
-from .answer_generation import ANSWER_GENERATION_SYS, ANSWER_GENERATION_USER
-
-__all__ = ["ANSWER_GENERATION_SYS", "ANSWER_GENERATION_USER"]
+__all__: list[str] = []

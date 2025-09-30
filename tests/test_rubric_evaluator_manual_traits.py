@@ -13,19 +13,19 @@ class TestRubricEvaluatorManualTraits:
     """Test RubricEvaluator with manual trait functionality."""
 
     @pytest.fixture
-    def mock_model_config(self):
+    def mock_model_config(self) -> None:
         """Create a mock model configuration."""
         return ModelConfig(
             id="test-model",
             model_provider="openai",
-            model_name="gpt-3.5-turbo",
+            model_name="gpt-4.1-mini",
             temperature=0.1,
             interface="langchain",
             system_prompt="You are a helpful assistant.",
         )
 
     @pytest.fixture
-    def sample_callable_registry(self):
+    def sample_callable_registry(self) -> None:
         """Create sample callable functions for testing."""
 
         def is_numeric(text: str) -> bool:
@@ -44,7 +44,9 @@ class TestRubricEvaluatorManualTraits:
         }
 
     @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
-    def test_evaluator_with_callable_registry(self, mock_init_model, mock_model_config, sample_callable_registry):
+    def test_evaluator_with_callable_registry(
+        self, mock_init_model, mock_model_config, sample_callable_registry
+    ) -> None:
         """Test RubricEvaluator initialization with callable registry."""
         mock_llm = Mock()
         mock_init_model.return_value = mock_llm
@@ -56,7 +58,7 @@ class TestRubricEvaluatorManualTraits:
         assert "contains_error" in evaluator.callable_registry
 
     @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
-    def test_register_callable(self, mock_init_model, mock_model_config):
+    def test_register_callable(self, mock_init_model, mock_model_config) -> None:
         """Test registering callable functions."""
         mock_llm = Mock()
         mock_init_model.return_value = mock_llm
@@ -72,21 +74,21 @@ class TestRubricEvaluatorManualTraits:
         assert evaluator.callable_registry["test_func"] == test_func
 
     @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
-    def test_register_callable_invalid_signature(self, mock_init_model, mock_model_config):
+    def test_register_callable_invalid_signature(self, mock_init_model, mock_model_config) -> None:
         """Test error when registering callable with wrong signature."""
         mock_llm = Mock()
         mock_init_model.return_value = mock_llm
 
         evaluator = RubricEvaluator(mock_model_config)
 
-        def bad_func(text: str, extra: str) -> bool:
+        def bad_func(text: str, _extra: str) -> bool:
             return True
 
         with pytest.raises(ValueError, match="must have exactly one parameter"):
             evaluator.register_callable("bad_func", bad_func)
 
     @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
-    def test_evaluate_manual_traits_only(self, mock_init_model, mock_model_config, sample_callable_registry):
+    def test_evaluate_manual_traits_only(self, mock_init_model, mock_model_config, sample_callable_registry) -> None:
         """Test evaluation with only manual traits."""
         mock_llm = Mock()
         mock_init_model.return_value = mock_llm
@@ -109,7 +111,7 @@ class TestRubricEvaluatorManualTraits:
         assert result["no_error"] is True  # No error (inverted)
 
     @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
-    def test_evaluate_mixed_traits(self, mock_init_model, mock_model_config, sample_callable_registry):
+    def test_evaluate_mixed_traits(self, mock_init_model, mock_model_config, sample_callable_registry) -> None:
         """Test evaluation with both LLM and manual traits."""
         mock_llm = Mock()
         mock_init_model.return_value = mock_llm
@@ -144,7 +146,7 @@ class TestRubricEvaluatorManualTraits:
         assert result["quality"] == 4
 
     @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
-    def test_evaluate_manual_trait_error_handling(self, mock_init_model, mock_model_config):
+    def test_evaluate_manual_trait_error_handling(self, mock_init_model, mock_model_config) -> None:
         """Test error handling in manual trait evaluation."""
         mock_llm = Mock()
         mock_init_model.return_value = mock_llm
@@ -164,7 +166,7 @@ class TestRubricEvaluatorManualTraits:
         assert result["missing_func"] is None
 
     @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
-    def test_evaluate_regex_patterns(self, mock_init_model, mock_model_config):
+    def test_evaluate_regex_patterns(self, mock_init_model, mock_model_config) -> None:
         """Test various regex pattern evaluations."""
         mock_llm = Mock()
         mock_init_model.return_value = mock_llm
@@ -190,7 +192,7 @@ class TestRubricEvaluatorManualTraits:
         assert result["contains_yes"] is True
 
     @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
-    def test_case_sensitivity_in_patterns(self, mock_init_model, mock_model_config):
+    def test_case_sensitivity_in_patterns(self, mock_init_model, mock_model_config) -> None:
         """Test case sensitivity handling in regex patterns."""
         mock_llm = Mock()
         mock_init_model.return_value = mock_llm
@@ -215,7 +217,7 @@ class TestRubricEvaluatorManualTraits:
         assert result2["case_insensitive"] is True  # Should match (case insensitive)
 
     @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
-    def test_invert_result_functionality(self, mock_init_model, mock_model_config):
+    def test_invert_result_functionality(self, mock_init_model, mock_model_config) -> None:
         """Test result inversion functionality."""
         mock_llm = Mock()
         mock_init_model.return_value = mock_llm
@@ -240,7 +242,7 @@ class TestRubricEvaluatorManualTraits:
         assert result2["no_error"] is True  # Inverted
 
     @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
-    def test_empty_rubric_handling(self, mock_init_model, mock_model_config):
+    def test_empty_rubric_handling(self, mock_init_model, mock_model_config) -> None:
         """Test evaluation with empty rubric."""
         mock_llm = Mock()
         mock_init_model.return_value = mock_llm

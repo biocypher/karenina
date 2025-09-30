@@ -9,7 +9,7 @@ from karenina.schemas.rubric_class import ManualRubricTrait, Rubric
 class TestManualRubricTrait:
     """Test ManualRubricTrait schema and functionality."""
 
-    def test_regex_pattern_trait_creation(self):
+    def test_regex_pattern_trait_creation(self) -> None:
         """Test creating a trait with regex pattern."""
         trait = ManualRubricTrait(
             name="contains_hello",
@@ -25,7 +25,7 @@ class TestManualRubricTrait:
         assert trait.case_sensitive is False
         assert trait.invert_result is False
 
-    def test_callable_trait_creation(self):
+    def test_callable_trait_creation(self) -> None:
         """Test creating a trait with callable function."""
         trait = ManualRubricTrait(
             name="is_numeric",
@@ -39,7 +39,7 @@ class TestManualRubricTrait:
         assert trait.pattern is None
         assert trait.invert_result is True
 
-    def test_mutually_exclusive_validation(self):
+    def test_mutually_exclusive_validation(self) -> None:
         """Test that pattern and callable_name are mutually exclusive."""
         # Both specified should fail
         with pytest.raises(ValidationError, match="Only one of 'pattern' or 'callable_name'"):
@@ -53,7 +53,7 @@ class TestManualRubricTrait:
         with pytest.raises(ValidationError, match="Either 'pattern' or 'callable_name' must be specified"):
             ManualRubricTrait(name="test")
 
-    def test_invalid_regex_pattern(self):
+    def test_invalid_regex_pattern(self) -> None:
         """Test validation of regex patterns."""
         with pytest.raises(ValidationError, match="Invalid regex pattern"):
             ManualRubricTrait(
@@ -61,7 +61,7 @@ class TestManualRubricTrait:
                 pattern=r"[invalid",  # Unclosed bracket
             )
 
-    def test_empty_name_validation(self):
+    def test_empty_name_validation(self) -> None:
         """Test that empty names are rejected."""
         with pytest.raises(ValidationError):
             ManualRubricTrait(
@@ -69,7 +69,7 @@ class TestManualRubricTrait:
                 pattern=r"test",
             )
 
-    def test_regex_evaluation_case_sensitive(self):
+    def test_regex_evaluation_case_sensitive(self) -> None:
         """Test regex evaluation with case sensitivity."""
         trait = ManualRubricTrait(
             name="contains_hello",
@@ -81,7 +81,7 @@ class TestManualRubricTrait:
         assert trait.evaluate("Say hello world") is True
         assert trait.evaluate("Say HELLO world") is False
 
-    def test_regex_evaluation_case_insensitive(self):
+    def test_regex_evaluation_case_insensitive(self) -> None:
         """Test regex evaluation without case sensitivity."""
         trait = ManualRubricTrait(
             name="contains_hello",
@@ -94,7 +94,7 @@ class TestManualRubricTrait:
         assert trait.evaluate("Say HELLO world") is True
         assert trait.evaluate("Say HeLLo world") is True
 
-    def test_regex_evaluation_with_invert(self):
+    def test_regex_evaluation_with_invert(self) -> None:
         """Test regex evaluation with result inversion."""
         trait = ManualRubricTrait(
             name="not_contains_error",
@@ -106,7 +106,7 @@ class TestManualRubricTrait:
         assert trait.evaluate("This is good") is True  # No error -> True (inverted)
         assert trait.evaluate("This is an error") is False  # Has error -> False (inverted)
 
-    def test_callable_evaluation(self):
+    def test_callable_evaluation(self) -> None:
         """Test evaluation using callable functions."""
 
         def is_numeric(text: str) -> bool:
@@ -123,7 +123,7 @@ class TestManualRubricTrait:
         assert trait.evaluate("abc", registry) is False
         assert trait.evaluate("12.3", registry) is False
 
-    def test_callable_evaluation_with_invert(self):
+    def test_callable_evaluation_with_invert(self) -> None:
         """Test callable evaluation with result inversion."""
 
         def is_empty(text: str) -> bool:
@@ -141,7 +141,7 @@ class TestManualRubricTrait:
         assert trait.evaluate("", registry) is False  # Empty -> False (inverted)
         assert trait.evaluate("   ", registry) is False  # Whitespace only -> False (inverted)
 
-    def test_callable_not_found_error(self):
+    def test_callable_not_found_error(self) -> None:
         """Test error when callable is not found in registry."""
         trait = ManualRubricTrait(
             name="test",
@@ -154,7 +154,7 @@ class TestManualRubricTrait:
         with pytest.raises(RuntimeError, match="Failed to evaluate manual trait 'test'"):
             trait.evaluate("test", None)
 
-    def test_callable_invalid_return_type(self):
+    def test_callable_invalid_return_type(self) -> None:
         """Test error when callable returns non-boolean."""
 
         def bad_func(text: str) -> str:
@@ -170,7 +170,7 @@ class TestManualRubricTrait:
         with pytest.raises(RuntimeError, match="Failed to evaluate manual trait 'test'"):
             trait.evaluate("test", registry)
 
-    def test_evaluation_runtime_error_handling(self):
+    def test_evaluation_runtime_error_handling(self) -> None:
         """Test handling of runtime errors during evaluation."""
 
         def error_func(text: str) -> bool:
@@ -190,7 +190,7 @@ class TestManualRubricTrait:
 class TestRubricWithManualTraits:
     """Test Rubric functionality with manual traits."""
 
-    def test_rubric_with_manual_traits(self):
+    def test_rubric_with_manual_traits(self) -> None:
         """Test creating rubric with manual traits."""
         from karenina.schemas.rubric_class import RubricTrait
 
@@ -208,7 +208,7 @@ class TestRubricWithManualTraits:
         assert rubric.get_llm_trait_names() == ["accuracy"]
         assert rubric.get_manual_trait_names() == ["has_number"]
 
-    def test_rubric_validation_with_manual_traits(self):
+    def test_rubric_validation_with_manual_traits(self) -> None:
         """Test validation of evaluation results with manual traits."""
         from karenina.schemas.rubric_class import RubricTrait
 
@@ -240,7 +240,7 @@ class TestRubricWithManualTraits:
 class TestMergeRubricsWithManualTraits:
     """Test rubric merging with manual traits."""
 
-    def test_merge_rubrics_with_manual_traits(self):
+    def test_merge_rubrics_with_manual_traits(self) -> None:
         """Test merging rubrics that contain manual traits."""
         from karenina.schemas.rubric_class import RubricTrait, merge_rubrics
 
@@ -262,7 +262,7 @@ class TestMergeRubricsWithManualTraits:
         assert len(merged.manual_traits) == 2  # has_number + has_date
         assert merged.get_trait_names() == ["accuracy", "completeness", "has_number", "has_date"]
 
-    def test_merge_rubrics_name_conflicts_across_types(self):
+    def test_merge_rubrics_name_conflicts_across_types(self) -> None:
         """Test that name conflicts are detected across trait types."""
         from karenina.schemas.rubric_class import RubricTrait, merge_rubrics
 
@@ -276,7 +276,7 @@ class TestMergeRubricsWithManualTraits:
         with pytest.raises(ValueError, match="Trait name conflicts"):
             merge_rubrics(global_rubric, question_rubric)
 
-    def test_merge_empty_rubrics_with_manual_traits(self):
+    def test_merge_empty_rubrics_with_manual_traits(self) -> None:
         """Test merging when one rubric has only manual traits."""
         from karenina.schemas.rubric_class import merge_rubrics
 

@@ -7,7 +7,7 @@ compiles to an executable Answer class that can be used with QuestionManager.
 """
 
 import re
-from typing import Any
+from typing import Any, cast
 
 from .generator import (
     GroundTruthField,
@@ -220,7 +220,7 @@ class AnswerBuilder:
         # Store source code on the class (critical for QuestionManager)
         Answer._source_code = final_code
 
-        return Answer
+        return cast(type[Any], Answer)
 
     def _generate_minimal_class(self, class_name: str) -> str:
         """Generate minimal Answer class when only regex patterns exist."""

@@ -9,7 +9,7 @@ from karenina.schemas.rubric_class import Rubric, RubricTrait
 class TestTaskEvalBasics:
     """Test basic TaskEval functionality."""
 
-    def test_init_default(self):
+    def test_init_default(self) -> None:
         """Test TaskEval initialization with defaults."""
         task = TaskEval()
 
@@ -22,7 +22,7 @@ class TestTaskEvalBasics:
         assert task.global_rubrics == []
         assert task.step_rubrics == {}
 
-    def test_init_with_params(self):
+    def test_init_with_params(self) -> None:
         """Test TaskEval initialization with parameters."""
         metadata = {"agent": "test_agent", "run": 123}
         task = TaskEval(task_id="task_123", metadata=metadata)
@@ -30,7 +30,7 @@ class TestTaskEvalBasics:
         assert task.task_id == "task_123"
         assert task.metadata == metadata
 
-    def test_log_global(self):
+    def test_log_global(self) -> None:
         """Test logging to global logs."""
         task = TaskEval()
 
@@ -41,7 +41,7 @@ class TestTaskEvalBasics:
         assert task.global_logs[0].level == "info"
         assert len(task.step_logs) == 0
 
-    def test_log_step(self):
+    def test_log_step(self) -> None:
         """Test logging to step logs."""
         task = TaskEval()
 
@@ -53,7 +53,7 @@ class TestTaskEvalBasics:
         assert task.step_logs["step1"][0].text == "Step message"
         assert task.step_logs["step1"][0].level == "warn"
 
-    def test_log_both(self):
+    def test_log_both(self) -> None:
         """Test logging to both global and step logs."""
         task = TaskEval()
 
@@ -65,7 +65,7 @@ class TestTaskEvalBasics:
         assert len(task.step_logs["step1"]) == 1
         assert task.step_logs["step1"][0].text == "Both message"
 
-    def test_log_with_tags_and_payload(self):
+    def test_log_with_tags_and_payload(self) -> None:
         """Test logging with tags and payload."""
         task = TaskEval()
         tags = ["tag1", "tag2"]
@@ -81,7 +81,7 @@ class TestTaskEvalBasics:
 class TestTaskEvalQuestions:
     """Test question handling in TaskEval."""
 
-    def test_add_question_dict_global(self):
+    def test_add_question_dict_global(self) -> None:
         """Test adding question dict to global questions."""
         task = TaskEval()
         question_dict = {
@@ -96,7 +96,7 @@ class TestTaskEvalQuestions:
         assert len(task.global_questions) == 1
         assert task.global_questions[0] == question_dict
 
-    def test_add_question_object_global(self):
+    def test_add_question_object_global(self) -> None:
         """Test adding Question object to global questions."""
         task = TaskEval()
         question_obj = Question(question="What is the capital of France?", raw_answer="Paris", tags=["geography"])
@@ -106,7 +106,7 @@ class TestTaskEvalQuestions:
         assert len(task.global_questions) == 1
         assert task.global_questions[0] == question_obj
 
-    def test_add_question_step(self):
+    def test_add_question_step(self) -> None:
         """Test adding question to step-specific questions."""
         task = TaskEval()
         question_dict = {"id": "q1", "question": "Test question", "raw_answer": "Test answer"}
@@ -118,7 +118,7 @@ class TestTaskEvalQuestions:
         assert len(task.step_questions["step1"]) == 1
         assert task.step_questions["step1"][0] == question_dict
 
-    def test_normalize_question_dict(self):
+    def test_normalize_question_dict(self) -> None:
         """Test normalizing question dict (should pass through unchanged)."""
         task = TaskEval()
         question_dict = {
@@ -133,7 +133,7 @@ class TestTaskEvalQuestions:
 
         assert normalized == question_dict
 
-    def test_normalize_question_object(self):
+    def test_normalize_question_object(self) -> None:
         """Test normalizing Question object to dict."""
         task = TaskEval()
         question_obj = Question(
@@ -159,7 +159,7 @@ class TestTaskEvalQuestions:
 class TestTaskEvalRubrics:
     """Test rubric handling in TaskEval."""
 
-    def test_add_rubric_global(self):
+    def test_add_rubric_global(self) -> None:
         """Test adding rubric to global rubrics."""
         task = TaskEval()
         rubric = Rubric(traits=[RubricTrait(name="clarity", description="Answer clarity", kind="score")])
@@ -169,7 +169,7 @@ class TestTaskEvalRubrics:
         assert len(task.global_rubrics) == 1
         assert task.global_rubrics[0] == rubric
 
-    def test_add_rubric_step(self):
+    def test_add_rubric_step(self) -> None:
         """Test adding rubric to step-specific rubrics."""
         task = TaskEval()
         rubric = Rubric(traits=[RubricTrait(name="accuracy", description="Answer accuracy", kind="boolean")])
@@ -181,7 +181,7 @@ class TestTaskEvalRubrics:
         assert len(task.step_rubrics["step1"]) == 1
         assert task.step_rubrics["step1"][0] == rubric
 
-    def test_merge_rubrics_empty(self):
+    def test_merge_rubrics_empty(self) -> None:
         """Test merging empty rubrics list."""
         task = TaskEval()
 
@@ -189,7 +189,7 @@ class TestTaskEvalRubrics:
 
         assert result is None
 
-    def test_merge_rubrics_single(self):
+    def test_merge_rubrics_single(self) -> None:
         """Test merging single rubric."""
         task = TaskEval()
         rubric = Rubric(traits=[RubricTrait(name="clarity", description="Answer clarity", kind="score")])
@@ -200,7 +200,7 @@ class TestTaskEvalRubrics:
         assert len(result.traits) == 1
         assert result.traits[0].name == "clarity"
 
-    def test_merge_rubrics_multiple(self):
+    def test_merge_rubrics_multiple(self) -> None:
         """Test merging multiple rubrics."""
         task = TaskEval()
         rubric1 = Rubric(traits=[RubricTrait(name="clarity", description="Answer clarity", kind="score")])
@@ -214,7 +214,7 @@ class TestTaskEvalRubrics:
         assert "clarity" in trait_names
         assert "accuracy" in trait_names
 
-    def test_merge_rubrics_duplicate_names(self):
+    def test_merge_rubrics_duplicate_names(self) -> None:
         """Test merging rubrics with duplicate trait names raises an error."""
         task = TaskEval()
         rubric1 = Rubric(traits=[RubricTrait(name="clarity", description="First clarity", kind="score")])
@@ -230,7 +230,7 @@ class TestTaskEvalRubrics:
 class TestTaskEvalSimplifiedLogging:
     """Test TaskEval simplified logging and evaluation with regular log() calls."""
 
-    def test_evaluation_with_simple_logs(self):
+    def test_evaluation_with_simple_logs(self) -> None:
         """Test that evaluation works with simple log() calls."""
         task = TaskEval(task_id="simple_eval_test")
 
@@ -273,7 +273,7 @@ class TestTaskEvalSimplifiedLogging:
         assert response_result["success"] is True
         assert "agent_output" in response_result["details"]
 
-    def test_evaluation_missing_logs(self):
+    def test_evaluation_missing_logs(self) -> None:
         """Test evaluation when no logs are available for a question."""
         task = TaskEval()
 
@@ -307,7 +307,7 @@ class TestTaskEvalSimplifiedLogging:
 class TestTaskEvalIntegration:
     """Test TaskEval integration with verification pipeline."""
 
-    def test_evaluate_global_basic(self):
+    def test_evaluate_global_basic(self) -> None:
         """Test basic global evaluation with logged agent output."""
         # Setup TaskEval
         task = TaskEval(task_id="test_task")
@@ -356,7 +356,7 @@ class TestTaskEvalIntegration:
         # Rubric scores depend on the simplified evaluation logic
         assert len(result.global_eval.rubric_scores) == 2  # Both traits evaluated
 
-    def test_evaluate_step_specific(self):
+    def test_evaluate_step_specific(self) -> None:
         """Test step-specific evaluation with logged agent output."""
         # Setup TaskEval with step-specific question and rubric
         task = TaskEval()
@@ -404,7 +404,7 @@ class TestTaskEvalIntegration:
         assert len(step_eval.rubric_scores) == 2  # Both traits evaluated
         # Failure modes functionality was removed as requested
 
-    def test_evaluate_no_questions(self):
+    def test_evaluate_no_questions(self) -> None:
         """Test evaluation with no questions."""
         task = TaskEval()
         config = VerificationConfig(
@@ -423,7 +423,7 @@ class TestTaskEvalIntegration:
         assert result.global_eval.question_verification == {}  # Empty dict, not None
         # Failure modes functionality was removed as requested
 
-    def test_evaluate_global_triggers_step_evaluations(self):
+    def test_evaluate_global_triggers_step_evaluations(self) -> None:
         """Test that global evaluation automatically evaluates all available steps."""
         task = TaskEval()
 
@@ -473,7 +473,7 @@ class TestTaskEvalIntegration:
 class TestTaskEvalRubricEvaluation:
     """Test TaskEval proper rubric evaluation using RubricEvaluator."""
 
-    def test_rubric_evaluation_with_answer_template(self):
+    def test_rubric_evaluation_with_answer_template(self) -> None:
         """Test that rubrics are properly evaluated using RubricEvaluator when answer template is available."""
         task = TaskEval(task_id="rubric_test")
 
@@ -562,7 +562,7 @@ class Answer(BaseAnswer):
         # but the structure should be present
         assert isinstance(rubric_scores, dict)
 
-    def test_rubric_evaluation_fallback_without_template(self):
+    def test_rubric_evaluation_fallback_without_template(self) -> None:
         """Test that rubrics are properly evaluated using RubricEvaluator in fallback mode."""
         task = TaskEval(task_id="rubric_fallback_test")
 
@@ -631,7 +631,7 @@ class Answer(BaseAnswer):
         rubric_scores = response_result.get("rubric_scores", {})
         assert isinstance(rubric_scores, dict)
 
-    def test_rubric_conflict_detection(self):
+    def test_rubric_conflict_detection(self) -> None:
         """Test that duplicate rubric trait names raise an error."""
         task = TaskEval(task_id="conflict_test")
 
@@ -680,7 +680,7 @@ class Answer(BaseAnswer):
         with pytest.raises(ValueError, match="Duplicate rubric trait names found"):
             task.evaluate(config)
 
-    def test_rubric_trait_extraction_from_template(self):
+    def test_rubric_trait_extraction_from_template(self) -> None:
         """Test that rubric traits are extracted from answer templates."""
         task = TaskEval(task_id="template_extraction_test")
 
@@ -744,7 +744,7 @@ class Answer(BaseAnswer):
         rubric_scores = result.global_eval.rubric_scores
         assert isinstance(rubric_scores, dict)
 
-    def test_rubric_trait_extraction_with_conflict(self):
+    def test_rubric_trait_extraction_with_conflict(self) -> None:
         """Test that conflicts between standalone and template rubrics are detected."""
         task = TaskEval(task_id="template_conflict_test")
 

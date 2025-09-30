@@ -9,7 +9,7 @@ from karenina.schemas.question_class import Question
 class TestRefactoredAddQuestion:
     """Test the new transparent add_question method."""
 
-    def test_add_question_with_question_object(self):
+    def test_add_question_with_question_object(self) -> None:
         """Test new functionality: passing Question object directly."""
         benchmark = Benchmark("Test Benchmark")
 
@@ -34,7 +34,7 @@ class TestRefactoredAddQuestion:
         assert question_data["raw_answer"] == "Machine learning is a subset of AI"
         assert question_data["few_shot_examples"] == [{"question": "What is AI?", "answer": "Artificial Intelligence"}]
 
-    def test_add_question_with_question_object_and_metadata(self):
+    def test_add_question_with_question_object_and_metadata(self) -> None:
         """Test Question object with additional metadata."""
         benchmark = Benchmark("Test Benchmark")
 
@@ -56,7 +56,7 @@ class TestRefactoredAddQuestion:
         assert question_data["author"]["name"] == "ML Expert"
         assert question_data["custom_metadata"]["difficulty"] == "intermediate"
 
-    def test_add_question_with_question_object_override_id(self):
+    def test_add_question_with_question_object_override_id(self) -> None:
         """Test that custom question_id overrides Question object's ID."""
         benchmark = Benchmark("Test Benchmark")
 
@@ -73,7 +73,7 @@ class TestRefactoredAddQuestion:
         assert q_id != question_obj.id
         assert custom_id in benchmark
 
-    def test_add_question_backward_compatibility_kwargs(self):
+    def test_add_question_backward_compatibility_kwargs(self) -> None:
         """Test that traditional kwargs usage still works."""
         benchmark = Benchmark("Test Benchmark")
 
@@ -92,7 +92,7 @@ class TestRefactoredAddQuestion:
         assert question_data["raw_answer"] == "Python is a programming language"
         assert question_data["finished"] is True
 
-    def test_add_question_validation_errors(self):
+    def test_add_question_validation_errors(self) -> None:
         """Test proper validation for invalid inputs."""
         benchmark = Benchmark("Test Benchmark")
 
@@ -104,7 +104,7 @@ class TestRefactoredAddQuestion:
         with pytest.raises(TypeError):
             benchmark.add_question(123)  # Invalid type
 
-    def test_question_object_id_consistency(self):
+    def test_question_object_id_consistency(self) -> None:
         """Test that Question objects generate consistent IDs."""
         benchmark1 = Benchmark("Test 1")
         benchmark2 = Benchmark("Test 2")
@@ -119,7 +119,7 @@ class TestRefactoredAddQuestion:
         assert id1 == id2  # Same content should generate same ID
         assert id1 == q1.id == q2.id
 
-    def test_question_object_with_few_shot_override(self):
+    def test_question_object_with_few_shot_override(self) -> None:
         """Test that explicit few_shot_examples override Question object's examples."""
         benchmark = Benchmark("Test Benchmark")
 
@@ -137,7 +137,7 @@ class TestRefactoredAddQuestion:
         assert question_data["few_shot_examples"] == override_examples
         assert question_data["few_shot_examples"] != question_obj.few_shot_examples
 
-    def test_mixed_usage_patterns(self):
+    def test_mixed_usage_patterns(self) -> None:
         """Test that both usage patterns can be used in the same benchmark."""
         benchmark = Benchmark("Mixed Usage Test")
 
@@ -160,7 +160,7 @@ class TestRefactoredAddQuestion:
         assert q1_data["question"] == "Traditional question"
         assert q2_data["question"] == "Object question"
 
-    def test_question_object_tags_handling(self):
+    def test_question_object_tags_handling(self) -> None:
         """Test that Question object tags are properly handled as keywords."""
         benchmark = Benchmark("Test Benchmark")
 
@@ -182,7 +182,7 @@ class TestRefactoredAddQuestion:
         assert "tag3" in retrieved_obj.tags
         assert None not in retrieved_obj.tags
 
-    def test_integration_with_existing_methods(self):
+    def test_integration_with_existing_methods(self) -> None:
         """Test that new functionality integrates with existing benchmark methods."""
         benchmark = Benchmark("Integration Test")
 

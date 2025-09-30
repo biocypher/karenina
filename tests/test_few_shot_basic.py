@@ -7,7 +7,7 @@ from karenina.benchmark.verification.runner import _construct_few_shot_prompt
 from karenina.schemas.question_class import Question
 
 
-def test_construct_few_shot_prompt_disabled():
+def test_construct_few_shot_prompt_disabled() -> None:
     """Test that when few-shot is disabled, original question is returned."""
     question_text = "What is 2 + 2?"
     examples = [
@@ -20,7 +20,7 @@ def test_construct_few_shot_prompt_disabled():
     assert result == question_text
 
 
-def test_construct_few_shot_prompt_enabled():
+def test_construct_few_shot_prompt_enabled() -> None:
     """Test few-shot prompt construction with examples."""
     question_text = "What is 2 + 2?"
     examples = [
@@ -41,7 +41,7 @@ def test_construct_few_shot_prompt_enabled():
     assert result == expected
 
 
-def test_question_schema_with_few_shot_examples():
+def test_question_schema_with_few_shot_examples() -> None:
     """Test creating a Question with few-shot examples."""
     question = Question(
         question="What is the capital of France?",
@@ -59,7 +59,7 @@ def test_question_schema_with_few_shot_examples():
     assert question.few_shot_examples[0]["answer"] == "Berlin"
 
 
-def test_question_schema_without_few_shot_examples():
+def test_question_schema_without_few_shot_examples() -> None:
     """Test creating a Question without few-shot examples."""
     question = Question(
         question="What is the capital of France?",
@@ -71,7 +71,7 @@ def test_question_schema_without_few_shot_examples():
     assert question.few_shot_examples is None
 
 
-def test_verification_config_with_few_shot_settings():
+def test_verification_config_with_few_shot_settings() -> None:
     """Test VerificationConfig with few-shot settings."""
     answering_model = ModelConfig(
         id="test-answering",
@@ -104,7 +104,7 @@ def test_verification_config_with_few_shot_settings():
     assert config.few_shot_k == 5
 
 
-def test_verification_config_few_shot_defaults():
+def test_verification_config_few_shot_defaults() -> None:
     """Test that few-shot is disabled by default in VerificationConfig."""
     answering_model = ModelConfig(
         id="test-answering",
@@ -139,7 +139,7 @@ def test_verification_config_few_shot_defaults():
     assert config.few_shot_k is None
 
 
-def test_verification_config_k_shot_validation():
+def test_verification_config_k_shot_validation() -> None:
     """Test that k-shot validation works correctly."""
     answering_model = ModelConfig(
         id="test-answering",

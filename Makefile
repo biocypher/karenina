@@ -34,16 +34,16 @@ test-changed:
 	uv run pytest --testmon -v
 
 lint:
-	uv run ruff check src/karenina tests
+	uv run ruff check --fix src/karenina tests
 
 format:
 	uv run ruff format src/karenina tests
 
 type-check:
-	uv run mypy src/karenina
+	uv run mypy src/karenina tests
 
 dead-code:
-	uv run vulture src/karenina
+	uv run vulture src/karenina tests
 
 clean:
 	rm -rf build/

@@ -6,7 +6,7 @@ from karenina.llm.manual_llm import ManualLLM, ManualTraceNotFoundError
 from karenina.llm.manual_traces import ManualTraceError, ManualTraceManager, clear_manual_traces, load_manual_traces
 
 
-def test_manual_trace_manager_helpful_error_messages():
+def test_manual_trace_manager_helpful_error_messages() -> None:
     """Test that ManualTraceManager provides helpful error messages."""
     manager = ManualTraceManager()
 
@@ -61,7 +61,7 @@ def test_manual_trace_manager_helpful_error_messages():
     assert "non-empty string" in error_msg
 
 
-def test_manual_llm_helpful_error_messages():
+def test_manual_llm_helpful_error_messages() -> None:
     """Test that ManualLLM provides helpful error messages when traces not found."""
     # Clear any existing traces
     clear_manual_traces()
@@ -104,7 +104,7 @@ def test_manual_llm_helpful_error_messages():
     clear_manual_traces()
 
 
-def test_error_message_consistency():
+def test_error_message_consistency() -> None:
     """Test that error messages are consistent between different methods."""
     clear_manual_traces()
 
@@ -135,7 +135,7 @@ def test_error_message_consistency():
     assert "Upload a JSON file" in content_error
 
 
-def test_error_messages_include_actionable_guidance():
+def test_error_messages_include_actionable_guidance() -> None:
     """Test that error messages include actionable guidance for users."""
     manager = ManualTraceManager()
 
@@ -166,7 +166,7 @@ def test_error_messages_include_actionable_guidance():
     assert "trace(s)" in error_msg
 
 
-def test_error_messages_include_examples():
+def test_error_messages_include_examples() -> None:
     """Test that error messages include helpful examples."""
     manager = ManualTraceManager()
 

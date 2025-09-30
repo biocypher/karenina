@@ -28,7 +28,7 @@ def error_function(item: str) -> str:
 class TestAsyncConfig:
     """Test the AsyncConfig class."""
 
-    def test_default_config(self):
+    def test_default_config(self) -> None:
         """Test default configuration values."""
         config = AsyncConfig()
         assert config.enabled is True
@@ -38,7 +38,7 @@ class TestAsyncConfig:
         assert config.concurrent_batches is None
         assert config.delay_between_batches == 0.5
 
-    def test_custom_config(self):
+    def test_custom_config(self) -> None:
         """Test custom configuration values."""
         config = AsyncConfig(
             enabled=False,
@@ -55,7 +55,7 @@ class TestAsyncConfig:
         assert config.concurrent_batches == 3
         assert config.delay_between_batches == 1.0
 
-    def test_from_env(self, monkeypatch):
+    def test_from_env(self, monkeypatch) -> None:
         """Test configuration from environment variables."""
         # Test with environment variables set
         monkeypatch.setenv("KARENINA_ASYNC_ENABLED", "false")
@@ -73,7 +73,7 @@ class TestAsyncConfig:
         assert config.concurrent_batches == 4
         assert config.delay_between_batches == 2.0
 
-    def test_from_env_defaults(self, monkeypatch):
+    def test_from_env_defaults(self, monkeypatch) -> None:
         """Test configuration defaults when environment variables are not set."""
         # Clear relevant environment variables
         for key in [
@@ -98,7 +98,7 @@ class TestAsyncConfig:
 class TestRunSyncWithProgress:
     """Test the synchronous function with progress tracking."""
 
-    def test_sync_with_progress(self):
+    def test_sync_with_progress(self) -> None:
         """Test synchronous execution with progress callback."""
         items = ["hello", "world", "test"]
         progress_calls = []
@@ -120,12 +120,12 @@ class TestRunSyncWithProgress:
         assert "2/3" in progress_calls[1][1]
         assert "3/3" in progress_calls[2][1]
 
-    def test_sync_empty_list(self):
+    def test_sync_empty_list(self) -> None:
         """Test synchronous execution with empty list."""
         results = run_sync_with_progress([], slow_function)
         assert results == []
 
-    def test_sync_with_errors(self):
+    def test_sync_with_errors(self) -> None:
         """Test synchronous execution with errors."""
         items = ["hello", "error", "world"]
         results = run_sync_with_progress(items, error_function)
@@ -282,7 +282,7 @@ class TestEdgeCases:
         for result in results:
             assert isinstance(result, ValueError)
 
-    def test_sync_all_errors(self):
+    def test_sync_all_errors(self) -> None:
         """Test sync handling when all items result in errors."""
         items = ["error", "error", "error"]
         results = run_sync_with_progress(items, error_function)
@@ -310,7 +310,7 @@ class TestEdgeCases:
         results = await run_async_chunked(items, slow_function, chunk_size=10)
         assert results == ["A", "B", "C"]
 
-    def test_progress_callback_none(self):
+    def test_progress_callback_none(self) -> None:
         """Test that None progress callback doesn't cause errors."""
         items = ["hello", "world"]
         results = run_sync_with_progress(items, slow_function, None)

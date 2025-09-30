@@ -5,7 +5,7 @@ from karenina.schemas.answer_class import BaseAnswer
 from karenina.schemas.question_class import Question
 
 
-def test_question_schema():
+def test_question_schema() -> None:
     """Test Question schema validation."""
     # Test valid question
     question = Question(
@@ -54,7 +54,7 @@ def test_question_schema():
         )
 
 
-def test_base_answer_schema():
+def test_base_answer_schema() -> None:
     """Test BaseAnswer schema validation."""
 
     # Test that BaseAnswer allows extra fields

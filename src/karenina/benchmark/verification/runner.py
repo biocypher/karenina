@@ -169,7 +169,7 @@ Ground Truth:
 
         prompt_parts.append(ground_truth_section)
 
-    return "\n\n".join(prompt_parts)
+    return "\n\n".join(prompt_parts) + "\n"
 
 
 def run_single_model_verification(

@@ -1,20 +1,20 @@
 from karenina.utils.code_parser import extract_and_combine_codeblocks
 
 
-def test_extract_and_combine_codeblocks_empty():
+def test_extract_and_combine_codeblocks_empty() -> None:
     """Test extracting code blocks from empty text."""
     result = extract_and_combine_codeblocks("")
     assert result == ""
 
 
-def test_extract_and_combine_codeblocks_no_blocks():
+def test_extract_and_combine_codeblocks_no_blocks() -> None:
     """Test extracting code blocks from text with no code blocks."""
     text = "This is some text without any code blocks."
     result = extract_and_combine_codeblocks(text)
     assert result == ""
 
 
-def test_extract_and_combine_codeblocks_single_block():
+def test_extract_and_combine_codeblocks_single_block() -> None:
     """Test extracting a single code block."""
     text = """
     Here's some code:
@@ -29,7 +29,7 @@ def test_extract_and_combine_codeblocks_single_block():
     assert "```" not in result
 
 
-def test_extract_and_combine_codeblocks_multiple_blocks():
+def test_extract_and_combine_codeblocks_multiple_blocks() -> None:
     """Test extracting multiple code blocks."""
     text = """
     First block:
@@ -51,7 +51,7 @@ def test_extract_and_combine_codeblocks_multiple_blocks():
     assert "```" not in result
 
 
-def test_extract_and_combine_codeblocks_with_language_identifiers():
+def test_extract_and_combine_codeblocks_with_language_identifiers() -> None:
     """Test extracting code blocks with language identifiers."""
     text = """
     ```python
@@ -74,7 +74,7 @@ def test_extract_and_combine_codeblocks_with_language_identifiers():
     assert "```" not in result
 
 
-def test_extract_and_combine_codeblocks_with_whitespace():
+def test_extract_and_combine_codeblocks_with_whitespace() -> None:
     """Test extracting code blocks with various whitespace patterns."""
     text = """
     ```python
@@ -94,7 +94,7 @@ def test_extract_and_combine_codeblocks_with_whitespace():
     assert "```" not in result
 
 
-def test_extract_and_combine_codeblocks_with_trailing_whitespace_after_language():
+def test_extract_and_combine_codeblocks_with_trailing_whitespace_after_language() -> None:
     """Test extracting code blocks with trailing whitespace after the language identifier."""
     text = """
     ```python
@@ -108,7 +108,7 @@ def test_extract_and_combine_codeblocks_with_trailing_whitespace_after_language(
     assert "```" not in result
 
 
-def test_extract_and_combine_codeblocks_windows_line_endings():
+def test_extract_and_combine_codeblocks_windows_line_endings() -> None:
     """Test extracting code blocks with Windows (CRLF) line endings."""
     text = """\r\n```python\r\ndef bar():\r\n    return 24\r\n```\r\n"""
     result = extract_and_combine_codeblocks(text)
