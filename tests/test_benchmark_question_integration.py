@@ -13,7 +13,7 @@ class TestBenchmarkQuestionObjectMethods:
     """Test the new Question object methods in Benchmark."""
 
     @pytest.fixture
-    def sample_benchmark(self):
+    def sample_benchmark(self) -> None:
         """Create a sample benchmark for testing."""
         benchmark = Benchmark.create(
             name="Test Benchmark", description="Test benchmark for Question object methods", creator="Test Suite"
@@ -36,7 +36,7 @@ class TestBenchmarkQuestionObjectMethods:
 
         return benchmark
 
-    def test_get_question_as_object(self, sample_benchmark):
+    def test_get_question_as_object(self, sample_benchmark) -> None:
         """Test getting a question as a Question object."""
         # Get question IDs
         question_ids = sample_benchmark.get_question_ids()
@@ -50,12 +50,12 @@ class TestBenchmarkQuestionObjectMethods:
         assert question_obj.raw_answer in ["4", "Paris"]
         assert isinstance(question_obj.tags, list)
 
-    def test_get_question_as_object_not_found(self, sample_benchmark):
+    def test_get_question_as_object_not_found(self, sample_benchmark) -> None:
         """Test getting non-existent question as object."""
         with pytest.raises(ValueError, match="Question not found"):
             sample_benchmark.get_question_as_object("nonexistent_id")
 
-    def test_get_all_questions_as_objects(self, sample_benchmark):
+    def test_get_all_questions_as_objects(self, sample_benchmark) -> None:
         """Test getting all questions as Question objects."""
         question_objects = sample_benchmark.get_all_questions_as_objects()
 
@@ -71,7 +71,7 @@ class TestBenchmarkQuestionObjectMethods:
         for q in question_objects:
             assert isinstance(q.tags, list)
 
-    def test_add_question_from_object(self, sample_benchmark):
+    def test_add_question_from_object(self, sample_benchmark) -> None:
         """Test adding a question from a Question object."""
         # Create a new Question object
         new_question = Question(
@@ -97,7 +97,7 @@ class TestBenchmarkQuestionObjectMethods:
             {"question": "What is the smallest planet?", "answer": "Mercury"}
         ]
 
-    def test_add_question_from_object_with_metadata(self, sample_benchmark):
+    def test_add_question_from_object_with_metadata(self, sample_benchmark) -> None:
         """Test adding a question from object with additional metadata."""
         new_question = Question(
             question="What is photosynthesis?",
@@ -122,7 +122,7 @@ class TestBenchmarkQuestionObjectMethods:
         difficulty = sample_benchmark.get_question_custom_property(question_id, "difficulty")
         assert difficulty == "medium"
 
-    def test_add_question_from_object_duplicate_id(self, sample_benchmark):
+    def test_add_question_from_object_duplicate_id(self, sample_benchmark) -> None:
         """Test adding a question object that already exists."""
         # Create a Question object and add it
         from karenina.schemas.question_class import Question
@@ -136,12 +136,12 @@ class TestBenchmarkQuestionObjectMethods:
         with pytest.raises(ValueError, match="Question with ID .* already exists"):
             sample_benchmark.add_question_from_object(question_obj)
 
-    def test_add_question_from_object_invalid_type(self, sample_benchmark):
+    def test_add_question_from_object_invalid_type(self, sample_benchmark) -> None:
         """Test adding invalid object type."""
         with pytest.raises(ValueError, match="question_obj must be a Question instance"):
             sample_benchmark.add_question_from_object({"not": "a_question_object"})
 
-    def test_round_trip_conversion(self, sample_benchmark):
+    def test_round_trip_conversion(self, sample_benchmark) -> None:
         """Test converting dict -> object -> dict maintains consistency."""
         question_ids = sample_benchmark.get_question_ids()
         original_dict = sample_benchmark.get_question(question_ids[0])
@@ -155,7 +155,7 @@ class TestBenchmarkQuestionObjectMethods:
         assert question_obj.tags == (original_dict.get("keywords") or [])
         assert question_obj.few_shot_examples == original_dict.get("few_shot_examples")
 
-    def test_question_object_id_consistency(self):
+    def test_question_object_id_consistency(self) -> None:
         """Test that Question object IDs are consistent with benchmark storage."""
         # Create a Question object
         question = Question(question="Test question for ID consistency", raw_answer="Test answer")
@@ -171,7 +171,7 @@ class TestBenchmarkQuestionObjectMethods:
         retrieved_obj = benchmark.get_question_as_object(added_id)
         assert retrieved_obj.id == question.id
 
-    def test_empty_tags_handling(self, sample_benchmark):
+    def test_empty_tags_handling(self, sample_benchmark) -> None:
         """Test handling of empty/None tags."""
         question = Question(
             question="Question with no tags",
@@ -185,7 +185,7 @@ class TestBenchmarkQuestionObjectMethods:
         # Should be converted to empty list
         assert retrieved_obj.tags == []
 
-    def test_persistence_round_trip(self):
+    def test_persistence_round_trip(self) -> None:
         """Test that Question objects survive save/load cycles."""
         # Create benchmark with Question object
         benchmark = Benchmark.create("Test", "Test", "Test")
@@ -224,7 +224,7 @@ class TestTaskEvalBenchmarkIntegration:
     """Test TaskEval integration with Benchmark Question objects."""
 
     @pytest.fixture
-    def sample_benchmark(self):
+    def sample_benchmark(self) -> None:
         """Create a sample benchmark for TaskEval testing."""
         benchmark = Benchmark.create("TaskEval Test", "Test", "Test")
 
@@ -247,7 +247,7 @@ class Answer(BaseAnswer):
 
         return benchmark
 
-    def test_task_eval_with_benchmark_dict(self, sample_benchmark):
+    def test_task_eval_with_benchmark_dict(self, sample_benchmark) -> None:
         """Test TaskEval using question dict from Benchmark."""
         from karenina.benchmark.task_eval import TaskEval
 
@@ -262,7 +262,7 @@ class Answer(BaseAnswer):
         assert len(task.global_questions) == 1
         assert task.global_questions[0] == question_dict
 
-    def test_task_eval_with_benchmark_object(self, sample_benchmark):
+    def test_task_eval_with_benchmark_object(self, sample_benchmark) -> None:
         """Test TaskEval using Question object from Benchmark."""
         from karenina.benchmark.task_eval import TaskEval
 
@@ -277,7 +277,7 @@ class Answer(BaseAnswer):
         assert len(task.global_questions) == 1
         assert task.global_questions[0] == question_obj
 
-    def test_task_eval_with_benchmark_all_objects(self, sample_benchmark):
+    def test_task_eval_with_benchmark_all_objects(self, sample_benchmark) -> None:
         """Test TaskEval using all Question objects from Benchmark."""
         from karenina.benchmark.task_eval import TaskEval
 
@@ -292,7 +292,7 @@ class Answer(BaseAnswer):
         assert len(task.global_questions) == len(all_questions)
         assert all(isinstance(q, Question) for q in task.global_questions)
 
-    def test_task_eval_normalization_from_benchmark(self, sample_benchmark):
+    def test_task_eval_normalization_from_benchmark(self, sample_benchmark) -> None:
         """Test that TaskEval correctly normalizes questions from Benchmark."""
         from karenina.benchmark.task_eval import TaskEval
 

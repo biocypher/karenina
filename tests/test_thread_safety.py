@@ -8,13 +8,13 @@ import pytest
 from karenina.llm.manual_traces import ManualTraceManager
 
 
-def test_concurrent_access():
+def test_concurrent_access() -> None:
     """Test concurrent access to trace manager from multiple threads."""
     manager = ManualTraceManager(session_timeout_seconds=10)
     results = []
     errors = []
 
-    def load_traces(thread_id: int):
+    def load_traces(thread_id: int) -> None:
         """Load traces from a thread."""
         try:
             test_traces = {f"d41d8cd98f00b204e9800998ecf8427{thread_id % 10}": f"Trace from thread {thread_id}"}
@@ -23,7 +23,7 @@ def test_concurrent_access():
         except Exception as e:
             errors.append(f"Thread {thread_id} error: {e}")
 
-    def access_traces(thread_id: int):
+    def access_traces(thread_id: int) -> None:
         """Access traces from a thread."""
         try:
             # Try to access various traces
@@ -61,7 +61,7 @@ def test_concurrent_access():
     manager.clear_traces()
 
 
-def test_concurrent_read_write():
+def test_concurrent_read_write() -> None:
     """Test concurrent read and write operations."""
     manager = ManualTraceManager(session_timeout_seconds=10)
 
@@ -73,7 +73,7 @@ def test_concurrent_read_write():
     write_results = []
     errors = []
 
-    def reader_thread():
+    def reader_thread() -> None:
         """Continuously read traces."""
         try:
             for _i in range(10):
@@ -84,7 +84,7 @@ def test_concurrent_read_write():
         except Exception as e:
             errors.append(f"Reader error: {e}")
 
-    def writer_thread(thread_id: int):
+    def writer_thread(thread_id: int) -> None:
         """Write new traces."""
         try:
             # Use valid 32-character MD5 hashes
@@ -148,14 +148,14 @@ def test_concurrent_read_write():
     manager.clear_traces()
 
 
-def test_concurrent_memory_usage():
+def test_concurrent_memory_usage() -> None:
     """Test concurrent access to memory usage information."""
     manager = ManualTraceManager(session_timeout_seconds=10)
 
     results = []
     errors = []
 
-    def check_memory_usage(thread_id: int):
+    def check_memory_usage(thread_id: int) -> None:
         """Check memory usage from a thread."""
         try:
             for _i in range(5):
@@ -168,7 +168,7 @@ def test_concurrent_memory_usage():
         except Exception as e:
             errors.append(f"Thread {thread_id} error: {e}")
 
-    def load_traces_concurrent(thread_id: int):
+    def load_traces_concurrent(thread_id: int) -> None:
         """Load traces concurrently."""
         try:
             # Use valid MD5 hashes
@@ -213,14 +213,14 @@ def test_concurrent_memory_usage():
     manager.clear_traces()
 
 
-def test_concurrent_cleanup():
+def test_concurrent_cleanup() -> None:
     """Test that cleanup doesn't interfere with concurrent operations."""
     manager = ManualTraceManager(session_timeout_seconds=1)  # Very short timeout
 
     results = []
     errors = []
 
-    def continuous_operations():
+    def continuous_operations() -> None:
         """Perform continuous operations while cleanup might happen."""
         try:
             # Use valid MD5 hashes
@@ -262,7 +262,7 @@ def test_concurrent_cleanup():
     manager.clear_traces()
 
 
-def test_lock_type():
+def test_lock_type() -> None:
     """Test that we're using the correct lock type (RLock for reentrant access)."""
     manager = ManualTraceManager()
 

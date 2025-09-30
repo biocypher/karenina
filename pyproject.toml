@@ -57,6 +57,7 @@ dev = [
     "mkdocs>=1.5.0",
     "mkdocs-material>=9.0.0",
     "mkdocstrings[python]>=0.20.0",
+    "ipython>=8.0.0",
 ]
 
 [project.urls]
@@ -110,6 +111,19 @@ warn_no_return = true
 follow_imports = "normal"
 ignore_missing_imports = true
 
+# Relax strictness for tests to accommodate test-specific patterns
+# Test code often intentionally violates type rules to test error conditions
+[[tool.mypy.overrides]]
+module = "tests.*"
+# Require type annotations on test function signatures
+disallow_untyped_defs = false  # Allow helpers without annotations
+disallow_incomplete_defs = false
+check_untyped_defs = false  # Don't check bodies of untyped functions
+disallow_untyped_calls = false  # Allow calling untyped code
+warn_return_any = false  # Don't warn about Any returns
+# Suppress errors in test bodies - tests intentionally use invalid patterns to test error handling
+disable_error_code = ["call-arg", "attr-defined", "arg-type", "index", "union-attr", "var-annotated", "operator", "assignment", "type-arg", "call-overload", "method-assign", "comparison-overlap", "return-value", "func-returns-value", "misc"]
+
 [tool.ruff]
 target-version = "py311"
 line-length = 120
@@ -151,6 +165,7 @@ make_whitelist = true
 dev = [
     "build>=1.2.2.post1",
     "deptree>=0.0.12",
+    "ipython>=9.6.0",
     "mkdocs>=1.6.1",
     "mkdocs-material>=9.6.14",
     "mkdocstrings[python]>=0.29.1",

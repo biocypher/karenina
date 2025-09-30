@@ -10,42 +10,42 @@ from karenina.benchmark.verification.runner import _should_expose_ground_truth, 
 class TestGroundTruthExposure:
     """Test the ground truth exposure functionality."""
 
-    def test_should_expose_ground_truth_default(self):
+    def test_should_expose_ground_truth_default(self) -> None:
         """Test that ground truth exposure is disabled by default."""
         with patch.dict(os.environ, {}, clear=True):
             assert _should_expose_ground_truth() is False
 
-    def test_should_expose_ground_truth_enabled_true(self):
+    def test_should_expose_ground_truth_enabled_true(self) -> None:
         """Test that ground truth exposure is enabled when env var is 'true'."""
         with patch.dict(os.environ, {"KARENINA_EXPOSE_GROUND_TRUTH": "true"}):
             assert _should_expose_ground_truth() is True
 
-    def test_should_expose_ground_truth_enabled_1(self):
+    def test_should_expose_ground_truth_enabled_1(self) -> None:
         """Test that ground truth exposure is enabled when env var is '1'."""
         with patch.dict(os.environ, {"KARENINA_EXPOSE_GROUND_TRUTH": "1"}):
             assert _should_expose_ground_truth() is True
 
-    def test_should_expose_ground_truth_enabled_yes(self):
+    def test_should_expose_ground_truth_enabled_yes(self) -> None:
         """Test that ground truth exposure is enabled when env var is 'yes'."""
         with patch.dict(os.environ, {"KARENINA_EXPOSE_GROUND_TRUTH": "yes"}):
             assert _should_expose_ground_truth() is True
 
-    def test_should_expose_ground_truth_enabled_on(self):
+    def test_should_expose_ground_truth_enabled_on(self) -> None:
         """Test that ground truth exposure is enabled when env var is 'on'."""
         with patch.dict(os.environ, {"KARENINA_EXPOSE_GROUND_TRUTH": "on"}):
             assert _should_expose_ground_truth() is True
 
-    def test_should_expose_ground_truth_disabled_false(self):
+    def test_should_expose_ground_truth_disabled_false(self) -> None:
         """Test that ground truth exposure is disabled when env var is 'false'."""
         with patch.dict(os.environ, {"KARENINA_EXPOSE_GROUND_TRUTH": "false"}):
             assert _should_expose_ground_truth() is False
 
-    def test_should_expose_ground_truth_disabled_0(self):
+    def test_should_expose_ground_truth_disabled_0(self) -> None:
         """Test that ground truth exposure is disabled when env var is '0'."""
         with patch.dict(os.environ, {"KARENINA_EXPOSE_GROUND_TRUTH": "0"}):
             assert _should_expose_ground_truth() is False
 
-    def test_should_expose_ground_truth_case_insensitive(self):
+    def test_should_expose_ground_truth_case_insensitive(self) -> None:
         """Test that ground truth exposure check is case insensitive."""
         with patch.dict(os.environ, {"KARENINA_EXPOSE_GROUND_TRUTH": "TRUE"}):
             assert _should_expose_ground_truth() is True
@@ -54,7 +54,7 @@ class TestGroundTruthExposure:
 
     @patch("karenina.benchmark.verification.runner._should_expose_ground_truth")
     @patch("karenina.benchmark.verification.runner.init_chat_model_unified")
-    def test_ground_truth_included_in_parsing_prompt(self, mock_init_llm, mock_should_expose):
+    def test_ground_truth_included_in_parsing_prompt(self, mock_init_llm, mock_should_expose) -> None:
         """Test that ground truth is included in parsing prompt when enabled."""
         # Setup
         mock_should_expose.return_value = True
@@ -73,7 +73,7 @@ class TestGroundTruthExposure:
         mock_parsing_llm.invoke.return_value = parsing_response
 
         # Configure mock to return different LLMs for answering vs parsing
-        def side_effect(*args, **kwargs):
+        def side_effect(*args, **kwargs) -> None:
             if "temperature" in kwargs and kwargs["temperature"] == 0.1:
                 return mock_parsing_llm  # Parsing model typically has lower temperature
             return mock_answering_llm
@@ -94,14 +94,14 @@ class TestGroundTruthExposure:
         # Configure models
         answering_model = ModelConfig(
             id="answering-model-1",
-            model_name="gpt-4",
+            model_name="gpt-4.1-mini",
             model_provider="openai",
             temperature=0.7,
             system_prompt="You are a helpful assistant.",
         )
         parsing_model = ModelConfig(
             id="parsing-model-1",
-            model_name="gpt-4",
+            model_name="gpt-4.1-mini",
             model_provider="openai",
             temperature=0.1,
             system_prompt="Parse the response into structured format.",
@@ -146,7 +146,7 @@ class TestGroundTruthExposure:
 
     @patch("karenina.benchmark.verification.runner._should_expose_ground_truth")
     @patch("karenina.benchmark.verification.runner.init_chat_model_unified")
-    def test_ground_truth_not_included_when_disabled(self, mock_init_llm, mock_should_expose):
+    def test_ground_truth_not_included_when_disabled(self, mock_init_llm, mock_should_expose) -> None:
         """Test that ground truth is not included in parsing prompt when disabled."""
         # Setup
         mock_should_expose.return_value = False
@@ -165,7 +165,7 @@ class TestGroundTruthExposure:
         mock_parsing_llm.invoke.return_value = parsing_response
 
         # Configure mock to return different LLMs for answering vs parsing
-        def side_effect(*args, **kwargs):
+        def side_effect(*args, **kwargs) -> None:
             if "temperature" in kwargs and kwargs["temperature"] == 0.1:
                 return mock_parsing_llm
             return mock_answering_llm
@@ -186,14 +186,14 @@ class TestGroundTruthExposure:
         # Configure models
         answering_model = ModelConfig(
             id="answering-model-1",
-            model_name="gpt-4",
+            model_name="gpt-4.1-mini",
             model_provider="openai",
             temperature=0.7,
             system_prompt="You are a helpful assistant.",
         )
         parsing_model = ModelConfig(
             id="parsing-model-1",
-            model_name="gpt-4",
+            model_name="gpt-4.1-mini",
             model_provider="openai",
             temperature=0.1,
             system_prompt="Parse the response into structured format.",
@@ -234,7 +234,7 @@ class TestGroundTruthExposure:
 
     @patch("karenina.benchmark.verification.runner._should_expose_ground_truth")
     @patch("karenina.benchmark.verification.runner.init_chat_model_unified")
-    def test_ground_truth_extraction_handles_complex_types(self, mock_init_llm, mock_should_expose):
+    def test_ground_truth_extraction_handles_complex_types(self, mock_init_llm, mock_should_expose) -> None:
         """Test that ground truth extraction handles complex types like Literal."""
         # Setup
         mock_should_expose.return_value = True
@@ -253,7 +253,7 @@ class TestGroundTruthExposure:
         mock_parsing_llm.invoke.return_value = parsing_response
 
         # Configure mock to return different LLMs
-        def side_effect(*args, **kwargs):
+        def side_effect(*args, **kwargs) -> None:
             if "temperature" in kwargs and kwargs["temperature"] == 0.1:
                 return mock_parsing_llm
             return mock_answering_llm
@@ -279,14 +279,14 @@ class TestGroundTruthExposure:
         # Configure models
         answering_model = ModelConfig(
             id="answering-model-1",
-            model_name="gpt-4",
+            model_name="gpt-4.1-mini",
             model_provider="openai",
             temperature=0.7,
             system_prompt="You are a helpful assistant.",
         )
         parsing_model = ModelConfig(
             id="parsing-model-1",
-            model_name="gpt-4",
+            model_name="gpt-4.1-mini",
             model_provider="openai",
             temperature=0.1,
             system_prompt="Parse the response into structured format.",
@@ -322,7 +322,7 @@ class TestGroundTruthExposure:
     @patch("karenina.benchmark.verification.runner._should_expose_ground_truth")
     @patch("karenina.benchmark.verification.runner.init_chat_model_unified")
     @patch("builtins.print")  # Capture warning print
-    def test_ground_truth_extraction_failure_is_graceful(self, _mock_print, mock_init_llm, mock_should_expose):
+    def test_ground_truth_extraction_failure_is_graceful(self, _mock_print, mock_init_llm, mock_should_expose) -> None:
         """Test that if ground truth extraction fails, verification continues gracefully."""
         # Setup
         mock_should_expose.return_value = True
@@ -340,7 +340,7 @@ class TestGroundTruthExposure:
         mock_parsing_llm = Mock()
         mock_parsing_llm.invoke.return_value = parsing_response
 
-        def side_effect(*args, **kwargs):
+        def side_effect(*args, **kwargs) -> None:
             if "temperature" in kwargs and kwargs["temperature"] == 0.1:
                 return mock_parsing_llm
             return mock_answering_llm
@@ -362,14 +362,14 @@ class TestGroundTruthExposure:
         # Configure models
         answering_model = ModelConfig(
             id="answering-model-1",
-            model_name="gpt-4",
+            model_name="gpt-4.1-mini",
             model_provider="openai",
             temperature=0.7,
             system_prompt="You are a helpful assistant.",
         )
         parsing_model = ModelConfig(
             id="parsing-model-1",
-            model_name="gpt-4",
+            model_name="gpt-4.1-mini",
             model_provider="openai",
             temperature=0.1,
             system_prompt="Parse the response into structured format.",

@@ -10,7 +10,7 @@ from karenina.schemas.answer_class import BaseAnswer
 class TestAnswerBuilder:
     """Test suite for AnswerBuilder functionality."""
 
-    def test_empty_builder_initialization(self):
+    def test_empty_builder_initialization(self) -> None:
         """Test that empty AnswerBuilder initializes correctly."""
         builder = AnswerBuilder()
 
@@ -19,7 +19,7 @@ class TestAnswerBuilder:
         assert builder.regex_patterns == {}
         assert builder.regex_descriptions == {}
 
-    def test_add_attribute_basic(self):
+    def test_add_attribute_basic(self) -> None:
         """Test adding a basic attribute."""
         builder = AnswerBuilder()
         result = builder.add_attribute("test_field", "bool", "Test boolean field", True)
@@ -34,7 +34,7 @@ class TestAnswerBuilder:
         assert builder.attributes[0].ground_truth is True
         assert builder.field_descriptions["test_field"] == "Test boolean field"
 
-    def test_add_attribute_chaining(self):
+    def test_add_attribute_chaining(self) -> None:
         """Test method chaining when adding multiple attributes."""
         builder = AnswerBuilder()
 
@@ -51,7 +51,7 @@ class TestAnswerBuilder:
         names = [attr.name for attr in builder.attributes]
         assert names == ["field1", "field2", "field3"]
 
-    def test_add_attribute_validation_errors(self):
+    def test_add_attribute_validation_errors(self) -> None:
         """Test validation errors when adding attributes."""
         builder = AnswerBuilder()
 
@@ -67,7 +67,7 @@ class TestAnswerBuilder:
         with pytest.raises(ValueError, match="Attribute 'duplicate' already exists"):
             builder.add_attribute("duplicate", "int", "Second", 42)
 
-    def test_remove_attribute_basic(self):
+    def test_remove_attribute_basic(self) -> None:
         """Test removing an attribute."""
         builder = AnswerBuilder()
         builder.add_attribute("field1", "bool", "First field", True)
@@ -84,14 +84,14 @@ class TestAnswerBuilder:
         assert "field1" not in builder.field_descriptions
         assert "field2" in builder.field_descriptions
 
-    def test_remove_attribute_not_found(self):
+    def test_remove_attribute_not_found(self) -> None:
         """Test error when removing non-existent attribute."""
         builder = AnswerBuilder()
 
         with pytest.raises(ValueError, match="Attribute 'nonexistent' not found"):
             builder.remove_attribute("nonexistent")
 
-    def test_add_regex_basic(self):
+    def test_add_regex_basic(self) -> None:
         """Test adding a basic regex pattern."""
         builder = AnswerBuilder()
         result = builder.add_regex(
@@ -108,7 +108,7 @@ class TestAnswerBuilder:
         assert builder.regex_patterns["citations"]["match_type"] == "count"
         assert builder.regex_descriptions["citations"] == "Citation count"
 
-    def test_add_regex_default_parameters(self):
+    def test_add_regex_default_parameters(self) -> None:
         """Test adding regex with default parameters."""
         builder = AnswerBuilder()
         builder.add_regex("test_pattern", r"test\d+", expected="test123")
@@ -118,7 +118,7 @@ class TestAnswerBuilder:
         # Should have empty description
         assert "test_pattern" not in builder.regex_descriptions
 
-    def test_add_regex_validation_errors(self):
+    def test_add_regex_validation_errors(self) -> None:
         """Test validation errors when adding regex patterns."""
         builder = AnswerBuilder()
 
@@ -139,7 +139,7 @@ class TestAnswerBuilder:
         with pytest.raises(ValueError, match="Regex pattern 'duplicate' already exists"):
             builder.add_regex("duplicate", r"other", "expected")
 
-    def test_name_conflicts_between_attributes_and_regex(self):
+    def test_name_conflicts_between_attributes_and_regex(self) -> None:
         """Test that attribute and regex names cannot conflict."""
         builder = AnswerBuilder()
 
@@ -154,7 +154,7 @@ class TestAnswerBuilder:
         with pytest.raises(ValueError, match="Name 'conflict2' already used for regex pattern"):
             builder2.add_attribute("conflict2", "bool", "Test field", True)
 
-    def test_remove_regex_basic(self):
+    def test_remove_regex_basic(self) -> None:
         """Test removing a regex pattern."""
         builder = AnswerBuilder()
         builder.add_regex("pattern1", r"test1", "expected1", description="First pattern")
@@ -172,14 +172,14 @@ class TestAnswerBuilder:
         assert "pattern1" not in builder.regex_descriptions
         assert "pattern2" in builder.regex_descriptions
 
-    def test_remove_regex_not_found(self):
+    def test_remove_regex_not_found(self) -> None:
         """Test error when removing non-existent regex pattern."""
         builder = AnswerBuilder()
 
         with pytest.raises(ValueError, match="Regex pattern 'nonexistent' not found"):
             builder.remove_regex("nonexistent")
 
-    def test_compile_with_attributes_only(self):
+    def test_compile_with_attributes_only(self) -> None:
         """Test compiling builder with only classical attributes."""
         builder = AnswerBuilder()
         builder.add_attribute("test_bool", "bool", "Test boolean", True)
@@ -204,7 +204,7 @@ class TestAnswerBuilder:
         answer_wrong = Answer(test_bool=False, test_int=42)
         assert answer_wrong.verify() is False
 
-    def test_compile_with_regex_only(self):
+    def test_compile_with_regex_only(self) -> None:
         """Test compiling builder with only regex patterns."""
         builder = AnswerBuilder()
         builder.add_regex("test_pattern", r"test\d+", expected="test123", match_type="exact")
@@ -230,7 +230,7 @@ class TestAnswerBuilder:
         assert regex_result["success"] is True
         assert regex_result["results"]["test_pattern"] is True
 
-    def test_compile_with_both_attributes_and_regex(self):
+    def test_compile_with_both_attributes_and_regex(self) -> None:
         """Test compiling builder with both attributes and regex patterns."""
         builder = AnswerBuilder()
         builder.add_attribute("mentions_drug", "bool", "Whether drug is mentioned", True)
@@ -257,7 +257,7 @@ class TestAnswerBuilder:
         regex_result_wrong = answer.verify_regex(wrong_text)
         assert regex_result_wrong["success"] is False
 
-    def test_compile_custom_class_name(self):
+    def test_compile_custom_class_name(self) -> None:
         """Test compiling with custom class name."""
         builder = AnswerBuilder()
         builder.add_attribute("value", "int", "Test value", 123)
@@ -267,14 +267,14 @@ class TestAnswerBuilder:
         assert CustomAnswer.__name__ == "CustomAnswer"
         assert "class CustomAnswer(BaseAnswer):" in CustomAnswer._source_code
 
-    def test_compile_empty_builder_error(self):
+    def test_compile_empty_builder_error(self) -> None:
         """Test that empty builder cannot be compiled."""
         builder = AnswerBuilder()
 
         with pytest.raises(ValueError, match="Cannot compile empty AnswerBuilder"):
             builder.compile()
 
-    def test_repr_empty_builder(self):
+    def test_repr_empty_builder(self) -> None:
         """Test string representation of empty builder."""
         builder = AnswerBuilder()
         repr_str = repr(builder)
@@ -284,7 +284,7 @@ class TestAnswerBuilder:
         assert "Regex Patterns (0):" in repr_str
         assert "(none)" in repr_str
 
-    def test_repr_with_attributes_and_regex(self):
+    def test_repr_with_attributes_and_regex(self) -> None:
         """Test string representation with attributes and regex."""
         builder = AnswerBuilder()
         builder.add_attribute("test_bool", "bool", "Test boolean field", True)
@@ -308,7 +308,7 @@ class TestAnswerBuilder:
         assert "Test pattern" in repr_str
         assert "pattern2: \\\\[\\\\d+\\\\] (count, expected=2)" in repr_str
 
-    def test_different_match_types(self):
+    def test_different_match_types(self) -> None:
         """Test all supported regex match types."""
         builder = AnswerBuilder()
 
@@ -331,7 +331,7 @@ class TestAnswerBuilder:
         assert result["results"]["count_pattern"] is True
         assert result["results"]["all_pattern"] is True
 
-    def test_complex_types_and_values(self):
+    def test_complex_types_and_values(self) -> None:
         """Test builder with complex types and values."""
         builder = AnswerBuilder()
 
@@ -362,7 +362,7 @@ class TestAnswerBuilder:
 class TestAnswerBuilderIntegration:
     """Test AnswerBuilder integration with QuestionManager."""
 
-    def test_integration_with_question_manager(self):
+    def test_integration_with_question_manager(self) -> None:
         """Test that compiled Answer classes work with QuestionManager."""
         # Create a benchmark
         benchmark = Benchmark("Test Benchmark")
@@ -392,7 +392,7 @@ class TestAnswerBuilderIntegration:
         assert "mentions_treatment: bool" in template_code
         assert "regex: dict = Field" in template_code
 
-    def test_builder_fluent_interface_realistic_example(self):
+    def test_builder_fluent_interface_realistic_example(self) -> None:
         """Test realistic usage with fluent interface."""
         # Realistic medical research question example
         Answer = (

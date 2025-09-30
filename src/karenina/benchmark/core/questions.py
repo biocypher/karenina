@@ -96,25 +96,31 @@ class QuestionManager:
             raise TypeError(f"question must be either a string or Question object, got {type(question)}")
 
         # Handle Answer class input for answer_template
-        if answer_template is not None and inspect.isclass(answer_template):
-            # Import BaseAnswer here to avoid circular imports
-            from ...schemas.answer_class import BaseAnswer
+        if answer_template is not None:
+            if inspect.isclass(answer_template):
+                # Import BaseAnswer here to avoid circular imports
+                from ...schemas.answer_class import BaseAnswer
 
-            # Validate that it's an Answer class
-            if not issubclass(answer_template, BaseAnswer):
-                raise TypeError(f"answer_template class must inherit from BaseAnswer, got {answer_template}")
+                # Validate that it's an Answer class
+                if not issubclass(answer_template, BaseAnswer):
+                    raise TypeError(f"answer_template class must inherit from BaseAnswer, got {answer_template}")
 
-            # Convert Answer class to source code string
-            try:
-                # First try to get source code using the BaseAnswer method
-                source_code = answer_template.get_source_code()
-                answer_template = source_code if source_code is not None else inspect.getsource(answer_template)
-            except (OSError, TypeError) as e:
-                class_name = getattr(answer_template, "__name__", "Unknown")
-                raise ValueError(
-                    f"Could not extract source code from Answer class {class_name}. "
-                    f"For dynamically created classes, ensure _source_code is set. Error: {e}"
-                ) from e
+                # Convert Answer class to source code string
+                try:
+                    # First try to get source code using the BaseAnswer method
+                    source_code = answer_template.get_source_code()
+                    answer_template = source_code if source_code is not None else inspect.getsource(answer_template)
+                except (OSError, TypeError) as e:
+                    class_name = getattr(answer_template, "__name__", "Unknown")
+                    raise ValueError(
+                        f"Could not extract source code from Answer class {class_name}. "
+                        f"For dynamically created classes, ensure _source_code is set. Error: {e}"
+                    ) from e
+            elif not isinstance(answer_template, str):
+                # If it's not None, not a class, and not a string, it's invalid
+                raise TypeError(
+                    f"answer_template must be either a string, a BaseAnswer subclass, or None. Got {type(answer_template)}"
+                )
 
         # If no template provided, create a minimal one
         if answer_template is None:

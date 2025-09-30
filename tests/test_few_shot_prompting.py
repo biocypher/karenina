@@ -12,7 +12,7 @@ from karenina.schemas.question_class import Question
 class TestFewShotPromptConstruction:
     """Test the few-shot prompt construction logic."""
 
-    def test_construct_few_shot_prompt_disabled(self):
+    def test_construct_few_shot_prompt_disabled(self) -> None:
         """Test that when few-shot is disabled, original question is returned."""
         question_text = "What is 2 + 2?"
         examples = [
@@ -24,7 +24,7 @@ class TestFewShotPromptConstruction:
 
         assert result == question_text
 
-    def test_construct_few_shot_prompt_no_examples(self):
+    def test_construct_few_shot_prompt_no_examples(self) -> None:
         """Test that when no examples are provided, original question is returned."""
         question_text = "What is 2 + 2?"
 
@@ -32,7 +32,7 @@ class TestFewShotPromptConstruction:
 
         assert result == question_text
 
-    def test_construct_few_shot_prompt_empty_examples(self):
+    def test_construct_few_shot_prompt_empty_examples(self) -> None:
         """Test that when empty examples list is provided, original question is returned."""
         question_text = "What is 2 + 2?"
         examples = []
@@ -41,7 +41,7 @@ class TestFewShotPromptConstruction:
 
         assert result == question_text
 
-    def test_construct_few_shot_prompt_single_example(self):
+    def test_construct_few_shot_prompt_single_example(self) -> None:
         """Test few-shot prompt construction with a single example."""
         question_text = "What is 2 + 2?"
         examples = [{"question": "What is 1 + 1?", "answer": "2"}]
@@ -51,7 +51,7 @@ class TestFewShotPromptConstruction:
         expected = "Question: What is 1 + 1?\nAnswer: 2\n\nQuestion: What is 2 + 2?\nAnswer:"
         assert result == expected
 
-    def test_construct_few_shot_prompt_multiple_examples(self):
+    def test_construct_few_shot_prompt_multiple_examples(self) -> None:
         """Test few-shot prompt construction with multiple examples."""
         question_text = "What is 2 + 2?"
         examples = [
@@ -71,7 +71,7 @@ class TestFewShotPromptConstruction:
         )
         assert result == expected
 
-    def test_construct_few_shot_prompt_malformed_examples(self):
+    def test_construct_few_shot_prompt_malformed_examples(self) -> None:
         """Test that malformed examples are skipped."""
         question_text = "What is 2 + 2?"
         examples = [
@@ -96,7 +96,7 @@ class TestFewShotPromptConstruction:
 class TestQuestionSchemaWithFewShot:
     """Test Question schema with few-shot examples."""
 
-    def test_question_with_few_shot_examples(self):
+    def test_question_with_few_shot_examples(self) -> None:
         """Test creating a Question with few-shot examples."""
         question = Question(
             question="What is the capital of France?",
@@ -113,7 +113,7 @@ class TestQuestionSchemaWithFewShot:
         assert question.few_shot_examples[0]["question"] == "What is the capital of Germany?"
         assert question.few_shot_examples[0]["answer"] == "Berlin"
 
-    def test_question_without_few_shot_examples(self):
+    def test_question_without_few_shot_examples(self) -> None:
         """Test creating a Question without few-shot examples."""
         question = Question(
             question="What is the capital of France?",
@@ -124,7 +124,7 @@ class TestQuestionSchemaWithFewShot:
         assert question.raw_answer == "Paris"
         assert question.few_shot_examples is None
 
-    def test_question_id_generation_with_few_shot(self):
+    def test_question_id_generation_with_few_shot(self) -> None:
         """Test that question ID generation is not affected by few-shot examples."""
         question_without_examples = Question(
             question="What is the capital of France?",
@@ -146,7 +146,7 @@ class TestQuestionSchemaWithFewShot:
 class TestVerificationConfigWithFewShot:
     """Test VerificationConfig with few-shot settings."""
 
-    def test_verification_config_default_few_shot_disabled(self):
+    def test_verification_config_default_few_shot_disabled(self) -> None:
         """Test that few-shot is disabled by default."""
         config = VerificationConfig(
             answering_models=[self._create_test_model("answering")],
@@ -156,7 +156,7 @@ class TestVerificationConfigWithFewShot:
         assert config.is_few_shot_enabled() is False
         assert config.get_few_shot_config() is None
 
-    def test_verification_config_with_few_shot_enabled(self):
+    def test_verification_config_with_few_shot_enabled(self) -> None:
         """Test creating VerificationConfig with few-shot enabled."""
         config = VerificationConfig(
             answering_models=[self._create_test_model("answering")],
@@ -170,7 +170,7 @@ class TestVerificationConfigWithFewShot:
         assert config.few_shot_mode == "k-shot"
         assert config.few_shot_k == 5
 
-    def test_verification_config_few_shot_validation_k_shot_positive(self):
+    def test_verification_config_few_shot_validation_k_shot_positive(self) -> None:
         """Test that k-shot validation requires positive k value."""
         with pytest.raises(ValueError, match="Global few-shot k value must be at least 1"):
             VerificationConfig(
@@ -181,7 +181,7 @@ class TestVerificationConfigWithFewShot:
                 few_shot_k=0,
             )
 
-    def test_verification_config_few_shot_validation_k_shot_negative(self):
+    def test_verification_config_few_shot_validation_k_shot_negative(self) -> None:
         """Test that k-shot validation rejects negative k values."""
         with pytest.raises(ValueError, match="Global few-shot k value must be at least 1"):
             VerificationConfig(
@@ -192,7 +192,7 @@ class TestVerificationConfigWithFewShot:
                 few_shot_k=-1,
             )
 
-    def test_verification_config_few_shot_validation_all_mode_no_k_required(self):
+    def test_verification_config_few_shot_validation_all_mode_no_k_required(self) -> None:
         """Test that 'all' mode doesn't require specific k validation."""
         config = VerificationConfig(
             answering_models=[self._create_test_model("answering")],
@@ -222,7 +222,7 @@ class TestFewShotIntegrationInVerification:
     """Integration tests for few-shot prompting in verification."""
 
     @patch("karenina.benchmark.verification.runner.init_chat_model_unified")
-    def test_few_shot_examples_passed_to_llm(self, mock_init_chat_model):
+    def test_few_shot_examples_passed_to_llm(self, mock_init_chat_model) -> None:
         """Test that few-shot examples are included in LLM messages when enabled."""
         from karenina.benchmark.verification.runner import run_single_model_verification
 
@@ -280,6 +280,8 @@ class Answer(BaseModel):
             # Configure mocks
             mock_answer_class = Mock()
             mock_answer_class.verify.return_value = True
+            mock_answer_class.verify_regex.return_value = {"success": True, "results": {}, "details": {}}
+            mock_answer_class.model_dump.return_value = {"answer": 4}
             mock_validate.return_value = (True, None, mock_answer_class)
             mock_inject.return_value = mock_answer_class
 
@@ -317,7 +319,7 @@ class Answer(BaseModel):
         assert result.success is True
 
     @patch("karenina.benchmark.verification.runner.init_chat_model_unified")
-    def test_few_shot_disabled_uses_original_question(self, mock_init_chat_model):
+    def test_few_shot_disabled_uses_original_question(self, mock_init_chat_model) -> None:
         """Test that when few-shot is disabled, the original question text is used."""
         from karenina.benchmark.verification.runner import run_single_model_verification
 
@@ -374,6 +376,8 @@ class Answer(BaseModel):
             # Configure mocks
             mock_answer_class = Mock()
             mock_answer_class.verify.return_value = True
+            mock_answer_class.verify_regex.return_value = {"success": True, "results": {}, "details": {}}
+            mock_answer_class.model_dump.return_value = {"answer": 4}
             mock_validate.return_value = (True, None, mock_answer_class)
             mock_inject.return_value = mock_answer_class
 

@@ -7,7 +7,7 @@ import pytest
 from karenina.llm.manual_traces import ManualTraceManager, get_memory_usage_info
 
 
-def test_session_timeout_initialization():
+def test_session_timeout_initialization() -> None:
     """Test that ManualTraceManager initializes with correct timeout."""
     # Test default timeout
     manager = ManualTraceManager()
@@ -18,7 +18,7 @@ def test_session_timeout_initialization():
     assert manager._session_timeout == 1800  # 30 minutes
 
 
-def test_memory_usage_info():
+def test_memory_usage_info() -> None:
     """Test memory usage information collection."""
     manager = ManualTraceManager()
 
@@ -44,7 +44,7 @@ def test_memory_usage_info():
     assert info["seconds_since_last_access"] < 1  # Just accessed
 
 
-def test_automatic_cleanup_timer():
+def test_automatic_cleanup_timer() -> None:
     """Test that cleanup timer is properly managed."""
     manager = ManualTraceManager(session_timeout_seconds=1)  # 1 second timeout
 
@@ -63,7 +63,7 @@ def test_automatic_cleanup_timer():
     assert manager.get_trace_count() == 0
 
 
-def test_manual_cleanup():
+def test_manual_cleanup() -> None:
     """Test manual cleanup functionality."""
     manager = ManualTraceManager()
 
@@ -87,7 +87,7 @@ def test_manual_cleanup():
     assert manager._cleanup_timer is None
 
 
-def test_access_updates_last_access():
+def test_access_updates_last_access() -> None:
     """Test that accessing traces updates the last access timestamp."""
     manager = ManualTraceManager()
 
@@ -106,7 +106,7 @@ def test_access_updates_last_access():
     assert manager._last_access > initial_access
 
 
-def test_global_memory_usage_function():
+def test_global_memory_usage_function() -> None:
     """Test the global memory usage function."""
     from karenina.llm.manual_traces import clear_manual_traces, load_manual_traces
 
@@ -126,7 +126,7 @@ def test_global_memory_usage_function():
     clear_manual_traces()
 
 
-def test_timer_restart_on_activity():
+def test_timer_restart_on_activity() -> None:
     """Test that timer restarts when new traces are loaded."""
     manager = ManualTraceManager(session_timeout_seconds=10)
 

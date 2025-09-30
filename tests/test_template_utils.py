@@ -15,13 +15,13 @@ from karenina.schemas.answer_class import BaseAnswer
 class TestTemplateUtils:
     """Test the template utility functions."""
 
-    def test_create_test_instance_simple(self):
+    def test_create_test_instance_simple(self) -> None:
         """Test creating a test instance with a simple Answer class."""
 
         class Answer(BaseAnswer):
             answer: int = Field(description="The answer", default=0)
 
-            def model_post_init(self, __context):
+            def model_post_init(self, __context) -> None:
                 self.correct = {"answer": 42}
 
             def verify(self) -> bool:
@@ -35,14 +35,14 @@ class TestTemplateUtils:
         assert ground_truth is not None
         assert ground_truth == {"answer": 42}
 
-    def test_create_test_instance_complex_types(self):
+    def test_create_test_instance_complex_types(self) -> None:
         """Test creating a test instance with complex types like Literal."""
 
         class Answer(BaseAnswer):
             phase: Literal["Phase I", "Phase II", "Phase III"] = Field(description="Phase", default="Phase I")
             status: Literal["Active", "Completed"] = Field(description="Status", default="Active")
 
-            def model_post_init(self, __context):
+            def model_post_init(self, __context) -> None:
                 self.correct = {"phase": "Phase II", "status": "Completed"}
 
             def verify(self) -> bool:
@@ -56,7 +56,7 @@ class TestTemplateUtils:
         assert ground_truth is not None
         assert ground_truth == {"phase": "Phase II", "status": "Completed"}
 
-    def test_create_test_instance_no_ground_truth(self):
+    def test_create_test_instance_no_ground_truth(self) -> None:
         """Test creating a test instance with no model_post_init (no ground truth)."""
 
         class Answer(BaseAnswer):
@@ -71,7 +71,7 @@ class TestTemplateUtils:
         assert test_instance.answer == ""
         assert ground_truth is None
 
-    def test_create_test_instance_various_types(self):
+    def test_create_test_instance_various_types(self) -> None:
         """Test creating a test instance with various field types."""
 
         class Answer(BaseAnswer):
@@ -81,7 +81,7 @@ class TestTemplateUtils:
             bool_field: bool = Field(description="A boolean", default=False)
             list_field: list = Field(description="A list", default=[])
 
-            def model_post_init(self, __context):
+            def model_post_init(self, __context) -> None:
                 self.correct = {
                     "integer_field": 123,
                     "string_field": "test",
@@ -108,7 +108,7 @@ class TestTemplateUtils:
         assert ground_truth["bool_field"] is True
         assert ground_truth["list_field"] == ["a", "b", "c"]
 
-    def test_extract_ground_truth_from_template_code(self):
+    def test_extract_ground_truth_from_template_code(self) -> None:
         """Test extracting ground truth from template code string."""
 
         template_code = """class Answer(BaseAnswer):
@@ -126,7 +126,7 @@ class TestTemplateUtils:
         assert ground_truth is not None
         assert ground_truth == {"answer": 42}
 
-    def test_extract_ground_truth_from_template_code_no_ground_truth(self):
+    def test_extract_ground_truth_from_template_code_no_ground_truth(self) -> None:
         """Test extracting ground truth from template code with no model_post_init."""
 
         template_code = """class Answer(BaseAnswer):
@@ -140,7 +140,7 @@ class TestTemplateUtils:
 
         assert ground_truth is None
 
-    def test_extract_ground_truth_invalid_template_code(self):
+    def test_extract_ground_truth_invalid_template_code(self) -> None:
         """Test error handling for invalid template code."""
 
         template_code = "invalid python code @#$%"
@@ -148,7 +148,7 @@ class TestTemplateUtils:
         with pytest.raises(SyntaxError):
             extract_ground_truth_from_template_code(template_code)
 
-    def test_extract_ground_truth_no_answer_class(self):
+    def test_extract_ground_truth_no_answer_class(self) -> None:
         """Test error handling for template code with no Answer class."""
 
         template_code = """class SomeOtherClass:
@@ -158,13 +158,13 @@ class TestTemplateUtils:
         with pytest.raises(ValueError, match="No 'Answer' class found"):
             extract_ground_truth_from_template_code(template_code)
 
-    def test_create_test_instance_error_handling(self):
+    def test_create_test_instance_error_handling(self) -> None:
         """Test error handling when test instance creation fails."""
 
         class BadAnswer(BaseAnswer):
             required_field: int  # No default value
 
-            def model_post_init(self, __context):
+            def model_post_init(self, __context) -> None:
                 self.correct = {"required_field": 42}
 
             def verify(self) -> bool:

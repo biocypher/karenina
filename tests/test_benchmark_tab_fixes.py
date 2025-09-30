@@ -12,7 +12,7 @@ import pytest
 
 
 @pytest.fixture
-def mock_verification_results():
+def mock_verification_results() -> None:
     """Sample verification results for testing."""
     return {
         "q1": {
@@ -49,7 +49,7 @@ def mock_verification_results():
 
 
 @pytest.fixture
-def additional_verification_results():
+def additional_verification_results() -> None:
     """Additional results from a second run."""
     return {
         "q3": {
@@ -73,7 +73,7 @@ def additional_verification_results():
 class TestBenchmarkResultsAccumulation:
     """Test that results properly accumulate instead of being replaced."""
 
-    def test_results_accumulation_structure(self, mock_verification_results, additional_verification_results):
+    def test_results_accumulation_structure(self, mock_verification_results, additional_verification_results) -> None:
         """Test that results can be properly accumulated without conflicts."""
         # Simulate the frontend accumulation logic: prev => ({ ...prev, ...new })
         existing_results = mock_verification_results.copy()
@@ -99,7 +99,7 @@ class TestBenchmarkResultsAccumulation:
         assert accumulated_results["q1"]["run_name"] == "test_run_1"
         assert accumulated_results["q3"]["run_name"] == "test_run_2"
 
-    def test_results_overwrite_same_question_id(self, mock_verification_results):
+    def test_results_overwrite_same_question_id(self, mock_verification_results) -> None:
         """Test that re-running the same question overwrites the previous result."""
         existing_results = mock_verification_results.copy()
 
@@ -165,7 +165,7 @@ class TestBenchmarkResultsAccumulation:
             assert "timestamp" in result
             assert "run_name" in result
 
-    def test_empty_results_accumulation(self):
+    def test_empty_results_accumulation(self) -> None:
         """Test accumulation behavior with empty results."""
         existing_results = {}
         new_results = {"q1": {"question_id": "q1", "success": True}}
@@ -175,7 +175,7 @@ class TestBenchmarkResultsAccumulation:
         assert len(accumulated_results) == 1
         assert "q1" in accumulated_results
 
-    def test_results_with_different_timestamps_preserved(self, mock_verification_results):
+    def test_results_with_different_timestamps_preserved(self, mock_verification_results) -> None:
         """Test that results with different timestamps are properly preserved."""
         existing_results = mock_verification_results.copy()
 
@@ -213,7 +213,7 @@ class TestBenchmarkResultsAccumulation:
 class TestClearAllResultsButtonRemoval:
     """Test that Clear All Results functionality is no longer accessible."""
 
-    def test_no_clear_all_results_endpoint_needed(self):
+    def test_no_clear_all_results_endpoint_needed(self) -> None:
         """Test that we don't need a clear all results endpoint since button is removed."""
         # Since the button is removed from the frontend, there should be no backend
         # endpoint calls to clear all results from the UI
@@ -223,7 +223,7 @@ class TestClearAllResultsButtonRemoval:
         # from the normal UI flow anymore
         assert True  # This test documents the intentional removal
 
-    def test_results_persist_without_clear_functionality(self, mock_verification_results):
+    def test_results_persist_without_clear_functionality(self, mock_verification_results) -> None:
         """Test that results persist since there's no clear functionality in the UI."""
         results = mock_verification_results.copy()
 
@@ -245,7 +245,9 @@ class TestClearAllResultsButtonRemoval:
 class TestBenchmarkTabIntegration:
     """Integration tests for the fixed BenchmarkTab behavior."""
 
-    def test_multiple_benchmark_runs_accumulate(self, mock_verification_results, additional_verification_results):
+    def test_multiple_benchmark_runs_accumulate(
+        self, mock_verification_results, additional_verification_results
+    ) -> None:
         """Test the complete flow of multiple benchmark runs accumulating results."""
         # Simulate first benchmark run
         run1_results = mock_verification_results.copy()
@@ -277,7 +279,7 @@ class TestBenchmarkTabIntegration:
         assert "q2" in run1_questions
         assert "q3" in run2_questions
 
-    def test_session_persistence_across_component_remounts(self, mock_verification_results):
+    def test_session_persistence_across_component_remounts(self, mock_verification_results) -> None:
         """Test that results persist even when component remounts (simulating page refresh)."""
         # Simulate initial session with results
         session_results = mock_verification_results.copy()
@@ -309,13 +311,15 @@ class TestBenchmarkTabIntegration:
         assert "q0" in merged_results
         assert merged_results["q0"]["run_name"] == "historical_run"
 
-    def test_results_filtering_with_accumulated_data(self, mock_verification_results, additional_verification_results):
+    def test_results_filtering_with_accumulated_data(
+        self, mock_verification_results, additional_verification_results
+    ) -> None:
         """Test that filtering works correctly with accumulated results from multiple runs."""
         # Accumulate results from multiple runs
         all_results = {**mock_verification_results, **additional_verification_results}
 
         # Test filtering by run name (simulating frontend filter logic)
-        def filter_by_run_name(results, run_name):
+        def filter_by_run_name(results, run_name) -> None:
             return {k: v for k, v in results.items() if v["run_name"] == run_name}
 
         run1_filtered = filter_by_run_name(all_results, "test_run_1")
@@ -325,7 +329,7 @@ class TestBenchmarkTabIntegration:
         assert len(run2_filtered) == 1  # q3
 
         # Test filtering by success status
-        def filter_by_success(results, success_status):
+        def filter_by_success(results, success_status) -> None:
             return {k: v for k, v in results.items() if v["success"] == success_status}
 
         successful_results = filter_by_success(all_results, True)

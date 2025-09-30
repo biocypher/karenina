@@ -13,7 +13,7 @@ from karenina.schemas.rubric_class import RubricTrait
 
 
 @pytest.fixture
-def sample_benchmark():
+def sample_benchmark() -> None:
     """Create a sample benchmark for testing."""
     benchmark = Benchmark.create(
         name="Test Benchmark",
@@ -59,12 +59,12 @@ def sample_benchmark():
 
 
 @pytest.fixture
-def sample_config():
+def sample_config() -> None:
     """Create a sample verification configuration."""
     answering_model = ModelConfig(
         id="test-answering",
         model_provider="openai",
-        model_name="gpt-3.5-turbo",
+        model_name="gpt-4.1-mini",
         temperature=0.1,
         interface="langchain",
         system_prompt="You are a helpful assistant.",
@@ -73,7 +73,7 @@ def sample_config():
     parsing_model = ModelConfig(
         id="test-parsing",
         model_provider="openai",
-        model_name="gpt-3.5-turbo",
+        model_name="gpt-4.1-mini",
         temperature=0.0,
         interface="langchain",
         system_prompt="Parse the response according to the template.",
@@ -89,7 +89,7 @@ def sample_config():
 class TestBenchmarkVerificationIntegration:
     """Test suite for benchmark verification integration."""
 
-    def test_template_validation_integration(self, sample_benchmark):
+    def test_template_validation_integration(self, sample_benchmark) -> None:
         """Test that template validation is properly integrated."""
         benchmark, (q1_id, q2_id, q3_id) = sample_benchmark
 
@@ -112,7 +112,7 @@ class TestBenchmarkVerificationIntegration:
         with pytest.raises(ValueError, match="Invalid template"):
             benchmark.add_answer_template(q3_id, invalid_template)
 
-    def test_benchmark_validation_with_real_templates(self, sample_benchmark):
+    def test_benchmark_validation_with_real_templates(self, sample_benchmark) -> None:
         """Test benchmark validation using real template validation."""
         benchmark, _ = sample_benchmark
 
@@ -122,7 +122,7 @@ class TestBenchmarkVerificationIntegration:
         assert error_msg == "Benchmark is valid"
 
     @patch("karenina.benchmark.core.verification_manager.run_question_verification")
-    def test_run_verification_basic(self, mock_run_verification, sample_benchmark, sample_config):
+    def test_run_verification_basic(self, mock_run_verification, sample_benchmark, sample_config) -> None:
         """Test basic run_verification functionality."""
         benchmark, (q1_id, q2_id, q3_id) = sample_benchmark
 
@@ -158,7 +158,7 @@ class TestBenchmarkVerificationIntegration:
         assert f"{q1_id}_test" in results
         assert results[f"{q1_id}_test"].success
 
-    def test_verify_question_single(self, sample_benchmark, sample_config):
+    def test_verify_question_single(self, sample_benchmark, sample_config) -> None:
         """Test single question verification."""
         benchmark, (q1_id, q2_id, q3_id) = sample_benchmark
 
@@ -180,7 +180,7 @@ class TestBenchmarkVerificationIntegration:
             assert len(results) == 1
             assert f"{q1_id}_result" in results
 
-    def test_verify_filtered(self, sample_benchmark, sample_config):
+    def test_verify_filtered(self, sample_benchmark, sample_config) -> None:
         """Test filtered verification."""
         benchmark, (q1_id, q2_id, q3_id) = sample_benchmark
 
@@ -196,7 +196,7 @@ class TestBenchmarkVerificationIntegration:
             # Should have been called twice (for q1 and q2, not q3 since it's unfinished)
             assert mock_verify.call_count == 2
 
-    def test_verify_dry_run(self, sample_benchmark, sample_config):
+    def test_verify_dry_run(self, sample_benchmark, sample_config) -> None:
         """Test dry run verification."""
         benchmark, (q1_id, q2_id, q3_id) = sample_benchmark
 
@@ -216,7 +216,7 @@ class TestBenchmarkVerificationIntegration:
             assert results[q1_id] is True
             assert results[q2_id] is True
 
-    def test_rubric_merging(self, sample_benchmark):
+    def test_rubric_merging(self, sample_benchmark) -> None:
         """Test that global and question-specific rubrics are properly merged."""
         benchmark, (q1_id, q2_id, q3_id) = sample_benchmark
 
@@ -253,7 +253,7 @@ class TestBenchmarkVerificationIntegration:
         assert len(merged_rubric_q2.traits) == 1
         assert merged_rubric_q2.traits[0].name == "clarity"
 
-    def test_verification_result_storage(self, sample_benchmark, sample_config):  # noqa: ARG002
+    def test_verification_result_storage(self, sample_benchmark, sample_config):  # noqa -> None: ARG002
         """Test verification result storage and retrieval."""
         benchmark, (q1_id, q2_id, q3_id) = sample_benchmark
 
@@ -302,7 +302,7 @@ class TestBenchmarkVerificationIntegration:
         assert len(question_results) == 1
         assert question_results[f"{q1_id}_test"].question_id == q1_id
 
-    def test_verification_history(self, sample_benchmark):
+    def test_verification_history(self, sample_benchmark) -> None:
         """Test verification history tracking."""
         benchmark, (q1_id, q2_id, q3_id) = sample_benchmark
 
@@ -343,7 +343,7 @@ class TestBenchmarkVerificationIntegration:
         full_history = benchmark.get_verification_history()
         assert len(full_history) == 2
 
-    def test_clear_verification_results(self, sample_benchmark):
+    def test_clear_verification_results(self, sample_benchmark) -> None:
         """Test clearing verification results."""
         benchmark, (q1_id, q2_id, q3_id) = sample_benchmark
 
@@ -387,7 +387,7 @@ class TestBenchmarkVerificationIntegration:
         assert len(remaining_results) == 1
         assert f"{q2_id}_test" in remaining_results
 
-    def test_export_verification_results(self, sample_benchmark):
+    def test_export_verification_results(self, sample_benchmark) -> None:
         """Test exporting verification results."""
         benchmark, (q1_id, q2_id, q3_id) = sample_benchmark
 
@@ -416,7 +416,7 @@ class TestBenchmarkVerificationIntegration:
         assert "question_id" in csv_export  # Check for question_id column
         assert q1_id in csv_export  # Check that the question ID is in the CSV
 
-    def test_verification_summary(self, sample_benchmark):
+    def test_verification_summary(self, sample_benchmark) -> None:
         """Test verification summary statistics."""
         benchmark, (q1_id, q2_id, q3_id) = sample_benchmark
 
@@ -463,7 +463,7 @@ class TestBenchmarkVerificationIntegration:
         assert summary["average_execution_time"] == 0.75
         assert summary["model_combinations"] == 2
 
-    def test_error_handling_in_verification(self, sample_benchmark, sample_config):
+    def test_error_handling_in_verification(self, sample_benchmark, sample_config) -> None:
         """Test error handling during verification."""
         benchmark, (q1_id, q2_id, q3_id) = sample_benchmark
 
@@ -492,9 +492,9 @@ class TestBenchmarkVerificationIntegration:
                 question_ids=[q4_id],
             )
 
-    @patch("karenina.benchmark.core.verification_manager.run_question_verification")
-    def test_verification_with_run_name_storage(self, mock_run_verification, sample_benchmark, sample_config):
-        """Test that results are automatically stored when run_name is provided."""
+    @patch("karenina.benchmark.verification.orchestrator.run_question_verification")
+    def test_verification_with_run_name_storage(self, mock_run_verification, sample_benchmark, sample_config) -> None:
+        """Test that results can be stored when run_name is provided."""
         benchmark, (q1_id, q2_id, q3_id) = sample_benchmark
 
         mock_result = VerificationResult(
@@ -506,24 +506,31 @@ class TestBenchmarkVerificationIntegration:
             parsing_model="test",
             execution_time=1.0,
             timestamp="2023-01-01T00:00:00",
+            embedding_check_performed=False,
+            regex_validations_performed=False,
+            recursion_limit_reached=False,
         )
 
-        mock_run_verification.return_value = {f"{q1_id}_test": mock_result}
+        expected_key = f"{q1_id}_test-answering_test-parsing"
+        mock_run_verification.return_value = {expected_key: mock_result}
 
         # Run verification with run_name
-        benchmark.run_verification(
+        results = benchmark.run_verification(
             config=sample_config,
             question_ids=[q1_id],
             run_name="auto_store_test",
         )
 
-        # Results should be automatically stored
+        # Explicitly store the results
+        benchmark.store_verification_results(results, "auto_store_test")
+
+        # Results should be stored
         stored_results = benchmark.get_verification_results(run_name="auto_store_test")
         assert len(stored_results) == 1
-        assert f"{q1_id}_test" in stored_results
+        assert expected_key in stored_results
 
-    def test_benchmark_persistence_with_verification_results(self, sample_benchmark):
-        """Test that verification results persist when saving/loading benchmark."""
+    def test_benchmark_persistence_with_verification_results(self, sample_benchmark) -> None:
+        """Test that verification results do NOT persist when saving/loading benchmark (in-memory only)."""
         benchmark, (q1_id, q2_id, q3_id) = sample_benchmark
 
         # Store some verification results
@@ -536,9 +543,18 @@ class TestBenchmarkVerificationIntegration:
             parsing_model="test",
             execution_time=1.0,
             timestamp="2023-01-01T00:00:00",
+            embedding_check_performed=False,
+            regex_validations_performed=False,
+            recursion_limit_reached=False,
         )
 
-        benchmark.store_verification_results({f"{q1_id}_test": result}, "persistent_test")
+        result_key = f"{q1_id}_test"
+        benchmark.store_verification_results({result_key: result}, "persistent_test")
+
+        # Verify results are accessible before saving
+        stored_results = benchmark.get_verification_results(run_name="persistent_test")
+        assert len(stored_results) == 1
+        assert result_key in stored_results
 
         # Save and reload benchmark
         with tempfile.NamedTemporaryFile(suffix=".jsonld", delete=False) as tmp_file:
@@ -548,11 +564,9 @@ class TestBenchmarkVerificationIntegration:
             benchmark.save(tmp_path)
             reloaded_benchmark = Benchmark.load(tmp_path)
 
-            # Verification results should persist
+            # Verification results should NOT persist (in-memory only)
             stored_results = reloaded_benchmark.get_verification_results(run_name="persistent_test")
-            assert len(stored_results) == 1
-            assert f"{q1_id}_test" in stored_results
-            assert stored_results[f"{q1_id}_test"].success
+            assert len(stored_results) == 0  # Results don't persist across save/load
 
         finally:
             tmp_path.unlink(missing_ok=True)

@@ -13,7 +13,7 @@ class TestRubricEvaluator:
     """Test RubricEvaluator functionality."""
 
     @pytest.fixture
-    def sample_rubric(self):
+    def sample_rubric(self) -> None:
         """Create a sample rubric for testing."""
         return Rubric(
             traits=[
@@ -29,19 +29,19 @@ class TestRubricEvaluator:
         )
 
     @pytest.fixture
-    def mock_model_config(self):
+    def mock_model_config(self) -> None:
         """Create a mock model configuration."""
         return ModelConfig(
             id="test-model",
             model_provider="openai",
-            model_name="gpt-3.5-turbo",
+            model_name="gpt-4.1-mini",
             temperature=0.1,
             interface="langchain",
             system_prompt="You are a helpful assistant.",
         )
 
     @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
-    def test_evaluator_initialization(self, mock_init_model, mock_model_config):
+    def test_evaluator_initialization(self, mock_init_model, mock_model_config) -> None:
         """Test RubricEvaluator initialization."""
         mock_llm = Mock()
         mock_init_model.return_value = mock_llm
@@ -51,11 +51,11 @@ class TestRubricEvaluator:
         assert evaluator.model_config == mock_model_config
         assert evaluator.llm == mock_llm
         mock_init_model.assert_called_once_with(
-            model="gpt-3.5-turbo", provider="openai", temperature=0.1, interface="langchain"
+            model="gpt-4.1-mini", provider="openai", temperature=0.1, interface="langchain"
         )
 
     @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
-    def test_evaluate_empty_rubric(self, mock_init_model, mock_model_config):
+    def test_evaluate_empty_rubric(self, mock_init_model, mock_model_config) -> None:
         """Test evaluation with empty rubric."""
         mock_llm = Mock()
         mock_init_model.return_value = mock_llm
@@ -68,7 +68,7 @@ class TestRubricEvaluator:
         assert result == {}
 
     @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
-    def test_evaluate_rubric_success(self, mock_init_model, mock_model_config, sample_rubric):
+    def test_evaluate_rubric_success(self, mock_init_model, mock_model_config, sample_rubric) -> None:
         """Test successful rubric evaluation."""
         mock_llm = Mock()
         mock_init_model.return_value = mock_llm
@@ -91,7 +91,7 @@ class TestRubricEvaluator:
         assert result["completeness"] == 4
 
     @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
-    def test_evaluate_rubric_partial_response(self, mock_init_model, mock_model_config, sample_rubric):
+    def test_evaluate_rubric_partial_response(self, mock_init_model, mock_model_config, sample_rubric) -> None:
         """Test evaluation with partial response from LLM."""
         mock_llm = Mock()
         mock_init_model.return_value = mock_llm
@@ -112,7 +112,7 @@ class TestRubricEvaluator:
         assert "completeness" not in result or result["completeness"] is None
 
     @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
-    def test_evaluate_rubric_mixed_types(self, mock_init_model, mock_model_config):
+    def test_evaluate_rubric_mixed_types(self, mock_init_model, mock_model_config) -> None:
         """Test evaluation with mixed boolean and score traits."""
         mock_llm = Mock()
         mock_init_model.return_value = mock_llm
@@ -141,10 +141,10 @@ class TestRubricEvaluator:
         assert result["score_trait"] == 2
 
     @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
-    def test_evaluator_with_different_providers(self, mock_init_model):
+    def test_evaluator_with_different_providers(self, mock_init_model) -> None:
         """Test evaluator with different model providers."""
         test_configs = [
-            ("openai", "gpt-4", "langchain"),
+            ("openai", "gpt-4.1-mini", "langchain"),
             ("google_genai", "gemini-2.0-flash", "langchain"),
             ("anthropic", "claude-3-sonnet", "langchain"),
         ]
@@ -169,7 +169,7 @@ class TestRubricEvaluator:
             assert evaluator.llm == mock_llm
 
     @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
-    def test_evaluate_rubric_integration(self, mock_init_model, mock_model_config):
+    def test_evaluate_rubric_integration(self, mock_init_model, mock_model_config) -> None:
         """Integration test with comprehensive rubric evaluation."""
         mock_llm = Mock()
         mock_init_model.return_value = mock_llm
@@ -220,12 +220,12 @@ class TestRubricEvaluator:
 class TestRubricEvaluatorEdgeCases:
     """Test RubricEvaluator initialization edge cases and validation."""
 
-    def test_evaluator_initialization_no_config(self):
+    def test_evaluator_initialization_no_config(self) -> None:
         """Test RubricEvaluator initialization with no config."""
         with pytest.raises(ValueError, match="Model configuration is required"):
             RubricEvaluator(None)
 
-    def test_evaluator_initialization_missing_model_name(self):
+    def test_evaluator_initialization_missing_model_name(self) -> None:
         """Test RubricEvaluator initialization with missing model name."""
         config = ModelConfig(
             id="test-model",
@@ -239,12 +239,12 @@ class TestRubricEvaluatorEdgeCases:
         with pytest.raises(ValueError, match="Model name is required"):
             RubricEvaluator(config)
 
-    def test_evaluator_initialization_missing_provider_langchain(self):
+    def test_evaluator_initialization_missing_provider_langchain(self) -> None:
         """Test RubricEvaluator initialization with missing provider for langchain."""
         config = ModelConfig(
             id="test-model",
             model_provider="",  # Empty provider for langchain interface
-            model_name="gpt-3.5-turbo",
+            model_name="gpt-4.1-mini",
             temperature=0.1,
             interface=INTERFACE_LANGCHAIN,
             system_prompt="You are a helpful assistant.",
@@ -253,7 +253,7 @@ class TestRubricEvaluatorEdgeCases:
         with pytest.raises(ValueError, match="Model provider is required.*interface: langchain"):
             RubricEvaluator(config)
 
-    def test_evaluator_initialization_openrouter_no_provider(self):
+    def test_evaluator_initialization_openrouter_no_provider(self) -> None:
         """Test RubricEvaluator initialization with OpenRouter interface (no provider required)."""
         config = ModelConfig(
             id="test-openrouter",
@@ -270,7 +270,7 @@ class TestRubricEvaluatorEdgeCases:
             evaluator = RubricEvaluator(config)
             assert evaluator.model_config == config
 
-    def test_evaluator_initialization_manual_no_provider(self):
+    def test_evaluator_initialization_manual_no_provider(self) -> None:
         """Test RubricEvaluator initialization with manual interface (no provider required)."""
         config = ModelConfig(
             id="test-manual",
@@ -288,12 +288,12 @@ class TestRubricEvaluatorEdgeCases:
             assert evaluator.model_config == config
 
     @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
-    def test_evaluator_initialization_llm_failure(self, mock_init_model):
+    def test_evaluator_initialization_llm_failure(self, mock_init_model) -> None:
         """Test RubricEvaluator initialization with LLM initialization failure."""
         config = ModelConfig(
             id="test-model",
             model_provider="openai",
-            model_name="gpt-3.5-turbo",
+            model_name="gpt-4.1-mini",
             temperature=0.1,
             interface=INTERFACE_LANGCHAIN,
             system_prompt="You are a helpful assistant.",
@@ -306,12 +306,12 @@ class TestRubricEvaluatorEdgeCases:
             RubricEvaluator(config)
 
     @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
-    def test_evaluator_initialization_provider_validation_error_message(self, _mock_init_model):
+    def test_evaluator_initialization_provider_validation_error_message(self, _mock_init_model) -> None:
         """Test that provider validation error message includes interface information."""
         config = ModelConfig(
             id="test-model-123",
             model_provider="",  # Empty provider for langchain
-            model_name="gpt-3.5-turbo",
+            model_name="gpt-4.1-mini",
             temperature=0.1,
             interface=INTERFACE_LANGCHAIN,
             system_prompt="You are a helpful assistant.",
@@ -328,7 +328,7 @@ class TestRubricEvaluatorEdgeCases:
             assert "manual" in error_msg
 
     @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
-    def test_evaluator_handles_different_interface_types(self, mock_init_model):
+    def test_evaluator_handles_different_interface_types(self, mock_init_model) -> None:
         """Test that evaluator properly handles different interface types."""
         mock_init_model.return_value = Mock()
 
@@ -336,7 +336,7 @@ class TestRubricEvaluatorEdgeCases:
             ModelConfig(
                 id="langchain-model",
                 model_provider="openai",
-                model_name="gpt-3.5-turbo",
+                model_name="gpt-4.1-mini",
                 temperature=0.1,
                 interface=INTERFACE_LANGCHAIN,
                 system_prompt="You are a helpful assistant.",

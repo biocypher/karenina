@@ -12,7 +12,7 @@ from karenina.schemas.answer_class import BaseAnswer
 class TestBaseAnswerSourceCode:
     """Test the new source code capture functionality in BaseAnswer."""
 
-    def test_file_based_class_captures_source_automatically(self):
+    def test_file_based_class_captures_source_automatically(self) -> None:
         """Test that file-based Answer classes capture source code automatically."""
 
         # Define a test Answer class
@@ -31,7 +31,7 @@ class TestBaseAnswerSourceCode:
         assert 'value: int = Field(description="Test value")' in source
         assert "def verify(self) -> bool:" in source
 
-    def test_exec_created_class_stores_manual_source(self):
+    def test_exec_created_class_stores_manual_source(self) -> None:
         """Test that exec-created classes store manually set source code."""
 
         template_code = '''
@@ -61,7 +61,7 @@ class Answer(BaseAnswer):
         assert "class Answer(BaseAnswer):" in source
         assert 'result: str = Field(description="The result")' in source
 
-    def test_get_source_code_returns_none_when_unavailable(self):
+    def test_get_source_code_returns_none_when_unavailable(self) -> None:
         """Test that get_source_code() returns None when source is unavailable."""
 
         template_code = """
@@ -82,7 +82,7 @@ class Answer(BaseAnswer):
         source = Answer.get_source_code()
         assert source is None
 
-    def test_init_subclass_handles_inspect_failure_gracefully(self):
+    def test_init_subclass_handles_inspect_failure_gracefully(self) -> None:
         """Test that __init_subclass__ handles inspect.getsource() failure gracefully."""
 
         # This simulates what happens with exec-created classes
@@ -104,13 +104,13 @@ class Answer(BaseAnswer):
         assert hasattr(Answer, "_source_code")
         assert Answer._source_code is None
 
-    def test_multiple_inheritance_preserves_source_code(self):
+    def test_multiple_inheritance_preserves_source_code(self) -> None:
         """Test that multiple inheritance doesn't break source code capture."""
 
         class MixinClass:
             """Test mixin class."""
 
-            def helper_method(self):
+            def helper_method(self) -> None:
                 return "helper"
 
         class MultipleInheritanceAnswer(BaseAnswer, MixinClass):
@@ -127,7 +127,7 @@ class Answer(BaseAnswer):
         assert "class MultipleInheritanceAnswer(BaseAnswer, MixinClass):" in source
         assert 'data: str = Field(description="Test data")' in source
 
-    def test_source_code_inheritance_behavior(self):
+    def test_source_code_inheritance_behavior(self) -> None:
         """Test how source code behaves with class inheritance."""
 
         class ParentAnswer(BaseAnswer):
@@ -156,7 +156,7 @@ class Answer(BaseAnswer):
         assert "class ParentAnswer(BaseAnswer):" in parent_source
         assert "class ChildAnswer(ParentAnswer):" in child_source
 
-    def test_source_code_with_complex_class_definition(self):
+    def test_source_code_with_complex_class_definition(self) -> None:
         """Test source code capture with complex class definitions."""
         from typing import ClassVar
 
@@ -190,7 +190,7 @@ class Answer(BaseAnswer):
         assert "@classmethod" in source
         assert "def create_default(cls):" in source
 
-    def test_source_code_consistency_across_instances(self):
+    def test_source_code_consistency_across_instances(self) -> None:
         """Test that source code is consistent across class instances."""
 
         class ConsistentAnswer(BaseAnswer):
@@ -209,7 +209,7 @@ class Answer(BaseAnswer):
         assert class_source == instance_source
         assert class_source is not None
 
-    def test_source_code_with_dynamic_class_modification(self):
+    def test_source_code_with_dynamic_class_modification(self) -> None:
         """Test that dynamically modifying a class doesn't affect captured source."""
 
         class ModifiableAnswer(BaseAnswer):
@@ -224,7 +224,7 @@ class Answer(BaseAnswer):
         original_source = ModifiableAnswer.get_source_code()
 
         # Dynamically add a method (this doesn't change the captured source)
-        def new_method(self):
+        def new_method(self) -> None:
             return "new"
 
         ModifiableAnswer.new_method = new_method
@@ -234,7 +234,7 @@ class Answer(BaseAnswer):
         assert current_source == original_source
         assert "new_method" not in current_source
 
-    def test_base_answer_itself_has_source_code(self):
+    def test_base_answer_itself_has_source_code(self) -> None:
         """Test that BaseAnswer itself has source code available."""
 
         # BaseAnswer itself won't have source code captured via __init_subclass__
@@ -251,7 +251,7 @@ class Answer(BaseAnswer):
 class TestAnswerSourceCodeIntegration:
     """Integration tests with the template validation system."""
 
-    def test_validation_system_preserves_source_code(self):
+    def test_validation_system_preserves_source_code(self) -> None:
         """Test that the validation system preserves source code."""
         from karenina.benchmark.verification.validation import validate_answer_template
 
@@ -278,7 +278,7 @@ class Answer(BaseAnswer):
         assert source is not None
         assert source == template_code
 
-    def test_template_utils_preserves_source_code(self):
+    def test_template_utils_preserves_source_code(self) -> None:
         """Test that template utils preserve source code."""
         from karenina.benchmark.verification.template_utils import extract_ground_truth_from_template_code
 
@@ -304,7 +304,7 @@ class Answer(BaseAnswer):
         # doesn't return the class, but we can verify it works by ensuring no exceptions.
         assert ground_truth is not None
 
-    def test_answer_generation_preserves_source_code(self):
+    def test_answer_generation_preserves_source_code(self) -> None:
         """Test that answer generation preserves source code."""
 
         # This tests the pattern used in answer generation
@@ -332,7 +332,7 @@ class Answer(BaseAnswer):
         source = Answer.get_source_code()
         assert source == template_code
 
-    def test_answer_reader_preserves_source_code(self):
+    def test_answer_reader_preserves_source_code(self) -> None:
         """Test that answer reader preserves source code."""
 
         # Create a temporary JSON file with answer templates

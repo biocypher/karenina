@@ -12,7 +12,7 @@ class TestTaskEvalFormatting:
     """Test formatting methods for TaskEval results."""
 
     @pytest.fixture
-    def sample_step_eval(self):
+    def sample_step_eval(self) -> None:
         """Create a sample StepEval with various data."""
         return StepEval(
             rubric_scores={"accuracy": True, "completeness": False, "clarity": 3, "formatting": None},
@@ -49,7 +49,7 @@ class TestTaskEvalFormatting:
         )
 
     @pytest.fixture
-    def sample_task_result(self, sample_step_eval):
+    def sample_task_result(self, sample_step_eval) -> None:
         """Create a sample TaskEvalResult."""
         return TaskEvalResult(
             task_id="test_task_123",
@@ -59,7 +59,7 @@ class TestTaskEvalFormatting:
             timestamp=datetime.now().isoformat(),
         )
 
-    def test_step_eval_format_rubric_scores(self, sample_step_eval):
+    def test_step_eval_format_rubric_scores(self, sample_step_eval) -> None:
         """Test rubric scores formatting."""
         formatted = sample_step_eval.format_rubric_scores()
 
@@ -72,7 +72,7 @@ class TestTaskEvalFormatting:
         assert "? formatting" in formatted
         assert "N/A" in formatted
 
-    def test_step_eval_format_question_results(self, sample_step_eval):
+    def test_step_eval_format_question_results(self, sample_step_eval) -> None:
         """Test question verification results formatting."""
         formatted = sample_step_eval.format_question_results()
 
@@ -89,7 +89,7 @@ class TestTaskEvalFormatting:
         assert "Parsed: {'result': '42'}" in formatted
         assert "Parsed: {'result': '43'}" in formatted
 
-    def test_step_eval_get_summary_stats(self, sample_step_eval):
+    def test_step_eval_get_summary_stats(self, sample_step_eval) -> None:
         """Test summary statistics calculation."""
         stats = sample_step_eval.get_summary_stats()
 
@@ -100,7 +100,7 @@ class TestTaskEvalFormatting:
         assert stats["rubric_total"] == 4
         assert stats["success_rate"] == 50.0  # 1/2 questions passed
 
-    def test_task_result_display(self, sample_task_result):
+    def test_task_result_display(self, sample_task_result) -> None:
         """Test display method formatting."""
         display_output = sample_task_result.display()
 
@@ -113,7 +113,7 @@ class TestTaskEvalFormatting:
         assert "Question Verification:" in display_output
         assert "SUMMARY:" in display_output
 
-    def test_task_result_display_minimal(self, sample_task_result):
+    def test_task_result_display_minimal(self, sample_task_result) -> None:
         """Test display with minimal details."""
         display_output = sample_task_result.display(show_details=False)
 
@@ -122,7 +122,7 @@ class TestTaskEvalFormatting:
         # Question details should not be included
         assert "Question Verification:" not in display_output
 
-    def test_task_result_summary(self, sample_task_result):
+    def test_task_result_summary(self, sample_task_result) -> None:
         """Test summary method."""
         summary = sample_task_result.summary()
 
@@ -132,7 +132,7 @@ class TestTaskEvalFormatting:
         assert "2/4 questions passed" in summary  # 1 global + 1 step
         assert "4/8 rubric traits passed" in summary  # 2 global + 2 step
 
-    def test_task_result_summary_compact(self, sample_task_result):
+    def test_task_result_summary_compact(self, sample_task_result) -> None:
         """Test compact summary method."""
         compact = sample_task_result.summary_compact()
 
@@ -141,7 +141,7 @@ class TestTaskEvalFormatting:
         assert "rubric traits" in compact
         assert "success" in compact
 
-    def test_task_result_to_dict_clean(self, sample_task_result):
+    def test_task_result_to_dict_clean(self, sample_task_result) -> None:
         """Test clean dictionary export."""
         clean_dict = sample_task_result.to_dict_clean()
 
@@ -153,7 +153,7 @@ class TestTaskEvalFormatting:
         assert clean_dict["global"]["questions_total"] == 2
         assert clean_dict["steps"]["step1"]["questions_total"] == 2
 
-    def test_task_result_export_json(self, sample_task_result):
+    def test_task_result_export_json(self, sample_task_result) -> None:
         """Test JSON export functionality."""
         json_str = sample_task_result.export_json()
 
@@ -172,7 +172,7 @@ class TestTaskEvalFormatting:
         assert "summary_stats" in parsed["global_evaluation"]
         assert "step1" in parsed["step_evaluations"]
 
-    def test_task_result_export_json_with_logs(self, sample_task_result):
+    def test_task_result_export_json_with_logs(self, sample_task_result) -> None:
         """Test JSON export with logs included."""
         # Add some logs
         sample_task_result.logs = {
@@ -190,7 +190,7 @@ class TestTaskEvalFormatting:
         assert len(parsed["logs"]["global"]) == 2
         assert parsed["logs"]["global"][0]["text"] == "Starting evaluation"
 
-    def test_task_result_export_json_compact(self, sample_task_result):
+    def test_task_result_export_json_compact(self, sample_task_result) -> None:
         """Test JSON export with no indentation."""
         json_str = sample_task_result.export_json(indent=None)
 
@@ -201,7 +201,7 @@ class TestTaskEvalFormatting:
         parsed = json.loads(json_str)
         assert parsed["task_id"] == "test_task_123"
 
-    def test_task_result_export_markdown(self, sample_task_result):
+    def test_task_result_export_markdown(self, sample_task_result) -> None:
         """Test Markdown export functionality."""
         md_str = sample_task_result.export_markdown()
 
@@ -214,7 +214,7 @@ class TestTaskEvalFormatting:
         assert "| completeness | ❌ Fail | FAIL |" in md_str
         assert "## Summary" in md_str
 
-    def test_task_result_status_emoji(self, sample_task_result):
+    def test_task_result_status_emoji(self, sample_task_result) -> None:
         """Test status emoji generation."""
         # Default case (50% success rate)
         emoji = sample_task_result._get_status_emoji()
@@ -230,7 +230,7 @@ class TestTaskEvalFormatting:
         emoji = sample_task_result._get_status_emoji()
         assert "❓ No Data" in emoji
 
-    def test_empty_task_result_formatting(self):
+    def test_empty_task_result_formatting(self) -> None:
         """Test formatting methods with empty/minimal data."""
         empty_result = TaskEvalResult(task_id="empty_test")
 
@@ -245,7 +245,7 @@ class TestTaskEvalFormatting:
         assert parsed["task_id"] == "empty_test"
         assert parsed["global_evaluation"] is None
 
-    def test_step_eval_empty_formatting(self):
+    def test_step_eval_empty_formatting(self) -> None:
         """Test StepEval formatting with empty data."""
         empty_step = StepEval()
 
@@ -259,7 +259,7 @@ class TestTaskEvalFormatting:
         assert stats["questions_total"] == 0
         assert stats["success_rate"] == 0
 
-    def test_formatting_with_special_characters(self):
+    def test_formatting_with_special_characters(self) -> None:
         """Test formatting handles special characters properly."""
         step_eval = StepEval(
             rubric_scores={"trait_with_special_chars": True},

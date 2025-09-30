@@ -14,7 +14,7 @@ from karenina.schemas.question_class import Question
 class TestAddQuestionBackwardCompatibility:
     """Test all current add_question usage patterns to ensure backward compatibility."""
 
-    def test_basic_kwargs_usage(self):
+    def test_basic_kwargs_usage(self) -> None:
         """Test basic add_question with minimal kwargs."""
         benchmark = Benchmark("Test Benchmark")
 
@@ -30,7 +30,7 @@ class TestAddQuestionBackwardCompatibility:
         assert question_data["finished"] is False
         assert question_data.get("answer_template") is not None  # Default template created
 
-    def test_kwargs_with_template(self):
+    def test_kwargs_with_template(self) -> None:
         """Test add_question with answer template provided."""
         benchmark = Benchmark("Test Benchmark")
 
@@ -47,7 +47,7 @@ class TestAddQuestionBackwardCompatibility:
         assert question_data["answer_template"] == template_code
         assert question_data["finished"] is False  # Not finished by default
 
-    def test_kwargs_with_custom_id(self):
+    def test_kwargs_with_custom_id(self) -> None:
         """Test add_question with custom question ID."""
         benchmark = Benchmark("Test Benchmark")
 
@@ -58,7 +58,7 @@ class TestAddQuestionBackwardCompatibility:
         question_data = benchmark.get_question("custom_id_123")
         assert question_data["id"] == "custom_id_123"
 
-    def test_kwargs_with_full_metadata(self):
+    def test_kwargs_with_full_metadata(self) -> None:
         """Test add_question with all metadata fields."""
         benchmark = Benchmark("Test Benchmark")
 
@@ -85,7 +85,7 @@ class TestAddQuestionBackwardCompatibility:
         assert question_data["custom_metadata"] == custom_meta
         assert question_data["few_shot_examples"] == few_shot
 
-    def test_add_question_from_object_current_method(self):
+    def test_add_question_from_object_current_method(self) -> None:
         """Test current add_question_from_object method."""
         benchmark = Benchmark("Test Benchmark")
 
@@ -103,7 +103,7 @@ class TestAddQuestionBackwardCompatibility:
         assert question_data["question"] == "Object test question"
         assert question_data["raw_answer"] == "Object test answer"
 
-    def test_question_id_generation_consistency(self):
+    def test_question_id_generation_consistency(self) -> None:
         """Test that question ID generation is consistent."""
         benchmark1 = Benchmark("Test 1")
         benchmark2 = Benchmark("Test 2")
@@ -114,7 +114,7 @@ class TestAddQuestionBackwardCompatibility:
 
         assert q1_id == q2_id  # Should generate same ID from same question text
 
-    def test_duplicate_question_id_handling(self):
+    def test_duplicate_question_id_handling(self) -> None:
         """Test how duplicate question IDs are handled."""
         benchmark = Benchmark("Test Benchmark")
 
@@ -135,7 +135,7 @@ class TestAddQuestionBackwardCompatibility:
         # The current implementation generates URN-style IDs from question text
         assert q2_id.startswith("urn:uuid:question-")
 
-    def test_empty_and_none_values(self):
+    def test_empty_and_none_values(self) -> None:
         """Test behavior with empty and None values."""
         benchmark = Benchmark("Test Benchmark")
 
@@ -155,7 +155,7 @@ class TestAddQuestionBackwardCompatibility:
         assert question_data.get("sources") is None
         assert question_data.get("custom_metadata") is None
 
-    def test_cache_consistency(self):
+    def test_cache_consistency(self) -> None:
         """Test that internal cache stays consistent with operations."""
         benchmark = Benchmark("Test Benchmark")
 
@@ -174,7 +174,7 @@ class TestAddQuestionBackwardCompatibility:
         assert updated_question["finished"] is True
         assert benchmark._questions_cache[q_id]["finished"] is True
 
-    def test_save_load_consistency(self):
+    def test_save_load_consistency(self) -> None:
         """Test that saved and loaded benchmarks maintain consistency."""
         original_benchmark = Benchmark("Save/Load Test")
 
@@ -211,7 +211,7 @@ class TestAddQuestionBackwardCompatibility:
         finally:
             tmp_path.unlink(missing_ok=True)
 
-    def test_batch_operations(self):
+    def test_batch_operations(self) -> None:
         """Test batch question operations work correctly."""
         benchmark = Benchmark("Batch Test")
 
@@ -242,7 +242,7 @@ class TestAddQuestionBackwardCompatibility:
 class TestQuestionObjectCompatibility:
     """Test Question object usage patterns with current implementation."""
 
-    def test_question_object_id_consistency(self):
+    def test_question_object_id_consistency(self) -> None:
         """Test that Question object IDs are consistent."""
         q1 = Question(question="Test question", raw_answer="Test answer")
         q2 = Question(question="Test question", raw_answer="Test answer")
@@ -250,7 +250,7 @@ class TestQuestionObjectCompatibility:
         # Same question text should generate same ID
         assert q1.id == q2.id
 
-    def test_question_object_properties(self):
+    def test_question_object_properties(self) -> None:
         """Test Question object property access."""
         question = Question(
             question="What is AI?",
@@ -265,7 +265,7 @@ class TestQuestionObjectCompatibility:
         assert len(question.few_shot_examples) == 1
         assert question.few_shot_examples[0]["question"] == "What is ML?"
 
-    def test_question_object_with_benchmark(self):
+    def test_question_object_with_benchmark(self) -> None:
         """Test current Question object integration with benchmark."""
         benchmark = Benchmark("Question Object Test")
 
@@ -287,7 +287,7 @@ class TestQuestionObjectCompatibility:
 class TestTaskEvalCompatibility:
     """Test TaskEval compatibility with both dict and Question objects."""
 
-    def test_task_eval_with_dict(self):
+    def test_task_eval_with_dict(self) -> None:
         """Test TaskEval accepts question dictionaries."""
         from karenina.benchmark.task_eval import TaskEval
 
@@ -302,7 +302,7 @@ class TestTaskEvalCompatibility:
         assert len(task.global_questions) == 1
         assert task.global_questions[0] == question_dict
 
-    def test_task_eval_with_question_object(self):
+    def test_task_eval_with_question_object(self) -> None:
         """Test TaskEval accepts Question objects."""
         from karenina.benchmark.task_eval import TaskEval
 
