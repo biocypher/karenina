@@ -613,7 +613,7 @@ Original Question: {question_text}
 
         # Step 6: Run rubric evaluation (optional)
         rubric_result = None
-        if rubric and rubric.traits:
+        if rubric and (rubric.traits or rubric.manual_traits):
             try:
                 # Use parsing model for rubric evaluation
                 evaluator = RubricEvaluator(parsing_model)
