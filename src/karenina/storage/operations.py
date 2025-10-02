@@ -54,19 +54,23 @@ def save_benchmark(benchmark: "Benchmark", storage: str | DBConfig, checkpoint_p
         ).scalar_one_or_none()
 
         if existing_benchmark:
-            # Update existing benchmark
-            existing_benchmark.description = benchmark.description
-            existing_benchmark.version = benchmark.version
-            existing_benchmark.creator = str(benchmark.creator) if benchmark.creator else None
-            existing_benchmark.checkpoint_path = str(checkpoint_path) if checkpoint_path else None
-            existing_benchmark.updated_at = datetime.now(UTC)
-
+            # Update existing benchmark metadata only (don't load relationships to avoid cascade issues)
             benchmark_id = existing_benchmark.id
 
-            # Remove old benchmark-question associations
-            session.execute(select(BenchmarkQuestionModel).where(BenchmarkQuestionModel.benchmark_id == benchmark_id))
-            for bq in session.query(BenchmarkQuestionModel).filter_by(benchmark_id=benchmark_id).all():
-                session.delete(bq)
+            # Use SQL UPDATE to avoid triggering ORM cascade deletes
+            from sqlalchemy import update
+
+            session.execute(
+                update(BenchmarkModel)
+                .where(BenchmarkModel.id == benchmark_id)
+                .values(
+                    description=benchmark.description,
+                    version=benchmark.version,
+                    creator=str(benchmark.creator) if benchmark.creator else None,
+                    checkpoint_path=str(checkpoint_path) if checkpoint_path else None,
+                    updated_at=datetime.now(UTC),
+                )
+            )
 
         else:
             # Create new benchmark
@@ -87,7 +91,9 @@ def save_benchmark(benchmark: "Benchmark", storage: str | DBConfig, checkpoint_p
 
         for q_data in questions_data:
             # Generate question ID from text (MD5 hash)
-            question_id = hashlib.md5(q_data["text"].encode("utf-8")).hexdigest()
+            # Note: question text is stored in "question" key, not "text"
+            question_text = q_data["question"]
+            question_id = hashlib.md5(question_text.encode("utf-8")).hexdigest()
 
             # Check if question exists
             existing_question = session.execute(
@@ -98,28 +104,45 @@ def save_benchmark(benchmark: "Benchmark", storage: str | DBConfig, checkpoint_p
                 # Create new question
                 question_model = QuestionModel(
                     id=question_id,
-                    question_text=q_data["text"],
+                    question_text=question_text,
                     raw_answer=q_data["raw_answer"],
-                    tags=q_data.get("tags", []),
+                    tags=q_data.get("keywords", []),  # Note: keywords key used for tags
                     few_shot_examples=q_data.get("few_shot_examples"),
                 )
                 session.add(question_model)
 
-            # Create benchmark-question association
+            # Create or update benchmark-question association
             answer_template = q_data.get("answer_template", "")
             finished = q_data.get("finished", False)
             keywords = q_data.get("keywords", [])
 
-            bq_model = BenchmarkQuestionModel(
-                benchmark_id=benchmark_id,
-                question_id=question_id,
-                answer_template=answer_template,
-                original_answer_template=q_data.get("original_answer_template", answer_template),
-                finished=finished,
-                keywords=keywords,
-                question_rubric=q_data.get("question_rubric"),
-            )
-            session.add(bq_model)
+            # Check if association already exists
+            existing_bq = session.execute(
+                select(BenchmarkQuestionModel).where(
+                    BenchmarkQuestionModel.benchmark_id == benchmark_id,
+                    BenchmarkQuestionModel.question_id == question_id,
+                )
+            ).scalar_one_or_none()
+
+            if existing_bq:
+                # Update existing association
+                existing_bq.answer_template = answer_template
+                existing_bq.original_answer_template = q_data.get("original_answer_template", answer_template)
+                existing_bq.finished = finished
+                existing_bq.keywords = keywords
+                existing_bq.question_rubric = q_data.get("question_rubric")
+            else:
+                # Create new association
+                bq_model = BenchmarkQuestionModel(
+                    benchmark_id=benchmark_id,
+                    question_id=question_id,
+                    answer_template=answer_template,
+                    original_answer_template=q_data.get("original_answer_template", answer_template),
+                    finished=finished,
+                    keywords=keywords,
+                    question_rubric=q_data.get("question_rubric"),
+                )
+                session.add(bq_model)
 
         if db_config.auto_commit:
             session.commit()
@@ -151,6 +174,10 @@ def load_benchmark(
 
     # Convert storage URL to DBConfig if needed
     db_config = DBConfig(storage_url=storage) if isinstance(storage, str) else storage
+
+    # Initialize database if auto_create is enabled
+    if db_config.auto_create:
+        init_database(db_config)
 
     with get_session(db_config) as session:
         # Load benchmark
