@@ -626,6 +626,7 @@ class VerificationJob(BaseModel):
 
     # Database storage
     storage_url: str | None = None  # Database URL for auto-save functionality
+    benchmark_name: str | None = None  # Benchmark name for auto-save functionality
 
     # Progress tracking
     total_questions: int
