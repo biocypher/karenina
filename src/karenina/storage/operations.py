@@ -93,10 +93,10 @@ def save_benchmark(benchmark: "Benchmark", storage: str | DBConfig, checkpoint_p
         added_questions_this_session: set[str] = set()
 
         for q_data in questions_data:
-            # Generate question ID from text (MD5 hash)
+            # Use existing question ID if available, otherwise generate from text (MD5 hash)
             # Note: question text is stored in "question" key, not "text"
             question_text = q_data["question"]
-            question_id = hashlib.md5(question_text.encode("utf-8")).hexdigest()
+            question_id = q_data.get("id") or hashlib.md5(question_text.encode("utf-8")).hexdigest()
 
             # Check if question exists in database or was added in this session
             if question_id not in added_questions_this_session:
@@ -323,11 +323,15 @@ def save_verification_results(
                 end_time=None,
             )
             session.add(run_model)
+            # Commit the run immediately to satisfy foreign key constraints for results
+            session.commit()
         else:
             # Update existing run
             existing_run.processed_count = len(results)
             existing_run.successful_count = sum(1 for r in results.values() if r.success)
             existing_run.failed_count = sum(1 for r in results.values() if not r.success)
+            # Commit the updated run
+            session.commit()
 
         # Save individual results
         for result in results.values():
