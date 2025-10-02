@@ -89,27 +89,32 @@ def save_benchmark(benchmark: "Benchmark", storage: str | DBConfig, checkpoint_p
         # Save questions and benchmark-question associations
         questions_data = benchmark._question_manager.get_all_questions()
 
+        # Track which questions we've added in this session to avoid duplicates
+        added_questions_this_session: set[str] = set()
+
         for q_data in questions_data:
             # Generate question ID from text (MD5 hash)
             # Note: question text is stored in "question" key, not "text"
             question_text = q_data["question"]
             question_id = hashlib.md5(question_text.encode("utf-8")).hexdigest()
 
-            # Check if question exists
-            existing_question = session.execute(
-                select(QuestionModel).where(QuestionModel.id == question_id)
-            ).scalar_one_or_none()
+            # Check if question exists in database or was added in this session
+            if question_id not in added_questions_this_session:
+                existing_question = session.execute(
+                    select(QuestionModel).where(QuestionModel.id == question_id)
+                ).scalar_one_or_none()
 
-            if not existing_question:
-                # Create new question
-                question_model = QuestionModel(
-                    id=question_id,
-                    question_text=question_text,
-                    raw_answer=q_data["raw_answer"],
-                    tags=q_data.get("keywords", []),  # Note: keywords key used for tags
-                    few_shot_examples=q_data.get("few_shot_examples"),
-                )
-                session.add(question_model)
+                if not existing_question:
+                    # Create new question
+                    question_model = QuestionModel(
+                        id=question_id,
+                        question_text=question_text,
+                        raw_answer=q_data["raw_answer"],
+                        tags=q_data.get("keywords", []),  # Note: keywords key used for tags
+                        few_shot_examples=q_data.get("few_shot_examples"),
+                    )
+                    session.add(question_model)
+                    added_questions_this_session.add(question_id)
 
             # Create or update benchmark-question association
             answer_template = q_data.get("answer_template", "")
