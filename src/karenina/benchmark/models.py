@@ -383,6 +383,9 @@ class VerificationConfig(BaseModel):
     # Few-shot prompting settings
     few_shot_config: FewShotConfig | None = None  # New flexible configuration
 
+    # Database storage settings
+    db_config: Any | None = None  # DBConfig instance for automatic result persistence
+
     # Legacy few-shot fields for backward compatibility (deprecated)
     few_shot_enabled: bool | None = None
     few_shot_mode: Literal["all", "k-shot", "custom"] | None = None
