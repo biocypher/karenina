@@ -624,6 +624,9 @@ class VerificationJob(BaseModel):
     config: VerificationConfig
     async_config: AsyncConfig | None = None
 
+    # Database storage
+    storage_url: str | None = None  # Database URL for auto-save functionality
+
     # Progress tracking
     total_questions: int
     processed_count: int = 0
