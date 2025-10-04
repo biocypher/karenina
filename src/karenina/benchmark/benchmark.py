@@ -147,7 +147,8 @@ class Benchmark:
         """
         from ..storage import save_benchmark
 
-        return save_benchmark(self, storage, checkpoint_path)
+        benchmark, _ = save_benchmark(self, storage, checkpoint_path)
+        return benchmark
 
     @classmethod
     def load_from_db(cls, benchmark_name: str, storage: str) -> "Benchmark":

@@ -26,16 +26,30 @@ from .models import (
 )
 
 
-def save_benchmark(benchmark: "Benchmark", storage: str | DBConfig, checkpoint_path: Path | None = None) -> "Benchmark":
+def save_benchmark(
+    benchmark: "Benchmark",
+    storage: str | DBConfig,
+    checkpoint_path: Path | None = None,
+    detect_duplicates_only: bool = False,
+) -> tuple["Benchmark", list[dict[str, Any]] | None]:
     """Save a benchmark to the database.
 
     Args:
         benchmark: The Benchmark instance to save
         storage: Database storage URL (e.g., "sqlite:///example.db") or DBConfig instance
         checkpoint_path: Optional path to the checkpoint file (source of truth)
+        detect_duplicates_only: If True, only detect duplicates without saving. Returns duplicate info.
 
     Returns:
-        The same benchmark instance (for chaining)
+        Tuple of (benchmark instance, list of duplicates if detect_duplicates_only=True else None)
+
+        Duplicate info structure:
+        {
+            'question_id': str,
+            'question_text': str,
+            'old_version': {...},  # Data from database
+            'new_version': {...}   # Data from incoming benchmark
+        }
 
     Raises:
         ValueError: If benchmark name already exists or data is invalid
@@ -91,6 +105,9 @@ def save_benchmark(benchmark: "Benchmark", storage: str | DBConfig, checkpoint_p
 
         # Track which questions we've added in this session to avoid duplicates
         added_questions_this_session: set[str] = set()
+
+        # Track duplicate questions if detect_duplicates_only is True
+        duplicates: list[dict[str, Any]] = [] if detect_duplicates_only else []
 
         for q_data in questions_data:
             # Use existing question ID if available, otherwise generate from text (MD5 hash)
@@ -153,29 +170,74 @@ def save_benchmark(benchmark: "Benchmark", storage: str | DBConfig, checkpoint_p
             ).scalar_one_or_none()
 
             if existing_bq:
-                # Update existing association
-                existing_bq.answer_template = answer_template
-                existing_bq.original_answer_template = q_data.get("original_answer_template", answer_template)
-                existing_bq.finished = finished
-                existing_bq.keywords = keywords
-                existing_bq.question_rubric = question_rubric_dict
-            else:
-                # Create new association
-                bq_model = BenchmarkQuestionModel(
-                    benchmark_id=benchmark_id,
-                    question_id=question_id,
-                    answer_template=answer_template,
-                    original_answer_template=q_data.get("original_answer_template", answer_template),
-                    finished=finished,
-                    keywords=keywords,
-                    question_rubric=question_rubric_dict,
-                )
-                session.add(bq_model)
+                if detect_duplicates_only:
+                    # Collect duplicate information instead of updating
+                    # Get the existing question model for complete old version data
+                    existing_question = session.execute(
+                        select(QuestionModel).where(QuestionModel.id == question_id)
+                    ).scalar_one_or_none()
 
-        if db_config.auto_commit:
+                    if existing_question:
+                        duplicates.append(
+                            {
+                                "question_id": question_id,
+                                "question_text": question_text,
+                                "old_version": {
+                                    "question": existing_question.question_text,
+                                    "raw_answer": existing_question.raw_answer,
+                                    "answer_template": existing_bq.answer_template or "",
+                                    "original_answer_template": existing_bq.original_answer_template or "",
+                                    "finished": existing_bq.finished,
+                                    "tags": existing_question.tags or [],
+                                    "keywords": existing_bq.keywords or [],
+                                    "few_shot_examples": existing_question.few_shot_examples,
+                                    "question_rubric": existing_bq.question_rubric,
+                                    "last_modified": (
+                                        existing_bq.updated_at.isoformat()
+                                        if existing_bq.updated_at
+                                        else existing_bq.created_at.isoformat()
+                                    ),
+                                },
+                                "new_version": {
+                                    "question": question_text,
+                                    "raw_answer": q_data["raw_answer"],
+                                    "answer_template": answer_template,
+                                    "original_answer_template": q_data.get("original_answer_template", answer_template),
+                                    "finished": finished,
+                                    "tags": q_data.get("tags", []),
+                                    "keywords": keywords,
+                                    "few_shot_examples": q_data.get("few_shot_examples"),
+                                    "question_rubric": question_rubric_dict,
+                                    "last_modified": datetime.now(UTC).isoformat(),
+                                },
+                            }
+                        )
+                else:
+                    # Update existing association (normal behavior)
+                    existing_bq.answer_template = answer_template
+                    existing_bq.original_answer_template = q_data.get("original_answer_template", answer_template)
+                    existing_bq.finished = finished
+                    existing_bq.keywords = keywords
+                    existing_bq.question_rubric = question_rubric_dict
+            else:
+                if not detect_duplicates_only:
+                    # Create new association (only if not in detect-only mode)
+                    bq_model = BenchmarkQuestionModel(
+                        benchmark_id=benchmark_id,
+                        question_id=question_id,
+                        answer_template=answer_template,
+                        original_answer_template=q_data.get("original_answer_template", answer_template),
+                        finished=finished,
+                        keywords=keywords,
+                        question_rubric=question_rubric_dict,
+                    )
+                    session.add(bq_model)
+
+        # Only commit if not in detect-only mode
+        if db_config.auto_commit and not detect_duplicates_only:
             session.commit()
 
-    return benchmark
+    return benchmark, (duplicates if detect_duplicates_only else None)
 
 
 def load_benchmark(
