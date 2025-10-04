@@ -121,6 +121,29 @@ def save_benchmark(benchmark: "Benchmark", storage: str | DBConfig, checkpoint_p
             finished = q_data.get("finished", False)
             keywords = q_data.get("keywords", [])
 
+            # Serialize question rubric to dict format for database storage
+            # The benchmark cache stores rubrics as list of Pydantic RubricTrait/ManualRubricTrait objects,
+            # but the database expects a JSON dict format with separate 'traits' and 'manual_traits' lists
+            question_rubric_dict = None
+            if q_data.get("question_rubric"):
+                try:
+                    from ..schemas.rubric_class import ManualRubricTrait, RubricTrait
+
+                    rubric_traits = q_data["question_rubric"]
+                    if isinstance(rubric_traits, list) and len(rubric_traits) > 0:
+                        # Separate traits by type
+                        llm_traits = [t for t in rubric_traits if isinstance(t, RubricTrait)]
+                        manual_traits = [t for t in rubric_traits if isinstance(t, ManualRubricTrait)]
+
+                        question_rubric_dict = {
+                            "traits": [trait.model_dump() for trait in llm_traits],
+                            "manual_traits": [trait.model_dump() for trait in manual_traits],
+                        }
+                except Exception as e:
+                    # Log warning but continue - rubric is optional
+                    print(f"Warning: Failed to serialize rubric for question {question_id}: {e}")
+                    question_rubric_dict = None
+
             # Check if association already exists
             existing_bq = session.execute(
                 select(BenchmarkQuestionModel).where(
@@ -135,7 +158,7 @@ def save_benchmark(benchmark: "Benchmark", storage: str | DBConfig, checkpoint_p
                 existing_bq.original_answer_template = q_data.get("original_answer_template", answer_template)
                 existing_bq.finished = finished
                 existing_bq.keywords = keywords
-                existing_bq.question_rubric = q_data.get("question_rubric")
+                existing_bq.question_rubric = question_rubric_dict
             else:
                 # Create new association
                 bq_model = BenchmarkQuestionModel(
@@ -145,7 +168,7 @@ def save_benchmark(benchmark: "Benchmark", storage: str | DBConfig, checkpoint_p
                     original_answer_template=q_data.get("original_answer_template", answer_template),
                     finished=finished,
                     keywords=keywords,
-                    question_rubric=q_data.get("question_rubric"),
+                    question_rubric=question_rubric_dict,
                 )
                 session.add(bq_model)
 
@@ -243,9 +266,12 @@ def load_benchmark(
             # Set question-specific rubric if present
             if bq.question_rubric:
                 # Convert JSON rubric back to Rubric object
-                from ..schemas.rubric_class import Rubric, RubricTrait
+                from ..schemas.rubric_class import ManualRubricTrait, Rubric, RubricTrait
 
                 traits = []
+                manual_traits = []
+
+                # Deserialize LLM-based traits
                 for trait_data in bq.question_rubric.get("traits", []):
                     # Determine kind from trait data
                     kind = trait_data.get("kind", "score")
@@ -258,8 +284,20 @@ def load_benchmark(
                     )
                     traits.append(trait)
 
-                if traits:
-                    rubric = Rubric(traits=traits)
+                # Deserialize manual (regex) traits
+                for manual_trait_data in bq.question_rubric.get("manual_traits", []):
+                    manual_trait = ManualRubricTrait(
+                        name=manual_trait_data["name"],
+                        description=manual_trait_data.get("description"),
+                        pattern=manual_trait_data.get("pattern"),
+                        callable_name=manual_trait_data.get("callable_name"),
+                        case_sensitive=manual_trait_data.get("case_sensitive", True),
+                        invert_result=manual_trait_data.get("invert_result", False),
+                    )
+                    manual_traits.append(manual_trait)
+
+                if traits or manual_traits:
+                    rubric = Rubric(traits=traits, manual_traits=manual_traits)
                     benchmark.set_question_rubric(bq.question_id, rubric)
 
     if load_config:
