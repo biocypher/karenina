@@ -338,6 +338,33 @@ class VerificationManager:
         if progress_callback:
             progress_callback(100.0, "Verification complete")
 
+        # Auto-save results to database if db_config is provided
+        if config.db_config is not None:
+            try:
+                # Generate a unique run_id
+                import uuid
+
+                from ...storage.operations import save_verification_results
+
+                actual_run_id = job_id if job_id else str(uuid.uuid4())
+                actual_run_name = run_name if run_name else f"run_{actual_run_id[:8]}"
+
+                # Convert config to dict for storage
+                config_dict = config.model_dump(exclude={"db_config"})
+
+                # Save to database
+                save_verification_results(
+                    results=results,
+                    db_config=config.db_config,
+                    run_id=actual_run_id,
+                    benchmark_name=self.base.name,
+                    run_name=actual_run_name,
+                    config=config_dict,
+                )
+            except Exception as e:
+                # Log error but don't fail the verification
+                print(f"Warning: Failed to save verification results to database: {e}")
+
         # Note: Results are not auto-stored in checkpoint anymore
         # They remain in memory only and must be explicitly exported if needed
 

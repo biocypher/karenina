@@ -135,6 +135,37 @@ class Benchmark:
         """Save the benchmark to a JSON-LD file."""
         self._base.save(path)
 
+    def save_to_db(self, storage: str, checkpoint_path: Path | None = None) -> "Benchmark":
+        """Save this benchmark to a database.
+
+        Args:
+            storage: Database storage URL (e.g., "sqlite:///example.db")
+            checkpoint_path: Optional path to the checkpoint file
+
+        Returns:
+            The same benchmark instance (for chaining)
+        """
+        from ..storage import save_benchmark
+
+        benchmark, _ = save_benchmark(self, storage, checkpoint_path)
+        return benchmark
+
+    @classmethod
+    def load_from_db(cls, benchmark_name: str, storage: str) -> "Benchmark":
+        """Load a benchmark from a database.
+
+        Args:
+            benchmark_name: Name of the benchmark to load
+            storage: Database storage URL
+
+        Returns:
+            Loaded Benchmark instance
+        """
+        from ..storage import load_benchmark
+
+        result = load_benchmark(benchmark_name, storage, load_config=False)
+        return result  # type: ignore[return-value]
+
     # Question management methods - delegate to QuestionManager
     def add_question(
         self,

@@ -133,6 +133,266 @@ benchmark = Benchmark.load(
 )
 ```
 
+## Database Storage
+
+Karenina supports persistent storage in relational databases (SQLite, PostgreSQL, MySQL) via SQLAlchemy. Database storage is ideal for:
+
+- **Multi-user collaboration** with concurrent access
+- **Query and analysis** of benchmark data using SQL
+- **Production deployments** requiring robust persistence
+- **Integration** with existing data infrastructure
+
+### Quick Start with Database Storage
+
+```python
+from karenina import Benchmark, save_benchmark, load_benchmark
+
+# Create and populate benchmark
+benchmark = Benchmark.create(
+    name="My Benchmark",
+    description="Example benchmark",
+    version="1.0.0"
+)
+benchmark.add_question("What is 2+2?", "4")
+
+# Save to SQLite database
+save_benchmark(benchmark, "sqlite:///benchmarks.db")
+
+# Load from database
+loaded = load_benchmark("My Benchmark", "sqlite:///benchmarks.db")
+```
+
+### Database Configuration
+
+```python
+from karenina import DBConfig
+
+# SQLite (default, file-based)
+db_config = DBConfig(
+    storage_url="sqlite:///benchmarks.db",
+    auto_create=True,       # Auto-create tables if they don't exist
+    auto_commit=True,       # Auto-commit transactions
+    echo=False             # Disable SQL query logging
+)
+
+# PostgreSQL (production)
+db_config = DBConfig(
+    storage_url="postgresql://user:password@localhost:5432/karenina",
+    pool_size=10,           # Connection pool size
+    max_overflow=20,        # Max connections beyond pool_size
+    pool_recycle=3600,      # Recycle connections after 1 hour
+    pool_pre_ping=True     # Verify connections before use
+)
+
+# MySQL
+db_config = DBConfig(
+    storage_url="mysql+pymysql://user:password@localhost:3306/karenina"
+)
+
+# Save using DBConfig
+save_benchmark(benchmark, db_config)
+```
+
+### Save and Load Operations
+
+```python
+# Save benchmark to database
+save_benchmark(
+    benchmark,
+    storage="sqlite:///benchmarks.db",
+    checkpoint_path="backup.jsonld"  # Optional: also save JSON-LD checkpoint
+)
+
+# Load benchmark by name
+benchmark = load_benchmark(
+    benchmark_name="My Benchmark",
+    storage="sqlite:///benchmarks.db"
+)
+
+# Load with DBConfig object
+benchmark, db_config = load_benchmark(
+    benchmark_name="My Benchmark",
+    storage="sqlite:///benchmarks.db",
+    load_config=True  # Returns tuple of (Benchmark, DBConfig)
+)
+```
+
+### Benchmark Methods for Database
+
+```python
+# Create and save benchmark
+benchmark = Benchmark.create(name="Test Benchmark")
+benchmark.add_question("Question 1?", "Answer 1")
+
+# Save using benchmark method (returns self for chaining)
+benchmark.save_to_db("sqlite:///benchmarks.db")
+
+# Load using class method
+benchmark = Benchmark.load_from_db("Test Benchmark", "sqlite:///benchmarks.db")
+
+# Method chaining
+Benchmark.create(name="New Benchmark") \
+    .add_question("Q?", "A") \
+    .save_to_db("sqlite:///benchmarks.db")
+```
+
+### Updating Existing Benchmarks
+
+```python
+# Load existing benchmark
+benchmark = load_benchmark("My Benchmark", "sqlite:///benchmarks.db")
+
+# Make changes
+benchmark.description = "Updated description"
+benchmark.add_question("New question?", "New answer")
+
+# Save updates (automatically updates existing record)
+save_benchmark(benchmark, "sqlite:///benchmarks.db")
+```
+
+### Auto-Save Verification Results
+
+```python
+from karenina import VerificationConfig, DBConfig, ModelConfig
+
+# Configure verification with database storage
+db_config = DBConfig(storage_url="sqlite:///results.db")
+
+verification_config = VerificationConfig(
+    answering_model=ModelConfig(model_provider="openai", model_name="gpt-4.1-mini"),
+    parsing_model=ModelConfig(model_provider="openai", model_name="gpt-4.1-mini"),
+    db_config=db_config  # Auto-save results to database
+)
+
+# Run verification (results automatically saved to database)
+results = benchmark.run_verification(verification_config)
+```
+
+### Querying Database Views
+
+```python
+from karenina.storage import (
+    get_benchmark_summary,
+    get_verification_run_summary,
+    get_model_performance,
+    get_failed_verifications,
+    get_database_statistics
+)
+
+# Get benchmark summaries
+summaries = get_benchmark_summary("sqlite:///benchmarks.db")
+for summary in summaries:
+    print(f"{summary['benchmark_name']}: {summary['total_questions']} questions")
+
+# Get verification run statistics
+runs = get_verification_run_summary("sqlite:///results.db")
+for run in runs:
+    print(f"{run['run_name']}: {run['success_rate']:.1f}% success rate")
+
+# Get model performance statistics
+performance = get_model_performance("sqlite:///results.db")
+for model in performance:
+    print(f"{model['model_name']}: {model['success_rate_pct']:.1f}% success")
+
+# Get all failed verifications for debugging
+failures = get_failed_verifications("sqlite:///results.db")
+for failure in failures:
+    print(f"Question: {failure['question_text']}")
+    print(f"Error: {failure['error']}")
+
+# Get overall database statistics
+stats = get_database_statistics("sqlite:///benchmarks.db")
+print(f"Total benchmarks: {stats['total_benchmarks']}")
+print(f"Total questions: {stats['total_questions']}")
+```
+
+### Direct Database Access
+
+```python
+from karenina.storage import DBConfig, get_session
+from karenina.storage.models import BenchmarkModel, QuestionModel
+from sqlalchemy import select
+
+db_config = DBConfig(storage_url="sqlite:///benchmarks.db")
+
+# Use session context manager for custom queries
+with get_session(db_config) as session:
+    # Query all benchmarks
+    benchmarks = session.execute(select(BenchmarkModel)).scalars().all()
+
+    for b in benchmarks:
+        print(f"Benchmark: {b.name} (ID: {b.id})")
+        print(f"  Questions: {len(b.benchmark_questions)}")
+        print(f"  Created: {b.created_at}")
+
+    # Query specific questions
+    questions = session.execute(
+        select(QuestionModel).where(QuestionModel.question_text.like("%math%"))
+    ).scalars().all()
+
+    for q in questions:
+        print(f"Question: {q.question_text}")
+```
+
+### Database Schema Overview
+
+The database schema includes:
+
+**Core Tables:**
+- `benchmarks` - Benchmark metadata and configuration
+- `questions` - Shared question pool (deduplicated by MD5 hash)
+- `benchmark_questions` - Junction table with benchmark-specific data (templates, rubrics)
+- `verification_runs` - Verification run metadata and statistics
+- `verification_results` - Individual question verification results
+
+**Pre-built Views:**
+- `benchmark_summary_view` - Benchmark overviews with question counts
+- `verification_run_summary_view` - Run statistics and success rates
+- `question_usage_view` - Which benchmarks use each question
+- `latest_verification_results_view` - Most recent result per question-model pair
+- `model_performance_view` - Aggregated performance by model
+- `failed_verifications_view` - All failures with error details
+- `rubric_scores_aggregate_view` - Rubric statistics
+- `verification_history_timeline_view` - Chronological run history
+- `rubric_traits_by_type_view` - Rubric traits categorized by type
+
+### Database vs JSON-LD Checkpoints
+
+| Feature | Database Storage | JSON-LD Checkpoints |
+|---------|-----------------|---------------------|
+| **Query Support** | Full SQL queries | File-based search |
+| **Concurrent Access** | Multi-user safe | Single user |
+| **Deduplication** | Questions shared across benchmarks | Questions duplicated |
+| **Views & Analytics** | Built-in aggregation views | Manual analysis |
+| **Portability** | Database-dependent | Fully portable |
+| **Versioning** | Database migrations | File versioning |
+| **Best For** | Production, collaboration, analysis | Development, sharing, backups |
+
+**Recommendation:** Use both! Database for primary storage and queries, JSON-LD checkpoints for backups and sharing.
+
+```python
+# Dual persistence strategy
+benchmark.save_to_db("sqlite:///production.db")  # Primary storage
+benchmark.save("backups/benchmark-20240315.jsonld")  # Backup + sharing
+```
+
+### Database Maintenance
+
+```python
+from karenina.storage import init_database, drop_database, reset_database
+
+db_config = DBConfig(storage_url="sqlite:///benchmarks.db")
+
+# Initialize database (creates tables and views)
+init_database(db_config)
+
+# Reset database (WARNING: destructive!)
+reset_database(db_config)  # Drops and recreates all tables
+
+# Drop database (WARNING: destructive!)
+drop_database(db_config)  # Removes all tables and views
+```
+
 ## Checkpoint Management
 
 ### Creating Regular Checkpoints
