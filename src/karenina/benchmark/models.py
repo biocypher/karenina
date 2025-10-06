@@ -383,6 +383,9 @@ class VerificationConfig(BaseModel):
     # Few-shot prompting settings
     few_shot_config: FewShotConfig | None = None  # New flexible configuration
 
+    # Database storage settings
+    db_config: Any | None = None  # DBConfig instance for automatic result persistence
+
     # Legacy few-shot fields for backward compatibility (deprecated)
     few_shot_enabled: bool | None = None
     few_shot_mode: Literal["all", "k-shot", "custom"] | None = None
@@ -611,6 +614,10 @@ class VerificationResult(BaseModel):
     # Recursion limit metadata
     recursion_limit_reached: bool = False  # Whether agent hit recursion limit
 
+    # MCP server metadata
+    answering_mcp_servers: list[str] | None = None  # Names of MCP servers attached to answering model
+    parsing_mcp_servers: list[str] | None = None  # Names of MCP servers attached to parsing model
+
 
 class VerificationJob(BaseModel):
     """Represents a verification job."""
@@ -620,6 +627,10 @@ class VerificationJob(BaseModel):
     status: Literal["pending", "running", "completed", "failed", "cancelled"]
     config: VerificationConfig
     async_config: AsyncConfig | None = None
+
+    # Database storage
+    storage_url: str | None = None  # Database URL for auto-save functionality
+    benchmark_name: str | None = None  # Benchmark name for auto-save functionality
 
     # Progress tracking
     total_questions: int
