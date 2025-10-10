@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 
 from sqlalchemy import select
 
+from ..utils.checkpoint_converter import generate_template_id
 from .db_config import DBConfig
 from .engine import get_session, init_database
 from .models import (
@@ -138,6 +139,9 @@ def save_benchmark(
             finished = q_data.get("finished", False)
             keywords = q_data.get("keywords", [])
 
+            # Compute template_id from answer_template (composite key component)
+            template_id = generate_template_id(answer_template)
+
             # Serialize question rubric to dict format for database storage
             # The benchmark cache stores rubrics as list of Pydantic RubricTrait/ManualRubricTrait objects,
             # but the database expects a JSON dict format with separate 'traits' and 'manual_traits' lists
@@ -161,11 +165,12 @@ def save_benchmark(
                     print(f"Warning: Failed to serialize rubric for question {question_id}: {e}")
                     question_rubric_dict = None
 
-            # Check if association already exists
+            # Check if association already exists (composite key: benchmark_id + question_id + template_id)
             existing_bq = session.execute(
                 select(BenchmarkQuestionModel).where(
                     BenchmarkQuestionModel.benchmark_id == benchmark_id,
                     BenchmarkQuestionModel.question_id == question_id,
+                    BenchmarkQuestionModel.template_id == template_id,
                 )
             ).scalar_one_or_none()
 
@@ -225,6 +230,7 @@ def save_benchmark(
                     bq_model = BenchmarkQuestionModel(
                         benchmark_id=benchmark_id,
                         question_id=question_id,
+                        template_id=template_id,  # Composite key component
                         answer_template=answer_template,
                         original_answer_template=q_data.get("original_answer_template", answer_template),
                         finished=finished,
