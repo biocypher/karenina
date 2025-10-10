@@ -83,7 +83,7 @@ def detect_abstention(
     raw_llm_response: str,
     parsing_model: ModelConfig,
     question_text: str,
-) -> tuple[bool, bool]:
+) -> tuple[bool, bool, str | None]:
     """
     Detect if the model refused to answer or abstained from answering.
 
@@ -97,15 +97,16 @@ def detect_abstention(
         question_text: The original question that was asked
 
     Returns:
-        Tuple of (abstention_detected, check_performed):
+        Tuple of (abstention_detected, check_performed, reasoning):
         - abstention_detected: True if model refused/abstained, False if genuine attempt
         - check_performed: True if check completed successfully, False if check failed
+        - reasoning: The LLM's explanation for its determination (None if check failed)
 
     Examples:
         >>> config = ModelConfig(id="parser", model_provider="openai", ...)
-        >>> detected, performed = detect_abstention("I cannot answer this", config, "What is X?")
-        >>> print(detected, performed)
-        True, True
+        >>> detected, performed, reasoning = detect_abstention("I cannot answer this", config, "What is X?")
+        >>> print(detected, performed, reasoning)
+        True, True, "Response contains explicit refusal pattern"
     """
 
     def _log_retry(retry_state: Any) -> None:
@@ -120,7 +121,7 @@ def detect_abstention(
         reraise=True,
         before_sleep=_log_retry,
     )
-    def _detect_with_retry() -> tuple[bool, bool]:
+    def _detect_with_retry() -> tuple[bool, bool, str | None]:
         """Inner function with retry logic."""
         try:
             # Initialize the parsing model for abstention detection
@@ -154,12 +155,12 @@ def detect_abstention(
             reasoning = result.get("reasoning", "No reasoning provided")
             logger.debug(f"Abstention check result: {abstention_detected} - Reasoning: {reasoning}")
 
-            return abstention_detected, True
+            return abstention_detected, True, reasoning
 
         except json.JSONDecodeError as e:
             # JSON parsing failed - log and treat as check failure
             logger.warning(f"Failed to parse abstention detection response as JSON: {e}")
-            return False, False
+            return False, False, None
 
         except Exception as e:
             # Check if this is a retryable error
@@ -169,11 +170,11 @@ def detect_abstention(
             else:
                 # Non-retryable error - log and treat as check failure
                 logger.warning(f"Abstention detection failed with non-retryable error: {e}")
-                return False, False
+                return False, False, None
 
     try:
         return _detect_with_retry()
     except Exception as e:
         # All retries exhausted or unhandled error
         logger.error(f"Abstention detection failed after all retries: {e}")
-        return False, False
+        return False, False, None

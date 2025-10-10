@@ -425,6 +425,7 @@ def run_single_model_verification(
                 abstention_check_performed=False,
                 abstention_detected=None,
                 abstention_override_applied=False,
+                abstention_reasoning=None,
                 # MCP server metadata
                 answering_mcp_servers=answering_mcp_servers,
             )
@@ -544,6 +545,11 @@ def run_single_model_verification(
                     regex_extraction_results=None,
                     # Recursion limit metadata (defaults for error cases)
                     recursion_limit_reached=False,
+                    # Abstention detection metadata (defaults for error cases)
+                    abstention_check_performed=False,
+                    abstention_detected=None,
+                    abstention_override_applied=False,
+                    abstention_reasoning=None,
                     # MCP server metadata
                     answering_mcp_servers=answering_mcp_servers,
                 )
@@ -598,6 +604,7 @@ def run_single_model_verification(
                 abstention_check_performed=False,
                 abstention_detected=None,
                 abstention_override_applied=False,
+                abstention_reasoning=None,
                 # MCP server metadata
                 answering_mcp_servers=answering_mcp_servers,
             )
@@ -684,6 +691,7 @@ Original Question: {question_text}
                 abstention_check_performed=False,
                 abstention_detected=None,
                 abstention_override_applied=False,
+                abstention_reasoning=None,
                 # MCP server metadata
                 answering_mcp_servers=answering_mcp_servers,
             )
@@ -734,10 +742,11 @@ Original Question: {question_text}
             abstention_check_performed = False
             abstention_detected = None
             abstention_override_applied = False
+            abstention_reasoning = None
 
             if abstention_enabled:
                 # Detect if model refused to answer or abstained
-                abstention_detected, abstention_check_performed = detect_abstention(
+                abstention_detected, abstention_check_performed, abstention_reasoning = detect_abstention(
                     raw_llm_response=raw_llm_response,
                     parsing_model=parsing_model,
                     question_text=question_text,
@@ -789,6 +798,7 @@ Original Question: {question_text}
                 abstention_check_performed=False,
                 abstention_detected=None,
                 abstention_override_applied=False,
+                abstention_reasoning=None,
                 # MCP server metadata
                 answering_mcp_servers=answering_mcp_servers,
             )
@@ -850,6 +860,7 @@ Original Question: {question_text}
             abstention_check_performed=abstention_check_performed,
             abstention_detected=abstention_detected,
             abstention_override_applied=abstention_override_applied,
+            abstention_reasoning=abstention_reasoning,
             # MCP server metadata
             answering_mcp_servers=answering_mcp_servers,
         )
@@ -889,6 +900,11 @@ Original Question: {question_text}
             regex_extraction_results=None,
             # Recursion limit metadata (defaults for error cases)
             recursion_limit_reached=False,
+            # Abstention detection metadata (defaults for error cases)
+            abstention_check_performed=False,
+            abstention_detected=None,
+            abstention_override_applied=False,
+            abstention_reasoning=None,
             # MCP server metadata
             answering_mcp_servers=answering_mcp_servers,
         )

@@ -622,6 +622,7 @@ class VerificationResult(BaseModel):
     abstention_check_performed: bool = False  # Whether abstention check was attempted
     abstention_detected: bool | None = None  # Whether model refused/abstained from answering
     abstention_override_applied: bool = False  # Whether abstention check overrode the result
+    abstention_reasoning: str | None = None  # LLM's reasoning for abstention determination
 
     # MCP server metadata
     answering_mcp_servers: list[str] | None = None  # Names of MCP servers attached to answering model
