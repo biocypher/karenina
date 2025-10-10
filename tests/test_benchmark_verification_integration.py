@@ -132,8 +132,8 @@ class TestBenchmarkVerificationIntegration:
             success=True,
             question_text="What is 2 + 2?",
             raw_llm_response="The answer is 4",
-            answering_model="openai/gpt-3.5-turbo",
-            parsing_model="openai/gpt-3.5-turbo",
+            answering_model="openai/gpt-4.1-mini",
+            parsing_model="openai/gpt-4.1-mini",
             execution_time=1.5,
             timestamp="2023-01-01T00:00:00",
         )
