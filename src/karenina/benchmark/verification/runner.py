@@ -8,6 +8,7 @@ from typing import Any
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_core.output_parsers import PydanticOutputParser
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from ...answers.generator import inject_question_id_into_answer_class
 from ...llm.interface import init_chat_model_unified
@@ -19,6 +20,144 @@ from .validation import validate_answer_template
 
 # Set up logger
 logger = logging.getLogger(__name__)
+
+
+# Define retryable exceptions
+def is_retryable_error(exception: Exception) -> bool:
+    """Check if an exception is retryable (transient error)."""
+    exception_str = str(exception).lower()
+    exception_type = type(exception).__name__
+
+    # Connection-related errors
+    if any(
+        keyword in exception_str
+        for keyword in [
+            "connection",
+            "timeout",
+            "timed out",
+            "rate limit",
+            "429",
+            "503",
+            "502",
+            "500",
+            "network",
+            "temporary failure",
+        ]
+    ):
+        return True
+
+    # Common retryable exception types
+    retryable_types = [
+        "ConnectionError",
+        "TimeoutError",
+        "HTTPError",
+        "ReadTimeout",
+        "ConnectTimeout",
+        "APIConnectionError",
+        "APITimeoutError",
+        "RateLimitError",
+    ]
+
+    return exception_type in retryable_types
+
+
+def _invoke_llm_with_retry(
+    llm: Any, messages: list[BaseMessage], is_agent: bool, timeout: int = 120
+) -> tuple[Any, bool]:
+    """
+    Invoke LLM with automatic retry logic for transient errors.
+
+    Args:
+        llm: The LLM or agent to invoke
+        messages: List of messages to send to the LLM
+        is_agent: Whether the LLM is a LangGraph agent
+        timeout: Timeout in seconds for agent invocation
+
+    Returns:
+        Tuple of (response, recursion_limit_reached)
+
+    Raises:
+        Exception: If all retry attempts are exhausted
+    """
+
+    def _log_retry(retry_state: Any) -> None:
+        """Log retry attempt with error details."""
+        exc = retry_state.outcome.exception() if retry_state.outcome else None
+        logger.warning(f"Retrying LLM call (attempt {retry_state.attempt_number}/3) after error: {exc}")
+
+    @retry(
+        retry=retry_if_exception_type(Exception),
+        stop=stop_after_attempt(3),  # Try 3 times
+        wait=wait_exponential(multiplier=1, min=2, max=10),  # Exponential backoff: 2s, 4s, 8s
+        reraise=True,
+        before_sleep=_log_retry,
+    )
+    def _invoke_with_retry_inner() -> tuple[Any, bool]:
+        recursion_limit_reached = False
+
+        try:
+            if is_agent:
+                # LangGraph agents with MCP tools need async invocation
+                import asyncio
+
+                async def invoke_agent_async() -> Any:
+                    try:
+                        return await llm.ainvoke({"messages": messages})
+                    except Exception as e:
+                        # Check if this is a GraphRecursionError
+                        if "GraphRecursionError" in str(type(e).__name__) or "recursion_limit" in str(e).lower():
+                            nonlocal recursion_limit_reached
+                            recursion_limit_reached = True
+                            # Try to extract partial state from the agent
+                            try:
+                                agent_state = llm.get_state({"messages": messages})
+                                return agent_state
+                            except Exception:
+                                # If we can't get state, return the messages we have so far
+                                return {"messages": messages}
+                        else:
+                            # Check if this is a retryable error
+                            if is_retryable_error(e):
+                                logger.info(f"Detected retryable error: {type(e).__name__}: {e}")
+                                raise  # Re-raise to trigger retry
+                            else:
+                                raise e
+
+                # Run the async invocation in the event loop
+                try:
+                    asyncio.get_running_loop()
+                    # We're in an async context, use ThreadPoolExecutor
+                    import concurrent.futures
+
+                    def run_in_thread() -> Any:
+                        return asyncio.run(invoke_agent_async())
+
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(run_in_thread)
+                        response = future.result(timeout=timeout)
+
+                except RuntimeError:
+                    # No event loop running, safe to use asyncio.run
+                    response = asyncio.run(invoke_agent_async())
+
+                from ...llm.mcp_utils import harmonize_agent_response
+
+                return harmonize_agent_response(response), recursion_limit_reached
+            else:
+                # Regular LLMs expect the messages list directly
+                response = llm.invoke(messages)
+                return response, recursion_limit_reached
+
+        except Exception as e:
+            # Check if this is a retryable error
+            if is_retryable_error(e):
+                logger.info(f"Detected retryable error: {type(e).__name__}: {e}")
+                raise  # Re-raise to trigger retry
+            else:
+                # Non-retryable error, don't retry
+                raise
+
+    return _invoke_with_retry_inner()
 
 
 def _should_expose_ground_truth() -> bool:
@@ -326,58 +465,19 @@ def run_single_model_verification(
         recursion_limit_reached = False
 
         try:
-            # Handle agent vs regular LLM invocation
-            # Check if this is an agent by looking for MCP URLs in the answering model
-            if answering_model.mcp_urls_dict is not None:
-                # LangGraph agents with MCP tools need async invocation
-                import asyncio
+            # Use retry-wrapped invocation
+            is_agent = answering_model.mcp_urls_dict is not None
+            response, recursion_limit_reached = _invoke_llm_with_retry(answering_llm, messages, is_agent)
 
-                async def invoke_agent_async() -> Any:
-                    try:
-                        return await answering_llm.ainvoke({"messages": messages})
-                    except Exception as e:
-                        # Check if this is a GraphRecursionError
-                        if "GraphRecursionError" in str(type(e).__name__) or "recursion_limit" in str(e).lower():
-                            nonlocal recursion_limit_reached
-                            recursion_limit_reached = True
-                            # Try to extract partial state from the agent
-                            try:
-                                agent_state = answering_llm.get_state({"messages": messages})
-                                return agent_state
-                            except Exception:
-                                # If we can't get state, return the messages we have so far
-                                return {"messages": messages}
-                        else:
-                            raise e
-
-                # Run the async invocation in the event loop
-                try:
-                    asyncio.get_running_loop()
-                    # We're in an async context, use ThreadPoolExecutor
-                    import concurrent.futures
-
-                    def run_in_thread() -> Any:
-                        return asyncio.run(invoke_agent_async())
-
-                    with concurrent.futures.ThreadPoolExecutor() as executor:
-                        future = executor.submit(run_in_thread)
-                        response = future.result(timeout=120)  # 2 minute timeout for verification
-
-                except RuntimeError:
-                    # No event loop running, safe to use asyncio.run
-                    response = asyncio.run(invoke_agent_async())
-
-                from ...llm.mcp_utils import harmonize_agent_response
-
-                raw_llm_response = harmonize_agent_response(response)
-
+            # Process response based on type
+            if is_agent:
+                raw_llm_response = response
                 # Add note if recursion limit was reached
                 if recursion_limit_reached:
                     raw_llm_response += "\n\n[Note: Recursion limit reached - partial response shown]"
             else:
-                # Regular LLMs expect the messages list directly
-                response = answering_llm.invoke(messages)
                 raw_llm_response = response.content if hasattr(response, "content") else str(response)
+
         except Exception as e:
             # Check if this is a recursion limit error that wasn't caught earlier
             if "GraphRecursionError" in str(type(e).__name__) or "recursion_limit" in str(e).lower():
@@ -385,10 +485,24 @@ def run_single_model_verification(
                 raw_llm_response = f"[Note: Recursion limit reached before completion. Error: {e}]"
                 # Continue processing with this partial response
             else:
+                # Log detailed error information for debugging
+                import traceback
+
+                error_details = traceback.format_exc()
+                logger.error(
+                    f"LLM call failed for question {question_id}\n"
+                    f"Exception type: {type(e).__name__}\n"
+                    f"Exception message: {e}\n"
+                    f"Full traceback:\n{error_details}"
+                )
+
+                # Create a more detailed error message
+                error_msg = f"LLM call failed: {type(e).__name__}: {e}"
+
                 return VerificationResult(
                     question_id=question_id,
                     success=False,
-                    error=f"LLM call failed: {e}",
+                    error=error_msg,
                     keywords=keywords,
                     question_text=question_text,
                     raw_llm_response="",
