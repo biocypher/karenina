@@ -80,11 +80,11 @@ class TestHarmonizeAgentResponse:
         agent_state = {"messages": [msg1, msg2]}
 
         result = harmonize_agent_response(agent_state)
-        # Now we expect pretty_print format, not just content
+        # Now we expect custom formatted output with Excel-friendly separators
         assert "I need to search for information." in result
         assert "Based on my search, here's the answer: 42" in result
-        # Check for AI message formatting
-        assert "=================================" in result or "I need to search for information." in result
+        # Check for AI message formatting with new separator
+        assert "--- AI Message ---" in result
 
     def test_harmonize_agent_trace_with_tool_messages(self) -> None:
         """Test harmonization with complete React agent trace including tools."""
@@ -116,9 +116,10 @@ class TestHarmonizeAgentResponse:
         assert "You are a helpful assistant" not in result
         assert "What are the interactors of TP53?" not in result
 
-        # Should have proper formatting from pretty_print
+        # Should have proper formatting with Excel-friendly separators
         lines = result.split("\n")
         assert len(lines) > 1  # Multiple formatted sections
+        assert "--- AI Message ---" in result or "--- Tool Message" in result
 
     def test_harmonize_filters_system_and_human_messages(self) -> None:
         """Test that system messages and first human message are filtered, but subsequent human messages are preserved."""
@@ -187,6 +188,34 @@ class TestHarmonizeAgentResponse:
         # Should NOT contain initial user question or system prompt
         assert "What are the interactors of TP53?" not in result  # Initial question should be filtered
         assert "You are a helpful assistant" not in result  # System prompt should be filtered
+
+    def test_harmonize_excel_friendly_formatting(self) -> None:
+        """Test that harmonized output is Excel-friendly (no leading equal signs)."""
+        # Create messages that would have had problematic formatting with pretty_print
+        messages = [
+            AIMessage(content="I'll help you with that calculation."),
+            ToolMessage(content="Result: 42", tool_call_id="call_123"),
+            AIMessage(content="The answer is 42."),
+        ]
+
+        result = harmonize_agent_response({"messages": messages})
+
+        # Verify content is present
+        assert "I'll help you with that calculation." in result
+        assert "Result: 42" in result
+        assert "The answer is 42." in result
+
+        # CRITICAL: Verify no lines start with multiple equal signs (Excel formula confusion)
+        lines = result.split("\n")
+        for line in lines:
+            # Check that no line starts with "=" or "===..." which would confuse Excel
+            assert not line.startswith("="), f"Line starts with '=': {line}"
+            # Specifically check for the old pretty_print format
+            assert "================================" not in line, f"Line contains old format: {line}"
+
+        # Verify we're using the new Excel-friendly format
+        assert "--- AI Message ---" in result
+        assert "--- Tool Message" in result
 
 
 class TestMCPUtilities:
@@ -553,16 +582,17 @@ class TestIntegrationScenarios:
         # Test agent response harmonization directly
         harmonized = harmonize_agent_response(mock_response)
 
-        # Now we expect pretty_print format, not just concatenated content
+        # Now we expect custom formatted output with Excel-friendly separators
         assert "I'll search for TP53 interactors using the biocontext tool." in harmonized
         assert (
             "Based on the search results, TP53 interacts with multiple proteins including MDM2, MDM4, p21, and BRCA1."
             in harmonized
         )
 
-        # Should have multiple formatted sections from pretty_print
+        # Should have multiple formatted sections with new formatting
         lines = harmonized.split("\n")
-        assert len(lines) > 1  # Multiple sections due to pretty_print formatting
+        assert len(lines) > 1  # Multiple sections with Excel-friendly formatting
+        assert "--- AI Message ---" in harmonized
 
     def test_biocontext_with_tool_filtering_scenario(self) -> None:
         """Test biocontext.ai scenario with tool filtering."""
