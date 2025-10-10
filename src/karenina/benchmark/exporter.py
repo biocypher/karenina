@@ -164,7 +164,6 @@ def export_verification_results_json(job: VerificationJob, results: dict[str, Ve
             "embedding_model_used": result.embedding_model_used,
             # MCP server fields
             "answering_mcp_servers": result.answering_mcp_servers,
-            "parsing_mcp_servers": result.parsing_mcp_servers,
         }
 
     return json.dumps(export_data, indent=2, ensure_ascii=False)
@@ -336,7 +335,6 @@ def export_verification_results_csv(
             "embedding_model_used",
             # MCP server fields
             "answering_mcp_servers",
-            "parsing_mcp_servers",
         ]
     )
 
@@ -384,9 +382,6 @@ def export_verification_results_csv(
             # MCP server fields
             "answering_mcp_servers": _safe_json_serialize(
                 result.answering_mcp_servers, result.question_id, "answering_mcp_servers"
-            ),
-            "parsing_mcp_servers": _safe_json_serialize(
-                result.parsing_mcp_servers, result.question_id, "parsing_mcp_servers"
             ),
         }
 

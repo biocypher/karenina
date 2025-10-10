@@ -616,7 +616,6 @@ class VerificationResult(BaseModel):
 
     # MCP server metadata
     answering_mcp_servers: list[str] | None = None  # Names of MCP servers attached to answering model
-    parsing_mcp_servers: list[str] | None = None  # Names of MCP servers attached to parsing model
 
 
 class VerificationJob(BaseModel):

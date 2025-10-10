@@ -257,7 +257,6 @@ class VerificationResultModel(Base):
 
     # MCP server metadata
     answering_mcp_servers: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
-    parsing_mcp_servers: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC), nullable=False)

@@ -551,7 +551,6 @@ def _create_result_model(run_id: str, result: "VerificationResult") -> Verificat
         regex_extraction_results=result.regex_extraction_results,
         recursion_limit_reached=result.recursion_limit_reached,
         answering_mcp_servers=result.answering_mcp_servers,
-        parsing_mcp_servers=result.parsing_mcp_servers,
     )
 
 
@@ -581,7 +580,6 @@ def _update_result_model(model: VerificationResultModel, result: "VerificationRe
     model.regex_extraction_results = result.regex_extraction_results
     model.recursion_limit_reached = result.recursion_limit_reached
     model.answering_mcp_servers = result.answering_mcp_servers
-    model.parsing_mcp_servers = result.parsing_mcp_servers
 
 
 def _model_to_verification_result(model: VerificationResultModel) -> "VerificationResult":
@@ -622,5 +620,4 @@ def _model_to_verification_result(model: VerificationResultModel) -> "Verificati
         regex_extraction_results=model.regex_extraction_results,
         recursion_limit_reached=model.recursion_limit_reached,
         answering_mcp_servers=model.answering_mcp_servers,
-        parsing_mcp_servers=model.parsing_mcp_servers,
     )

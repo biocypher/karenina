@@ -231,15 +231,12 @@ def run_single_model_verification(
     else:
         parsing_model_str = f"{parsing_model.model_provider}/{parsing_model.model_name}"
 
-    # Extract MCP server names from model configs
+    # Extract MCP server names from answering model config
     answering_mcp_servers = list(answering_model.mcp_urls_dict.keys()) if answering_model.mcp_urls_dict else None
-    parsing_mcp_servers = list(parsing_model.mcp_urls_dict.keys()) if parsing_model.mcp_urls_dict else None
 
     # Debug logging for MCP configuration
     if answering_mcp_servers:
         logger.info(f"Answering model MCP servers: {answering_mcp_servers}")
-    if parsing_mcp_servers:
-        logger.info(f"Parsing model MCP servers: {parsing_mcp_servers}")
 
     try:
         # Step 1: Validate the template
@@ -280,7 +277,6 @@ def run_single_model_verification(
                 recursion_limit_reached=False,
                 # MCP server metadata
                 answering_mcp_servers=answering_mcp_servers,
-                parsing_mcp_servers=parsing_mcp_servers,
             )
 
         # Step 1.5: Inject question ID into the Answer class
@@ -424,7 +420,6 @@ def run_single_model_verification(
                     recursion_limit_reached=False,
                     # MCP server metadata
                     answering_mcp_servers=answering_mcp_servers,
-                    parsing_mcp_servers=parsing_mcp_servers,
                 )
 
         # Step 4: Initialize parsing model and parse response
@@ -474,7 +469,6 @@ def run_single_model_verification(
                 recursion_limit_reached=False,
                 # MCP server metadata
                 answering_mcp_servers=answering_mcp_servers,
-                parsing_mcp_servers=parsing_mcp_servers,
             )
 
         # Extract ground truth if enabled
@@ -556,7 +550,6 @@ Original Question: {question_text}
                 recursion_limit_reached=False,
                 # MCP server metadata
                 answering_mcp_servers=answering_mcp_servers,
-                parsing_mcp_servers=parsing_mcp_servers,
             )
 
         # Step 5: Run verification
@@ -637,7 +630,6 @@ Original Question: {question_text}
                 recursion_limit_reached=False,
                 # MCP server metadata
                 answering_mcp_servers=answering_mcp_servers,
-                parsing_mcp_servers=parsing_mcp_servers,
             )
 
         # Step 6: Run rubric evaluation (optional)
@@ -694,7 +686,6 @@ Original Question: {question_text}
             recursion_limit_reached=recursion_limit_reached,
             # MCP server metadata
             answering_mcp_servers=answering_mcp_servers,
-            parsing_mcp_servers=parsing_mcp_servers,
         )
 
     except Exception as e:
@@ -733,5 +724,4 @@ Original Question: {question_text}
             recursion_limit_reached=False,
             # MCP server metadata
             answering_mcp_servers=answering_mcp_servers,
-            parsing_mcp_servers=parsing_mcp_servers,
         )
