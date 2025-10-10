@@ -32,7 +32,7 @@ def save_benchmark(
     storage: str | DBConfig,
     checkpoint_path: Path | None = None,
     detect_duplicates_only: bool = False,
-) -> tuple["Benchmark", list[dict[str, Any]] | None]:
+) -> "Benchmark | tuple[Benchmark, list[dict[str, Any]]]":
     """Save a benchmark to the database.
 
     Args:
@@ -42,7 +42,8 @@ def save_benchmark(
         detect_duplicates_only: If True, only detect duplicates without saving. Returns duplicate info.
 
     Returns:
-        Tuple of (benchmark instance, list of duplicates if detect_duplicates_only=True else None)
+        - Benchmark instance when detect_duplicates_only=False (default)
+        - Tuple of (benchmark instance, list of duplicates) when detect_duplicates_only=True
 
         Duplicate info structure:
         {
@@ -243,7 +244,12 @@ def save_benchmark(
         if db_config.auto_commit and not detect_duplicates_only:
             session.commit()
 
-    return benchmark, (duplicates if detect_duplicates_only else None)
+    # Return tuple with duplicates only when detect_duplicates_only=True
+    # Otherwise return just the benchmark (backward compatibility)
+    if detect_duplicates_only:
+        return benchmark, duplicates
+    else:
+        return benchmark
 
 
 def load_benchmark(

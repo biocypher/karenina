@@ -43,6 +43,7 @@ class TestResultsSeparation:
         return {
             "q1_result1": VerificationResult(
                 question_id="test_q1",
+                template_id="no_template",
                 success=True,
                 question_text="What is 2+2?",
                 raw_llm_response="4",
@@ -54,6 +55,7 @@ class TestResultsSeparation:
             ),
             "q2_result1": VerificationResult(
                 question_id="test_q2",
+                template_id="no_template",
                 success=True,
                 question_text="What is the capital of France?",
                 raw_llm_response="Paris",

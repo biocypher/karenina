@@ -77,6 +77,7 @@ def mock_results_with_global_and_specific_rubrics() -> dict[str, VerificationRes
     return {
         "q1_answering-test_parsing-test": VerificationResult(
             question_id="q1",
+            template_id="no_template",
             success=True,
             question_text="What is 2+2?",
             raw_llm_response="The answer is 4.",
@@ -96,6 +97,7 @@ def mock_results_with_global_and_specific_rubrics() -> dict[str, VerificationRes
         ),
         "q2_answering-test_parsing-test": VerificationResult(
             question_id="q2",
+            template_id="no_template",
             success=True,
             question_text="What is the capital of France?",
             raw_llm_response="The capital of France is Paris.",
@@ -122,6 +124,7 @@ def mock_results_global_only() -> dict[str, VerificationResult]:
     return {
         "q1_answering-test_parsing-test": VerificationResult(
             question_id="q1",
+            template_id="no_template",
             success=True,
             question_text="What is 2+2?",
             raw_llm_response="The answer is 4.",
@@ -147,6 +150,7 @@ def mock_results_no_rubrics() -> dict[str, VerificationResult]:
     return {
         "q1_answering-test_parsing-test": VerificationResult(
             question_id="q1",
+            template_id="no_template",
             success=True,
             question_text="What is 2+2?",
             raw_llm_response="The answer is 4.",
@@ -295,6 +299,7 @@ class TestExportVerificationResultsCSV:
         results_with_mixed = mock_results_global_only.copy()
         results_with_mixed["q2_answering-test_parsing-test"] = VerificationResult(
             question_id="q2",
+            template_id="no_template",
             success=True,
             question_text="Test question",
             raw_llm_response="Test response",
@@ -402,6 +407,7 @@ class TestExportVerificationResultsCSV:
         results_with_special_traits = {
             "q1_answering-test_parsing-test": VerificationResult(
                 question_id="q1",
+                template_id="no_template",
                 success=True,
                 question_text="What is 2+2?",
                 raw_llm_response="The answer is 4.",
@@ -448,6 +454,7 @@ class TestExportVerificationResultsCSV:
         for i in range(100):  # 100 results instead of the usual 2
             large_results[f"q{i}_answering-test_parsing-test"] = VerificationResult(
                 question_id=f"q{i}",
+                template_id="no_template",
                 success=True,
                 question_text=f"Test question {i}?",
                 raw_llm_response=f"Test answer {i}.",
@@ -508,6 +515,7 @@ class TestExportVerificationResultsCSV:
         results_with_bad_trait_names = {
             "q1_answering-test_parsing-test": VerificationResult(
                 question_id="q1",
+                template_id="no_template",
                 success=True,
                 question_text="What is 2+2?",
                 raw_llm_response="The answer is 4.",
