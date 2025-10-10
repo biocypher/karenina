@@ -107,10 +107,11 @@ class TestDetectAbstention:
             response = "I cannot answer this question as I don't have access to that information."
             question = "What is the secret password?"
 
-            abstention_detected, check_performed = detect_abstention(response, parsing_model, question)
+            abstention_detected, check_performed, reasoning = detect_abstention(response, parsing_model, question)
 
             assert check_performed is True
             assert abstention_detected is True
+            assert reasoning == "Model refused to answer"
 
     def test_detect_abstention_with_genuine_answer(self, parsing_model):
         """Test abstention detection with a genuine answer."""
@@ -124,10 +125,11 @@ class TestDetectAbstention:
             response = "The capital of France is Paris."
             question = "What is the capital of France?"
 
-            abstention_detected, check_performed = detect_abstention(response, parsing_model, question)
+            abstention_detected, check_performed, reasoning = detect_abstention(response, parsing_model, question)
 
             assert check_performed is True
             assert abstention_detected is False
+            assert reasoning == "Model provided substantive answer"
 
     def test_detect_abstention_with_markdown_fences(self, parsing_model):
         """Test abstention detection with markdown-fenced JSON response."""
@@ -141,10 +143,11 @@ class TestDetectAbstention:
             response = "I'm not able to provide that information."
             question = "What is X?"
 
-            abstention_detected, check_performed = detect_abstention(response, parsing_model, question)
+            abstention_detected, check_performed, reasoning = detect_abstention(response, parsing_model, question)
 
             assert check_performed is True
             assert abstention_detected is True
+            assert reasoning == "Clear refusal"
 
     def test_detect_abstention_with_json_parse_error(self, parsing_model):
         """Test abstention detection with invalid JSON response."""
@@ -158,11 +161,12 @@ class TestDetectAbstention:
             response = "Some answer"
             question = "Some question?"
 
-            abstention_detected, check_performed = detect_abstention(response, parsing_model, question)
+            abstention_detected, check_performed, reasoning = detect_abstention(response, parsing_model, question)
 
             # When JSON parsing fails, check_performed should be False
             assert check_performed is False
             assert abstention_detected is False
+            assert reasoning is None
 
     def test_detect_abstention_with_retryable_error(self, parsing_model):
         """Test abstention detection with retryable error (should retry)."""
@@ -179,10 +183,11 @@ class TestDetectAbstention:
             question = "Question text?"
 
             # Should retry and succeed on second attempt
-            abstention_detected, check_performed = detect_abstention(response, parsing_model, question)
+            abstention_detected, check_performed, reasoning = detect_abstention(response, parsing_model, question)
 
             assert check_performed is True
             assert abstention_detected is False
+            assert reasoning == "OK"
             assert mock_llm.invoke.call_count == 2
 
     def test_detect_abstention_with_non_retryable_error(self, parsing_model):
@@ -196,10 +201,11 @@ class TestDetectAbstention:
             question = "Question text?"
 
             # Should not retry, return False
-            abstention_detected, check_performed = detect_abstention(response, parsing_model, question)
+            abstention_detected, check_performed, reasoning = detect_abstention(response, parsing_model, question)
 
             assert check_performed is False
             assert abstention_detected is False
+            assert reasoning is None
             assert mock_llm.invoke.call_count == 1
 
 
