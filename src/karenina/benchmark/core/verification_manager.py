@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from .results import ResultsManager
     from .rubrics import RubricManager
 
+from ...utils.checkpoint_converter import generate_template_id
 from ..models import VerificationConfig, VerificationResult
 from ..verification.orchestrator import run_question_verification
 from ..verification.validation import validate_answer_template
@@ -319,8 +320,10 @@ class VerificationManager:
 
             except Exception as e:
                 # Create error result for this question
+                template_id = generate_template_id(template_code)
                 error_result = VerificationResult(
                     question_id=q_id,
+                    template_id=template_id,
                     success=False,
                     error=f"Verification failed: {str(e)}",
                     question_text=q_data["question"],
@@ -403,8 +406,12 @@ class VerificationManager:
                 all_results[question_id] = question_results
             except Exception as e:
                 # Create error result
+                q_data = self.base._questions_cache.get(question_id, {})
+                template_code = q_data.get("answer_template", "")
+                template_id = generate_template_id(template_code)
                 error_result = VerificationResult(
                     question_id=question_id,
+                    template_id=template_id,
                     success=False,
                     error=f"Mixed config verification failed: {str(e)}",
                     question_text=self.base._questions_cache.get(question_id, {}).get("question", ""),
@@ -464,8 +471,12 @@ class VerificationManager:
                 # Create error results for this run
                 error_results = {}
                 for q_id in question_ids:
+                    q_data = self.base._questions_cache.get(q_id, {})
+                    template_code = q_data.get("answer_template", "")
+                    template_id = generate_template_id(template_code)
                     error_result = VerificationResult(
                         question_id=q_id,
+                        template_id=template_id,
                         success=False,
                         error=f"Comparative verification failed: {str(e)}",
                         question_text=self.base._questions_cache.get(q_id, {}).get("question", ""),

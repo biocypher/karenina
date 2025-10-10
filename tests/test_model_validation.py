@@ -20,7 +20,7 @@ class TestModelConfigurationValidation:
         config = ModelConfig(
             id="test-model",
             model_provider="openai",
-            model_name="gpt-3.5-turbo",
+            model_name="gpt-4.1-mini",
             temperature=0.1,
             interface=INTERFACE_LANGCHAIN,
             system_prompt="You are a helpful assistant.",
@@ -71,7 +71,7 @@ class TestModelConfigurationValidation:
                     ModelConfig(
                         id="test-model",
                         model_provider="",  # Empty provider should fail for langchain
-                        model_name="gpt-3.5-turbo",
+                        model_name="gpt-4.1-mini",
                         temperature=0.1,
                         interface=INTERFACE_LANGCHAIN,
                         system_prompt="You are a helpful assistant.",
@@ -81,7 +81,7 @@ class TestModelConfigurationValidation:
                     ModelConfig(
                         id="parsing-model",
                         model_provider="openai",
-                        model_name="gpt-3.5-turbo",
+                        model_name="gpt-4.1-mini",
                         temperature=0.1,
                         interface=INTERFACE_LANGCHAIN,
                         system_prompt="You are a validator.",
@@ -107,7 +107,7 @@ class TestModelConfigurationValidation:
                     ModelConfig(
                         id="parsing-model",
                         model_provider="openai",
-                        model_name="gpt-3.5-turbo",
+                        model_name="gpt-4.1-mini",
                         temperature=0.1,
                         interface=INTERFACE_LANGCHAIN,
                         system_prompt="You are a validator.",
@@ -123,7 +123,7 @@ class TestModelConfigurationValidation:
                     ModelConfig(
                         id="test-model",
                         model_provider="openai",
-                        model_name="gpt-3.5-turbo",
+                        model_name="gpt-4.1-mini",
                         temperature=0.1,
                         interface=INTERFACE_LANGCHAIN,
                         system_prompt="",  # Empty system prompt should fail
@@ -133,7 +133,7 @@ class TestModelConfigurationValidation:
                     ModelConfig(
                         id="parsing-model",
                         model_provider="openai",
-                        model_name="gpt-3.5-turbo",
+                        model_name="gpt-4.1-mini",
                         temperature=0.1,
                         interface=INTERFACE_LANGCHAIN,
                         system_prompt="You are a validator.",
@@ -150,7 +150,7 @@ class TestModelConfigurationValidation:
                     ModelConfig(
                         id="parsing-model",
                         model_provider="openai",
-                        model_name="gpt-3.5-turbo",
+                        model_name="gpt-4.1-mini",
                         temperature=0.1,
                         interface=INTERFACE_LANGCHAIN,
                         system_prompt="You are a validator.",
@@ -166,7 +166,7 @@ class TestModelConfigurationValidation:
                     ModelConfig(
                         id="answering-model",
                         model_provider="openai",
-                        model_name="gpt-3.5-turbo",
+                        model_name="gpt-4.1-mini",
                         temperature=0.1,
                         interface=INTERFACE_LANGCHAIN,
                         system_prompt="You are a helpful assistant.",
@@ -183,7 +183,7 @@ class TestModelConfigurationValidation:
                     ModelConfig(
                         id="answering-model",
                         model_provider="openai",
-                        model_name="gpt-3.5-turbo",
+                        model_name="gpt-4.1-mini",
                         temperature=0.1,
                         interface=INTERFACE_LANGCHAIN,
                         system_prompt="You are a helpful assistant.",
@@ -201,7 +201,7 @@ class TestModelConfigurationValidation:
                     ModelConfig(
                         id="answering-model",
                         model_provider="openai",
-                        model_name="gpt-3.5-turbo",
+                        model_name="gpt-4.1-mini",
                         temperature=0.1,
                         interface=INTERFACE_LANGCHAIN,
                         system_prompt="You are a helpful assistant.",
@@ -211,7 +211,7 @@ class TestModelConfigurationValidation:
                     ModelConfig(
                         id="parsing-model",
                         model_provider="openai",
-                        model_name="gpt-3.5-turbo",
+                        model_name="gpt-4.1-mini",
                         temperature=0.1,
                         interface=INTERFACE_LANGCHAIN,
                         system_prompt="You are a validator.",
@@ -228,7 +228,7 @@ class TestModelConfigurationValidation:
                 ModelConfig(
                     id="answering-model",
                     model_provider="openai",
-                    model_name="gpt-3.5-turbo",
+                    model_name="gpt-4.1-mini",
                     temperature=0.1,
                     interface=INTERFACE_LANGCHAIN,
                     system_prompt="You are a helpful assistant.",
@@ -238,7 +238,7 @@ class TestModelConfigurationValidation:
                 ModelConfig(
                     id="parsing-model",
                     model_provider="openai",
-                    model_name="gpt-3.5-turbo",
+                    model_name="gpt-4.1-mini",
                     temperature=0.1,
                     interface=INTERFACE_LANGCHAIN,
                     system_prompt="You are a validator.",
@@ -259,7 +259,7 @@ class TestModelConfigurationValidation:
                 ModelConfig(
                     id="langchain-model",
                     model_provider="openai",
-                    model_name="gpt-3.5-turbo",
+                    model_name="gpt-4.1-mini",
                     temperature=0.1,
                     interface=INTERFACE_LANGCHAIN,
                     system_prompt="You are a helpful assistant.",
@@ -305,7 +305,7 @@ class TestLegacyConfigurationSupport:
         """Test conversion from legacy answering model fields."""
         config = VerificationConfig(
             answering_model_provider="openai",
-            answering_model_name="gpt-3.5-turbo",
+            answering_model_name="gpt-4.1-mini",
             answering_temperature=0.2,
             answering_interface=INTERFACE_LANGCHAIN,
             answering_system_prompt="Custom answering prompt",
@@ -313,7 +313,7 @@ class TestLegacyConfigurationSupport:
                 ModelConfig(
                     id="parsing-model",
                     model_provider="openai",
-                    model_name="gpt-3.5-turbo",
+                    model_name="gpt-4.1-mini",
                     temperature=0.1,
                     interface=INTERFACE_LANGCHAIN,
                     system_prompt="You are a validator.",
@@ -325,7 +325,7 @@ class TestLegacyConfigurationSupport:
         assert len(config.answering_models) == 1
         assert config.answering_models[0].id == "answering-legacy"
         assert config.answering_models[0].model_provider == "openai"
-        assert config.answering_models[0].model_name == "gpt-3.5-turbo"
+        assert config.answering_models[0].model_name == "gpt-4.1-mini"
         assert config.answering_models[0].temperature == 0.2
         assert config.answering_models[0].interface == INTERFACE_LANGCHAIN
         assert config.answering_models[0].system_prompt == "Custom answering prompt"
@@ -337,7 +337,7 @@ class TestLegacyConfigurationSupport:
                 ModelConfig(
                     id="answering-model",
                     model_provider="openai",
-                    model_name="gpt-3.5-turbo",
+                    model_name="gpt-4.1-mini",
                     temperature=0.1,
                     interface=INTERFACE_LANGCHAIN,
                     system_prompt="You are a helpful assistant.",
@@ -363,10 +363,10 @@ class TestLegacyConfigurationSupport:
         """Test that legacy conversion uses appropriate defaults."""
         config = VerificationConfig(
             answering_model_provider="openai",
-            answering_model_name="gpt-3.5-turbo",
+            answering_model_name="gpt-4.1-mini",
             # Other fields use defaults
             parsing_model_provider="openai",
-            parsing_model_name="gpt-3.5-turbo",
+            parsing_model_name="gpt-4.1-mini",
         )
 
         answering_model = config.answering_models[0]

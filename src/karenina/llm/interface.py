@@ -153,7 +153,7 @@ def init_chat_model_unified(
     with tools from MCP servers.
 
     Args:
-        model: The model name (e.g., "gemini-2.0-flash", "gpt-4", "claude-3-sonnet")
+        model: The model name (e.g., "gemini-2.0-flash", "gpt-4.1-mini", "claude-3-sonnet")
         provider: The model provider (e.g., "google_genai", "openai", "anthropic").
                  Optional for OpenRouter and Manual interfaces.
         interface: The interface to use for model initialization.
@@ -182,7 +182,7 @@ def init_chat_model_unified(
         >>> model = init_chat_model_unified("gemini-2.0-flash", "google_genai")
 
         Initialize an OpenAI model via OpenRouter:
-        >>> model = init_chat_model_unified("gpt-4", interface="openrouter")
+        >>> model = init_chat_model_unified("gpt-4.1-mini", interface="openrouter")
 
         Initialize with MCP tools:
         >>> mcp_urls = {"biocontext": "https://mcp.biocontext.ai/mcp/"}
@@ -257,7 +257,7 @@ def call_model(
     Call a language model and return the response, supporting conversational context.
 
     Args:
-        model: The model name (e.g., "gemini-2.0-flash", "gpt-4")
+        model: The model name (e.g., "gemini-2.0-flash", "gpt-4.1-mini")
         provider: The model provider (e.g., "google_genai", "openai")
         message: The user message to send
         session_id: Optional session ID for continuing a conversation

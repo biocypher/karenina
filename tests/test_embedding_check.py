@@ -151,7 +151,7 @@ class TestSemanticEquivalence:
     def test_check_semantic_equivalence_none_data(self) -> None:
         """Test semantic check with None data."""
         model_config = ModelConfig(
-            id="test", model_provider="openai", model_name="gpt-4", temperature=0.1, system_prompt="Test prompt"
+            id="test", model_provider="openai", model_name="gpt-4.1-mini", temperature=0.1, system_prompt="Test prompt"
         )
 
         is_equiv = check_semantic_equivalence(None, {"answer": "test"}, model_config, "What is the answer?")
@@ -167,7 +167,7 @@ class TestSemanticEquivalence:
         mock_init_chat.return_value = mock_llm
 
         model_config = ModelConfig(
-            id="test", model_provider="openai", model_name="gpt-4", temperature=0.1, system_prompt="Test prompt"
+            id="test", model_provider="openai", model_name="gpt-4.1-mini", temperature=0.1, system_prompt="Test prompt"
         )
 
         gt_data = {"answer": "The capital is Paris"}
@@ -189,7 +189,7 @@ class TestSemanticEquivalence:
         mock_init_chat.return_value = mock_llm
 
         model_config = ModelConfig(
-            id="test", model_provider="openai", model_name="gpt-4", temperature=0.1, system_prompt="Test prompt"
+            id="test", model_provider="openai", model_name="gpt-4.1-mini", temperature=0.1, system_prompt="Test prompt"
         )
 
         gt_data = {"answer": "Paris"}
@@ -205,7 +205,7 @@ class TestSemanticEquivalence:
         mock_init_chat.side_effect = RuntimeError("LLM initialization failed")
 
         model_config = ModelConfig(
-            id="test", model_provider="openai", model_name="gpt-4", temperature=0.1, system_prompt="Test prompt"
+            id="test", model_provider="openai", model_name="gpt-4.1-mini", temperature=0.1, system_prompt="Test prompt"
         )
 
         with pytest.raises(RuntimeError, match="Failed to perform semantic equivalence check"):
@@ -219,7 +219,11 @@ class TestPerformEmbeddingCheck:
         """Test embedding check when disabled."""
         with patch.dict(os.environ, {"EMBEDDING_CHECK": "false"}):
             model_config = ModelConfig(
-                id="test", model_provider="openai", model_name="gpt-4", temperature=0.1, system_prompt="Test prompt"
+                id="test",
+                model_provider="openai",
+                model_name="gpt-4.1-mini",
+                temperature=0.1,
+                system_prompt="Test prompt",
             )
 
             result = perform_embedding_check({"a": 1}, {"b": 2}, model_config, "Test question")
@@ -239,7 +243,7 @@ class TestPerformEmbeddingCheck:
         mock_semantic_check.return_value = True
 
         model_config = ModelConfig(
-            id="test", model_provider="openai", model_name="gpt-4", temperature=0.1, system_prompt="Test prompt"
+            id="test", model_provider="openai", model_name="gpt-4.1-mini", temperature=0.1, system_prompt="Test prompt"
         )
 
         result = perform_embedding_check({"answer": "A"}, {"answer": "B"}, model_config, "What is the answer?")
@@ -259,7 +263,7 @@ class TestPerformEmbeddingCheck:
         mock_semantic_check.return_value = False
 
         model_config = ModelConfig(
-            id="test", model_provider="openai", model_name="gpt-4", temperature=0.1, system_prompt="Test prompt"
+            id="test", model_provider="openai", model_name="gpt-4.1-mini", temperature=0.1, system_prompt="Test prompt"
         )
 
         result = perform_embedding_check({"answer": "A"}, {"answer": "B"}, model_config, "What is the answer?")
@@ -277,7 +281,7 @@ class TestPerformEmbeddingCheck:
         mock_similarity.return_value = (0.7, "test-model")
 
         model_config = ModelConfig(
-            id="test", model_provider="openai", model_name="gpt-4", temperature=0.1, system_prompt="Test prompt"
+            id="test", model_provider="openai", model_name="gpt-4.1-mini", temperature=0.1, system_prompt="Test prompt"
         )
 
         result = perform_embedding_check({"answer": "A"}, {"answer": "B"}, model_config, "What is the answer?")
@@ -297,7 +301,7 @@ class TestPerformEmbeddingCheck:
         mock_semantic_check.side_effect = RuntimeError("Semantic check failed")
 
         model_config = ModelConfig(
-            id="test", model_provider="openai", model_name="gpt-4", temperature=0.1, system_prompt="Test prompt"
+            id="test", model_provider="openai", model_name="gpt-4.1-mini", temperature=0.1, system_prompt="Test prompt"
         )
 
         result = perform_embedding_check({"answer": "A"}, {"answer": "B"}, model_config, "What is the answer?")
@@ -315,7 +319,7 @@ class TestPerformEmbeddingCheck:
         mock_similarity.side_effect = RuntimeError("Embedding computation failed")
 
         model_config = ModelConfig(
-            id="test", model_provider="openai", model_name="gpt-4", temperature=0.1, system_prompt="Test prompt"
+            id="test", model_provider="openai", model_name="gpt-4.1-mini", temperature=0.1, system_prompt="Test prompt"
         )
 
         result = perform_embedding_check({"answer": "A"}, {"answer": "B"}, model_config, "What is the answer?")

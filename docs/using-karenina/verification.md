@@ -65,7 +65,7 @@ google_config = ModelConfiguration(
 # Test multiple models in a single verification run
 model_configs = [
     ModelConfiguration(provider="openai", model="gpt-4"),
-    ModelConfiguration(provider="openai", model="gpt-3.5-turbo"),
+    ModelConfiguration(provider="openai", model="gpt-4.1-mini"),
     ModelConfiguration(provider="anthropic", model="claude-3-sonnet"),
     ModelConfiguration(provider="google", model="gemini-pro")
 ]
@@ -266,7 +266,7 @@ def compare_models(benchmark, model_configs):
 # Compare multiple models
 model_configs = [
     ModelConfiguration(provider="openai", model="gpt-4"),
-    ModelConfiguration(provider="openai", model="gpt-3.5-turbo"),
+    ModelConfiguration(provider="openai", model="gpt-4.1-mini"),
     ModelConfiguration(provider="anthropic", model="claude-3-sonnet")
 ]
 
@@ -317,7 +317,7 @@ def ab_test_templates(benchmark, template_a, template_b, model_config):
 # Configure for high-throughput verification
 high_throughput_config = ModelConfiguration(
     provider="openai",
-    model="gpt-3.5-turbo",  # Faster model
+    model="gpt-4.1-mini",  # Faster model
     temperature=0.0,        # Deterministic
     max_tokens=500         # Shorter responses
 )

@@ -247,7 +247,7 @@ class TestTaskEvalSimplifiedLogging:
                 ModelConfig(
                     id="parser",
                     model_provider="openai",
-                    model_name="gpt-4",
+                    model_name="gpt-4.1-mini",
                     system_prompt="Parse and evaluate responses",
                 )
             ],
@@ -283,7 +283,9 @@ class TestTaskEvalSimplifiedLogging:
 
         config = VerificationConfig(
             parsing_models=[
-                ModelConfig(id="parser", model_provider="openai", model_name="gpt-4", system_prompt="Parse responses")
+                ModelConfig(
+                    id="parser", model_provider="openai", model_name="gpt-4.1-mini", system_prompt="Parse responses"
+                )
             ],
             parsing_only=True,
         )
@@ -329,7 +331,9 @@ class TestTaskEvalIntegration:
         # Setup config
         config = VerificationConfig(
             parsing_models=[
-                ModelConfig(id="parsing", model_provider="openai", model_name="gpt-4", system_prompt="Parse prompt")
+                ModelConfig(
+                    id="parsing", model_provider="openai", model_name="gpt-4.1-mini", system_prompt="Parse prompt"
+                )
             ],
             parsing_only=True,
             rubric_enabled=True,
@@ -377,7 +381,9 @@ class TestTaskEvalIntegration:
         # Setup config
         config = VerificationConfig(
             parsing_models=[
-                ModelConfig(id="parsing", model_provider="openai", model_name="gpt-4", system_prompt="Parse prompt")
+                ModelConfig(
+                    id="parsing", model_provider="openai", model_name="gpt-4.1-mini", system_prompt="Parse prompt"
+                )
             ],
             parsing_only=True,
             rubric_enabled=True,
@@ -409,10 +415,14 @@ class TestTaskEvalIntegration:
         task = TaskEval()
         config = VerificationConfig(
             answering_models=[
-                ModelConfig(id="answering", model_provider="openai", model_name="gpt-4", system_prompt="Test prompt")
+                ModelConfig(
+                    id="answering", model_provider="openai", model_name="gpt-4.1-mini", system_prompt="Test prompt"
+                )
             ],
             parsing_models=[
-                ModelConfig(id="parsing", model_provider="openai", model_name="gpt-4", system_prompt="Parse prompt")
+                ModelConfig(
+                    id="parsing", model_provider="openai", model_name="gpt-4.1-mini", system_prompt="Parse prompt"
+                )
             ],
         )
 
@@ -444,7 +454,9 @@ class TestTaskEvalIntegration:
 
         config = VerificationConfig(
             parsing_models=[
-                ModelConfig(id="parsing", model_provider="openai", model_name="gpt-4", system_prompt="Parse prompt")
+                ModelConfig(
+                    id="parsing", model_provider="openai", model_name="gpt-4.1-mini", system_prompt="Parse prompt"
+                )
             ],
             parsing_only=True,
         )

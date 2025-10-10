@@ -380,6 +380,9 @@ class VerificationConfig(BaseModel):
     rubric_enabled: bool = False
     rubric_trait_names: list[str] | None = None  # Optional filter for specific traits
 
+    # Abstention detection settings
+    abstention_enabled: bool = False  # Enable abstention/refusal detection
+
     # Few-shot prompting settings
     few_shot_config: FewShotConfig | None = None  # New flexible configuration
 
@@ -565,6 +568,7 @@ class VerificationResult(BaseModel):
     """Result of verifying a single question."""
 
     question_id: str
+    template_id: str  # MD5 of template or "no_template" (composite key component)
     success: bool
     error: str | None = None
 
@@ -613,6 +617,15 @@ class VerificationResult(BaseModel):
     regex_extraction_results: dict[str, Any] | None = None  # What the regex patterns actually extracted
     # Recursion limit metadata
     recursion_limit_reached: bool = False  # Whether agent hit recursion limit
+
+    # Abstention detection metadata
+    abstention_check_performed: bool = False  # Whether abstention check was attempted
+    abstention_detected: bool | None = None  # Whether model refused/abstained from answering
+    abstention_override_applied: bool = False  # Whether abstention check overrode the result
+    abstention_reasoning: str | None = None  # LLM's reasoning for abstention determination
+
+    # MCP server metadata
+    answering_mcp_servers: list[str] | None = None  # Names of MCP servers attached to answering model
 
 
 class VerificationJob(BaseModel):

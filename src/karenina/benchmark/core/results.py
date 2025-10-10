@@ -176,6 +176,9 @@ class ResultsManager:
             for index, (_, result) in enumerate(results.items(), 1):
                 result_dict = result.model_dump()
                 result_dict["row_index"] = index
+                # Replace success with "abstained" when abstention is detected
+                if result.abstention_detected and result.abstention_override_applied:
+                    result_dict["success"] = "abstained"
                 results_array.append(result_dict)
             return json.dumps(results_array, indent=2, ensure_ascii=False)
 
@@ -518,7 +521,9 @@ class ResultsManager:
                 self._escape_csv_field(result.parsing_replicate or ""),
                 self._escape_csv_field(result.answering_system_prompt or ""),
                 self._escape_csv_field(result.parsing_system_prompt or ""),
-                self._escape_csv_field(result.success),
+                self._escape_csv_field(
+                    "abstained" if result.abstention_detected and result.abstention_override_applied else result.success
+                ),
                 self._escape_csv_field(result.error or ""),
                 self._escape_csv_field(result.execution_time),
                 self._escape_csv_field(result.timestamp),
@@ -658,7 +663,11 @@ class ResultsManager:
                         except ValueError:
                             processed_row[field] = 0.0
                     elif field == "success" and value:
-                        processed_row[field] = value.lower() in ("true", "1", "yes")
+                        # Handle "abstained" status as True (since abstention overrides are successful responses)
+                        if value.lower() == "abstained":
+                            processed_row[field] = True
+                        else:
+                            processed_row[field] = value.lower() in ("true", "1", "yes")
                     elif field in ["answering_replicate", "parsing_replicate"] and value:
                         try:
                             processed_row[field] = int(value)

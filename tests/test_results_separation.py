@@ -43,22 +43,24 @@ class TestResultsSeparation:
         return {
             "q1_result1": VerificationResult(
                 question_id="test_q1",
+                template_id="no_template",
                 success=True,
                 question_text="What is 2+2?",
                 raw_llm_response="4",
-                answering_model="gpt-4",
-                parsing_model="gpt-4",
+                answering_model="gpt-4.1-mini",
+                parsing_model="gpt-4.1-mini",
                 execution_time=1.5,
                 timestamp=datetime.now().isoformat(),
                 run_name="test_run",
             ),
             "q2_result1": VerificationResult(
                 question_id="test_q2",
+                template_id="no_template",
                 success=True,
                 question_text="What is the capital of France?",
                 raw_llm_response="Paris",
-                answering_model="gpt-4",
-                parsing_model="gpt-4",
+                answering_model="gpt-4.1-mini",
+                parsing_model="gpt-4.1-mini",
                 execution_time=2.0,
                 timestamp=datetime.now().isoformat(),
                 run_name="test_run",
@@ -117,7 +119,7 @@ class TestResultsSeparation:
             # Verify result details
             result = list(retrieved_results.values())[0]
             assert result.success is True
-            assert result.answering_model == "gpt-4"
+            assert result.answering_model == "gpt-4.1-mini"
 
         finally:
             if checkpoint_path.exists():
@@ -175,7 +177,7 @@ class TestResultsSeparation:
             assert result["row_index"] == 1
             assert result["success"] is True
             assert result["question_text"] == "What is 2+2?"
-            assert result["answering_model"] == "gpt-4"
+            assert result["answering_model"] == "gpt-4.1-mini"
 
         finally:
             if results_path.exists():

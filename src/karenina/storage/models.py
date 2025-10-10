@@ -75,7 +75,7 @@ class QuestionModel(Base):
 
     # Use MD5 hash of question text as primary key
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
-    question_text: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    question_text: Mapped[str] = mapped_column(Text, nullable=False)  # Removed unique=True for composite key
     raw_answer: Mapped[str] = mapped_column(Text, nullable=False)
     tags: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     few_shot_examples: Mapped[list[dict[str, str]] | None] = mapped_column(JSON, nullable=True)
@@ -115,6 +115,7 @@ class BenchmarkQuestionModel(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     benchmark_id: Mapped[int] = mapped_column(ForeignKey("benchmarks.id", ondelete="CASCADE"), nullable=False)
     question_id: Mapped[str] = mapped_column(ForeignKey("questions.id", ondelete="CASCADE"), nullable=False)
+    template_id: Mapped[str] = mapped_column(String(32), nullable=False)  # MD5 of template or "no_template"
 
     # Benchmark-specific question data
     answer_template: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -135,7 +136,7 @@ class BenchmarkQuestionModel(Base):
 
     # Constraints
     __table_args__ = (
-        UniqueConstraint("benchmark_id", "question_id", name="uq_benchmark_question"),
+        UniqueConstraint("benchmark_id", "question_id", "template_id", name="uq_benchmark_question_template"),
         Index("idx_benchmark_finished", "benchmark_id", "finished"),
     )
 
@@ -204,6 +205,7 @@ class VerificationResultModel(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     run_id: Mapped[str] = mapped_column(ForeignKey("verification_runs.id", ondelete="CASCADE"), nullable=False)
     question_id: Mapped[str] = mapped_column(ForeignKey("questions.id", ondelete="CASCADE"), nullable=False)
+    template_id: Mapped[str] = mapped_column(String(32), nullable=False)  # MD5 of template or "no_template"
 
     # Basic result information
     success: Mapped[bool] = mapped_column(Boolean, nullable=False)
@@ -254,6 +256,15 @@ class VerificationResultModel(Base):
 
     # Recursion limit metadata
     recursion_limit_reached: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # MCP server metadata
+    answering_mcp_servers: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+
+    # Abstention detection metadata
+    abstention_check_performed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    abstention_detected: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    abstention_override_applied: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    abstention_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC), nullable=False)

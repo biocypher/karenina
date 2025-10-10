@@ -24,6 +24,7 @@ def _create_verification_task(
     keywords: list[str] | None = None,
     few_shot_examples: list[dict[str, str]] | None = None,
     few_shot_enabled: bool = False,
+    abstention_enabled: bool = False,
 ) -> dict[str, Any]:
     """Create a verification task dictionary from parameters."""
     return {
@@ -40,6 +41,7 @@ def _create_verification_task(
         "keywords": keywords,
         "few_shot_examples": few_shot_examples,
         "few_shot_enabled": few_shot_enabled,
+        "abstention_enabled": abstention_enabled,
     }
 
 
@@ -72,6 +74,7 @@ def _execute_verification_task(task: dict[str, Any]) -> tuple[str, VerificationR
         keywords=task.get("keywords"),
         few_shot_examples=task.get("few_shot_examples"),
         few_shot_enabled=task.get("few_shot_enabled", False),
+        abstention_enabled=task.get("abstention_enabled", False),
     )
 
     return result_key, result
@@ -160,6 +163,7 @@ def run_question_verification(
                 keywords=keywords,
                 few_shot_examples=few_shot_examples,
                 few_shot_enabled=config.is_few_shot_enabled(),
+                abstention_enabled=getattr(config, "abstention_enabled", False),
             )
             verification_tasks.append(task)
 
@@ -190,6 +194,7 @@ def run_question_verification(
                         keywords=keywords,
                         few_shot_examples=few_shot_examples,
                         few_shot_enabled=config.is_few_shot_enabled(),
+                        abstention_enabled=getattr(config, "abstention_enabled", False),
                     )
                     verification_tasks.append(task)
 
