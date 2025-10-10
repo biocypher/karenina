@@ -1,5 +1,6 @@
 """Single model verification runner."""
 
+import logging
 import os
 import re
 import time
@@ -15,6 +16,9 @@ from ..models import ModelConfig, VerificationResult
 from .embedding_utils import perform_embedding_check
 from .rubric_evaluator import RubricEvaluator
 from .validation import validate_answer_template
+
+# Set up logger
+logger = logging.getLogger(__name__)
 
 
 def _should_expose_ground_truth() -> bool:
@@ -230,6 +234,12 @@ def run_single_model_verification(
     # Extract MCP server names from model configs
     answering_mcp_servers = list(answering_model.mcp_urls_dict.keys()) if answering_model.mcp_urls_dict else None
     parsing_mcp_servers = list(parsing_model.mcp_urls_dict.keys()) if parsing_model.mcp_urls_dict else None
+
+    # Debug logging for MCP configuration
+    if answering_mcp_servers:
+        logger.info(f"Answering model MCP servers: {answering_mcp_servers}")
+    if parsing_mcp_servers:
+        logger.info(f"Parsing model MCP servers: {parsing_mcp_servers}")
 
     try:
         # Step 1: Validate the template
