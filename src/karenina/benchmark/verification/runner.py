@@ -15,6 +15,7 @@ from ...llm.interface import init_chat_model_unified
 from ...schemas.rubric_class import Rubric
 from ...utils.checkpoint_converter import generate_template_id
 from ..models import ModelConfig, VerificationResult
+from .abstention_checker import detect_abstention
 from .embedding_utils import perform_embedding_check
 from .rubric_evaluator import RubricEvaluator
 from .validation import validate_answer_template
@@ -330,6 +331,7 @@ def run_single_model_verification(
     keywords: list[str] | None = None,
     few_shot_examples: list[dict[str, str]] | None = None,
     few_shot_enabled: bool = False,
+    abstention_enabled: bool = False,
 ) -> VerificationResult:
     """
     Run verification for a single question with specific answering and parsing models.
@@ -419,6 +421,10 @@ def run_single_model_verification(
                 regex_extraction_results=None,
                 # Recursion limit metadata (defaults for error cases)
                 recursion_limit_reached=False,
+                # Abstention detection metadata (defaults for error cases)
+                abstention_check_performed=False,
+                abstention_detected=None,
+                abstention_override_applied=False,
                 # MCP server metadata
                 answering_mcp_servers=answering_mcp_servers,
             )
@@ -588,6 +594,10 @@ def run_single_model_verification(
                 regex_extraction_results=None,
                 # Recursion limit metadata (defaults for error cases)
                 recursion_limit_reached=False,
+                # Abstention detection metadata (defaults for error cases)
+                abstention_check_performed=False,
+                abstention_detected=None,
+                abstention_override_applied=False,
                 # MCP server metadata
                 answering_mcp_servers=answering_mcp_servers,
             )
@@ -670,6 +680,10 @@ Original Question: {question_text}
                 regex_extraction_results=None,
                 # Recursion limit metadata (defaults for error cases)
                 recursion_limit_reached=False,
+                # Abstention detection metadata (defaults for error cases)
+                abstention_check_performed=False,
+                abstention_detected=None,
+                abstention_override_applied=False,
                 # MCP server metadata
                 answering_mcp_servers=answering_mcp_servers,
             )
@@ -716,6 +730,26 @@ Original Question: {question_text}
                     verification_result = True and regex_verification_results["success"]
                     embedding_override_applied = True
 
+            # Step 5.6: Abstention detection (runs after all other verification)
+            abstention_check_performed = False
+            abstention_detected = None
+            abstention_override_applied = False
+
+            if abstention_enabled:
+                # Detect if model refused to answer or abstained
+                abstention_detected, abstention_check_performed = detect_abstention(
+                    raw_llm_response=raw_llm_response,
+                    parsing_model=parsing_model,
+                    question_text=question_text,
+                )
+
+                # If abstention is detected, override the verification result
+                if abstention_detected and abstention_check_performed:
+                    # Mark as failed since model didn't provide a real answer
+                    verification_result = False
+                    abstention_override_applied = True
+                    logger.info(f"Abstention detected for question {question_id} - overriding result to False")
+
         except Exception as e:
             return VerificationResult(
                 question_id=question_id,
@@ -751,6 +785,10 @@ Original Question: {question_text}
                 regex_extraction_results=None,
                 # Recursion limit metadata (defaults for error cases)
                 recursion_limit_reached=False,
+                # Abstention detection metadata (defaults for error cases)
+                abstention_check_performed=False,
+                abstention_detected=None,
+                abstention_override_applied=False,
                 # MCP server metadata
                 answering_mcp_servers=answering_mcp_servers,
             )
@@ -808,6 +846,10 @@ Original Question: {question_text}
             regex_extraction_results=regex_extraction_results,
             # Recursion limit metadata
             recursion_limit_reached=recursion_limit_reached,
+            # Abstention detection metadata
+            abstention_check_performed=abstention_check_performed,
+            abstention_detected=abstention_detected,
+            abstention_override_applied=abstention_override_applied,
             # MCP server metadata
             answering_mcp_servers=answering_mcp_servers,
         )
