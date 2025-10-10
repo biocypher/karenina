@@ -565,6 +565,7 @@ class VerificationResult(BaseModel):
     """Result of verifying a single question."""
 
     question_id: str
+    template_id: str  # MD5 of template or "no_template" (composite key component)
     success: bool
     error: str | None = None
 

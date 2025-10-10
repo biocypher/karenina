@@ -443,10 +443,12 @@ def save_verification_results(
         # Save individual results
         for result in results.values():
             # Check if result already exists (to avoid duplicates)
+            # Include template_id in the uniqueness check (composite key component)
             existing_result = session.execute(
                 select(VerificationResultModel).where(
                     VerificationResultModel.run_id == run_id,
                     VerificationResultModel.question_id == result.question_id,
+                    VerificationResultModel.template_id == result.template_id,
                     VerificationResultModel.answering_model == result.answering_model,
                     VerificationResultModel.parsing_model == result.parsing_model,
                     VerificationResultModel.answering_replicate == result.answering_replicate,
@@ -527,6 +529,7 @@ def _create_result_model(run_id: str, result: "VerificationResult") -> Verificat
     return VerificationResultModel(
         run_id=run_id,
         question_id=result.question_id,
+        template_id=result.template_id,
         success=result.success,
         error=result.error,
         question_text=result.question_text,
@@ -595,6 +598,7 @@ def _model_to_verification_result(model: VerificationResultModel) -> "Verificati
 
     return VerificationResult(
         question_id=model.question_id,
+        template_id=model.template_id,
         success=model.success,
         error=model.error,
         question_text=model.question_text,

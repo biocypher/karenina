@@ -13,6 +13,7 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 from ...answers.generator import inject_question_id_into_answer_class
 from ...llm.interface import init_chat_model_unified
 from ...schemas.rubric_class import Rubric
+from ...utils.checkpoint_converter import generate_template_id
 from ..models import ModelConfig, VerificationResult
 from .embedding_utils import perform_embedding_check
 from .rubric_evaluator import RubricEvaluator
@@ -359,6 +360,9 @@ def run_single_model_verification(
     start_time = time.time()
     timestamp = datetime.now().isoformat()
 
+    # Compute template_id from template_code (composite key component)
+    template_id = generate_template_id(template_code)
+
     # For OpenRouter interface, don't include provider in the model string
     if answering_model.interface == "openrouter":
         answering_model_str = answering_model.model_name
@@ -383,6 +387,7 @@ def run_single_model_verification(
         if not is_valid or RawAnswer is None:
             return VerificationResult(
                 question_id=question_id,
+                template_id=template_id,
                 success=False,
                 error=f"Template validation failed: {error_msg}",
                 keywords=keywords,
@@ -501,6 +506,7 @@ def run_single_model_verification(
 
                 return VerificationResult(
                     question_id=question_id,
+                    template_id=template_id,
                     success=False,
                     error=error_msg,
                     keywords=keywords,
@@ -550,6 +556,7 @@ def run_single_model_verification(
         except Exception as e:
             return VerificationResult(
                 question_id=question_id,
+                template_id=template_id,
                 success=False,
                 error=f"Failed to create PydanticOutputParser: {e}",
                 keywords=keywords,
@@ -631,6 +638,7 @@ Original Question: {question_text}
         except Exception as e:
             return VerificationResult(
                 question_id=question_id,
+                template_id=template_id,
                 success=False,
                 error=f"Parsing failed: {e}",
                 keywords=keywords,
@@ -711,6 +719,7 @@ Original Question: {question_text}
         except Exception as e:
             return VerificationResult(
                 question_id=question_id,
+                template_id=template_id,
                 success=False,
                 error=f"Verification failed: {e}",
                 keywords=keywords,
@@ -766,6 +775,7 @@ Original Question: {question_text}
 
         return VerificationResult(
             question_id=question_id,
+            template_id=template_id,
             success=True,
             verify_result=verification_result,
             verify_rubric=rubric_result,
@@ -805,6 +815,7 @@ Original Question: {question_text}
     except Exception as e:
         return VerificationResult(
             question_id=question_id,
+            template_id=template_id,
             success=False,
             error=f"Unexpected error: {e}",
             keywords=keywords,
