@@ -132,7 +132,7 @@ class SchemaOrgDataFeed(BaseModel):
     name: str
     description: str | None = None
     version: str | None = None
-    creator: str | None = None  # Can be string or SchemaOrgPerson
+    creator: str | SchemaOrgPerson | None = None  # Can be string or SchemaOrgPerson
     dateCreated: str  # ISO timestamp
     dateModified: str  # ISO timestamp
     rating: list[SchemaOrgRating] | None = None  # Global rubric traits
@@ -156,7 +156,7 @@ class JsonLdCheckpoint(BaseModel):
     name: str
     description: str | None = None
     version: str | None = None
-    creator: str | None = None
+    creator: str | SchemaOrgPerson | None = None  # Can be string or SchemaOrgPerson
     dateCreated: str
     dateModified: str
     rating: list[SchemaOrgRating] | None = None  # Global rubric
