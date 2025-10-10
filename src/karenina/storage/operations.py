@@ -304,12 +304,17 @@ def load_benchmark(
             ).scalar_one()
 
             # Create Question object
-            # Convert tags list to proper type for Question
-            tags_list: list[str | None] = list(question_model.tags) if question_model.tags else []
+            # Use keywords from BenchmarkQuestionModel if available, fall back to QuestionModel.tags
+            keywords_list: list[str | None] = []
+            if bq.keywords:
+                keywords_list = list(bq.keywords)
+            elif question_model.tags:
+                keywords_list = list(question_model.tags)
+
             question = Question(
                 question=question_model.question_text,
                 raw_answer=question_model.raw_answer,
-                tags=tags_list,
+                tags=keywords_list,
                 few_shot_examples=question_model.few_shot_examples,
             )
 
@@ -320,10 +325,6 @@ def load_benchmark(
                 finished=bq.finished,
                 few_shot_examples=question_model.few_shot_examples,
             )
-
-            # Note: Keywords are stored in benchmark_questions table but not restored
-            # because there's no set_keywords method on Benchmark class.
-            # They're available via get_question() method.
 
             # Set question-specific rubric if present
             if bq.question_rubric:
