@@ -567,6 +567,10 @@ def _create_result_model(run_id: str, result: "VerificationResult") -> Verificat
         regex_extraction_results=result.regex_extraction_results,
         recursion_limit_reached=result.recursion_limit_reached,
         answering_mcp_servers=result.answering_mcp_servers,
+        abstention_check_performed=result.abstention_check_performed,
+        abstention_detected=result.abstention_detected,
+        abstention_override_applied=result.abstention_override_applied,
+        abstention_reasoning=result.abstention_reasoning,
     )
 
 
@@ -596,6 +600,10 @@ def _update_result_model(model: VerificationResultModel, result: "VerificationRe
     model.regex_extraction_results = result.regex_extraction_results
     model.recursion_limit_reached = result.recursion_limit_reached
     model.answering_mcp_servers = result.answering_mcp_servers
+    model.abstention_check_performed = result.abstention_check_performed
+    model.abstention_detected = result.abstention_detected
+    model.abstention_override_applied = result.abstention_override_applied
+    model.abstention_reasoning = result.abstention_reasoning
 
 
 def _model_to_verification_result(model: VerificationResultModel) -> "VerificationResult":
@@ -637,4 +645,8 @@ def _model_to_verification_result(model: VerificationResultModel) -> "Verificati
         regex_extraction_results=model.regex_extraction_results,
         recursion_limit_reached=model.recursion_limit_reached,
         answering_mcp_servers=model.answering_mcp_servers,
+        abstention_check_performed=model.abstention_check_performed,
+        abstention_detected=model.abstention_detected,
+        abstention_override_applied=model.abstention_override_applied,
+        abstention_reasoning=model.abstention_reasoning,
     )

@@ -260,6 +260,12 @@ class VerificationResultModel(Base):
     # MCP server metadata
     answering_mcp_servers: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
 
+    # Abstention detection metadata
+    abstention_check_performed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    abstention_detected: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    abstention_override_applied: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    abstention_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
 
