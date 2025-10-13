@@ -268,9 +268,12 @@ Return JSON format:
 </extracted_excerpts>
 
 <task>
-For each attribute in the schema, generate reasoning that explains how the excerpts should inform the attribute's value.
+Generate reasoning that explains how the excerpts should inform each attribute's value.
 
-For each attribute:
+IMPORTANT: Only generate reasoning for these specific attributes (excluding configuration fields like 'id', 'correct', 'regex'):
+{", ".join(attribute_names)}
+
+For each of the above attributes:
 1. **Review the attribute's description** in the schema to understand what value it expects
 2. **Analyze the excerpts** to determine what they tell us about this attribute
 3. **Generate reasoning** (2-3 sentences) that explains:
@@ -280,7 +283,7 @@ For each attribute:
 
 When excerpts are empty: Explain why no excerpts were found and how this affects the attribute (e.g., "The response contains a refusal, so this attribute should be marked as not provided" or "No explicit evidence present, attribute may need inference from context").
 
-Return JSON format:
+Return JSON format with ONLY the attributes listed above:
 {{
   "attribute_name": "reasoning text explaining how excerpts inform the attribute value based on its schema description"
 }}
