@@ -2,12 +2,21 @@
 
 This module implements the deep-judgment feature, which extends standard parsing
 with a multi-stage approach:
+
 1. Stage 1: Extract verbatim excerpts that corroborate each attribute
-2. Stage 2: Generate reasoning traces explaining how excerpts support values
+   - Uses the answer template's JSON schema (with field descriptions) to guide excerpt selection
+   - Field descriptions specify what evidence to look for in the response
+   - Excerpts are validated using fuzzy matching to prevent hallucinations
+
+2. Stage 2: Generate reasoning traces explaining how excerpts inform attribute values
+   - Explains how each excerpt maps to the attribute based on its schema description
+   - Determines what value the attribute should have based on the evidence
+
 3. Stage 3: Parse final attribute values (standard parsing logic)
+   - Uses PydanticOutputParser with the same schema to extract structured values
 
 The feature gracefully handles missing excerpts (refusals, no corroborating evidence)
-and validates excerpts using fuzzy matching to prevent hallucinations.
+and provides detailed metadata about the parsing process.
 """
 
 import json
@@ -89,8 +98,14 @@ def deep_judgment_parse(
     excerpts = {}
     max_retries = config.deep_judgment_excerpt_retry_attempts
 
+    # Generate JSON schema with field descriptions from the template class
+    from langchain_core.output_parsers import PydanticOutputParser
+
+    parser = PydanticOutputParser(pydantic_object=RawAnswer)
+    json_schema = parser.get_format_instructions()
+
     for attempt in range(max_retries + 1):
-        # Build excerpt extraction prompt (EXPLICIT MISSING EXCERPTS HANDLING)
+        # Build excerpt extraction prompt with explicit field descriptions
         excerpt_prompt = f"""<original_question>
 {question_text}
 </original_question>
@@ -99,14 +114,26 @@ def deep_judgment_parse(
 {raw_llm_response}
 </response_to_analyze>
 
+<answer_template_schema>
+The response will be parsed into a structured answer using the following JSON schema:
+
+{json_schema}
+
+Each attribute in this schema has a description field that specifies what information should be extracted for that attribute.
+</answer_template_schema>
+
 <task>
-Extract verbatim excerpts from the response that support each of these attributes: {", ".join(attribute_names)}
+Extract verbatim excerpts from the response that corroborate each attribute in the answer template schema above.
 
-For each attribute:
-- If excerpts exist: Identify up to {config.deep_judgment_max_excerpts_per_attribute} exact quotes with confidence level (low/medium/high)
-- If no excerpts exist: Return ONE entry with empty text and an explanation
+For each attribute ({", ".join(attribute_names)}):
+1. **Read the attribute's description** in the schema to understand what evidence to look for
+2. **Identify excerpts**: Find up to {config.deep_judgment_max_excerpts_per_attribute} exact quotes from the response that help determine how to populate this attribute based on its schema description
+   - "high" confidence: Direct, explicit statement matching the attribute description
+   - "medium" confidence: Implied information or indirect evidence
+   - "low" confidence: Weak or ambiguous evidence
+3. **If no excerpts exist**: Return ONE entry with empty text and explain why (e.g., model refused, no relevant information, implicit answer)
 
-IMPORTANT: When no corroborating excerpts exist for an attribute (e.g., model refused, no relevant information, implicit answer), provide a brief explanation of why.
+IMPORTANT: Excerpts should be verbatim text spans that provide evidence for filling the attribute according to its schema description. The excerpts will inform the next stage where we determine the actual attribute values.
 
 Return JSON format:
 {{
@@ -232,19 +259,30 @@ Return JSON format:
 {question_text}
 </original_question>
 
+<answer_template_schema>
+{json_schema}
+</answer_template_schema>
+
 <extracted_excerpts>
 {json.dumps(excerpts, indent=2)}
 </extracted_excerpts>
 
 <task>
-For each attribute, explain the reasoning for the attribute value.
+For each attribute in the schema, generate reasoning that explains how the excerpts should inform the attribute's value.
 
-When excerpts exist: Explain how the excerpts support the attribute value (2-3 sentences).
-When excerpts are empty []: Explain why no excerpts were found (e.g., "The response contains a refusal" or "No corroborating evidence present").
+For each attribute:
+1. **Review the attribute's description** in the schema to understand what value it expects
+2. **Analyze the excerpts** to determine what they tell us about this attribute
+3. **Generate reasoning** (2-3 sentences) that explains:
+   - How the excerpts map to the attribute based on its schema description
+   - What value the attribute should have based on the evidence
+   - Any ambiguities or confidence issues
+
+When excerpts are empty: Explain why no excerpts were found and how this affects the attribute (e.g., "The response contains a refusal, so this attribute should be marked as not provided" or "No explicit evidence present, attribute may need inference from context").
 
 Return JSON format:
 {{
-  "attribute_name": "reasoning text explaining excerpt → value mapping OR why no excerpts found"
+  "attribute_name": "reasoning text explaining how excerpts inform the attribute value based on its schema description"
 }}
 </task>"""
 
