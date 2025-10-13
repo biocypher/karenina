@@ -12,6 +12,7 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 
 from ...answers.generator import inject_question_id_into_answer_class
 from ...llm.interface import init_chat_model_unified
+from ...schemas.answer_class import BaseAnswer
 from ...schemas.rubric_class import Rubric
 from ...utils.checkpoint_converter import generate_template_id
 from ..models import ModelConfig, VerificationResult
@@ -198,6 +199,44 @@ def _split_parsed_response(parsed_answer: Any) -> tuple[dict[str, Any] | None, d
     parsed_llm_response = {k: v for k, v in parsed_dict.items() if k not in ("id", "correct", "regex")}
 
     return parsed_gt_response, parsed_llm_response
+
+
+def _extract_attribute_names_from_class(answer_class: type[BaseAnswer]) -> list[str]:
+    """Extract attribute names from Answer class, excluding configuration fields.
+
+    This function extracts the list of attributes that should be analyzed
+    during deep-judgment multi-stage parsing. It automatically excludes
+    configuration fields that are not part of the actual answer content.
+
+    Args:
+        answer_class: BaseAnswer subclass (the class itself, not an instance)
+
+    Returns:
+        List of attribute names for deep-judgment extraction.
+        Excludes: 'id', 'correct', 'regex' (configuration fields)
+
+    Examples:
+        >>> class MyAnswer(BaseAnswer):
+        ...     drug_target: str
+        ...     mechanism: str
+        ...     confidence: str
+        >>> _extract_attribute_names_from_class(MyAnswer)
+        ['drug_target', 'mechanism', 'confidence']
+    """
+    # Get model fields from Pydantic v2
+    if hasattr(answer_class, "model_fields"):
+        model_fields = answer_class.model_fields
+        field_names = list(model_fields.keys())
+    else:
+        # Fallback for older Pydantic versions
+        fields = answer_class.__fields__
+        field_names = list(fields.keys())  # type: ignore[attr-defined]
+
+    # Exclude configuration fields that aren't part of the answer content
+    # 'id': Question ID (metadata)
+    # 'correct': Ground truth field (not extracted from LLM response)
+    # 'regex': Regex validation configuration (not an answer field)
+    return [name for name in field_names if name not in ("id", "correct", "regex")]
 
 
 def _is_valid_md5_hash(hash_string: str) -> bool:
