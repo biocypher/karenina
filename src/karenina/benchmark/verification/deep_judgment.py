@@ -102,17 +102,20 @@ def deep_judgment_parse(
 <task>
 Extract verbatim excerpts from the response that support each of these attributes: {", ".join(attribute_names)}
 
-For each attribute, identify up to {config.deep_judgment_max_excerpts_per_attribute} exact quotes.
-Provide a confidence level (low/medium/high) for each excerpt based on how strongly it supports the attribute.
+For each attribute:
+- If excerpts exist: Identify up to {config.deep_judgment_max_excerpts_per_attribute} exact quotes with confidence level (low/medium/high)
+- If no excerpts exist: Return ONE entry with empty text and an explanation
 
-IMPORTANT: If no corroborating excerpts exist for an attribute (e.g., refusals, no relevant information), return an empty list for that attribute.
+IMPORTANT: When no corroborating excerpts exist for an attribute (e.g., model refused, no relevant information, implicit answer), provide a brief explanation of why.
 
 Return JSON format:
 {{
   "attribute_name": [
     {{"text": "exact quote from response", "confidence": "low|medium|high"}}
   ],
-  "another_attribute": []  // Empty list when no excerpts found
+  "attribute_without_excerpts": [
+    {{"text": "", "confidence": "none", "explanation": "Brief reason why no excerpts (e.g., 'Model refused to answer', 'No explicit statement found', 'Information was implicit')"}}
+  ]
 }}
 </task>"""
 
@@ -155,11 +158,27 @@ Return JSON format:
             for excerpt_obj in excerpt_list:
                 excerpt_text = excerpt_obj.get("text", "")
                 confidence = excerpt_obj.get("confidence", "medium")
+                explanation = excerpt_obj.get("explanation", "")
 
-                # Validate confidence level
-                if confidence not in ("low", "medium", "high"):
+                # Handle missing excerpt with explanation
+                if not excerpt_text and confidence == "none" and explanation:
+                    # This is a missing excerpt with LLM-generated explanation
+                    validated_list.append(
+                        {"text": "", "confidence": "none", "similarity_score": 0.0, "explanation": explanation}
+                    )
+                    attributes_without_excerpts.append(attr)
+                    logger.info(f"No excerpts for attribute '{attr}': {explanation}")
+                    continue
+
+                # Validate confidence level for normal excerpts
+                if confidence not in ("low", "medium", "high", "none"):
                     logger.warning(f"Invalid confidence '{confidence}' for '{attr}', defaulting to 'medium'")
                     confidence = "medium"
+
+                # Skip validation for empty excerpts (shouldn't happen after explanation check above)
+                if not excerpt_text:
+                    logger.warning(f"Empty excerpt text for '{attr}' without explanation, skipping")
+                    continue
 
                 # Fuzzy match against raw trace
                 match_found, similarity = fuzzy_match_excerpt(excerpt_text, raw_llm_response)

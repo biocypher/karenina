@@ -805,6 +805,22 @@ Original Question: {question_text}
                     abstention_override_applied = True
                     logger.info(f"Abstention detected for question {question_id} - overriding result to False")
 
+            # Step 5.7: Deep-judgment auto-fail (runs after abstention check)
+            # If deep-judgment found missing excerpts and abstention was NOT detected, auto-fail
+            if (
+                deep_judgment_performed
+                and attributes_without_excerpts
+                and len(attributes_without_excerpts) > 0
+                and not (abstention_detected and abstention_check_performed)
+            ):
+                # Short-circuit verification: success=True (test ran fine), verify_result=False (verification failed)
+                verification_result = False
+                field_verification_result = False
+                logger.info(
+                    f"Deep-judgment auto-fail for question {question_id}: "
+                    f"{len(attributes_without_excerpts)} attributes without excerpts: {', '.join(attributes_without_excerpts)}"
+                )
+
         except Exception as e:
             return VerificationResult(
                 question_id=question_id,
