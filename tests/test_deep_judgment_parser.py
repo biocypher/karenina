@@ -7,7 +7,7 @@ This module tests the deep_judgment_parse function and its three stages:
 """
 
 import json
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from pydantic import Field
@@ -60,9 +60,8 @@ class TestDeepJudgmentParseFullWorkflow:
     @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
     def test_successful_full_workflow(self, mock_invoke, test_config, mock_parsing_llm):
         """Test successful execution of all three stages."""
-        # Mock Stage 1: Excerpt extraction
-        excerpt_response = Mock()
-        excerpt_response.content = json.dumps(
+        # Mock Stage 1: Excerpt extraction (return JSON string)
+        excerpt_response = json.dumps(
             {
                 "drug_target": [{"text": "targets BCL-2 protein", "confidence": "high"}],
                 "mechanism": [{"text": "induces apoptosis", "confidence": "medium"}],
@@ -70,9 +69,8 @@ class TestDeepJudgmentParseFullWorkflow:
             }
         )
 
-        # Mock Stage 2: Reasoning generation
-        reasoning_response = Mock()
-        reasoning_response.content = json.dumps(
+        # Mock Stage 2: Reasoning generation (return JSON string)
+        reasoning_response = json.dumps(
             {
                 "drug_target": "The excerpt clearly states BCL-2 as the target.",
                 "mechanism": "The text indicates apoptosis induction as the mechanism.",
@@ -80,17 +78,14 @@ class TestDeepJudgmentParseFullWorkflow:
             }
         )
 
-        # Mock Stage 3: Parameter extraction
-        parameter_response = Mock()
-        parameter_response.content = json.dumps(
-            {"drug_target": "BCL-2", "mechanism": "apoptosis", "confidence": "medium"}
-        )
+        # Mock Stage 3: Parameter extraction (return JSON string)
+        parameter_response = json.dumps({"drug_target": "BCL-2", "mechanism": "apoptosis", "confidence": "medium"})
 
-        # Set up mock to return different responses for each call
+        # Set up mock to return string responses for each call
         mock_invoke.side_effect = [
-            (excerpt_response, False),  # Stage 1
-            (reasoning_response, False),  # Stage 2
-            (parameter_response, False),  # Stage 3
+            excerpt_response,  # Stage 1
+            reasoning_response,  # Stage 2
+            parameter_response,  # Stage 3
         ]
 
         # Execute
@@ -131,9 +126,8 @@ class TestDeepJudgmentParseFullWorkflow:
     @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
     def test_workflow_with_missing_excerpts(self, mock_invoke, test_config, mock_parsing_llm):
         """Test workflow when some attributes have no excerpts (refusal scenario)."""
-        # Mock Stage 1: Some attributes have no excerpts
-        excerpt_response = Mock()
-        excerpt_response.content = json.dumps(
+        # Mock Stage 1: Some attributes have no excerpts (return JSON string)
+        excerpt_response = json.dumps(
             {
                 "drug_target": [],  # No excerpts found (refusal)
                 "mechanism": [{"text": "some mechanism text", "confidence": "medium"}],
@@ -141,9 +135,8 @@ class TestDeepJudgmentParseFullWorkflow:
             }
         )
 
-        # Mock Stage 2: Reasoning explains why no excerpts
-        reasoning_response = Mock()
-        reasoning_response.content = json.dumps(
+        # Mock Stage 2: Reasoning explains why no excerpts (return JSON string)
+        reasoning_response = json.dumps(
             {
                 "drug_target": "The response contains a refusal and provides no drug target information.",
                 "mechanism": "The mechanism is briefly mentioned.",
@@ -151,14 +144,13 @@ class TestDeepJudgmentParseFullWorkflow:
             }
         )
 
-        # Mock Stage 3: Parameter extraction
-        parameter_response = Mock()
-        parameter_response.content = json.dumps({"drug_target": "unknown", "mechanism": "unclear", "confidence": "low"})
+        # Mock Stage 3: Parameter extraction (return JSON string)
+        parameter_response = json.dumps({"drug_target": "unknown", "mechanism": "unclear", "confidence": "low"})
 
         mock_invoke.side_effect = [
-            (excerpt_response, False),
-            (reasoning_response, False),
-            (parameter_response, False),
+            excerpt_response,
+            reasoning_response,
+            parameter_response,
         ]
 
         # Execute
@@ -192,9 +184,8 @@ class TestDeepJudgmentParseFullWorkflow:
     @patch("karenina.benchmark.verification.deep_judgment.fuzzy_match_excerpt")
     def test_excerpt_validation_retry(self, mock_fuzzy_match, mock_invoke, test_config, mock_parsing_llm):
         """Test that invalid excerpts trigger retry with error feedback."""
-        # First attempt: Invalid excerpt (low similarity)
-        excerpt_response_1 = Mock()
-        excerpt_response_1.content = json.dumps(
+        # First attempt: Invalid excerpt (low similarity) - return JSON string
+        excerpt_response_1 = json.dumps(
             {
                 "drug_target": [{"text": "hallucinated excerpt", "confidence": "high"}],
                 "mechanism": [{"text": "valid excerpt", "confidence": "medium"}],
@@ -202,9 +193,8 @@ class TestDeepJudgmentParseFullWorkflow:
             }
         )
 
-        # Second attempt: Valid excerpt after retry
-        excerpt_response_2 = Mock()
-        excerpt_response_2.content = json.dumps(
+        # Second attempt: Valid excerpt after retry - return JSON string
+        excerpt_response_2 = json.dumps(
             {
                 "drug_target": [{"text": "actual excerpt from trace", "confidence": "high"}],
                 "mechanism": [{"text": "valid excerpt", "confidence": "medium"}],
@@ -212,20 +202,18 @@ class TestDeepJudgmentParseFullWorkflow:
             }
         )
 
-        # Mock other stages
-        reasoning_response = Mock()
-        reasoning_response.content = json.dumps(
+        # Mock other stages - return JSON strings
+        reasoning_response = json.dumps(
             {"drug_target": "reasoning", "mechanism": "reasoning", "confidence": "reasoning"}
         )
 
-        parameter_response = Mock()
-        parameter_response.content = json.dumps({"drug_target": "test", "mechanism": "test", "confidence": "low"})
+        parameter_response = json.dumps({"drug_target": "test", "mechanism": "test", "confidence": "low"})
 
         mock_invoke.side_effect = [
-            (excerpt_response_1, False),  # Stage 1 attempt 1 (will fail validation)
-            (excerpt_response_2, False),  # Stage 1 attempt 2 (will succeed)
-            (reasoning_response, False),  # Stage 2
-            (parameter_response, False),  # Stage 3
+            excerpt_response_1,  # Stage 1 attempt 1 (will fail validation)
+            excerpt_response_2,  # Stage 1 attempt 2 (will succeed)
+            reasoning_response,  # Stage 2
+            parameter_response,  # Stage 3
         ]
 
         # Mock fuzzy matching: first excerpt fails, second succeeds
@@ -262,9 +250,8 @@ class TestDeepJudgmentParseFullWorkflow:
     @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
     def test_invalid_confidence_level_defaults_to_medium(self, mock_invoke, test_config, mock_parsing_llm):
         """Test that invalid confidence levels are defaulted to 'medium'."""
-        # Mock with invalid confidence level
-        excerpt_response = Mock()
-        excerpt_response.content = json.dumps(
+        # Mock with invalid confidence level - return JSON strings
+        excerpt_response = json.dumps(
             {
                 "drug_target": [{"text": "excerpt text", "confidence": "invalid_level"}],
                 "mechanism": [{"text": "another excerpt", "confidence": "high"}],
@@ -272,16 +259,14 @@ class TestDeepJudgmentParseFullWorkflow:
             }
         )
 
-        reasoning_response = Mock()
-        reasoning_response.content = json.dumps({"drug_target": "r", "mechanism": "r", "confidence": "r"})
+        reasoning_response = json.dumps({"drug_target": "r", "mechanism": "r", "confidence": "r"})
 
-        parameter_response = Mock()
-        parameter_response.content = json.dumps({"drug_target": "t", "mechanism": "t", "confidence": "low"})
+        parameter_response = json.dumps({"drug_target": "t", "mechanism": "t", "confidence": "low"})
 
         mock_invoke.side_effect = [
-            (excerpt_response, False),
-            (reasoning_response, False),
-            (parameter_response, False),
+            excerpt_response,
+            reasoning_response,
+            parameter_response,
         ]
 
         # Execute
@@ -305,14 +290,13 @@ class TestDeepJudgmentParseFullWorkflow:
     @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
     def test_json_parsing_failure_raises_error(self, mock_invoke, test_config, mock_parsing_llm):
         """Test that JSON parsing failures raise appropriate error after retries."""
-        # Mock all attempts return invalid JSON
-        invalid_response = Mock()
-        invalid_response.content = "This is not valid JSON at all"
+        # Mock all attempts return invalid JSON - return string
+        invalid_response = "This is not valid JSON at all"
 
         mock_invoke.side_effect = [
-            (invalid_response, False),  # Attempt 1
-            (invalid_response, False),  # Attempt 2 (first retry)
-            (invalid_response, False),  # Attempt 3 (second retry)
+            invalid_response,  # Attempt 1
+            invalid_response,  # Attempt 2 (first retry)
+            invalid_response,  # Attempt 3 (second retry)
         ]
 
         # Execute - should raise ValueError after exhausting retries
@@ -331,24 +315,21 @@ class TestDeepJudgmentParseFullWorkflow:
     @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
     def test_reasoning_json_failure_handled_gracefully(self, mock_invoke, test_config, mock_parsing_llm):
         """Test that reasoning JSON failures are handled gracefully (empty dict)."""
-        # Mock Stage 1: Valid excerpts
-        excerpt_response = Mock()
-        excerpt_response.content = json.dumps(
+        # Mock Stage 1: Valid excerpts - return JSON string
+        excerpt_response = json.dumps(
             {"drug_target": [{"text": "test", "confidence": "high"}], "mechanism": [], "confidence": []}
         )
 
-        # Mock Stage 2: Invalid JSON (should be handled gracefully)
-        reasoning_response = Mock()
-        reasoning_response.content = "Invalid JSON for reasoning"
+        # Mock Stage 2: Invalid JSON (should be handled gracefully) - return string
+        reasoning_response = "Invalid JSON for reasoning"
 
-        # Mock Stage 3: Valid parameters
-        parameter_response = Mock()
-        parameter_response.content = json.dumps({"drug_target": "t", "mechanism": "m", "confidence": "c"})
+        # Mock Stage 3: Valid parameters - return JSON string
+        parameter_response = json.dumps({"drug_target": "t", "mechanism": "m", "confidence": "c"})
 
         mock_invoke.side_effect = [
-            (excerpt_response, False),
-            (reasoning_response, False),
-            (parameter_response, False),
+            excerpt_response,
+            reasoning_response,
+            parameter_response,
         ]
 
         # Execute - should not raise error
@@ -387,9 +368,8 @@ class TestDeepJudgmentParseIntegration:
             phase: str
             confidence: str
 
-        # Mock responses for all 6 attributes
-        excerpt_response = Mock()
-        excerpt_response.content = json.dumps(
+        # Mock responses for all 6 attributes - return JSON strings
+        excerpt_response = json.dumps(
             {
                 "drug_name": [{"text": "venetoclax", "confidence": "high"}],
                 "drug_target": [{"text": "BCL-2", "confidence": "high"}],
@@ -400,8 +380,7 @@ class TestDeepJudgmentParseIntegration:
             }
         )
 
-        reasoning_response = Mock()
-        reasoning_response.content = json.dumps(
+        reasoning_response = json.dumps(
             {
                 "drug_name": "Drug name is venetoclax",
                 "drug_target": "Target is BCL-2",
@@ -412,8 +391,7 @@ class TestDeepJudgmentParseIntegration:
             }
         )
 
-        parameter_response = Mock()
-        parameter_response.content = json.dumps(
+        parameter_response = json.dumps(
             {
                 "drug_name": "venetoclax",
                 "drug_target": "BCL-2",
@@ -424,7 +402,7 @@ class TestDeepJudgmentParseIntegration:
             }
         )
 
-        mock_invoke.side_effect = [(excerpt_response, False), (reasoning_response, False), (parameter_response, False)]
+        mock_invoke.side_effect = [excerpt_response, reasoning_response, parameter_response]
 
         # Execute
         raw_trace = "venetoclax targets BCL-2 and induces apoptosis for CLL treatment with promising results"
