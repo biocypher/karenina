@@ -19,7 +19,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from ...schemas.answer_class import BaseAnswer
 from ..models import ModelConfig, VerificationConfig
 from .fuzzy_match import fuzzy_match_excerpt
-from .runner import _extract_attribute_names_from_class, _invoke_llm_with_retry, _strip_markdown_fences
+from .parser_utils import _extract_attribute_names_from_class, _invoke_llm_with_retry, _strip_markdown_fences
 
 logger = logging.getLogger(__name__)
 
@@ -122,11 +122,8 @@ Return JSON format:
 
         # Invoke parsing model with generic retry logic
         messages = [SystemMessage(content=combined_system_prompt), HumanMessage(content=excerpt_prompt)]
-        response, _ = _invoke_llm_with_retry(parsing_llm, messages, is_agent=False)
+        raw_response = _invoke_llm_with_retry(parsing_llm, messages)
         model_calls += 1
-
-        # Parse response
-        raw_response = response.content if hasattr(response, "content") else str(response)
         cleaned_response = _strip_markdown_fences(raw_response)
 
         try:
@@ -233,10 +230,8 @@ Return JSON format:
 </task>"""
 
     messages = [SystemMessage(content=combined_system_prompt), HumanMessage(content=reasoning_prompt)]
-    response, _ = _invoke_llm_with_retry(parsing_llm, messages, is_agent=False)
+    raw_response = _invoke_llm_with_retry(parsing_llm, messages)
     model_calls += 1
-
-    raw_response = response.content if hasattr(response, "content") else str(response)
     cleaned_response = _strip_markdown_fences(raw_response)
 
     try:
@@ -263,10 +258,8 @@ Original Question: {question_text}
 </response_to_parse>"""
 
     messages = [SystemMessage(content=combined_system_prompt), HumanMessage(content=parsing_prompt)]
-    response, _ = _invoke_llm_with_retry(parsing_llm, messages, is_agent=False)
+    raw_response = _invoke_llm_with_retry(parsing_llm, messages)
     model_calls += 1
-
-    raw_response = response.content if hasattr(response, "content") else str(response)
     cleaned_response = _strip_markdown_fences(raw_response)
 
     # Parse with PydanticOutputParser (standard logic)
