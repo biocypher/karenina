@@ -57,7 +57,7 @@ def test_manual_interface_valid_hash() -> None:
     parsing_model = ModelConfig(
         id="test-parsing-model",
         interface="langchain",
-        model_name="gpt-3.5-turbo",
+        model_name="gpt-4.1-mini",
         model_provider="openai",
         temperature=0.0,
         system_prompt="",
@@ -114,7 +114,7 @@ def test_manual_interface_invalid_hash() -> None:
     parsing_model = ModelConfig(
         id="test-parsing-model",
         interface="langchain",
-        model_name="gpt-3.5-turbo",
+        model_name="gpt-4.1-mini",
         model_provider="openai",
         temperature=0.0,
         system_prompt="",
@@ -165,7 +165,7 @@ def test_non_manual_interface_ignores_hash_validation() -> None:
     langchain_model = ModelConfig(
         id="test-langchain-model",
         interface="langchain",
-        model_name="gpt-3.5-turbo",
+        model_name="gpt-4.1-mini",
         model_provider="openai",
         temperature=0.0,
         system_prompt="",
@@ -217,7 +217,7 @@ def test_hash_validation_error_message() -> None:
     parsing_model = ModelConfig(
         id="test-parsing-model",
         interface="langchain",
-        model_name="gpt-3.5-turbo",
+        model_name="gpt-4.1-mini",
         model_provider="openai",
         temperature=0.0,
         system_prompt="",

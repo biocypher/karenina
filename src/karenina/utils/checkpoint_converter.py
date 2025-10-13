@@ -48,6 +48,28 @@ def generate_question_id(question_text: str) -> str:
     return f"urn:uuid:question-{prefix}-{hash_hex[:8]}"
 
 
+def generate_template_id(template: str | None) -> str:
+    """
+    Generate a deterministic ID for an answer template based on its content.
+
+    This is used as part of a composite key system where question identity =
+    (question_id + template_id). This allows the same question text to have
+    different templates in the same benchmark.
+
+    Args:
+        template: The answer template code (Python class definition)
+
+    Returns:
+        MD5 hash of the template (32 chars), or "no_template" if template is empty/None
+    """
+    if not template or template.strip() == "":
+        return "no_template"
+
+    # Create MD5 hash of the template
+    hash_obj = hashlib.md5(template.strip().encode("utf-8"))
+    return hash_obj.hexdigest()[:32]
+
+
 def convert_rubric_trait_to_rating(
     trait: RubricTrait | ManualRubricTrait, rubric_type: str = "global"
 ) -> SchemaOrgRating:

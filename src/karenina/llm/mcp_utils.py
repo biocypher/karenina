@@ -53,6 +53,67 @@ def harmonize_agent_response(response: Any) -> str:
     return str(response)
 
 
+def _format_message_for_trace(msg: Any) -> str:
+    """
+    Format a single message for trace output with Excel-friendly separators.
+
+    Uses simple dashes instead of equal signs to avoid Excel formula confusion.
+
+    Args:
+        msg: A LangChain message object (AIMessage, ToolMessage, or HumanMessage)
+
+    Returns:
+        Formatted message string with header and content
+    """
+    try:
+        from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+    except ImportError:
+        # Fallback for non-LangChain messages
+        msg_type = type(msg).__name__
+        content = str(getattr(msg, "content", msg))
+        return f"--- {msg_type} ---\n{content}"
+
+    # Format based on message type
+    if isinstance(msg, AIMessage):
+        header = "--- AI Message ---"
+        content_parts = []
+
+        # Add main content if present
+        if msg.content:
+            content_parts.append(str(msg.content))
+
+        # Add tool calls if present
+        if hasattr(msg, "tool_calls") and msg.tool_calls:
+            content_parts.append("\nTool Calls:")
+            for tool_call in msg.tool_calls:
+                tool_name = tool_call.get("name", "unknown")
+                tool_id = tool_call.get("id", "unknown")
+                tool_args = tool_call.get("args", {})
+                content_parts.append(f"  {tool_name} (call_{tool_id})")
+                content_parts.append(f"   Call ID: {tool_id}")
+                if tool_args:
+                    content_parts.append(f"   Args: {tool_args}")
+
+        content = "\n".join(content_parts) if content_parts else ""
+
+    elif isinstance(msg, ToolMessage):
+        tool_call_id = getattr(msg, "tool_call_id", "unknown")
+        header = f"--- Tool Message (call_id: {tool_call_id}) ---"
+        content = str(msg.content) if msg.content else ""
+
+    elif isinstance(msg, HumanMessage):
+        header = "--- Human Message ---"
+        content = str(msg.content) if msg.content else ""
+
+    else:
+        # Fallback for unknown message types
+        msg_type = type(msg).__name__
+        header = f"--- {msg_type} ---"
+        content = str(getattr(msg, "content", msg))
+
+    return f"{header}\n{content}" if content else header
+
+
 def _extract_agent_trace(messages: list[Any]) -> str:
     """
     Extract the complete agent trace from a list of messages.
@@ -64,7 +125,7 @@ def _extract_agent_trace(messages: list[Any]) -> str:
         messages: List of LangChain messages
 
     Returns:
-        The pretty-printed trace of AI, Tool, and intermediate Human messages (excluding first), empty string if none found
+        The formatted trace of AI, Tool, and intermediate Human messages (excluding first), empty string if none found
     """
     # Import here to avoid circular imports
     try:
@@ -100,32 +161,11 @@ def _extract_agent_trace(messages: list[Any]) -> str:
                     or role == "user"
                     or role == "human"
                 ):
-                    # Try to use pretty_print if available, otherwise use content
-                    if hasattr(msg, "pretty_print"):
-                        try:
-                            import io
-                            import sys
+                    formatted_msg = _format_message_for_trace(msg)
+                    if formatted_msg.strip():
+                        trace_parts.append(formatted_msg.strip())
 
-                            # Capture stdout for pretty_print
-                            old_stdout = sys.stdout
-                            sys.stdout = captured_output = io.StringIO()
-
-                            msg.pretty_print()
-
-                            pretty_output = captured_output.getvalue()
-                            sys.stdout = old_stdout
-
-                            if pretty_output.strip():
-                                trace_parts.append(pretty_output.strip())
-
-                        except Exception:
-                            trace_parts.append(str(msg.content))
-                        finally:
-                            sys.stdout = old_stdout
-                    else:
-                        trace_parts.append(str(msg.content))
-
-        return "\n".join(trace_parts) if trace_parts else ""
+        return "\n\n".join(trace_parts) if trace_parts else ""
 
     # Extract AI, Tool, and intermediate Human messages (skip first Human and all System messages)
     trace_parts = []
@@ -144,36 +184,11 @@ def _extract_agent_trace(messages: list[Any]) -> str:
 
         # Include AI, Tool, and subsequent Human messages
         if isinstance(msg, AIMessage | ToolMessage | HumanMessage):
-            try:
-                # Capture pretty_print output using StringIO
-                import io
-                import sys
+            formatted_msg = _format_message_for_trace(msg)
+            if formatted_msg.strip():
+                trace_parts.append(formatted_msg.strip())
 
-                # Capture stdout
-                old_stdout = sys.stdout
-                sys.stdout = captured_output = io.StringIO()
-
-                # Call pretty_print which prints to stdout
-                msg.pretty_print()
-
-                # Get the captured output
-                pretty_output = captured_output.getvalue()
-
-                # Restore stdout
-                sys.stdout = old_stdout
-
-                if pretty_output.strip():
-                    trace_parts.append(pretty_output.strip())
-
-            except Exception:
-                # Fallback to content if pretty_print fails
-                if hasattr(msg, "content") and msg.content:
-                    trace_parts.append(str(msg.content))
-            finally:
-                # Ensure stdout is always restored
-                sys.stdout = old_stdout
-
-    return "\n".join(trace_parts) if trace_parts else ""
+    return "\n\n".join(trace_parts) if trace_parts else ""
 
 
 async def create_mcp_client_and_tools(

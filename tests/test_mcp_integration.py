@@ -80,11 +80,11 @@ class TestHarmonizeAgentResponse:
         agent_state = {"messages": [msg1, msg2]}
 
         result = harmonize_agent_response(agent_state)
-        # Now we expect pretty_print format, not just content
+        # Now we expect custom formatted output with Excel-friendly separators
         assert "I need to search for information." in result
         assert "Based on my search, here's the answer: 42" in result
-        # Check for AI message formatting
-        assert "=================================" in result or "I need to search for information." in result
+        # Check for AI message formatting with new separator
+        assert "--- AI Message ---" in result
 
     def test_harmonize_agent_trace_with_tool_messages(self) -> None:
         """Test harmonization with complete React agent trace including tools."""
@@ -116,9 +116,10 @@ class TestHarmonizeAgentResponse:
         assert "You are a helpful assistant" not in result
         assert "What are the interactors of TP53?" not in result
 
-        # Should have proper formatting from pretty_print
+        # Should have proper formatting with Excel-friendly separators
         lines = result.split("\n")
         assert len(lines) > 1  # Multiple formatted sections
+        assert "--- AI Message ---" in result or "--- Tool Message" in result
 
     def test_harmonize_filters_system_and_human_messages(self) -> None:
         """Test that system messages and first human message are filtered, but subsequent human messages are preserved."""
@@ -188,6 +189,34 @@ class TestHarmonizeAgentResponse:
         assert "What are the interactors of TP53?" not in result  # Initial question should be filtered
         assert "You are a helpful assistant" not in result  # System prompt should be filtered
 
+    def test_harmonize_excel_friendly_formatting(self) -> None:
+        """Test that harmonized output is Excel-friendly (no leading equal signs)."""
+        # Create messages that would have had problematic formatting with pretty_print
+        messages = [
+            AIMessage(content="I'll help you with that calculation."),
+            ToolMessage(content="Result: 42", tool_call_id="call_123"),
+            AIMessage(content="The answer is 42."),
+        ]
+
+        result = harmonize_agent_response({"messages": messages})
+
+        # Verify content is present
+        assert "I'll help you with that calculation." in result
+        assert "Result: 42" in result
+        assert "The answer is 42." in result
+
+        # CRITICAL: Verify no lines start with multiple equal signs (Excel formula confusion)
+        lines = result.split("\n")
+        for line in lines:
+            # Check that no line starts with "=" or "===..." which would confuse Excel
+            assert not line.startswith("="), f"Line starts with '=': {line}"
+            # Specifically check for the old pretty_print format
+            assert "================================" not in line, f"Line contains old format: {line}"
+
+        # Verify we're using the new Excel-friendly format
+        assert "--- AI Message ---" in result
+        assert "--- Tool Message" in result
+
 
 class TestMCPUtilities:
     """Test MCP utility functions."""
@@ -219,10 +248,10 @@ class TestInitChatModelUnifiedWithMCP:
             mock_model = Mock()
             mock_init.return_value = mock_model
 
-            result = init_chat_model_unified(model="gpt-4", provider="openai", interface="langchain")
+            result = init_chat_model_unified(model="gpt-4.1-mini", provider="openai", interface="langchain")
 
             assert result == mock_model
-            mock_init.assert_called_once_with(model="gpt-4", model_provider="openai")
+            mock_init.assert_called_once_with(model="gpt-4.1-mini", model_provider="openai")
 
     def test_init_with_manual_interface_and_mcp_raises_error(self) -> None:
         """Test that MCP with manual interface raises ValueError."""
@@ -243,7 +272,7 @@ class TestInitChatModelUnifiedWithMCP:
             patch("langgraph.prebuilt.create_react_agent", return_value=mock_agent),
         ):
             result = init_chat_model_unified(
-                model="gpt-4", provider="openai", interface="langchain", mcp_urls_dict=self.mcp_urls
+                model="gpt-4.1-mini", provider="openai", interface="langchain", mcp_urls_dict=self.mcp_urls
             )
 
             assert result == mock_agent
@@ -265,7 +294,7 @@ class TestInitChatModelUnifiedWithMCP:
             pytest.raises(Exception, match="Failed to create MCP-enabled agent"),
         ):
             init_chat_model_unified(
-                model="gpt-4", provider="openai", interface="langchain", mcp_urls_dict=self.mcp_urls
+                model="gpt-4.1-mini", provider="openai", interface="langchain", mcp_urls_dict=self.mcp_urls
             )
 
 
@@ -280,14 +309,18 @@ class TestChatSessionWithMCP:
 
     def test_chat_session_initialization_with_mcp(self) -> None:
         """Test ChatSession initialization with MCP URLs."""
-        session = ChatSession(session_id="test-session", model="gpt-4", provider="openai", mcp_urls_dict=self.mcp_urls)
+        session = ChatSession(
+            session_id="test-session", model="gpt-4.1-mini", provider="openai", mcp_urls_dict=self.mcp_urls
+        )
 
         assert session.mcp_urls_dict == self.mcp_urls
         assert session.is_agent is False  # Only set to True after LLM initialization
 
     def test_chat_session_initialize_llm_with_mcp(self) -> None:
         """Test LLM initialization in ChatSession with MCP."""
-        session = ChatSession(session_id="test-session", model="gpt-4", provider="openai", mcp_urls_dict=self.mcp_urls)
+        session = ChatSession(
+            session_id="test-session", model="gpt-4.1-mini", provider="openai", mcp_urls_dict=self.mcp_urls
+        )
 
         mock_agent = Mock()
         with patch("karenina.llm.interface.init_chat_model_unified", return_value=mock_agent):
@@ -310,7 +343,7 @@ class TestChatSessionWithMCP:
 
         with patch("karenina.llm.interface.init_chat_model_unified", return_value=mock_agent):
             response = call_model(
-                model="gpt-4",
+                model="gpt-4.1-mini",
                 provider="openai",
                 message="What are the interactors of TP53?",
                 mcp_urls_dict=self.mcp_urls,
@@ -331,7 +364,7 @@ class TestModelConfigWithMCP:
         config = ModelConfig(
             id="test-model",
             model_provider="openai",
-            model_name="gpt-4",
+            model_name="gpt-4.1-mini",
             system_prompt="You are a helpful assistant.",
             mcp_urls_dict=mcp_urls,
         )
@@ -341,7 +374,10 @@ class TestModelConfigWithMCP:
     def test_model_config_without_mcp_urls(self) -> None:
         """Test ModelConfig creation without MCP URLs."""
         config = ModelConfig(
-            id="test-model", model_provider="openai", model_name="gpt-4", system_prompt="You are a helpful assistant."
+            id="test-model",
+            model_provider="openai",
+            model_name="gpt-4.1-mini",
+            system_prompt="You are a helpful assistant.",
         )
 
         assert config.mcp_urls_dict is None
@@ -355,13 +391,13 @@ class TestVerificationRunnerWithMCP:
         answering_model = ModelConfig(
             id="mcp-answering",
             model_provider="openai",
-            model_name="gpt-4",
+            model_name="gpt-4.1-mini",
             system_prompt="Answer questions using available tools.",
             mcp_urls_dict={"biocontext": "https://mcp.biocontext.ai/mcp/"},
         )
 
         parsing_model = ModelConfig(
-            id="parsing", model_provider="openai", model_name="gpt-4", system_prompt="Parse the answer."
+            id="parsing", model_provider="openai", model_name="gpt-4.1-mini", system_prompt="Parse the answer."
         )
 
         # Just test that the model config includes MCP URLs
@@ -423,7 +459,7 @@ class TestToolFiltering:
             patch("langgraph.prebuilt.create_react_agent", return_value=mock_agent),
         ):
             result = init_chat_model_unified(
-                model="gpt-4",
+                model="gpt-4.1-mini",
                 provider="openai",
                 interface="langchain",
                 mcp_urls_dict=self.mcp_urls,
@@ -439,7 +475,7 @@ class TestToolFiltering:
         config = ModelConfig(
             id="test-model",
             model_provider="openai",
-            model_name="gpt-4",
+            model_name="gpt-4.1-mini",
             system_prompt="You are a helpful assistant.",
             mcp_urls_dict=self.mcp_urls,
             mcp_tool_filter=self.tool_filter,
@@ -452,7 +488,7 @@ class TestToolFiltering:
         """Test ChatSession with tool filtering."""
         session = ChatSession(
             session_id="test-session",
-            model="gpt-4",
+            model="gpt-4.1-mini",
             provider="openai",
             mcp_urls_dict=self.mcp_urls,
             mcp_tool_filter=self.tool_filter,
@@ -473,7 +509,7 @@ class TestToolFiltering:
 
         with patch("karenina.llm.interface.init_chat_model_unified", return_value=mock_agent):
             response = call_model(
-                model="gpt-4",
+                model="gpt-4.1-mini",
                 provider="openai",
                 message="Test message",
                 mcp_urls_dict=self.mcp_urls,
@@ -553,16 +589,17 @@ class TestIntegrationScenarios:
         # Test agent response harmonization directly
         harmonized = harmonize_agent_response(mock_response)
 
-        # Now we expect pretty_print format, not just concatenated content
+        # Now we expect custom formatted output with Excel-friendly separators
         assert "I'll search for TP53 interactors using the biocontext tool." in harmonized
         assert (
             "Based on the search results, TP53 interacts with multiple proteins including MDM2, MDM4, p21, and BRCA1."
             in harmonized
         )
 
-        # Should have multiple formatted sections from pretty_print
+        # Should have multiple formatted sections with new formatting
         lines = harmonized.split("\n")
-        assert len(lines) > 1  # Multiple sections due to pretty_print formatting
+        assert len(lines) > 1  # Multiple sections with Excel-friendly formatting
+        assert "--- AI Message ---" in harmonized
 
     def test_biocontext_with_tool_filtering_scenario(self) -> None:
         """Test biocontext.ai scenario with tool filtering."""
@@ -573,14 +610,14 @@ class TestIntegrationScenarios:
         answering_model = ModelConfig(
             id="biocontext-filtered",
             model_provider="openai",
-            model_name="gpt-4",
+            model_name="gpt-4.1-mini",
             system_prompt="Use only protein search and interaction tools.",
             mcp_urls_dict=mcp_urls,
             mcp_tool_filter=tool_filter,
         )
 
         parsing_model = ModelConfig(
-            id="parsing", model_provider="openai", model_name="gpt-4", system_prompt="Parse the answer."
+            id="parsing", model_provider="openai", model_name="gpt-4.1-mini", system_prompt="Parse the answer."
         )
 
         # Verify configuration

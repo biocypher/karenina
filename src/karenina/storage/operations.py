@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 
 from sqlalchemy import select
 
+from ..utils.checkpoint_converter import generate_template_id
 from .db_config import DBConfig
 from .engine import get_session, init_database
 from .models import (
@@ -31,7 +32,7 @@ def save_benchmark(
     storage: str | DBConfig,
     checkpoint_path: Path | None = None,
     detect_duplicates_only: bool = False,
-) -> tuple["Benchmark", list[dict[str, Any]] | None]:
+) -> "Benchmark | tuple[Benchmark, list[dict[str, Any]]]":
     """Save a benchmark to the database.
 
     Args:
@@ -41,7 +42,8 @@ def save_benchmark(
         detect_duplicates_only: If True, only detect duplicates without saving. Returns duplicate info.
 
     Returns:
-        Tuple of (benchmark instance, list of duplicates if detect_duplicates_only=True else None)
+        - Benchmark instance when detect_duplicates_only=False (default)
+        - Tuple of (benchmark instance, list of duplicates) when detect_duplicates_only=True
 
         Duplicate info structure:
         {
@@ -138,6 +140,9 @@ def save_benchmark(
             finished = q_data.get("finished", False)
             keywords = q_data.get("keywords", [])
 
+            # Compute template_id from answer_template (composite key component)
+            template_id = generate_template_id(answer_template)
+
             # Serialize question rubric to dict format for database storage
             # The benchmark cache stores rubrics as list of Pydantic RubricTrait/ManualRubricTrait objects,
             # but the database expects a JSON dict format with separate 'traits' and 'manual_traits' lists
@@ -161,11 +166,12 @@ def save_benchmark(
                     print(f"Warning: Failed to serialize rubric for question {question_id}: {e}")
                     question_rubric_dict = None
 
-            # Check if association already exists
+            # Check if association already exists (composite key: benchmark_id + question_id + template_id)
             existing_bq = session.execute(
                 select(BenchmarkQuestionModel).where(
                     BenchmarkQuestionModel.benchmark_id == benchmark_id,
                     BenchmarkQuestionModel.question_id == question_id,
+                    BenchmarkQuestionModel.template_id == template_id,
                 )
             ).scalar_one_or_none()
 
@@ -225,6 +231,7 @@ def save_benchmark(
                     bq_model = BenchmarkQuestionModel(
                         benchmark_id=benchmark_id,
                         question_id=question_id,
+                        template_id=template_id,  # Composite key component
                         answer_template=answer_template,
                         original_answer_template=q_data.get("original_answer_template", answer_template),
                         finished=finished,
@@ -237,7 +244,12 @@ def save_benchmark(
         if db_config.auto_commit and not detect_duplicates_only:
             session.commit()
 
-    return benchmark, (duplicates if detect_duplicates_only else None)
+    # Return tuple with duplicates only when detect_duplicates_only=True
+    # Otherwise return just the benchmark (backward compatibility)
+    if detect_duplicates_only:
+        return benchmark, duplicates
+    else:
+        return benchmark
 
 
 def load_benchmark(
@@ -304,12 +316,17 @@ def load_benchmark(
             ).scalar_one()
 
             # Create Question object
-            # Convert tags list to proper type for Question
-            tags_list: list[str | None] = list(question_model.tags) if question_model.tags else []
+            # Use keywords from BenchmarkQuestionModel if available, fall back to QuestionModel.tags
+            keywords_list: list[str | None] = []
+            if bq.keywords:
+                keywords_list = list(bq.keywords)
+            elif question_model.tags:
+                keywords_list = list(question_model.tags)
+
             question = Question(
                 question=question_model.question_text,
                 raw_answer=question_model.raw_answer,
-                tags=tags_list,
+                tags=keywords_list,
                 few_shot_examples=question_model.few_shot_examples,
             )
 
@@ -320,10 +337,6 @@ def load_benchmark(
                 finished=bq.finished,
                 few_shot_examples=question_model.few_shot_examples,
             )
-
-            # Note: Keywords are stored in benchmark_questions table but not restored
-            # because there's no set_keywords method on Benchmark class.
-            # They're available via get_question() method.
 
             # Set question-specific rubric if present
             if bq.question_rubric:
@@ -436,10 +449,12 @@ def save_verification_results(
         # Save individual results
         for result in results.values():
             # Check if result already exists (to avoid duplicates)
+            # Include template_id in the uniqueness check (composite key component)
             existing_result = session.execute(
                 select(VerificationResultModel).where(
                     VerificationResultModel.run_id == run_id,
                     VerificationResultModel.question_id == result.question_id,
+                    VerificationResultModel.template_id == result.template_id,
                     VerificationResultModel.answering_model == result.answering_model,
                     VerificationResultModel.parsing_model == result.parsing_model,
                     VerificationResultModel.answering_replicate == result.answering_replicate,
@@ -520,6 +535,7 @@ def _create_result_model(run_id: str, result: "VerificationResult") -> Verificat
     return VerificationResultModel(
         run_id=run_id,
         question_id=result.question_id,
+        template_id=result.template_id,
         success=result.success,
         error=result.error,
         question_text=result.question_text,
@@ -550,6 +566,11 @@ def _create_result_model(run_id: str, result: "VerificationResult") -> Verificat
         regex_overall_success=result.regex_overall_success,
         regex_extraction_results=result.regex_extraction_results,
         recursion_limit_reached=result.recursion_limit_reached,
+        answering_mcp_servers=result.answering_mcp_servers,
+        abstention_check_performed=result.abstention_check_performed,
+        abstention_detected=result.abstention_detected,
+        abstention_override_applied=result.abstention_override_applied,
+        abstention_reasoning=result.abstention_reasoning,
     )
 
 
@@ -578,6 +599,11 @@ def _update_result_model(model: VerificationResultModel, result: "VerificationRe
     model.regex_overall_success = result.regex_overall_success
     model.regex_extraction_results = result.regex_extraction_results
     model.recursion_limit_reached = result.recursion_limit_reached
+    model.answering_mcp_servers = result.answering_mcp_servers
+    model.abstention_check_performed = result.abstention_check_performed
+    model.abstention_detected = result.abstention_detected
+    model.abstention_override_applied = result.abstention_override_applied
+    model.abstention_reasoning = result.abstention_reasoning
 
 
 def _model_to_verification_result(model: VerificationResultModel) -> "VerificationResult":
@@ -586,6 +612,7 @@ def _model_to_verification_result(model: VerificationResultModel) -> "Verificati
 
     return VerificationResult(
         question_id=model.question_id,
+        template_id=model.template_id,
         success=model.success,
         error=model.error,
         question_text=model.question_text,
@@ -617,4 +644,9 @@ def _model_to_verification_result(model: VerificationResultModel) -> "Verificati
         regex_overall_success=model.regex_overall_success,
         regex_extraction_results=model.regex_extraction_results,
         recursion_limit_reached=model.recursion_limit_reached,
+        answering_mcp_servers=model.answering_mcp_servers,
+        abstention_check_performed=model.abstention_check_performed,
+        abstention_detected=model.abstention_detected,
+        abstention_override_applied=model.abstention_override_applied,
+        abstention_reasoning=model.abstention_reasoning,
     )

@@ -204,7 +204,14 @@ class BenchmarkBase:
     @property
     def creator(self) -> str:
         """Get the benchmark creator."""
-        return self._checkpoint.creator or "Unknown"
+        creator = self._checkpoint.creator
+        if creator is None:
+            return "Unknown"
+        # Handle both string and SchemaOrgPerson types
+        if isinstance(creator, str):
+            return creator
+        # SchemaOrgPerson - extract name
+        return creator.name
 
     @creator.setter
     def creator(self, value: str) -> None:

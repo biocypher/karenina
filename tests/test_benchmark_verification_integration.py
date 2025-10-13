@@ -129,11 +129,12 @@ class TestBenchmarkVerificationIntegration:
         # Mock the verification results
         mock_verification_result = VerificationResult(
             question_id=q1_id,
+            template_id="no_template",
             success=True,
             question_text="What is 2 + 2?",
             raw_llm_response="The answer is 4",
-            answering_model="openai/gpt-3.5-turbo",
-            parsing_model="openai/gpt-3.5-turbo",
+            answering_model="openai/gpt-4.1-mini",
+            parsing_model="openai/gpt-4.1-mini",
             execution_time=1.5,
             timestamp="2023-01-01T00:00:00",
         )
@@ -165,6 +166,7 @@ class TestBenchmarkVerificationIntegration:
         with patch("karenina.benchmark.core.verification_manager.run_question_verification") as mock_verify:
             mock_result = VerificationResult(
                 question_id=q1_id,
+                template_id="no_template",
                 success=True,
                 question_text="What is 2 + 2?",
                 raw_llm_response="4",
@@ -260,6 +262,7 @@ class TestBenchmarkVerificationIntegration:
         # Create some mock results
         result1 = VerificationResult(
             question_id=q1_id,
+            template_id="no_template",
             success=True,
             question_text="What is 2 + 2?",
             raw_llm_response="4",
@@ -271,6 +274,7 @@ class TestBenchmarkVerificationIntegration:
 
         result2 = VerificationResult(
             question_id=q2_id,
+            template_id="no_template",
             success=False,
             error="Some error",
             question_text="What is the capital of France?",
@@ -309,6 +313,7 @@ class TestBenchmarkVerificationIntegration:
         # Store results for multiple runs
         result1 = VerificationResult(
             question_id=q1_id,
+            template_id="no_template",
             success=True,
             question_text="What is 2 + 2?",
             raw_llm_response="4",
@@ -320,6 +325,7 @@ class TestBenchmarkVerificationIntegration:
 
         result2 = VerificationResult(
             question_id=q1_id,
+            template_id="no_template",
             success=False,
             error="Different error",
             question_text="What is 2 + 2?",
@@ -350,6 +356,7 @@ class TestBenchmarkVerificationIntegration:
         # Store some results
         result1 = VerificationResult(
             question_id=q1_id,
+            template_id="no_template",
             success=True,
             question_text="What is 2 + 2?",
             raw_llm_response="4",
@@ -361,6 +368,7 @@ class TestBenchmarkVerificationIntegration:
 
         result2 = VerificationResult(
             question_id=q2_id,
+            template_id="no_template",
             success=True,
             question_text="What is the capital of France?",
             raw_llm_response="Paris",
@@ -394,6 +402,7 @@ class TestBenchmarkVerificationIntegration:
         # Store some results
         result = VerificationResult(
             question_id=q1_id,
+            template_id="no_template",
             success=True,
             question_text="What is 2 + 2?",
             raw_llm_response="4",
@@ -423,6 +432,7 @@ class TestBenchmarkVerificationIntegration:
         # Store mixed results
         success_result = VerificationResult(
             question_id=q1_id,
+            template_id="no_template",
             success=True,
             question_text="What is 2 + 2?",
             raw_llm_response="4",
@@ -434,6 +444,7 @@ class TestBenchmarkVerificationIntegration:
 
         failure_result = VerificationResult(
             question_id=q2_id,
+            template_id="no_template",
             success=False,
             error="Failed",
             question_text="What is the capital of France?",
@@ -499,6 +510,7 @@ class TestBenchmarkVerificationIntegration:
 
         mock_result = VerificationResult(
             question_id=q1_id,
+            template_id="no_template",
             success=True,
             question_text="What is 2 + 2?",
             raw_llm_response="4",
@@ -536,6 +548,7 @@ class TestBenchmarkVerificationIntegration:
         # Store some verification results
         result = VerificationResult(
             question_id=q1_id,
+            template_id="no_template",
             success=True,
             question_text="What is 2 + 2?",
             raw_llm_response="4",
