@@ -145,10 +145,14 @@ class Benchmark:
         Returns:
             The same benchmark instance (for chaining)
         """
+        from typing import cast
+
         from ..storage import save_benchmark
 
-        benchmark, _ = save_benchmark(self, storage, checkpoint_path)
-        return benchmark
+        # save_benchmark returns just the benchmark when detect_duplicates_only=False (default)
+        result = save_benchmark(self, storage, checkpoint_path)
+        # Type cast since we know detect_duplicates_only=False returns Benchmark, not tuple
+        return cast("Benchmark", result)
 
     @classmethod
     def load_from_db(cls, benchmark_name: str, storage: str) -> "Benchmark":

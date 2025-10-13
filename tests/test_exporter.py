@@ -34,7 +34,7 @@ def mock_verification_job() -> VerificationJob:
     answering_model = ModelConfig(
         id="answering-test",
         model_provider="openai",
-        model_name="gpt-4",
+        model_name="gpt-4.1-mini",
         temperature=0.1,
         interface="langchain",
         system_prompt="You are a helpful assistant.",
@@ -43,7 +43,7 @@ def mock_verification_job() -> VerificationJob:
     parsing_model = ModelConfig(
         id="parsing-test",
         model_provider="openai",
-        model_name="gpt-4",
+        model_name="gpt-4.1-mini",
         temperature=0.1,
         interface="langchain",
         system_prompt="Parse the response.",
@@ -77,6 +77,7 @@ def mock_results_with_global_and_specific_rubrics() -> dict[str, VerificationRes
     return {
         "q1_answering-test_parsing-test": VerificationResult(
             question_id="q1",
+            template_id="no_template",
             success=True,
             question_text="What is 2+2?",
             raw_llm_response="The answer is 4.",
@@ -89,13 +90,14 @@ def mock_results_with_global_and_specific_rubrics() -> dict[str, VerificationRes
                 "Directness": 4,
                 "specific_trait": 3,
             },
-            answering_model="openai/gpt-4",
-            parsing_model="openai/gpt-4",
+            answering_model="openai/gpt-4.1-mini",
+            parsing_model="openai/gpt-4.1-mini",
             execution_time=1.5,
             timestamp="2022-01-01T00:00:00Z",
         ),
         "q2_answering-test_parsing-test": VerificationResult(
             question_id="q2",
+            template_id="no_template",
             success=True,
             question_text="What is the capital of France?",
             raw_llm_response="The capital of France is Paris.",
@@ -108,8 +110,8 @@ def mock_results_with_global_and_specific_rubrics() -> dict[str, VerificationRes
                 "Directness": 2,
                 "another_specific": True,
             },
-            answering_model="openai/gpt-4",
-            parsing_model="openai/gpt-4",
+            answering_model="openai/gpt-4.1-mini",
+            parsing_model="openai/gpt-4.1-mini",
             execution_time=2.1,
             timestamp="2022-01-01T00:00:10Z",
         ),
@@ -122,6 +124,7 @@ def mock_results_global_only() -> dict[str, VerificationResult]:
     return {
         "q1_answering-test_parsing-test": VerificationResult(
             question_id="q1",
+            template_id="no_template",
             success=True,
             question_text="What is 2+2?",
             raw_llm_response="The answer is 4.",
@@ -133,8 +136,8 @@ def mock_results_global_only() -> dict[str, VerificationResult]:
                 "Conciseness": True,
                 "Directness": 4,
             },
-            answering_model="openai/gpt-4",
-            parsing_model="openai/gpt-4",
+            answering_model="openai/gpt-4.1-mini",
+            parsing_model="openai/gpt-4.1-mini",
             execution_time=1.5,
             timestamp="2022-01-01T00:00:00Z",
         ),
@@ -147,6 +150,7 @@ def mock_results_no_rubrics() -> dict[str, VerificationResult]:
     return {
         "q1_answering-test_parsing-test": VerificationResult(
             question_id="q1",
+            template_id="no_template",
             success=True,
             question_text="What is 2+2?",
             raw_llm_response="The answer is 4.",
@@ -155,8 +159,8 @@ def mock_results_no_rubrics() -> dict[str, VerificationResult]:
             verify_result=True,
             verify_granular_result={"correct": True},
             verify_rubric=None,
-            answering_model="openai/gpt-4",
-            parsing_model="openai/gpt-4",
+            answering_model="openai/gpt-4.1-mini",
+            parsing_model="openai/gpt-4.1-mini",
             execution_time=1.5,
             timestamp="2022-01-01T00:00:00Z",
         ),
@@ -295,6 +299,7 @@ class TestExportVerificationResultsCSV:
         results_with_mixed = mock_results_global_only.copy()
         results_with_mixed["q2_answering-test_parsing-test"] = VerificationResult(
             question_id="q2",
+            template_id="no_template",
             success=True,
             question_text="Test question",
             raw_llm_response="Test response",
@@ -307,8 +312,8 @@ class TestExportVerificationResultsCSV:
                 "Directness": 3,
                 "specific_trait": 2,  # This is question-specific
             },
-            answering_model="openai/gpt-4",
-            parsing_model="openai/gpt-4",
+            answering_model="openai/gpt-4.1-mini",
+            parsing_model="openai/gpt-4.1-mini",
             execution_time=1.2,
             timestamp="2022-01-01T00:00:05Z",
         )
@@ -402,6 +407,7 @@ class TestExportVerificationResultsCSV:
         results_with_special_traits = {
             "q1_answering-test_parsing-test": VerificationResult(
                 question_id="q1",
+                template_id="no_template",
                 success=True,
                 question_text="What is 2+2?",
                 raw_llm_response="The answer is 4.",
@@ -416,8 +422,8 @@ class TestExportVerificationResultsCSV:
                     "trait,with,commas": True,
                     'trait"with"quotes': 4,
                 },
-                answering_model="openai/gpt-4",
-                parsing_model="openai/gpt-4",
+                answering_model="openai/gpt-4.1-mini",
+                parsing_model="openai/gpt-4.1-mini",
                 execution_time=1.5,
                 timestamp="2022-01-01T00:00:00Z",
             ),
@@ -448,6 +454,7 @@ class TestExportVerificationResultsCSV:
         for i in range(100):  # 100 results instead of the usual 2
             large_results[f"q{i}_answering-test_parsing-test"] = VerificationResult(
                 question_id=f"q{i}",
+                template_id="no_template",
                 success=True,
                 question_text=f"Test question {i}?",
                 raw_llm_response=f"Test answer {i}.",
@@ -460,8 +467,8 @@ class TestExportVerificationResultsCSV:
                     "trait_b": i % 5,  # Cycling numeric values 0-4
                     f"specific_trait_{i}": True,  # Question-specific trait
                 },
-                answering_model="openai/gpt-4",
-                parsing_model="openai/gpt-4",
+                answering_model="openai/gpt-4.1-mini",
+                parsing_model="openai/gpt-4.1-mini",
                 execution_time=1.5,
                 timestamp="2022-01-01T00:00:00Z",
             )
@@ -508,6 +515,7 @@ class TestExportVerificationResultsCSV:
         results_with_bad_trait_names = {
             "q1_answering-test_parsing-test": VerificationResult(
                 question_id="q1",
+                template_id="no_template",
                 success=True,
                 question_text="What is 2+2?",
                 raw_llm_response="The answer is 4.",
@@ -522,8 +530,8 @@ class TestExportVerificationResultsCSV:
                     "trait_with_null\0": True,  # This should be filtered out
                     "very_long_trait_name_" + "x" * 300: 2,  # This should be filtered out (>255 chars)
                 },
-                answering_model="openai/gpt-4",
-                parsing_model="openai/gpt-4",
+                answering_model="openai/gpt-4.1-mini",
+                parsing_model="openai/gpt-4.1-mini",
                 execution_time=1.5,
                 timestamp="2022-01-01T00:00:00Z",
             ),
