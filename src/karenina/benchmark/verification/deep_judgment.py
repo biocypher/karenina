@@ -28,7 +28,12 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from ...schemas.answer_class import BaseAnswer
 from ..models import ModelConfig, VerificationConfig
 from .fuzzy_match import fuzzy_match_excerpt
-from .parser_utils import _extract_attribute_names_from_class, _invoke_llm_with_retry, _strip_markdown_fences
+from .parser_utils import (
+    _extract_attribute_descriptions,
+    _extract_attribute_names_from_class,
+    _invoke_llm_with_retry,
+    _strip_markdown_fences,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +45,7 @@ def deep_judgment_parse(
     parsing_llm: Any,
     question_text: str,
     config: VerificationConfig,
-    format_instructions: str,  # noqa: ARG001 - Kept for interface consistency with standard parsing
+    format_instructions: str,
     combined_system_prompt: str,
 ) -> tuple[BaseAnswer, dict[str, list[dict[str, Any]]], dict[str, str], dict[str, Any]]:
     """Execute multi-stage deep-judgment parsing: excerpts → reasoning → parameters.
@@ -93,47 +98,52 @@ def deep_judgment_parse(
     logger.info(f"Starting deep-judgment parsing for {len(attribute_names)} attributes: {', '.join(attribute_names)}")
 
     # ==========================================
-    # STAGE 1: EXCERPT EXTRACTION WITH RETRY
+    # PREPARE PROMPTS
     # ==========================================
-    excerpts = {}
-    max_retries = config.deep_judgment_excerpt_retry_attempts
-
     # Generate JSON schema with field descriptions from the template class
     from langchain_core.output_parsers import PydanticOutputParser
 
     parser = PydanticOutputParser(pydantic_object=RawAnswer)
     json_schema = parser.get_format_instructions()
 
-    for attempt in range(max_retries + 1):
-        # Build excerpt extraction prompt with explicit field descriptions
-        excerpt_prompt = f"""<original_question>
-{question_text}
-</original_question>
+    # Extract generic system instructions (without format_instructions for stages 1&2)
+    # The combined_system_prompt contains general instructions + format_instructions
+    # For stages 1&2, we only need the general instructions
+    generic_system_prompt = combined_system_prompt.split("<format_instructions>")[0].strip()
 
-<response_to_analyze>
-{raw_llm_response}
-</response_to_analyze>
+    # Build stage-specific system prompts
+    # Extract attribute descriptions for guidance (without the full schema format)
+    attribute_descriptions = _extract_attribute_descriptions(json_schema, attribute_names)
+    attr_guidance = "\n".join([f"- {attr}: {desc}" for attr, desc in attribute_descriptions.items()])
 
-<answer_template_schema>
-The response will be parsed into a structured answer using the following JSON schema:
+    excerpt_system_prompt = f"""{generic_system_prompt}
 
-{json_schema}
+<task_structure>
+You will be provided with:
+1. An original question in <original_question> tags
+2. A response to analyze in <response_to_analyze> tags
 
-Each attribute in this schema has a description field that specifies what information should be extracted for that attribute.
-</answer_template_schema>
+Your task is to extract verbatim excerpts from the response that provide evidence for specific attributes.
+</task_structure>
 
-<task>
-Extract verbatim excerpts from the response that corroborate each attribute in the answer template schema above.
+<attribute_guidance>
+For each attribute below, the description indicates what evidence to look for in the response:
 
-For each attribute ({", ".join(attribute_names)}):
-1. **Read the attribute's description** in the schema to understand what evidence to look for
-2. **Identify excerpts**: Find up to {config.deep_judgment_max_excerpts_per_attribute} exact quotes from the response that help determine how to populate this attribute based on its schema description
+{attr_guidance}
+</attribute_guidance>
+
+<instructions>
+Extract verbatim excerpts from the response for each attribute listed above.
+
+For each attribute:
+1. **Read the attribute's description** to understand what evidence to look for
+2. **Identify excerpts**: Find up to {config.deep_judgment_max_excerpts_per_attribute} exact quotes from the response that provide evidence for this attribute
    - "high" confidence: Direct, explicit statement matching the attribute description
    - "medium" confidence: Implied information or indirect evidence
    - "low" confidence: Weak or ambiguous evidence
 3. **If no excerpts exist**: Return ONE entry with empty text and explain why (e.g., model refused, no relevant information, implicit answer)
 
-IMPORTANT: Excerpts should be verbatim text spans that provide evidence for filling the attribute according to its schema description. The excerpts will inform the next stage where we determine the actual attribute values.
+IMPORTANT: Excerpts should be verbatim text spans from the response. Do NOT try to generate or infer content - only extract what is explicitly present.
 
 Return JSON format:
 {{
@@ -144,14 +154,30 @@ Return JSON format:
     {{"text": "", "confidence": "none", "explanation": "Brief reason why no excerpts (e.g., 'Model refused to answer', 'No explicit statement found', 'Information was implicit')"}}
   ]
 }}
-</task>"""
+</instructions>"""
+
+    # ==========================================
+    # STAGE 1: EXCERPT EXTRACTION WITH RETRY
+    # ==========================================
+    excerpts = {}
+    max_retries = config.deep_judgment_excerpt_retry_attempts
+
+    for attempt in range(max_retries + 1):
+        # Build excerpt extraction prompt
+        excerpt_prompt = f"""<original_question>
+{question_text}
+</original_question>
+
+<response_to_analyze>
+{raw_llm_response}
+</response_to_analyze>"""
 
         # Add error feedback if this is a retry
         if attempt > 0:
             excerpt_prompt += "\n\n<error>Some excerpts from the previous attempt were not found verbatim in the response. Please provide EXACT quotes that appear in the text above, or return empty list [] if no valid excerpts exist.</error>"
 
-        # Invoke parsing model with generic retry logic
-        messages = [SystemMessage(content=combined_system_prompt), HumanMessage(content=excerpt_prompt)]
+        # Invoke parsing model with excerpt-specific system prompt
+        messages = [SystemMessage(content=excerpt_system_prompt), HumanMessage(content=excerpt_prompt)]
         raw_response = _invoke_llm_with_retry(parsing_llm, messages)
         model_calls += 1
         cleaned_response = _strip_markdown_fences(raw_response)
@@ -255,29 +281,32 @@ Return JSON format:
     # STAGE 2: REASONING GENERATION
     # (Works even with empty excerpt lists)
     # ==========================================
-    reasoning_prompt = f"""<original_question>
-{question_text}
-</original_question>
+    reasoning_system_prompt = f"""{generic_system_prompt}
 
-<answer_template_schema>
-{json_schema}
-</answer_template_schema>
+<task_structure>
+You will be provided with:
+1. An original question in <original_question> tags
+2. Extracted excerpts in <extracted_excerpts> tags from the previous stage
 
-<extracted_excerpts>
-{json.dumps(excerpts, indent=2)}
-</extracted_excerpts>
+Your task is to generate reasoning that explains how the excerpts should inform each attribute's value.
+</task_structure>
 
-<task>
+<attribute_guidance>
+For each attribute below, the description indicates what the attribute represents:
+
+{attr_guidance}
+</attribute_guidance>
+
+<instructions>
 Generate reasoning that explains how the excerpts should inform each attribute's value.
 
-IMPORTANT: Only generate reasoning for these specific attributes (excluding configuration fields like 'id', 'correct', 'regex'):
-{", ".join(attribute_names)}
+IMPORTANT: Only generate reasoning for the attributes listed above.
 
-For each of the above attributes:
-1. **Review the attribute's description** in the schema to understand what value it expects
+For each attribute:
+1. **Review the attribute's description** to understand what value it expects
 2. **Analyze the excerpts** to determine what they tell us about this attribute
 3. **Generate reasoning** (2-3 sentences) that explains:
-   - How the excerpts map to the attribute based on its schema description
+   - How the excerpts relate to the attribute based on its description
    - What value the attribute should have based on the evidence
    - Any ambiguities or confidence issues
 
@@ -285,11 +314,19 @@ When excerpts are empty: Explain why no excerpts were found and how this affects
 
 Return JSON format with ONLY the attributes listed above:
 {{
-  "attribute_name": "reasoning text explaining how excerpts inform the attribute value based on its schema description"
+  "attribute_name": "reasoning text explaining how excerpts inform the attribute value"
 }}
-</task>"""
+</instructions>"""
 
-    messages = [SystemMessage(content=combined_system_prompt), HumanMessage(content=reasoning_prompt)]
+    reasoning_prompt = f"""<original_question>
+{question_text}
+</original_question>
+
+<extracted_excerpts>
+{json.dumps(excerpts, indent=2)}
+</extracted_excerpts>"""
+
+    messages = [SystemMessage(content=reasoning_system_prompt), HumanMessage(content=reasoning_prompt)]
     raw_response = _invoke_llm_with_retry(parsing_llm, messages)
     model_calls += 1
     cleaned_response = _strip_markdown_fences(raw_response)
@@ -306,18 +343,28 @@ Return JSON format with ONLY the attributes listed above:
     # ==========================================
     # STAGE 3: PARAMETER EXTRACTION
     # ==========================================
-    # Use standard parsing logic (same as existing single-stage parsing)
-    parsing_prompt = f"""<original_question>
-Your task is to parse an answer given to the question reported in this section. Use the question to contextualize the info from the schema fields below:
+    # Build system prompt with format_instructions for structured output
+    parsing_system_prompt = f"""{generic_system_prompt}
 
-Original Question: {question_text}
+<task_structure>
+You will be provided with:
+1. An original question in <original_question> tags
+2. Reasoning traces in <reasoning_traces> tags that explain how excerpts from a response map to attribute values
+
+Your task is to extract the final attribute values based on the reasoning traces, following the JSON schema format specified below.
+</task_structure>
+
+{format_instructions}"""
+
+    parsing_prompt = f"""<original_question>
+{question_text}
 </original_question>
 
-<response_to_parse>
-{raw_llm_response}
-</response_to_parse>"""
+<reasoning_traces>
+{json.dumps(reasoning, indent=2)}
+</reasoning_traces>"""
 
-    messages = [SystemMessage(content=combined_system_prompt), HumanMessage(content=parsing_prompt)]
+    messages = [SystemMessage(content=parsing_system_prompt), HumanMessage(content=parsing_prompt)]
     raw_response = _invoke_llm_with_retry(parsing_llm, messages)
     model_calls += 1
     cleaned_response = _strip_markdown_fences(raw_response)

@@ -78,6 +78,39 @@ def _strip_markdown_fences(text: str) -> str:
     return text.strip()
 
 
+def _extract_attribute_descriptions(json_schema: str, attribute_names: list[str]) -> dict[str, str]:
+    """Extract attribute descriptions from JSON schema format instructions.
+
+    Parses the JSON schema string to extract description fields for each attribute.
+    This is used to provide guidance to the LLM about what evidence to look for
+    without requiring it to follow the full schema format.
+
+    Args:
+        json_schema: JSON schema string from PydanticOutputParser.get_format_instructions()
+        attribute_names: List of attribute names to extract descriptions for
+
+    Returns:
+        Dictionary mapping attribute names to their descriptions
+
+    Example:
+        >>> schema = '{"properties": {"drug_target": {"description": "The target protein", ...}}}'
+        >>> _extract_attribute_descriptions(schema, ["drug_target"])
+        {"drug_target": "The target protein"}
+    """
+    attribute_descriptions = {}
+    for attr in attribute_names:
+        # Extract description from JSON schema using regex
+        # Pattern matches: "attr_name": {..., "description": "text", ...}
+        pattern = rf'"{attr}":\s*{{[^}}]*"description":\s*"([^"]*)"'
+        match = re.search(pattern, json_schema)
+        if match:
+            attribute_descriptions[attr] = match.group(1)
+        else:
+            # Fallback if description not found
+            attribute_descriptions[attr] = f"Evidence for {attr}"
+    return attribute_descriptions
+
+
 def _invoke_llm_with_retry(llm: Any, messages: list[Any], max_retries: int = 3) -> str:
     """Invoke LLM with retry logic for transient failures.
 
