@@ -325,6 +325,120 @@ Return JSON format:
             logger.warning(f"Search enhancement failed: {e}. Continuing without search results.")
 
     # ==========================================
+    # STAGE 1.5: PER-EXCERPT HALLUCINATION ASSESSMENT
+    # (Only when search was performed)
+    # ==========================================
+    search_performed = any(
+        "search_results" in excerpt_obj for excerpt_list in excerpts.values() for excerpt_obj in excerpt_list
+    )
+
+    if search_performed:
+        logger.info("Stage 1.5: Assessing hallucination risk for each excerpt")
+
+        # Assign unique IDs to excerpts for matching
+        excerpt_id_counter = 0
+        excerpts_with_search = []
+
+        for attr_name, excerpt_list in excerpts.items():
+            for excerpt_obj in excerpt_list:
+                if "search_results" in excerpt_obj:
+                    excerpt_obj["_id"] = str(excerpt_id_counter)
+                    excerpt_obj["_attribute"] = attr_name
+                    excerpts_with_search.append((attr_name, excerpt_obj))
+                    excerpt_id_counter += 1
+
+        if excerpts_with_search:
+            # Build batch assessment prompt
+            assessment_system_prompt = f"""{generic_system_prompt}
+
+You are assessing hallucination risk for extracted excerpts based on search validation.
+
+For EACH excerpt below, evaluate the hallucination risk by comparing the excerpt against the search results:
+
+- **none** (lowest risk): Search strongly supports the excerpt with multiple corroborating sources
+- **low**: Search generally supports the excerpt with minor discrepancies or weak evidence
+- **medium**: Search provides mixed evidence, contradictions, or very weak support
+- **high** (highest risk): Search contradicts the excerpt or provides no supporting evidence whatsoever
+
+Be conservative - only assign "none" when evidence is very strong."""
+
+            # Format each excerpt for assessment
+            excerpt_descriptions = []
+            for attr_name, excerpt_obj in excerpts_with_search:
+                excerpt_id = excerpt_obj["_id"]
+                text = excerpt_obj.get("text", "")
+                confidence = excerpt_obj.get("confidence", "unknown")
+                similarity = excerpt_obj.get("similarity_score", 0.0)
+                search_results = excerpt_obj.get("search_results", "")
+
+                excerpt_descriptions.append(
+                    f'<excerpt id="{excerpt_id}" attribute="{attr_name}">\n'
+                    f"Text: {text}\n"
+                    f"Extraction Confidence: {confidence}\n"
+                    f"Similarity: {similarity:.3f}\n"
+                    f"Search Results:\n{search_results}\n"
+                    f"</excerpt>"
+                )
+
+            assessment_prompt = f"""Assess hallucination risk for each of the {len(excerpts_with_search)} excerpts below.
+
+{chr(10).join(excerpt_descriptions)}
+
+Return JSON format with assessments for ALL excerpts:
+{{
+  "excerpt_assessments": [
+    {{
+      "excerpt_id": "0",
+      "attribute": "attribute_name",
+      "hallucination_risk": "none|low|medium|high",
+      "justification": "Brief explanation of why this risk level was assigned based on search evidence"
+    }},
+    ...
+  ]
+}}"""
+
+            # Invoke LLM for batch assessment
+            messages = [SystemMessage(content=assessment_system_prompt), HumanMessage(content=assessment_prompt)]
+
+            try:
+                raw_response = _invoke_llm_with_retry(parsing_llm, messages)
+                cleaned_response = _strip_markdown_fences(raw_response)
+                assessment_data = json.loads(cleaned_response)
+
+                # Match assessments back to excerpts
+                for assessment in assessment_data.get("excerpt_assessments", []):
+                    excerpt_id = assessment["excerpt_id"]
+                    hallucination_risk = assessment.get("hallucination_risk", "high")
+                    justification = assessment.get("justification", "")
+
+                    # Find and update the excerpt
+                    for excerpt_list in excerpts.values():
+                        for excerpt_obj in excerpt_list:
+                            if excerpt_obj.get("_id") == excerpt_id:
+                                excerpt_obj["hallucination_risk"] = hallucination_risk
+                                excerpt_obj["hallucination_justification"] = justification
+                                break
+
+                logger.info(
+                    f"Stage 1.5 complete: Assessed {len(assessment_data.get('excerpt_assessments', []))} excerpts"
+                )
+                stages_completed.append("excerpt_hallucination_assessment")
+
+            except (json.JSONDecodeError, Exception) as e:
+                # Fail the entire deep-judgment process if hallucination assessment fails
+                logger.error(f"Stage 1.5 hallucination assessment failed: {e}")
+                raise ValueError(
+                    f"Failed to assess per-excerpt hallucination risk: {e}. "
+                    "Deep-judgment cannot continue without risk assessment."
+                ) from e
+
+            # Clean up temporary IDs
+            for excerpt_list in excerpts.values():
+                for excerpt_obj in excerpt_list:
+                    excerpt_obj.pop("_id", None)
+                    excerpt_obj.pop("_attribute", None)
+
+    # ==========================================
     # STAGE 2: REASONING GENERATION
     # (Works even with empty excerpt lists)
     # ==========================================
@@ -357,18 +471,13 @@ For each attribute below, the description indicates what the attribute represent
         reasoning_system_prompt += """
 
 <search_context>
-Each excerpt has been validated against external search results.
-The search results are included in the excerpt data structure under the "search_results" field.
+Each excerpt has been validated against external search results AND has been assigned a hallucination risk score.
+The excerpt data now includes:
+- "Hallucination Risk": Per-excerpt risk assessment (NONE/LOW/MEDIUM/HIGH)
+- "Risk Justification": Explanation of why that risk level was assigned
+- "Search Results": The actual search validation results
 
-When generating reasoning, evaluate:
-1. Does the search evidence back this excerpt?
-2. What is the hallucination risk for this excerpt?
-   - NONE: Strong search evidence fully supports the excerpt (lowest risk)
-   - LOW: Good search evidence mostly supports the excerpt
-   - MEDIUM: Partial or weak search evidence
-   - HIGH: Little or no search evidence found (highest risk)
-
-Include a dedicated assessment of evidence backing in your reasoning.
+Use these per-excerpt risk assessments to inform your reasoning about each attribute.
 </search_context>
 
 <instructions>
@@ -378,21 +487,19 @@ IMPORTANT: Only generate reasoning for the attributes listed above.
 
 For each attribute:
 1. **Review the attribute's description** to understand what value it expects
-2. **Analyze the excerpts** to determine what they tell us about this attribute
-3. **Evaluate search evidence** to assess hallucination risk
-4. **Generate reasoning** (2-3 sentences) that explains:
+2. **Analyze the excerpts** considering their hallucination risk scores
+3. **Generate reasoning** (2-3 sentences) that explains:
    - How the excerpts relate to the attribute based on its description
    - What value the attribute should have based on the evidence
-   - How search results support or contradict the excerpt
+   - How the per-excerpt hallucination risks affect confidence in this attribute
    - Any ambiguities or confidence issues
 
-When excerpts are empty: Explain why no excerpts were found and how this affects the attribute. Set hallucination_risk to "high".
+When excerpts are empty: Explain why no excerpts were found and how this affects the attribute.
 
 Return JSON format with ONLY the attributes listed above:
 {
   "attribute_name": {
-    "reasoning": "reasoning text explaining how excerpts inform the attribute value",
-    "hallucination_risk": "none|low|medium|high"
+    "reasoning": "reasoning text explaining how excerpts inform the attribute value"
   }
 }
 </instructions>"""
@@ -446,15 +553,32 @@ Return JSON format with ONLY the attributes listed above:
 
     if search_performed:
         # Nested format: {"attr": {"reasoning": "...", "hallucination_risk": "none|low|medium|high"}}
+        # NOTE: We now ignore the LLM's hallucination_risk from Stage 2
+        # Instead, we calculate it from per-excerpt risks (Stage 1.5)
         for attr, value in reasoning_raw.items():
             if isinstance(value, dict):
                 reasoning[attr] = value.get("reasoning", "")
-                hallucination_risk[attr] = value.get("hallucination_risk", "high")
             else:
                 # Fallback: LLM returned string instead of nested format
                 reasoning[attr] = str(value)
-                hallucination_risk[attr] = "high"
                 logger.warning(f"Expected nested reasoning format for '{attr}' but got string. Using fallback.")
+
+        # Calculate attribute-level hallucination risk as MAX of per-excerpt risks
+        risk_order = {"none": 0, "low": 1, "medium": 2, "high": 3}
+        for attr_name, excerpt_list in excerpts.items():
+            excerpt_risks = []
+            for excerpt_obj in excerpt_list:
+                if "hallucination_risk" in excerpt_obj:
+                    excerpt_risks.append(excerpt_obj["hallucination_risk"])
+
+            if excerpt_risks:
+                # Find the maximum risk level
+                max_risk = max(excerpt_risks, key=lambda r: risk_order.get(r, 3))
+                hallucination_risk[attr_name] = max_risk
+            else:
+                # No per-excerpt risks (shouldn't happen if Stage 1.5 ran)
+                hallucination_risk[attr_name] = "high"
+
     else:
         # Simple format: {"attr": "reasoning text"}
         for attr, value in reasoning_raw.items():

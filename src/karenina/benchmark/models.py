@@ -660,9 +660,13 @@ class VerificationResult(BaseModel):
     deep_judgment_enabled: bool = False  # Whether deep-judgment was configured
     deep_judgment_performed: bool = False  # Whether deep-judgment was successfully executed
     extracted_excerpts: dict[str, list[dict[str, Any]]] | None = None  # Extracted excerpts per attribute
-    # Structure: {"attribute_name": [{"text": str, "confidence": "low|medium|high", "similarity_score": float, "search_results"?: str}]}
+    # Structure: {"attribute_name": [{"text": str, "confidence": "low|medium|high", "similarity_score": float,
+    #   "search_results"?: str, "hallucination_risk"?: "none|low|medium|high", "hallucination_justification"?: str}]}
     # Empty list [] indicates no excerpts found for that attribute (e.g., refusals, no corroborating evidence)
-    # When search is enabled, each excerpt may include a "search_results" field with external validation text
+    # When search is enabled, each excerpt includes:
+    #   - "search_results": External validation text from search tool
+    #   - "hallucination_risk": Per-excerpt risk assessment (none/low/medium/high)
+    #   - "hallucination_justification": Explanation for the risk level
     attribute_reasoning: dict[str, str] | None = None  # Reasoning traces per attribute
     # Structure: {"attribute_name": "reasoning text"}
     # Reasoning can exist even when excerpts are empty (explains why no excerpts found)

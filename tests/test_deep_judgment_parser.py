@@ -450,7 +450,7 @@ class TestDeepJudgmentSearchEnhancement:
         ]
         mock_create_search.return_value = mock_search_tool
 
-        # Mock LLM responses (3 stages)
+        # Mock LLM responses (4 stages: excerpts, hallucination assessment, reasoning, parameters)
         excerpt_response = json.dumps(
             {
                 "drug_target": [{"text": "targets BCL-2 protein", "confidence": "high"}],
@@ -458,12 +458,34 @@ class TestDeepJudgmentSearchEnhancement:
                 "confidence": [],
             }
         )
+        assessment_response = json.dumps(
+            {
+                "excerpt_assessments": [
+                    {
+                        "excerpt_id": "0",
+                        "attribute": "drug_target",
+                        "hallucination_risk": "low",
+                        "justification": "Search strongly supports BCL-2 as the target",
+                    },
+                    {
+                        "excerpt_id": "1",
+                        "attribute": "mechanism",
+                        "hallucination_risk": "medium",
+                        "justification": "Search provides weak evidence for apoptosis mechanism",
+                    },
+                ]
+            }
+        )
         reasoning_response = json.dumps(
-            {"drug_target": "Target is BCL-2", "mechanism": "Mechanism is apoptosis", "confidence": "No info"}
+            {
+                "drug_target": {"reasoning": "Target is BCL-2"},
+                "mechanism": {"reasoning": "Mechanism is apoptosis"},
+                "confidence": {"reasoning": "No info"},
+            }
         )
         parameter_response = json.dumps({"drug_target": "BCL-2", "mechanism": "apoptosis", "confidence": "low"})
 
-        mock_invoke.side_effect = [excerpt_response, reasoning_response, parameter_response]
+        mock_invoke.side_effect = [excerpt_response, assessment_response, reasoning_response, parameter_response]
 
         # Execute
         raw_trace = "The drug targets BCL-2 protein and induces apoptosis."
@@ -493,6 +515,17 @@ class TestDeepJudgmentSearchEnhancement:
         assert excerpts["drug_target"][0]["search_results"] == "Search result for BCL-2 target"
         assert "search_results" in excerpts["mechanism"][0]
         assert excerpts["mechanism"][0]["search_results"] == "Search result for apoptosis mechanism"
+
+        # Verify hallucination risk was added to excerpts (Stage 1.5)
+        assert "hallucination_risk" in excerpts["drug_target"][0]
+        assert excerpts["drug_target"][0]["hallucination_risk"] == "low"
+        assert "hallucination_justification" in excerpts["drug_target"][0]
+        assert "hallucination_risk" in excerpts["mechanism"][0]
+        assert excerpts["mechanism"][0]["hallucination_risk"] == "medium"
+
+        # Verify attribute-level risk is max of per-excerpt risks
+        assert metadata["hallucination_risk"]["drug_target"] == "low"
+        assert metadata["hallucination_risk"]["mechanism"] == "medium"
 
     @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
     def test_search_disabled_skips_search(self, mock_invoke, test_config, mock_parsing_llm):
@@ -544,10 +577,28 @@ class TestDeepJudgmentSearchEnhancement:
                 "confidence": [],
             }
         )
-        reasoning_response = json.dumps({"drug_target": "r", "mechanism": "r", "confidence": "r"})
+        assessment_response = json.dumps(
+            {
+                "excerpt_assessments": [
+                    {
+                        "excerpt_id": "0",
+                        "attribute": "drug_target",
+                        "hallucination_risk": "none",
+                        "justification": "Search strongly supports BCL-2",
+                    }
+                ]
+            }
+        )
+        reasoning_response = json.dumps(
+            {
+                "drug_target": {"reasoning": "r"},
+                "mechanism": {"reasoning": "r"},
+                "confidence": {"reasoning": "r"},
+            }
+        )
         parameter_response = json.dumps({"drug_target": "t", "mechanism": "m", "confidence": "c"})
 
-        mock_invoke.side_effect = [excerpt_response, reasoning_response, parameter_response]
+        mock_invoke.side_effect = [excerpt_response, assessment_response, reasoning_response, parameter_response]
 
         # Execute
         parsed, excerpts, reasoning, metadata = deep_judgment_parse(
@@ -637,10 +688,30 @@ class TestDeepJudgmentSearchEnhancement:
                 "confidence": [],
             }
         )
-        reasoning_response = json.dumps({"drug_target": "r", "mechanism": "r", "confidence": "r"})
+        assessment_response = json.dumps(
+            {
+                "excerpt_assessments": [
+                    {
+                        "excerpt_id": "0",
+                        "attribute": "drug_target",
+                        "hallucination_risk": "low",
+                        "justification": "Good evidence",
+                    },
+                    {
+                        "excerpt_id": "1",
+                        "attribute": "mechanism",
+                        "hallucination_risk": "low",
+                        "justification": "Good evidence",
+                    },
+                ]
+            }
+        )
+        reasoning_response = json.dumps(
+            {"drug_target": {"reasoning": "r"}, "mechanism": {"reasoning": "r"}, "confidence": {"reasoning": "r"}}
+        )
         parameter_response = json.dumps({"drug_target": "t", "mechanism": "m", "confidence": "c"})
 
-        mock_invoke.side_effect = [excerpt_response, reasoning_response, parameter_response]
+        mock_invoke.side_effect = [excerpt_response, assessment_response, reasoning_response, parameter_response]
 
         # Execute
         parsed, excerpts, reasoning, metadata = deep_judgment_parse(
@@ -682,25 +753,39 @@ class TestDeepJudgmentSearchEnhancement:
             }
         )
 
-        # Mock Stage 2: Reasoning WITH hallucination risk (nested format)
+        # Mock Stage 1.5: Hallucination assessment (per-excerpt)
+        assessment_response = json.dumps(
+            {
+                "excerpt_assessments": [
+                    {
+                        "excerpt_id": "0",
+                        "attribute": "drug_target",
+                        "hallucination_risk": "none",
+                        "justification": "Search strongly confirms BCL-2",
+                    },
+                    {
+                        "excerpt_id": "1",
+                        "attribute": "mechanism",
+                        "hallucination_risk": "low",
+                        "justification": "Search provides some evidence for apoptosis",
+                    },
+                ]
+            }
+        )
+
+        # Mock Stage 2: Reasoning (NO hallucination_risk - that's calculated from per-excerpt risks)
         reasoning_response = json.dumps(
             {
-                "drug_target": {
-                    "reasoning": "BCL-2 target confirmed by search results",
-                    "hallucination_risk": "none",
-                },
-                "mechanism": {
-                    "reasoning": "Apoptosis mechanism supported by search",
-                    "hallucination_risk": "low",
-                },
-                "confidence": {"reasoning": "No information provided", "hallucination_risk": "high"},
+                "drug_target": {"reasoning": "BCL-2 target confirmed by search results"},
+                "mechanism": {"reasoning": "Apoptosis mechanism supported by search"},
+                "confidence": {"reasoning": "No information provided"},
             }
         )
 
         # Mock Stage 3: Parameters
         parameter_response = json.dumps({"drug_target": "BCL-2", "mechanism": "apoptosis", "confidence": "low"})
 
-        mock_invoke.side_effect = [excerpt_response, reasoning_response, parameter_response]
+        mock_invoke.side_effect = [excerpt_response, assessment_response, reasoning_response, parameter_response]
 
         # Execute
         parsed, excerpts, reasoning, metadata = deep_judgment_parse(
@@ -718,10 +803,11 @@ class TestDeepJudgmentSearchEnhancement:
         assert reasoning["drug_target"] == "BCL-2 target confirmed by search results"
         assert reasoning["mechanism"] == "Apoptosis mechanism supported by search"
 
-        # Verify hallucination risk was extracted and stored in metadata
+        # Verify hallucination risk was calculated from per-excerpt risks (max)
         assert "hallucination_risk" in metadata
         assert metadata["hallucination_risk"]["drug_target"] == "none"
         assert metadata["hallucination_risk"]["mechanism"] == "low"
+        # confidence attribute has no excerpts, so it should have default "high" risk
         assert metadata["hallucination_risk"]["confidence"] == "high"
 
     @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
@@ -787,6 +873,15 @@ class TestDeepJudgmentSearchEnhancement:
             {"drug_target": [{"text": "excerpt", "confidence": "high"}], "mechanism": [], "confidence": []}
         )
 
+        # Mock Stage 1.5: Assessment
+        assessment_response = json.dumps(
+            {
+                "excerpt_assessments": [
+                    {"excerpt_id": "0", "attribute": "drug_target", "hallucination_risk": "low", "justification": "OK"}
+                ]
+            }
+        )
+
         # Mock Stage 2: LLM returned STRING instead of nested dict (malformed)
         reasoning_response = json.dumps(
             {
@@ -799,7 +894,7 @@ class TestDeepJudgmentSearchEnhancement:
         # Mock Stage 3
         parameter_response = json.dumps({"drug_target": "t", "mechanism": "m", "confidence": "c"})
 
-        mock_invoke.side_effect = [excerpt_response, reasoning_response, parameter_response]
+        mock_invoke.side_effect = [excerpt_response, assessment_response, reasoning_response, parameter_response]
 
         # Execute - should not crash
         parsed, excerpts, reasoning, metadata = deep_judgment_parse(
@@ -816,8 +911,9 @@ class TestDeepJudgmentSearchEnhancement:
         # Verify fallback: reasoning extracted as strings
         assert reasoning["drug_target"] == "This should be a dict but is a string"
 
-        # Verify fallback: hallucination_risk defaults to "high"
-        assert metadata["hallucination_risk"]["drug_target"] == "high"
+        # Verify hallucination risk comes from Stage 1.5 assessment, not Stage 2
+        # (Stage 2 malformed response doesn't affect risk calculation)
+        assert metadata["hallucination_risk"]["drug_target"] == "low"  # From Stage 1.5 mock
 
     @patch("karenina.benchmark.verification.deep_judgment.create_search_tool")
     @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
@@ -842,28 +938,39 @@ class TestDeepJudgmentSearchEnhancement:
             }
         )
 
-        # Mock Stage 2: Reasoning with hallucination risk
+        # Mock Stage 1.5: Per-excerpt hallucination assessment
+        assessment_response = json.dumps(
+            {
+                "excerpt_assessments": [
+                    {
+                        "excerpt_id": "0",
+                        "attribute": "drug_target",
+                        "hallucination_risk": "none",
+                        "justification": "Search strongly confirms BCL-2",
+                    },
+                    {
+                        "excerpt_id": "1",
+                        "attribute": "mechanism",
+                        "hallucination_risk": "none",
+                        "justification": "Search validates apoptosis mechanism",
+                    },
+                ]
+            }
+        )
+
+        # Mock Stage 2: Reasoning (no hallucination_risk - calculated from per-excerpt risks)
         reasoning_response = json.dumps(
             {
-                "drug_target": {
-                    "reasoning": "BCL-2 target is strongly supported by search results",
-                    "hallucination_risk": "none",
-                },
-                "mechanism": {
-                    "reasoning": "Apoptosis mechanism validated by external sources",
-                    "hallucination_risk": "none",
-                },
-                "confidence": {
-                    "reasoning": "No confidence information available",
-                    "hallucination_risk": "high",
-                },
+                "drug_target": {"reasoning": "BCL-2 target is strongly supported by search results"},
+                "mechanism": {"reasoning": "Apoptosis mechanism validated by external sources"},
+                "confidence": {"reasoning": "No confidence information available"},
             }
         )
 
         # Mock Stage 3: Final parameter extraction
         parameter_response = json.dumps({"drug_target": "BCL-2", "mechanism": "apoptosis", "confidence": "unknown"})
 
-        mock_invoke.side_effect = [excerpt_response, reasoning_response, parameter_response]
+        mock_invoke.side_effect = [excerpt_response, assessment_response, reasoning_response, parameter_response]
 
         # Execute full pipeline
         parsed, excerpts, reasoning, metadata = deep_judgment_parse(
@@ -877,9 +984,14 @@ class TestDeepJudgmentSearchEnhancement:
             combined_system_prompt="test prompt",
         )
 
-        # Verify all 3 stages completed
-        assert metadata["stages_completed"] == ["excerpts", "reasoning", "parameters"]
-        assert metadata["model_calls"] == 3
+        # Verify all 4 stages completed (including excerpt_hallucination_assessment)
+        assert metadata["stages_completed"] == [
+            "excerpts",
+            "excerpt_hallucination_assessment",
+            "reasoning",
+            "parameters",
+        ]
+        assert metadata["model_calls"] == 3  # We don't track Stage 1.5 call (as per requirements)
 
         # Verify search results added to excerpts
         assert "search_results" in excerpts["drug_target"][0]

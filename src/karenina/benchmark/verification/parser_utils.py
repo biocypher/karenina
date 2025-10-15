@@ -213,6 +213,14 @@ def format_excerpts_for_reasoning(excerpts: dict[str, list[dict[str, Any]]]) -> 
             lines.append(f"    Confidence: {confidence}")
             lines.append(f"    Similarity: {similarity:.3f}")
 
+            # Add hallucination risk if present (from Stage 1.5)
+            if "hallucination_risk" in excerpt_obj:
+                hallucination_risk = excerpt_obj["hallucination_risk"]
+                lines.append(f"    Hallucination Risk: {hallucination_risk.upper()}")
+                justification = excerpt_obj.get("hallucination_justification", "")
+                if justification:
+                    lines.append(f"    Risk Justification: {justification}")
+
             # Add search results if present
             if "search_results" in excerpt_obj:
                 search_results = excerpt_obj["search_results"]
