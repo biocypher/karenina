@@ -419,6 +419,9 @@ def run_single_model_verification(
                 deep_judgment_model_calls=0,
                 deep_judgment_excerpt_retry_count=0,
                 attributes_without_excerpts=None,
+                # Search-enhanced deep-judgment metadata (defaults for error cases)
+                deep_judgment_search_enabled=deep_judgment_search_enabled,
+                hallucination_risk_assessment=None,
             )
 
         # Step 1.5: Inject question ID into the Answer class
@@ -607,6 +610,9 @@ def run_single_model_verification(
                 deep_judgment_model_calls=0,
                 deep_judgment_excerpt_retry_count=0,
                 attributes_without_excerpts=None,
+                # Search-enhanced deep-judgment metadata (defaults for error cases)
+                deep_judgment_search_enabled=deep_judgment_search_enabled,
+                hallucination_risk_assessment=None,
             )
 
         # Extract ground truth if enabled
@@ -650,6 +656,7 @@ Original Question: {question_text}
         deep_judgment_model_calls = 0
         deep_judgment_excerpt_retry_count = 0
         attributes_without_excerpts = None
+        hallucination_risk_assessment = None
 
         try:
             # Choose parsing strategy based on configuration
@@ -683,6 +690,7 @@ Original Question: {question_text}
                 deep_judgment_model_calls = dj_metadata.get("model_calls", 0)
                 deep_judgment_excerpt_retry_count = dj_metadata.get("excerpt_retry_count", 0)
                 attributes_without_excerpts = dj_metadata.get("attributes_without_excerpts", None)
+                hallucination_risk_assessment = dj_metadata.get("hallucination_risk", None)
             else:
                 # Standard single-stage parsing (existing logic)
                 parsing_response = parsing_llm.invoke(parsing_messages)
@@ -876,6 +884,9 @@ Original Question: {question_text}
                 deep_judgment_model_calls=0,
                 deep_judgment_excerpt_retry_count=0,
                 attributes_without_excerpts=None,
+                # Search-enhanced deep-judgment metadata (defaults for error cases)
+                deep_judgment_search_enabled=deep_judgment_search_enabled,
+                hallucination_risk_assessment=None,
             )
 
         # Step 6: Run rubric evaluation (optional)
@@ -947,6 +958,9 @@ Original Question: {question_text}
             deep_judgment_model_calls=deep_judgment_model_calls,
             deep_judgment_excerpt_retry_count=deep_judgment_excerpt_retry_count,
             attributes_without_excerpts=attributes_without_excerpts,
+            # Search-enhanced deep-judgment metadata
+            deep_judgment_search_enabled=deep_judgment_search_enabled,
+            hallucination_risk_assessment=hallucination_risk_assessment,
         )
 
     except Exception as e:
@@ -1000,4 +1014,7 @@ Original Question: {question_text}
             deep_judgment_model_calls=0,
             deep_judgment_excerpt_retry_count=0,
             attributes_without_excerpts=None,
+            # Search-enhanced deep-judgment metadata (defaults for error cases)
+            deep_judgment_search_enabled=deep_judgment_search_enabled,
+            hallucination_risk_assessment=None,
         )
