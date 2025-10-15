@@ -143,3 +143,124 @@ def _invoke_llm_with_retry(llm: Any, messages: list[Any], max_retries: int = 3) 
             # Simple exponential backoff could be added here
             continue
     raise RuntimeError("Unreachable code")
+
+
+def format_excerpts_for_reasoning(excerpts: dict[str, list[dict[str, Any]]]) -> str:
+    """Format excerpts in a human-readable way for the reasoning stage.
+
+    Formats excerpts with clear hierarchical structure, including search results when present.
+    This improves LLM comprehension compared to raw JSON dumps.
+
+    Args:
+        excerpts: Dictionary mapping attribute names to lists of excerpt objects.
+                  Each excerpt object may contain:
+                  - text: The excerpt text (displayed in full)
+                  - confidence: Confidence level (none/low/medium/high)
+                  - similarity_score: Fuzzy match score (0.0-1.0)
+                  - search_results: Optional external search validation (displayed in full)
+                  - explanation: Optional explanation when no excerpt found
+
+    Returns:
+        Human-readable formatted string suitable for LLM reasoning stage
+
+    Example:
+        >>> excerpts = {
+        ...     "drug_target": [
+        ...         {
+        ...             "text": "targets BCL-2",
+        ...             "confidence": "high",
+        ...             "similarity_score": 0.95,
+        ...             "search_results": "External validation confirms BCL-2 targeting"
+        ...         },
+        ...     ],
+        ... }
+        >>> print(format_excerpts_for_reasoning(excerpts))
+        drug_target:
+          Excerpt 1:
+            Text: "targets BCL-2"
+            Confidence: high
+            Similarity: 0.950
+            Search Results:
+              External validation confirms BCL-2 targeting
+    """
+    if not excerpts:
+        return "(No excerpts extracted)"
+
+    lines = []
+    for attr, excerpt_list in excerpts.items():
+        lines.append(f"{attr}:")
+
+        if not excerpt_list:
+            lines.append("  (No excerpts found for this attribute)")
+            continue
+
+        for i, excerpt_obj in enumerate(excerpt_list, 1):
+            lines.append(f"  Excerpt {i}:")
+
+            # Handle missing excerpt with explanation
+            if not excerpt_obj.get("text") and excerpt_obj.get("explanation"):
+                lines.append(f"    Explanation: {excerpt_obj['explanation']}")
+                continue
+
+            # Regular excerpt with text
+            text = excerpt_obj.get("text", "")
+            if text:
+                lines.append(f'    Text: "{text}"')
+
+            # Add confidence and similarity
+            confidence = excerpt_obj.get("confidence", "unknown")
+            similarity = excerpt_obj.get("similarity_score", 0.0)
+            lines.append(f"    Confidence: {confidence}")
+            lines.append(f"    Similarity: {similarity:.3f}")
+
+            # Add search results if present
+            if "search_results" in excerpt_obj:
+                search_results = excerpt_obj["search_results"]
+                lines.append("    Search Results:")
+                search_lines = search_results.split("\n")
+                for search_line in search_lines:
+                    lines.append(f"      {search_line}")
+
+        lines.append("")  # Blank line between attributes
+
+    return "\n".join(lines)
+
+
+def format_reasoning_for_parsing(reasoning: dict[str, str]) -> str:
+    """Format reasoning traces in a human-readable way for the parsing stage.
+
+    Formats reasoning traces with clear structure, making it easier for the LLM
+    to understand how each attribute should be valued based on the reasoning.
+
+    Args:
+        reasoning: Dictionary mapping attribute names to reasoning text strings.
+                   Each reasoning text explains how excerpts inform the attribute value.
+
+    Returns:
+        Human-readable formatted string suitable for LLM parsing stage
+
+    Example:
+        >>> reasoning = {
+        ...     "drug_target": "The excerpt 'targets BCL-2' clearly indicates BCL-2 as the target",
+        ...     "mechanism": "Based on the evidence, the mechanism involves apoptosis inhibition"
+        ... }
+        >>> print(format_reasoning_for_parsing(reasoning))
+        drug_target:
+          The excerpt 'targets BCL-2' clearly indicates BCL-2 as the target
+        <BLANKLINE>
+        mechanism:
+          Based on the evidence, the mechanism involves apoptosis inhibition
+    """
+    if not reasoning:
+        return "(No reasoning traces generated)"
+
+    lines = []
+    for attr, reasoning_text in reasoning.items():
+        lines.append(f"{attr}:")
+        # Indent the reasoning text for readability
+        reasoning_lines = reasoning_text.split("\n")
+        for reasoning_line in reasoning_lines:
+            lines.append(f"  {reasoning_line}")
+        lines.append("")  # Blank line between attributes
+
+    return "\n".join(lines)

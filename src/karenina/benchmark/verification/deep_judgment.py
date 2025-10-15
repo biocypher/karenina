@@ -33,6 +33,8 @@ from .parser_utils import (
     _extract_attribute_names_from_class,
     _invoke_llm_with_retry,
     _strip_markdown_fences,
+    format_excerpts_for_reasoning,
+    format_reasoning_for_parsing,
 )
 from .search_tools import create_search_tool
 
@@ -332,12 +334,14 @@ Return JSON format:
     )
 
     # Build base reasoning prompt
+    additional_task = "3. Search snipptes gathered starting from the excerpts." if search_performed else ""
     reasoning_system_prompt = f"""{generic_system_prompt}
 
 <task_structure>
 You will be provided with:
 1. An original question in <original_question> tags
 2. Extracted excerpts in <extracted_excerpts> tags from the previous stage
+{additional_task}
 
 Your task is to generate reasoning that explains how the excerpts should inform each attribute's value.
 </task_structure>
@@ -422,7 +426,7 @@ Return JSON format with ONLY the attributes listed above:
 </original_question>
 
 <extracted_excerpts>
-{json.dumps(excerpts, indent=2)}
+{format_excerpts_for_reasoning(excerpts)}
 </extracted_excerpts>"""
 
     messages = [SystemMessage(content=reasoning_system_prompt), HumanMessage(content=reasoning_prompt)]
@@ -485,7 +489,7 @@ Your task is to extract the final attribute values based on the reasoning traces
 </original_question>
 
 <reasoning_traces>
-{json.dumps(reasoning, indent=2)}
+{format_reasoning_for_parsing(reasoning)}
 </reasoning_traces>"""
 
     messages = [SystemMessage(content=parsing_system_prompt), HumanMessage(content=parsing_prompt)]
