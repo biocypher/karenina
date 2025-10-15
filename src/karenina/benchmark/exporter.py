@@ -173,6 +173,9 @@ def export_verification_results_json(job: VerificationJob, results: dict[str, Ve
             "deep_judgment_model_calls": result.deep_judgment_model_calls,
             "deep_judgment_excerpt_retry_count": result.deep_judgment_excerpt_retry_count,
             "attributes_without_excerpts": result.attributes_without_excerpts,
+            # Search-enhanced deep-judgment fields
+            "deep_judgment_search_enabled": result.deep_judgment_search_enabled,
+            "hallucination_risk_assessment": result.hallucination_risk_assessment,
         }
 
     return json.dumps(export_data, indent=2, ensure_ascii=False)
@@ -353,6 +356,9 @@ def export_verification_results_csv(
             "deep_judgment_model_calls",
             "deep_judgment_excerpt_retry_count",
             "attributes_without_excerpts",
+            # Search-enhanced deep-judgment fields
+            "deep_judgment_search_enabled",
+            "hallucination_risk_assessment",
         ]
     )
 
@@ -417,6 +423,11 @@ def export_verification_results_csv(
             "deep_judgment_excerpt_retry_count": result.deep_judgment_excerpt_retry_count,
             "attributes_without_excerpts": _safe_json_serialize(
                 result.attributes_without_excerpts, result.question_id, "attributes_without_excerpts"
+            ),
+            # Search-enhanced deep-judgment fields
+            "deep_judgment_search_enabled": result.deep_judgment_search_enabled,
+            "hallucination_risk_assessment": _safe_json_serialize(
+                result.hallucination_risk_assessment, result.question_id, "hallucination_risk_assessment"
             ),
         }
 
