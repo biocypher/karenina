@@ -282,6 +282,10 @@ Return JSON format:
     # SEARCH ENHANCEMENT (Optional)
     # Validate excerpts against external search results
     # ==========================================
+    logger.debug(
+        f"Search enhancement config: enabled={config.deep_judgment_search_enabled}, "
+        f"tool={config.deep_judgment_search_tool}"
+    )
     if config.deep_judgment_search_enabled:
         logger.info("Search enhancement enabled - validating excerpts against external evidence")
 

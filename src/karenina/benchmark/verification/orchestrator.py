@@ -29,6 +29,8 @@ def _create_verification_task(
     deep_judgment_max_excerpts_per_attribute: int = 3,
     deep_judgment_fuzzy_match_threshold: float = 0.80,
     deep_judgment_excerpt_retry_attempts: int = 2,
+    deep_judgment_search_enabled: bool = False,
+    deep_judgment_search_tool: str | Any = "tavily",
 ) -> dict[str, Any]:
     """Create a verification task dictionary from parameters."""
     return {
@@ -50,6 +52,8 @@ def _create_verification_task(
         "deep_judgment_max_excerpts_per_attribute": deep_judgment_max_excerpts_per_attribute,
         "deep_judgment_fuzzy_match_threshold": deep_judgment_fuzzy_match_threshold,
         "deep_judgment_excerpt_retry_attempts": deep_judgment_excerpt_retry_attempts,
+        "deep_judgment_search_enabled": deep_judgment_search_enabled,
+        "deep_judgment_search_tool": deep_judgment_search_tool,
     }
 
 
@@ -87,6 +91,8 @@ def _execute_verification_task(task: dict[str, Any]) -> tuple[str, VerificationR
         deep_judgment_max_excerpts_per_attribute=task.get("deep_judgment_max_excerpts_per_attribute", 3),
         deep_judgment_fuzzy_match_threshold=task.get("deep_judgment_fuzzy_match_threshold", 0.80),
         deep_judgment_excerpt_retry_attempts=task.get("deep_judgment_excerpt_retry_attempts", 2),
+        deep_judgment_search_enabled=task.get("deep_judgment_search_enabled", False),
+        deep_judgment_search_tool=task.get("deep_judgment_search_tool", "tavily"),
     )
 
     return result_key, result
@@ -180,6 +186,8 @@ def run_question_verification(
                 deep_judgment_max_excerpts_per_attribute=getattr(config, "deep_judgment_max_excerpts_per_attribute", 3),
                 deep_judgment_fuzzy_match_threshold=getattr(config, "deep_judgment_fuzzy_match_threshold", 0.80),
                 deep_judgment_excerpt_retry_attempts=getattr(config, "deep_judgment_excerpt_retry_attempts", 2),
+                deep_judgment_search_enabled=getattr(config, "deep_judgment_search_enabled", False),
+                deep_judgment_search_tool=getattr(config, "deep_judgment_search_tool", "tavily"),
             )
             verification_tasks.append(task)
 
@@ -219,6 +227,8 @@ def run_question_verification(
                             config, "deep_judgment_fuzzy_match_threshold", 0.80
                         ),
                         deep_judgment_excerpt_retry_attempts=getattr(config, "deep_judgment_excerpt_retry_attempts", 2),
+                        deep_judgment_search_enabled=getattr(config, "deep_judgment_search_enabled", False),
+                        deep_judgment_search_tool=getattr(config, "deep_judgment_search_tool", "tavily"),
                     )
                     verification_tasks.append(task)
 

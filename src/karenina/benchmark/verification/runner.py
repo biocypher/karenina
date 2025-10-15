@@ -312,6 +312,8 @@ def run_single_model_verification(
     deep_judgment_max_excerpts_per_attribute: int = 3,
     deep_judgment_fuzzy_match_threshold: float = 0.80,
     deep_judgment_excerpt_retry_attempts: int = 2,
+    deep_judgment_search_enabled: bool = False,
+    deep_judgment_search_tool: str | Any = "tavily",
 ) -> VerificationResult:
     """
     Run verification for a single question with specific answering and parsing models.
@@ -661,6 +663,8 @@ Original Question: {question_text}
                     deep_judgment_max_excerpts_per_attribute=deep_judgment_max_excerpts_per_attribute,
                     deep_judgment_fuzzy_match_threshold=deep_judgment_fuzzy_match_threshold,
                     deep_judgment_excerpt_retry_attempts=deep_judgment_excerpt_retry_attempts,
+                    deep_judgment_search_enabled=deep_judgment_search_enabled,
+                    deep_judgment_search_tool=deep_judgment_search_tool,
                 )
 
                 # Deep-judgment multi-stage parsing
