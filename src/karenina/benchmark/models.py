@@ -389,6 +389,13 @@ class VerificationConfig(BaseModel):
     deep_judgment_fuzzy_match_threshold: float = 0.80  # Similarity threshold for excerpt validation
     deep_judgment_excerpt_retry_attempts: int = 2  # Additional retry attempts for excerpt validation
 
+    # Search-enhanced deep-judgment settings (validate excerpts against external evidence)
+    deep_judgment_search_enabled: bool = False  # Enable search validation for excerpts
+    deep_judgment_search_tool: str | Any = "tavily"  # Search tool name or callable instance
+    # Supported built-in tools: "tavily"
+    # Can also pass any callable: (str | list[str]) -> (str | list[str])
+    # Examples: langchain tools, MCP tools, custom functions
+
     # Few-shot prompting settings
     few_shot_config: FewShotConfig | None = None  # New flexible configuration
 
@@ -534,6 +541,22 @@ class VerificationConfig(BaseModel):
                     raise ValueError(
                         f"Question {question_id} few-shot k value must be at least 1 when using k-shot mode"
                     )
+
+        # Additional validation for search-enhanced deep-judgment
+        if self.deep_judgment_search_enabled:
+            # Validate search tool
+            if isinstance(self.deep_judgment_search_tool, str):
+                # Check if it's a supported built-in tool
+                supported_tools = ["tavily"]
+                if self.deep_judgment_search_tool.lower() not in supported_tools:
+                    raise ValueError(
+                        f"Unknown search tool: '{self.deep_judgment_search_tool}'. Supported tools: {supported_tools}"
+                    )
+            elif not callable(self.deep_judgment_search_tool):
+                raise ValueError(
+                    "Search tool must be either a supported tool name string "
+                    "or a callable with signature (str | list[str]) -> (str | list[str])"
+                )
 
     def get_few_shot_config(self) -> FewShotConfig | None:
         """
