@@ -818,3 +818,90 @@ class TestDeepJudgmentSearchEnhancement:
 
         # Verify fallback: hallucination_confidence defaults to "none"
         assert metadata["hallucination_confidence"]["drug_target"] == "none"
+
+    @patch("karenina.benchmark.verification.deep_judgment.create_search_tool")
+    @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
+    def test_full_pipeline_with_search_integration(
+        self, mock_invoke, mock_create_search, test_config, mock_parsing_llm
+    ):
+        """Integration test: Full 3-stage pipeline with search returns confidence in metadata."""
+        # Enable search
+        test_config.deep_judgment_search_enabled = True
+
+        # Mock search tool
+        mock_search_tool = MagicMock()
+        mock_search_tool.return_value = ["Search confirms BCL-2 as drug target", "Search validates apoptosis mechanism"]
+        mock_create_search.return_value = mock_search_tool
+
+        # Mock Stage 1: Excerpts
+        excerpt_response = json.dumps(
+            {
+                "drug_target": [{"text": "targets BCL-2", "confidence": "high"}],
+                "mechanism": [{"text": "induces apoptosis", "confidence": "high"}],
+                "confidence": [{"text": "", "confidence": "none", "explanation": "No confidence info"}],
+            }
+        )
+
+        # Mock Stage 2: Reasoning with hallucination confidence
+        reasoning_response = json.dumps(
+            {
+                "drug_target": {
+                    "reasoning": "BCL-2 target is strongly supported by search results",
+                    "hallucination_confidence": "high",
+                },
+                "mechanism": {
+                    "reasoning": "Apoptosis mechanism validated by external sources",
+                    "hallucination_confidence": "high",
+                },
+                "confidence": {
+                    "reasoning": "No confidence information available",
+                    "hallucination_confidence": "none",
+                },
+            }
+        )
+
+        # Mock Stage 3: Final parameter extraction
+        parameter_response = json.dumps({"drug_target": "BCL-2", "mechanism": "apoptosis", "confidence": "unknown"})
+
+        mock_invoke.side_effect = [excerpt_response, reasoning_response, parameter_response]
+
+        # Execute full pipeline
+        parsed, excerpts, reasoning, metadata = deep_judgment_parse(
+            raw_llm_response="The drug targets BCL-2 and induces apoptosis",
+            RawAnswer=DrugAnswer,
+            parsing_model=test_config.parsing_models[0],
+            parsing_llm=mock_parsing_llm,
+            question_text="What is the drug target and mechanism?",
+            config=test_config,
+            format_instructions="test format",
+            combined_system_prompt="test prompt",
+        )
+
+        # Verify all 3 stages completed
+        assert metadata["stages_completed"] == ["excerpts", "reasoning", "parameters"]
+        assert metadata["model_calls"] == 3
+
+        # Verify search results added to excerpts
+        assert "search_results" in excerpts["drug_target"][0]
+        assert "search_results" in excerpts["mechanism"][0]
+        assert excerpts["drug_target"][0]["search_results"] == "Search confirms BCL-2 as drug target"
+
+        # Verify reasoning extracted correctly
+        assert reasoning["drug_target"] == "BCL-2 target is strongly supported by search results"
+        assert reasoning["mechanism"] == "Apoptosis mechanism validated by external sources"
+
+        # Verify hallucination confidence in metadata (Task 2.2 output)
+        assert "hallucination_confidence" in metadata
+        assert metadata["hallucination_confidence"]["drug_target"] == "high"
+        assert metadata["hallucination_confidence"]["mechanism"] == "high"
+        assert metadata["hallucination_confidence"]["confidence"] == "none"
+
+        # Verify final parsed answer (Stage 3 output)
+        assert parsed.drug_target == "BCL-2"
+        assert parsed.mechanism == "apoptosis"
+        assert parsed.confidence == "unknown"
+
+        # Verify metadata is complete and ready for downstream use
+        # (VerificationResult can use hallucination_confidence from metadata)
+        assert isinstance(metadata["hallucination_confidence"], dict)
+        assert len(metadata["hallucination_confidence"]) == 3
