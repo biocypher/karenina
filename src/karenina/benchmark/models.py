@@ -660,8 +660,9 @@ class VerificationResult(BaseModel):
     deep_judgment_enabled: bool = False  # Whether deep-judgment was configured
     deep_judgment_performed: bool = False  # Whether deep-judgment was successfully executed
     extracted_excerpts: dict[str, list[dict[str, Any]]] | None = None  # Extracted excerpts per attribute
-    # Structure: {"attribute_name": [{"text": str, "confidence": "low|medium|high", "similarity_score": float}]}
+    # Structure: {"attribute_name": [{"text": str, "confidence": "low|medium|high", "similarity_score": float, "search_results"?: str}]}
     # Empty list [] indicates no excerpts found for that attribute (e.g., refusals, no corroborating evidence)
+    # When search is enabled, each excerpt may include a "search_results" field with external validation text
     attribute_reasoning: dict[str, str] | None = None  # Reasoning traces per attribute
     # Structure: {"attribute_name": "reasoning text"}
     # Reasoning can exist even when excerpts are empty (explains why no excerpts found)
@@ -669,6 +670,13 @@ class VerificationResult(BaseModel):
     deep_judgment_model_calls: int = 0  # Number of LLM invocations for deep-judgment
     deep_judgment_excerpt_retry_count: int = 0  # Number of retries for excerpt validation
     attributes_without_excerpts: list[str] | None = None  # Attributes with no corroborating excerpts
+
+    # Search-enhanced deep-judgment metadata
+    deep_judgment_search_enabled: bool = False  # Whether search enhancement was enabled for this verification
+    hallucination_risk_assessment: dict[str, str] | None = None  # Hallucination risk per attribute
+    # Structure: {"attribute_name": "none" | "low" | "medium" | "high"}
+    # Scale: "none" = lowest risk (strong external evidence), "high" = highest risk (weak/no evidence)
+    # Only populated when deep_judgment_search_enabled=True
 
 
 class VerificationJob(BaseModel):
