@@ -172,6 +172,6 @@ def _format_structured_results(results: list[dict[str, Any]], max_results: int) 
         url = result.get("url", "")
 
         # Include full content (no truncation)
-        summary_parts.append(f"[{i}] {title}\n    {content}\n    Source: {url}")
+        summary_parts.append(f"<item_{i}>\n[{i}] {title}\n    {content}\n    Source: {url}\n</item_{i}>")
 
     return "\n\n".join(summary_parts)
