@@ -660,3 +660,161 @@ class TestDeepJudgmentSearchEnhancement:
         # Verify search results added
         assert "search_results" in excerpts["drug_target"][0]
         assert "search_results" in excerpts["mechanism"][0]
+
+    @patch("karenina.benchmark.verification.deep_judgment.create_search_tool")
+    @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
+    def test_stage2_reasoning_with_search_context(self, mock_invoke, mock_create_search, test_config, mock_parsing_llm):
+        """Test Stage 2 reasoning includes hallucination assessment when search is enabled."""
+        # Enable search
+        test_config.deep_judgment_search_enabled = True
+
+        # Mock search tool
+        mock_search_tool = MagicMock()
+        mock_search_tool.return_value = ["Search confirms BCL-2", "Search confirms apoptosis"]
+        mock_create_search.return_value = mock_search_tool
+
+        # Mock Stage 1: Excerpts
+        excerpt_response = json.dumps(
+            {
+                "drug_target": [{"text": "targets BCL-2", "confidence": "high"}],
+                "mechanism": [{"text": "apoptosis", "confidence": "medium"}],
+                "confidence": [],
+            }
+        )
+
+        # Mock Stage 2: Reasoning WITH hallucination confidence (nested format)
+        reasoning_response = json.dumps(
+            {
+                "drug_target": {
+                    "reasoning": "BCL-2 target confirmed by search results",
+                    "hallucination_confidence": "high",
+                },
+                "mechanism": {
+                    "reasoning": "Apoptosis mechanism supported by search",
+                    "hallucination_confidence": "medium",
+                },
+                "confidence": {"reasoning": "No information provided", "hallucination_confidence": "none"},
+            }
+        )
+
+        # Mock Stage 3: Parameters
+        parameter_response = json.dumps({"drug_target": "BCL-2", "mechanism": "apoptosis", "confidence": "low"})
+
+        mock_invoke.side_effect = [excerpt_response, reasoning_response, parameter_response]
+
+        # Execute
+        parsed, excerpts, reasoning, metadata = deep_judgment_parse(
+            raw_llm_response="targets BCL-2 and apoptosis",
+            RawAnswer=DrugAnswer,
+            parsing_model=test_config.parsing_models[0],
+            parsing_llm=mock_parsing_llm,
+            question_text="test",
+            config=test_config,
+            format_instructions="test",
+            combined_system_prompt="test",
+        )
+
+        # Verify reasoning was extracted correctly
+        assert reasoning["drug_target"] == "BCL-2 target confirmed by search results"
+        assert reasoning["mechanism"] == "Apoptosis mechanism supported by search"
+
+        # Verify hallucination confidence was extracted and stored in metadata
+        assert "hallucination_confidence" in metadata
+        assert metadata["hallucination_confidence"]["drug_target"] == "high"
+        assert metadata["hallucination_confidence"]["mechanism"] == "medium"
+        assert metadata["hallucination_confidence"]["confidence"] == "none"
+
+    @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
+    def test_stage2_reasoning_without_search_backward_compatible(self, mock_invoke, test_config, mock_parsing_llm):
+        """Test Stage 2 reasoning without search uses simple format (backward compatible)."""
+        # Ensure search is disabled
+        assert test_config.deep_judgment_search_enabled is False
+
+        # Mock Stage 1: Excerpts (without search_results)
+        excerpt_response = json.dumps(
+            {"drug_target": [{"text": "excerpt", "confidence": "high"}], "mechanism": [], "confidence": []}
+        )
+
+        # Mock Stage 2: Simple string format (no nested structure)
+        reasoning_response = json.dumps(
+            {
+                "drug_target": "Simple reasoning text",
+                "mechanism": "Another reasoning",
+                "confidence": "No info",
+            }
+        )
+
+        # Mock Stage 3: Parameters
+        parameter_response = json.dumps({"drug_target": "t", "mechanism": "m", "confidence": "c"})
+
+        mock_invoke.side_effect = [excerpt_response, reasoning_response, parameter_response]
+
+        # Execute
+        parsed, excerpts, reasoning, metadata = deep_judgment_parse(
+            raw_llm_response="excerpt here",
+            RawAnswer=DrugAnswer,
+            parsing_model=test_config.parsing_models[0],
+            parsing_llm=mock_parsing_llm,
+            question_text="test",
+            config=test_config,
+            format_instructions="test",
+            combined_system_prompt="test",
+        )
+
+        # Verify reasoning is simple strings
+        assert reasoning["drug_target"] == "Simple reasoning text"
+        assert reasoning["mechanism"] == "Another reasoning"
+
+        # Verify NO hallucination confidence in metadata
+        assert "hallucination_confidence" not in metadata
+
+    @patch("karenina.benchmark.verification.deep_judgment.create_search_tool")
+    @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
+    def test_stage2_reasoning_fallback_on_malformed_nested_format(
+        self, mock_invoke, mock_create_search, test_config, mock_parsing_llm
+    ):
+        """Test Stage 2 reasoning falls back gracefully if LLM returns wrong format."""
+        # Enable search
+        test_config.deep_judgment_search_enabled = True
+
+        # Mock search tool
+        mock_search_tool = MagicMock()
+        mock_search_tool.return_value = ["Search result"]
+        mock_create_search.return_value = mock_search_tool
+
+        # Mock Stage 1: Excerpts with search results
+        excerpt_response = json.dumps(
+            {"drug_target": [{"text": "excerpt", "confidence": "high"}], "mechanism": [], "confidence": []}
+        )
+
+        # Mock Stage 2: LLM returned STRING instead of nested dict (malformed)
+        reasoning_response = json.dumps(
+            {
+                "drug_target": "This should be a dict but is a string",  # Wrong format!
+                "mechanism": "Another string",
+                "confidence": "String",
+            }
+        )
+
+        # Mock Stage 3
+        parameter_response = json.dumps({"drug_target": "t", "mechanism": "m", "confidence": "c"})
+
+        mock_invoke.side_effect = [excerpt_response, reasoning_response, parameter_response]
+
+        # Execute - should not crash
+        parsed, excerpts, reasoning, metadata = deep_judgment_parse(
+            raw_llm_response="excerpt here",
+            RawAnswer=DrugAnswer,
+            parsing_model=test_config.parsing_models[0],
+            parsing_llm=mock_parsing_llm,
+            question_text="test",
+            config=test_config,
+            format_instructions="test",
+            combined_system_prompt="test",
+        )
+
+        # Verify fallback: reasoning extracted as strings
+        assert reasoning["drug_target"] == "This should be a dict but is a string"
+
+        # Verify fallback: hallucination_confidence defaults to "none"
+        assert metadata["hallucination_confidence"]["drug_target"] == "none"

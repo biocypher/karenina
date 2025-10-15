@@ -322,6 +322,12 @@ Return JSON format:
     # STAGE 2: REASONING GENERATION
     # (Works even with empty excerpt lists)
     # ==========================================
+    # Check if search was performed (any excerpt has search_results field)
+    search_performed = any(
+        "search_results" in excerpt_obj for excerpt_list in excerpts.values() for excerpt_obj in excerpt_list
+    )
+
+    # Build base reasoning prompt
     reasoning_system_prompt = f"""{generic_system_prompt}
 
 <task_structure>
@@ -336,7 +342,55 @@ Your task is to generate reasoning that explains how the excerpts should inform 
 For each attribute below, the description indicates what the attribute represents:
 
 {attr_guidance}
-</attribute_guidance>
+</attribute_guidance>"""
+
+    # Conditionally add search context and use nested format when search was performed
+    if search_performed:
+        reasoning_system_prompt += """
+
+<search_context>
+Each excerpt has been validated against external search results.
+The search results are included in the excerpt data structure under the "search_results" field.
+
+When generating reasoning, evaluate:
+1. Does the search evidence back this excerpt?
+2. What is the confidence that this excerpt is NOT hallucinated?
+   - HIGH: Strong search evidence supports the excerpt
+   - MEDIUM: Partial search evidence or indirect support
+   - LOW: Weak or no search evidence found
+   - NONE: No search performed or excerpt marked as missing
+
+Include a dedicated assessment of evidence backing in your reasoning.
+</search_context>
+
+<instructions>
+Generate reasoning that explains how the excerpts should inform each attribute's value.
+
+IMPORTANT: Only generate reasoning for the attributes listed above.
+
+For each attribute:
+1. **Review the attribute's description** to understand what value it expects
+2. **Analyze the excerpts** to determine what they tell us about this attribute
+3. **Evaluate search evidence** to assess hallucination risk
+4. **Generate reasoning** (2-3 sentences) that explains:
+   - How the excerpts relate to the attribute based on its description
+   - What value the attribute should have based on the evidence
+   - How search results support or contradict the excerpt
+   - Any ambiguities or confidence issues
+
+When excerpts are empty: Explain why no excerpts were found and how this affects the attribute. Set hallucination_confidence to "none".
+
+Return JSON format with ONLY the attributes listed above:
+{
+  "attribute_name": {
+    "reasoning": "reasoning text explaining how excerpts inform the attribute value",
+    "hallucination_confidence": "high|medium|low|none"
+  }
+}
+</instructions>"""
+    else:
+        # Use simple string format (backward compatible - no search context)
+        reasoning_system_prompt += """
 
 <instructions>
 Generate reasoning that explains how the excerpts should inform each attribute's value.
@@ -354,9 +408,9 @@ For each attribute:
 When excerpts are empty: Explain why no excerpts were found and how this affects the attribute (e.g., "The response contains a refusal, so this attribute should be marked as not provided" or "No explicit evidence present, attribute may need inference from context").
 
 Return JSON format with ONLY the attributes listed above:
-{{
+{
   "attribute_name": "reasoning text explaining how excerpts inform the attribute value"
-}}
+}
 </instructions>"""
 
     reasoning_prompt = f"""<original_question>
@@ -373,13 +427,38 @@ Return JSON format with ONLY the attributes listed above:
     cleaned_response = _strip_markdown_fences(raw_response)
 
     try:
-        reasoning = json.loads(cleaned_response)
+        reasoning_raw = json.loads(cleaned_response)
     except json.JSONDecodeError as e:
         logger.warning(f"Failed to parse reasoning JSON: {e}")
-        reasoning = {}  # Gracefully handle failures
+        reasoning_raw = {}  # Gracefully handle failures
+
+    # Extract reasoning and hallucination confidence (if present)
+    reasoning = {}
+    hallucination_confidence = {}
+
+    if search_performed:
+        # Nested format: {"attr": {"reasoning": "...", "hallucination_confidence": "high|medium|low|none"}}
+        for attr, value in reasoning_raw.items():
+            if isinstance(value, dict):
+                reasoning[attr] = value.get("reasoning", "")
+                hallucination_confidence[attr] = value.get("hallucination_confidence", "none")
+            else:
+                # Fallback: LLM returned string instead of nested format
+                reasoning[attr] = str(value)
+                hallucination_confidence[attr] = "none"
+                logger.warning(f"Expected nested reasoning format for '{attr}' but got string. Using fallback.")
+    else:
+        # Simple format: {"attr": "reasoning text"}
+        for attr, value in reasoning_raw.items():
+            reasoning[attr] = str(value) if not isinstance(value, dict) else value.get("reasoning", "")
 
     stages_completed.append("reasoning")
-    logger.info(f"Stage 2 completed: Generated reasoning for {len(reasoning)} attributes")
+    if search_performed:
+        logger.info(
+            f"Stage 2 completed: Generated reasoning with hallucination assessment for {len(reasoning)} attributes"
+        )
+    else:
+        logger.info(f"Stage 2 completed: Generated reasoning for {len(reasoning)} attributes")
 
     # ==========================================
     # STAGE 3: PARAMETER EXTRACTION
@@ -429,5 +508,9 @@ Your task is to extract the final attribute values based on the reasoning traces
         "excerpt_retry_count": excerpt_retry_count,
         "attributes_without_excerpts": attributes_without_excerpts,
     }
+
+    # Add hallucination confidence if search was performed
+    if search_performed and hallucination_confidence:
+        metadata["hallucination_confidence"] = hallucination_confidence
 
     return parsed_answer, excerpts, reasoning, metadata
