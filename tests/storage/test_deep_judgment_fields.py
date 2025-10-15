@@ -19,6 +19,10 @@ def test_deep_judgment_fields_exist():
     assert hasattr(VerificationResultModel, "deep_judgment_excerpt_retry_count")
     assert hasattr(VerificationResultModel, "attributes_without_excerpts")
 
+    # Search-enhanced deep-judgment fields
+    assert hasattr(VerificationResultModel, "deep_judgment_search_enabled")
+    assert hasattr(VerificationResultModel, "hallucination_risk_assessment")
+
 
 def test_deep_judgment_field_annotations():
     """Test that deep-judgment fields have correct type annotations."""
@@ -34,3 +38,7 @@ def test_deep_judgment_field_annotations():
     assert "deep_judgment_model_calls" in annotations
     assert "deep_judgment_excerpt_retry_count" in annotations
     assert "attributes_without_excerpts" in annotations
+
+    # Search-enhanced deep-judgment fields
+    assert "deep_judgment_search_enabled" in annotations
+    assert "hallucination_risk_assessment" in annotations

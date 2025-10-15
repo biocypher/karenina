@@ -276,6 +276,10 @@ class VerificationResultModel(Base):
     deep_judgment_excerpt_retry_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     attributes_without_excerpts: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
 
+    # Search-enhanced deep-judgment metadata
+    deep_judgment_search_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    hallucination_risk_assessment: Mapped[dict[str, str] | None] = mapped_column(JSON, nullable=True)
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
 
