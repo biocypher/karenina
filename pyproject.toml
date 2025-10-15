@@ -61,6 +61,10 @@ dev = [
     "mkdocstrings[python]>=0.20.0",
     "ipython>=8.0.0",
 ]
+search = [
+    "langchain-community>=0.3.0",
+    "tavily-python>=0.3.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/yourusername/karenina"
@@ -112,6 +116,11 @@ warn_unused_ignores = true
 warn_no_return = true
 follow_imports = "normal"
 ignore_missing_imports = true
+
+# Relax strictness for optional dependencies (search tools)
+[[tool.mypy.overrides]]
+module = "karenina.benchmark.verification.search_tools_tavily"
+ignore_errors = true  # Skip type checking for optional Tavily implementation
 
 # Relax strictness for tests to accommodate test-specific patterns
 # Test code often intentionally violates type rules to test error conditions
