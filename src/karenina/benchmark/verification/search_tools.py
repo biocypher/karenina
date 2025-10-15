@@ -12,188 +12,87 @@ The design prioritizes extensibility and allows users to:
 - Inject custom langchain tools at runtime
 - Replace with MCP-provided search tools in the future
 
+Search Tool Interface:
+    All search tools follow a simple contract:
+    - Input: str or list[str] (query or queries)
+    - Output: str or list[str] (result or results)
+
 Example Usage:
     # Built-in tool (string-based)
     search_tool = create_search_tool("tavily")
 
-    # Custom langchain tool (function-based)
-    from langchain.tools import Tool
-    custom_tool = Tool(name="custom_search", func=my_search_function, ...)
-    search_tool = create_search_tool(custom_tool)
+    # Search single query
+    result = search_tool("What is the capital of France?")
+    print(result)  # String with search results
 
-    # Use the tool
-    result = search_tool.search("What is the capital of France?")
-    print(result.results_summary)
+    # Search multiple queries
+    results = search_tool(["Query 1", "Query 2", "Query 3"])
+    print(results)  # List of result strings
+
+    # Custom langchain tool (function-based)
+    def my_search(query: str) -> str:
+        return f"Results for: {query}"
+
+    search_tool = create_search_tool(my_search)
+    result = search_tool("test query")
 """
 
 import logging
-from dataclasses import dataclass
-from typing import Any, Protocol
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
-
-@dataclass(frozen=True)
-class SearchResult:
-    """Result from a search tool query.
-
-    Attributes:
-        query: The original search query (excerpt text)
-        results_summary: Human-readable summary of top search results
-        raw_results: Optional raw results from the search API (for debugging)
-    """
-
-    query: str
-    results_summary: str
-    raw_results: Any | None = None
-
-
-class SearchTool(Protocol):
-    """Protocol for search tools used in deep-judgment excerpt validation.
-
-    This protocol defines the interface that all search tools must implement.
-    Search tools can be:
-    - Built-in implementations (e.g., TavilySearchTool)
-    - Langchain tools wrapped in this interface
-    - MCP tools wrapped in this interface (future)
-
-    The protocol ensures consistent behavior across different search backends
-    while allowing flexible implementation strategies.
-    """
-
-    def search(self, query: str) -> SearchResult:
-        """Execute a search query and return structured results.
-
-        Args:
-            query: The search query (typically an excerpt from LLM response)
-
-        Returns:
-            SearchResult containing summary and confidence score
-
-        Raises:
-            Exception: Implementation-specific errors (should be caught by caller)
-        """
-        ...
-
-
-class LangChainSearchToolAdapter:
-    """Adapter that wraps a langchain tool to conform to SearchTool protocol.
-
-    This adapter allows any langchain tool (including MCP tools) to be used
-    as a search tool in deep-judgment. The langchain tool should:
-    - Accept a string query as input
-    - Return a string result
-
-    The adapter handles:
-    - Invoking the langchain tool
-    - Parsing results into SearchResult format
-    - Calculating confidence scores based on result quality
-    - Error handling and fallbacks
-    """
-
-    def __init__(self, langchain_tool: Any):
-        """Initialize adapter with a langchain tool.
-
-        Args:
-            langchain_tool: Any langchain tool that implements invoke() or run()
-                Expected to have one of: invoke(str) -> str, run(str) -> str
-        """
-        self.langchain_tool = langchain_tool
-
-        # Determine which method to use (invoke for newer tools, run for legacy)
-        if hasattr(langchain_tool, "invoke"):
-            self._call_method = "invoke"
-        elif hasattr(langchain_tool, "run"):
-            self._call_method = "run"
-        elif callable(langchain_tool):
-            self._call_method = "call"
-        else:
-            raise ValueError(
-                f"Langchain tool must have 'invoke', 'run' method, or be callable. Got: {type(langchain_tool)}"
-            )
-
-        logger.info(f"Initialized LangChainSearchToolAdapter with tool: {getattr(langchain_tool, 'name', 'unknown')}")
-
-    def search(self, query: str) -> SearchResult:
-        """Execute search using the wrapped langchain tool.
-
-        Args:
-            query: Search query string
-
-        Returns:
-            SearchResult with summary and confidence score
-        """
-        try:
-            # Invoke the langchain tool
-            if self._call_method == "invoke":
-                raw_result = self.langchain_tool.invoke(query)
-            elif self._call_method == "run":
-                raw_result = self.langchain_tool.run(query)
-            else:  # callable
-                raw_result = self.langchain_tool(query)
-
-            # Parse result (langchain tools typically return strings)
-            results_summary = raw_result.strip() if isinstance(raw_result, str) else str(raw_result)
-
-            logger.info(f"Search completed for query: '{query[:50]}...'")
-
-            return SearchResult(
-                query=query,
-                results_summary=results_summary,
-                raw_results=raw_result,
-            )
-
-        except Exception as e:
-            logger.warning(f"Search failed for query '{query[:50]}...': {e}")
-            # Return empty result on failure
-            return SearchResult(
-                query=query,
-                results_summary=f"Search failed: {str(e)}",
-                raw_results=None,
-            )
+# Type alias for search tool callable
+SearchToolCallable = Callable[[str | list[str]], str | list[str]]
 
 
 def create_search_tool(
     tool: str | Any,
     **kwargs: Any,
-) -> SearchTool:
+) -> SearchToolCallable:
     """Factory function to create search tools.
 
     This factory supports two modes:
 
     1. String-based (built-in tools):
-       create_search_tool("tavily") -> TavilySearchTool instance
+       create_search_tool("tavily") -> Tavily search function
 
     2. Langchain tool injection:
-       create_search_tool(my_langchain_tool) -> LangChainSearchToolAdapter
+       create_search_tool(my_langchain_tool) -> Wrapped search function
 
     The dual-mode design allows:
     - Simple usage with built-in tools (just pass "tavily")
     - Advanced usage with custom langchain tools (pass tool instance)
     - Future MCP integration (pass MCP tool as langchain tool)
 
+    All search tools follow the same interface:
+    - Input: str or list[str]
+    - Output: str or list[str]
+
     Args:
-        tool: Either a string name ("tavily") or a langchain tool instance
+        tool: Either a string name ("tavily") or a langchain tool instance/callable
         **kwargs: Additional arguments passed to built-in tool constructors
 
     Returns:
-        SearchTool instance conforming to the protocol
+        Search function that takes str|list[str] and returns str|list[str]
 
     Raises:
         ValueError: If tool name is unknown or tool instance is invalid
 
     Examples:
         # Built-in Tavily tool
-        search_tool = create_search_tool("tavily")
+        search = create_search_tool("tavily")
+        result = search("Python programming")
 
         # Custom langchain tool
         from langchain.tools import Tool
         custom_tool = Tool(name="my_search", func=lambda q: f"Results for: {q}")
-        search_tool = create_search_tool(custom_tool)
+        search = create_search_tool(custom_tool)
+        result = search("test query")
 
-        # Future: MCP tool (treated as langchain tool)
-        mcp_search_tool = load_mcp_tool("search")
-        search_tool = create_search_tool(mcp_search_tool)
+        # Batch search
+        results = search(["query1", "query2", "query3"])
     """
     # Case 1: String-based built-in tool
     if isinstance(tool, str):
@@ -202,10 +101,10 @@ def create_search_tool(
         if tool_name == "tavily":
             # Import here to avoid dependency issues if Tavily not installed
             try:
-                from .search_tools_tavily import TavilySearchTool
+                from .search_tools_tavily import create_tavily_search_tool
 
-                logger.info("Creating TavilySearchTool instance")
-                return TavilySearchTool(**kwargs)
+                logger.info("Creating Tavily search tool")
+                return create_tavily_search_tool(**kwargs)  # type: ignore[no-any-return]
             except ImportError as e:
                 raise ValueError(
                     f"Tavily search tool requires 'langchain-community' and 'tavily-python'. "
@@ -219,8 +118,91 @@ def create_search_tool(
                 f"Or pass a langchain tool instance directly."
             )
 
-    # Case 2: Langchain tool instance
+    # Case 2: Langchain tool instance or callable
     else:
-        # Wrap the langchain tool in our adapter
-        logger.info(f"Creating LangChainSearchToolAdapter for tool: {type(tool)}")
-        return LangChainSearchToolAdapter(tool)
+        logger.info(f"Creating wrapper for custom tool: {type(tool)}")
+        return _wrap_langchain_tool(tool)
+
+
+def _wrap_langchain_tool(langchain_tool: Any) -> SearchToolCallable:
+    """Wrap a langchain tool to conform to search tool interface.
+
+    Args:
+        langchain_tool: Any langchain tool that implements invoke(), run(), or is callable
+
+    Returns:
+        Search function that takes str|list[str] and returns str|list[str]
+
+    Raises:
+        ValueError: If tool doesn't have required methods
+    """
+    # Determine which method to use (invoke for newer tools, run for legacy, or callable)
+    if hasattr(langchain_tool, "invoke"):
+        call_method = "invoke"
+    elif hasattr(langchain_tool, "run"):
+        call_method = "run"
+    elif callable(langchain_tool):
+        call_method = "call"
+    else:
+        raise ValueError(
+            f"Langchain tool must have 'invoke', 'run' method, or be callable. Got: {type(langchain_tool)}"
+        )
+
+    logger.info(f"Wrapped langchain tool with method: {call_method}")
+
+    def search_function(query: str | list[str]) -> str | list[str]:
+        """Execute search using wrapped langchain tool.
+
+        Args:
+            query: Single query string or list of query strings
+
+        Returns:
+            Single result string (if query is str) or list of results (if query is list)
+        """
+        # Handle batch queries
+        if isinstance(query, list):
+            results = []
+            for q in query:
+                try:
+                    result = _invoke_tool(langchain_tool, call_method, q)
+                    results.append(result)
+                except Exception as e:
+                    logger.warning(f"Search failed for query '{q[:50]}...': {e}")
+                    results.append(f"Search failed: {str(e)}")
+            return results
+
+        # Handle single query
+        else:
+            try:
+                return _invoke_tool(langchain_tool, call_method, query)
+            except Exception as e:
+                logger.warning(f"Search failed for query '{query[:50]}...': {e}")
+                return f"Search failed: {str(e)}"
+
+    return search_function
+
+
+def _invoke_tool(tool: Any, method: str, query: str) -> str:
+    """Invoke a langchain tool with the appropriate method.
+
+    Args:
+        tool: The langchain tool instance
+        method: Method to use ("invoke", "run", or "call")
+        query: Query string
+
+    Returns:
+        Search result as string
+    """
+    if method == "invoke":
+        raw_result = tool.invoke(query)
+    elif method == "run":
+        raw_result = tool.run(query)
+    else:  # callable
+        raw_result = tool(query)
+
+    # Parse result to string
+    if isinstance(raw_result, str):
+        return raw_result.strip()
+    else:
+        # Handle structured data (convert to string)
+        return str(raw_result)

@@ -2,54 +2,37 @@
 
 import pytest
 
-from karenina.benchmark.verification.search_tools import (
-    LangChainSearchToolAdapter,
-    SearchResult,
-    create_search_tool,
-)
+from karenina.benchmark.verification.search_tools import create_search_tool
 
 
-class TestSearchResult:
-    """Test SearchResult dataclass."""
+class TestFactoryFunction:
+    """Test create_search_tool factory function."""
 
-    def test_search_result_creation(self) -> None:
-        """Test creating a SearchResult."""
-        result = SearchResult(
-            query="What is Python?",
-            results_summary="Python is a programming language...",
-        )
+    def test_factory_with_unknown_string(self) -> None:
+        """Test factory raises error for unknown tool name."""
+        with pytest.raises(ValueError, match="Unknown built-in search tool"):
+            create_search_tool("unknown_tool")
 
-        assert result.query == "What is Python?"
-        assert "programming language" in result.results_summary
-        assert result.raw_results is None
+    def test_factory_with_callable(self) -> None:
+        """Test factory with simple callable function."""
 
-    def test_search_result_with_raw_data(self) -> None:
-        """Test SearchResult with raw data."""
-        raw_data = {"hits": [{"title": "Python", "url": "https://python.org"}]}
-        result = SearchResult(
-            query="Python docs",
-            results_summary="Found Python documentation",
-            raw_results=raw_data,
-        )
+        def my_search(query: str | list[str]) -> str | list[str]:
+            if isinstance(query, list):
+                return [f"Results for: {q}" for q in query]
+            return f"Results for: {query}"
 
-        assert result.raw_results == raw_data
+        search_tool = create_search_tool(my_search)
 
-    def test_search_result_is_frozen(self) -> None:
-        """Test that SearchResult is immutable."""
-        result = SearchResult(
-            query="test",
-            results_summary="summary",
-        )
+        # Test single query
+        result = search_tool("test query")
+        assert result == "Results for: test query"
 
-        with pytest.raises(AttributeError):  # FrozenInstanceError
-            result.results_summary = "new summary"
+        # Test batch queries
+        results = search_tool(["q1", "q2", "q3"])
+        assert results == ["Results for: q1", "Results for: q2", "Results for: q3"]
 
-
-class TestLangChainSearchToolAdapter:
-    """Test LangChainSearchToolAdapter."""
-
-    def test_adapter_with_invoke_method(self) -> None:
-        """Test adapter with langchain tool that has invoke() method."""
+    def test_factory_with_langchain_tool_invoke(self) -> None:
+        """Test factory with langchain tool that has invoke() method."""
 
         class MockLangChainTool:
             name = "mock_search"
@@ -58,15 +41,20 @@ class TestLangChainSearchToolAdapter:
                 return f"Search results for: {query}"
 
         tool = MockLangChainTool()
-        adapter = LangChainSearchToolAdapter(tool)
+        search_tool = create_search_tool(tool)
 
-        result = adapter.search("Python programming")
+        # Test single query
+        result = search_tool("Python")
+        assert "Search results for: Python" in result
 
-        assert result.query == "Python programming"
-        assert "Search results for: Python programming" in result.results_summary
+        # Test batch queries
+        results = search_tool(["q1", "q2"])
+        assert isinstance(results, list)
+        assert len(results) == 2
+        assert "Search results for: q1" in results[0]
 
-    def test_adapter_with_run_method(self) -> None:
-        """Test adapter with legacy langchain tool that has run() method."""
+    def test_factory_with_langchain_tool_run(self) -> None:
+        """Test factory with legacy langchain tool that has run() method."""
 
         class MockLegacyTool:
             name = "legacy_search"
@@ -75,168 +63,150 @@ class TestLangChainSearchToolAdapter:
                 return f"Legacy search: {query}"
 
         tool = MockLegacyTool()
-        adapter = LangChainSearchToolAdapter(tool)
+        search_tool = create_search_tool(tool)
 
-        result = adapter.search("test query")
+        result = search_tool("test")
+        assert "Legacy search: test" in result
 
-        assert result.query == "test query"
-        assert "Legacy search: test query" in result.results_summary
-
-    def test_adapter_with_callable(self) -> None:
-        """Test adapter with callable tool."""
-
-        def mock_search(query: str) -> str:
-            return f"Callable search: {query}"
-
-        adapter = LangChainSearchToolAdapter(mock_search)
-
-        result = adapter.search("test")
-
-        assert result.query == "test"
-        assert "Callable search: test" in result.results_summary
-
-    def test_adapter_with_invalid_tool(self) -> None:
-        """Test adapter raises error for invalid tool."""
+    def test_factory_with_invalid_tool(self) -> None:
+        """Test factory raises error for invalid tool."""
 
         class InvalidTool:
             pass
 
         with pytest.raises(ValueError, match="must have 'invoke', 'run' method, or be callable"):
-            LangChainSearchToolAdapter(InvalidTool())
+            create_search_tool(InvalidTool())
 
-    def test_adapter_handles_exceptions(self) -> None:
-        """Test adapter handles tool exceptions gracefully."""
+    def test_wrapped_tool_handles_exceptions(self) -> None:
+        """Test wrapped tool handles exceptions gracefully."""
 
         class FailingTool:
             def invoke(self, query: str) -> str:  # noqa: ARG002
                 raise RuntimeError("API error")
 
         tool = FailingTool()
-        adapter = LangChainSearchToolAdapter(tool)
+        search_tool = create_search_tool(tool)
 
-        result = adapter.search("test")
+        # Single query should return error message
+        result = search_tool("test")
+        assert "Search failed" in result
 
-        assert result.query == "test"
-        assert "Search failed" in result.results_summary
+        # Batch queries should return error messages
+        results = search_tool(["q1", "q2"])
+        assert len(results) == 2
+        assert all("Search failed" in r for r in results)
 
-    def test_adapter_handles_non_string_results(self) -> None:
-        """Test adapter handles non-string tool results."""
+    def test_wrapped_tool_handles_non_string_results(self) -> None:
+        """Test wrapped tool handles non-string results."""
 
         class StructuredResultTool:
             def invoke(self, query: str) -> dict:  # noqa: ARG002
                 return {"results": ["item1", "item2"]}
 
         tool = StructuredResultTool()
-        adapter = LangChainSearchToolAdapter(tool)
+        search_tool = create_search_tool(tool)
 
-        result = adapter.search("test")
-
-        assert result.query == "test"
-        assert "results" in result.results_summary.lower()
-        assert result.raw_results == {"results": ["item1", "item2"]}
-
-
-class TestCreateSearchTool:
-    """Test create_search_tool factory function."""
-
-    def test_factory_with_string_tavily(self) -> None:
-        """Test factory with 'tavily' string (requires actual dependencies)."""
-        # This test will be skipped if tavily not installed
-        pytest.importorskip("langchain_community.tools.tavily_search")
-
-        # Note: This will raise ValueError if TAVILY_API_KEY not set
-        # We'll catch that as expected behavior
-        try:
-            tool = create_search_tool("tavily")
-            # If we have the API key, tool should be created
-            assert hasattr(tool, "search")
-        except ValueError as e:
-            # Expected if API key not set
-            assert "API key" in str(e)
-
-    def test_factory_with_unknown_string(self) -> None:
-        """Test factory raises error for unknown tool name."""
-        with pytest.raises(ValueError, match="Unknown built-in search tool"):
-            create_search_tool("unknown_tool")
-
-    def test_factory_with_langchain_tool(self) -> None:
-        """Test factory with langchain tool instance."""
-
-        class MockTool:
-            name = "custom"
-
-            def invoke(self, query: str) -> str:  # noqa: ARG002
-                return "Custom: test"
-
-        custom_tool = MockTool()
-        adapter = create_search_tool(custom_tool)
-
-        assert hasattr(adapter, "search")
-
-        result = adapter.search("test")
-        assert result.query == "test"
-        assert "Custom" in result.results_summary
-
-    def test_factory_with_callable(self) -> None:
-        """Test factory with callable function."""
-
-        def my_search(query: str) -> str:
-            return f"Function search: {query}"
-
-        adapter = create_search_tool(my_search)
-
-        result = adapter.search("test query")
-        assert "Function search: test query" in result.results_summary
+        result = search_tool("test")
+        assert "results" in result.lower()
 
     def test_factory_preserves_kwargs_for_builtin_tools(self) -> None:
         """Test factory passes kwargs to built-in tool constructors."""
         # Skip if tavily not available
-        pytest.importorskip("langchain_community.tools.tavily_search")
+        try:
+            pytest.importorskip("langchain_community.tools.tavily_search")
+        except pytest.skip.Exception:
+            pytest.skip("Tavily dependencies not available")
+            return
 
-        # This should pass kwargs to TavilySearchTool constructor
-        # Will fail if no API key, but that's expected
-        with pytest.raises(ValueError, match="API key"):
-            create_search_tool("tavily", max_results=5, search_depth="advanced")
+        # This should pass kwargs to create_tavily_search_tool
+        # If no API key in environment, should raise ValueError
+        # If API key present, tool should be created successfully
+        try:
+            search_tool = create_search_tool("tavily", max_results=5, search_depth="advanced")
+            assert callable(search_tool)  # Tool created successfully
+        except ValueError as e:
+            # Expected if no API key
+            assert "API key" in str(e)
 
 
-class TestProtocolCompliance:
-    """Test that implementations conform to SearchTool protocol."""
+class TestSearchToolInterface:
+    """Test search tool interface behavior."""
 
-    def test_adapter_conforms_to_protocol(self) -> None:
-        """Test that LangChainSearchToolAdapter conforms to SearchTool protocol."""
+    def test_search_tool_single_query(self) -> None:
+        """Test search tool with single query string."""
 
-        class MockTool:
-            def invoke(self, query: str) -> str:  # noqa: ARG002
-                return "result"
+        def mock_search(query: str | list[str]) -> str | list[str]:
+            if isinstance(query, list):
+                return [f"Result: {q}" for q in query]
+            return f"Result: {query}"
 
-        tool = MockTool()
-        adapter = LangChainSearchToolAdapter(tool)
+        search_tool = create_search_tool(mock_search)
 
-        # Should have search method
-        assert hasattr(adapter, "search")
-        assert callable(adapter.search)
+        result = search_tool("single query")
+        assert isinstance(result, str)
+        assert result == "Result: single query"
 
-        # Should return SearchResult
-        result = adapter.search("test")
-        assert isinstance(result, SearchResult)
+    def test_search_tool_batch_queries(self) -> None:
+        """Test search tool with list of queries."""
 
-    def test_tavily_tool_conforms_to_protocol(self) -> None:
-        """Test that TavilySearchTool conforms to SearchTool protocol (if available)."""
+        def mock_search(query: str | list[str]) -> str | list[str]:
+            if isinstance(query, list):
+                return [f"Result: {q}" for q in query]
+            return f"Result: {query}"
+
+        search_tool = create_search_tool(mock_search)
+
+        results = search_tool(["q1", "q2", "q3"])
+        assert isinstance(results, list)
+        assert len(results) == 3
+        assert results == ["Result: q1", "Result: q2", "Result: q3"]
+
+    def test_search_tool_with_empty_list(self) -> None:
+        """Test search tool with empty query list."""
+
+        def mock_search(query: str | list[str]) -> str | list[str]:
+            if isinstance(query, list):
+                return [f"Result: {q}" for q in query]
+            return f"Result: {query}"
+
+        search_tool = create_search_tool(mock_search)
+
+        results = search_tool([])
+        assert isinstance(results, list)
+        assert len(results) == 0
+
+
+class TestTavilySearchTool:
+    """Test Tavily search tool (if available)."""
+
+    def test_tavily_tool_creation(self) -> None:
+        """Test creating Tavily tool (requires API key)."""
+        # Skip if tavily not available
+        try:
+            pytest.importorskip("langchain_community.tools.tavily_search")
+        except pytest.skip.Exception:
+            pytest.skip("Tavily dependencies not available")
+            return
+
+        # If no API key, should raise error
+        # If API key present, tool should be created
+        try:
+            search_tool = create_search_tool("tavily")
+            assert callable(search_tool)  # Tool created successfully with API key from env
+        except ValueError as e:
+            # Expected if no API key
+            assert "API key" in str(e)
+
+    def test_tavily_tool_with_api_key(self) -> None:
+        """Test Tavily tool with dummy API key (for interface testing only)."""
         # Skip if tavily not available
         pytest.importorskip("langchain_community.tools.tavily_search")
 
-        from karenina.benchmark.verification.search_tools_tavily import TavilySearchTool
-
-        # Create tool (will fail without API key, but we're just testing interface)
+        # We can't actually test search without a real API key,
+        # but we can test that the tool is created correctly
         try:
-            tool = TavilySearchTool(api_key="dummy_key_for_testing")
-
-            # Should have search method
-            assert hasattr(tool, "search")
-            assert callable(tool.search)
-
-            # We can't test actual search without real API key
-            # but we've verified the interface exists
-
+            search_tool = create_search_tool("tavily", api_key="dummy_key")
+            # Tool should be a callable
+            assert callable(search_tool)
         except ImportError:
             pytest.skip("Tavily dependencies not available")
