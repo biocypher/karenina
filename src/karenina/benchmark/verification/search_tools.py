@@ -40,13 +40,11 @@ class SearchResult:
     Attributes:
         query: The original search query (excerpt text)
         results_summary: Human-readable summary of top search results
-        confidence_score: Confidence that results are relevant (0.0 to 1.0)
         raw_results: Optional raw results from the search API (for debugging)
     """
 
     query: str
     results_summary: str
-    confidence_score: float
     raw_results: Any | None = None
 
 
@@ -137,16 +135,11 @@ class LangChainSearchToolAdapter:
             # Parse result (langchain tools typically return strings)
             results_summary = raw_result.strip() if isinstance(raw_result, str) else str(raw_result)
 
-            # Default confidence: 1.0 if we got results, 0.0 if empty
-            # Individual search tool implementations can override this with more sophisticated scoring
-            confidence_score = 1.0 if results_summary and len(results_summary) > 0 else 0.0
-
             logger.info(f"Search completed for query: '{query[:50]}...'")
 
             return SearchResult(
                 query=query,
                 results_summary=results_summary,
-                confidence_score=confidence_score,
                 raw_results=raw_result,
             )
 
@@ -156,7 +149,6 @@ class LangChainSearchToolAdapter:
             return SearchResult(
                 query=query,
                 results_summary=f"Search failed: {str(e)}",
-                confidence_score=0.0,
                 raw_results=None,
             )
 

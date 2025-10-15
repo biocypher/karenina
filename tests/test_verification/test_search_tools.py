@@ -17,12 +17,10 @@ class TestSearchResult:
         result = SearchResult(
             query="What is Python?",
             results_summary="Python is a programming language...",
-            confidence_score=0.85,
         )
 
         assert result.query == "What is Python?"
         assert "programming language" in result.results_summary
-        assert result.confidence_score == 0.85
         assert result.raw_results is None
 
     def test_search_result_with_raw_data(self) -> None:
@@ -31,7 +29,6 @@ class TestSearchResult:
         result = SearchResult(
             query="Python docs",
             results_summary="Found Python documentation",
-            confidence_score=0.9,
             raw_results=raw_data,
         )
 
@@ -42,11 +39,10 @@ class TestSearchResult:
         result = SearchResult(
             query="test",
             results_summary="summary",
-            confidence_score=0.5,
         )
 
         with pytest.raises(AttributeError):  # FrozenInstanceError
-            result.confidence_score = 0.8
+            result.results_summary = "new summary"
 
 
 class TestLangChainSearchToolAdapter:
@@ -68,7 +64,6 @@ class TestLangChainSearchToolAdapter:
 
         assert result.query == "Python programming"
         assert "Search results for: Python programming" in result.results_summary
-        assert 0.0 <= result.confidence_score <= 1.0
 
     def test_adapter_with_run_method(self) -> None:
         """Test adapter with legacy langchain tool that has run() method."""
@@ -123,51 +118,6 @@ class TestLangChainSearchToolAdapter:
 
         assert result.query == "test"
         assert "Search failed" in result.results_summary
-        assert result.confidence_score == 0.0
-
-    def test_adapter_confidence_calculation_empty_result(self) -> None:
-        """Test confidence calculation for empty results."""
-
-        class EmptyResultTool:
-            def invoke(self, query: str) -> str:  # noqa: ARG002
-                return ""
-
-        tool = EmptyResultTool()
-        adapter = LangChainSearchToolAdapter(tool)
-
-        result = adapter.search("test")
-
-        assert result.confidence_score == 0.0
-
-    def test_adapter_confidence_calculation_short_result(self) -> None:
-        """Test confidence is 1.0 even for short results."""
-
-        class ShortResultTool:
-            def invoke(self, query: str) -> str:  # noqa: ARG002
-                return "Short"
-
-        tool = ShortResultTool()
-        adapter = LangChainSearchToolAdapter(tool)
-
-        result = adapter.search("test")
-
-        # Simple rule: non-empty = 1.0 confidence (even if short)
-        assert result.confidence_score == 1.0
-
-    def test_adapter_confidence_calculation_non_empty_result(self) -> None:
-        """Test confidence is 1.0 for non-empty results."""
-
-        class NonEmptyResultTool:
-            def invoke(self, query: str) -> str:  # noqa: ARG002
-                return "Some search results"
-
-        tool = NonEmptyResultTool()
-        adapter = LangChainSearchToolAdapter(tool)
-
-        result = adapter.search("test")
-
-        # Simple rule: non-empty = 1.0 confidence
-        assert result.confidence_score == 1.0
 
     def test_adapter_handles_non_string_results(self) -> None:
         """Test adapter handles non-string tool results."""
