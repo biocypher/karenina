@@ -34,6 +34,7 @@ from .parser_utils import (
     _invoke_llm_with_retry,
     _strip_markdown_fences,
 )
+from .search_tools import create_search_tool
 
 logger = logging.getLogger(__name__)
 
@@ -276,6 +277,46 @@ Return JSON format:
         f"Stage 1 completed: Extracted {total_excerpts} excerpts across {len(excerpts)} attributes "
         f"({len(attributes_without_excerpts)} attributes without excerpts)"
     )
+
+    # ==========================================
+    # SEARCH ENHANCEMENT (Optional)
+    # Validate excerpts against external search results
+    # ==========================================
+    if config.deep_judgment_search_enabled:
+        logger.info("Search enhancement enabled - validating excerpts against external evidence")
+
+        try:
+            # Initialize search tool
+            search_tool = create_search_tool(config.deep_judgment_search_tool)
+
+            # Collect all excerpts to search (excluding empty/none excerpts)
+            excerpts_to_search = []
+            for attr, excerpt_list in excerpts.items():
+                for excerpt_obj in excerpt_list:
+                    excerpt_text = excerpt_obj.get("text", "")
+                    confidence = excerpt_obj.get("confidence", "medium")
+                    # Only search non-empty excerpts
+                    if excerpt_text and confidence != "none":
+                        excerpts_to_search.append((attr, excerpt_obj, excerpt_text))
+
+            if excerpts_to_search:
+                # Batch search all excerpts
+                search_queries = [text for _, _, text in excerpts_to_search]
+                logger.info(f"Performing search for {len(search_queries)} excerpts")
+
+                search_results = search_tool(search_queries)
+
+                # Add search results to each excerpt
+                for (_attr, excerpt_obj, _), search_result in zip(excerpts_to_search, search_results, strict=False):
+                    excerpt_obj["search_results"] = search_result
+
+                logger.info(f"Search completed for {len(search_queries)} excerpts")
+            else:
+                logger.info("No excerpts to search (all empty or none confidence)")
+
+        except Exception as e:
+            # Log warning but don't fail the pipeline
+            logger.warning(f"Search enhancement failed: {e}. Continuing without search results.")
 
     # ==========================================
     # STAGE 2: REASONING GENERATION

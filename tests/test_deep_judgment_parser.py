@@ -429,3 +429,234 @@ class TestDeepJudgmentParseIntegration:
         # Verify parsed answer has all attributes
         assert parsed.drug_name == "venetoclax"
         assert parsed.phase == "unknown"
+
+
+class TestDeepJudgmentSearchEnhancement:
+    """Tests for search-enhanced deep-judgment feature."""
+
+    @patch("karenina.benchmark.verification.deep_judgment.create_search_tool")
+    @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
+    def test_search_enhancement_enabled(self, mock_invoke, mock_create_search, test_config, mock_parsing_llm):
+        """Test that search is performed when enabled and results added to excerpts."""
+        # Enable search in config
+        test_config.deep_judgment_search_enabled = True
+        test_config.deep_judgment_search_tool = "tavily"
+
+        # Create mock search tool
+        mock_search_tool = MagicMock()
+        mock_search_tool.return_value = [
+            "Search result for BCL-2 target",
+            "Search result for apoptosis mechanism",
+        ]
+        mock_create_search.return_value = mock_search_tool
+
+        # Mock LLM responses (3 stages)
+        excerpt_response = json.dumps(
+            {
+                "drug_target": [{"text": "targets BCL-2 protein", "confidence": "high"}],
+                "mechanism": [{"text": "induces apoptosis", "confidence": "medium"}],
+                "confidence": [],
+            }
+        )
+        reasoning_response = json.dumps(
+            {"drug_target": "Target is BCL-2", "mechanism": "Mechanism is apoptosis", "confidence": "No info"}
+        )
+        parameter_response = json.dumps({"drug_target": "BCL-2", "mechanism": "apoptosis", "confidence": "low"})
+
+        mock_invoke.side_effect = [excerpt_response, reasoning_response, parameter_response]
+
+        # Execute
+        raw_trace = "The drug targets BCL-2 protein and induces apoptosis."
+        parsed, excerpts, reasoning, metadata = deep_judgment_parse(
+            raw_llm_response=raw_trace,
+            RawAnswer=DrugAnswer,
+            parsing_model=test_config.parsing_models[0],
+            parsing_llm=mock_parsing_llm,
+            question_text="Test question",
+            config=test_config,
+            format_instructions="test",
+            combined_system_prompt="test",
+        )
+
+        # Verify search tool was created with correct tool name
+        mock_create_search.assert_called_once_with("tavily")
+
+        # Verify search was called with both excerpts
+        mock_search_tool.assert_called_once()
+        call_args = mock_search_tool.call_args[0][0]
+        assert len(call_args) == 2
+        assert "targets BCL-2 protein" in call_args
+        assert "induces apoptosis" in call_args
+
+        # Verify search results were added to excerpts
+        assert "search_results" in excerpts["drug_target"][0]
+        assert excerpts["drug_target"][0]["search_results"] == "Search result for BCL-2 target"
+        assert "search_results" in excerpts["mechanism"][0]
+        assert excerpts["mechanism"][0]["search_results"] == "Search result for apoptosis mechanism"
+
+    @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
+    def test_search_disabled_skips_search(self, mock_invoke, test_config, mock_parsing_llm):
+        """Test that search is skipped when disabled."""
+        # Ensure search is disabled (default)
+        assert test_config.deep_judgment_search_enabled is False
+
+        # Mock LLM responses
+        excerpt_response = json.dumps(
+            {"drug_target": [{"text": "excerpt", "confidence": "high"}], "mechanism": [], "confidence": []}
+        )
+        reasoning_response = json.dumps({"drug_target": "reasoning", "mechanism": "r", "confidence": "r"})
+        parameter_response = json.dumps({"drug_target": "test", "mechanism": "m", "confidence": "c"})
+
+        mock_invoke.side_effect = [excerpt_response, reasoning_response, parameter_response]
+
+        # Execute
+        parsed, excerpts, reasoning, metadata = deep_judgment_parse(
+            raw_llm_response="excerpt is here",
+            RawAnswer=DrugAnswer,
+            parsing_model=test_config.parsing_models[0],
+            parsing_llm=mock_parsing_llm,
+            question_text="test",
+            config=test_config,
+            format_instructions="test",
+            combined_system_prompt="test",
+        )
+
+        # Verify excerpts do NOT have search_results field
+        assert "search_results" not in excerpts["drug_target"][0]
+
+    @patch("karenina.benchmark.verification.deep_judgment.create_search_tool")
+    @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
+    def test_search_skips_empty_excerpts(self, mock_invoke, mock_create_search, test_config, mock_parsing_llm):
+        """Test that search skips empty excerpts (confidence='none')."""
+        # Enable search
+        test_config.deep_judgment_search_enabled = True
+
+        # Create mock search tool
+        mock_search_tool = MagicMock()
+        mock_search_tool.return_value = ["Search result for BCL-2"]
+        mock_create_search.return_value = mock_search_tool
+
+        # Mock responses with one empty excerpt
+        excerpt_response = json.dumps(
+            {
+                "drug_target": [{"text": "targets BCL-2", "confidence": "high"}],
+                "mechanism": [{"text": "", "confidence": "none", "explanation": "No mechanism mentioned"}],
+                "confidence": [],
+            }
+        )
+        reasoning_response = json.dumps({"drug_target": "r", "mechanism": "r", "confidence": "r"})
+        parameter_response = json.dumps({"drug_target": "t", "mechanism": "m", "confidence": "c"})
+
+        mock_invoke.side_effect = [excerpt_response, reasoning_response, parameter_response]
+
+        # Execute
+        parsed, excerpts, reasoning, metadata = deep_judgment_parse(
+            raw_llm_response="targets BCL-2 is mentioned",
+            RawAnswer=DrugAnswer,
+            parsing_model=test_config.parsing_models[0],
+            parsing_llm=mock_parsing_llm,
+            question_text="test",
+            config=test_config,
+            format_instructions="test",
+            combined_system_prompt="test",
+        )
+
+        # Verify search was only called for non-empty excerpt
+        mock_search_tool.assert_called_once()
+        call_args = mock_search_tool.call_args[0][0]
+        assert len(call_args) == 1  # Only one excerpt searched
+        assert call_args[0] == "targets BCL-2"
+
+        # Verify empty excerpt does NOT have search_results
+        assert "search_results" in excerpts["drug_target"][0]
+        assert "search_results" not in excerpts["mechanism"][0]
+
+    @patch("karenina.benchmark.verification.deep_judgment.create_search_tool")
+    @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
+    def test_search_failure_continues_pipeline(self, mock_invoke, mock_create_search, test_config, mock_parsing_llm):
+        """Test that search failures don't break the pipeline."""
+        # Enable search
+        test_config.deep_judgment_search_enabled = True
+
+        # Mock search tool that raises exception
+        mock_search_tool = MagicMock()
+        mock_search_tool.side_effect = Exception("Search API failure")
+        mock_create_search.return_value = mock_search_tool
+
+        # Mock LLM responses
+        excerpt_response = json.dumps(
+            {"drug_target": [{"text": "excerpt", "confidence": "high"}], "mechanism": [], "confidence": []}
+        )
+        reasoning_response = json.dumps({"drug_target": "r", "mechanism": "r", "confidence": "r"})
+        parameter_response = json.dumps({"drug_target": "t", "mechanism": "m", "confidence": "c"})
+
+        mock_invoke.side_effect = [excerpt_response, reasoning_response, parameter_response]
+
+        # Execute - should not raise exception
+        parsed, excerpts, reasoning, metadata = deep_judgment_parse(
+            raw_llm_response="excerpt is here",
+            RawAnswer=DrugAnswer,
+            parsing_model=test_config.parsing_models[0],
+            parsing_llm=mock_parsing_llm,
+            question_text="test",
+            config=test_config,
+            format_instructions="test",
+            combined_system_prompt="test",
+        )
+
+        # Verify parsing completed successfully despite search failure
+        assert parsed.drug_target == "t"
+        assert metadata["stages_completed"] == ["excerpts", "reasoning", "parameters"]
+
+        # Verify excerpts do NOT have search_results (due to failure)
+        assert "search_results" not in excerpts["drug_target"][0]
+
+    @patch("karenina.benchmark.verification.deep_judgment.create_search_tool")
+    @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
+    def test_search_with_custom_callable(self, mock_invoke, mock_create_search, test_config, mock_parsing_llm):
+        """Test search with custom callable tool."""
+
+        # Custom search function
+        def custom_search(query):
+            return [f"Custom result for: {q}" for q in query]
+
+        # Enable search with callable
+        test_config.deep_judgment_search_enabled = True
+        test_config.deep_judgment_search_tool = custom_search
+
+        # Mock search tool creation
+        mock_search_tool = MagicMock()
+        mock_search_tool.return_value = ["Custom search result 1", "Custom search result 2"]
+        mock_create_search.return_value = mock_search_tool
+
+        # Mock LLM responses
+        excerpt_response = json.dumps(
+            {
+                "drug_target": [{"text": "BCL-2", "confidence": "high"}],
+                "mechanism": [{"text": "apoptosis", "confidence": "high"}],
+                "confidence": [],
+            }
+        )
+        reasoning_response = json.dumps({"drug_target": "r", "mechanism": "r", "confidence": "r"})
+        parameter_response = json.dumps({"drug_target": "t", "mechanism": "m", "confidence": "c"})
+
+        mock_invoke.side_effect = [excerpt_response, reasoning_response, parameter_response]
+
+        # Execute
+        parsed, excerpts, reasoning, metadata = deep_judgment_parse(
+            raw_llm_response="BCL-2 and apoptosis mentioned",
+            RawAnswer=DrugAnswer,
+            parsing_model=test_config.parsing_models[0],
+            parsing_llm=mock_parsing_llm,
+            question_text="test",
+            config=test_config,
+            format_instructions="test",
+            combined_system_prompt="test",
+        )
+
+        # Verify custom callable was passed to factory
+        mock_create_search.assert_called_once_with(custom_search)
+
+        # Verify search results added
+        assert "search_results" in excerpts["drug_target"][0]
+        assert "search_results" in excerpts["mechanism"][0]
