@@ -358,11 +358,11 @@ The search results are included in the excerpt data structure under the "search_
 
 When generating reasoning, evaluate:
 1. Does the search evidence back this excerpt?
-2. What is the confidence that this excerpt is NOT hallucinated?
-   - HIGH: Strong search evidence supports the excerpt
-   - MEDIUM: Partial search evidence or indirect support
-   - LOW: Weak or no search evidence found
-   - NONE: No search performed or excerpt marked as missing
+2. What is the hallucination risk for this excerpt?
+   - NONE: Strong search evidence fully supports the excerpt (lowest risk)
+   - LOW: Good search evidence mostly supports the excerpt
+   - MEDIUM: Partial or weak search evidence
+   - HIGH: Little or no search evidence found (highest risk)
 
 Include a dedicated assessment of evidence backing in your reasoning.
 </search_context>
@@ -382,13 +382,13 @@ For each attribute:
    - How search results support or contradict the excerpt
    - Any ambiguities or confidence issues
 
-When excerpts are empty: Explain why no excerpts were found and how this affects the attribute. Set hallucination_confidence to "none".
+When excerpts are empty: Explain why no excerpts were found and how this affects the attribute. Set hallucination_risk to "high".
 
 Return JSON format with ONLY the attributes listed above:
 {
   "attribute_name": {
     "reasoning": "reasoning text explaining how excerpts inform the attribute value",
-    "hallucination_confidence": "high|medium|low|none"
+    "hallucination_risk": "none|low|medium|high"
   }
 }
 </instructions>"""
@@ -436,20 +436,20 @@ Return JSON format with ONLY the attributes listed above:
         logger.warning(f"Failed to parse reasoning JSON: {e}")
         reasoning_raw = {}  # Gracefully handle failures
 
-    # Extract reasoning and hallucination confidence (if present)
+    # Extract reasoning and hallucination risk (if present)
     reasoning = {}
-    hallucination_confidence = {}
+    hallucination_risk = {}
 
     if search_performed:
-        # Nested format: {"attr": {"reasoning": "...", "hallucination_confidence": "high|medium|low|none"}}
+        # Nested format: {"attr": {"reasoning": "...", "hallucination_risk": "none|low|medium|high"}}
         for attr, value in reasoning_raw.items():
             if isinstance(value, dict):
                 reasoning[attr] = value.get("reasoning", "")
-                hallucination_confidence[attr] = value.get("hallucination_confidence", "none")
+                hallucination_risk[attr] = value.get("hallucination_risk", "high")
             else:
                 # Fallback: LLM returned string instead of nested format
                 reasoning[attr] = str(value)
-                hallucination_confidence[attr] = "none"
+                hallucination_risk[attr] = "high"
                 logger.warning(f"Expected nested reasoning format for '{attr}' but got string. Using fallback.")
     else:
         # Simple format: {"attr": "reasoning text"}
@@ -459,7 +459,7 @@ Return JSON format with ONLY the attributes listed above:
     stages_completed.append("reasoning")
     if search_performed:
         logger.info(
-            f"Stage 2 completed: Generated reasoning with hallucination assessment for {len(reasoning)} attributes"
+            f"Stage 2 completed: Generated reasoning with hallucination risk assessment for {len(reasoning)} attributes"
         )
     else:
         logger.info(f"Stage 2 completed: Generated reasoning for {len(reasoning)} attributes")
@@ -513,8 +513,8 @@ Your task is to extract the final attribute values based on the reasoning traces
         "attributes_without_excerpts": attributes_without_excerpts,
     }
 
-    # Add hallucination confidence if search was performed
-    if search_performed and hallucination_confidence:
-        metadata["hallucination_confidence"] = hallucination_confidence
+    # Add hallucination risk if search was performed
+    if search_performed and hallucination_risk:
+        metadata["hallucination_risk"] = hallucination_risk
 
     return parsed_answer, excerpts, reasoning, metadata

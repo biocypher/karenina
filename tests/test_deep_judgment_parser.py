@@ -682,18 +682,18 @@ class TestDeepJudgmentSearchEnhancement:
             }
         )
 
-        # Mock Stage 2: Reasoning WITH hallucination confidence (nested format)
+        # Mock Stage 2: Reasoning WITH hallucination risk (nested format)
         reasoning_response = json.dumps(
             {
                 "drug_target": {
                     "reasoning": "BCL-2 target confirmed by search results",
-                    "hallucination_confidence": "high",
+                    "hallucination_risk": "none",
                 },
                 "mechanism": {
                     "reasoning": "Apoptosis mechanism supported by search",
-                    "hallucination_confidence": "medium",
+                    "hallucination_risk": "low",
                 },
-                "confidence": {"reasoning": "No information provided", "hallucination_confidence": "none"},
+                "confidence": {"reasoning": "No information provided", "hallucination_risk": "high"},
             }
         )
 
@@ -718,11 +718,11 @@ class TestDeepJudgmentSearchEnhancement:
         assert reasoning["drug_target"] == "BCL-2 target confirmed by search results"
         assert reasoning["mechanism"] == "Apoptosis mechanism supported by search"
 
-        # Verify hallucination confidence was extracted and stored in metadata
-        assert "hallucination_confidence" in metadata
-        assert metadata["hallucination_confidence"]["drug_target"] == "high"
-        assert metadata["hallucination_confidence"]["mechanism"] == "medium"
-        assert metadata["hallucination_confidence"]["confidence"] == "none"
+        # Verify hallucination risk was extracted and stored in metadata
+        assert "hallucination_risk" in metadata
+        assert metadata["hallucination_risk"]["drug_target"] == "none"
+        assert metadata["hallucination_risk"]["mechanism"] == "low"
+        assert metadata["hallucination_risk"]["confidence"] == "high"
 
     @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
     def test_stage2_reasoning_without_search_backward_compatible(self, mock_invoke, test_config, mock_parsing_llm):
@@ -765,8 +765,8 @@ class TestDeepJudgmentSearchEnhancement:
         assert reasoning["drug_target"] == "Simple reasoning text"
         assert reasoning["mechanism"] == "Another reasoning"
 
-        # Verify NO hallucination confidence in metadata
-        assert "hallucination_confidence" not in metadata
+        # Verify NO hallucination risk in metadata
+        assert "hallucination_risk" not in metadata
 
     @patch("karenina.benchmark.verification.deep_judgment.create_search_tool")
     @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
@@ -816,8 +816,8 @@ class TestDeepJudgmentSearchEnhancement:
         # Verify fallback: reasoning extracted as strings
         assert reasoning["drug_target"] == "This should be a dict but is a string"
 
-        # Verify fallback: hallucination_confidence defaults to "none"
-        assert metadata["hallucination_confidence"]["drug_target"] == "none"
+        # Verify fallback: hallucination_risk defaults to "high"
+        assert metadata["hallucination_risk"]["drug_target"] == "high"
 
     @patch("karenina.benchmark.verification.deep_judgment.create_search_tool")
     @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
@@ -842,20 +842,20 @@ class TestDeepJudgmentSearchEnhancement:
             }
         )
 
-        # Mock Stage 2: Reasoning with hallucination confidence
+        # Mock Stage 2: Reasoning with hallucination risk
         reasoning_response = json.dumps(
             {
                 "drug_target": {
                     "reasoning": "BCL-2 target is strongly supported by search results",
-                    "hallucination_confidence": "high",
+                    "hallucination_risk": "none",
                 },
                 "mechanism": {
                     "reasoning": "Apoptosis mechanism validated by external sources",
-                    "hallucination_confidence": "high",
+                    "hallucination_risk": "none",
                 },
                 "confidence": {
                     "reasoning": "No confidence information available",
-                    "hallucination_confidence": "none",
+                    "hallucination_risk": "high",
                 },
             }
         )
@@ -890,11 +890,11 @@ class TestDeepJudgmentSearchEnhancement:
         assert reasoning["drug_target"] == "BCL-2 target is strongly supported by search results"
         assert reasoning["mechanism"] == "Apoptosis mechanism validated by external sources"
 
-        # Verify hallucination confidence in metadata (Task 2.2 output)
-        assert "hallucination_confidence" in metadata
-        assert metadata["hallucination_confidence"]["drug_target"] == "high"
-        assert metadata["hallucination_confidence"]["mechanism"] == "high"
-        assert metadata["hallucination_confidence"]["confidence"] == "none"
+        # Verify hallucination risk in metadata (Task 2.2 output)
+        assert "hallucination_risk" in metadata
+        assert metadata["hallucination_risk"]["drug_target"] == "none"
+        assert metadata["hallucination_risk"]["mechanism"] == "none"
+        assert metadata["hallucination_risk"]["confidence"] == "high"
 
         # Verify final parsed answer (Stage 3 output)
         assert parsed.drug_target == "BCL-2"
@@ -902,6 +902,6 @@ class TestDeepJudgmentSearchEnhancement:
         assert parsed.confidence == "unknown"
 
         # Verify metadata is complete and ready for downstream use
-        # (VerificationResult can use hallucination_confidence from metadata)
-        assert isinstance(metadata["hallucination_confidence"], dict)
-        assert len(metadata["hallucination_confidence"]) == 3
+        # (VerificationResult can use hallucination_risk from metadata)
+        assert isinstance(metadata["hallucination_risk"], dict)
+        assert len(metadata["hallucination_risk"]) == 3
