@@ -991,7 +991,7 @@ class TestDeepJudgmentSearchEnhancement:
             "reasoning",
             "parameters",
         ]
-        assert metadata["model_calls"] == 3  # We don't track Stage 1.5 call (as per requirements)
+        assert metadata["model_calls"] == 4  # Includes Stage 1.5 (excerpt hallucination assessment)
 
         # Verify search results added to excerpts
         assert "search_results" in excerpts["drug_target"][0]

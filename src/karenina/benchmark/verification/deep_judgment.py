@@ -402,6 +402,7 @@ Return JSON format with assessments for ALL excerpts:
 
             try:
                 raw_response = _invoke_llm_with_retry(parsing_llm, messages)
+                model_calls += 1
                 cleaned_response = _strip_markdown_fences(raw_response)
                 assessment_data = json.loads(cleaned_response)
 
