@@ -226,7 +226,19 @@ def format_excerpts_for_reasoning(excerpts: dict[str, list[dict[str, Any]]]) -> 
             if "search_results" in excerpt_obj:
                 search_results = excerpt_obj["search_results"]
                 lines.append("    Search Results:")
-                search_lines = search_results.split("\n")
+
+                # Handle both string and list formats (list is new structured format)
+                if isinstance(search_results, list):
+                    # Use the new formatting function for structured results
+                    formatted = format_search_results_for_llm(search_results)
+                    search_lines = formatted.split("\n")
+                elif isinstance(search_results, str):
+                    # Legacy string format
+                    search_lines = search_results.split("\n")
+                else:
+                    # Fallback for unexpected types
+                    search_lines = [str(search_results)]
+
                 for search_line in search_lines:
                     lines.append(f"      {search_line}")
 

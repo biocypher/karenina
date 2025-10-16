@@ -5,7 +5,7 @@ search-enhanced deep-judgment. The abstraction supports:
 
 1. Built-in search tools (e.g., Tavily) via string-based factory
 2. Custom langchain tools passed directly as callables
-3. Future MCP tool integration (by passing MCP tools as langchain tools)
+3. MCP tool integration with native async support
 
 The design prioritizes extensibility and allows users to:
 - Use default Tavily search without configuration
@@ -44,6 +44,9 @@ Example Usage:
     result = search_tool("test query")
 """
 
+import asyncio
+import concurrent.futures
+import inspect
 import json
 import logging
 from collections.abc import Callable
@@ -137,8 +140,10 @@ def create_search_tool(
 def _wrap_langchain_tool(langchain_tool: Any) -> SearchToolCallable:
     """Wrap a langchain tool to conform to search tool interface.
 
+    Supports both sync and async tools (including MCP tools via langchain-mcp-adapters).
+
     Args:
-        langchain_tool: Any langchain tool that implements invoke(), run(), or is callable
+        langchain_tool: Any langchain tool that implements invoke(), run(), arun(), or is callable
 
     Returns:
         Search function that takes str|list[str] and returns list[SearchResultItem]|list[list[SearchResultItem]]
@@ -146,19 +151,38 @@ def _wrap_langchain_tool(langchain_tool: Any) -> SearchToolCallable:
     Raises:
         ValueError: If tool doesn't have required methods
     """
-    # Determine which method to use (invoke for newer tools, run for legacy, or callable)
-    if hasattr(langchain_tool, "invoke"):
+    # Determine which method to use and whether it's async
+    # Priority: ainvoke > arun > invoke > run > callable
+    call_method = None
+    is_async = False
+
+    if hasattr(langchain_tool, "ainvoke"):
+        call_method = "ainvoke"
+        is_async = True
+    elif hasattr(langchain_tool, "arun"):
+        call_method = "arun"
+        is_async = True
+    elif hasattr(langchain_tool, "invoke"):
         call_method = "invoke"
     elif hasattr(langchain_tool, "run"):
         call_method = "run"
     elif callable(langchain_tool):
         call_method = "call"
+        # Check if the callable itself is async
+        is_async = inspect.iscoroutinefunction(langchain_tool)
     else:
         raise ValueError(
-            f"Langchain tool must have 'invoke', 'run' method, or be callable. Got: {type(langchain_tool)}"
+            f"Langchain tool must have 'invoke', 'run', 'ainvoke', 'arun' method, or be callable. "
+            f"Got: {type(langchain_tool)}"
         )
 
-    logger.info(f"Wrapped langchain tool with method: {call_method}")
+    logger.info(f"Wrapped langchain tool with method: {call_method} (async={is_async})")
+
+    # If tool is async, create executor for running in separate thread
+    executor = None
+    if is_async:
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=5, thread_name_prefix="search_tool")
+        logger.info("Created thread pool executor for async tool")
 
     def search_function(query: str | list[str]) -> list[SearchResultItem] | list[list[SearchResultItem]]:
         """Execute search using wrapped langchain tool.
@@ -174,7 +198,7 @@ def _wrap_langchain_tool(langchain_tool: Any) -> SearchToolCallable:
             results = []
             for q in query:
                 try:
-                    result = _invoke_tool(langchain_tool, call_method, q)
+                    result = _invoke_tool(langchain_tool, call_method, q, is_async, executor)
                     parsed = _parse_tool_output(result)
                     results.append(parsed)
                 except Exception as e:
@@ -185,7 +209,7 @@ def _wrap_langchain_tool(langchain_tool: Any) -> SearchToolCallable:
         # Handle single query
         else:
             try:
-                result = _invoke_tool(langchain_tool, call_method, query)
+                result = _invoke_tool(langchain_tool, call_method, query, is_async, executor)
                 return _parse_tool_output(result)
             except Exception as e:
                 logger.warning(f"Search failed for query '{query[:50]}...': {e}")
@@ -194,23 +218,59 @@ def _wrap_langchain_tool(langchain_tool: Any) -> SearchToolCallable:
     return search_function
 
 
-def _invoke_tool(tool: Any, method: str, query: str) -> Any:
+def _invoke_tool(
+    tool: Any,
+    method: str,
+    query: str,
+    is_async: bool = False,
+    executor: concurrent.futures.ThreadPoolExecutor | None = None,
+) -> Any:
     """Invoke a langchain tool with the appropriate method.
+
+    Handles both sync and async tools. For async tools, runs them in a separate
+    thread with a new event loop to avoid conflicts with existing loops.
 
     Args:
         tool: The langchain tool instance
-        method: Method to use ("invoke", "run", or "call")
+        method: Method to use ("invoke", "run", "ainvoke", "arun", or "call")
         query: Query string
+        is_async: Whether the tool method is async
+        executor: Thread pool executor for async tools (required if is_async=True)
 
     Returns:
         Raw search result (any type - will be parsed by _parse_tool_output)
     """
-    if method == "invoke":
-        return tool.invoke(query)
-    elif method == "run":
-        return tool.run(query)
-    else:  # callable
-        return tool(query)
+    if not is_async:
+        # Synchronous invocation
+        if method == "invoke":
+            return tool.invoke(query)
+        elif method == "run":
+            return tool.run(query)
+        else:  # callable
+            return tool(query)
+    else:
+        # Asynchronous invocation - run in separate thread with new event loop
+        if executor is None:
+            raise ValueError("Executor required for async tool invocation")
+
+        def run_async_in_thread() -> Any:
+            """Run async tool in a new event loop within a thread."""
+            # Create new event loop for this thread
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                if method == "ainvoke":
+                    return loop.run_until_complete(tool.ainvoke(query))
+                elif method == "arun":
+                    return loop.run_until_complete(tool.arun(query))
+                else:  # async callable
+                    return loop.run_until_complete(tool(query))
+            finally:
+                loop.close()
+
+        # Submit to thread pool and wait for result
+        future = executor.submit(run_async_in_thread)
+        return future.result(timeout=60)  # 60 second timeout for search
 
 
 def _parse_tool_output(raw_result: Any) -> list[SearchResultItem]:
