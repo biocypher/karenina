@@ -21,6 +21,8 @@ import logging
 import os
 from typing import Any
 
+from ...schemas import SearchResultItem
+
 logger = logging.getLogger(__name__)
 
 
@@ -70,14 +72,14 @@ def create_tavily_search_tool(
             "Install with: pip install langchain-community tavily-python"
         ) from e
 
-    def tavily_search(query: str | list[str]) -> str | list[str]:
+    def tavily_search(query: str | list[str]) -> list[SearchResultItem] | list[list[SearchResultItem]]:
         """Execute Tavily search for one or more queries.
 
         Args:
             query: Single query string or list of query strings
 
         Returns:
-            Single result string (if query is str) or list of results (if query is list)
+            Single list of SearchResultItem (if query is str) or list of lists (if query is list)
         """
         # Handle batch queries
         if isinstance(query, list):
@@ -88,7 +90,8 @@ def create_tavily_search_tool(
                     results.append(result)
                 except Exception as e:
                     logger.warning(f"Tavily search failed for query '{q[:50]}...': {e}")
-                    results.append(f"Tavily search failed: {str(e)}")
+                    # Return empty list on failure
+                    results.append([])
             return results
 
         # Handle single query
@@ -97,7 +100,8 @@ def create_tavily_search_tool(
                 return _search_single(tavily_tool, query, max_results)
             except Exception as e:
                 logger.warning(f"Tavily search failed for query '{query[:50]}...': {e}")
-                return f"Tavily search failed: {str(e)}"
+                # Return empty list on failure
+                return []
 
     return tavily_search
 
@@ -120,7 +124,7 @@ def _create_tavily_wrapper(tavily_api_key: str, **kwargs: Any) -> Any:
     )
 
 
-def _search_single(tavily_tool: Any, query: str, max_results: int) -> str:
+def _search_single(tavily_tool: Any, query: str, max_results: int) -> list[SearchResultItem]:
     """Execute single Tavily search and format results.
 
     Args:
@@ -129,49 +133,58 @@ def _search_single(tavily_tool: Any, query: str, max_results: int) -> str:
         max_results: Maximum number of results to return
 
     Returns:
-        Formatted search results as string
+        List of SearchResultItem objects
     """
     logger.debug(f"Tavily search for: '{query[:100]}...'")
     results = tavily_tool.invoke(query)
 
-    # Parse results (Tavily returns list of dicts or string)
+    # Parse results (Tavily returns list of dicts)
     if isinstance(results, list):
         # Structured results: [{"url": ..., "content": ...}, ...]
-        results_summary = _format_structured_results(results, max_results)
-    elif isinstance(results, str):
-        # String results (fallback)
-        results_summary = results.strip()
+        structured_results = _format_structured_results(results, max_results)
     else:
-        # Unexpected format
-        results_summary = str(results)
+        # Unexpected format - return empty list
+        logger.warning(f"Unexpected Tavily result format: {type(results)}")
+        structured_results = []
 
-    logger.info(f"Tavily search completed: {len(results_summary)} chars")
-    return results_summary
+    logger.info(f"Tavily search completed: {len(structured_results)} results")
+    return structured_results
 
 
-def _format_structured_results(results: list[dict[str, Any]], max_results: int) -> str:
-    """Format structured Tavily results into summary string.
+def _format_structured_results(results: list[dict[str, Any]], max_results: int) -> list[SearchResultItem]:
+    """Format structured Tavily results into SearchResultItem objects.
 
     Args:
         results: List of result dicts from Tavily API
         max_results: Maximum number of results to include
 
     Returns:
-        Human-readable summary of top results
+        List of SearchResultItem objects
     """
     if not results:
-        return "No search results found."
+        return []
 
     # Take top N results (already limited by max_results)
     top_results = results[:max_results]
 
-    summary_parts = []
-    for i, result in enumerate(top_results, 1):
-        title = result.get("title", "Untitled")
+    structured_items = []
+    for result in top_results:
+        # Handle optional title and url fields
+        title = result.get("title") or None  # Convert empty string to None
         content = result.get("content", "No content available")
-        url = result.get("url", "")
+        url = result.get("url") or None  # Convert empty string to None
 
-        # Include full content (no truncation)
-        summary_parts.append(f"<item_{i}>\n[{i}] {title}\n    {content}\n    Source: {url}\n</item_{i}>")
+        # Skip if content is empty or missing
+        if not content or content == "No content available":
+            logger.warning("Skipping Tavily result with no content")
+            continue
 
-    return "\n\n".join(summary_parts)
+        # Create SearchResultItem (title and url are optional)
+        try:
+            item = SearchResultItem(title=title, content=content, url=url)
+            structured_items.append(item)
+        except Exception as e:
+            logger.warning(f"Failed to create SearchResultItem: {e}")
+            continue
+
+    return structured_items

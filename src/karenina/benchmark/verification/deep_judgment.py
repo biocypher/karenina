@@ -35,6 +35,7 @@ from .parser_utils import (
     _strip_markdown_fences,
     format_excerpts_for_reasoning,
     format_reasoning_for_parsing,
+    format_search_results_for_llm,
 )
 from .search_tools import create_search_tool
 
@@ -312,9 +313,17 @@ Return JSON format:
 
                 search_results = search_tool(search_queries)
 
-                # Add search results to each excerpt
+                # Add search results to each excerpt (convert SearchResultItem to dict for JSON storage)
                 for (_attr, excerpt_obj, _), search_result in zip(excerpts_to_search, search_results, strict=False):
-                    excerpt_obj["search_results"] = search_result
+                    # Convert list[SearchResultItem] to list[dict] for JSON serialization
+                    if isinstance(search_result, list):
+                        excerpt_obj["search_results"] = [
+                            {"title": item.title, "content": item.content, "url": item.url} for item in search_result
+                        ]
+                    else:
+                        # Shouldn't happen with new interface, but handle gracefully
+                        excerpt_obj["search_results"] = []
+                        logger.warning(f"Unexpected search result type: {type(search_result)}")
 
                 logger.info(f"Search completed for {len(search_queries)} excerpts")
             else:
@@ -369,14 +378,21 @@ Be conservative - only assign "none" when evidence is very strong."""
                 text = excerpt_obj.get("text", "")
                 confidence = excerpt_obj.get("confidence", "unknown")
                 similarity = excerpt_obj.get("similarity_score", 0.0)
-                search_results = excerpt_obj.get("search_results", "")
+                search_results_raw = excerpt_obj.get("search_results", [])
+
+                # Format search results for LLM (list[dict] -> string)
+                if isinstance(search_results_raw, list):
+                    search_results_formatted = format_search_results_for_llm(search_results_raw)
+                else:
+                    # Backward compatibility: if stored as string, use as-is
+                    search_results_formatted = search_results_raw
 
                 excerpt_descriptions.append(
                     f'<excerpt id="{excerpt_id}" attribute="{attr_name}">\n'
                     f"Text: {text}\n"
                     f"Extraction Confidence: {confidence}\n"
                     f"Similarity: {similarity:.3f}\n"
-                    f"Search Results:\n{search_results}\n"
+                    f"Search Results:\n{search_results_formatted}\n"
                     f"</excerpt>"
                 )
 

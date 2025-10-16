@@ -13,38 +13,48 @@ The design prioritizes extensibility and allows users to:
 - Replace with MCP-provided search tools in the future
 
 Search Tool Interface:
-    All search tools follow a simple contract:
+    All search tools follow a structured contract:
     - Input: str or list[str] (query or queries)
-    - Output: str or list[str] (result or results)
+    - Output: list[SearchResultItem] or list[list[SearchResultItem]]
+
+    Each SearchResultItem has:
+    - title: str (result title)
+    - content: str (result content/snippet)
+    - url: str (source URL)
 
 Example Usage:
     # Built-in tool (string-based)
     search_tool = create_search_tool("tavily")
 
     # Search single query
-    result = search_tool("What is the capital of France?")
-    print(result)  # String with search results
+    results = search_tool("What is the capital of France?")
+    print(results)  # list[SearchResultItem]
+    for item in results:
+        print(f"{item.title}: {item.content}")
 
     # Search multiple queries
     results = search_tool(["Query 1", "Query 2", "Query 3"])
-    print(results)  # List of result strings
+    print(results)  # list[list[SearchResultItem]]
 
     # Custom langchain tool (function-based)
     def my_search(query: str) -> str:
-        return f"Results for: {query}"
+        return json.dumps([{"title": "Result", "content": "...", "url": "..."}])
 
     search_tool = create_search_tool(my_search)
     result = search_tool("test query")
 """
 
+import json
 import logging
 from collections.abc import Callable
 from typing import Any
 
+from ...schemas import SearchResultItem
+
 logger = logging.getLogger(__name__)
 
 # Type alias for search tool callable
-SearchToolCallable = Callable[[str | list[str]], str | list[str]]
+SearchToolCallable = Callable[[str | list[str]], list[SearchResultItem] | list[list[SearchResultItem]]]
 
 
 def create_search_tool(
@@ -131,7 +141,7 @@ def _wrap_langchain_tool(langchain_tool: Any) -> SearchToolCallable:
         langchain_tool: Any langchain tool that implements invoke(), run(), or is callable
 
     Returns:
-        Search function that takes str|list[str] and returns str|list[str]
+        Search function that takes str|list[str] and returns list[SearchResultItem]|list[list[SearchResultItem]]
 
     Raises:
         ValueError: If tool doesn't have required methods
@@ -150,14 +160,14 @@ def _wrap_langchain_tool(langchain_tool: Any) -> SearchToolCallable:
 
     logger.info(f"Wrapped langchain tool with method: {call_method}")
 
-    def search_function(query: str | list[str]) -> str | list[str]:
+    def search_function(query: str | list[str]) -> list[SearchResultItem] | list[list[SearchResultItem]]:
         """Execute search using wrapped langchain tool.
 
         Args:
             query: Single query string or list of query strings
 
         Returns:
-            Single result string (if query is str) or list of results (if query is list)
+            Single list of SearchResultItem (if query is str) or list of lists (if query is list)
         """
         # Handle batch queries
         if isinstance(query, list):
@@ -165,24 +175,26 @@ def _wrap_langchain_tool(langchain_tool: Any) -> SearchToolCallable:
             for q in query:
                 try:
                     result = _invoke_tool(langchain_tool, call_method, q)
-                    results.append(result)
+                    parsed = _parse_tool_output(result)
+                    results.append(parsed)
                 except Exception as e:
                     logger.warning(f"Search failed for query '{q[:50]}...': {e}")
-                    results.append(f"Search failed: {str(e)}")
+                    results.append([])
             return results
 
         # Handle single query
         else:
             try:
-                return _invoke_tool(langchain_tool, call_method, query)
+                result = _invoke_tool(langchain_tool, call_method, query)
+                return _parse_tool_output(result)
             except Exception as e:
                 logger.warning(f"Search failed for query '{query[:50]}...': {e}")
-                return f"Search failed: {str(e)}"
+                return []
 
     return search_function
 
 
-def _invoke_tool(tool: Any, method: str, query: str) -> str:
+def _invoke_tool(tool: Any, method: str, query: str) -> Any:
     """Invoke a langchain tool with the appropriate method.
 
     Args:
@@ -191,18 +203,85 @@ def _invoke_tool(tool: Any, method: str, query: str) -> str:
         query: Query string
 
     Returns:
-        Search result as string
+        Raw search result (any type - will be parsed by _parse_tool_output)
     """
     if method == "invoke":
-        raw_result = tool.invoke(query)
+        return tool.invoke(query)
     elif method == "run":
-        raw_result = tool.run(query)
+        return tool.run(query)
     else:  # callable
-        raw_result = tool(query)
+        return tool(query)
 
-    # Parse result to string
+
+def _parse_tool_output(raw_result: Any) -> list[SearchResultItem]:
+    """Parse raw tool output into list of SearchResultItem objects.
+
+    This function handles multiple output formats:
+    1. List of SearchResultItem objects (already structured)
+    2. List of dicts with title/content/url keys
+    3. JSON string containing list of dicts
+    4. Plain string (creates single item with generic title)
+
+    Args:
+        raw_result: Raw output from search tool
+
+    Returns:
+        List of SearchResultItem objects
+
+    Raises:
+        None - returns empty list on failure
+    """
+    # Case 1: Already a list of SearchResultItem
+    if isinstance(raw_result, list) and all(isinstance(item, SearchResultItem) for item in raw_result):
+        return raw_result
+
+    # Case 2: List of dicts
+    if isinstance(raw_result, list) and all(isinstance(item, dict) for item in raw_result):
+        items = []
+        for item_dict in raw_result:
+            try:
+                # Handle optional title and url fields
+                title = item_dict.get("title") or None  # Convert empty string to None
+                content = item_dict.get("content", "No content")
+                url = item_dict.get("url") or None  # Convert empty string to None
+
+                # Skip items with no content
+                if not content or content == "No content":
+                    logger.warning("Skipping search result with no content")
+                    continue
+
+                item = SearchResultItem(
+                    title=title,
+                    content=content,
+                    url=url,
+                )
+                items.append(item)
+            except Exception as e:
+                logger.warning(f"Failed to parse dict to SearchResultItem: {e}")
+                continue
+        return items
+
+    # Case 3: JSON string
     if isinstance(raw_result, str):
-        return raw_result.strip()
-    else:
-        # Handle structured data (convert to string)
-        return str(raw_result)
+        try:
+            # Try to parse as JSON
+            parsed = json.loads(raw_result)
+            if isinstance(parsed, list):
+                return _parse_tool_output(parsed)  # Recursive call with parsed list
+        except json.JSONDecodeError:
+            # Not JSON - treat as plain text
+            pass
+
+        # Plain text fallback - create single generic item (no title, no URL)
+        logger.info("Search tool returned plain text, wrapping in SearchResultItem")
+        return [
+            SearchResultItem(
+                title=None,  # Will use truncated content in GUI
+                content=raw_result.strip(),
+                url=None,
+            )
+        ]
+
+    # Case 4: Unknown format
+    logger.warning(f"Unknown search result format: {type(raw_result)}")
+    return []

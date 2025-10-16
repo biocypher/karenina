@@ -4,6 +4,7 @@ import logging
 import re
 from typing import Any
 
+from ...schemas import SearchResultItem
 from ...schemas.answer_class import BaseAnswer
 
 logger = logging.getLogger(__name__)
@@ -272,3 +273,63 @@ def format_reasoning_for_parsing(reasoning: dict[str, str]) -> str:
         lines.append("")  # Blank line between attributes
 
     return "\n".join(lines)
+
+
+def format_search_results_for_llm(search_results: list[SearchResultItem] | list[dict[str, Any]]) -> str:
+    """Format structured search results into human-readable string for LLM prompts.
+
+    This function converts structured search results (SearchResultItem objects or dicts)
+    into a formatted string suitable for inclusion in LLM prompts. The formatting is
+    designed to be clear and easy for LLMs to understand.
+
+    Handles optional fields gracefully:
+    - If title is missing, uses truncated content (first 50 chars)
+    - If URL is missing, displays "Source: Not available"
+
+    Args:
+        search_results: List of SearchResultItem objects or list of dicts with
+                       title/content/url keys. Can be empty.
+
+    Returns:
+        Formatted string with numbered search results, one result per block.
+        Returns "No search results found." if the list is empty.
+
+    Example:
+        >>> results = [
+        ...     SearchResultItem(title="Example", content="Content here", url="http://..."),
+        ...     SearchResultItem(content="Content without title", url=None)
+        ... ]
+        >>> print(format_search_results_for_llm(results))
+        [1] Example
+            Content here
+            Source: http://...
+        <BLANKLINE>
+        [2] Content without title...
+            Content without title
+            Source: Not available
+    """
+    if not search_results:
+        return "No search results found."
+
+    formatted_parts = []
+    for i, result in enumerate(search_results, 1):
+        # Handle both SearchResultItem objects and dicts
+        if isinstance(result, SearchResultItem):
+            title = result.title
+            content = result.content
+            url = result.url
+        elif isinstance(result, dict):
+            title = result.get("title")
+            content = result.get("content", "No content")
+            url = result.get("url")
+        else:
+            logger.warning(f"Unexpected search result type in formatting: {type(result)}")
+            continue
+
+        # Format with optional fields (use truncated content if no title)
+        title_display = title if title else content[:50] + "..."
+        url_display = f"Source: {url}" if url else "Source: Not available"
+
+        formatted_parts.append(f"[{i}] {title_display}\n    {content}\n    {url_display}")
+
+    return "\n\n".join(formatted_parts)
