@@ -164,6 +164,18 @@ def export_verification_results_json(job: VerificationJob, results: dict[str, Ve
             "embedding_model_used": result.embedding_model_used,
             # MCP server fields
             "answering_mcp_servers": result.answering_mcp_servers,
+            # Deep-judgment fields
+            "deep_judgment_enabled": result.deep_judgment_enabled,
+            "deep_judgment_performed": result.deep_judgment_performed,
+            "extracted_excerpts": result.extracted_excerpts,
+            "attribute_reasoning": result.attribute_reasoning,
+            "deep_judgment_stages_completed": result.deep_judgment_stages_completed,
+            "deep_judgment_model_calls": result.deep_judgment_model_calls,
+            "deep_judgment_excerpt_retry_count": result.deep_judgment_excerpt_retry_count,
+            "attributes_without_excerpts": result.attributes_without_excerpts,
+            # Search-enhanced deep-judgment fields
+            "deep_judgment_search_enabled": result.deep_judgment_search_enabled,
+            "hallucination_risk_assessment": result.hallucination_risk_assessment,
         }
 
     return json.dumps(export_data, indent=2, ensure_ascii=False)
@@ -335,6 +347,18 @@ def export_verification_results_csv(
             "embedding_model_used",
             # MCP server fields
             "answering_mcp_servers",
+            # Deep-judgment fields
+            "deep_judgment_enabled",
+            "deep_judgment_performed",
+            "extracted_excerpts",
+            "attribute_reasoning",
+            "deep_judgment_stages_completed",
+            "deep_judgment_model_calls",
+            "deep_judgment_excerpt_retry_count",
+            "attributes_without_excerpts",
+            # Search-enhanced deep-judgment fields
+            "deep_judgment_search_enabled",
+            "hallucination_risk_assessment",
         ]
     )
 
@@ -382,6 +406,28 @@ def export_verification_results_csv(
             # MCP server fields
             "answering_mcp_servers": _safe_json_serialize(
                 result.answering_mcp_servers, result.question_id, "answering_mcp_servers"
+            ),
+            # Deep-judgment fields
+            "deep_judgment_enabled": result.deep_judgment_enabled,
+            "deep_judgment_performed": result.deep_judgment_performed,
+            "extracted_excerpts": _safe_json_serialize(
+                result.extracted_excerpts, result.question_id, "extracted_excerpts"
+            ),
+            "attribute_reasoning": _safe_json_serialize(
+                result.attribute_reasoning, result.question_id, "attribute_reasoning"
+            ),
+            "deep_judgment_stages_completed": _safe_json_serialize(
+                result.deep_judgment_stages_completed, result.question_id, "deep_judgment_stages_completed"
+            ),
+            "deep_judgment_model_calls": result.deep_judgment_model_calls,
+            "deep_judgment_excerpt_retry_count": result.deep_judgment_excerpt_retry_count,
+            "attributes_without_excerpts": _safe_json_serialize(
+                result.attributes_without_excerpts, result.question_id, "attributes_without_excerpts"
+            ),
+            # Search-enhanced deep-judgment fields
+            "deep_judgment_search_enabled": result.deep_judgment_search_enabled,
+            "hallucination_risk_assessment": _safe_json_serialize(
+                result.hallucination_risk_assessment, result.question_id, "hallucination_risk_assessment"
             ),
         }
 

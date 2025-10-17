@@ -383,6 +383,19 @@ class VerificationConfig(BaseModel):
     # Abstention detection settings
     abstention_enabled: bool = False  # Enable abstention/refusal detection
 
+    # Deep-judgment settings (multi-stage parsing with excerpts and reasoning)
+    deep_judgment_enabled: bool = False  # Enable deep-judgment analysis (default: disabled)
+    deep_judgment_max_excerpts_per_attribute: int = 3  # Max excerpts to extract per attribute
+    deep_judgment_fuzzy_match_threshold: float = 0.80  # Similarity threshold for excerpt validation
+    deep_judgment_excerpt_retry_attempts: int = 2  # Additional retry attempts for excerpt validation
+
+    # Search-enhanced deep-judgment settings (validate excerpts against external evidence)
+    deep_judgment_search_enabled: bool = False  # Enable search validation for excerpts
+    deep_judgment_search_tool: str | Any = "tavily"  # Search tool name or callable instance
+    # Supported built-in tools: "tavily"
+    # Can also pass any callable: (str | list[str]) -> (str | list[str])
+    # Examples: langchain tools, MCP tools, custom functions
+
     # Few-shot prompting settings
     few_shot_config: FewShotConfig | None = None  # New flexible configuration
 
@@ -529,6 +542,22 @@ class VerificationConfig(BaseModel):
                         f"Question {question_id} few-shot k value must be at least 1 when using k-shot mode"
                     )
 
+        # Additional validation for search-enhanced deep-judgment
+        if self.deep_judgment_search_enabled:
+            # Validate search tool
+            if isinstance(self.deep_judgment_search_tool, str):
+                # Check if it's a supported built-in tool
+                supported_tools = ["tavily"]
+                if self.deep_judgment_search_tool.lower() not in supported_tools:
+                    raise ValueError(
+                        f"Unknown search tool: '{self.deep_judgment_search_tool}'. Supported tools: {supported_tools}"
+                    )
+            elif not callable(self.deep_judgment_search_tool):
+                raise ValueError(
+                    "Search tool must be either a supported tool name string "
+                    "or a callable with signature (str | list[str]) -> (str | list[str])"
+                )
+
     def get_few_shot_config(self) -> FewShotConfig | None:
         """
         Get the effective FewShotConfig, handling backward compatibility.
@@ -626,6 +655,32 @@ class VerificationResult(BaseModel):
 
     # MCP server metadata
     answering_mcp_servers: list[str] | None = None  # Names of MCP servers attached to answering model
+
+    # Deep-judgment metadata (multi-stage parsing with excerpts and reasoning)
+    deep_judgment_enabled: bool = False  # Whether deep-judgment was configured
+    deep_judgment_performed: bool = False  # Whether deep-judgment was successfully executed
+    extracted_excerpts: dict[str, list[dict[str, Any]]] | None = None  # Extracted excerpts per attribute
+    # Structure: {"attribute_name": [{"text": str, "confidence": "low|medium|high", "similarity_score": float,
+    #   "search_results"?: str, "hallucination_risk"?: "none|low|medium|high", "hallucination_justification"?: str}]}
+    # Empty list [] indicates no excerpts found for that attribute (e.g., refusals, no corroborating evidence)
+    # When search is enabled, each excerpt includes:
+    #   - "search_results": External validation text from search tool
+    #   - "hallucination_risk": Per-excerpt risk assessment (none/low/medium/high)
+    #   - "hallucination_justification": Explanation for the risk level
+    attribute_reasoning: dict[str, str] | None = None  # Reasoning traces per attribute
+    # Structure: {"attribute_name": "reasoning text"}
+    # Reasoning can exist even when excerpts are empty (explains why no excerpts found)
+    deep_judgment_stages_completed: list[str] | None = None  # Stages completed: ["excerpts", "reasoning", "parameters"]
+    deep_judgment_model_calls: int = 0  # Number of LLM invocations for deep-judgment
+    deep_judgment_excerpt_retry_count: int = 0  # Number of retries for excerpt validation
+    attributes_without_excerpts: list[str] | None = None  # Attributes with no corroborating excerpts
+
+    # Search-enhanced deep-judgment metadata
+    deep_judgment_search_enabled: bool = False  # Whether search enhancement was enabled for this verification
+    hallucination_risk_assessment: dict[str, str] | None = None  # Hallucination risk per attribute
+    # Structure: {"attribute_name": "none" | "low" | "medium" | "high"}
+    # Scale: "none" = lowest risk (strong external evidence), "high" = highest risk (weak/no evidence)
+    # Only populated when deep_judgment_search_enabled=True
 
 
 class VerificationJob(BaseModel):

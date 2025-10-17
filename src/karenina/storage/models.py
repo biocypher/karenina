@@ -266,6 +266,20 @@ class VerificationResultModel(Base):
     abstention_override_applied: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     abstention_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Deep-judgment metadata (multi-stage parsing with excerpts and reasoning)
+    deep_judgment_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    deep_judgment_performed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    extracted_excerpts: Mapped[dict[str, list[dict[str, Any]]] | None] = mapped_column(JSON, nullable=True)
+    attribute_reasoning: Mapped[dict[str, str] | None] = mapped_column(JSON, nullable=True)
+    deep_judgment_stages_completed: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    deep_judgment_model_calls: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    deep_judgment_excerpt_retry_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    attributes_without_excerpts: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+
+    # Search-enhanced deep-judgment metadata
+    deep_judgment_search_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    hallucination_risk_assessment: Mapped[dict[str, str] | None] = mapped_column(JSON, nullable=True)
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
 

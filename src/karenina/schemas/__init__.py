@@ -19,6 +19,7 @@ from .checkpoint import (
 )
 from .question_class import Question
 from .rubric_class import ManualRubricTrait, Rubric, RubricEvaluation, RubricTrait, TraitKind
+from .search import SearchResultItem
 
 __all__ = [
     "BaseAnswer",
@@ -40,4 +41,5 @@ __all__ = [
     "SchemaOrgPerson",
     "SchemaOrgCreativeWork",
     "DatasetMetadata",
+    "SearchResultItem",
 ]
