@@ -137,7 +137,7 @@ def export_verification_results_json(job: VerificationJob, results: dict[str, Ve
     for question_id, result in results.items():
         export_data["results"][question_id] = {
             "question_id": result.question_id,
-            "success": result.success,
+            "completed_without_errors": result.completed_without_errors,
             "error": result.error,
             "question_text": result.question_text,
             "raw_llm_response": result.raw_llm_response,
@@ -373,7 +373,7 @@ def export_verification_results_csv(
     for _question_id, result in results.items():
         row = {
             "question_id": result.question_id,
-            "success": result.success,
+            "completed_without_errors": result.completed_without_errors,
             "error": result.error or "",
             "question_text": result.question_text,
             "raw_llm_response": result.raw_llm_response,

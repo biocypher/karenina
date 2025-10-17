@@ -324,7 +324,7 @@ class VerificationManager:
                 error_result = VerificationResult(
                     question_id=q_id,
                     template_id=template_id,
-                    success=False,
+                    completed_without_errors=False,
                     error=f"Verification failed: {str(e)}",
                     question_text=q_data["question"],
                     raw_llm_response="",
@@ -412,7 +412,7 @@ class VerificationManager:
                 error_result = VerificationResult(
                     question_id=question_id,
                     template_id=template_id,
-                    success=False,
+                    completed_without_errors=False,
                     error=f"Mixed config verification failed: {str(e)}",
                     question_text=self.base._questions_cache.get(question_id, {}).get("question", ""),
                     raw_llm_response="",
@@ -477,7 +477,7 @@ class VerificationManager:
                     error_result = VerificationResult(
                         question_id=q_id,
                         template_id=template_id,
-                        success=False,
+                        completed_without_errors=False,
                         error=f"Comparative verification failed: {str(e)}",
                         question_text=self.base._questions_cache.get(q_id, {}).get("question", ""),
                         raw_llm_response="",

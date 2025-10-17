@@ -598,7 +598,7 @@ class VerificationResult(BaseModel):
 
     question_id: str
     template_id: str  # MD5 of template or "no_template" (composite key component)
-    success: bool
+    completed_without_errors: bool
     error: str | None = None
 
     # Raw data

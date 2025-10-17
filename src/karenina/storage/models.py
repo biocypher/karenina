@@ -208,7 +208,7 @@ class VerificationResultModel(Base):
     template_id: Mapped[str] = mapped_column(String(32), nullable=False)  # MD5 of template or "no_template"
 
     # Basic result information
-    success: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    completed_without_errors: Mapped[bool] = mapped_column(Boolean, nullable=False)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Raw data
@@ -290,11 +290,11 @@ class VerificationResultModel(Base):
     # Indexes for common queries
     __table_args__ = (
         Index("idx_result_run_question", "run_id", "question_id"),
-        Index("idx_result_success", "success"),
+        Index("idx_result_completed_without_errors", "completed_without_errors"),
         Index("idx_result_models", "answering_model", "parsing_model"),
         Index("idx_result_timestamp", "timestamp"),
     )
 
     def __repr__(self) -> str:
         """String representation."""
-        return f"<VerificationResult(id={self.id}, run_id='{self.run_id}', question_id='{self.question_id}', success={self.success})>"
+        return f"<VerificationResult(id={self.id}, run_id='{self.run_id}', question_id='{self.question_id}', completed_without_errors={self.completed_without_errors})>"
