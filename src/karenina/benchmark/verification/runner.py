@@ -14,9 +14,11 @@ from ...answers.generator import inject_question_id_into_answer_class
 from ...llm.interface import init_chat_model_unified
 from ...schemas.rubric_class import Rubric
 from ...utils.checkpoint_converter import generate_template_id
-from ..models import ModelConfig, VerificationResult
+from ..models import ModelConfig, VerificationConfig, VerificationResult
 from .abstention_checker import detect_abstention
+from .deep_judgment import deep_judgment_parse
 from .embedding_utils import perform_embedding_check
+from .parser_utils import _strip_markdown_fences
 from .rubric_evaluator import RubricEvaluator
 from .validation import validate_answer_template
 
@@ -218,32 +220,6 @@ def _is_valid_md5_hash(hash_string: str) -> bool:
     return bool(md5_pattern.match(hash_string))
 
 
-def _strip_markdown_fences(text: str) -> str:
-    """
-    Remove markdown JSON code fences from LLM response text.
-
-    Args:
-        text: Raw text response from LLM that may contain markdown fences
-
-    Returns:
-        Cleaned text with markdown fences removed
-    """
-    if not isinstance(text, str):
-        return text
-
-    # Strip leading and trailing markdown JSON fences
-    cleaned = text.strip()
-    if cleaned.startswith("```json"):
-        cleaned = cleaned[7:]  # Remove ```json
-    elif cleaned.startswith("```"):
-        cleaned = cleaned[3:]  # Remove ```
-
-    if cleaned.endswith("```"):
-        cleaned = cleaned[:-3]  # Remove trailing ```
-
-    return cleaned.strip()
-
-
 def _construct_few_shot_prompt(
     question_text: str, few_shot_examples: list[dict[str, str]] | None, few_shot_enabled: bool
 ) -> str:
@@ -332,6 +308,12 @@ def run_single_model_verification(
     few_shot_examples: list[dict[str, str]] | None = None,
     few_shot_enabled: bool = False,
     abstention_enabled: bool = False,
+    deep_judgment_enabled: bool = False,
+    deep_judgment_max_excerpts_per_attribute: int = 3,
+    deep_judgment_fuzzy_match_threshold: float = 0.80,
+    deep_judgment_excerpt_retry_attempts: int = 2,
+    deep_judgment_search_enabled: bool = False,
+    deep_judgment_search_tool: str | Any = "tavily",
 ) -> VerificationResult:
     """
     Run verification for a single question with specific answering and parsing models.
@@ -428,6 +410,18 @@ def run_single_model_verification(
                 abstention_reasoning=None,
                 # MCP server metadata
                 answering_mcp_servers=answering_mcp_servers,
+                # Deep-judgment metadata (defaults for error cases)
+                deep_judgment_enabled=deep_judgment_enabled,
+                deep_judgment_performed=False,
+                extracted_excerpts=None,
+                attribute_reasoning=None,
+                deep_judgment_stages_completed=None,
+                deep_judgment_model_calls=0,
+                deep_judgment_excerpt_retry_count=0,
+                attributes_without_excerpts=None,
+                # Search-enhanced deep-judgment metadata (defaults for error cases)
+                deep_judgment_search_enabled=deep_judgment_search_enabled,
+                hallucination_risk_assessment=None,
             )
 
         # Step 1.5: Inject question ID into the Answer class
@@ -607,6 +601,18 @@ def run_single_model_verification(
                 abstention_reasoning=None,
                 # MCP server metadata
                 answering_mcp_servers=answering_mcp_servers,
+                # Deep-judgment metadata (defaults for error cases)
+                deep_judgment_enabled=deep_judgment_enabled,
+                deep_judgment_performed=False,
+                extracted_excerpts=None,
+                attribute_reasoning=None,
+                deep_judgment_stages_completed=None,
+                deep_judgment_model_calls=0,
+                deep_judgment_excerpt_retry_count=0,
+                attributes_without_excerpts=None,
+                # Search-enhanced deep-judgment metadata (defaults for error cases)
+                deep_judgment_search_enabled=deep_judgment_search_enabled,
+                hallucination_risk_assessment=None,
             )
 
         # Extract ground truth if enabled
@@ -642,16 +648,59 @@ Original Question: {question_text}
             parsing_messages.append(SystemMessage(content=combined_system_prompt))
         parsing_messages.append(HumanMessage(content=parsing_prompt))
 
-        try:
-            # Get raw text response from parsing LLM
-            parsing_response = parsing_llm.invoke(parsing_messages)
-            raw_parsing_response = (
-                parsing_response.content if hasattr(parsing_response, "content") else str(parsing_response)
-            )
+        # Initialize deep-judgment metadata variables
+        deep_judgment_performed = False
+        extracted_excerpts = None
+        attribute_reasoning = None
+        deep_judgment_stages_completed = None
+        deep_judgment_model_calls = 0
+        deep_judgment_excerpt_retry_count = 0
+        attributes_without_excerpts = None
+        hallucination_risk_assessment = None
 
-            # Strip markdown fences and parse with PydanticOutputParser
-            cleaned_response = _strip_markdown_fences(raw_parsing_response)
-            parsed_answer = parser.parse(cleaned_response)
+        try:
+            # Choose parsing strategy based on configuration
+            if deep_judgment_enabled:
+                # Create minimal config for deep-judgment
+                dj_config = VerificationConfig(
+                    answering_models=[],
+                    parsing_models=[parsing_model],
+                    parsing_only=True,
+                    deep_judgment_enabled=True,
+                    deep_judgment_max_excerpts_per_attribute=deep_judgment_max_excerpts_per_attribute,
+                    deep_judgment_fuzzy_match_threshold=deep_judgment_fuzzy_match_threshold,
+                    deep_judgment_excerpt_retry_attempts=deep_judgment_excerpt_retry_attempts,
+                    deep_judgment_search_enabled=deep_judgment_search_enabled,
+                    deep_judgment_search_tool=deep_judgment_search_tool,
+                )
+
+                # Deep-judgment multi-stage parsing
+                parsed_answer, extracted_excerpts, attribute_reasoning, dj_metadata = deep_judgment_parse(
+                    raw_llm_response=raw_llm_response,
+                    RawAnswer=RawAnswer,
+                    parsing_model=parsing_model,
+                    parsing_llm=parsing_llm,
+                    question_text=question_text,
+                    config=dj_config,
+                    format_instructions=format_instructions,
+                    combined_system_prompt=combined_system_prompt,
+                )
+                deep_judgment_performed = True
+                deep_judgment_stages_completed = dj_metadata.get("stages_completed", [])
+                deep_judgment_model_calls = dj_metadata.get("model_calls", 0)
+                deep_judgment_excerpt_retry_count = dj_metadata.get("excerpt_retry_count", 0)
+                attributes_without_excerpts = dj_metadata.get("attributes_without_excerpts", None)
+                hallucination_risk_assessment = dj_metadata.get("hallucination_risk", None)
+            else:
+                # Standard single-stage parsing (existing logic)
+                parsing_response = parsing_llm.invoke(parsing_messages)
+                raw_parsing_response = (
+                    parsing_response.content if hasattr(parsing_response, "content") else str(parsing_response)
+                )
+
+                # Strip markdown fences and parse with PydanticOutputParser
+                cleaned_response = _strip_markdown_fences(raw_parsing_response)
+                parsed_answer = parser.parse(cleaned_response)
         except Exception as e:
             return VerificationResult(
                 question_id=question_id,
@@ -694,12 +743,21 @@ Original Question: {question_text}
                 abstention_reasoning=None,
                 # MCP server metadata
                 answering_mcp_servers=answering_mcp_servers,
+                # Deep-judgment metadata (defaults for error cases)
+                deep_judgment_enabled=deep_judgment_enabled,
+                deep_judgment_performed=deep_judgment_performed,
+                extracted_excerpts=extracted_excerpts,
+                attribute_reasoning=attribute_reasoning,
+                deep_judgment_stages_completed=deep_judgment_stages_completed,
+                deep_judgment_model_calls=deep_judgment_model_calls,
+                deep_judgment_excerpt_retry_count=deep_judgment_excerpt_retry_count,
+                attributes_without_excerpts=attributes_without_excerpts,
             )
 
         # Step 5: Run verification
         try:
             # Standard field verification
-            field_verification_result = parsed_answer.verify()
+            field_verification_result = parsed_answer.verify()  # type: ignore[attr-defined]
 
             # Step 5.1: Run regex verification on the raw trace
             regex_verification_results = parsed_answer.verify_regex(raw_llm_response)
@@ -759,6 +817,22 @@ Original Question: {question_text}
                     abstention_override_applied = True
                     logger.info(f"Abstention detected for question {question_id} - overriding result to False")
 
+            # Step 5.7: Deep-judgment auto-fail (runs after abstention check)
+            # If deep-judgment found missing excerpts and abstention was NOT detected, auto-fail
+            if (
+                deep_judgment_performed
+                and attributes_without_excerpts
+                and len(attributes_without_excerpts) > 0
+                and not (abstention_detected and abstention_check_performed)
+            ):
+                # Short-circuit verification: success=True (test ran fine), verify_result=False (verification failed)
+                verification_result = False
+                field_verification_result = False
+                logger.info(
+                    f"Deep-judgment auto-fail for question {question_id}: "
+                    f"{len(attributes_without_excerpts)} attributes without excerpts: {', '.join(attributes_without_excerpts)}"
+                )
+
         except Exception as e:
             return VerificationResult(
                 question_id=question_id,
@@ -801,6 +875,18 @@ Original Question: {question_text}
                 abstention_reasoning=None,
                 # MCP server metadata
                 answering_mcp_servers=answering_mcp_servers,
+                # Deep-judgment metadata (defaults for error cases)
+                deep_judgment_enabled=deep_judgment_enabled,
+                deep_judgment_performed=False,
+                extracted_excerpts=None,
+                attribute_reasoning=None,
+                deep_judgment_stages_completed=None,
+                deep_judgment_model_calls=0,
+                deep_judgment_excerpt_retry_count=0,
+                attributes_without_excerpts=None,
+                # Search-enhanced deep-judgment metadata (defaults for error cases)
+                deep_judgment_search_enabled=deep_judgment_search_enabled,
+                hallucination_risk_assessment=None,
             )
 
         # Step 6: Run rubric evaluation (optional)
@@ -863,6 +949,18 @@ Original Question: {question_text}
             abstention_reasoning=abstention_reasoning,
             # MCP server metadata
             answering_mcp_servers=answering_mcp_servers,
+            # Deep-judgment metadata
+            deep_judgment_enabled=deep_judgment_enabled,
+            deep_judgment_performed=deep_judgment_performed,
+            extracted_excerpts=extracted_excerpts,
+            attribute_reasoning=attribute_reasoning,
+            deep_judgment_stages_completed=deep_judgment_stages_completed,
+            deep_judgment_model_calls=deep_judgment_model_calls,
+            deep_judgment_excerpt_retry_count=deep_judgment_excerpt_retry_count,
+            attributes_without_excerpts=attributes_without_excerpts,
+            # Search-enhanced deep-judgment metadata
+            deep_judgment_search_enabled=deep_judgment_search_enabled,
+            hallucination_risk_assessment=hallucination_risk_assessment,
         )
 
     except Exception as e:
@@ -907,4 +1005,16 @@ Original Question: {question_text}
             abstention_reasoning=None,
             # MCP server metadata
             answering_mcp_servers=answering_mcp_servers,
+            # Deep-judgment metadata (defaults for error cases)
+            deep_judgment_enabled=deep_judgment_enabled,
+            deep_judgment_performed=False,
+            extracted_excerpts=None,
+            attribute_reasoning=None,
+            deep_judgment_stages_completed=None,
+            deep_judgment_model_calls=0,
+            deep_judgment_excerpt_retry_count=0,
+            attributes_without_excerpts=None,
+            # Search-enhanced deep-judgment metadata (defaults for error cases)
+            deep_judgment_search_enabled=deep_judgment_search_enabled,
+            hallucination_risk_assessment=None,
         )

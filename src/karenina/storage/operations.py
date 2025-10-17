@@ -571,6 +571,18 @@ def _create_result_model(run_id: str, result: "VerificationResult") -> Verificat
         abstention_detected=result.abstention_detected,
         abstention_override_applied=result.abstention_override_applied,
         abstention_reasoning=result.abstention_reasoning,
+        # Deep-judgment fields
+        deep_judgment_enabled=result.deep_judgment_enabled,
+        deep_judgment_performed=result.deep_judgment_performed,
+        extracted_excerpts=result.extracted_excerpts,
+        attribute_reasoning=result.attribute_reasoning,
+        deep_judgment_stages_completed=result.deep_judgment_stages_completed,
+        deep_judgment_model_calls=result.deep_judgment_model_calls,
+        deep_judgment_excerpt_retry_count=result.deep_judgment_excerpt_retry_count,
+        attributes_without_excerpts=result.attributes_without_excerpts,
+        # Search-enhanced deep-judgment fields
+        deep_judgment_search_enabled=result.deep_judgment_search_enabled,
+        hallucination_risk_assessment=result.hallucination_risk_assessment,
     )
 
 
@@ -604,6 +616,18 @@ def _update_result_model(model: VerificationResultModel, result: "VerificationRe
     model.abstention_detected = result.abstention_detected
     model.abstention_override_applied = result.abstention_override_applied
     model.abstention_reasoning = result.abstention_reasoning
+    # Deep-judgment fields
+    model.deep_judgment_enabled = result.deep_judgment_enabled
+    model.deep_judgment_performed = result.deep_judgment_performed
+    model.extracted_excerpts = result.extracted_excerpts
+    model.attribute_reasoning = result.attribute_reasoning
+    model.deep_judgment_stages_completed = result.deep_judgment_stages_completed
+    model.deep_judgment_model_calls = result.deep_judgment_model_calls
+    model.deep_judgment_excerpt_retry_count = result.deep_judgment_excerpt_retry_count
+    model.attributes_without_excerpts = result.attributes_without_excerpts
+    # Search-enhanced deep-judgment fields
+    model.deep_judgment_search_enabled = result.deep_judgment_search_enabled
+    model.hallucination_risk_assessment = result.hallucination_risk_assessment
 
 
 def _model_to_verification_result(model: VerificationResultModel) -> "VerificationResult":
@@ -649,4 +673,16 @@ def _model_to_verification_result(model: VerificationResultModel) -> "Verificati
         abstention_detected=model.abstention_detected,
         abstention_override_applied=model.abstention_override_applied,
         abstention_reasoning=model.abstention_reasoning,
+        # Deep-judgment fields
+        deep_judgment_enabled=model.deep_judgment_enabled,
+        deep_judgment_performed=model.deep_judgment_performed,
+        extracted_excerpts=model.extracted_excerpts,
+        attribute_reasoning=model.attribute_reasoning,
+        deep_judgment_stages_completed=model.deep_judgment_stages_completed,
+        deep_judgment_model_calls=model.deep_judgment_model_calls,
+        deep_judgment_excerpt_retry_count=model.deep_judgment_excerpt_retry_count,
+        attributes_without_excerpts=model.attributes_without_excerpts,
+        # Search-enhanced deep-judgment fields
+        deep_judgment_search_enabled=model.deep_judgment_search_enabled,
+        hallucination_risk_assessment=model.hallucination_risk_assessment,
     )
