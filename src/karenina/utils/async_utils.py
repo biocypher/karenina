@@ -21,6 +21,8 @@ async def run_async_chunked(
     chunk_size: int = 5,
     progress_callback: Callable[[float, str], None] | None = None,
     max_workers: int | None = None,
+    on_task_start: Callable[[T], None] | None = None,
+    on_task_done: Callable[[T, R | Exception], None] | None = None,
 ) -> list[R]:
     """
     Run a synchronous function on a list of items in parallel chunks.
@@ -35,6 +37,8 @@ async def run_async_chunked(
         chunk_size: Number of items to process in parallel (default: 5)
         progress_callback: Optional callback for progress updates (percentage, message)
         max_workers: Maximum number of worker threads (default: min(32, len(items)))
+        on_task_start: Optional callback when a task starts processing
+        on_task_done: Optional callback when a task completes (with result or exception)
 
     Returns:
         List of results maintaining the same order as input items
@@ -70,18 +74,30 @@ async def run_async_chunked(
 
             # Submit chunk to executor
             future_to_index = {}
+            future_to_item = {}
             for i, item in enumerate(chunk_items):
                 original_index = chunk_start + i
+
+                # Call on_task_start callback
+                if on_task_start:
+                    on_task_start(item)
+
                 future = executor.submit(sync_function, item)
                 future_to_index[future] = original_index
+                future_to_item[future] = item
 
             # Collect results as they complete
             for future in as_completed(future_to_index):
                 original_index = future_to_index[future]
+                item = future_to_item[future]
                 try:
                     result = future.result()
                     results[original_index] = result
                     processed_count += 1
+
+                    # Call on_task_done callback
+                    if on_task_done:
+                        on_task_done(item, result)
 
                     # Update progress
                     if progress_callback:
@@ -93,6 +109,10 @@ async def run_async_chunked(
                     # Store exception as result to be handled by caller
                     results[original_index] = e
                     processed_count += 1
+
+                    # Call on_task_done callback with exception
+                    if on_task_done:
+                        on_task_done(item, e)
 
             # Small delay between chunks to be respectful to APIs
             if chunk_end < total_items:
@@ -108,6 +128,8 @@ async def run_async_batched(
     concurrent_batches: int = 2,
     progress_callback: Callable[[float, str], None] | None = None,
     delay_between_batches: float = 0.5,
+    on_task_start: Callable[[T], None] | None = None,
+    on_task_done: Callable[[T, R | Exception], None] | None = None,
 ) -> list[R]:
     """
     Run a synchronous function on batches of items with controlled concurrency.
@@ -149,6 +171,8 @@ async def run_async_batched(
             items=batch_items,
             sync_function=sync_function,
             chunk_size=len(batch_items),  # Process entire batch concurrently
+            on_task_start=on_task_start,
+            on_task_done=on_task_done,
         )
         return [(idx, result) for (idx, _), result in zip(batch, batch_results, strict=True)]
 
@@ -271,6 +295,8 @@ async def execute_with_config(
     sync_function: Callable[[T], R],
     config: AsyncConfig,
     progress_callback: Callable[[float, str], None] | None = None,
+    on_task_start: Callable[[T], None] | None = None,
+    on_task_done: Callable[[T, R | Exception], None] | None = None,
 ) -> list[R]:
     """
     Execute function with the given configuration (sync or async).
@@ -283,6 +309,8 @@ async def execute_with_config(
         sync_function: Synchronous function to apply to each item
         config: Async configuration
         progress_callback: Optional callback for progress updates
+        on_task_start: Optional callback when a task starts processing
+        on_task_done: Optional callback when a task completes
 
     Returns:
         List of results maintaining the same order as input items
@@ -301,6 +329,8 @@ async def execute_with_config(
             concurrent_batches=config.concurrent_batches,
             progress_callback=progress_callback,
             delay_between_batches=config.delay_between_batches,
+            on_task_start=on_task_start,
+            on_task_done=on_task_done,
         )
     else:
         # Chunked async execution (default)
@@ -310,6 +340,8 @@ async def execute_with_config(
             chunk_size=config.chunk_size,
             progress_callback=progress_callback,
             max_workers=config.max_workers,
+            on_task_start=on_task_start,
+            on_task_done=on_task_done,
         )
 
 
