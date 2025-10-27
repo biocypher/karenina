@@ -110,6 +110,8 @@ def extract_questions_from_file(
     author_email_column: str | None = None,
     author_affiliation_column: str | None = None,
     url_column: str | None = None,
+    keywords_columns: list[dict[str, str]] | None = None,
+    # Deprecated: kept for backward compatibility
     keywords_column: str | None = None,
     keywords_separator: str = ",",
 ) -> list[tuple[Question, dict[str, Any]]]:
@@ -125,8 +127,10 @@ def extract_questions_from_file(
         author_email_column: Optional column name for author emails
         author_affiliation_column: Optional column name for author affiliations
         url_column: Optional column name for URLs
-        keywords_column: Optional column name for keywords
-        keywords_separator: Separator for splitting keywords (default: ",")
+        keywords_columns: Optional list of keyword column configurations with individual separators
+            e.g., [{"column": "keywords1", "separator": ","}, {"column": "keywords2", "separator": ";"}]
+        keywords_column: (Deprecated) Optional single column name for keywords
+        keywords_separator: (Deprecated) Separator for splitting keywords (default: ",")
 
     Returns:
         List of tuples containing (Question, metadata_dict)
@@ -145,7 +149,7 @@ def extract_questions_from_file(
 
     # Collect all columns we want to use (required + optional metadata)
     columns_to_use = [question_column, answer_column]
-    metadata_columns = {}
+    metadata_columns: dict[str, Any] = {}
 
     # Add metadata columns if they exist in the file
     if author_name_column and author_name_column in df.columns:
@@ -164,9 +168,23 @@ def extract_questions_from_file(
         columns_to_use.append(url_column)
         metadata_columns["url"] = url_column
 
-    if keywords_column and keywords_column in df.columns:
-        columns_to_use.append(keywords_column)
-        metadata_columns["keywords"] = keywords_column
+    # Handle backward compatibility for keywords
+    effective_keywords_columns = keywords_columns
+    if not effective_keywords_columns and keywords_column:
+        # Old format: convert to new format
+        effective_keywords_columns = [{"column": keywords_column, "separator": keywords_separator}]
+
+    # Add all keyword columns
+    if effective_keywords_columns:
+        keyword_cols_info = []
+        for kw_config in effective_keywords_columns:
+            col_name = kw_config.get("column")
+            separator = kw_config.get("separator", ",")
+            if col_name and col_name in df.columns:
+                columns_to_use.append(col_name)
+                keyword_cols_info.append({"column": col_name, "separator": separator})
+        if keyword_cols_info:
+            metadata_columns["keywords_columns"] = keyword_cols_info
 
     # Filter to only the columns we need and drop rows with missing required data
     df_filtered = df[columns_to_use].dropna(subset=[question_column, answer_column])
@@ -209,13 +227,22 @@ def extract_questions_from_file(
             if url_value:
                 metadata["url"] = url_value
 
-        # Keywords metadata
-        if "keywords" in metadata_columns and pd.notna(row[metadata_columns["keywords"]]):
-            keywords_value = str(row[metadata_columns["keywords"]]).strip()
-            if keywords_value:
-                keywords_list = [k.strip() for k in keywords_value.split(keywords_separator) if k.strip()]
-                if keywords_list:
-                    metadata["keywords"] = keywords_list
+        # Keywords metadata - handle multiple keyword columns
+        if "keywords_columns" in metadata_columns:
+            all_keywords = []
+            for kw_col_info in metadata_columns["keywords_columns"]:
+                col_name = kw_col_info["column"]
+                separator = kw_col_info["separator"]
+                if pd.notna(row[col_name]):
+                    keywords_value = str(row[col_name]).strip()
+                    if keywords_value:
+                        keywords_list = [k.strip() for k in keywords_value.split(separator) if k.strip()]
+                        all_keywords.extend(keywords_list)
+
+            # Remove duplicates and sort for consistency
+            if all_keywords:
+                unique_keywords = sorted(set(all_keywords))
+                metadata["keywords"] = unique_keywords
 
         results.append((question, metadata))
 
@@ -327,6 +354,8 @@ def extract_and_generate_questions(
     author_email_column: str | None = None,
     author_affiliation_column: str | None = None,
     url_column: str | None = None,
+    keywords_columns: list[dict[str, str]] | None = None,
+    # Deprecated: kept for backward compatibility
     keywords_column: str | None = None,
     keywords_separator: str = ",",
 ) -> dict[str, Any] | None:
@@ -344,8 +373,10 @@ def extract_and_generate_questions(
         author_email_column: Optional column name for author emails
         author_affiliation_column: Optional column name for author affiliations
         url_column: Optional column name for URLs
-        keywords_column: Optional column name for keywords
-        keywords_separator: Separator for splitting keywords (default: ",")
+        keywords_columns: Optional list of keyword column configurations with individual separators
+            e.g., [{"column": "keywords1", "separator": ","}, {"column": "keywords2", "separator": ";"}]
+        keywords_column: (Deprecated) Optional single column name for keywords
+        keywords_separator: (Deprecated) Separator for splitting keywords (default: ",")
 
     Returns:
         If return_json is True, returns dictionary in webapp format
@@ -370,6 +401,7 @@ def extract_and_generate_questions(
         author_email_column=author_email_column,
         author_affiliation_column=author_affiliation_column,
         url_column=url_column,
+        keywords_columns=keywords_columns,
         keywords_column=keywords_column,
         keywords_separator=keywords_separator,
     )

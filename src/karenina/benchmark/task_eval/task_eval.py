@@ -563,7 +563,7 @@ class TaskEval:
                     "execution_time": verification_result.execution_time,
                 },
                 "verify_rubric": rubric_scores,
-                "success": verification_result.success,
+                "completed_without_errors": verification_result.completed_without_errors,
                 "error": verification_result.error,
             }
 

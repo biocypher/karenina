@@ -430,8 +430,8 @@ def save_verification_results(
                 config=config or {},
                 total_questions=len({r.question_id for r in results.values()}),
                 processed_count=len(results),
-                successful_count=sum(1 for r in results.values() if r.success),
-                failed_count=sum(1 for r in results.values() if not r.success),
+                successful_count=sum(1 for r in results.values() if r.completed_without_errors),
+                failed_count=sum(1 for r in results.values() if not r.completed_without_errors),
                 start_time=None,  # These would come from config
                 end_time=None,
             )
@@ -441,8 +441,8 @@ def save_verification_results(
         else:
             # Update existing run
             existing_run.processed_count = len(results)
-            existing_run.successful_count = sum(1 for r in results.values() if r.success)
-            existing_run.failed_count = sum(1 for r in results.values() if not r.success)
+            existing_run.successful_count = sum(1 for r in results.values() if r.completed_without_errors)
+            existing_run.failed_count = sum(1 for r in results.values() if not r.completed_without_errors)
             # Commit the updated run
             session.commit()
 
@@ -536,7 +536,7 @@ def _create_result_model(run_id: str, result: "VerificationResult") -> Verificat
         run_id=run_id,
         question_id=result.question_id,
         template_id=result.template_id,
-        success=result.success,
+        completed_without_errors=result.completed_without_errors,
         error=result.error,
         question_text=result.question_text,
         raw_llm_response=result.raw_llm_response,
@@ -588,7 +588,7 @@ def _create_result_model(run_id: str, result: "VerificationResult") -> Verificat
 
 def _update_result_model(model: VerificationResultModel, result: "VerificationResult") -> None:
     """Update an existing VerificationResultModel with new data."""
-    model.success = result.success
+    model.completed_without_errors = result.completed_without_errors
     model.error = result.error
     model.question_text = result.question_text
     model.raw_llm_response = result.raw_llm_response
@@ -637,7 +637,7 @@ def _model_to_verification_result(model: VerificationResultModel) -> "Verificati
     return VerificationResult(
         question_id=model.question_id,
         template_id=model.template_id,
-        success=model.success,
+        completed_without_errors=model.completed_without_errors,
         error=model.error,
         question_text=model.question_text,
         raw_llm_response=model.raw_llm_response,
