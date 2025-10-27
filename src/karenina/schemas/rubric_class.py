@@ -124,24 +124,137 @@ class ManualRubricTrait(BaseModel):
             raise RuntimeError(f"Failed to evaluate manual trait '{self.name}': {e}") from e
 
 
+# Valid metric names that can be computed
+VALID_METRICS = {"precision", "recall", "specificity", "accuracy", "f1"}
+
+# Metric computation requirements (which confusion buckets are needed)
+METRIC_REQUIREMENTS = {
+    "precision": {"tp", "fp"},
+    "recall": {"tp", "fn"},
+    "specificity": {"tn", "fp"},
+    "accuracy": {"tp", "tn", "fp", "fn"},
+    "f1": {"tp", "fp", "fn"},
+}
+
+
+class MetricRubricTrait(BaseModel):
+    """
+    Metric evaluation trait using confusion-matrix analysis.
+
+    This trait type evaluates free-text answers by having an LLM identify excerpts
+    that match different instruction categories (TP/TN/FP/FN), then computes
+    classification metrics (precision, recall, F1, etc.) from those lists.
+
+    The trait returns both the confusion lists and computed metric values.
+    """
+
+    name: str = Field(..., min_length=1, description="Human readable identifier for the trait")
+    description: str | None = Field(None, description="Detailed description of what this trait evaluates")
+    metrics: list[str] = Field(
+        ..., min_length=1, description="List of metrics to compute (e.g., 'precision', 'recall', 'f1')"
+    )
+    tp_instructions: list[str] = Field(
+        default_factory=list, description="Instructions for identifying True Positives (correct matches)"
+    )
+    tn_instructions: list[str] = Field(
+        default_factory=list, description="Instructions for identifying True Negatives (correct non-matches)"
+    )
+    fp_instructions: list[str] = Field(
+        default_factory=list, description="Instructions for identifying False Positives (incorrect matches)"
+    )
+    fn_instructions: list[str] = Field(
+        default_factory=list, description="Instructions for identifying False Negatives (missed matches)"
+    )
+    repeated_extraction: bool = Field(
+        True, description="Whether to deduplicate repeated excerpts (case-insensitive exact match)"
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("metrics")
+    @classmethod
+    def validate_metric_names(cls, v: list[str]) -> list[str]:
+        """Validate that all requested metrics are valid."""
+        if not v:
+            raise ValueError("At least one metric must be specified")
+
+        invalid_metrics = set(v) - VALID_METRICS
+        if invalid_metrics:
+            raise ValueError(f"Invalid metric names: {invalid_metrics}. Valid metrics are: {VALID_METRICS}")
+
+        return v
+
+    @model_validator(mode="after")
+    def validate_metric_computability(self) -> "MetricRubricTrait":
+        """Validate that requested metrics can be computed from provided instruction buckets."""
+        # Check that at least one instruction bucket is non-empty
+        all_empty = (
+            not self.tp_instructions
+            and not self.tn_instructions
+            and not self.fp_instructions
+            and not self.fn_instructions
+        )
+        if all_empty:
+            raise ValueError("At least one instruction bucket (TP/TN/FP/FN) must have instructions")
+
+        # Determine which buckets have instructions
+        available_buckets = set()
+        if self.tp_instructions:
+            available_buckets.add("tp")
+        if self.tn_instructions:
+            available_buckets.add("tn")
+        if self.fp_instructions:
+            available_buckets.add("fp")
+        if self.fn_instructions:
+            available_buckets.add("fn")
+
+        # Check each requested metric can be computed
+        uncomputable_metrics = []
+        for metric in self.metrics:
+            required_buckets = METRIC_REQUIREMENTS[metric]
+            if not required_buckets.issubset(available_buckets):
+                missing = required_buckets - available_buckets
+                uncomputable_metrics.append(f"{metric} (needs {missing})")
+
+        if uncomputable_metrics:
+            raise ValueError(
+                f"Cannot compute the following metrics with provided instruction buckets: "
+                f"{', '.join(uncomputable_metrics)}. "
+                f"Available buckets: {available_buckets}"
+            )
+
+        return self
+
+    def get_required_buckets(self) -> set[str]:
+        """Get the set of confusion buckets required for computing all requested metrics."""
+        required = set()
+        for metric in self.metrics:
+            required.update(METRIC_REQUIREMENTS[metric])
+        return required
+
+
 class Rubric(BaseModel):
     """
     Collection of evaluation traits applied to all question-answer pairs.
 
     A rubric defines the qualitative criteria used to evaluate LLM responses
-    beyond basic correctness checking. Supports both LLM-based and manual traits.
+    beyond basic correctness checking. Supports LLM-based, manual, and metric traits.
     """
 
     traits: list[RubricTrait] = Field(default_factory=list, description="List of LLM-based evaluation traits")
     manual_traits: list[ManualRubricTrait] = Field(default_factory=list, description="List of manual evaluation traits")
+    metric_traits: list[MetricRubricTrait] = Field(
+        default_factory=list, description="List of metric-based evaluation traits (confusion-matrix analysis)"
+    )
 
     model_config = ConfigDict(extra="forbid")
 
     def get_trait_names(self) -> list[str]:
-        """Get list of all trait names in this rubric (both LLM and manual)."""
+        """Get list of all trait names in this rubric (LLM, manual, and metric)."""
         llm_names = [trait.name for trait in self.traits]
         manual_names = [trait.name for trait in self.manual_traits]
-        return llm_names + manual_names
+        metric_names = [trait.name for trait in self.metric_traits]
+        return llm_names + manual_names + metric_names
 
     def get_llm_trait_names(self) -> list[str]:
         """Get list of LLM trait names only."""
@@ -151,13 +264,27 @@ class Rubric(BaseModel):
         """Get list of manual trait names only."""
         return [trait.name for trait in self.manual_traits]
 
+    def get_metric_trait_names(self) -> list[str]:
+        """Get list of metric trait names only."""
+        return [trait.name for trait in self.metric_traits]
+
     def validate_evaluation(self, evaluation: dict[str, int | bool]) -> bool:
-        """Validate that an evaluation result matches this rubric structure."""
-        trait_names = set(self.get_trait_names())
+        """
+        Validate that an evaluation result matches this rubric structure.
+
+        Note: This validates LLM and manual trait scores only. Metric traits
+        are stored separately in VerificationResult fields (metric_trait_confusion_lists
+        and metric_trait_metrics) and don't participate in this validation.
+        """
+        # Get trait names excluding metric traits (they're validated separately)
+        llm_names = set(self.get_llm_trait_names())
+        manual_names = set(self.get_manual_trait_names())
+        expected_names = llm_names | manual_names
+
         eval_names = set(evaluation.keys())
 
-        # Check that all trait names are present
-        if trait_names != eval_names:
+        # Check that all expected trait names are present
+        if expected_names != eval_names:
             return False
 
         # Check that each score is valid for its trait
@@ -220,8 +347,9 @@ def merge_rubrics(global_rubric: "Rubric | None", question_rubric: "Rubric | Non
     if conflicts:
         raise ValueError(f"Trait name conflicts between global and question rubrics: {conflicts}")
 
-    # Merge traits and manual traits separately
+    # Merge all trait types separately
     merged_traits = list(global_rubric.traits) + list(question_rubric.traits)
     merged_manual_traits = list(global_rubric.manual_traits) + list(question_rubric.manual_traits)
+    merged_metric_traits = list(global_rubric.metric_traits) + list(question_rubric.metric_traits)
 
-    return Rubric(traits=merged_traits, manual_traits=merged_manual_traits)
+    return Rubric(traits=merged_traits, manual_traits=merged_manual_traits, metric_traits=merged_metric_traits)

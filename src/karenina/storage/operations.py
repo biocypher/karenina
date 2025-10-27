@@ -583,6 +583,9 @@ def _create_result_model(run_id: str, result: "VerificationResult") -> Verificat
         # Search-enhanced deep-judgment fields
         deep_judgment_search_enabled=result.deep_judgment_search_enabled,
         hallucination_risk_assessment=result.hallucination_risk_assessment,
+        # Metric trait fields
+        metric_trait_confusion_lists=result.metric_trait_confusion_lists,
+        metric_trait_metrics=result.metric_trait_metrics,
     )
 
 
@@ -628,6 +631,9 @@ def _update_result_model(model: VerificationResultModel, result: "VerificationRe
     # Search-enhanced deep-judgment fields
     model.deep_judgment_search_enabled = result.deep_judgment_search_enabled
     model.hallucination_risk_assessment = result.hallucination_risk_assessment
+    # Metric trait fields
+    model.metric_trait_confusion_lists = result.metric_trait_confusion_lists
+    model.metric_trait_metrics = result.metric_trait_metrics
 
 
 def _model_to_verification_result(model: VerificationResultModel) -> "VerificationResult":
@@ -685,4 +691,7 @@ def _model_to_verification_result(model: VerificationResultModel) -> "Verificati
         # Search-enhanced deep-judgment fields
         deep_judgment_search_enabled=model.deep_judgment_search_enabled,
         hallucination_risk_assessment=model.hallucination_risk_assessment,
+        # Metric trait fields
+        metric_trait_confusion_lists=model.metric_trait_confusion_lists,
+        metric_trait_metrics=model.metric_trait_metrics,
     )

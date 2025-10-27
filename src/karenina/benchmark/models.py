@@ -682,6 +682,14 @@ class VerificationResult(BaseModel):
     # Scale: "none" = lowest risk (strong external evidence), "high" = highest risk (weak/no evidence)
     # Only populated when deep_judgment_search_enabled=True
 
+    # Metric trait evaluation metadata (confusion-matrix analysis)
+    metric_trait_confusion_lists: dict[str, dict[str, list[str]]] | None = None  # Confusion lists per metric trait
+    # Structure: {"trait_name": {"tp": ["excerpt1", ...], "tn": [...], "fp": [...], "fn": [...]}}
+    # Each trait has four lists (TP/TN/FP/FN) containing extracted excerpts from the answer
+    metric_trait_metrics: dict[str, dict[str, float]] | None = None  # Computed metrics per metric trait
+    # Structure: {"trait_name": {"precision": 0.85, "recall": 0.92, "f1": 0.88, ...}}
+    # Only metrics requested by the trait are included in the inner dictionary
+
 
 class VerificationJob(BaseModel):
     """Represents a verification job."""
