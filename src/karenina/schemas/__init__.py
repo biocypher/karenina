@@ -18,7 +18,7 @@ from .checkpoint import (
     SchemaOrgSoftwareSourceCode,
 )
 from .question_class import Question
-from .rubric_class import ManualRubricTrait, Rubric, RubricEvaluation, RubricTrait, TraitKind
+from .rubric_class import ManualRubricTrait, MetricRubricTrait, Rubric, RubricEvaluation, RubricTrait, TraitKind
 from .search import SearchResultItem
 
 __all__ = [
@@ -28,6 +28,7 @@ __all__ = [
     "Rubric",
     "RubricTrait",
     "ManualRubricTrait",
+    "MetricRubricTrait",
     "RubricEvaluation",
     "TraitKind",
     "JsonLdCheckpoint",
