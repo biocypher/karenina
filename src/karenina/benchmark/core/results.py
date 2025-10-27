@@ -212,7 +212,7 @@ class ResultsManager:
                 "model_combinations": 0,
             }
 
-        successful_count = sum(1 for r in results.values() if r.success)
+        successful_count = sum(1 for r in results.values() if r.completed_without_errors)
         failed_count = len(results) - successful_count
         unique_questions = len({r.question_id for r in results.values()})
         total_execution_time = sum(r.execution_time for r in results.values() if r.execution_time)
@@ -522,7 +522,9 @@ class ResultsManager:
                 self._escape_csv_field(result.answering_system_prompt or ""),
                 self._escape_csv_field(result.parsing_system_prompt or ""),
                 self._escape_csv_field(
-                    "abstained" if result.abstention_detected and result.abstention_override_applied else result.success
+                    "abstained"
+                    if result.abstention_detected and result.abstention_override_applied
+                    else result.completed_without_errors
                 ),
                 self._escape_csv_field(result.error or ""),
                 self._escape_csv_field(result.execution_time),

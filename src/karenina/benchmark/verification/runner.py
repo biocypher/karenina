@@ -372,7 +372,7 @@ def run_single_model_verification(
             return VerificationResult(
                 question_id=question_id,
                 template_id=template_id,
-                success=False,
+                completed_without_errors=False,
                 error=f"Template validation failed: {error_msg}",
                 keywords=keywords,
                 question_text=question_text,
@@ -508,7 +508,7 @@ def run_single_model_verification(
                 return VerificationResult(
                     question_id=question_id,
                     template_id=template_id,
-                    success=False,
+                    completed_without_errors=False,
                     error=error_msg,
                     keywords=keywords,
                     question_text=question_text,
@@ -563,7 +563,7 @@ def run_single_model_verification(
             return VerificationResult(
                 question_id=question_id,
                 template_id=template_id,
-                success=False,
+                completed_without_errors=False,
                 error=f"Failed to create PydanticOutputParser: {e}",
                 keywords=keywords,
                 question_text=question_text,
@@ -705,7 +705,7 @@ Original Question: {question_text}
             return VerificationResult(
                 question_id=question_id,
                 template_id=template_id,
-                success=False,
+                completed_without_errors=False,
                 error=f"Parsing failed: {e}",
                 keywords=keywords,
                 question_text=question_text,
@@ -837,7 +837,7 @@ Original Question: {question_text}
             return VerificationResult(
                 question_id=question_id,
                 template_id=template_id,
-                success=False,
+                completed_without_errors=False,
                 error=f"Verification failed: {e}",
                 keywords=keywords,
                 question_text=question_text,
@@ -910,7 +910,7 @@ Original Question: {question_text}
         return VerificationResult(
             question_id=question_id,
             template_id=template_id,
-            success=True,
+            completed_without_errors=True,
             verify_result=verification_result,
             verify_rubric=rubric_result,
             evaluation_rubric=rubric.model_dump() if rubric else None,
@@ -967,7 +967,7 @@ Original Question: {question_text}
         return VerificationResult(
             question_id=question_id,
             template_id=template_id,
-            success=False,
+            completed_without_errors=False,
             error=f"Unexpected error: {e}",
             keywords=keywords,
             question_text=question_text,

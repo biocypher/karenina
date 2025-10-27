@@ -598,7 +598,7 @@ class VerificationResult(BaseModel):
 
     question_id: str
     template_id: str  # MD5 of template or "no_template" (composite key component)
-    success: bool
+    completed_without_errors: bool
     error: str | None = None
 
     # Raw data
@@ -705,6 +705,11 @@ class VerificationJob(BaseModel):
     current_question: str = ""
     estimated_time_remaining: float | None = None
 
+    # WebSocket streaming progress fields
+    in_progress_questions: list[str] = Field(default_factory=list)
+    ema_seconds_per_item: float = 0.0
+    last_update_ts: float | None = None
+
     # Timing
     start_time: float | None = None
     end_time: float | None = None
@@ -712,6 +717,47 @@ class VerificationJob(BaseModel):
     # Results
     results: dict[str, VerificationResult] = Field(default_factory=dict)
     error_message: str | None = None
+
+    def task_started(self, question_id: str) -> None:
+        """Mark a task as started and add to in-progress list."""
+        import time
+
+        if question_id not in self.in_progress_questions:
+            self.in_progress_questions.append(question_id)
+        self.last_update_ts = time.time()
+
+    def task_finished(self, question_id: str, success: bool, duration_seconds: float, ema_alpha: float = 0.3) -> None:
+        """Mark a task as finished, update counts and EMA."""
+        import time
+
+        # Remove from in-progress list
+        if question_id in self.in_progress_questions:
+            self.in_progress_questions.remove(question_id)
+
+        # Update counts
+        self.processed_count += 1
+        if success:
+            self.successful_count += 1
+        else:
+            self.failed_count += 1
+
+        # Update EMA for time estimation
+        if self.ema_seconds_per_item == 0.0:
+            # First item: initialize EMA with actual duration
+            self.ema_seconds_per_item = duration_seconds
+        else:
+            # Update EMA: new_ema = alpha * current + (1 - alpha) * previous
+            self.ema_seconds_per_item = ema_alpha * duration_seconds + (1 - ema_alpha) * self.ema_seconds_per_item
+
+        # Calculate estimated remaining time using EMA
+        remaining_questions = self.total_questions - self.processed_count
+        self.estimated_time_remaining = self.ema_seconds_per_item * remaining_questions
+
+        # Update percentage
+        self.percentage = (self.processed_count / self.total_questions) * 100 if self.total_questions > 0 else 0.0
+
+        # Update timestamp
+        self.last_update_ts = time.time()
 
     def to_dict(self) -> dict[str, Any]:
         """Convert job to dictionary for API response."""
@@ -729,6 +775,9 @@ class VerificationJob(BaseModel):
             "error_message": self.error_message,
             "start_time": self.start_time,
             "end_time": self.end_time,
+            # WebSocket streaming fields
+            "in_progress_questions": self.in_progress_questions,
+            "ema_seconds_per_item": self.ema_seconds_per_item,
         }
 
 
