@@ -431,93 +431,158 @@ Please evaluate this answer for the trait "{trait.name}": {trait.description or 
         """Build system prompt for metric trait evaluation."""
         return """You are an expert evaluator performing confusion-matrix analysis on text responses.
 
-Your task is to analyze an answer and identify excerpts that match specific instruction categories.
+Your task is to analyze an answer and categorize its content based on provided instructions.
 
-You will be given instructions for identifying:
-- True Positives (TP): Correct matches
-- True Negatives (TN): Correct non-matches
-- False Positives (FP): Incorrect matches
-- False Negatives (FN): Missed matches
+**CONFUSION MATRIX CATEGORIES:**
 
-Your evaluation should be:
-- Objective and thorough
-- Based solely on the provided instructions
-- Extract exact phrases or short excerpts from the answer
+- **True Positive (TP)**: Content from the answer that SHOULD be present AND IS present
+  - Extract actual excerpts/terms from the answer that match TP instructions
 
-Return your analysis as a JSON object with arrays of excerpts for each category."""
+- **False Negative (FN)**: Content that SHOULD be present BUT IS NOT found in the answer
+  - List what is missing based on TP instructions
+
+- **True Negative (TN)**: Content that SHOULD NOT be present AND IS correctly absent
+  - List instructions that are correctly not mentioned in the answer
+
+- **False Positive (FP)**: Content from the answer that SHOULD NOT be present BUT IS present
+  - Extract actual excerpts/terms from the answer that should not be there
+
+**MATCHING CRITERIA:**
+
+1. **Exact matches**: If the instruction specifies an exact term, look for that exact term or very close variants
+2. **Semantic matches**: If the instruction describes a concept, accept semantically equivalent expressions
+3. **Synonyms**: Accept commonly recognized synonyms (e.g., "disease" and "illness", "tumor" and "neoplasm")
+4. **Case insensitive**: Ignore case differences unless specifically instructed otherwise
+5. **Partial matches**: If an answer contains a broader or narrower term than instructed, use your judgment:
+   - If instruction is "mention cancer" and answer says "lung cancer", count it as TP
+   - If instruction is "mention specific organ" and answer just says "organ", it may not fully satisfy the instruction
+
+**CRITICAL RULES:**
+
+- For TP and FP: Extract the ACTUAL text/excerpts FROM THE ANSWER (not the instruction text)
+- For FN and TN: Reference the instruction content (what should/shouldn't be there)
+- Be thorough but focused - extract key terms or short phrases, not full sentences
+- When in doubt, err on the side of being inclusive rather than overly strict
+- If something is ambiguous, include it and let the metrics reflect the ambiguity
+
+**OUTPUT FORMAT:**
+
+Return a JSON object with arrays for each category. Each array should contain strings (excerpts or descriptions)."""
 
     def _build_metric_trait_user_prompt(self, question: str, answer: str, trait: MetricRubricTrait) -> str:
         """Build user prompt for metric trait evaluation (mode-specific)."""
-        prompt_parts = []
+        # Format TP instructions as numbered list
+        tp_instructions_formatted = "\n".join(
+            f"  {i}. {instruction}" for i, instruction in enumerate(trait.tp_instructions, 1)
+        )
 
-        prompt_parts.append(f"Analyze the following answer for: **{trait.name}**")
-        if trait.description:
-            prompt_parts.append(f"Description: {trait.description}")
-        prompt_parts.append("")
+        # Build description line if present
+        description_line = f"Description: {trait.description}\n" if trait.description else ""
 
         if trait.evaluation_mode == "tp_only":
-            # TP-only mode: Check which TP instructions are present, identify extra content
-            prompt_parts.append("TRUE POSITIVE INSTRUCTIONS (what SHOULD be present):")
-            for i, instruction in enumerate(trait.tp_instructions, 1):
-                prompt_parts.append(f"  {i}. {instruction}")
-            prompt_parts.append("")
+            return f"""Analyze the following answer for: **{trait.name}**
+{description_line}
+**EVALUATION TASK:**
+You are evaluating an answer against required content (TP instructions). Your job is to categorize content from the answer into:
+1. **True Positives (TP)**: Content that correctly matches TP instructions
+2. **False Negatives (FN)**: Required content from TP instructions that is missing
+3. **False Positives (FP)**: Content that LOOKS like it should match TP instructions but is actually incorrect
 
-            prompt_parts.append("QUESTION:")
-            prompt_parts.append(question)
-            prompt_parts.append("")
-            prompt_parts.append("ANSWER TO EVALUATE:")
-            prompt_parts.append(answer)
-            prompt_parts.append("")
+**TRUE POSITIVE INSTRUCTIONS (required content):**
+{tp_instructions_formatted}
 
-            prompt_parts.append("Evaluate the answer and return a JSON object with:")
-            prompt_parts.append(
-                '- "tp": List of TP instructions that are present in the answer (by number or exact text)'
-            )
-            prompt_parts.append('- "fn": List of TP instructions that are missing from the answer')
-            prompt_parts.append(
-                '- "fp": List of any extra content/terms in the answer that are NOT covered by the TP instructions'
-            )
-            prompt_parts.append("")
-            prompt_parts.append("Expected format:")
-            prompt_parts.append(
-                '{"tp": ["instruction 1", "instruction 2"], "fn": ["instruction 3"], "fp": ["extra term 1", "extra term 2"]}'
-            )
-            prompt_parts.append("")
-            prompt_parts.append("JSON Response:")
+**QUESTION:**
+{question}
+
+**ANSWER TO EVALUATE:**
+{answer}
+
+**EVALUATION GUIDELINES:**
+
+**For True Positives (TP):**
+- Extract actual terms/excerpts from the answer that match TP instructions
+- Accept exact matches, synonyms, and semantically equivalent expressions
+- Example: If TP instruction is "mention proctitis" and answer says "proctitis", extract "proctitis"
+- Example: If TP instruction is "mention tumor" and answer says "neoplasm", extract "neoplasm" (synonym)
+
+**For False Negatives (FN):**
+- List the content from TP instructions that is NOT found in the answer
+- Reference the actual missing content
+- Example: If TP instruction is "mention anal polyp" but it's not in the answer, add "anal polyp"
+
+**For False Positives (FP):**
+- Extract terms from the answer that appear to be attempting to satisfy TP instructions but are actually INCORRECT
+- Focus on terms in the same domain/category as TP instructions that LOOK like valid answers but aren't
+- Example: If TP instructions list specific child diseases and answer includes DIFFERENT diseases in the same category, those are FP
+- DO NOT include: generic filler text, explanations, or content clearly not attempting to match TP instructions
+- If unsure whether something is FP, consider: "Is this term in the same category as TP instructions but not actually correct?"
+
+**OUTPUT FORMAT:**
+
+Return ONLY a valid JSON object:
+{{"tp": [<excerpts from answer matching TP instructions>], "fn": [<missing TP instruction content>], "fp": [<incorrect terms from answer that look like TPs but aren't>]}}
+
+Example:
+{{"tp": ["proctitis", "anal polyp"], "fn": ["anal neoplasm", "imperforate anus"], "fp": ["anal fistula", "anal cancer"]}}
+
+Your JSON response:"""
 
         else:  # full_matrix mode
-            # Full matrix: Check each TP and TN instruction against answer
-            prompt_parts.append("TRUE POSITIVE INSTRUCTIONS (what SHOULD be present):")
-            for i, instruction in enumerate(trait.tp_instructions, 1):
-                prompt_parts.append(f"  {i}. {instruction}")
-            prompt_parts.append("")
-
-            prompt_parts.append("TRUE NEGATIVE INSTRUCTIONS (what SHOULD NOT be present):")
-            for i, instruction in enumerate(trait.tn_instructions, 1):
-                prompt_parts.append(f"  {i}. {instruction}")
-            prompt_parts.append("")
-
-            prompt_parts.append("QUESTION:")
-            prompt_parts.append(question)
-            prompt_parts.append("")
-            prompt_parts.append("ANSWER TO EVALUATE:")
-            prompt_parts.append(answer)
-            prompt_parts.append("")
-
-            prompt_parts.append("Evaluate the answer against each instruction and return a JSON object with:")
-            prompt_parts.append('- "tp": TP instructions that are present in the answer (correct)')
-            prompt_parts.append('- "fn": TP instructions that are missing from the answer (incorrect)')
-            prompt_parts.append('- "tn": TN instructions that are correctly absent from the answer (correct)')
-            prompt_parts.append('- "fp": TN instructions that are incorrectly present in the answer (incorrect)')
-            prompt_parts.append("")
-            prompt_parts.append("Expected format:")
-            prompt_parts.append(
-                '{"tp": ["instruction 1"], "fn": ["instruction 2"], "tn": ["instruction 3"], "fp": ["instruction 4"]}'
+            # Format TN instructions as numbered list
+            tn_instructions_formatted = "\n".join(
+                f"  {i}. {instruction}" for i, instruction in enumerate(trait.tn_instructions, 1)
             )
-            prompt_parts.append("")
-            prompt_parts.append("JSON Response:")
 
-        return "\n".join(prompt_parts)
+            return f"""Analyze the following answer for: **{trait.name}**
+{description_line}
+**EVALUATION TASK:**
+You are evaluating an answer against two instruction sets:
+- **TP instructions**: Content that SHOULD be present
+- **TN instructions**: Content that SHOULD NOT be present
+
+Categorize the answer content into four confusion matrix categories.
+
+**TRUE POSITIVE INSTRUCTIONS (what SHOULD be present):**
+{tp_instructions_formatted}
+
+**TRUE NEGATIVE INSTRUCTIONS (what SHOULD NOT be present):**
+{tn_instructions_formatted}
+
+**QUESTION:**
+{question}
+
+**ANSWER TO EVALUATE:**
+{answer}
+
+**EVALUATION GUIDELINES:**
+
+**For True Positives (TP):**
+- Extract actual terms/excerpts from the answer that match TP instructions
+- Accept exact matches, synonyms, and semantically equivalent expressions
+
+**For False Negatives (FN):**
+- List content from TP instructions that is NOT found in the answer
+- These are required items that are missing
+
+**For True Negatives (TN):**
+- List TN instructions that are correctly NOT present in the answer
+- Reference the instruction content
+- These represent unwanted content that is correctly absent
+
+**For False Positives (FP):**
+- Extract terms/excerpts from the answer that match TN instructions
+- These are items that SHOULD NOT be there but ARE present
+- Use the same matching criteria as TP (accept synonyms, etc.)
+
+**OUTPUT FORMAT:**
+
+Return ONLY a valid JSON object:
+{{"tp": [<excerpts matching TP instructions>], "fn": [<missing TP content>], "tn": [<TN instructions correctly absent>], "fp": [<excerpts matching TN instructions>]}}
+
+Example:
+{{"tp": ["proctitis"], "fn": ["anal polyp"], "tn": ["hemorrhoid"], "fp": ["anal fistula"]}}
+
+Your JSON response:"""
 
     def _parse_metric_trait_response(self, response: str, trait: MetricRubricTrait) -> dict[str, list[str]]:
         """
