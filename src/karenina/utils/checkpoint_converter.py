@@ -100,14 +100,6 @@ def convert_rubric_trait_to_rating(
             additional_props.append(
                 SchemaOrgPropertyValue(name="tn_instructions", value=json.dumps(trait.tn_instructions))
             )
-        if trait.fp_instructions:
-            additional_props.append(
-                SchemaOrgPropertyValue(name="fp_instructions", value=json.dumps(trait.fp_instructions))
-            )
-        if trait.fn_instructions:
-            additional_props.append(
-                SchemaOrgPropertyValue(name="fn_instructions", value=json.dumps(trait.fn_instructions))
-            )
 
         return SchemaOrgRating(
             name=trait.name,
@@ -171,8 +163,6 @@ def convert_rating_to_rubric_trait(rating: SchemaOrgRating) -> RubricTrait | Man
         repeated_extraction = True  # Default
         tp_instructions = []
         tn_instructions = []
-        fp_instructions = []
-        fn_instructions = []
 
         if rating.additionalProperty:
             for prop in rating.additionalProperty:
@@ -193,16 +183,8 @@ def convert_rating_to_rubric_trait(rating: SchemaOrgRating) -> RubricTrait | Man
                         tn_instructions = json.loads(prop.value)
                     except (json.JSONDecodeError, TypeError):
                         tn_instructions = prop.value if isinstance(prop.value, list) else []
-                elif prop.name == "fp_instructions":
-                    try:
-                        fp_instructions = json.loads(prop.value)
-                    except (json.JSONDecodeError, TypeError):
-                        fp_instructions = prop.value if isinstance(prop.value, list) else []
-                elif prop.name == "fn_instructions":
-                    try:
-                        fn_instructions = json.loads(prop.value)
-                    except (json.JSONDecodeError, TypeError):
-                        fn_instructions = prop.value if isinstance(prop.value, list) else []
+                # Note: fp_instructions and fn_instructions are no longer supported
+                # Old checkpoints with these fields will be ignored (backward compatibility)
 
         return MetricRubricTrait(
             name=rating.name,
@@ -210,8 +192,6 @@ def convert_rating_to_rubric_trait(rating: SchemaOrgRating) -> RubricTrait | Man
             metrics=metrics,
             tp_instructions=tp_instructions,
             tn_instructions=tn_instructions,
-            fp_instructions=fp_instructions,
-            fn_instructions=fn_instructions,
             repeated_extraction=repeated_extraction,
         )
 

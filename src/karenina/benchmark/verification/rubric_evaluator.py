@@ -457,26 +457,14 @@ Return your analysis as a JSON object with arrays of excerpts for each category.
 
         # Add instructions for each non-empty bucket
         if trait.tp_instructions:
-            prompt_parts.append("TRUE POSITIVES (correct matches):")
+            prompt_parts.append("CORRECT EXTRACTIONS (what SHOULD be in the answer):")
             for i, instruction in enumerate(trait.tp_instructions, 1):
                 prompt_parts.append(f"  {i}. {instruction}")
             prompt_parts.append("")
 
         if trait.tn_instructions:
-            prompt_parts.append("TRUE NEGATIVES (correct non-matches):")
+            prompt_parts.append("INCORRECT EXTRACTIONS (what SHOULD NOT be in the answer):")
             for i, instruction in enumerate(trait.tn_instructions, 1):
-                prompt_parts.append(f"  {i}. {instruction}")
-            prompt_parts.append("")
-
-        if trait.fp_instructions:
-            prompt_parts.append("FALSE POSITIVES (incorrect matches):")
-            for i, instruction in enumerate(trait.fp_instructions, 1):
-                prompt_parts.append(f"  {i}. {instruction}")
-            prompt_parts.append("")
-
-        if trait.fn_instructions:
-            prompt_parts.append("FALSE NEGATIVES (missed matches):")
-            for i, instruction in enumerate(trait.fn_instructions, 1):
                 prompt_parts.append(f"  {i}. {instruction}")
             prompt_parts.append("")
 
@@ -487,23 +475,21 @@ Return your analysis as a JSON object with arrays of excerpts for each category.
         prompt_parts.append(answer)
         prompt_parts.append("")
 
-        # Build expected JSON structure (only include non-empty buckets)
+        # Build expected JSON structure
+        # TP = correct extractions (match TP instructions)
+        # FP = incorrect extractions (match TN instructions - things that shouldn't be there)
         expected_keys = []
         if trait.tp_instructions:
             expected_keys.append('"tp": ["excerpt1", "excerpt2", ...]')
         if trait.tn_instructions:
-            expected_keys.append('"tn": ["excerpt1", "excerpt2", ...]')
-        if trait.fp_instructions:
             expected_keys.append('"fp": ["excerpt1", "excerpt2", ...]')
-        if trait.fn_instructions:
-            expected_keys.append('"fn": ["excerpt1", "excerpt2", ...]')
 
         prompt_parts.append("Extract relevant excerpts from the answer and return them as a JSON object:")
         prompt_parts.append(f"{{{', '.join(expected_keys)}}}")
         prompt_parts.append("")
-        prompt_parts.append(
-            "Only include categories that have instructions above. Use empty arrays [] if no excerpts are found."
-        )
+        prompt_parts.append("- 'tp': Excerpts matching CORRECT EXTRACTION instructions")
+        prompt_parts.append("- 'fp': Excerpts matching INCORRECT EXTRACTION instructions")
+        prompt_parts.append("Use empty arrays [] if no excerpts are found for a category.")
         prompt_parts.append("")
         prompt_parts.append("JSON Response:")
 
@@ -533,18 +519,14 @@ Return your analysis as a JSON object with arrays of excerpts for each category.
         # Initialize all buckets with empty lists
         confusion_lists: dict[str, list[str]] = {"tp": [], "tn": [], "fp": [], "fn": []}
 
-        # Extract lists from response (only for buckets that had instructions)
+        # Extract lists from response
+        # TP instructions → TP list (correct extractions)
+        # TN instructions → FP list (incorrect extractions found in answer)
         if trait.tp_instructions and "tp" in result:
             confusion_lists["tp"] = result["tp"] if isinstance(result["tp"], list) else []
 
-        if trait.tn_instructions and "tn" in result:
-            confusion_lists["tn"] = result["tn"] if isinstance(result["tn"], list) else []
-
-        if trait.fp_instructions and "fp" in result:
+        if trait.tn_instructions and "fp" in result:
             confusion_lists["fp"] = result["fp"] if isinstance(result["fp"], list) else []
-
-        if trait.fn_instructions and "fn" in result:
-            confusion_lists["fn"] = result["fn"] if isinstance(result["fn"], list) else []
 
         return confusion_lists
 

@@ -125,45 +125,47 @@ class ManualRubricTrait(BaseModel):
 
 
 # Valid metric names that can be computed
-VALID_METRICS = {"precision", "recall", "specificity", "accuracy", "f1"}
+# With TP (what should be extracted) and TN (what should not be extracted) instructions:
+# - TP: Excerpts in model output matching TP instructions (correct extractions)
+# - FP: Excerpts in model output matching TN instructions (incorrect extractions)
+# - Precision = TP / (TP + FP)
+VALID_METRICS = {"precision"}
 
-# Metric computation requirements (which confusion buckets are needed)
+# Metric computation requirements (which instruction buckets are needed)
 METRIC_REQUIREMENTS = {
-    "precision": {"tp", "fp"},
-    "recall": {"tp", "fn"},
-    "specificity": {"tn", "fp"},
-    "accuracy": {"tp", "tn", "fp", "fn"},
-    "f1": {"tp", "fp", "fn"},
+    "precision": {"tp", "tn"},  # TP identifies correct extractions, TN identifies incorrect ones (FP)
 }
 
 
 class MetricRubricTrait(BaseModel):
     """
-    Metric evaluation trait using confusion-matrix analysis.
+    Metric evaluation trait using extraction-based precision analysis.
 
     This trait type evaluates free-text answers by having an LLM identify excerpts
-    that match different instruction categories (TP/TN/FP/FN), then computes
-    classification metrics (precision, recall, F1, etc.) from those lists.
+    in the model output that match two instruction categories:
+    - TP instructions: What the model SHOULD extract (correct extractions)
+    - TN instructions: What the model SHOULD NOT extract (incorrect extractions become FP)
 
-    The trait returns both the confusion lists and computed metric values.
+    From these categories, the system computes:
+    - TP count: Number of excerpts matching TP instructions (correct)
+    - FP count: Number of excerpts matching TN instructions (incorrect)
+    - Precision: TP / (TP + FP)
+
+    The trait returns both the excerpt lists and computed precision value.
     """
 
     name: str = Field(..., min_length=1, description="Human readable identifier for the trait")
     description: str | None = Field(None, description="Detailed description of what this trait evaluates")
     metrics: list[str] = Field(
-        ..., min_length=1, description="List of metrics to compute (e.g., 'precision', 'recall', 'f1')"
+        ..., min_length=1, description="List of metrics to compute (currently only 'precision' is supported)"
     )
     tp_instructions: list[str] = Field(
-        default_factory=list, description="Instructions for identifying True Positives (correct matches)"
+        default_factory=list,
+        description="Instructions for identifying correct extractions (what should be in the answer)",
     )
     tn_instructions: list[str] = Field(
-        default_factory=list, description="Instructions for identifying True Negatives (correct non-matches)"
-    )
-    fp_instructions: list[str] = Field(
-        default_factory=list, description="Instructions for identifying False Positives (incorrect matches)"
-    )
-    fn_instructions: list[str] = Field(
-        default_factory=list, description="Instructions for identifying False Negatives (missed matches)"
+        default_factory=list,
+        description="Instructions for identifying incorrect extractions (what should not be in the answer)",
     )
     repeated_extraction: bool = Field(
         True, description="Whether to deduplicate repeated excerpts (case-insensitive exact match)"
@@ -187,26 +189,15 @@ class MetricRubricTrait(BaseModel):
     @model_validator(mode="after")
     def validate_metric_computability(self) -> "MetricRubricTrait":
         """Validate that requested metrics can be computed from provided instruction buckets."""
-        # Check that at least one instruction bucket is non-empty
-        all_empty = (
-            not self.tp_instructions
-            and not self.tn_instructions
-            and not self.fp_instructions
-            and not self.fn_instructions
-        )
-        if all_empty:
-            raise ValueError("At least one instruction bucket (TP/TN/FP/FN) must have instructions")
+        # Check that both TP and TN instructions are provided (required for precision)
+        if not self.tp_instructions:
+            raise ValueError("TP instructions must be provided (to identify correct extractions)")
+
+        if not self.tn_instructions:
+            raise ValueError("TN instructions must be provided (to identify incorrect extractions as FP)")
 
         # Determine which buckets have instructions
-        available_buckets = set()
-        if self.tp_instructions:
-            available_buckets.add("tp")
-        if self.tn_instructions:
-            available_buckets.add("tn")
-        if self.fp_instructions:
-            available_buckets.add("fp")
-        if self.fn_instructions:
-            available_buckets.add("fn")
+        available_buckets = {"tp", "tn"}
 
         # Check each requested metric can be computed
         uncomputable_metrics = []
@@ -226,11 +217,9 @@ class MetricRubricTrait(BaseModel):
         return self
 
     def get_required_buckets(self) -> set[str]:
-        """Get the set of confusion buckets required for computing all requested metrics."""
-        required = set()
-        for metric in self.metrics:
-            required.update(METRIC_REQUIREMENTS[metric])
-        return required
+        """Get the set of instruction buckets required for computing all requested metrics."""
+        # Currently only precision is supported, which requires both TP and TN
+        return {"tp", "tn"}
 
 
 class Rubric(BaseModel):
