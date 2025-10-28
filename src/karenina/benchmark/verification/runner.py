@@ -903,9 +903,22 @@ Original Question: {question_text}
 
                 # Evaluate metric traits separately (returns confusion lists and computed metrics)
                 if rubric.metric_traits:
+                    print(
+                        f"🔍 Runner: Evaluating {len(rubric.metric_traits)} metric trait(s) for question {question_id}"
+                    )
+                    for trait in rubric.metric_traits:
+                        print(f"  - Trait: {trait.name} (mode: {trait.evaluation_mode}, metrics: {trait.metrics})")
+
                     metric_confusion_lists, metric_results = evaluator.evaluate_metric_traits(
                         question=question_text, answer=raw_llm_response, metric_traits=rubric.metric_traits
                     )
+
+                    print(
+                        f"  ✅ Metric evaluation complete. Results: {list(metric_results.keys()) if metric_results else 'None'}"
+                    )
+                    if metric_results:
+                        for trait_name, metrics in metric_results.items():
+                            print(f"     {trait_name}: {metrics}")
             except (ValueError, RuntimeError) as e:
                 # Handle specific rubric evaluator errors
                 print(f"Warning: Rubric evaluator initialization/configuration failed for question {question_id}: {e}")
