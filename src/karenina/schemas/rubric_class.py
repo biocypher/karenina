@@ -124,51 +124,73 @@ class ManualRubricTrait(BaseModel):
             raise RuntimeError(f"Failed to evaluate manual trait '{self.name}': {e}") from e
 
 
-# Valid metric names that can be computed
-# With TP (what should be extracted) and TN (what should not be extracted) instructions:
-# - TP: Excerpts in model output matching TP instructions (correct extractions)
-# - FP: Excerpts in model output matching TN instructions (incorrect extractions)
-# - Precision = TP / (TP + FP)
-VALID_METRICS = {"precision"}
+# Valid metric names for each evaluation mode
+# TP-only mode: Only TP instructions provided, FP = anything else not in TP list
+VALID_METRICS_TP_ONLY = {"precision", "recall", "f1"}
 
-# Metric computation requirements (which instruction buckets are needed)
+# Full matrix mode: Both TP and TN instructions provided
+VALID_METRICS_FULL_MATRIX = {"precision", "recall", "specificity", "accuracy", "f1"}
+
+# All valid metrics (union of both modes)
+VALID_METRICS = VALID_METRICS_TP_ONLY | VALID_METRICS_FULL_MATRIX
+
+# Metric computation requirements (which confusion matrix values are needed)
 METRIC_REQUIREMENTS = {
-    "precision": {"tp", "tn"},  # TP identifies correct extractions, TN identifies incorrect ones (FP)
+    "precision": {"tp", "fp"},
+    "recall": {"tp", "fn"},
+    "specificity": {"tn", "fp"},
+    "accuracy": {"tp", "tn", "fp", "fn"},
+    "f1": {"tp", "fp", "fn"},
 }
 
 
 class MetricRubricTrait(BaseModel):
     """
-    Metric evaluation trait using extraction-based precision analysis.
+    Metric evaluation trait using instruction-level confusion matrix analysis.
 
-    This trait type evaluates free-text answers by having an LLM identify excerpts
-    in the model output that match two instruction categories:
-    - TP instructions: What the model SHOULD extract (correct extractions)
-    - TN instructions: What the model SHOULD NOT extract (incorrect extractions become FP)
+    Two evaluation modes are supported:
 
-    From these categories, the system computes:
-    - TP count: Number of excerpts matching TP instructions (correct)
-    - FP count: Number of excerpts matching TN instructions (incorrect)
-    - Precision: TP / (TP + FP)
+    1. TP-only mode (evaluation_mode="tp_only"):
+       - User defines: TP instructions (what should be present)
+       - System evaluates:
+         * TP: Instructions found in answer
+         * FN: Instructions missing from answer
+         * FP: Extra content in answer not matching TP instructions
+         * TN: Cannot be computed (no explicit negative set)
+       - Available metrics: precision, recall, f1
 
-    The trait returns both the excerpt lists and computed precision value.
+    2. Full matrix mode (evaluation_mode="full_matrix"):
+       - User defines: TP instructions (should be present) + TN instructions (should NOT be present)
+       - System evaluates:
+         * TP: TP instructions found in answer
+         * FN: TP instructions missing from answer
+         * TN: TN instructions correctly absent
+         * FP: TN instructions incorrectly present
+       - Available metrics: precision, recall, specificity, accuracy, f1
+
+    The trait returns confusion matrix counts/lists and computed metric values.
     """
 
     name: str = Field(..., min_length=1, description="Human readable identifier for the trait")
     description: str | None = Field(None, description="Detailed description of what this trait evaluates")
+    evaluation_mode: Literal["tp_only", "full_matrix"] = Field(
+        "tp_only", description="Evaluation mode: tp_only (only TP defined) or full_matrix (TP+TN defined)"
+    )
     metrics: list[str] = Field(
-        ..., min_length=1, description="List of metrics to compute (currently only 'precision' is supported)"
+        ...,
+        min_length=1,
+        description="List of metrics to compute (mode-dependent: see VALID_METRICS_TP_ONLY and VALID_METRICS_FULL_MATRIX)",
     )
     tp_instructions: list[str] = Field(
         default_factory=list,
-        description="Instructions for identifying correct extractions (what should be in the answer)",
+        description="Instructions for what should be present in the answer",
     )
     tn_instructions: list[str] = Field(
         default_factory=list,
-        description="Instructions for identifying incorrect extractions (what should not be in the answer)",
+        description="Instructions for what should NOT be present in the answer (required in full_matrix mode, ignored in tp_only mode)",
     )
     repeated_extraction: bool = Field(
-        True, description="Whether to deduplicate repeated excerpts (case-insensitive exact match)"
+        True, description="Whether to deduplicate repeated excerpts/instructions (case-insensitive exact match)"
     )
 
     model_config = ConfigDict(extra="forbid")
@@ -188,16 +210,40 @@ class MetricRubricTrait(BaseModel):
 
     @model_validator(mode="after")
     def validate_metric_computability(self) -> "MetricRubricTrait":
-        """Validate that requested metrics can be computed from provided instruction buckets."""
-        # Check that both TP and TN instructions are provided (required for precision)
+        """Validate that requested metrics are compatible with the evaluation mode and provided instructions."""
+        # Validate TP instructions are always provided
         if not self.tp_instructions:
-            raise ValueError("TP instructions must be provided (to identify correct extractions)")
+            raise ValueError("TP instructions must be provided (define what should be present in the answer)")
 
-        if not self.tn_instructions:
-            raise ValueError("TN instructions must be provided (to identify incorrect extractions as FP)")
+        # Mode-specific validation
+        if self.evaluation_mode == "tp_only":
+            # TP-only mode: TN instructions should be empty, validate metrics
+            valid_metrics_for_mode = VALID_METRICS_TP_ONLY
+            invalid_for_mode = set(self.metrics) - valid_metrics_for_mode
+            if invalid_for_mode:
+                raise ValueError(
+                    f"Metrics {invalid_for_mode} are not available in tp_only mode. "
+                    f"Available metrics: {valid_metrics_for_mode}. "
+                    f"Use full_matrix mode for specificity and accuracy."
+                )
+            # In tp_only mode, we can compute: TP, FN, FP (but not TN)
+            available_buckets = {"tp", "fn", "fp"}
 
-        # Determine which buckets have instructions
-        available_buckets = {"tp", "tn"}
+        elif self.evaluation_mode == "full_matrix":
+            # Full matrix mode: Both TP and TN instructions required
+            if not self.tn_instructions:
+                raise ValueError(
+                    "TN instructions must be provided in full_matrix mode "
+                    "(define what should NOT be present in the answer)"
+                )
+            valid_metrics_for_mode = VALID_METRICS_FULL_MATRIX
+            invalid_for_mode = set(self.metrics) - valid_metrics_for_mode
+            if invalid_for_mode:
+                raise ValueError(
+                    f"Metrics {invalid_for_mode} are not valid. Available metrics: {valid_metrics_for_mode}"
+                )
+            # In full_matrix mode, we can compute all four: TP, FN, TN, FP
+            available_buckets = {"tp", "fn", "tn", "fp"}
 
         # Check each requested metric can be computed
         uncomputable_metrics = []
@@ -209,7 +255,7 @@ class MetricRubricTrait(BaseModel):
 
         if uncomputable_metrics:
             raise ValueError(
-                f"Cannot compute the following metrics with provided instruction buckets: "
+                f"Cannot compute the following metrics with current mode ({self.evaluation_mode}): "
                 f"{', '.join(uncomputable_metrics)}. "
                 f"Available buckets: {available_buckets}"
             )
@@ -217,9 +263,11 @@ class MetricRubricTrait(BaseModel):
         return self
 
     def get_required_buckets(self) -> set[str]:
-        """Get the set of instruction buckets required for computing all requested metrics."""
-        # Currently only precision is supported, which requires both TP and TN
-        return {"tp", "tn"}
+        """Get the set of confusion matrix buckets that will be computed for this trait."""
+        if self.evaluation_mode == "tp_only":
+            return {"tp", "fn", "fp"}  # TN cannot be computed
+        else:  # full_matrix
+            return {"tp", "fn", "tn", "fp"}  # All four can be computed
 
 
 class Rubric(BaseModel):

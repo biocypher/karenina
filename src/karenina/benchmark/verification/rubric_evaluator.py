@@ -447,7 +447,7 @@ Your evaluation should be:
 Return your analysis as a JSON object with arrays of excerpts for each category."""
 
     def _build_metric_trait_user_prompt(self, question: str, answer: str, trait: MetricRubricTrait) -> str:
-        """Build user prompt for metric trait evaluation."""
+        """Build user prompt for metric trait evaluation (mode-specific)."""
         prompt_parts = []
 
         prompt_parts.append(f"Analyze the following answer for: **{trait.name}**")
@@ -455,43 +455,67 @@ Return your analysis as a JSON object with arrays of excerpts for each category.
             prompt_parts.append(f"Description: {trait.description}")
         prompt_parts.append("")
 
-        # Add instructions for each non-empty bucket
-        if trait.tp_instructions:
-            prompt_parts.append("CORRECT EXTRACTIONS (what SHOULD be in the answer):")
+        if trait.evaluation_mode == "tp_only":
+            # TP-only mode: Check which TP instructions are present, identify extra content
+            prompt_parts.append("TRUE POSITIVE INSTRUCTIONS (what SHOULD be present):")
             for i, instruction in enumerate(trait.tp_instructions, 1):
                 prompt_parts.append(f"  {i}. {instruction}")
             prompt_parts.append("")
 
-        if trait.tn_instructions:
-            prompt_parts.append("INCORRECT EXTRACTIONS (what SHOULD NOT be in the answer):")
+            prompt_parts.append("QUESTION:")
+            prompt_parts.append(question)
+            prompt_parts.append("")
+            prompt_parts.append("ANSWER TO EVALUATE:")
+            prompt_parts.append(answer)
+            prompt_parts.append("")
+
+            prompt_parts.append("Evaluate the answer and return a JSON object with:")
+            prompt_parts.append(
+                '- "tp": List of TP instructions that are present in the answer (by number or exact text)'
+            )
+            prompt_parts.append('- "fn": List of TP instructions that are missing from the answer')
+            prompt_parts.append(
+                '- "fp": List of any extra content/terms in the answer that are NOT covered by the TP instructions'
+            )
+            prompt_parts.append("")
+            prompt_parts.append("Expected format:")
+            prompt_parts.append(
+                '{"tp": ["instruction 1", "instruction 2"], "fn": ["instruction 3"], "fp": ["extra term 1", "extra term 2"]}'
+            )
+            prompt_parts.append("")
+            prompt_parts.append("JSON Response:")
+
+        else:  # full_matrix mode
+            # Full matrix: Check each TP and TN instruction against answer
+            prompt_parts.append("TRUE POSITIVE INSTRUCTIONS (what SHOULD be present):")
+            for i, instruction in enumerate(trait.tp_instructions, 1):
+                prompt_parts.append(f"  {i}. {instruction}")
+            prompt_parts.append("")
+
+            prompt_parts.append("TRUE NEGATIVE INSTRUCTIONS (what SHOULD NOT be present):")
             for i, instruction in enumerate(trait.tn_instructions, 1):
                 prompt_parts.append(f"  {i}. {instruction}")
             prompt_parts.append("")
 
-        prompt_parts.append("QUESTION:")
-        prompt_parts.append(question)
-        prompt_parts.append("")
-        prompt_parts.append("ANSWER TO EVALUATE:")
-        prompt_parts.append(answer)
-        prompt_parts.append("")
+            prompt_parts.append("QUESTION:")
+            prompt_parts.append(question)
+            prompt_parts.append("")
+            prompt_parts.append("ANSWER TO EVALUATE:")
+            prompt_parts.append(answer)
+            prompt_parts.append("")
 
-        # Build expected JSON structure
-        # TP = correct extractions (match TP instructions)
-        # FP = incorrect extractions (match TN instructions - things that shouldn't be there)
-        expected_keys = []
-        if trait.tp_instructions:
-            expected_keys.append('"tp": ["excerpt1", "excerpt2", ...]')
-        if trait.tn_instructions:
-            expected_keys.append('"fp": ["excerpt1", "excerpt2", ...]')
-
-        prompt_parts.append("Extract relevant excerpts from the answer and return them as a JSON object:")
-        prompt_parts.append(f"{{{', '.join(expected_keys)}}}")
-        prompt_parts.append("")
-        prompt_parts.append("- 'tp': Excerpts matching CORRECT EXTRACTION instructions")
-        prompt_parts.append("- 'fp': Excerpts matching INCORRECT EXTRACTION instructions")
-        prompt_parts.append("Use empty arrays [] if no excerpts are found for a category.")
-        prompt_parts.append("")
-        prompt_parts.append("JSON Response:")
+            prompt_parts.append("Evaluate the answer against each instruction and return a JSON object with:")
+            prompt_parts.append('- "tp": TP instructions that are present in the answer (correct)')
+            prompt_parts.append('- "fn": TP instructions that are missing from the answer (incorrect)')
+            prompt_parts.append('- "tn": TN instructions that are correctly absent from the answer (correct)')
+            prompt_parts.append('- "fp": TN instructions that are incorrectly present in the answer (incorrect)')
+            prompt_parts.append("")
+            prompt_parts.append("Expected format:")
+            prompt_parts.append(
+                '{"tp": ["instruction 1"], "fn": ["instruction 2"], "tn": ["instruction 3"], "fp": ["instruction 4"]}'
+            )
+            prompt_parts.append("")
+            prompt_parts.append("JSON Response:")
 
         return "\n".join(prompt_parts)
 
@@ -519,14 +543,27 @@ Return your analysis as a JSON object with arrays of excerpts for each category.
         # Initialize all buckets with empty lists
         confusion_lists: dict[str, list[str]] = {"tp": [], "tn": [], "fp": [], "fn": []}
 
-        # Extract lists from response
-        # TP instructions → TP list (correct extractions)
-        # TN instructions → FP list (incorrect extractions found in answer)
-        if trait.tp_instructions and "tp" in result:
-            confusion_lists["tp"] = result["tp"] if isinstance(result["tp"], list) else []
+        # Extract lists from response based on evaluation mode
+        if trait.evaluation_mode == "tp_only":
+            # TP-only mode: Extract TP, FN, FP (TN cannot be computed)
+            if "tp" in result:
+                confusion_lists["tp"] = result["tp"] if isinstance(result["tp"], list) else []
+            if "fn" in result:
+                confusion_lists["fn"] = result["fn"] if isinstance(result["fn"], list) else []
+            if "fp" in result:
+                confusion_lists["fp"] = result["fp"] if isinstance(result["fp"], list) else []
+            # TN remains empty (cannot be computed in tp_only mode)
 
-        if trait.tn_instructions and "fp" in result:
-            confusion_lists["fp"] = result["fp"] if isinstance(result["fp"], list) else []
+        else:  # full_matrix mode
+            # Full matrix mode: Extract all four buckets
+            if "tp" in result:
+                confusion_lists["tp"] = result["tp"] if isinstance(result["tp"], list) else []
+            if "fn" in result:
+                confusion_lists["fn"] = result["fn"] if isinstance(result["fn"], list) else []
+            if "tn" in result:
+                confusion_lists["tn"] = result["tn"] if isinstance(result["tn"], list) else []
+            if "fp" in result:
+                confusion_lists["fp"] = result["fp"] if isinstance(result["fp"], list) else []
 
         return confusion_lists
 

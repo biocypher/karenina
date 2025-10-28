@@ -7,7 +7,7 @@ and the JSON-LD format used by the frontend.
 import hashlib
 import json
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal, cast
 
 from ..schemas.checkpoint import (
     SCHEMA_ORG_CONTEXT,
@@ -89,6 +89,7 @@ def convert_rubric_trait_to_rating(
         additional_props = [
             SchemaOrgPropertyValue(name="metrics", value=json.dumps(trait.metrics)),
             SchemaOrgPropertyValue(name="repeated_extraction", value=trait.repeated_extraction),
+            SchemaOrgPropertyValue(name="evaluation_mode", value=trait.evaluation_mode),
         ]
 
         # Add instruction lists (only if non-empty)
@@ -161,6 +162,7 @@ def convert_rating_to_rubric_trait(rating: SchemaOrgRating) -> RubricTrait | Man
         # Extract configuration from additionalProperty
         metrics = []
         repeated_extraction = True  # Default
+        evaluation_mode: Literal["tp_only", "full_matrix"] = "tp_only"  # Default for backward compatibility
         tp_instructions = []
         tn_instructions = []
 
@@ -173,6 +175,9 @@ def convert_rating_to_rubric_trait(rating: SchemaOrgRating) -> RubricTrait | Man
                         metrics = prop.value if isinstance(prop.value, list) else []
                 elif prop.name == "repeated_extraction":
                     repeated_extraction = prop.value
+                elif prop.name == "evaluation_mode":
+                    # Cast to Literal type for type safety
+                    evaluation_mode = cast(Literal["tp_only", "full_matrix"], prop.value)
                 elif prop.name == "tp_instructions":
                     try:
                         tp_instructions = json.loads(prop.value)
@@ -189,6 +194,7 @@ def convert_rating_to_rubric_trait(rating: SchemaOrgRating) -> RubricTrait | Man
         return MetricRubricTrait(
             name=rating.name,
             description=rating.description,
+            evaluation_mode=evaluation_mode,
             metrics=metrics,
             tp_instructions=tp_instructions,
             tn_instructions=tn_instructions,
