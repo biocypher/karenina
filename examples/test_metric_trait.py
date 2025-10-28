@@ -177,14 +177,14 @@ print(f"\n💬 Raw LLM Response:")
 print(f"   {result.raw_llm_response}")
 
 # Print metric trait results
-if result.verify_metric_confusion_lists and result.verify_metric_results:
+if result.metric_trait_confusion_lists and result.metric_trait_metrics:
     print("\n" + "=" * 80)
     print("🎯 METRIC TRAIT EVALUATION")
     print("=" * 80 + "\n")
 
     trait_name = metric_trait.name
-    confusion = result.verify_metric_confusion_lists.get(trait_name, {})
-    metrics = result.verify_metric_results.get(trait_name, {})
+    confusion = result.metric_trait_confusion_lists.get(trait_name, {})
+    metrics = result.metric_trait_metrics.get(trait_name, {})
 
     print(f"Trait: {trait_name}")
     print(f"Mode: {metric_trait.evaluation_mode}")

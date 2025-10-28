@@ -611,8 +611,6 @@ class VerificationResult(BaseModel):
     verify_result: Any | None = None
     verify_granular_result: Any | None = None
     verify_rubric: dict[str, int | bool] | None = None  # Rubric trait scores (LLM and manual)
-    verify_metric_confusion_lists: dict[str, dict[str, list[str]]] | None = None  # Metric trait confusion lists
-    verify_metric_results: dict[str, dict[str, float]] | None = None  # Metric trait computed metrics
     evaluation_rubric: dict[str, Any] | None = None  # The merged rubric used for evaluation
 
     # Question metadata
