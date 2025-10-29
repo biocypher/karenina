@@ -218,8 +218,14 @@ class VerificationResultModel(Base):
     parsed_llm_response: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
     # Verification outcomes
+    template_verification_performed: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, comment="Whether template verification was executed"
+    )
     verify_result: Mapped[Any | None] = mapped_column(JSON, nullable=True)
     verify_granular_result: Mapped[Any | None] = mapped_column(JSON, nullable=True)
+    rubric_evaluation_performed: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, comment="Whether rubric evaluation was executed"
+    )
     verify_rubric: Mapped[dict[str, int | bool] | None] = mapped_column(JSON, nullable=True)
     evaluation_rubric: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
