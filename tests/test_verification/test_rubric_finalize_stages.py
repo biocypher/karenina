@@ -45,7 +45,7 @@ class TestRubricEvaluationStage:
         """Test that stage skips when rubric has no traits."""
         from karenina.schemas.rubric_class import Rubric
 
-        basic_context.rubric = Rubric(name="Empty Rubric", traits=[])
+        basic_context.rubric = Rubric(traits=[])
 
         stage = RubricEvaluationStage()
         assert stage.should_run(basic_context) is False
@@ -162,7 +162,7 @@ class TestFinalizeResultStage:
         basic_context.set_artifact("parsed_answer", parsed)
         basic_context.set_artifact("raw_llm_response", "The answer is 4")
         basic_context.set_artifact("field_verification_result", True)
-        basic_context.set_artifact("regex_match_result", True)
+        basic_context.set_artifact("regex_overall_success", True)
         basic_context.set_artifact("answering_model_str", "openai/gpt-4.1-mini")
         basic_context.set_artifact("parsing_model_str", "openai/gpt-4.1-mini")
         basic_context.set_artifact("deep_judgment_performed", False)
@@ -175,7 +175,7 @@ class TestFinalizeResultStage:
 
         # Verify result is a VerificationResult
         assert isinstance(result, VerificationResult)
-        assert result.success is True
+        assert result.completed_without_errors is True
         assert result.question_id == "test_q123"
         assert result.template_id == "test_t456"
         assert result.answering_model == "openai/gpt-4.1-mini"
@@ -194,8 +194,8 @@ class TestFinalizeResultStage:
 
         # Verify result reflects error
         assert isinstance(result, VerificationResult)
-        assert result.success is False
-        assert result.error_message == "Template validation failed"
+        assert result.completed_without_errors is False
+        assert result.error == "Template validation failed"
 
     def test_finalize_with_partial_results(self, basic_context: VerificationContext) -> None:
         """Test finalization with partial verification results."""
@@ -215,8 +215,8 @@ class TestFinalizeResultStage:
 
         # Verify result captures partial verification
         assert isinstance(result, VerificationResult)
-        assert result.success is False  # Field verification failed
-        assert result.parsed_answer is not None
+        assert result.completed_without_errors is False  # Field verification failed
+        assert result.parsed_llm_response is not None
         assert result.embedding_check_performed is True
 
     def test_finalize_with_rubric_results(self, basic_context: VerificationContext, sample_rubric) -> None:
@@ -281,7 +281,7 @@ class TestFinalizeResultStage:
         # Verify abstention is captured
         assert isinstance(result, VerificationResult)
         assert result.abstention_detected is True
-        assert result.abstention_reason == "Explicit refusal"
+        assert result.abstention_reasoning == "Explicit refusal"
 
     def test_stage_metadata(self) -> None:
         """Test stage name and artifact declarations."""

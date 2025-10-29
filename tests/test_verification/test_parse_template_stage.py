@@ -67,8 +67,11 @@ class TestParseTemplateStage:
         basic_context.set_artifact("Answer", MockAnswer)
         basic_context.set_artifact("raw_llm_response", "The answer is 4")
 
-        # Mock LLM
+        # Mock LLM and its invoke response
         mock_llm = Mock()
+        mock_llm_response = Mock()
+        mock_llm_response.content = '{"result": 4, "correct": {"value": 4}, "question_id": "test_q123"}'
+        mock_llm.invoke.return_value = mock_llm_response
         mock_init_llm.return_value = mock_llm
 
         # Mock parser
@@ -158,9 +161,14 @@ class TestParseTemplateStage:
         basic_context.set_artifact("Answer", MockAnswer)
         basic_context.set_artifact("raw_llm_response", "The answer is 4")
 
-        # Mock LLM and parser
+        # Mock LLM and its invoke response
         mock_llm = Mock()
+        mock_llm_response = Mock()
+        mock_llm_response.content = '{"result": 4, "correct": {"value": 4}, "question_id": "test_q123"}'
+        mock_llm.invoke.return_value = mock_llm_response
         mock_init_llm.return_value = mock_llm
+
+        # Mock parser
         mock_parser = Mock()
         mock_parser_class.return_value = mock_parser
         parsed_result = MockAnswer(
@@ -192,8 +200,11 @@ class TestParseTemplateStage:
         basic_context.set_artifact("Answer", MockAnswer)
         basic_context.set_artifact("raw_llm_response", "Invalid unparseable response")
 
-        # Mock LLM
+        # Mock LLM and its invoke response
         mock_llm = Mock()
+        mock_llm_response = Mock()
+        mock_llm_response.content = "Invalid JSON that cannot be parsed"
+        mock_llm.invoke.return_value = mock_llm_response
         mock_init_llm.return_value = mock_llm
 
         # Mock parser to raise exception
@@ -207,7 +218,7 @@ class TestParseTemplateStage:
 
         # Verify error was set
         assert basic_context.error is not None
-        assert "Failed to parse LLM response" in basic_context.error
+        assert "Parsing failed" in basic_context.error
 
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.PydanticOutputParser")

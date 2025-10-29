@@ -91,7 +91,7 @@ class TestGenerateAnswerStage:
     ) -> None:
         """Test LLM call with MCP agent configuration."""
         # Configure context for MCP
-        basic_context.answering_model.mcp_servers = ["test-server"]
+        basic_context.answering_model.mcp_urls_dict = {"test-server": "http://localhost:8000"}
 
         # Set up Answer artifact
         class MockAnswer(BaseAnswer):
@@ -114,7 +114,7 @@ class TestGenerateAnswerStage:
 
         # Verify MCP servers were set in artifacts
         assert basic_context.has_artifact("answering_mcp_servers")
-        assert basic_context.get_artifact("answering_mcp_servers") == ["test-server"]
+        assert "test-server" in basic_context.get_artifact("answering_mcp_servers")
         assert basic_context.get_artifact("raw_llm_response") == "Answer from MCP agent"
 
     @patch("karenina.benchmark.verification.stages.generate_answer._invoke_llm_with_retry")
