@@ -13,8 +13,8 @@ from ....llm.interface import init_chat_model_unified
 from ...models import VerificationConfig
 from ..deep_judgment import deep_judgment_parse
 from ..parser_utils import _strip_markdown_fences
-from ..runner import _should_expose_ground_truth, _system_prompt_compose
 from ..stage import BaseVerificationStage, VerificationContext
+from ..verification_utils import _should_expose_ground_truth, _system_prompt_compose
 
 # Set up logger
 logger = logging.getLogger(__name__)

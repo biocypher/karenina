@@ -9,8 +9,8 @@ import traceback
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 from ....llm.interface import init_chat_model_unified
-from ..runner import _construct_few_shot_prompt, _invoke_llm_with_retry, _is_valid_md5_hash
 from ..stage import BaseVerificationStage, VerificationContext
+from ..verification_utils import _construct_few_shot_prompt, _invoke_llm_with_retry, _is_valid_md5_hash
 
 # Set up logger
 logger = logging.getLogger(__name__)

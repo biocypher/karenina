@@ -6,8 +6,8 @@ Builds the final VerificationResult from accumulated context.
 import logging
 
 from ...models import VerificationResult
-from ..runner import _split_parsed_response
 from ..stage import BaseVerificationStage, VerificationContext
+from ..verification_utils import _split_parsed_response
 
 # Set up logger
 logger = logging.getLogger(__name__)
