@@ -143,8 +143,10 @@ def export_verification_results_json(job: VerificationJob, results: dict[str, Ve
             "raw_llm_response": result.raw_llm_response,
             "parsed_gt_response": result.parsed_gt_response,
             "parsed_llm_response": result.parsed_llm_response,
+            "template_verification_performed": result.template_verification_performed,
             "verify_result": _serialize_verification_result(result.verify_result),
             "verify_granular_result": _serialize_verification_result(result.verify_granular_result),
+            "rubric_evaluation_performed": result.rubric_evaluation_performed,
             "verify_rubric": result.verify_rubric,
             "keywords": result.keywords,
             "answering_model": result.answering_model,
@@ -316,8 +318,10 @@ def export_verification_results_csv(
         "raw_llm_response",
         "parsed_gt_response",
         "parsed_llm_response",
+        "template_verification_performed",
         "verify_result",
         "verify_granular_result",
+        "rubric_evaluation_performed",
         "keywords",
     ]
 
@@ -389,8 +393,10 @@ def export_verification_results_csv(
             "parsed_llm_response": _safe_json_serialize(
                 result.parsed_llm_response, result.question_id, "parsed_llm_response"
             ),
+            "template_verification_performed": result.template_verification_performed,
             "verify_result": _serialize_verification_result(result.verify_result),
             "verify_granular_result": _serialize_verification_result(result.verify_granular_result),
+            "rubric_evaluation_performed": result.rubric_evaluation_performed,
             "keywords": _safe_json_serialize(result.keywords, result.question_id, "keywords"),
             "answering_model": result.answering_model,
             "parsing_model": result.parsing_model,
