@@ -252,7 +252,7 @@ class TestParseTemplateStage:
         basic_context.set_artifact("raw_llm_response", "The answer is 4")
 
         # Mock LLM initialization failure
-        mock_init_llm.side_effect = Exception("Failed to initialize parsing LLM")
+        mock_init_llm.side_effect = Exception("Failed to initialize parsing model")
 
         # Execute stage
         stage = ParseTemplateStage()
@@ -260,7 +260,7 @@ class TestParseTemplateStage:
 
         # Verify error was set
         assert basic_context.error is not None
-        assert "Failed to initialize parsing LLM" in basic_context.error
+        assert "Failed to initialize parsing model" in basic_context.error
 
     def test_stage_metadata(self) -> None:
         """Test stage name and artifact declarations."""

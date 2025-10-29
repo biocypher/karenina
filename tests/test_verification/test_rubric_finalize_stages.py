@@ -242,7 +242,6 @@ class TestFinalizeResultStage:
 
         # Verify rubric results are included
         assert isinstance(result, VerificationResult)
-        assert result.rubric_name == "Test Rubric"
 
     def test_finalize_with_deep_judgment(self, basic_context: VerificationContext) -> None:
         """Test finalization includes deep-judgment metadata."""

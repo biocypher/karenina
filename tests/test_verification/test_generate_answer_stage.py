@@ -253,7 +253,7 @@ class TestGenerateAnswerStage:
 
         # Verify error was set
         assert basic_context.error is not None
-        assert "Failed to initialize answering LLM" in basic_context.error
+        assert "Failed to initialize answering model" in basic_context.error
 
     def test_stage_metadata(self) -> None:
         """Test stage name and artifact declarations."""

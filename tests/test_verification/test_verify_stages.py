@@ -27,9 +27,10 @@ class TestVerifyTemplateStage:
     """Test suite for VerifyTemplateStage."""
 
     def test_should_run_with_parsed_answer(self, basic_context: VerificationContext) -> None:
-        """Test that should_run returns True when parsed_answer exists."""
+        """Test that should_run returns True when parsed_answer and raw_llm_response exist."""
         parsed = MockAnswer(result=4, correct={"value": 4}, question_id="test_q123")
         basic_context.set_artifact("parsed_answer", parsed)
+        basic_context.set_artifact("raw_llm_response", "The answer is 4")
 
         stage = VerifyTemplateStage()
         assert stage.should_run(basic_context) is True
@@ -84,7 +85,7 @@ class TestVerifyTemplateStage:
 
         # Should have both field and regex results
         assert basic_context.has_artifact("field_verification_result")
-        assert basic_context.has_artifact("regex_match_result")
+        assert basic_context.has_artifact("regex_verification_results")
 
     def test_stage_metadata(self) -> None:
         """Test stage name and artifact declarations."""
@@ -93,7 +94,7 @@ class TestVerifyTemplateStage:
         assert stage.name == "VerifyTemplate"
         assert "parsed_answer" in stage.requires
         assert "field_verification_result" in stage.produces
-        assert "regex_match_result" in stage.produces
+        assert "regex_verification_results" in stage.produces
 
 
 class TestEmbeddingCheckStage:
@@ -116,26 +117,22 @@ class TestEmbeddingCheckStage:
         stage = EmbeddingCheckStage()
         assert stage.should_run(basic_context) is False
 
-    @patch("karenina.benchmark.verification.stages.embedding_check._should_use_embedding_check")
-    @patch("karenina.benchmark.verification.stages.embedding_check.check_semantic_equivalence")
+    @patch("karenina.benchmark.verification.stages.embedding_check.perform_embedding_check")
     def test_embedding_override_success(
         self,
-        mock_check_semantic: Mock,
-        mock_should_use: Mock,
+        mock_perform_check: Mock,
         basic_context: VerificationContext,
     ) -> None:
         """Test that embedding check can override field verification failure."""
-        # Enable embedding check
-        mock_should_use.return_value = True
-
         # Set up failed field verification
         parsed = MockAnswer(result=5, correct={"value": 5}, question_id="test_q123")
         basic_context.set_artifact("parsed_answer", parsed)
         basic_context.set_artifact("field_verification_result", False)
         basic_context.set_artifact("raw_llm_response", "The answer is basically 4")
 
-        # Mock semantic equivalence check to pass
-        mock_check_semantic.return_value = (True, 0.92, "Semantically equivalent")
+        # Mock perform_embedding_check to return success
+        # Returns: (should_override, similarity_score, embedding_model, embedding_performed)
+        mock_perform_check.return_value = (True, 0.92, "all-MiniLM-L6-v2", True)
 
         stage = EmbeddingCheckStage()
         stage.execute(basic_context)
@@ -143,21 +140,22 @@ class TestEmbeddingCheckStage:
         # Should have embedding check result
         assert basic_context.has_artifact("embedding_check_performed")
         assert basic_context.get_artifact("embedding_check_performed") is True
-        assert basic_context.get_artifact("embedding_check_passed")
+        assert basic_context.get_artifact("embedding_override_applied") is True
 
-    @patch("karenina.benchmark.verification.stages.embedding_check._should_use_embedding_check")
+    @patch("karenina.benchmark.verification.stages.embedding_check.perform_embedding_check")
     def test_embedding_check_disabled(
         self,
-        mock_should_use: Mock,
+        mock_perform_check: Mock,
         basic_context: VerificationContext,
     ) -> None:
         """Test that embedding check respects disabled configuration."""
-        # Disable embedding check
-        mock_should_use.return_value = False
-
+        # Set up context
         parsed = MockAnswer(result=5, correct={"value": 5}, question_id="test_q123")
         basic_context.set_artifact("parsed_answer", parsed)
         basic_context.set_artifact("field_verification_result", False)
+
+        # Mock perform_embedding_check to return disabled state
+        mock_perform_check.return_value = (False, None, None, False)
 
         stage = EmbeddingCheckStage()
         stage.execute(basic_context)
@@ -171,7 +169,7 @@ class TestEmbeddingCheckStage:
 
         assert stage.name == "EmbeddingCheck"
         assert "embedding_check_performed" in stage.produces
-        assert "embedding_check_passed" in stage.produces
+        assert "embedding_override_applied" in stage.produces
 
 
 class TestAbstentionCheckStage:
@@ -192,10 +190,10 @@ class TestAbstentionCheckStage:
         stage = AbstentionCheckStage()
         assert stage.should_run(basic_context) is False
 
-    @patch("karenina.benchmark.verification.stages.abstention_check.check_abstention")
+    @patch("karenina.benchmark.verification.stages.abstention_check.detect_abstention")
     def test_abstention_override_detected(
         self,
-        mock_check_abstention: Mock,
+        mock_detect: Mock,
         basic_context: VerificationContext,
     ) -> None:
         """Test that abstention check can override verification result."""
@@ -204,7 +202,8 @@ class TestAbstentionCheckStage:
         basic_context.set_artifact("field_verification_result", False)
 
         # Mock abstention detection
-        mock_check_abstention.return_value = (True, "Explicit refusal detected")
+        # Returns: (check_performed, abstention_detected, reasoning)
+        mock_detect.return_value = (True, True, "Explicit refusal detected")
 
         stage = AbstentionCheckStage()
         stage.execute(basic_context)
@@ -212,12 +211,12 @@ class TestAbstentionCheckStage:
         # Should have abstention result
         assert basic_context.has_artifact("abstention_detected")
         assert basic_context.get_artifact("abstention_detected") is True
-        assert basic_context.has_artifact("abstention_reason")
+        assert basic_context.has_artifact("abstention_reasoning")
 
-    @patch("karenina.benchmark.verification.stages.abstention_check.check_abstention")
+    @patch("karenina.benchmark.verification.stages.abstention_check.detect_abstention")
     def test_no_abstention_detected(
         self,
-        mock_check_abstention: Mock,
+        mock_detect: Mock,
         basic_context: VerificationContext,
     ) -> None:
         """Test normal response without abstention."""
@@ -225,7 +224,8 @@ class TestAbstentionCheckStage:
         basic_context.set_artifact("raw_llm_response", "The answer is 4")
 
         # Mock no abstention
-        mock_check_abstention.return_value = (False, "")
+        # Returns: (check_performed, abstention_detected, reasoning)
+        mock_detect.return_value = (True, False, "")
 
         stage = AbstentionCheckStage()
         stage.execute(basic_context)
@@ -239,17 +239,17 @@ class TestAbstentionCheckStage:
 
         assert stage.name == "AbstentionCheck"
         assert "abstention_detected" in stage.produces
-        assert "abstention_reason" in stage.produces
+        assert "abstention_reasoning" in stage.produces
 
 
 class TestDeepJudgmentAutoFailStage:
     """Test suite for DeepJudgmentAutoFailStage."""
 
     def test_should_run_with_deep_judgment_enabled(self, basic_context: VerificationContext) -> None:
-        """Test that stage runs when deep-judgment is enabled."""
+        """Test that stage runs when deep-judgment is enabled AND has missing excerpts."""
         basic_context.deep_judgment_enabled = True
         basic_context.set_artifact("deep_judgment_performed", True)
-        basic_context.set_artifact("attributes_without_excerpts", [])
+        basic_context.set_artifact("attributes_without_excerpts", ["result"])  # Has missing excerpts
 
         stage = DeepJudgmentAutoFailStage()
         assert stage.should_run(basic_context) is True
