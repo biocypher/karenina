@@ -20,12 +20,11 @@ class AbstentionCheckStage(BaseVerificationStage):
     1. Only runs if abstention detection is enabled
     2. Analyzes raw LLM response for refusal patterns
     3. Uses parsing model to judge if response is an abstention
-    4. If abstention detected, overrides verification result to False
+    4. If abstention detected, sets verification result to False
     5. Provides reasoning for the abstention determination
 
     Requires:
         - "raw_llm_response": Raw LLM response text
-        - "verification_result": Current verification result
 
     Produces:
         - "abstention_check_performed": Whether check was attempted (bool)
@@ -34,11 +33,13 @@ class AbstentionCheckStage(BaseVerificationStage):
         - "abstention_reasoning": LLM's reasoning for determination (str or None)
 
     Side Effects:
-        - May update "verification_result" to False if abstention detected
+        - Sets "verification_result" to False if abstention detected
+        - In rubric_only mode, this may be the first stage to set verification_result
 
     Note:
-        Abstention detection runs after embedding check, so it can override
-        even semantically equivalent responses if they represent refusals.
+        In template modes, abstention detection runs after template verification
+        and can override the result. In rubric_only mode, it may run before any
+        verification result is set.
     """
 
     @property
@@ -49,7 +50,9 @@ class AbstentionCheckStage(BaseVerificationStage):
     @property
     def requires(self) -> list[str]:
         """Artifacts required by this stage."""
-        return ["raw_llm_response", "verification_result"]
+        # Only requires raw_llm_response - verification_result is optional
+        # In rubric_only mode, verification_result may not exist yet
+        return ["raw_llm_response"]
 
     @property
     def produces(self) -> list[str]:

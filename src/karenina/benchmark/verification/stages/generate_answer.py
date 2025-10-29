@@ -52,7 +52,8 @@ class GenerateAnswerStage(BaseVerificationStage):
     @property
     def requires(self) -> list[str]:
         """Artifacts required by this stage."""
-        return ["Answer"]  # Needs validated Answer class
+        # Answer artifact is optional - not needed in rubric_only mode
+        return []
 
     @property
     def produces(self) -> list[str]:
@@ -65,8 +66,16 @@ class GenerateAnswerStage(BaseVerificationStage):
         ]
 
     def should_run(self, context: VerificationContext) -> bool:
-        """Run if Answer class was successfully validated."""
-        return context.has_artifact("Answer") and not context.error
+        """
+        Run if either:
+        - Answer class was successfully validated (template modes), OR
+        - No Answer artifact exists (rubric_only mode - template validation skipped)
+
+        Skip only if there's an error.
+        """
+        # In rubric_only mode, Answer artifact won't exist but we still need to generate response
+        # In template modes, Answer artifact should exist
+        return not context.error
 
     def execute(self, context: VerificationContext) -> None:
         """

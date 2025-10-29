@@ -87,6 +87,7 @@ class TestVerificationConfigDeepJudgment:
             deep_judgment_enabled=True,
             abstention_enabled=True,
             rubric_enabled=True,
+            evaluation_mode="template_and_rubric",
         )
 
         assert config.deep_judgment_enabled is True
@@ -388,6 +389,7 @@ class TestVerificationConfigSearchEnhancedDeepJudgment:
             deep_judgment_search_enabled=True,
             abstention_enabled=True,
             rubric_enabled=True,
+            evaluation_mode="template_and_rubric",
         )
 
         assert config.deep_judgment_enabled is True

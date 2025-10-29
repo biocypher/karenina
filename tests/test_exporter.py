@@ -54,6 +54,7 @@ def mock_verification_job() -> VerificationJob:
         parsing_models=[parsing_model],
         replicate_count=1,
         rubric_enabled=True,
+        evaluation_mode="template_and_rubric",
     )
 
     return VerificationJob(

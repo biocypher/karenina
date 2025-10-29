@@ -337,6 +337,7 @@ class TestTaskEvalIntegration:
             ],
             parsing_only=True,
             rubric_enabled=True,
+            evaluation_mode="template_and_rubric",
         )
 
         # Evaluate
@@ -387,6 +388,7 @@ class TestTaskEvalIntegration:
             ],
             parsing_only=True,
             rubric_enabled=True,
+            evaluation_mode="template_and_rubric",
         )
 
         # Evaluate step

@@ -245,6 +245,7 @@ class TestModelConfigurationValidation:
                 )
             ],
             rubric_enabled=True,
+            evaluation_mode="template_and_rubric",
             replicate_count=3,
         )
 
