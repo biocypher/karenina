@@ -3,7 +3,8 @@
 from unittest.mock import Mock, patch
 
 from karenina.benchmark.models import VerificationConfig
-from karenina.benchmark.verification.runner import _strip_markdown_fences, _system_prompt_compose
+from karenina.benchmark.verification.parser_utils import _strip_markdown_fences
+from karenina.benchmark.verification.verification_utils import _system_prompt_compose
 from karenina.benchmark.verifier import run_question_verification, validate_answer_template
 
 

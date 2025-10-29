@@ -3,7 +3,8 @@
 import pytest
 
 from karenina.benchmark.models import ModelConfig
-from karenina.benchmark.verification.runner import _is_valid_md5_hash, run_single_model_verification
+from karenina.benchmark.verification.runner import run_single_model_verification
+from karenina.benchmark.verification.verification_utils import _is_valid_md5_hash
 
 
 def test_is_valid_md5_hash() -> None:

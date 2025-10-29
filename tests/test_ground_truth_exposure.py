@@ -4,7 +4,8 @@ import os
 from unittest.mock import Mock, patch
 
 from karenina.benchmark.models import ModelConfig
-from karenina.benchmark.verification.runner import _should_expose_ground_truth, run_single_model_verification
+from karenina.benchmark.verification.runner import run_single_model_verification
+from karenina.benchmark.verification.verification_utils import _should_expose_ground_truth
 
 
 class TestGroundTruthExposure:
