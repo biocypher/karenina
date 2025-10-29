@@ -76,12 +76,13 @@ class StageOrchestrator:
         rubric: Rubric | None = None,
         abstention_enabled: bool = False,
         deep_judgment_enabled: bool = False,
+        evaluation_mode: str = "template_only",
     ) -> "StageOrchestrator":
         """
         Build orchestrator from configuration.
 
         This method determines which stages to include based on the
-        configuration flags.
+        configuration flags and evaluation mode.
 
         Args:
             answering_model: Answering model configuration (reserved for future use)
@@ -89,6 +90,10 @@ class StageOrchestrator:
             rubric: Optional rubric for evaluation
             abstention_enabled: Whether abstention detection is enabled
             deep_judgment_enabled: Whether deep-judgment parsing is enabled
+            evaluation_mode: Evaluation mode determining which stages run:
+                - "template_only": Template verification only (default)
+                - "template_and_rubric": Template verification + rubric evaluation
+                - "rubric_only": Skip template, only evaluate rubrics
 
         Returns:
             Configured StageOrchestrator instance
@@ -99,33 +104,55 @@ class StageOrchestrator:
         """
         stages: StageList = []
 
-        # Core template verification stages (always included)
-        stages.extend(
-            [
-                ValidateTemplateStage(),
-                GenerateAnswerStage(),
-                ParseTemplateStage(),
-                VerifyTemplateStage(),
-            ]
-        )
+        if evaluation_mode == "rubric_only":
+            # Rubric-only mode: Skip template verification stages
+            # Only generate answer, optionally check abstention, evaluate rubric, finalize
+            stages.append(GenerateAnswerStage())
 
-        # Optional verification enhancement stages
-        # Note: Embedding check stage has its own should_run() logic
-        # It only runs if field verification failed
-        stages.append(EmbeddingCheckStage())
+            # Optional abstention check (can run on raw response)
+            if abstention_enabled:
+                stages.append(AbstentionCheckStage())
 
-        if abstention_enabled:
-            stages.append(AbstentionCheckStage())
+            # Rubric evaluation (required for rubric_only mode)
+            if rubric and (rubric.traits or rubric.manual_traits or rubric.metric_traits):
+                stages.append(RubricEvaluationStage())
 
-        if deep_judgment_enabled:
-            stages.append(DeepJudgmentAutoFailStage())
+            # Finalize result (always last)
+            stages.append(FinalizeResultStage())
 
-        # Rubric evaluation (if configured)
-        if rubric and (rubric.traits or rubric.manual_traits or rubric.metric_traits):
-            stages.append(RubricEvaluationStage())
+        else:
+            # template_only or template_and_rubric modes
+            # Include all template verification stages
+            stages.extend(
+                [
+                    ValidateTemplateStage(),
+                    GenerateAnswerStage(),
+                    ParseTemplateStage(),
+                    VerifyTemplateStage(),
+                ]
+            )
 
-        # Finalize result (always last)
-        stages.append(FinalizeResultStage())
+            # Optional verification enhancement stages
+            # Note: Embedding check stage has its own should_run() logic
+            # It only runs if field verification failed
+            stages.append(EmbeddingCheckStage())
+
+            if abstention_enabled:
+                stages.append(AbstentionCheckStage())
+
+            if deep_judgment_enabled:
+                stages.append(DeepJudgmentAutoFailStage())
+
+            # Rubric evaluation (for template_and_rubric mode)
+            if (
+                evaluation_mode == "template_and_rubric"
+                and rubric
+                and (rubric.traits or rubric.manual_traits or rubric.metric_traits)
+            ):
+                stages.append(RubricEvaluationStage())
+
+            # Finalize result (always last)
+            stages.append(FinalizeResultStage())
 
         return cls(stages=stages)
 

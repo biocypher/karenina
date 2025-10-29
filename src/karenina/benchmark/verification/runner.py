@@ -33,6 +33,7 @@ def run_single_model_verification(
     deep_judgment_excerpt_retry_attempts: int = 2,
     deep_judgment_search_enabled: bool = False,
     deep_judgment_search_tool: str | Any = "tavily",
+    evaluation_mode: str = "template_only",
 ) -> VerificationResult:
     """
     Run verification for a single question with specific answering and parsing models.
@@ -63,6 +64,10 @@ def run_single_model_verification(
         deep_judgment_excerpt_retry_attempts: Retry attempts for excerpt validation (deep-judgment)
         deep_judgment_search_enabled: Whether to enable search enhancement (deep-judgment)
         deep_judgment_search_tool: Search tool name or callable (deep-judgment)
+        evaluation_mode: Evaluation mode determining which stages run:
+            - "template_only": Template verification only (default)
+            - "template_and_rubric": Template verification + rubric evaluation
+            - "rubric_only": Skip template, only evaluate rubrics on raw response
 
     Returns:
         VerificationResult with all details and optional rubric scores
@@ -128,6 +133,7 @@ def run_single_model_verification(
         rubric=rubric,
         abstention_enabled=abstention_enabled,
         deep_judgment_enabled=deep_judgment_enabled,
+        evaluation_mode=evaluation_mode,
     )
 
     # Execute verification pipeline

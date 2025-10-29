@@ -53,7 +53,7 @@ class TestStageOrchestratorConfiguration:
         assert stage_types == expected_stages
 
     def test_template_with_rubric_mode(self, answering_model: ModelConfig, parsing_model: ModelConfig) -> None:
-        """Test template + rubric mode."""
+        """Test template + rubric mode (requires evaluation_mode='template_and_rubric')."""
         rubric = Rubric(
             traits=[RubricTrait(name="Clarity", description="Response clarity", kind="score", min_score=1, max_score=5)]
         )
@@ -62,6 +62,7 @@ class TestStageOrchestratorConfiguration:
             answering_model=answering_model,
             parsing_model=parsing_model,
             rubric=rubric,
+            evaluation_mode="template_and_rubric",
         )
 
         # Verify rubric evaluation stage is included
@@ -98,7 +99,7 @@ class TestStageOrchestratorConfiguration:
         assert DeepJudgmentAutoFailStage in stage_types
 
     def test_all_features_enabled(self, answering_model: ModelConfig, parsing_model: ModelConfig) -> None:
-        """Test all features enabled together."""
+        """Test all features enabled together (requires evaluation_mode='template_and_rubric')."""
         rubric = Rubric(
             traits=[RubricTrait(name="Clarity", description="Response clarity", kind="score", min_score=1, max_score=5)]
         )
@@ -109,6 +110,7 @@ class TestStageOrchestratorConfiguration:
             rubric=rubric,
             abstention_enabled=True,
             deep_judgment_enabled=True,
+            evaluation_mode="template_and_rubric",
         )
 
         # Verify all optional stages are included
@@ -125,11 +127,142 @@ class TestStageOrchestratorConfiguration:
             answering_model=answering_model,
             parsing_model=parsing_model,
             rubric=empty_rubric,
+            evaluation_mode="template_and_rubric",
         )
 
         # Verify rubric stage is NOT included
         stage_types = [type(stage) for stage in orchestrator.stages]
         assert RubricEvaluationStage not in stage_types
+
+
+class TestEvaluationModeStageSelection:
+    """Test stage selection based on evaluation_mode."""
+
+    def test_template_only_mode_excludes_rubric(self, answering_model: ModelConfig, parsing_model: ModelConfig) -> None:
+        """Test that template_only mode excludes rubric stage even if rubric provided."""
+        rubric = Rubric(
+            traits=[RubricTrait(name="Clarity", description="Response clarity", kind="score", min_score=1, max_score=5)]
+        )
+
+        orchestrator = StageOrchestrator.from_config(
+            answering_model=answering_model,
+            parsing_model=parsing_model,
+            rubric=rubric,
+            evaluation_mode="template_only",  # Explicit template_only
+        )
+
+        # Verify rubric stage is NOT included in template_only mode
+        stage_types = [type(stage) for stage in orchestrator.stages]
+        assert RubricEvaluationStage not in stage_types
+
+        # Verify template stages ARE included
+        assert ValidateTemplateStage in stage_types
+        assert ParseTemplateStage in stage_types
+        assert VerifyTemplateStage in stage_types
+
+    def test_template_and_rubric_mode_includes_both(
+        self, answering_model: ModelConfig, parsing_model: ModelConfig
+    ) -> None:
+        """Test that template_and_rubric mode includes both template and rubric stages."""
+        rubric = Rubric(
+            traits=[RubricTrait(name="Clarity", description="Response clarity", kind="score", min_score=1, max_score=5)]
+        )
+
+        orchestrator = StageOrchestrator.from_config(
+            answering_model=answering_model,
+            parsing_model=parsing_model,
+            rubric=rubric,
+            evaluation_mode="template_and_rubric",
+        )
+
+        stage_types = [type(stage) for stage in orchestrator.stages]
+
+        # Verify template stages are included
+        assert ValidateTemplateStage in stage_types
+        assert ParseTemplateStage in stage_types
+        assert VerifyTemplateStage in stage_types
+
+        # Verify rubric stage is included
+        assert RubricEvaluationStage in stage_types
+
+    def test_rubric_only_mode_skips_template_stages(
+        self, answering_model: ModelConfig, parsing_model: ModelConfig
+    ) -> None:
+        """Test that rubric_only mode skips template verification stages."""
+        rubric = Rubric(
+            traits=[RubricTrait(name="Clarity", description="Response clarity", kind="score", min_score=1, max_score=5)]
+        )
+
+        orchestrator = StageOrchestrator.from_config(
+            answering_model=answering_model,
+            parsing_model=parsing_model,
+            rubric=rubric,
+            evaluation_mode="rubric_only",
+        )
+
+        stage_types = [type(stage) for stage in orchestrator.stages]
+
+        # Verify template stages are NOT included
+        assert ValidateTemplateStage not in stage_types
+        assert ParseTemplateStage not in stage_types
+        assert VerifyTemplateStage not in stage_types
+        assert EmbeddingCheckStage not in stage_types
+        assert DeepJudgmentAutoFailStage not in stage_types
+
+        # Verify minimal rubric-only stages are included
+        assert GenerateAnswerStage in stage_types
+        assert RubricEvaluationStage in stage_types
+        assert FinalizeResultStage in stage_types
+
+    def test_rubric_only_mode_with_abstention(self, answering_model: ModelConfig, parsing_model: ModelConfig) -> None:
+        """Test that rubric_only mode can include abstention check."""
+        rubric = Rubric(
+            traits=[RubricTrait(name="Clarity", description="Response clarity", kind="score", min_score=1, max_score=5)]
+        )
+
+        orchestrator = StageOrchestrator.from_config(
+            answering_model=answering_model,
+            parsing_model=parsing_model,
+            rubric=rubric,
+            abstention_enabled=True,
+            evaluation_mode="rubric_only",
+        )
+
+        stage_types = [type(stage) for stage in orchestrator.stages]
+
+        # Verify template stages are NOT included
+        assert ValidateTemplateStage not in stage_types
+        assert ParseTemplateStage not in stage_types
+
+        # Verify rubric-only stages with abstention
+        assert GenerateAnswerStage in stage_types
+        assert AbstentionCheckStage in stage_types
+        assert RubricEvaluationStage in stage_types
+        assert FinalizeResultStage in stage_types
+
+    def test_rubric_only_mode_stage_order(self, answering_model: ModelConfig, parsing_model: ModelConfig) -> None:
+        """Test that rubric_only mode stages are in correct order."""
+        rubric = Rubric(
+            traits=[RubricTrait(name="Clarity", description="Response clarity", kind="score", min_score=1, max_score=5)]
+        )
+
+        orchestrator = StageOrchestrator.from_config(
+            answering_model=answering_model,
+            parsing_model=parsing_model,
+            rubric=rubric,
+            abstention_enabled=True,
+            evaluation_mode="rubric_only",
+        )
+
+        stage_types = [type(stage) for stage in orchestrator.stages]
+
+        # Verify order: Generate → Abstention → Rubric → Finalize
+        generate_idx = stage_types.index(GenerateAnswerStage)
+        abstention_idx = stage_types.index(AbstentionCheckStage)
+        rubric_idx = stage_types.index(RubricEvaluationStage)
+        finalize_idx = stage_types.index(FinalizeResultStage)
+
+        assert generate_idx < abstention_idx < rubric_idx < finalize_idx
 
 
 class TestStageOrdering:
