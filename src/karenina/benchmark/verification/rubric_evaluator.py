@@ -502,18 +502,18 @@ You are evaluating an answer against required content (TP instructions). Your jo
 **For True Positives (TP):**
 - Extract actual terms/excerpts from the answer that match TP instructions
 - Accept exact matches, synonyms, and semantically equivalent expressions
-- Example: If TP instruction is "mention proctitis" and answer says "proctitis", extract "proctitis"
+- Example: If TP instruction is "mention asthma" and answer says "asthma", extract "asthma"
 - Example: If TP instruction is "mention tumor" and answer says "neoplasm", extract "neoplasm" (synonym)
 
 **For False Negatives (FN):**
 - List the content from TP instructions that is NOT found in the answer
 - Reference the actual missing content
-- Example: If TP instruction is "mention anal polyp" but it's not in the answer, add "anal polyp"
+- Example: If TP instruction is "mention pneumonia" but it's not in the answer, add "pneumonia"
 
 **For False Positives (FP):**
 - Extract terms from the answer that appear to be attempting to satisfy TP instructions but are actually INCORRECT
 - Focus on terms in the same domain/category as TP instructions that LOOK like valid answers but aren't
-- Example: If TP instructions list specific child diseases and answer includes DIFFERENT diseases in the same category, those are FP
+- Example: If TP instructions ask for inflammatory lung diseases (asthma, bronchitis, pneumonia) but answer includes restrictive lung diseases (pulmonary fibrosis, sarcoidosis), those are FP
 - DO NOT include: generic filler text, explanations, or content clearly not attempting to match TP instructions
 - If unsure whether something is FP, consider: "Is this term in the same category as TP instructions but not actually correct?"
 
@@ -523,7 +523,7 @@ Return ONLY a valid JSON object:
 {{"tp": [<excerpts from answer matching TP instructions>], "fn": [<missing TP instruction content>], "fp": [<incorrect terms from answer that look like TPs but aren't>]}}
 
 Example:
-{{"tp": ["proctitis", "anal polyp"], "fn": ["anal neoplasm", "imperforate anus"], "fp": ["anal fistula", "anal cancer"]}}
+{{"tp": ["asthma", "bronchitis"], "fn": ["pneumonia", "pleurisy"], "fp": ["pulmonary fibrosis", "emphysema", "sarcoidosis"]}}
 
 Your JSON response:"""
 
@@ -580,7 +580,7 @@ Return ONLY a valid JSON object:
 {{"tp": [<excerpts matching TP instructions>], "fn": [<missing TP content>], "tn": [<TN instructions correctly absent>], "fp": [<excerpts matching TN instructions>]}}
 
 Example:
-{{"tp": ["proctitis"], "fn": ["anal polyp"], "tn": ["hemorrhoid"], "fp": ["anal fistula"]}}
+{{"tp": ["asthma"], "fn": ["bronchitis"], "tn": ["pulmonary fibrosis"], "fp": ["emphysema"]}}
 
 Your JSON response:"""
 
