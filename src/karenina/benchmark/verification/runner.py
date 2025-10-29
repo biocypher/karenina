@@ -891,13 +891,34 @@ Original Question: {question_text}
 
         # Step 6: Run rubric evaluation (optional)
         rubric_result = None
-        if rubric and (rubric.traits or rubric.manual_traits):
+        metric_confusion_lists = None
+        metric_results = None
+        if rubric and (rubric.traits or rubric.manual_traits or rubric.metric_traits):
             try:
                 # Use parsing model for rubric evaluation
                 evaluator = RubricEvaluator(parsing_model)
                 rubric_result = evaluator.evaluate_rubric(
                     question=question_text, answer=raw_llm_response, rubric=rubric
                 )
+
+                # Evaluate metric traits separately (returns confusion lists and computed metrics)
+                if rubric.metric_traits:
+                    print(
+                        f"🔍 Runner: Evaluating {len(rubric.metric_traits)} metric trait(s) for question {question_id}"
+                    )
+                    for trait in rubric.metric_traits:
+                        print(f"  - Trait: {trait.name} (mode: {trait.evaluation_mode}, metrics: {trait.metrics})")
+
+                    metric_confusion_lists, metric_results = evaluator.evaluate_metric_traits(
+                        question=question_text, answer=raw_llm_response, metric_traits=rubric.metric_traits
+                    )
+
+                    print(
+                        f"  ✅ Metric evaluation complete. Results: {list(metric_results.keys()) if metric_results else 'None'}"
+                    )
+                    if metric_results:
+                        for trait_name, metrics in metric_results.items():
+                            print(f"     {trait_name}: {metrics}")
             except (ValueError, RuntimeError) as e:
                 # Handle specific rubric evaluator errors
                 print(f"Warning: Rubric evaluator initialization/configuration failed for question {question_id}: {e}")
@@ -913,6 +934,8 @@ Original Question: {question_text}
             completed_without_errors=True,
             verify_result=verification_result,
             verify_rubric=rubric_result,
+            metric_trait_confusion_lists=metric_confusion_lists,
+            metric_trait_metrics=metric_results,
             evaluation_rubric=rubric.model_dump() if rubric else None,
             keywords=keywords,
             question_text=question_text,

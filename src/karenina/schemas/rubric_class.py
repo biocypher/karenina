@@ -124,24 +124,174 @@ class ManualRubricTrait(BaseModel):
             raise RuntimeError(f"Failed to evaluate manual trait '{self.name}': {e}") from e
 
 
+# Valid metric names for each evaluation mode
+# TP-only mode: Only TP instructions provided, FP = anything else not in TP list
+VALID_METRICS_TP_ONLY = {"precision", "recall", "f1"}
+
+# Full matrix mode: Both TP and TN instructions provided
+VALID_METRICS_FULL_MATRIX = {"precision", "recall", "specificity", "accuracy", "f1"}
+
+# All valid metrics (union of both modes)
+VALID_METRICS = VALID_METRICS_TP_ONLY | VALID_METRICS_FULL_MATRIX
+
+# Metric computation requirements (which confusion matrix values are needed)
+METRIC_REQUIREMENTS = {
+    "precision": {"tp", "fp"},
+    "recall": {"tp", "fn"},
+    "specificity": {"tn", "fp"},
+    "accuracy": {"tp", "tn", "fp", "fn"},
+    "f1": {"tp", "fp", "fn"},
+}
+
+
+class MetricRubricTrait(BaseModel):
+    """
+    Metric evaluation trait using instruction-level confusion matrix analysis.
+
+    Two evaluation modes are supported:
+
+    1. TP-only mode (evaluation_mode="tp_only"):
+       - User defines: TP instructions (what should be present)
+       - System evaluates:
+         * TP: Instructions found in answer
+         * FN: Instructions missing from answer
+         * FP: Extra content in answer not matching TP instructions
+         * TN: Cannot be computed (no explicit negative set)
+       - Available metrics: precision, recall, f1
+
+    2. Full matrix mode (evaluation_mode="full_matrix"):
+       - User defines: TP instructions (should be present) + TN instructions (should NOT be present)
+       - System evaluates:
+         * TP: TP instructions found in answer
+         * FN: TP instructions missing from answer
+         * TN: TN instructions correctly absent
+         * FP: TN instructions incorrectly present
+       - Available metrics: precision, recall, specificity, accuracy, f1
+
+    The trait returns confusion matrix counts/lists and computed metric values.
+    """
+
+    name: str = Field(..., min_length=1, description="Human readable identifier for the trait")
+    description: str | None = Field(None, description="Detailed description of what this trait evaluates")
+    evaluation_mode: Literal["tp_only", "full_matrix"] = Field(
+        "tp_only", description="Evaluation mode: tp_only (only TP defined) or full_matrix (TP+TN defined)"
+    )
+    metrics: list[str] = Field(
+        ...,
+        min_length=1,
+        description="List of metrics to compute (mode-dependent: see VALID_METRICS_TP_ONLY and VALID_METRICS_FULL_MATRIX)",
+    )
+    tp_instructions: list[str] = Field(
+        default_factory=list,
+        description="Instructions for what should be present in the answer",
+    )
+    tn_instructions: list[str] = Field(
+        default_factory=list,
+        description="Instructions for what should NOT be present in the answer (required in full_matrix mode, ignored in tp_only mode)",
+    )
+    repeated_extraction: bool = Field(
+        True, description="Whether to deduplicate repeated excerpts/instructions (case-insensitive exact match)"
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("metrics")
+    @classmethod
+    def validate_metric_names(cls, v: list[str]) -> list[str]:
+        """Validate that all requested metrics are valid."""
+        if not v:
+            raise ValueError("At least one metric must be specified")
+
+        invalid_metrics = set(v) - VALID_METRICS
+        if invalid_metrics:
+            raise ValueError(f"Invalid metric names: {invalid_metrics}. Valid metrics are: {VALID_METRICS}")
+
+        return v
+
+    @model_validator(mode="after")
+    def validate_metric_computability(self) -> "MetricRubricTrait":
+        """Validate that requested metrics are compatible with the evaluation mode and provided instructions."""
+        # Validate TP instructions are always provided
+        if not self.tp_instructions:
+            raise ValueError("TP instructions must be provided (define what should be present in the answer)")
+
+        # Mode-specific validation
+        if self.evaluation_mode == "tp_only":
+            # TP-only mode: TN instructions should be empty, validate metrics
+            valid_metrics_for_mode = VALID_METRICS_TP_ONLY
+            invalid_for_mode = set(self.metrics) - valid_metrics_for_mode
+            if invalid_for_mode:
+                raise ValueError(
+                    f"Metrics {invalid_for_mode} are not available in tp_only mode. "
+                    f"Available metrics: {valid_metrics_for_mode}. "
+                    f"Use full_matrix mode for specificity and accuracy."
+                )
+            # In tp_only mode, we can compute: TP, FN, FP (but not TN)
+            available_buckets = {"tp", "fn", "fp"}
+
+        elif self.evaluation_mode == "full_matrix":
+            # Full matrix mode: Both TP and TN instructions required
+            if not self.tn_instructions:
+                raise ValueError(
+                    "TN instructions must be provided in full_matrix mode "
+                    "(define what should NOT be present in the answer)"
+                )
+            valid_metrics_for_mode = VALID_METRICS_FULL_MATRIX
+            invalid_for_mode = set(self.metrics) - valid_metrics_for_mode
+            if invalid_for_mode:
+                raise ValueError(
+                    f"Metrics {invalid_for_mode} are not valid. Available metrics: {valid_metrics_for_mode}"
+                )
+            # In full_matrix mode, we can compute all four: TP, FN, TN, FP
+            available_buckets = {"tp", "fn", "tn", "fp"}
+
+        # Check each requested metric can be computed
+        uncomputable_metrics = []
+        for metric in self.metrics:
+            required_buckets = METRIC_REQUIREMENTS[metric]
+            if not required_buckets.issubset(available_buckets):
+                missing = required_buckets - available_buckets
+                uncomputable_metrics.append(f"{metric} (needs {missing})")
+
+        if uncomputable_metrics:
+            raise ValueError(
+                f"Cannot compute the following metrics with current mode ({self.evaluation_mode}): "
+                f"{', '.join(uncomputable_metrics)}. "
+                f"Available buckets: {available_buckets}"
+            )
+
+        return self
+
+    def get_required_buckets(self) -> set[str]:
+        """Get the set of confusion matrix buckets that will be computed for this trait."""
+        if self.evaluation_mode == "tp_only":
+            return {"tp", "fn", "fp"}  # TN cannot be computed
+        else:  # full_matrix
+            return {"tp", "fn", "tn", "fp"}  # All four can be computed
+
+
 class Rubric(BaseModel):
     """
     Collection of evaluation traits applied to all question-answer pairs.
 
     A rubric defines the qualitative criteria used to evaluate LLM responses
-    beyond basic correctness checking. Supports both LLM-based and manual traits.
+    beyond basic correctness checking. Supports LLM-based, manual, and metric traits.
     """
 
     traits: list[RubricTrait] = Field(default_factory=list, description="List of LLM-based evaluation traits")
     manual_traits: list[ManualRubricTrait] = Field(default_factory=list, description="List of manual evaluation traits")
+    metric_traits: list[MetricRubricTrait] = Field(
+        default_factory=list, description="List of metric-based evaluation traits (confusion-matrix analysis)"
+    )
 
     model_config = ConfigDict(extra="forbid")
 
     def get_trait_names(self) -> list[str]:
-        """Get list of all trait names in this rubric (both LLM and manual)."""
+        """Get list of all trait names in this rubric (LLM, manual, and metric)."""
         llm_names = [trait.name for trait in self.traits]
         manual_names = [trait.name for trait in self.manual_traits]
-        return llm_names + manual_names
+        metric_names = [trait.name for trait in self.metric_traits]
+        return llm_names + manual_names + metric_names
 
     def get_llm_trait_names(self) -> list[str]:
         """Get list of LLM trait names only."""
@@ -151,13 +301,27 @@ class Rubric(BaseModel):
         """Get list of manual trait names only."""
         return [trait.name for trait in self.manual_traits]
 
+    def get_metric_trait_names(self) -> list[str]:
+        """Get list of metric trait names only."""
+        return [trait.name for trait in self.metric_traits]
+
     def validate_evaluation(self, evaluation: dict[str, int | bool]) -> bool:
-        """Validate that an evaluation result matches this rubric structure."""
-        trait_names = set(self.get_trait_names())
+        """
+        Validate that an evaluation result matches this rubric structure.
+
+        Note: This validates LLM and manual trait scores only. Metric traits
+        are stored separately in VerificationResult fields (metric_trait_confusion_lists
+        and metric_trait_metrics) and don't participate in this validation.
+        """
+        # Get trait names excluding metric traits (they're validated separately)
+        llm_names = set(self.get_llm_trait_names())
+        manual_names = set(self.get_manual_trait_names())
+        expected_names = llm_names | manual_names
+
         eval_names = set(evaluation.keys())
 
-        # Check that all trait names are present
-        if trait_names != eval_names:
+        # Check that all expected trait names are present
+        if expected_names != eval_names:
             return False
 
         # Check that each score is valid for its trait
@@ -220,8 +384,9 @@ def merge_rubrics(global_rubric: "Rubric | None", question_rubric: "Rubric | Non
     if conflicts:
         raise ValueError(f"Trait name conflicts between global and question rubrics: {conflicts}")
 
-    # Merge traits and manual traits separately
+    # Merge all trait types separately
     merged_traits = list(global_rubric.traits) + list(question_rubric.traits)
     merged_manual_traits = list(global_rubric.manual_traits) + list(question_rubric.manual_traits)
+    merged_metric_traits = list(global_rubric.metric_traits) + list(question_rubric.metric_traits)
 
-    return Rubric(traits=merged_traits, manual_traits=merged_manual_traits)
+    return Rubric(traits=merged_traits, manual_traits=merged_manual_traits, metric_traits=merged_metric_traits)

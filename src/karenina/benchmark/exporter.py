@@ -176,6 +176,9 @@ def export_verification_results_json(job: VerificationJob, results: dict[str, Ve
             # Search-enhanced deep-judgment fields
             "deep_judgment_search_enabled": result.deep_judgment_search_enabled,
             "hallucination_risk_assessment": result.hallucination_risk_assessment,
+            # Metric trait fields
+            "metric_trait_confusion_lists": result.metric_trait_confusion_lists,
+            "metric_trait_metrics": result.metric_trait_metrics,
         }
 
     return json.dumps(export_data, indent=2, ensure_ascii=False)
@@ -359,6 +362,9 @@ def export_verification_results_csv(
             # Search-enhanced deep-judgment fields
             "deep_judgment_search_enabled",
             "hallucination_risk_assessment",
+            # Metric trait fields
+            "metric_trait_confusion_lists",
+            "metric_trait_metrics",
         ]
     )
 
@@ -428,6 +434,13 @@ def export_verification_results_csv(
             "deep_judgment_search_enabled": result.deep_judgment_search_enabled,
             "hallucination_risk_assessment": _safe_json_serialize(
                 result.hallucination_risk_assessment, result.question_id, "hallucination_risk_assessment"
+            ),
+            # Metric trait fields
+            "metric_trait_confusion_lists": _safe_json_serialize(
+                result.metric_trait_confusion_lists, result.question_id, "metric_trait_confusion_lists"
+            ),
+            "metric_trait_metrics": _safe_json_serialize(
+                result.metric_trait_metrics, result.question_id, "metric_trait_metrics"
             ),
         }
 
