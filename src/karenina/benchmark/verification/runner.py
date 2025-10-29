@@ -389,6 +389,22 @@ def run_single_model_verification(
         few_shot_examples=few_shot_examples,
     )
 
+    # Compute model strings for result (needed even if validation fails)
+    # For OpenRouter interface, don't include provider in the model string
+    if answering_model.interface == "openrouter":
+        answering_model_str = answering_model.model_name
+    else:
+        answering_model_str = f"{answering_model.model_provider}/{answering_model.model_name}"
+
+    if parsing_model.interface == "openrouter":
+        parsing_model_str = parsing_model.model_name
+    else:
+        parsing_model_str = f"{parsing_model.model_provider}/{parsing_model.model_name}"
+
+    # Store model strings in context for early access (e.g., in error cases)
+    context.set_artifact("answering_model_str", answering_model_str)
+    context.set_artifact("parsing_model_str", parsing_model_str)
+
     # Build stage orchestrator from configuration
     orchestrator = StageOrchestrator.from_config(
         answering_model=answering_model,
