@@ -138,3 +138,29 @@ The calculation 2 + 2 equals 4.
 
 Therefore, the answer is 4.
 """
+
+
+@pytest.fixture
+def answering_model() -> ModelConfig:
+    """Create a standard answering model config."""
+    return ModelConfig(
+        id="test-answering",
+        model_provider="openai",
+        model_name="gpt-4o-mini",
+        temperature=0.1,
+        interface="langchain",
+        system_prompt="You are a helpful assistant.",
+    )
+
+
+@pytest.fixture
+def parsing_model() -> ModelConfig:
+    """Create a standard parsing model config."""
+    return ModelConfig(
+        id="test-parsing",
+        model_provider="openai",
+        model_name="gpt-4o-mini",
+        temperature=0.0,
+        interface="langchain",
+        system_prompt="Parse the response according to the template.",
+    )
