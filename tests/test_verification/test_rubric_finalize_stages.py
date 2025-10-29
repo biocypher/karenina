@@ -301,3 +301,68 @@ class TestFinalizeResultStage:
 
         assert stage.name == "FinalizeResult"
         assert "final_result" in stage.produces
+
+    def test_template_only_mode_flags(self, basic_context: VerificationContext) -> None:
+        """Test that template_only mode sets correct flags."""
+        # Set up template verification (but no rubric)
+        parsed = MockAnswer(result=4, correct={"value": 4}, question_id="test_q123")
+        basic_context.set_artifact("parsed_answer", parsed)
+        basic_context.set_artifact("field_verification_result", True)  # Template verification ran
+        basic_context.set_artifact("answering_model_str", "openai/gpt-4.1-mini")
+        basic_context.set_artifact("parsing_model_str", "openai/gpt-4.1-mini")
+        basic_context.set_result_field("verify_result", True)
+        # No rubric results set
+
+        stage = FinalizeResultStage()
+        stage.execute(basic_context)
+        result = basic_context.get_artifact("final_result")
+
+        # Verify flags are set correctly
+        assert result.template_verification_performed is True
+        assert result.verify_result is True
+        assert result.rubric_evaluation_performed is False
+        assert result.verify_rubric is None
+
+    def test_template_and_rubric_mode_flags(self, basic_context: VerificationContext) -> None:
+        """Test that template_and_rubric mode sets correct flags."""
+        # Set up template verification
+        parsed = MockAnswer(result=4, correct={"value": 4}, question_id="test_q123")
+        basic_context.set_artifact("parsed_answer", parsed)
+        basic_context.set_artifact("field_verification_result", True)  # Template verification ran
+        basic_context.set_artifact("answering_model_str", "openai/gpt-4.1-mini")
+        basic_context.set_artifact("parsing_model_str", "openai/gpt-4.1-mini")
+        basic_context.set_result_field("verify_result", True)
+
+        # Set up rubric evaluation
+        basic_context.set_result_field("verify_rubric", {"Clarity": 5, "Accuracy": 4})  # Rubric ran
+
+        stage = FinalizeResultStage()
+        stage.execute(basic_context)
+        result = basic_context.get_artifact("final_result")
+
+        # Verify both flags are set
+        assert result.template_verification_performed is True
+        assert result.verify_result is True
+        assert result.rubric_evaluation_performed is True
+        assert result.verify_rubric is not None
+
+    def test_rubric_only_mode_flags(self, basic_context: VerificationContext) -> None:
+        """Test that rubric_only mode sets correct flags (no template verification)."""
+        # No template verification artifacts - template stages were skipped
+        # Only raw response and rubric evaluation
+        basic_context.set_artifact("answering_model_str", "openai/gpt-4.1-mini")
+        basic_context.set_artifact("parsing_model_str", "openai/gpt-4.1-mini")
+        basic_context.set_result_field("raw_llm_response", "The answer is comprehensive...")
+        basic_context.set_result_field("verify_rubric", {"Clarity": 5, "Depth": 4})  # Rubric ran
+        # No field_verification_result artifact (template stages skipped)
+        # No verify_result set (template verification not performed)
+
+        stage = FinalizeResultStage()
+        stage.execute(basic_context)
+        result = basic_context.get_artifact("final_result")
+
+        # Verify flags show template was skipped, rubric was done
+        assert result.template_verification_performed is False
+        assert result.verify_result is None  # Should be None when template verification skipped
+        assert result.rubric_evaluation_performed is True
+        assert result.verify_rubric is not None

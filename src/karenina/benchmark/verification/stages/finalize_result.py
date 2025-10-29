@@ -84,6 +84,13 @@ class FinalizeResultStage(BaseVerificationStage):
             except Exception as e:
                 logger.warning(f"Failed to split parsed response: {e}")
 
+        # Determine which verification types were performed
+        # Template verification was performed if VerifyTemplateStage ran and set field_verification_result
+        template_verification_performed = context.get_artifact("field_verification_result") is not None
+
+        # Rubric evaluation was performed if RubricEvaluationStage ran and set verify_rubric
+        rubric_evaluation_performed = context.get_result_field("verify_rubric") is not None
+
         # Build VerificationResult from context
         result = VerificationResult(
             # Identity & Metadata
@@ -94,8 +101,10 @@ class FinalizeResultStage(BaseVerificationStage):
             keywords=context.keywords,
             question_text=context.question_text,
             # Core Results
+            template_verification_performed=template_verification_performed,
             verify_result=context.get_result_field("verify_result"),
             verify_granular_result=context.get_result_field("verify_granular_result"),
+            rubric_evaluation_performed=rubric_evaluation_performed,
             verify_rubric=context.get_result_field("verify_rubric"),
             evaluation_rubric=context.get_result_field("evaluation_rubric"),
             # Metric Traits

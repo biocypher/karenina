@@ -637,8 +637,10 @@ class VerificationResult(BaseModel):
     parsed_llm_response: dict[str, Any] | None = None  # LLM extracted fields (excluding 'id' and 'correct')
 
     # Verification outcomes
-    verify_result: Any | None = None
+    template_verification_performed: bool = False  # Whether template verification was executed
+    verify_result: Any | None = None  # Template verification result (None if template verification skipped)
     verify_granular_result: Any | None = None
+    rubric_evaluation_performed: bool = False  # Whether rubric evaluation was executed
     verify_rubric: dict[str, int | bool] | None = None  # Rubric trait scores (LLM and manual)
     evaluation_rubric: dict[str, Any] | None = None  # The merged rubric used for evaluation
 
