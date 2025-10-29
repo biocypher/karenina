@@ -380,6 +380,12 @@ class VerificationConfig(BaseModel):
     rubric_enabled: bool = False
     rubric_trait_names: list[str] | None = None  # Optional filter for specific traits
 
+    # Evaluation mode: determines which stages run in the verification pipeline
+    evaluation_mode: Literal["template_only", "template_and_rubric", "rubric_only"] = "template_only"
+    # - "template_only": Run template verification only (default behavior)
+    # - "template_and_rubric": Run both template verification AND rubric evaluation
+    # - "rubric_only": Skip template verification, only evaluate rubrics on raw LLM response
+
     # Abstention detection settings
     abstention_enabled: bool = False  # Enable abstention/refusal detection
 
@@ -516,6 +522,29 @@ class VerificationConfig(BaseModel):
             # Check that replicate count is valid
             if self.replicate_count < 1:
                 raise ValueError("Replicate count must be at least 1")
+
+        # Validation for evaluation_mode
+        if self.evaluation_mode == "rubric_only":
+            # Rubric-only mode requires rubric to be enabled
+            if not self.rubric_enabled:
+                raise ValueError(
+                    "evaluation_mode='rubric_only' requires rubric_enabled=True. "
+                    "Rubric-only mode evaluates rubric traits on the raw LLM response without template verification."
+                )
+        elif self.evaluation_mode == "template_and_rubric":
+            # Template + rubric mode requires rubric to be enabled
+            if not self.rubric_enabled:
+                raise ValueError(
+                    "evaluation_mode='template_and_rubric' requires rubric_enabled=True. "
+                    "This mode runs both template verification AND rubric evaluation."
+                )
+        elif self.evaluation_mode == "template_only" and self.rubric_enabled:
+            # Template-only mode should not have rubric enabled (warn about configuration mismatch)
+            raise ValueError(
+                "evaluation_mode='template_only' is incompatible with rubric_enabled=True. "
+                "Use evaluation_mode='template_and_rubric' to run both template verification and rubric evaluation, "
+                "or set rubric_enabled=False for template-only verification."
+            )
 
         # Additional validation for few-shot prompting scenarios
         # Handle both legacy and new few-shot configurations

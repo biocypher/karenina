@@ -461,3 +461,154 @@ class TestVerificationConfigIntegration:
             parsing_models=[parsing_model],
         )
         assert config3.is_few_shot_enabled() is False
+
+
+class TestEvaluationModeValidation:
+    """Test evaluation_mode validation in VerificationConfig."""
+
+    def _create_test_models(self) -> tuple[ModelConfig, ModelConfig]:
+        """Helper to create test models."""
+        answering_model = ModelConfig(
+            id="test-answering",
+            model_provider="test",
+            model_name="test-model",
+            temperature=0.1,
+            interface="langchain",
+            system_prompt="Test answering prompt",
+        )
+
+        parsing_model = ModelConfig(
+            id="test-parsing",
+            model_provider="test",
+            model_name="test-model",
+            temperature=0.1,
+            interface="langchain",
+            system_prompt="Test parsing prompt",
+        )
+
+        return answering_model, parsing_model
+
+    def test_template_only_mode_valid_without_rubric(self) -> None:
+        """Test that template_only mode is valid when rubric is disabled."""
+        answering_model, parsing_model = self._create_test_models()
+
+        # Should work - template_only with no rubric
+        config = VerificationConfig(
+            answering_models=[answering_model],
+            parsing_models=[parsing_model],
+            evaluation_mode="template_only",
+            rubric_enabled=False,
+        )
+
+        assert config.evaluation_mode == "template_only"
+        assert config.rubric_enabled is False
+
+    def test_template_only_mode_invalid_with_rubric(self) -> None:
+        """Test that template_only mode fails when rubric is enabled."""
+        answering_model, parsing_model = self._create_test_models()
+
+        # Should fail - template_only with rubric enabled
+        with pytest.raises(
+            ValueError, match="evaluation_mode='template_only' is incompatible with rubric_enabled=True"
+        ):
+            VerificationConfig(
+                answering_models=[answering_model],
+                parsing_models=[parsing_model],
+                evaluation_mode="template_only",
+                rubric_enabled=True,
+            )
+
+    def test_template_and_rubric_mode_valid_with_rubric(self) -> None:
+        """Test that template_and_rubric mode is valid when rubric is enabled."""
+        answering_model, parsing_model = self._create_test_models()
+
+        # Should work - template_and_rubric with rubric enabled
+        config = VerificationConfig(
+            answering_models=[answering_model],
+            parsing_models=[parsing_model],
+            evaluation_mode="template_and_rubric",
+            rubric_enabled=True,
+        )
+
+        assert config.evaluation_mode == "template_and_rubric"
+        assert config.rubric_enabled is True
+
+    def test_template_and_rubric_mode_invalid_without_rubric(self) -> None:
+        """Test that template_and_rubric mode fails when rubric is disabled."""
+        answering_model, parsing_model = self._create_test_models()
+
+        # Should fail - template_and_rubric without rubric
+        with pytest.raises(ValueError, match="evaluation_mode='template_and_rubric' requires rubric_enabled=True"):
+            VerificationConfig(
+                answering_models=[answering_model],
+                parsing_models=[parsing_model],
+                evaluation_mode="template_and_rubric",
+                rubric_enabled=False,
+            )
+
+    def test_rubric_only_mode_valid_with_rubric(self) -> None:
+        """Test that rubric_only mode is valid when rubric is enabled."""
+        answering_model, parsing_model = self._create_test_models()
+
+        # Should work - rubric_only with rubric enabled
+        config = VerificationConfig(
+            answering_models=[answering_model],
+            parsing_models=[parsing_model],
+            evaluation_mode="rubric_only",
+            rubric_enabled=True,
+        )
+
+        assert config.evaluation_mode == "rubric_only"
+        assert config.rubric_enabled is True
+
+    def test_rubric_only_mode_invalid_without_rubric(self) -> None:
+        """Test that rubric_only mode fails when rubric is disabled."""
+        answering_model, parsing_model = self._create_test_models()
+
+        # Should fail - rubric_only without rubric
+        with pytest.raises(ValueError, match="evaluation_mode='rubric_only' requires rubric_enabled=True"):
+            VerificationConfig(
+                answering_models=[answering_model],
+                parsing_models=[parsing_model],
+                evaluation_mode="rubric_only",
+                rubric_enabled=False,
+            )
+
+    def test_default_evaluation_mode_is_template_only(self) -> None:
+        """Test that the default evaluation_mode is template_only."""
+        answering_model, parsing_model = self._create_test_models()
+
+        config = VerificationConfig(
+            answering_models=[answering_model],
+            parsing_models=[parsing_model],
+        )
+
+        assert config.evaluation_mode == "template_only"
+
+    def test_evaluation_mode_error_messages_are_helpful(self) -> None:
+        """Test that error messages provide clear guidance."""
+        answering_model, parsing_model = self._create_test_models()
+
+        # template_only with rubric should suggest template_and_rubric
+        try:
+            VerificationConfig(
+                answering_models=[answering_model],
+                parsing_models=[parsing_model],
+                evaluation_mode="template_only",
+                rubric_enabled=True,
+            )
+        except ValueError as e:
+            assert "template_and_rubric" in str(e)
+            assert "Use evaluation_mode='template_and_rubric'" in str(e)
+
+        # rubric_only without rubric should explain the requirement
+        try:
+            VerificationConfig(
+                answering_models=[answering_model],
+                parsing_models=[parsing_model],
+                evaluation_mode="rubric_only",
+                rubric_enabled=False,
+            )
+        except ValueError as e:
+            assert "requires rubric_enabled=True" in str(e)
+            assert "Rubric-only mode evaluates rubric traits" in str(e)
