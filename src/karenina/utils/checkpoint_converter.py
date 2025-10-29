@@ -7,7 +7,7 @@ and the JSON-LD format used by the frontend.
 import hashlib
 import json
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal, cast
 
 from ..schemas.checkpoint import (
     SCHEMA_ORG_CONTEXT,
@@ -19,7 +19,7 @@ from ..schemas.checkpoint import (
     SchemaOrgRating,
     SchemaOrgSoftwareSourceCode,
 )
-from ..schemas.rubric_class import ManualRubricTrait, RubricTrait
+from ..schemas.rubric_class import ManualRubricTrait, MetricRubricTrait, RubricTrait
 
 
 class BenchmarkConversionError(Exception):
@@ -71,18 +71,48 @@ def generate_template_id(template: str | None) -> str:
 
 
 def convert_rubric_trait_to_rating(
-    trait: RubricTrait | ManualRubricTrait, rubric_type: str = "global"
+    trait: RubricTrait | ManualRubricTrait | MetricRubricTrait, rubric_type: str = "global"
 ) -> SchemaOrgRating:
     """
-    Convert an internal RubricTrait or ManualRubricTrait to a schema.org Rating.
+    Convert an internal RubricTrait, ManualRubricTrait, or MetricRubricTrait to a schema.org Rating.
 
     Args:
-        trait: The RubricTrait or ManualRubricTrait to convert
+        trait: The trait to convert
         rubric_type: Either 'global' or 'question-specific'
 
     Returns:
         A SchemaOrgRating object
     """
+    # Handle MetricRubricTrait
+    if isinstance(trait, MetricRubricTrait):
+        # Store metric trait configuration in additionalProperty
+        additional_props = [
+            SchemaOrgPropertyValue(name="metrics", value=json.dumps(trait.metrics)),
+            SchemaOrgPropertyValue(name="repeated_extraction", value=trait.repeated_extraction),
+            SchemaOrgPropertyValue(name="evaluation_mode", value=trait.evaluation_mode),
+        ]
+
+        # Add instruction lists (only if non-empty)
+        if trait.tp_instructions:
+            additional_props.append(
+                SchemaOrgPropertyValue(name="tp_instructions", value=json.dumps(trait.tp_instructions))
+            )
+        if trait.tn_instructions:
+            additional_props.append(
+                SchemaOrgPropertyValue(name="tn_instructions", value=json.dumps(trait.tn_instructions))
+            )
+
+        return SchemaOrgRating(
+            name=trait.name,
+            description=trait.description,
+            bestRating=1.0,  # Metrics are in 0-1 range
+            worstRating=0.0,
+            additionalType="GlobalMetricRubricTrait"
+            if rubric_type == "global"
+            else "QuestionSpecificMetricRubricTrait",
+            additionalProperty=additional_props,
+        )
+
     # Handle ManualRubricTrait (always boolean)
     if isinstance(trait, ManualRubricTrait):
         return SchemaOrgRating(
@@ -117,16 +147,60 @@ def convert_rubric_trait_to_rating(
         )
 
 
-def convert_rating_to_rubric_trait(rating: SchemaOrgRating) -> RubricTrait | ManualRubricTrait:
+def convert_rating_to_rubric_trait(rating: SchemaOrgRating) -> RubricTrait | ManualRubricTrait | MetricRubricTrait:
     """
-    Convert a schema.org Rating back to a RubricTrait or ManualRubricTrait.
+    Convert a schema.org Rating back to a RubricTrait, ManualRubricTrait, or MetricRubricTrait.
 
     Args:
         rating: The SchemaOrgRating to convert
 
     Returns:
-        A RubricTrait or ManualRubricTrait object
+        A RubricTrait, ManualRubricTrait, or MetricRubricTrait object
     """
+    # Check if it's a MetricRubricTrait
+    if rating.additionalType in ["GlobalMetricRubricTrait", "QuestionSpecificMetricRubricTrait"]:
+        # Extract configuration from additionalProperty
+        metrics = []
+        repeated_extraction = True  # Default
+        evaluation_mode: Literal["tp_only", "full_matrix"] = "tp_only"  # Default for backward compatibility
+        tp_instructions = []
+        tn_instructions = []
+
+        if rating.additionalProperty:
+            for prop in rating.additionalProperty:
+                if prop.name == "metrics":
+                    try:
+                        metrics = json.loads(prop.value)
+                    except (json.JSONDecodeError, TypeError):
+                        metrics = prop.value if isinstance(prop.value, list) else []
+                elif prop.name == "repeated_extraction":
+                    repeated_extraction = prop.value
+                elif prop.name == "evaluation_mode":
+                    # Cast to Literal type for type safety
+                    evaluation_mode = cast(Literal["tp_only", "full_matrix"], prop.value)
+                elif prop.name == "tp_instructions":
+                    try:
+                        tp_instructions = json.loads(prop.value)
+                    except (json.JSONDecodeError, TypeError):
+                        tp_instructions = prop.value if isinstance(prop.value, list) else []
+                elif prop.name == "tn_instructions":
+                    try:
+                        tn_instructions = json.loads(prop.value)
+                    except (json.JSONDecodeError, TypeError):
+                        tn_instructions = prop.value if isinstance(prop.value, list) else []
+                # Note: fp_instructions and fn_instructions are no longer supported
+                # Old checkpoints with these fields will be ignored (backward compatibility)
+
+        return MetricRubricTrait(
+            name=rating.name,
+            description=rating.description,
+            evaluation_mode=evaluation_mode,
+            metrics=metrics,
+            tp_instructions=tp_instructions,
+            tn_instructions=tn_instructions,
+            repeated_extraction=repeated_extraction,
+        )
+
     # Check if it's a ManualRubricTrait
     if rating.additionalType in ["GlobalManualRubricTrait", "QuestionSpecificManualRubricTrait"]:
         return ManualRubricTrait(
@@ -199,7 +273,7 @@ def add_question_to_benchmark(
     raw_answer: str,
     answer_template: str,
     question_id: str | None = None,
-    question_rubric_traits: list[RubricTrait] | None = None,
+    question_rubric_traits: list[RubricTrait | ManualRubricTrait | MetricRubricTrait] | None = None,
     finished: bool = False,
     author: dict[str, Any] | None = None,
     sources: list[dict[str, Any]] | None = None,
@@ -304,7 +378,7 @@ def add_question_to_benchmark(
 
 def add_global_rubric_to_benchmark(
     benchmark: JsonLdCheckpoint,
-    rubric_traits: list[RubricTrait | ManualRubricTrait],
+    rubric_traits: list[RubricTrait | ManualRubricTrait | MetricRubricTrait],
 ) -> None:
     """
     Add global rubric traits to a benchmark.
@@ -371,7 +445,12 @@ def extract_questions_from_benchmark(
             question_rubric = [
                 convert_rating_to_rubric_trait(rating)
                 for rating in question.rating
-                if rating.additionalType == "QuestionSpecificRubricTrait"
+                if rating.additionalType
+                in [
+                    "QuestionSpecificRubricTrait",
+                    "QuestionSpecificManualRubricTrait",
+                    "QuestionSpecificMetricRubricTrait",
+                ]
             ]
 
         questions.append(
@@ -397,7 +476,7 @@ def extract_questions_from_benchmark(
 
 def extract_global_rubric_from_benchmark(
     benchmark: JsonLdCheckpoint,
-) -> list[RubricTrait | ManualRubricTrait] | None:
+) -> list[RubricTrait | ManualRubricTrait | MetricRubricTrait] | None:
     """
     Extract global rubric traits from a benchmark.
 
@@ -405,14 +484,14 @@ def extract_global_rubric_from_benchmark(
         benchmark: The benchmark to extract from
 
     Returns:
-        List of RubricTrait or ManualRubricTrait objects or None if no global rubric
+        List of RubricTrait, ManualRubricTrait, or MetricRubricTrait objects or None if no global rubric
     """
     if not benchmark.rating:
         return None
 
     traits = []
     for rating in benchmark.rating:
-        if rating.additionalType in ["GlobalRubricTrait", "GlobalManualRubricTrait"]:
+        if rating.additionalType in ["GlobalRubricTrait", "GlobalManualRubricTrait", "GlobalMetricRubricTrait"]:
             traits.append(convert_rating_to_rubric_trait(rating))
 
     return traits if traits else None
@@ -454,6 +533,10 @@ def validate_jsonld_benchmark(benchmark: JsonLdCheckpoint) -> tuple[bool, str]:
                         if rating.additionalType not in [
                             "GlobalRubricTrait",
                             "QuestionSpecificRubricTrait",
+                            "GlobalManualRubricTrait",
+                            "QuestionSpecificManualRubricTrait",
+                            "GlobalMetricRubricTrait",
+                            "QuestionSpecificMetricRubricTrait",
                         ]:
                             return (
                                 False,
@@ -463,10 +546,14 @@ def validate_jsonld_benchmark(benchmark: JsonLdCheckpoint) -> tuple[bool, str]:
         # Validate global ratings if present
         if benchmark.rating:
             for rating in benchmark.rating:
-                if rating.additionalType != "GlobalRubricTrait":
+                if rating.additionalType not in [
+                    "GlobalRubricTrait",
+                    "GlobalManualRubricTrait",
+                    "GlobalMetricRubricTrait",
+                ]:
                     return (
                         False,
-                        f"Dataset-level rating must be GlobalRubricTrait, got {rating.additionalType}",
+                        f"Dataset-level rating must be a global trait type, got {rating.additionalType}",
                     )
 
         return True, "Valid benchmark"

@@ -280,6 +280,10 @@ class VerificationResultModel(Base):
     deep_judgment_search_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     hallucination_risk_assessment: Mapped[dict[str, str] | None] = mapped_column(JSON, nullable=True)
 
+    # Metric trait evaluation metadata (confusion-matrix analysis)
+    metric_trait_confusion_lists: Mapped[dict[str, dict[str, list[str]]] | None] = mapped_column(JSON, nullable=True)
+    metric_trait_metrics: Mapped[dict[str, dict[str, float]] | None] = mapped_column(JSON, nullable=True)
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
 

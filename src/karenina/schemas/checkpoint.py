@@ -60,7 +60,10 @@ class SchemaOrgRating(BaseModel):
         "QuestionSpecificRubricTrait",
         "GlobalManualRubricTrait",
         "QuestionSpecificManualRubricTrait",
+        "GlobalMetricRubricTrait",
+        "QuestionSpecificMetricRubricTrait",
     ]
+    additionalProperty: list[SchemaOrgPropertyValue] | None = None  # For metric trait instructions
 
 
 # Schema.org SoftwareSourceCode for Pydantic templates

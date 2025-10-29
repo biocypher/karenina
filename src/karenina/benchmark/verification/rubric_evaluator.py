@@ -11,7 +11,7 @@ from typing import Any
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 from ...llm.interface import init_chat_model_unified
-from ...schemas.rubric_class import ManualRubricTrait, Rubric, RubricTrait
+from ...schemas.rubric_class import ManualRubricTrait, MetricRubricTrait, Rubric, RubricTrait
 from ..models import INTERFACES_NO_PROVIDER_REQUIRED, ModelConfig
 
 logger = logging.getLogger(__name__)
@@ -352,3 +352,390 @@ Please evaluate this answer for the trait "{trait.name}": {trait.description or 
             # Clamp score to valid range
             clamped_score = max(min_score, min(max_score, int(score)))
             return clamped_score
+
+    # ========== Metric Trait Evaluation Methods ==========
+
+    def evaluate_metric_traits(
+        self, question: str, answer: str, metric_traits: list[MetricRubricTrait]
+    ) -> tuple[dict[str, dict[str, list[str]]], dict[str, dict[str, float]]]:
+        """
+        Evaluate metric traits and return confusion lists and computed metrics.
+
+        Args:
+            question: The original question asked
+            answer: The LLM's response to evaluate
+            metric_traits: List of metric traits to evaluate
+
+        Returns:
+            Tuple of (confusion_lists, metrics) where:
+            - confusion_lists: {trait_name: {tp: [...], tn: [...], fp: [...], fn: [...]}}
+            - metrics: {trait_name: {precision: 0.85, recall: 0.92, ...}}
+
+        Raises:
+            Exception: If evaluation fails for all traits
+        """
+        confusion_lists: dict[str, dict[str, list[str]]] = {}
+        metrics: dict[str, dict[str, float]] = {}
+
+        for trait in metric_traits:
+            try:
+                trait_confusion, trait_metrics = self._evaluate_single_metric_trait(question, answer, trait)
+                confusion_lists[trait.name] = trait_confusion
+                metrics[trait.name] = trait_metrics
+            except Exception as e:
+                logger.warning(f"Failed to evaluate metric trait '{trait.name}': {e}")
+                # Store empty results for failed traits
+                confusion_lists[trait.name] = {"tp": [], "tn": [], "fp": [], "fn": []}
+                metrics[trait.name] = {}
+
+        return confusion_lists, metrics
+
+    def _evaluate_single_metric_trait(
+        self, question: str, answer: str, trait: MetricRubricTrait
+    ) -> tuple[dict[str, list[str]], dict[str, float]]:
+        """
+        Evaluate a single metric trait.
+
+        Args:
+            question: The original question
+            answer: The answer to evaluate
+            trait: The metric trait to evaluate
+
+        Returns:
+            Tuple of (confusion_lists, metrics)
+        """
+        # Build prompt
+        system_prompt = self._build_metric_trait_system_prompt()
+        user_prompt = self._build_metric_trait_user_prompt(question, answer, trait)
+
+        # Invoke LLM
+        messages: list[BaseMessage] = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
+        response = self.llm.invoke(messages)
+        raw_response = response.content if hasattr(response, "content") else str(response)
+
+        # Parse response to get confusion lists
+        confusion_lists = self._parse_metric_trait_response(raw_response, trait)
+
+        # Apply deduplication if requested
+        if trait.repeated_extraction:
+            confusion_lists = self._deduplicate_confusion_lists(confusion_lists)
+
+        # Compute metrics
+        computed_metrics = self._compute_metrics(
+            confusion_lists["tp"], confusion_lists["tn"], confusion_lists["fp"], confusion_lists["fn"], trait.metrics
+        )
+
+        return confusion_lists, computed_metrics
+
+    def _build_metric_trait_system_prompt(self) -> str:
+        """Build system prompt for metric trait evaluation."""
+        return """You are an expert evaluator performing confusion-matrix analysis on text responses.
+
+Your task is to analyze an answer and categorize its content based on provided instructions.
+
+**CONFUSION MATRIX CATEGORIES:**
+
+- **True Positive (TP)**: Content from the answer that SHOULD be present AND IS present
+  - Extract actual excerpts/terms from the answer that match TP instructions
+
+- **False Negative (FN)**: Content that SHOULD be present BUT IS NOT found in the answer
+  - List what is missing based on TP instructions
+
+- **True Negative (TN)**: Content that SHOULD NOT be present AND IS correctly absent
+  - List instructions that are correctly not mentioned in the answer
+
+- **False Positive (FP)**: Content from the answer that SHOULD NOT be present BUT IS present
+  - Extract actual excerpts/terms from the answer that should not be there
+
+**MATCHING CRITERIA:**
+
+1. **Exact matches**: If the instruction specifies an exact term, look for that exact term or very close variants
+2. **Semantic matches**: If the instruction describes a concept, accept semantically equivalent expressions
+3. **Synonyms**: Accept commonly recognized synonyms (e.g., "disease" and "illness", "tumor" and "neoplasm")
+4. **Case insensitive**: Ignore case differences unless specifically instructed otherwise
+5. **Partial matches**: If an answer contains a broader or narrower term than instructed, use your judgment:
+   - If instruction is "mention cancer" and answer says "lung cancer", count it as TP
+   - If instruction is "mention specific organ" and answer just says "organ", it may not fully satisfy the instruction
+
+**CRITICAL RULES:**
+
+- For TP and FP: Extract the ACTUAL text/excerpts FROM THE ANSWER (not the instruction text)
+- For FN and TN: Reference the instruction content (what should/shouldn't be there)
+- Be thorough but focused - extract key terms or short phrases, not full sentences
+- When in doubt, err on the side of being inclusive rather than overly strict
+- If something is ambiguous, include it and let the metrics reflect the ambiguity
+
+**OUTPUT FORMAT:**
+
+Return a JSON object with arrays for each category. Each array should contain strings (excerpts or descriptions)."""
+
+    def _build_metric_trait_user_prompt(self, question: str, answer: str, trait: MetricRubricTrait) -> str:
+        """Build user prompt for metric trait evaluation (mode-specific)."""
+        # Format TP instructions as numbered list
+        tp_instructions_formatted = "\n".join(
+            f"  {i}. {instruction}" for i, instruction in enumerate(trait.tp_instructions, 1)
+        )
+
+        # Build description line if present
+        description_line = f"Description: {trait.description}\n" if trait.description else ""
+
+        if trait.evaluation_mode == "tp_only":
+            return f"""Analyze the following answer for: **{trait.name}**
+{description_line}
+**EVALUATION TASK:**
+You are evaluating an answer against required content (TP instructions). Your job is to categorize content from the answer into:
+1. **True Positives (TP)**: Content that correctly matches TP instructions
+2. **False Negatives (FN)**: Required content from TP instructions that is missing
+3. **False Positives (FP)**: Content that LOOKS like it should match TP instructions but is actually incorrect
+
+**TRUE POSITIVE INSTRUCTIONS (required content):**
+{tp_instructions_formatted}
+
+**QUESTION:**
+{question}
+
+**ANSWER TO EVALUATE:**
+{answer}
+
+**EVALUATION GUIDELINES:**
+
+**For True Positives (TP):**
+- Extract actual terms/excerpts from the answer that match TP instructions
+- Accept exact matches, synonyms, and semantically equivalent expressions
+- Example: If TP instruction is "mention asthma" and answer says "asthma", extract "asthma"
+- Example: If TP instruction is "mention tumor" and answer says "neoplasm", extract "neoplasm" (synonym)
+
+**For False Negatives (FN):**
+- List the content from TP instructions that is NOT found in the answer
+- Reference the actual missing content
+- Example: If TP instruction is "mention pneumonia" but it's not in the answer, add "pneumonia"
+
+**For False Positives (FP):**
+- Extract terms from the answer that appear to be attempting to satisfy TP instructions but are actually INCORRECT
+- Focus on terms in the same domain/category as TP instructions that LOOK like valid answers but aren't
+- Example: If TP instructions ask for inflammatory lung diseases (asthma, bronchitis, pneumonia) but answer includes restrictive lung diseases (pulmonary fibrosis, sarcoidosis), those are FP
+- DO NOT include: generic filler text, explanations, or content clearly not attempting to match TP instructions
+- If unsure whether something is FP, consider: "Is this term in the same category as TP instructions but not actually correct?"
+
+**OUTPUT FORMAT:**
+
+Return ONLY a valid JSON object:
+{{"tp": [<excerpts from answer matching TP instructions>], "fn": [<missing TP instruction content>], "fp": [<incorrect terms from answer that look like TPs but aren't>]}}
+
+Example:
+{{"tp": ["asthma", "bronchitis"], "fn": ["pneumonia", "pleurisy"], "fp": ["pulmonary fibrosis", "emphysema", "sarcoidosis"]}}
+
+Your JSON response:"""
+
+        else:  # full_matrix mode
+            # Format TN instructions as numbered list
+            tn_instructions_formatted = "\n".join(
+                f"  {i}. {instruction}" for i, instruction in enumerate(trait.tn_instructions, 1)
+            )
+
+            return f"""Analyze the following answer for: **{trait.name}**
+{description_line}
+**EVALUATION TASK:**
+You are evaluating an answer against two instruction sets:
+- **TP instructions**: Content that SHOULD be present
+- **TN instructions**: Content that SHOULD NOT be present
+
+Categorize the answer content into four confusion matrix categories.
+
+**TRUE POSITIVE INSTRUCTIONS (what SHOULD be present):**
+{tp_instructions_formatted}
+
+**TRUE NEGATIVE INSTRUCTIONS (what SHOULD NOT be present):**
+{tn_instructions_formatted}
+
+**QUESTION:**
+{question}
+
+**ANSWER TO EVALUATE:**
+{answer}
+
+**EVALUATION GUIDELINES:**
+
+**For True Positives (TP):**
+- Extract actual terms/excerpts from the answer that match TP instructions
+- Accept exact matches, synonyms, and semantically equivalent expressions
+
+**For False Negatives (FN):**
+- List content from TP instructions that is NOT found in the answer
+- These are required items that are missing
+
+**For True Negatives (TN):**
+- List TN instructions that are correctly NOT present in the answer
+- Reference the instruction content
+- These represent unwanted content that is correctly absent
+
+**For False Positives (FP):**
+- Extract terms/excerpts from the answer that match TN instructions
+- These are items that SHOULD NOT be there but ARE present
+- Use the same matching criteria as TP (accept synonyms, etc.)
+
+**OUTPUT FORMAT:**
+
+Return ONLY a valid JSON object:
+{{"tp": [<excerpts matching TP instructions>], "fn": [<missing TP content>], "tn": [<TN instructions correctly absent>], "fp": [<excerpts matching TN instructions>]}}
+
+Example:
+{{"tp": ["asthma"], "fn": ["bronchitis"], "tn": ["pulmonary fibrosis"], "fp": ["emphysema"]}}
+
+Your JSON response:"""
+
+    def _parse_metric_trait_response(self, response: str, trait: MetricRubricTrait) -> dict[str, list[str]]:
+        """
+        Parse the LLM response to extract confusion lists.
+
+        Args:
+            response: Raw LLM response
+            trait: The metric trait being evaluated
+
+        Returns:
+            Dictionary with keys {tp, tn, fp, fn} and list values
+        """
+        # Try to extract JSON from response
+        json_match = re.search(r"\{.*\}", response, re.DOTALL)
+        if not json_match:
+            raise ValueError(f"No JSON found in metric trait response: {response[:200]}")
+
+        try:
+            result = json.loads(json_match.group())
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON in metric trait response: {e}") from e
+
+        # Initialize all buckets with empty lists
+        confusion_lists: dict[str, list[str]] = {"tp": [], "tn": [], "fp": [], "fn": []}
+
+        # Extract lists from response based on evaluation mode
+        if trait.evaluation_mode == "tp_only":
+            # TP-only mode: Extract TP, FN, FP (TN cannot be computed)
+            if "tp" in result:
+                confusion_lists["tp"] = result["tp"] if isinstance(result["tp"], list) else []
+            if "fn" in result:
+                confusion_lists["fn"] = result["fn"] if isinstance(result["fn"], list) else []
+            if "fp" in result:
+                confusion_lists["fp"] = result["fp"] if isinstance(result["fp"], list) else []
+            # TN remains empty (cannot be computed in tp_only mode)
+
+        else:  # full_matrix mode
+            # Full matrix mode: Extract all four buckets
+            if "tp" in result:
+                confusion_lists["tp"] = result["tp"] if isinstance(result["tp"], list) else []
+            if "fn" in result:
+                confusion_lists["fn"] = result["fn"] if isinstance(result["fn"], list) else []
+            if "tn" in result:
+                confusion_lists["tn"] = result["tn"] if isinstance(result["tn"], list) else []
+            if "fp" in result:
+                confusion_lists["fp"] = result["fp"] if isinstance(result["fp"], list) else []
+
+        return confusion_lists
+
+    def _deduplicate_confusion_lists(self, confusion_lists: dict[str, list[str]]) -> dict[str, list[str]]:
+        """
+        Deduplicate excerpts within each confusion list bucket.
+
+        Uses case-insensitive exact matching. Preserves the first occurrence of each unique excerpt.
+
+        Args:
+            confusion_lists: Dictionary of confusion matrix lists
+
+        Returns:
+            Dictionary with deduplicated lists
+        """
+        deduplicated = {}
+
+        for bucket, excerpts in confusion_lists.items():
+            deduplicated[bucket] = self._deduplicate_excerpts(excerpts)
+
+        return deduplicated
+
+    def _deduplicate_excerpts(self, excerpts: list[str]) -> list[str]:
+        """
+        Deduplicate a list of excerpts (case-insensitive exact matching).
+
+        Args:
+            excerpts: List of excerpt strings
+
+        Returns:
+            Deduplicated list preserving first occurrence order
+        """
+        seen_lower = set()
+        deduplicated = []
+
+        for excerpt in excerpts:
+            excerpt_lower = excerpt.lower().strip()
+            if excerpt_lower and excerpt_lower not in seen_lower:
+                seen_lower.add(excerpt_lower)
+                deduplicated.append(excerpt)
+
+        return deduplicated
+
+    def _compute_metrics(
+        self, tp: list[str], tn: list[str], fp: list[str], fn: list[str], requested_metrics: list[str]
+    ) -> dict[str, float]:
+        """
+        Compute classification metrics from confusion matrix lists.
+
+        Args:
+            tp: True positives list
+            tn: True negatives list
+            fp: False positives list
+            fn: False negatives list
+            requested_metrics: List of metric names to compute
+
+        Returns:
+            Dictionary mapping metric names to computed values
+        """
+        # Get counts
+        tp_count = len(tp)
+        tn_count = len(tn)
+        fp_count = len(fp)
+        fn_count = len(fn)
+
+        metrics = {}
+
+        for metric in requested_metrics:
+            try:
+                if metric == "precision":
+                    # Precision = TP / (TP + FP)
+                    denominator = tp_count + fp_count
+                    metrics["precision"] = tp_count / denominator if denominator > 0 else 0.0
+
+                elif metric == "recall":
+                    # Recall = TP / (TP + FN)
+                    denominator = tp_count + fn_count
+                    metrics["recall"] = tp_count / denominator if denominator > 0 else 0.0
+
+                elif metric == "specificity":
+                    # Specificity = TN / (TN + FP)
+                    denominator = tn_count + fp_count
+                    metrics["specificity"] = tn_count / denominator if denominator > 0 else 0.0
+
+                elif metric == "accuracy":
+                    # Accuracy = (TP + TN) / (TP + TN + FP + FN)
+                    denominator = tp_count + tn_count + fp_count + fn_count
+                    metrics["accuracy"] = (tp_count + tn_count) / denominator if denominator > 0 else 0.0
+
+                elif metric == "f1":
+                    # F1 = 2 * (Precision * Recall) / (Precision + Recall)
+                    precision_denom = tp_count + fp_count
+                    recall_denom = tp_count + fn_count
+
+                    if precision_denom > 0 and recall_denom > 0:
+                        precision = tp_count / precision_denom
+                        recall = tp_count / recall_denom
+
+                        if precision + recall > 0:
+                            metrics["f1"] = 2 * (precision * recall) / (precision + recall)
+                        else:
+                            metrics["f1"] = 0.0
+                    else:
+                        metrics["f1"] = 0.0
+
+            except Exception as e:
+                logger.warning(f"Failed to compute metric '{metric}': {e}")
+                metrics[metric] = 0.0
+
+        return metrics

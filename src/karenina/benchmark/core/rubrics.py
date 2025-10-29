@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from .base import BenchmarkBase
 
-from ...schemas.rubric_class import ManualRubricTrait, Rubric, RubricTrait
+from ...schemas.rubric_class import ManualRubricTrait, MetricRubricTrait, Rubric, RubricTrait
 from ...utils.checkpoint_converter import (
     add_global_rubric_to_benchmark,
     extract_global_rubric_from_benchmark,
@@ -253,12 +253,12 @@ class RubricManager:
         """Get list of question IDs that have question-specific rubrics."""
         return [q_id for q_id, q_data in self.base._questions_cache.items() if q_data.get("question_rubric")]
 
-    def set_global_rubric(self, traits: list[RubricTrait | ManualRubricTrait]) -> None:
+    def set_global_rubric(self, traits: list[RubricTrait | ManualRubricTrait | MetricRubricTrait]) -> None:
         """
         Set the global rubric with a list of traits.
 
         Args:
-            traits: List of rubric traits
+            traits: List of rubric traits (LLM, manual, or metric-based)
         """
         add_global_rubric_to_benchmark(self.base._checkpoint, traits)
 
