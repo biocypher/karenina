@@ -124,13 +124,15 @@ class TestParseTemplateStage:
         )
         mock_deep_judgment.return_value = (
             parsed_result,  # parsed_answer
-            {"result": "The answer is 4"},  # extracted_excerpts
+            {"result": [{"text": "The answer is 4", "confidence": "high"}]},  # extracted_excerpts
             {"result": "Basic arithmetic"},  # attribute_reasoning
-            ["excerpt_extraction", "attribute_parsing"],  # stages_completed
-            3,  # model_calls
-            0,  # excerpt_retry_count
-            [],  # attributes_without_excerpts
-            {},  # hallucination_risk_assessment
+            {  # dj_metadata dictionary
+                "stages_completed": ["excerpt_extraction", "attribute_parsing"],
+                "model_calls": 3,
+                "excerpt_retry_count": 0,
+                "attributes_without_excerpts": [],
+                "hallucination_risk": {},
+            },
         )
 
         # Execute stage

@@ -89,10 +89,11 @@ class TestRubricEvaluationStage:
 
         # Create rubric with metric traits
         metric_trait = MetricRubricTrait(
-            name="Token Count",
-            description="Count of tokens in response",
-            evaluation_mode="regex",
-            metrics=["\\w+"],
+            name="Accuracy Check",
+            description="Check accuracy metric",
+            evaluation_mode="tp_only",
+            tp_instructions=["State the answer is 'four'", "Provide reasoning"],
+            metrics=["precision", "recall"],
         )
         basic_context.rubric = Rubric(metric_traits=[metric_trait])
         basic_context.set_artifact("raw_llm_response", "The answer is four")
@@ -101,8 +102,8 @@ class TestRubricEvaluationStage:
         mock_evaluator = Mock()
         mock_evaluator_class.return_value = mock_evaluator
         mock_evaluator.evaluate_metric_traits.return_value = (
-            {"Token Count": ["The", "answer", "is", "four"]},  # confusion lists
-            {"Token Count": 4},  # metric results
+            {"Accuracy Check": {"tp": ["State the answer is 'four'"], "fn": [], "fp": []}},  # confusion lists
+            {"Accuracy Check": {"precision": 1.0, "recall": 0.5}},  # metric results
         )
 
         stage = RubricEvaluationStage()
@@ -111,7 +112,7 @@ class TestRubricEvaluationStage:
         # Verify metric evaluation
         assert basic_context.has_artifact("metric_confusion_lists")
         assert basic_context.has_artifact("metric_results")
-        assert basic_context.get_artifact("metric_results")["Token Count"] == 4
+        assert basic_context.get_artifact("metric_results")["Accuracy Check"]["precision"] == 1.0
 
     @patch("karenina.benchmark.verification.stages.rubric_evaluation.RubricEvaluator")
     def test_rubric_evaluation_with_error(
@@ -209,13 +210,18 @@ class TestFinalizeResultStage:
         basic_context.set_artifact("answering_model_str", "openai/gpt-4.1-mini")
         basic_context.set_artifact("parsing_model_str", "openai/gpt-4.1-mini")
 
+        # Set verify_result to capture the verification failure
+        basic_context.set_result_field("verify_result", False)
+        basic_context.set_result_field("embedding_check_performed", True)
+
         stage = FinalizeResultStage()
         stage.execute(basic_context)
         result = basic_context.get_artifact("final_result")
 
         # Verify result captures partial verification
         assert isinstance(result, VerificationResult)
-        assert result.completed_without_errors is False  # Field verification failed
+        assert result.completed_without_errors is True  # Pipeline completed successfully
+        assert result.verify_result is False  # But verification determined answer was wrong
         assert result.parsed_llm_response is not None
         assert result.embedding_check_performed is True
 
@@ -248,13 +254,17 @@ class TestFinalizeResultStage:
         # Set up deep-judgment verification
         parsed = MockAnswer(result=4, correct={"value": 4}, question_id="test_q123")
         basic_context.set_artifact("parsed_answer", parsed)
-        basic_context.set_artifact("raw_llm_response", "The answer is 4")
-        basic_context.set_artifact("field_verification_result", True)
-        basic_context.set_artifact("deep_judgment_performed", True)
-        basic_context.set_artifact("extracted_excerpts", {"result": "4"})
-        basic_context.set_artifact("deep_judgment_model_calls", 3)
         basic_context.set_artifact("answering_model_str", "openai/gpt-4.1-mini")
         basic_context.set_artifact("parsing_model_str", "openai/gpt-4.1-mini")
+
+        # Set result fields for deep-judgment metadata
+        basic_context.set_result_field("raw_llm_response", "The answer is 4")
+        basic_context.set_result_field("verify_result", True)
+        basic_context.set_result_field("deep_judgment_performed", True)
+        basic_context.set_result_field(
+            "extracted_excerpts", {"result": [{"text": "The answer is 4", "confidence": "high"}]}
+        )
+        basic_context.set_result_field("deep_judgment_model_calls", 3)
 
         stage = FinalizeResultStage()
         stage.execute(basic_context)
@@ -268,11 +278,13 @@ class TestFinalizeResultStage:
     def test_finalize_with_abstention(self, basic_context: VerificationContext) -> None:
         """Test finalization handles abstention detection."""
         # Set up abstention
-        basic_context.set_artifact("raw_llm_response", "I cannot answer this")
-        basic_context.set_artifact("abstention_detected", True)
-        basic_context.set_artifact("abstention_reason", "Explicit refusal")
         basic_context.set_artifact("answering_model_str", "openai/gpt-4.1-mini")
         basic_context.set_artifact("parsing_model_str", "openai/gpt-4.1-mini")
+
+        # Set result fields for abstention metadata
+        basic_context.set_result_field("raw_llm_response", "I cannot answer this")
+        basic_context.set_result_field("abstention_detected", True)
+        basic_context.set_result_field("abstention_reasoning", "Explicit refusal")
 
         stage = FinalizeResultStage()
         stage.execute(basic_context)

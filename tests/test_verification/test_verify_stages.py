@@ -129,6 +129,8 @@ class TestEmbeddingCheckStage:
         basic_context.set_artifact("parsed_answer", parsed)
         basic_context.set_artifact("field_verification_result", False)
         basic_context.set_artifact("raw_llm_response", "The answer is basically 4")
+        # Embedding check needs regex results to recalculate overall verification
+        basic_context.set_artifact("regex_verification_results", {"success": True})
 
         # Mock perform_embedding_check to return success
         # Returns: (should_override, similarity_score, embedding_model, embedding_performed)
@@ -202,7 +204,7 @@ class TestAbstentionCheckStage:
         basic_context.set_artifact("field_verification_result", False)
 
         # Mock abstention detection
-        # Returns: (check_performed, abstention_detected, reasoning)
+        # Returns: (abstention_detected, check_performed, reasoning)
         mock_detect.return_value = (True, True, "Explicit refusal detected")
 
         stage = AbstentionCheckStage()
@@ -224,8 +226,8 @@ class TestAbstentionCheckStage:
         basic_context.set_artifact("raw_llm_response", "The answer is 4")
 
         # Mock no abstention
-        # Returns: (check_performed, abstention_detected, reasoning)
-        mock_detect.return_value = (True, False, "")
+        # Returns: (abstention_detected, check_performed, reasoning)
+        mock_detect.return_value = (False, True, "")
 
         stage = AbstentionCheckStage()
         stage.execute(basic_context)
