@@ -3,6 +3,7 @@
 import pytest
 
 from karenina.benchmark.verification.search_tools import create_search_tool
+from karenina.schemas import SearchResultItem
 
 
 class TestFactoryFunction:
@@ -23,13 +24,21 @@ class TestFactoryFunction:
 
         search_tool = create_search_tool(my_search)
 
-        # Test single query
+        # Test single query - now returns list[SearchResultItem]
         result = search_tool("test query")
-        assert result == "Results for: test query"
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert isinstance(result[0], SearchResultItem)
+        assert result[0].content == "Results for: test query"
 
-        # Test batch queries
+        # Test batch queries - now returns list[list[SearchResultItem]]
         results = search_tool(["q1", "q2", "q3"])
-        assert results == ["Results for: q1", "Results for: q2", "Results for: q3"]
+        assert isinstance(results, list)
+        assert len(results) == 3
+        assert isinstance(results[0], list)
+        assert results[0][0].content == "Results for: q1"
+        assert results[1][0].content == "Results for: q2"
+        assert results[2][0].content == "Results for: q3"
 
     def test_factory_with_langchain_tool_invoke(self) -> None:
         """Test factory with langchain tool that has invoke() method."""
@@ -43,15 +52,18 @@ class TestFactoryFunction:
         tool = MockLangChainTool()
         search_tool = create_search_tool(tool)
 
-        # Test single query
+        # Test single query - returns list[SearchResultItem]
         result = search_tool("Python")
-        assert "Search results for: Python" in result
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert "Search results for: Python" in result[0].content
 
-        # Test batch queries
+        # Test batch queries - returns list[list[SearchResultItem]]
         results = search_tool(["q1", "q2"])
         assert isinstance(results, list)
         assert len(results) == 2
-        assert "Search results for: q1" in results[0]
+        assert isinstance(results[0], list)
+        assert "Search results for: q1" in results[0][0].content
 
     def test_factory_with_langchain_tool_run(self) -> None:
         """Test factory with legacy langchain tool that has run() method."""
@@ -66,7 +78,9 @@ class TestFactoryFunction:
         search_tool = create_search_tool(tool)
 
         result = search_tool("test")
-        assert "Legacy search: test" in result
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert "Legacy search: test" in result[0].content
 
     def test_factory_with_invalid_tool(self) -> None:
         """Test factory raises error for invalid tool."""
@@ -74,7 +88,7 @@ class TestFactoryFunction:
         class InvalidTool:
             pass
 
-        with pytest.raises(ValueError, match="must have 'invoke', 'run' method, or be callable"):
+        with pytest.raises(ValueError, match="must have 'invoke', 'run', 'ainvoke', 'arun' method, or be callable"):
             create_search_tool(InvalidTool())
 
     def test_wrapped_tool_handles_exceptions(self) -> None:
@@ -87,27 +101,33 @@ class TestFactoryFunction:
         tool = FailingTool()
         search_tool = create_search_tool(tool)
 
-        # Single query should return error message
+        # Single query should return empty list on error
         result = search_tool("test")
-        assert "Search failed" in result
+        assert isinstance(result, list)
+        assert len(result) == 0
 
-        # Batch queries should return error messages
+        # Batch queries should return empty lists for each query
         results = search_tool(["q1", "q2"])
+        assert isinstance(results, list)
         assert len(results) == 2
-        assert all("Search failed" in r for r in results)
+        assert all(isinstance(r, list) and len(r) == 0 for r in results)
 
     def test_wrapped_tool_handles_non_string_results(self) -> None:
         """Test wrapped tool handles non-string results."""
 
         class StructuredResultTool:
             def invoke(self, query: str) -> dict:  # noqa: ARG002
+                # Return dict in unrecognized format - should return empty list
                 return {"results": ["item1", "item2"]}
 
         tool = StructuredResultTool()
         search_tool = create_search_tool(tool)
 
+        # Dict is not in recognized format (not list of dicts), should return empty list
         result = search_tool("test")
-        assert "results" in result.lower()
+        assert isinstance(result, list)
+        # Unknown format returns empty list
+        assert len(result) == 0
 
     def test_factory_preserves_kwargs_for_builtin_tools(self) -> None:
         """Test factory passes kwargs to built-in tool constructors."""
@@ -143,8 +163,10 @@ class TestSearchToolInterface:
         search_tool = create_search_tool(mock_search)
 
         result = search_tool("single query")
-        assert isinstance(result, str)
-        assert result == "Result: single query"
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert isinstance(result[0], SearchResultItem)
+        assert result[0].content == "Result: single query"
 
     def test_search_tool_batch_queries(self) -> None:
         """Test search tool with list of queries."""
@@ -159,7 +181,11 @@ class TestSearchToolInterface:
         results = search_tool(["q1", "q2", "q3"])
         assert isinstance(results, list)
         assert len(results) == 3
-        assert results == ["Result: q1", "Result: q2", "Result: q3"]
+        # Each result is a list of SearchResultItem
+        assert isinstance(results[0], list)
+        assert results[0][0].content == "Result: q1"
+        assert results[1][0].content == "Result: q2"
+        assert results[2][0].content == "Result: q3"
 
     def test_search_tool_with_empty_list(self) -> None:
         """Test search tool with empty query list."""
