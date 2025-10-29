@@ -16,9 +16,9 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from karenina.benchmark.models import ModelConfig, VerificationResult
-from karenina.benchmark.verification.runner import (
-    run_single_model_verification,
-    run_single_model_verification_LEGACY,
+from karenina.benchmark.verification.runner import run_single_model_verification
+from karenina.benchmark.verification.runner_legacy import (
+    run_single_model_verification as run_single_model_verification_LEGACY,
 )
 from karenina.schemas.rubric_class import Rubric, RubricTrait
 
@@ -158,11 +158,11 @@ def compare_verification_results(
 class TestBasicRegression:
     """Basic regression tests for common verification scenarios."""
 
-    @patch("karenina.benchmark.verification.runner.init_chat_model_unified")
+    @patch("karenina.benchmark.verification.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
     def test_basic_template_verification_equivalence(
-        self, mock_parse_llm: Mock, mock_generate_llm: Mock, mock_runner_llm: Mock
+        self, mock_parse_llm: Mock, mock_generate_llm: Mock, mock_runner_legacy_llm: Mock
     ) -> None:
         """Test basic template verification produces identical results."""
         # Setup models
@@ -209,7 +209,7 @@ class TestBasicRegression:
         # Apply the same side_effect to all three patches
         mock_parse_llm.side_effect = mock_llm_side_effect
         mock_generate_llm.side_effect = mock_llm_side_effect
-        mock_runner_llm.side_effect = mock_llm_side_effect
+        mock_runner_legacy_llm.side_effect = mock_llm_side_effect
 
         # Template
         template_code = """class Answer(BaseAnswer):
@@ -243,14 +243,14 @@ class TestBasicRegression:
         assert new_result.completed_without_errors is True
 
     @patch("karenina.benchmark.verification.rubric_evaluator.RubricEvaluator")
-    @patch("karenina.benchmark.verification.runner.init_chat_model_unified")
+    @patch("karenina.benchmark.verification.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
     def test_template_with_rubric_equivalence(
         self,
         mock_parse_llm: Mock,
         mock_generate_llm: Mock,
-        mock_runner_llm: Mock,
+        mock_runner_legacy_llm: Mock,
         mock_evaluator_class: Mock,
     ) -> None:
         """Test template + rubric evaluation produces identical results."""
@@ -296,7 +296,7 @@ class TestBasicRegression:
         # Apply the same side_effect to all three patches
         mock_parse_llm.side_effect = mock_llm_side_effect
         mock_generate_llm.side_effect = mock_llm_side_effect
-        mock_runner_llm.side_effect = mock_llm_side_effect
+        mock_runner_legacy_llm.side_effect = mock_llm_side_effect
 
         # Mock rubric evaluator
         mock_evaluator = Mock()
@@ -349,11 +349,11 @@ class TestBasicRegression:
         assert new_result.verify_rubric is not None
         assert "Clarity" in new_result.verify_rubric
 
-    @patch("karenina.benchmark.verification.runner.init_chat_model_unified")
+    @patch("karenina.benchmark.verification.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
     def test_template_verification_failure_equivalence(
-        self, mock_parse_llm: Mock, mock_generate_llm: Mock, mock_runner_llm: Mock
+        self, mock_parse_llm: Mock, mock_generate_llm: Mock, mock_runner_legacy_llm: Mock
     ) -> None:
         """Test that verification failures produce identical results."""
         answering_model = ModelConfig(
@@ -397,7 +397,7 @@ class TestBasicRegression:
         # Apply the same side_effect to all three patches
         mock_parse_llm.side_effect = mock_llm_side_effect
         mock_generate_llm.side_effect = mock_llm_side_effect
-        mock_runner_llm.side_effect = mock_llm_side_effect
+        mock_runner_legacy_llm.side_effect = mock_llm_side_effect
 
         template_code = """class Answer(BaseAnswer):
     result: int = Field(description="The answer")
@@ -428,10 +428,12 @@ class TestBasicRegression:
         assert new_result.verify_result is False
         assert new_result.completed_without_errors is True  # Pipeline succeeded, answer was wrong
 
-    @patch("karenina.benchmark.verification.runner.init_chat_model_unified")
+    @patch("karenina.benchmark.verification.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
-    def test_error_case_equivalence(self, mock_parse_llm: Mock, mock_generate_llm: Mock, mock_runner_llm: Mock) -> None:
+    def test_error_case_equivalence(
+        self, mock_parse_llm: Mock, mock_generate_llm: Mock, mock_runner_legacy_llm: Mock
+    ) -> None:
         """Test that pipeline errors produce identical results."""
         answering_model = ModelConfig(
             id="test-answering",
@@ -455,7 +457,7 @@ class TestBasicRegression:
         mock_llm = Mock()
         mock_parse_llm.return_value = mock_llm
         mock_generate_llm.return_value = mock_llm
-        mock_runner_llm.return_value = mock_llm
+        mock_runner_legacy_llm.return_value = mock_llm
 
         # Invalid template (syntax error)
         template_code = """class Answer(BaseAnswer):
@@ -486,11 +488,11 @@ class TestBasicRegression:
         assert new_result.error is not None
         assert "Template validation failed" in new_result.error or "syntax" in new_result.error.lower()
 
-    @patch("karenina.benchmark.verification.runner.init_chat_model_unified")
+    @patch("karenina.benchmark.verification.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
     def test_few_shot_prompting_equivalence(
-        self, mock_parse_llm: Mock, mock_generate_llm: Mock, mock_runner_llm: Mock
+        self, mock_parse_llm: Mock, mock_generate_llm: Mock, mock_runner_legacy_llm: Mock
     ) -> None:
         """Test that few-shot prompting produces identical results."""
         answering_model = ModelConfig(
@@ -534,7 +536,7 @@ class TestBasicRegression:
         # Apply the same side_effect to all three patches
         mock_parse_llm.side_effect = mock_llm_side_effect
         mock_generate_llm.side_effect = mock_llm_side_effect
-        mock_runner_llm.side_effect = mock_llm_side_effect
+        mock_runner_legacy_llm.side_effect = mock_llm_side_effect
 
         template_code = """class Answer(BaseAnswer):
     result: int = Field(description="The sum")
@@ -574,18 +576,18 @@ class TestBasicRegression:
 class TestAdvancedRegression:
     """Advanced regression tests for complex features."""
 
-    @patch("karenina.benchmark.verification.runner.detect_abstention")
+    @patch("karenina.benchmark.verification.runner_legacy.detect_abstention")
     @patch("karenina.benchmark.verification.stages.abstention_check.detect_abstention")
-    @patch("karenina.benchmark.verification.runner.deep_judgment_parse")
+    @patch("karenina.benchmark.verification.runner_legacy.deep_judgment_parse")
     @patch("karenina.benchmark.verification.stages.parse_template.deep_judgment_parse")
-    @patch("karenina.benchmark.verification.runner.init_chat_model_unified")
+    @patch("karenina.benchmark.verification.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
     def test_deep_judgment_parsing_equivalence(
         self,
         mock_parse_llm: Mock,
         mock_generate_llm: Mock,
-        mock_runner_llm: Mock,
+        mock_runner_legacy_llm: Mock,
         mock_dj_stage: Mock,
         mock_dj_runner: Mock,
         mock_abstention_stage: Mock,
@@ -635,7 +637,7 @@ class TestAdvancedRegression:
         # Apply the same side_effect to all three patches
         mock_parse_llm.side_effect = mock_llm_side_effect
         mock_generate_llm.side_effect = mock_llm_side_effect
-        mock_runner_llm.side_effect = mock_llm_side_effect
+        mock_runner_legacy_llm.side_effect = mock_llm_side_effect
 
         # Mock abstention detection (required by DeepJudgmentAutoFail stage)
         # Returns: (abstention_detected, check_performed, reasoning)
@@ -716,16 +718,16 @@ class TestAdvancedRegression:
         assert new_result.deep_judgment_model_calls == 3
         assert new_result.verify_result is True
 
-    @patch("karenina.benchmark.verification.runner.detect_abstention")
+    @patch("karenina.benchmark.verification.runner_legacy.detect_abstention")
     @patch("karenina.benchmark.verification.stages.abstention_check.detect_abstention")
-    @patch("karenina.benchmark.verification.runner.init_chat_model_unified")
+    @patch("karenina.benchmark.verification.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
     def test_abstention_detection_equivalence(
         self,
         mock_parse_llm: Mock,
         mock_generate_llm: Mock,
-        mock_runner_llm: Mock,
+        mock_runner_legacy_llm: Mock,
         mock_abstention_stage: Mock,
         mock_abstention_runner: Mock,
     ) -> None:
@@ -771,7 +773,7 @@ class TestAdvancedRegression:
         # Apply the same side_effect to all three patches
         mock_parse_llm.side_effect = mock_llm_side_effect
         mock_generate_llm.side_effect = mock_llm_side_effect
-        mock_runner_llm.side_effect = mock_llm_side_effect
+        mock_runner_legacy_llm.side_effect = mock_llm_side_effect
 
         # Mock abstention detection to return detected
         # Returns: (abstention_detected, check_performed, reasoning)
@@ -813,16 +815,16 @@ class TestAdvancedRegression:
         # Verification should fail due to abstention
         assert new_result.verify_result is False
 
-    @patch("karenina.benchmark.verification.runner.perform_embedding_check")
+    @patch("karenina.benchmark.verification.runner_legacy.perform_embedding_check")
     @patch("karenina.benchmark.verification.stages.embedding_check.perform_embedding_check")
-    @patch("karenina.benchmark.verification.runner.init_chat_model_unified")
+    @patch("karenina.benchmark.verification.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
     def test_embedding_check_equivalence(
         self,
         mock_parse_llm: Mock,
         mock_generate_llm: Mock,
-        mock_runner_llm: Mock,
+        mock_runner_legacy_llm: Mock,
         mock_embedding_stage: Mock,
         mock_embedding_runner: Mock,
     ) -> None:
@@ -868,7 +870,7 @@ class TestAdvancedRegression:
         # Apply the same side_effect to all three patches
         mock_parse_llm.side_effect = mock_llm_side_effect
         mock_generate_llm.side_effect = mock_llm_side_effect
-        mock_runner_llm.side_effect = mock_llm_side_effect
+        mock_runner_legacy_llm.side_effect = mock_llm_side_effect
 
         # Mock embedding check to return override success
         # Returns: (should_override, similarity_score, model_name, check_performed)
@@ -918,14 +920,14 @@ class TestAdvancedRegression:
         pytest.skip("Metric trait evaluation is tested in combined features test")
 
     @patch("karenina.benchmark.verification.rubric_evaluator.RubricEvaluator")
-    @patch("karenina.benchmark.verification.runner.init_chat_model_unified")
+    @patch("karenina.benchmark.verification.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
     def test_all_features_combined_equivalence(
         self,
         mock_parse_llm: Mock,
         mock_generate_llm: Mock,
-        mock_runner_llm: Mock,
+        mock_runner_legacy_llm: Mock,
         mock_evaluator_class: Mock,
     ) -> None:
         """Test all features together produce identical results."""
@@ -970,7 +972,7 @@ class TestAdvancedRegression:
         # Apply the same side_effect to all three patches
         mock_parse_llm.side_effect = mock_llm_side_effect
         mock_generate_llm.side_effect = mock_llm_side_effect
-        mock_runner_llm.side_effect = mock_llm_side_effect
+        mock_runner_legacy_llm.side_effect = mock_llm_side_effect
 
         # Mock rubric evaluator for both trait types
         mock_evaluator = Mock()
@@ -1069,11 +1071,11 @@ class TestAdvancedRegression:
 class TestEdgeCaseRegression:
     """Edge case regression tests."""
 
-    @patch("karenina.benchmark.verification.runner.init_chat_model_unified")
+    @patch("karenina.benchmark.verification.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
     def test_empty_response_equivalence(
-        self, mock_parse_llm: Mock, mock_generate_llm: Mock, mock_runner_llm: Mock
+        self, mock_parse_llm: Mock, mock_generate_llm: Mock, mock_runner_legacy_llm: Mock
     ) -> None:
         """Test empty LLM responses produce identical results."""
         answering_model = ModelConfig(
@@ -1104,7 +1106,7 @@ class TestEdgeCaseRegression:
         # Apply the same side_effect to all three patches
         mock_parse_llm.side_effect = mock_llm_side_effect
         mock_generate_llm.side_effect = mock_llm_side_effect
-        mock_runner_llm.side_effect = mock_llm_side_effect
+        mock_runner_legacy_llm.side_effect = mock_llm_side_effect
 
         template_code = """class Answer(BaseAnswer):
     result: int = Field(description="The answer")
@@ -1135,11 +1137,11 @@ class TestEdgeCaseRegression:
         assert new_result.completed_without_errors is False
         assert new_result.error is not None
 
-    @patch("karenina.benchmark.verification.runner.init_chat_model_unified")
+    @patch("karenina.benchmark.verification.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
     def test_parsing_failure_equivalence(
-        self, mock_parse_llm: Mock, mock_generate_llm: Mock, mock_runner_llm: Mock
+        self, mock_parse_llm: Mock, mock_generate_llm: Mock, mock_runner_legacy_llm: Mock
     ) -> None:
         """Test parsing failures produce identical results."""
         answering_model = ModelConfig(
@@ -1183,7 +1185,7 @@ class TestEdgeCaseRegression:
         # Apply the same side_effect to all three patches
         mock_parse_llm.side_effect = mock_llm_side_effect
         mock_generate_llm.side_effect = mock_llm_side_effect
-        mock_runner_llm.side_effect = mock_llm_side_effect
+        mock_runner_legacy_llm.side_effect = mock_llm_side_effect
 
         template_code = """class Answer(BaseAnswer):
     result: int = Field(description="The answer")
@@ -1215,11 +1217,11 @@ class TestEdgeCaseRegression:
         assert new_result.error is not None
         assert "Parsing failed" in new_result.error or "parsing" in new_result.error.lower()
 
-    @patch("karenina.benchmark.verification.runner.init_chat_model_unified")
+    @patch("karenina.benchmark.verification.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
     def test_invalid_template_equivalence(
-        self, mock_parse_llm: Mock, mock_generate_llm: Mock, mock_runner_llm: Mock
+        self, mock_parse_llm: Mock, mock_generate_llm: Mock, mock_runner_legacy_llm: Mock
     ) -> None:
         """Test invalid templates produce identical results."""
         answering_model = ModelConfig(
@@ -1243,7 +1245,7 @@ class TestEdgeCaseRegression:
         mock_llm = Mock()
         mock_parse_llm.return_value = mock_llm
         mock_generate_llm.return_value = mock_llm
-        mock_runner_llm.return_value = mock_llm
+        mock_runner_legacy_llm.return_value = mock_llm
 
         # Template with wrong base class (not BaseAnswer)
         template_code = """class Answer:  # Missing BaseAnswer inheritance!
@@ -1277,11 +1279,11 @@ class TestEdgeCaseRegression:
         # Both should have the same error about invalid template
         assert new_result.error == legacy_result.error
 
-    @patch("karenina.benchmark.verification.runner.init_chat_model_unified")
+    @patch("karenina.benchmark.verification.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
     def test_recursion_limit_equivalence(
-        self, mock_parse_llm: Mock, mock_generate_llm: Mock, mock_runner_llm: Mock
+        self, mock_parse_llm: Mock, mock_generate_llm: Mock, mock_runner_legacy_llm: Mock
     ) -> None:
         """Test recursion limit handling produces identical results."""
         answering_model = ModelConfig(
@@ -1326,7 +1328,7 @@ class TestEdgeCaseRegression:
         # Apply the same side_effect to all three patches
         mock_parse_llm.side_effect = mock_llm_side_effect
         mock_generate_llm.side_effect = mock_llm_side_effect
-        mock_runner_llm.side_effect = mock_llm_side_effect
+        mock_runner_legacy_llm.side_effect = mock_llm_side_effect
 
         template_code = """class Answer(BaseAnswer):
     result: int = Field(description="The answer")
@@ -1360,10 +1362,12 @@ class TestEdgeCaseRegression:
         assert new_result.completed_without_errors is True
         assert legacy_result.completed_without_errors is True
 
-    @patch("karenina.benchmark.verification.runner.init_chat_model_unified")
+    @patch("karenina.benchmark.verification.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
-    def test_mcp_agent_equivalence(self, mock_parse_llm: Mock, mock_generate_llm: Mock, mock_runner_llm: Mock) -> None:
+    def test_mcp_agent_equivalence(
+        self, mock_parse_llm: Mock, mock_generate_llm: Mock, mock_runner_legacy_llm: Mock
+    ) -> None:
         """Test MCP agent calls produce identical results."""
         # Create answering model with MCP configuration
         answering_model = ModelConfig(
@@ -1414,7 +1418,7 @@ class TestEdgeCaseRegression:
         # Apply the same side_effect to all three patches
         mock_parse_llm.side_effect = mock_llm_side_effect
         mock_generate_llm.side_effect = mock_llm_side_effect
-        mock_runner_llm.side_effect = mock_llm_side_effect
+        mock_runner_legacy_llm.side_effect = mock_llm_side_effect
 
         template_code = """class Answer(BaseAnswer):
     result: int = Field(description="The answer")
