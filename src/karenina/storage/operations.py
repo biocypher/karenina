@@ -542,8 +542,10 @@ def _create_result_model(run_id: str, result: "VerificationResult") -> Verificat
         raw_llm_response=result.raw_llm_response,
         parsed_gt_response=result.parsed_gt_response,
         parsed_llm_response=result.parsed_llm_response,
+        template_verification_performed=result.template_verification_performed,
         verify_result=result.verify_result,
         verify_granular_result=result.verify_granular_result,
+        rubric_evaluation_performed=result.rubric_evaluation_performed,
         verify_rubric=result.verify_rubric,
         evaluation_rubric=result.evaluation_rubric,
         keywords=result.keywords,
@@ -597,8 +599,10 @@ def _update_result_model(model: VerificationResultModel, result: "VerificationRe
     model.raw_llm_response = result.raw_llm_response
     model.parsed_gt_response = result.parsed_gt_response
     model.parsed_llm_response = result.parsed_llm_response
+    model.template_verification_performed = result.template_verification_performed
     model.verify_result = result.verify_result
     model.verify_granular_result = result.verify_granular_result
+    model.rubric_evaluation_performed = result.rubric_evaluation_performed
     model.verify_rubric = result.verify_rubric
     model.evaluation_rubric = result.evaluation_rubric
     model.keywords = result.keywords
@@ -649,8 +653,10 @@ def _model_to_verification_result(model: VerificationResultModel) -> "Verificati
         raw_llm_response=model.raw_llm_response,
         parsed_gt_response=model.parsed_gt_response,
         parsed_llm_response=model.parsed_llm_response,
+        template_verification_performed=model.template_verification_performed,
         verify_result=model.verify_result,
         verify_granular_result=model.verify_granular_result,
+        rubric_evaluation_performed=model.rubric_evaluation_performed,
         verify_rubric=model.verify_rubric,
         evaluation_rubric=model.evaluation_rubric,
         keywords=model.keywords,
