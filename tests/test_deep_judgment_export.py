@@ -10,7 +10,7 @@ from datetime import datetime
 from io import StringIO
 
 from karenina.benchmark.exporter import export_verification_results_csv, export_verification_results_json
-from karenina.benchmark.models import ModelConfig, VerificationConfig, VerificationJob, VerificationResult
+from karenina.schemas import ModelConfig, VerificationConfig, VerificationJob, VerificationResult
 
 
 def test_deep_judgment_in_json_export():

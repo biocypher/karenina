@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from karenina.schemas.rubric_class import ManualRubricTrait, Rubric
+from karenina.schemas.domain import ManualRubricTrait, Rubric
 
 
 class TestManualRubricTrait:
@@ -192,7 +192,7 @@ class TestRubricWithManualTraits:
 
     def test_rubric_with_manual_traits(self) -> None:
         """Test creating rubric with manual traits."""
-        from karenina.schemas.rubric_class import RubricTrait
+        from karenina.schemas.domain import RubricTrait
 
         llm_trait = RubricTrait(name="accuracy", description="Accurate?", kind="boolean")
         manual_trait = ManualRubricTrait(name="has_number", pattern=r"\d+")
@@ -210,7 +210,7 @@ class TestRubricWithManualTraits:
 
     def test_rubric_validation_with_manual_traits(self) -> None:
         """Test validation of evaluation results with manual traits."""
-        from karenina.schemas.rubric_class import RubricTrait
+        from karenina.schemas.domain import RubricTrait
 
         llm_trait = RubricTrait(name="score", kind="score", min_score=1, max_score=5)
         manual_trait = ManualRubricTrait(name="has_keyword", pattern=r"keyword")
@@ -242,7 +242,7 @@ class TestMergeRubricsWithManualTraits:
 
     def test_merge_rubrics_with_manual_traits(self) -> None:
         """Test merging rubrics that contain manual traits."""
-        from karenina.schemas.rubric_class import RubricTrait, merge_rubrics
+        from karenina.schemas.domain import RubricTrait, merge_rubrics
 
         # Global rubric with both types
         global_llm = RubricTrait(name="accuracy", kind="boolean")
@@ -264,7 +264,7 @@ class TestMergeRubricsWithManualTraits:
 
     def test_merge_rubrics_name_conflicts_across_types(self) -> None:
         """Test that name conflicts are detected across trait types."""
-        from karenina.schemas.rubric_class import RubricTrait, merge_rubrics
+        from karenina.schemas.domain import RubricTrait, merge_rubrics
 
         # Create conflict: same name in LLM and manual traits
         global_llm = RubricTrait(name="quality", kind="boolean")
@@ -278,7 +278,7 @@ class TestMergeRubricsWithManualTraits:
 
     def test_merge_empty_rubrics_with_manual_traits(self) -> None:
         """Test merging when one rubric has only manual traits."""
-        from karenina.schemas.rubric_class import merge_rubrics
+        from karenina.schemas.domain import merge_rubrics
 
         manual_trait = ManualRubricTrait(name="has_keyword", pattern=r"important")
         manual_only_rubric = Rubric(manual_traits=[manual_trait])

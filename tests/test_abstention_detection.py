@@ -4,12 +4,12 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from karenina.benchmark.models import ModelConfig, VerificationResult
-from karenina.benchmark.verification.abstention_checker import (
-    _strip_markdown_fences,
+from karenina.benchmark.verification.evaluators.abstention_checker import (
     detect_abstention,
     is_retryable_error,
 )
+from karenina.benchmark.verification.utils.parsing import _strip_markdown_fences
+from karenina.schemas import ModelConfig, VerificationResult
 
 
 class TestStripMarkdownFences:
@@ -97,7 +97,9 @@ class TestDetectAbstention:
     def test_detect_abstention_with_refusal(self, parsing_model):
         """Test abstention detection with a clear refusal."""
         # Mock the LLM to return abstention detected
-        with patch("karenina.benchmark.verification.abstention_checker.init_chat_model_unified") as mock_init:
+        with patch(
+            "karenina.benchmark.verification.evaluators.abstention_checker.init_chat_model_unified"
+        ) as mock_init:
             mock_llm = Mock()
             mock_response = Mock()
             mock_response.content = '{"abstention_detected": true, "reasoning": "Model refused to answer"}'
@@ -115,7 +117,9 @@ class TestDetectAbstention:
 
     def test_detect_abstention_with_genuine_answer(self, parsing_model):
         """Test abstention detection with a genuine answer."""
-        with patch("karenina.benchmark.verification.abstention_checker.init_chat_model_unified") as mock_init:
+        with patch(
+            "karenina.benchmark.verification.evaluators.abstention_checker.init_chat_model_unified"
+        ) as mock_init:
             mock_llm = Mock()
             mock_response = Mock()
             mock_response.content = '{"abstention_detected": false, "reasoning": "Model provided substantive answer"}'
@@ -133,7 +137,9 @@ class TestDetectAbstention:
 
     def test_detect_abstention_with_markdown_fences(self, parsing_model):
         """Test abstention detection with markdown-fenced JSON response."""
-        with patch("karenina.benchmark.verification.abstention_checker.init_chat_model_unified") as mock_init:
+        with patch(
+            "karenina.benchmark.verification.evaluators.abstention_checker.init_chat_model_unified"
+        ) as mock_init:
             mock_llm = Mock()
             mock_response = Mock()
             mock_response.content = '```json\n{"abstention_detected": true, "reasoning": "Clear refusal"}\n```'
@@ -151,7 +157,9 @@ class TestDetectAbstention:
 
     def test_detect_abstention_with_json_parse_error(self, parsing_model):
         """Test abstention detection with invalid JSON response."""
-        with patch("karenina.benchmark.verification.abstention_checker.init_chat_model_unified") as mock_init:
+        with patch(
+            "karenina.benchmark.verification.evaluators.abstention_checker.init_chat_model_unified"
+        ) as mock_init:
             mock_llm = Mock()
             mock_response = Mock()
             mock_response.content = "This is not valid JSON"
@@ -170,7 +178,9 @@ class TestDetectAbstention:
 
     def test_detect_abstention_with_retryable_error(self, parsing_model):
         """Test abstention detection with retryable error (should retry)."""
-        with patch("karenina.benchmark.verification.abstention_checker.init_chat_model_unified") as mock_init:
+        with patch(
+            "karenina.benchmark.verification.evaluators.abstention_checker.init_chat_model_unified"
+        ) as mock_init:
             mock_llm = Mock()
             # First call: retryable error, second call: success
             mock_llm.invoke.side_effect = [
@@ -192,7 +202,9 @@ class TestDetectAbstention:
 
     def test_detect_abstention_with_non_retryable_error(self, parsing_model):
         """Test abstention detection with non-retryable error (should not retry)."""
-        with patch("karenina.benchmark.verification.abstention_checker.init_chat_model_unified") as mock_init:
+        with patch(
+            "karenina.benchmark.verification.evaluators.abstention_checker.init_chat_model_unified"
+        ) as mock_init:
             mock_llm = Mock()
             mock_llm.invoke.side_effect = ValueError("Invalid input format")
             mock_init.return_value = mock_llm
@@ -214,7 +226,7 @@ class TestAbstentionIntegrationWithOrchestrator:
 
     def test_abstention_parameter_propagation(self):
         """Test that abstention_enabled parameter propagates through the orchestrator."""
-        from karenina.benchmark.verification.orchestrator import _create_verification_task
+        from karenina.benchmark.verification.multi_model_orchestrator import _create_verification_task
 
         task = _create_verification_task(
             question_id="test-q-123",
@@ -238,7 +250,7 @@ class TestAbstentionIntegrationWithOrchestrator:
 
     def test_abstention_parameter_default_false(self):
         """Test that abstention_enabled defaults to False."""
-        from karenina.benchmark.verification.orchestrator import _create_verification_task
+        from karenina.benchmark.verification.multi_model_orchestrator import _create_verification_task
 
         task = _create_verification_task(
             question_id="test-q-123",
@@ -266,7 +278,7 @@ class TestAbstentionPrompts:
 
     def test_abstention_prompts_exist(self):
         """Test that abstention prompts are defined."""
-        from karenina.prompts.abstention_detection import (
+        from karenina.benchmark.verification.utils.prompts import (
             ABSTENTION_DETECTION_SYS,
             ABSTENTION_DETECTION_USER,
         )
@@ -278,7 +290,7 @@ class TestAbstentionPrompts:
 
     def test_abstention_system_prompt_content(self):
         """Test that system prompt contains key instructions."""
-        from karenina.prompts.abstention_detection import ABSTENTION_DETECTION_SYS
+        from karenina.benchmark.verification.utils.prompts import ABSTENTION_DETECTION_SYS
 
         # Check for key elements
         assert "<role>" in ABSTENTION_DETECTION_SYS
@@ -288,7 +300,7 @@ class TestAbstentionPrompts:
 
     def test_abstention_user_prompt_format(self):
         """Test that user prompt has correct format placeholders."""
-        from karenina.prompts.abstention_detection import ABSTENTION_DETECTION_USER
+        from karenina.benchmark.verification.utils.prompts import ABSTENTION_DETECTION_USER
 
         assert "{question}" in ABSTENTION_DETECTION_USER
         assert "{response}" in ABSTENTION_DETECTION_USER
@@ -299,7 +311,7 @@ class TestVerificationConfigAbstention:
 
     def test_verification_config_has_abstention_field(self):
         """Test that VerificationConfig has abstention_enabled field."""
-        from karenina.benchmark.models import ModelConfig, VerificationConfig
+        from karenina.schemas import ModelConfig, VerificationConfig
 
         parsing_model = ModelConfig(
             id="parser",
@@ -315,7 +327,7 @@ class TestVerificationConfigAbstention:
 
     def test_verification_config_abstention_enabled(self):
         """Test setting abstention_enabled to True."""
-        from karenina.benchmark.models import ModelConfig, VerificationConfig
+        from karenina.schemas import ModelConfig, VerificationConfig
 
         parsing_model = ModelConfig(
             id="parser",
@@ -338,7 +350,7 @@ class TestVerificationResultAbstention:
         result = VerificationResult(
             question_id="test-id",
             template_id="test-template-id",
-            success=True,
+            completed_without_errors=True,
             question_text="Test question?",
             raw_llm_response="Test response",
             answering_model="openai/gpt-4o-mini",
@@ -357,7 +369,7 @@ class TestVerificationResultAbstention:
         result = VerificationResult(
             question_id="test-id",
             template_id="test-template-id",
-            success=True,
+            completed_without_errors=True,
             question_text="Test question?",
             raw_llm_response="Test response",
             answering_model="openai/gpt-4o-mini",
@@ -376,7 +388,7 @@ class TestVerificationResultAbstention:
         result = VerificationResult(
             question_id="test-id",
             template_id="test-template-id",
-            success=True,
+            completed_without_errors=True,
             question_text="Test question?",
             raw_llm_response="Test response",
             answering_model="openai/gpt-4o-mini",

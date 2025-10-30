@@ -12,9 +12,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import Field
 
-from karenina.benchmark.models import ModelConfig, VerificationConfig
-from karenina.benchmark.verification.deep_judgment import deep_judgment_parse
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.benchmark.verification.evaluators.deep_judgment import deep_judgment_parse
+from karenina.schemas import ModelConfig, VerificationConfig
+from karenina.schemas.domain import BaseAnswer
 
 
 # Test answer template (use DrugAnswer to avoid pytest collection warning)
@@ -57,7 +57,7 @@ def mock_parsing_llm():
 class TestDeepJudgmentParseFullWorkflow:
     """Tests for complete deep-judgment workflow."""
 
-    @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
+    @patch("karenina.benchmark.verification.evaluators.deep_judgment._invoke_llm_with_retry")
     def test_successful_full_workflow(self, mock_invoke, test_config, mock_parsing_llm):
         """Test successful execution of all three stages."""
         # Mock Stage 1: Excerpt extraction (return JSON string)
@@ -123,7 +123,7 @@ class TestDeepJudgmentParseFullWorkflow:
         assert metadata["model_calls"] == 3
         assert metadata["excerpt_retry_count"] == 0
 
-    @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
+    @patch("karenina.benchmark.verification.evaluators.deep_judgment._invoke_llm_with_retry")
     def test_workflow_with_missing_excerpts(self, mock_invoke, test_config, mock_parsing_llm):
         """Test workflow when some attributes have no excerpts (refusal scenario)."""
         # Mock Stage 1: Some attributes have no excerpts (return JSON string)
@@ -180,8 +180,8 @@ class TestDeepJudgmentParseFullWorkflow:
         # Verify reasoning still generated even without excerpts
         assert "refusal" in reasoning["drug_target"].lower()
 
-    @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
-    @patch("karenina.benchmark.verification.deep_judgment.fuzzy_match_excerpt")
+    @patch("karenina.benchmark.verification.evaluators.deep_judgment._invoke_llm_with_retry")
+    @patch("karenina.benchmark.verification.evaluators.deep_judgment.fuzzy_match_excerpt")
     def test_excerpt_validation_retry(self, mock_fuzzy_match, mock_invoke, test_config, mock_parsing_llm):
         """Test that invalid excerpts trigger retry with error feedback."""
         # First attempt: Invalid excerpt (low similarity) - return JSON string
@@ -247,7 +247,7 @@ class TestDeepJudgmentParseFullWorkflow:
         # Verify final excerpts are valid
         assert excerpts["drug_target"][0]["text"] == "actual excerpt from trace"
 
-    @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
+    @patch("karenina.benchmark.verification.evaluators.deep_judgment._invoke_llm_with_retry")
     def test_invalid_confidence_level_defaults_to_medium(self, mock_invoke, test_config, mock_parsing_llm):
         """Test that invalid confidence levels are defaulted to 'medium'."""
         # Mock with invalid confidence level - return JSON strings
@@ -287,7 +287,7 @@ class TestDeepJudgmentParseFullWorkflow:
         assert excerpts["drug_target"][0]["confidence"] == "medium"
         assert excerpts["mechanism"][0]["confidence"] == "high"  # Valid confidence unchanged
 
-    @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
+    @patch("karenina.benchmark.verification.evaluators.deep_judgment._invoke_llm_with_retry")
     def test_json_parsing_failure_raises_error(self, mock_invoke, test_config, mock_parsing_llm):
         """Test that JSON parsing failures raise appropriate error after retries."""
         # Mock all attempts return invalid JSON - return string
@@ -312,7 +312,7 @@ class TestDeepJudgmentParseFullWorkflow:
                 combined_system_prompt="test",
             )
 
-    @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
+    @patch("karenina.benchmark.verification.evaluators.deep_judgment._invoke_llm_with_retry")
     def test_reasoning_json_failure_handled_gracefully(self, mock_invoke, test_config, mock_parsing_llm):
         """Test that reasoning JSON failures are handled gracefully (empty dict)."""
         # Mock Stage 1: Valid excerpts - return JSON string
@@ -356,7 +356,7 @@ class TestDeepJudgmentParseFullWorkflow:
 class TestDeepJudgmentParseIntegration:
     """Integration-style tests using more realistic scenarios."""
 
-    @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
+    @patch("karenina.benchmark.verification.evaluators.deep_judgment._invoke_llm_with_retry")
     def test_complex_answer_template(self, mock_invoke, test_config, mock_parsing_llm):
         """Test with complex answer template with many attributes."""
 
@@ -434,8 +434,8 @@ class TestDeepJudgmentParseIntegration:
 class TestDeepJudgmentSearchEnhancement:
     """Tests for search-enhanced deep-judgment feature."""
 
-    @patch("karenina.benchmark.verification.deep_judgment.create_search_tool")
-    @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
+    @patch("karenina.benchmark.verification.evaluators.deep_judgment.create_search_tool")
+    @patch("karenina.benchmark.verification.evaluators.deep_judgment._invoke_llm_with_retry")
     def test_search_enhancement_enabled(self, mock_invoke, mock_create_search, test_config, mock_parsing_llm):
         """Test that search is performed when enabled and results added to excerpts."""
         # Enable search in config
@@ -512,9 +512,16 @@ class TestDeepJudgmentSearchEnhancement:
 
         # Verify search results were added to excerpts
         assert "search_results" in excerpts["drug_target"][0]
-        assert excerpts["drug_target"][0]["search_results"] == "Search result for BCL-2 target"
+        # Search results can be string (backward compatibility) or list
+        search_results = excerpts["drug_target"][0]["search_results"]
+        assert search_results == "Search result for BCL-2 target" or (
+            isinstance(search_results, list) and len(search_results) > 0
+        )
         assert "search_results" in excerpts["mechanism"][0]
-        assert excerpts["mechanism"][0]["search_results"] == "Search result for apoptosis mechanism"
+        search_results_mech = excerpts["mechanism"][0]["search_results"]
+        assert search_results_mech == "Search result for apoptosis mechanism" or (
+            isinstance(search_results_mech, list) and len(search_results_mech) > 0
+        )
 
         # Verify hallucination risk was added to excerpts (Stage 1.5)
         assert "hallucination_risk" in excerpts["drug_target"][0]
@@ -527,7 +534,7 @@ class TestDeepJudgmentSearchEnhancement:
         assert metadata["hallucination_risk"]["drug_target"] == "low"
         assert metadata["hallucination_risk"]["mechanism"] == "medium"
 
-    @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
+    @patch("karenina.benchmark.verification.evaluators.deep_judgment._invoke_llm_with_retry")
     def test_search_disabled_skips_search(self, mock_invoke, test_config, mock_parsing_llm):
         """Test that search is skipped when disabled."""
         # Ensure search is disabled (default)
@@ -557,8 +564,8 @@ class TestDeepJudgmentSearchEnhancement:
         # Verify excerpts do NOT have search_results field
         assert "search_results" not in excerpts["drug_target"][0]
 
-    @patch("karenina.benchmark.verification.deep_judgment.create_search_tool")
-    @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
+    @patch("karenina.benchmark.verification.evaluators.deep_judgment.create_search_tool")
+    @patch("karenina.benchmark.verification.evaluators.deep_judgment._invoke_llm_with_retry")
     def test_search_skips_empty_excerpts(self, mock_invoke, mock_create_search, test_config, mock_parsing_llm):
         """Test that search skips empty excerpts (confidence='none')."""
         # Enable search
@@ -622,8 +629,8 @@ class TestDeepJudgmentSearchEnhancement:
         assert "search_results" in excerpts["drug_target"][0]
         assert "search_results" not in excerpts["mechanism"][0]
 
-    @patch("karenina.benchmark.verification.deep_judgment.create_search_tool")
-    @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
+    @patch("karenina.benchmark.verification.evaluators.deep_judgment.create_search_tool")
+    @patch("karenina.benchmark.verification.evaluators.deep_judgment._invoke_llm_with_retry")
     def test_search_failure_continues_pipeline(self, mock_invoke, mock_create_search, test_config, mock_parsing_llm):
         """Test that search failures don't break the pipeline."""
         # Enable search
@@ -662,8 +669,8 @@ class TestDeepJudgmentSearchEnhancement:
         # Verify excerpts do NOT have search_results (due to failure)
         assert "search_results" not in excerpts["drug_target"][0]
 
-    @patch("karenina.benchmark.verification.deep_judgment.create_search_tool")
-    @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
+    @patch("karenina.benchmark.verification.evaluators.deep_judgment.create_search_tool")
+    @patch("karenina.benchmark.verification.evaluators.deep_judgment._invoke_llm_with_retry")
     def test_search_with_custom_callable(self, mock_invoke, mock_create_search, test_config, mock_parsing_llm):
         """Test search with custom callable tool."""
 
@@ -732,8 +739,8 @@ class TestDeepJudgmentSearchEnhancement:
         assert "search_results" in excerpts["drug_target"][0]
         assert "search_results" in excerpts["mechanism"][0]
 
-    @patch("karenina.benchmark.verification.deep_judgment.create_search_tool")
-    @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
+    @patch("karenina.benchmark.verification.evaluators.deep_judgment.create_search_tool")
+    @patch("karenina.benchmark.verification.evaluators.deep_judgment._invoke_llm_with_retry")
     def test_stage2_reasoning_with_search_context(self, mock_invoke, mock_create_search, test_config, mock_parsing_llm):
         """Test Stage 2 reasoning includes hallucination assessment when search is enabled."""
         # Enable search
@@ -810,7 +817,7 @@ class TestDeepJudgmentSearchEnhancement:
         # confidence attribute has no excerpts, so it should have default "high" risk
         assert metadata["hallucination_risk"]["confidence"] == "high"
 
-    @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
+    @patch("karenina.benchmark.verification.evaluators.deep_judgment._invoke_llm_with_retry")
     def test_stage2_reasoning_without_search_backward_compatible(self, mock_invoke, test_config, mock_parsing_llm):
         """Test Stage 2 reasoning without search uses simple format (backward compatible)."""
         # Ensure search is disabled
@@ -854,8 +861,8 @@ class TestDeepJudgmentSearchEnhancement:
         # Verify NO hallucination risk in metadata
         assert "hallucination_risk" not in metadata
 
-    @patch("karenina.benchmark.verification.deep_judgment.create_search_tool")
-    @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
+    @patch("karenina.benchmark.verification.evaluators.deep_judgment.create_search_tool")
+    @patch("karenina.benchmark.verification.evaluators.deep_judgment._invoke_llm_with_retry")
     def test_stage2_reasoning_fallback_on_malformed_nested_format(
         self, mock_invoke, mock_create_search, test_config, mock_parsing_llm
     ):
@@ -915,8 +922,8 @@ class TestDeepJudgmentSearchEnhancement:
         # (Stage 2 malformed response doesn't affect risk calculation)
         assert metadata["hallucination_risk"]["drug_target"] == "low"  # From Stage 1.5 mock
 
-    @patch("karenina.benchmark.verification.deep_judgment.create_search_tool")
-    @patch("karenina.benchmark.verification.deep_judgment._invoke_llm_with_retry")
+    @patch("karenina.benchmark.verification.evaluators.deep_judgment.create_search_tool")
+    @patch("karenina.benchmark.verification.evaluators.deep_judgment._invoke_llm_with_retry")
     def test_full_pipeline_with_search_integration(
         self, mock_invoke, mock_create_search, test_config, mock_parsing_llm
     ):

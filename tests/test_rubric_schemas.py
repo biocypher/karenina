@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from karenina.schemas.rubric_class import Rubric, RubricEvaluation, RubricTrait
+from karenina.schemas.domain import Rubric, RubricEvaluation, RubricTrait
 
 
 class TestRubricTrait:

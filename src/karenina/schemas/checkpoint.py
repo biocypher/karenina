@@ -10,7 +10,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from .rubric_class import RubricTrait
+from .domain import RubricTrait
 
 
 # Schema.org Person type

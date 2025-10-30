@@ -1,8 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from karenina.schemas.answer_class import BaseAnswer
-from karenina.schemas.question_class import Question
+from karenina.schemas.domain import BaseAnswer, Question
 
 
 def test_question_schema() -> None:

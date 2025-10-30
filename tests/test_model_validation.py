@@ -2,7 +2,7 @@
 
 import pytest
 
-from karenina.benchmark.models import (
+from karenina.schemas import (
     INTERFACE_LANGCHAIN,
     INTERFACE_MANUAL,
     INTERFACE_OPENROUTER,
@@ -245,6 +245,7 @@ class TestModelConfigurationValidation:
                 )
             ],
             rubric_enabled=True,
+            evaluation_mode="template_and_rubric",
             replicate_count=3,
         )
 

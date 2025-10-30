@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 from pydantic import Field
 
-from karenina.schemas.answer_class import BaseAnswer, capture_answer_source
+from karenina.schemas.domain import BaseAnswer, capture_answer_source
 
 
 class TestNotebookSourceCapture:

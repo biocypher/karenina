@@ -5,11 +5,11 @@ from typing import Literal
 import pytest
 from pydantic import Field
 
-from karenina.benchmark.verification.template_utils import (
+from karenina.benchmark.verification.utils.parsing import (
     create_test_instance_from_answer_class,
     extract_ground_truth_from_template_code,
 )
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 
 
 class TestTemplateUtils:

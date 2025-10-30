@@ -9,10 +9,10 @@ if TYPE_CHECKING:
     from .results import ResultsManager
     from .rubrics import RubricManager
 
-from ...utils.checkpoint_converter import generate_template_id
-from ..models import VerificationConfig, VerificationResult
-from ..verification.orchestrator import run_question_verification
-from ..verification.validation import validate_answer_template
+from ...schemas.workflow import VerificationConfig, VerificationResult
+from ...utils.checkpoint import generate_template_id
+from ..verification.multi_model_orchestrator import run_question_verification
+from ..verification.utils.validation import validate_answer_template
 
 
 class VerificationManager:

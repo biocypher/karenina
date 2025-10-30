@@ -6,7 +6,7 @@ from pathlib import Path
 
 from pydantic import Field
 
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 
 
 class TestBaseAnswerSourceCode:
@@ -253,7 +253,7 @@ class TestAnswerSourceCodeIntegration:
 
     def test_validation_system_preserves_source_code(self) -> None:
         """Test that the validation system preserves source code."""
-        from karenina.benchmark.verification.validation import validate_answer_template
+        from karenina.benchmark.verification.utils.validation import validate_answer_template
 
         template_code = '''
 from pydantic import Field
@@ -280,7 +280,7 @@ class Answer(BaseAnswer):
 
     def test_template_utils_preserves_source_code(self) -> None:
         """Test that template utils preserve source code."""
-        from karenina.benchmark.verification.template_utils import extract_ground_truth_from_template_code
+        from karenina.benchmark.verification.utils.parsing import extract_ground_truth_from_template_code
 
         template_code = '''
 from pydantic import Field
@@ -356,7 +356,7 @@ class Answer(BaseAnswer):
 
         try:
             # Import here to avoid circular imports
-            from karenina.answers.reader import read_answer_templates
+            from karenina.domain.answers.reader import read_answer_templates
 
             # This function uses exec internally and should preserve source code
             answer_dict = read_answer_templates(temp_path)

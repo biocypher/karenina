@@ -4,9 +4,9 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from karenina.benchmark.models import ModelConfig, VerificationConfig
-from karenina.benchmark.verification.runner import _construct_few_shot_prompt
-from karenina.schemas.question_class import Question
+from karenina.benchmark.verification.verification_utils import _construct_few_shot_prompt
+from karenina.schemas import ModelConfig, VerificationConfig
+from karenina.schemas.domain import Question
 
 
 class TestFewShotPromptConstruction:

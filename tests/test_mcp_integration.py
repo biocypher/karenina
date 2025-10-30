@@ -5,12 +5,12 @@ from unittest.mock import Mock, patch
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
-from karenina.benchmark.models import ModelConfig
-from karenina.llm.interface import ChatSession, call_model, chat_sessions, init_chat_model_unified
-from karenina.llm.mcp_utils import (
+from karenina.infrastructure.llm.interface import ChatSession, call_model, chat_sessions, init_chat_model_unified
+from karenina.infrastructure.llm.mcp_utils import (
     harmonize_agent_response,
     sync_create_mcp_client_and_tools,
 )
+from karenina.schemas import ModelConfig
 
 
 class TestHarmonizeAgentResponse:
@@ -226,7 +226,10 @@ class TestMCPUtilities:
         mock_client = Mock()
         mock_tools = [Mock(), Mock()]
 
-        with patch("karenina.llm.mcp_utils.create_mcp_client_and_tools"), patch("asyncio.run") as mock_run:
+        with (
+            patch("karenina.infrastructure.llm.mcp_utils.create_mcp_client_and_tools"),
+            patch("asyncio.run") as mock_run,
+        ):
             mock_run.return_value = (mock_client, mock_tools)
 
             client, tools = sync_create_mcp_client_and_tools({"test": "http://example.com"})
@@ -244,7 +247,7 @@ class TestInitChatModelUnifiedWithMCP:
 
     def test_init_without_mcp_returns_base_model(self) -> None:
         """Test that without MCP URLs, function returns base model."""
-        with patch("karenina.llm.interface.init_chat_model") as mock_init:
+        with patch("karenina.infrastructure.llm.interface.init_chat_model") as mock_init:
             mock_model = Mock()
             mock_init.return_value = mock_model
 
@@ -267,8 +270,11 @@ class TestInitChatModelUnifiedWithMCP:
         mock_tools = [Mock(), Mock()]
 
         with (
-            patch("karenina.llm.interface.init_chat_model", return_value=mock_base_model),
-            patch("karenina.llm.mcp_utils.sync_create_mcp_client_and_tools", return_value=(Mock(), mock_tools)),
+            patch("karenina.infrastructure.llm.interface.init_chat_model", return_value=mock_base_model),
+            patch(
+                "karenina.infrastructure.llm.mcp_utils.sync_create_mcp_client_and_tools",
+                return_value=(Mock(), mock_tools),
+            ),
             patch("langgraph.prebuilt.create_react_agent", return_value=mock_agent),
         ):
             result = init_chat_model_unified(
@@ -279,7 +285,7 @@ class TestInitChatModelUnifiedWithMCP:
 
     def test_init_with_mcp_missing_dependencies_raises_error(self) -> None:
         """Test that missing dependencies raise ImportError."""
-        with patch("karenina.llm.interface.init_chat_model", return_value=Mock()):
+        with patch("karenina.infrastructure.llm.interface.init_chat_model", return_value=Mock()):
             # Import error will be raised naturally when langgraph is not available
             # For this test, we'll just verify the base functionality works
             pass
@@ -287,9 +293,10 @@ class TestInitChatModelUnifiedWithMCP:
     def test_init_with_mcp_client_creation_error(self) -> None:
         """Test error handling during MCP client creation."""
         with (
-            patch("karenina.llm.interface.init_chat_model", return_value=Mock()),
+            patch("karenina.infrastructure.llm.interface.init_chat_model", return_value=Mock()),
             patch(
-                "karenina.llm.mcp_utils.sync_create_mcp_client_and_tools", side_effect=Exception("Connection failed")
+                "karenina.infrastructure.llm.mcp_utils.sync_create_mcp_client_and_tools",
+                side_effect=Exception("Connection failed"),
             ),
             pytest.raises(Exception, match="Failed to create MCP-enabled agent"),
         ):
@@ -323,7 +330,7 @@ class TestChatSessionWithMCP:
         )
 
         mock_agent = Mock()
-        with patch("karenina.llm.interface.init_chat_model_unified", return_value=mock_agent):
+        with patch("karenina.infrastructure.llm.interface.init_chat_model_unified", return_value=mock_agent):
             session.initialize_llm()
 
             assert session.llm == mock_agent
@@ -341,7 +348,7 @@ class TestChatSessionWithMCP:
         async_mock = AsyncMock(return_value=mock_response)
         mock_agent.ainvoke = async_mock
 
-        with patch("karenina.llm.interface.init_chat_model_unified", return_value=mock_agent):
+        with patch("karenina.infrastructure.llm.interface.init_chat_model_unified", return_value=mock_agent):
             response = call_model(
                 model="gpt-4.1-mini",
                 provider="openai",
@@ -424,7 +431,10 @@ class TestToolFiltering:
         mock_tool3.name = "unwanted_tool"
         all_tools = [mock_tool1, mock_tool2, mock_tool3]
 
-        with patch("karenina.llm.mcp_utils.create_mcp_client_and_tools"), patch("asyncio.run") as mock_run:
+        with (
+            patch("karenina.infrastructure.llm.mcp_utils.create_mcp_client_and_tools"),
+            patch("asyncio.run") as mock_run,
+        ):
             mock_client = Mock()
             # Simulate filtering inside the async function
             filtered_tools = [tool for tool in all_tools if tool.name in self.tool_filter]
@@ -452,9 +462,10 @@ class TestToolFiltering:
         filtered_tools = [mock_tool1, mock_tool2]
 
         with (
-            patch("karenina.llm.interface.init_chat_model", return_value=mock_base_model),
+            patch("karenina.infrastructure.llm.interface.init_chat_model", return_value=mock_base_model),
             patch(
-                "karenina.llm.mcp_utils.sync_create_mcp_client_and_tools", return_value=(Mock(), filtered_tools)
+                "karenina.infrastructure.llm.mcp_utils.sync_create_mcp_client_and_tools",
+                return_value=(Mock(), filtered_tools),
             ) as mock_sync,
             patch("langgraph.prebuilt.create_react_agent", return_value=mock_agent),
         ):
@@ -507,7 +518,7 @@ class TestToolFiltering:
         async_mock = AsyncMock(return_value=mock_response)
         mock_agent.ainvoke = async_mock
 
-        with patch("karenina.llm.interface.init_chat_model_unified", return_value=mock_agent):
+        with patch("karenina.infrastructure.llm.interface.init_chat_model_unified", return_value=mock_agent):
             response = call_model(
                 model="gpt-4.1-mini",
                 provider="openai",
@@ -530,7 +541,10 @@ class TestToolFiltering:
         mock_tool3.name = "tool3"
         all_tools = [mock_tool1, mock_tool2, mock_tool3]
 
-        with patch("karenina.llm.mcp_utils.create_mcp_client_and_tools"), patch("asyncio.run") as mock_run:
+        with (
+            patch("karenina.infrastructure.llm.mcp_utils.create_mcp_client_and_tools"),
+            patch("asyncio.run") as mock_run,
+        ):
             mock_client = Mock()
             mock_run.return_value = (mock_client, all_tools)
 
@@ -545,7 +559,10 @@ class TestToolFiltering:
         mock_tool1 = Mock()
         mock_tool1.name = "tool1"
 
-        with patch("karenina.llm.mcp_utils.create_mcp_client_and_tools"), patch("asyncio.run") as mock_run:
+        with (
+            patch("karenina.infrastructure.llm.mcp_utils.create_mcp_client_and_tools"),
+            patch("asyncio.run") as mock_run,
+        ):
             mock_client = Mock()
             # Simulate empty filter behavior
             mock_run.return_value = (mock_client, [])
@@ -560,7 +577,10 @@ class TestToolFiltering:
         mock_tool1 = Mock()
         mock_tool1.name = "existing_tool"
 
-        with patch("karenina.llm.mcp_utils.create_mcp_client_and_tools"), patch("asyncio.run") as mock_run:
+        with (
+            patch("karenina.infrastructure.llm.mcp_utils.create_mcp_client_and_tools"),
+            patch("asyncio.run") as mock_run,
+        ):
             mock_client = Mock()
             # Simulate filtering with nonexistent tool names
             mock_run.return_value = (mock_client, [])
