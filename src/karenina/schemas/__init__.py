@@ -34,6 +34,7 @@ from .domain import (
     RubricTrait,
     TraitKind,
     capture_answer_source,
+    merge_rubrics,
 )
 
 # Shared models
@@ -68,6 +69,7 @@ __all__ = [
     "MetricRubricTrait",
     "RubricEvaluation",
     "TraitKind",
+    "merge_rubrics",
     # Workflow models
     "ModelConfig",
     "FewShotConfig",
