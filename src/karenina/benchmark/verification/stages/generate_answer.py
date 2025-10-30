@@ -10,6 +10,7 @@ from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 from ....infrastructure.llm.interface import init_chat_model_unified
 from ..stage import BaseVerificationStage, VerificationContext
+from ..utils import UsageTracker
 from ..verification_utils import _construct_few_shot_prompt, _invoke_llm_with_retry, _is_valid_md5_hash
 
 # Set up logger
@@ -159,10 +160,24 @@ class GenerateAnswerStage(BaseVerificationStage):
         # Step 4: Invoke LLM with retry logic
         recursion_limit_reached = False
 
+        # Initialize usage tracker for this stage
+        usage_tracker = UsageTracker()
+
         try:
             # Use retry-wrapped invocation
             is_agent = answering_model.mcp_urls_dict is not None
-            response, recursion_limit_reached = _invoke_llm_with_retry(answering_llm, messages, is_agent)
+            response, recursion_limit_reached, usage_metadata, agent_metrics = _invoke_llm_with_retry(
+                answering_llm, messages, is_agent
+            )
+
+            # Track usage metadata
+            if usage_metadata:
+                usage_tracker.track_call("answer_generation", answering_model_str, usage_metadata)
+
+            # Track agent metrics if this was an MCP agent
+            if is_agent and agent_metrics:
+                # Store agent metrics in tracker for aggregation in final result
+                usage_tracker.set_agent_metrics(agent_metrics)
 
             # Process response based on type
             if is_agent:
@@ -200,6 +215,9 @@ class GenerateAnswerStage(BaseVerificationStage):
         # Store results
         context.set_artifact("raw_llm_response", raw_llm_response)
         context.set_artifact("recursion_limit_reached", recursion_limit_reached)
+
+        # Store usage tracker for next stages to continue tracking
+        context.set_artifact("usage_tracker", usage_tracker)
 
         # Also store in result builder for easy access
         context.set_result_field("raw_llm_response", raw_llm_response)

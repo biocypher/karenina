@@ -8,6 +8,7 @@ import re
 from collections.abc import Callable
 from typing import Any
 
+from langchain_core.callbacks import get_usage_metadata_callback
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 from ....infrastructure.llm.interface import init_chat_model_unified
@@ -61,7 +62,9 @@ class RubricEvaluator:
         except Exception as e:
             raise RuntimeError(f"Failed to initialize LLM for rubric evaluation: {e}") from e
 
-    def evaluate_rubric(self, question: str, answer: str, rubric: Rubric) -> dict[str, int | bool]:
+    def evaluate_rubric(
+        self, question: str, answer: str, rubric: Rubric
+    ) -> tuple[dict[str, int | bool], list[dict[str, Any]]]:
         """
         Evaluate an answer against a rubric's traits (both LLM and manual).
 
@@ -71,12 +74,15 @@ class RubricEvaluator:
             rubric: The rubric containing evaluation traits
 
         Returns:
-            Dictionary mapping trait names to their evaluated scores
+            Tuple of (results, usage_metadata_list) where:
+            - results: Dictionary mapping trait names to their evaluated scores
+            - usage_metadata_list: List of usage metadata dicts from LLM calls
 
         Raises:
             Exception: If evaluation fails completely
         """
         results: dict[str, int | bool] = {}
+        usage_metadata_list: list[dict[str, Any]] = []
 
         # Evaluate manual traits first (these are faster and deterministic)
         if rubric.manual_traits:
@@ -87,20 +93,23 @@ class RubricEvaluator:
         if rubric.traits:
             try:
                 # Try batch evaluation first (more efficient)
-                llm_results = self._evaluate_batch(question, answer, rubric)
+                llm_results, usage_metadata = self._evaluate_batch(question, answer, rubric)
                 results.update(llm_results)
+                if usage_metadata:
+                    usage_metadata_list.append(usage_metadata)
             except Exception as batch_error:
                 # Fallback to sequential evaluation
                 try:
-                    llm_results = self._evaluate_sequential(question, answer, rubric)
+                    llm_results, seq_usage_metadata_list = self._evaluate_sequential(question, answer, rubric)
                     results.update(llm_results)
+                    usage_metadata_list.extend(seq_usage_metadata_list)
                 except Exception as seq_error:
                     # Log both errors and raise the sequential one
                     logger.error(f"Batch evaluation failed: {batch_error}")
                     logger.error(f"Sequential evaluation failed: {seq_error}")
                     raise seq_error
 
-        return results
+        return results, usage_metadata_list
 
     def register_callable(self, name: str, func: Callable[[str], bool]) -> None:
         """
@@ -152,50 +161,77 @@ class RubricEvaluator:
 
         return results
 
-    def _evaluate_batch(self, question: str, answer: str, rubric: Rubric) -> dict[str, int | bool]:
+    def _evaluate_batch(
+        self, question: str, answer: str, rubric: Rubric
+    ) -> tuple[dict[str, int | bool], dict[str, Any]]:
         """
         Evaluate all traits in a single LLM call (more efficient).
+
+        Returns:
+            Tuple of (results_dict, usage_metadata)
         """
         system_prompt = self._build_batch_system_prompt()
         user_prompt = self._build_batch_user_prompt(question, answer, rubric.traits)
 
         messages: list[BaseMessage] = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
 
-        response = self.llm.invoke(messages)
+        # Wrap invoke with usage metadata callback
+        with get_usage_metadata_callback() as cb:
+            response = self.llm.invoke(messages)
+        usage_metadata = dict(cb.usage_metadata) if cb.usage_metadata else {}
+
         raw_response = response.content if hasattr(response, "content") else str(response)
 
-        return self._parse_batch_response(raw_response, rubric.traits)
+        results = self._parse_batch_response(raw_response, rubric.traits)
+        return results, usage_metadata
 
-    def _evaluate_sequential(self, question: str, answer: str, rubric: Rubric) -> dict[str, int | bool]:
+    def _evaluate_sequential(
+        self, question: str, answer: str, rubric: Rubric
+    ) -> tuple[dict[str, int | bool], list[dict[str, Any]]]:
         """
         Evaluate traits one by one (fallback method).
+
+        Returns:
+            Tuple of (results_dict, list_of_usage_metadata)
         """
         results = {}
+        usage_metadata_list = []
 
         for trait in rubric.traits:
             try:
-                score = self._evaluate_single_trait(question, answer, trait)
+                score, usage_metadata = self._evaluate_single_trait(question, answer, trait)
                 results[trait.name] = score
+                usage_metadata_list.append(usage_metadata)
             except Exception as e:
                 logger.warning(f"Failed to evaluate trait '{trait.name}': {e}")
                 # Continue with other traits, mark this one as None
                 results[trait.name] = None  # type: ignore[assignment]
 
-        return results
+        return results, usage_metadata_list
 
-    def _evaluate_single_trait(self, question: str, answer: str, trait: RubricTrait) -> int | bool:
+    def _evaluate_single_trait(
+        self, question: str, answer: str, trait: RubricTrait
+    ) -> tuple[int | bool, dict[str, Any]]:
         """
         Evaluate a single trait.
+
+        Returns:
+            Tuple of (score, usage_metadata)
         """
         system_prompt = self._build_single_trait_system_prompt(trait)
         user_prompt = self._build_single_trait_user_prompt(question, answer, trait)
 
         messages: list[BaseMessage] = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
 
-        response = self.llm.invoke(messages)
+        # Wrap invoke with usage metadata callback
+        with get_usage_metadata_callback() as cb:
+            response = self.llm.invoke(messages)
+        usage_metadata = dict(cb.usage_metadata) if cb.usage_metadata else {}
+
         raw_response = response.content if hasattr(response, "content") else str(response)
 
-        return self._parse_single_trait_response(raw_response, trait)
+        score = self._parse_single_trait_response(raw_response, trait)
+        return score, usage_metadata
 
     def _build_batch_system_prompt(self) -> str:
         """Build system prompt for batch evaluation."""
@@ -357,7 +393,7 @@ Please evaluate this answer for the trait "{trait.name}": {trait.description or 
 
     def evaluate_metric_traits(
         self, question: str, answer: str, metric_traits: list[MetricRubricTrait]
-    ) -> tuple[dict[str, dict[str, list[str]]], dict[str, dict[str, float]]]:
+    ) -> tuple[dict[str, dict[str, list[str]]], dict[str, dict[str, float]], list[dict[str, Any]]]:
         """
         Evaluate metric traits and return confusion lists and computed metrics.
 
@@ -367,32 +403,38 @@ Please evaluate this answer for the trait "{trait.name}": {trait.description or 
             metric_traits: List of metric traits to evaluate
 
         Returns:
-            Tuple of (confusion_lists, metrics) where:
+            Tuple of (confusion_lists, metrics, usage_metadata_list) where:
             - confusion_lists: {trait_name: {tp: [...], tn: [...], fp: [...], fn: [...]}}
             - metrics: {trait_name: {precision: 0.85, recall: 0.92, ...}}
+            - usage_metadata_list: List of usage metadata dicts from LLM calls
 
         Raises:
             Exception: If evaluation fails for all traits
         """
         confusion_lists: dict[str, dict[str, list[str]]] = {}
         metrics: dict[str, dict[str, float]] = {}
+        usage_metadata_list: list[dict[str, Any]] = []
 
         for trait in metric_traits:
             try:
-                trait_confusion, trait_metrics = self._evaluate_single_metric_trait(question, answer, trait)
+                trait_confusion, trait_metrics, usage_metadata = self._evaluate_single_metric_trait(
+                    question, answer, trait
+                )
                 confusion_lists[trait.name] = trait_confusion
                 metrics[trait.name] = trait_metrics
+                if usage_metadata:
+                    usage_metadata_list.append(usage_metadata)
             except Exception as e:
                 logger.warning(f"Failed to evaluate metric trait '{trait.name}': {e}")
                 # Store empty results for failed traits
                 confusion_lists[trait.name] = {"tp": [], "tn": [], "fp": [], "fn": []}
                 metrics[trait.name] = {}
 
-        return confusion_lists, metrics
+        return confusion_lists, metrics, usage_metadata_list
 
     def _evaluate_single_metric_trait(
         self, question: str, answer: str, trait: MetricRubricTrait
-    ) -> tuple[dict[str, list[str]], dict[str, float]]:
+    ) -> tuple[dict[str, list[str]], dict[str, float], dict[str, Any]]:
         """
         Evaluate a single metric trait.
 
@@ -402,15 +444,20 @@ Please evaluate this answer for the trait "{trait.name}": {trait.description or 
             trait: The metric trait to evaluate
 
         Returns:
-            Tuple of (confusion_lists, metrics)
+            Tuple of (confusion_lists, metrics, usage_metadata)
         """
         # Build prompt
         system_prompt = self._build_metric_trait_system_prompt()
         user_prompt = self._build_metric_trait_user_prompt(question, answer, trait)
 
-        # Invoke LLM
+        # Invoke LLM with usage tracking
+        from langchain_core.callbacks import get_usage_metadata_callback
+
         messages: list[BaseMessage] = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
-        response = self.llm.invoke(messages)
+        with get_usage_metadata_callback() as cb:
+            response = self.llm.invoke(messages)
+        usage_metadata = dict(cb.usage_metadata) if cb.usage_metadata else {}
+
         raw_response = response.content if hasattr(response, "content") else str(response)
 
         # Parse response to get confusion lists
@@ -425,7 +472,7 @@ Please evaluate this answer for the trait "{trait.name}": {trait.description or 
             confusion_lists["tp"], confusion_lists["tn"], confusion_lists["fp"], confusion_lists["fn"], trait.metrics
         )
 
-        return confusion_lists, computed_metrics
+        return confusion_lists, computed_metrics, usage_metadata
 
     def _build_metric_trait_system_prompt(self) -> str:
         """Build system prompt for metric trait evaluation."""

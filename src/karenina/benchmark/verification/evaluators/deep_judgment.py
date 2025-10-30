@@ -183,8 +183,9 @@ Return JSON format:
 
         # Invoke parsing model with excerpt-specific system prompt
         messages = [SystemMessage(content=excerpt_system_prompt), HumanMessage(content=excerpt_prompt)]
-        raw_response = _invoke_llm_with_retry(parsing_llm, messages)
+        raw_response, _, usage_metadata, _ = _invoke_llm_with_retry(parsing_llm, messages, is_agent=False)
         model_calls += 1
+        # TODO: Aggregate usage_metadata in Phase 4
         cleaned_response = _strip_markdown_fences(raw_response)
 
         try:
@@ -435,8 +436,9 @@ Return JSON format with assessments for ALL excerpts:
             messages = [SystemMessage(content=assessment_system_prompt), HumanMessage(content=assessment_prompt)]
 
             try:
-                raw_response = _invoke_llm_with_retry(parsing_llm, messages)
+                raw_response, _, usage_metadata, _ = _invoke_llm_with_retry(parsing_llm, messages, is_agent=False)
                 model_calls += 1
+                # TODO: Aggregate usage_metadata in Phase 4
                 cleaned_response = _strip_markdown_fences(raw_response)
                 assessment_data = {} if cleaned_response is None else json.loads(cleaned_response)
 
@@ -572,8 +574,9 @@ Return JSON format with ONLY the attributes listed above:
 </extracted_excerpts>"""
 
     messages = [SystemMessage(content=reasoning_system_prompt), HumanMessage(content=reasoning_prompt)]
-    raw_response = _invoke_llm_with_retry(parsing_llm, messages)
+    raw_response, _, usage_metadata, _ = _invoke_llm_with_retry(parsing_llm, messages, is_agent=False)
     model_calls += 1
+    # TODO: Aggregate usage_metadata in Phase 4
     cleaned_response = _strip_markdown_fences(raw_response)
 
     try:
@@ -652,8 +655,9 @@ Your task is to extract the final attribute values based on the reasoning traces
 </reasoning_traces>"""
 
     messages = [SystemMessage(content=parsing_system_prompt), HumanMessage(content=parsing_prompt)]
-    raw_response = _invoke_llm_with_retry(parsing_llm, messages)
+    raw_response, _, usage_metadata, _ = _invoke_llm_with_retry(parsing_llm, messages, is_agent=False)
     model_calls += 1
+    # TODO: Aggregate usage_metadata in Phase 4
     cleaned_response = _strip_markdown_fences(raw_response)
 
     # Parse with PydanticOutputParser (standard logic)

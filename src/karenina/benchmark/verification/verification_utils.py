@@ -11,6 +11,7 @@ import os
 import re
 from typing import Any
 
+from langchain_core.callbacks import get_usage_metadata_callback
 from langchain_core.messages import BaseMessage
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
@@ -61,9 +62,56 @@ def is_retryable_error(exception: Exception) -> bool:
     return exception_type in retryable_types
 
 
+def _extract_agent_metrics(response: Any) -> dict[str, Any] | None:
+    """
+    Extract agent execution metrics from LangGraph agent response.
+
+    Args:
+        response: Agent response object from LangGraph (dict with "messages" key)
+
+    Returns:
+        Dict with agent metrics (iterations, tool_calls, tools_used) or None if extraction fails
+    """
+    if not response or not isinstance(response, dict):
+        return None
+
+    messages = response.get("messages", [])
+    if not messages:
+        return None
+
+    # Count iterations (AI message cycles)
+    iterations = 0
+    tool_calls = 0
+    tools_used = set()
+
+    for msg in messages:
+        # Check message type
+        msg_type = getattr(msg, "__class__", None)
+        if msg_type:
+            type_name = msg_type.__name__
+
+            # Count AI messages as iterations
+            if type_name == "AIMessage":
+                iterations += 1
+
+            # Count tool messages and extract tool names
+            elif type_name == "ToolMessage":
+                tool_calls += 1
+                # Extract tool name from ToolMessage
+                tool_name = getattr(msg, "name", None)
+                if tool_name:
+                    tools_used.add(tool_name)
+
+    return {
+        "iterations": iterations,
+        "tool_calls": tool_calls,
+        "tools_used": sorted(tools_used),  # Sort for deterministic output
+    }
+
+
 def _invoke_llm_with_retry(
     llm: Any, messages: list[BaseMessage], is_agent: bool, timeout: int = 120
-) -> tuple[Any, bool]:
+) -> tuple[Any, bool, dict[str, Any], dict[str, Any] | None]:
     """
     Invoke LLM with automatic retry logic for transient errors.
 
@@ -74,7 +122,11 @@ def _invoke_llm_with_retry(
         timeout: Timeout in seconds for agent invocation
 
     Returns:
-        Tuple of (response, recursion_limit_reached)
+        Tuple of (response, recursion_limit_reached, usage_metadata, agent_metrics)
+        - response: The LLM/agent response
+        - recursion_limit_reached: Whether agent hit recursion limit
+        - usage_metadata: Token usage metadata from LangChain callback
+        - agent_metrics: Agent execution metrics (iterations, tool_calls, tools_used) or None for non-agents
 
     Raises:
         Exception: If all retry attempts are exhausted
@@ -92,8 +144,10 @@ def _invoke_llm_with_retry(
         reraise=True,
         before_sleep=_log_retry,
     )
-    def _invoke_with_retry_inner() -> tuple[Any, bool]:
+    def _invoke_with_retry_inner() -> tuple[Any, bool, dict[str, Any], dict[str, Any] | None]:
         recursion_limit_reached = False
+        usage_metadata: dict[str, Any] = {}
+        agent_metrics = None
 
         try:
             if is_agent:
@@ -102,7 +156,13 @@ def _invoke_llm_with_retry(
 
                 async def invoke_agent_async() -> Any:
                     try:
-                        return await llm.ainvoke({"messages": messages})
+                        # Wrap async invoke with usage metadata callback
+                        with get_usage_metadata_callback() as cb:
+                            response = await llm.ainvoke({"messages": messages})
+                        # Capture usage metadata
+                        nonlocal usage_metadata
+                        usage_metadata = dict(cb.usage_metadata) if cb.usage_metadata else {}
+                        return response
                     except Exception as e:
                         # Check if this is a GraphRecursionError
                         if "GraphRecursionError" in str(type(e).__name__) or "recursion_limit" in str(e).lower():
@@ -140,13 +200,20 @@ def _invoke_llm_with_retry(
                     # No event loop running, safe to use asyncio.run
                     response = asyncio.run(invoke_agent_async())
 
+                # Extract agent metrics before harmonization
+                agent_metrics = _extract_agent_metrics(response)
+
                 from ...infrastructure.llm.mcp_utils import harmonize_agent_response
 
-                return harmonize_agent_response(response), recursion_limit_reached
+                return harmonize_agent_response(response), recursion_limit_reached, usage_metadata, agent_metrics
             else:
                 # Regular LLMs expect the messages list directly
-                response = llm.invoke(messages)
-                return response, recursion_limit_reached
+                # Wrap invoke with usage metadata callback
+                with get_usage_metadata_callback() as cb:
+                    response = llm.invoke(messages)
+                usage_metadata = dict(cb.usage_metadata) if cb.usage_metadata else {}
+                # Non-agents don't have agent metrics
+                return response, recursion_limit_reached, usage_metadata, None
 
         except Exception as e:
             # Check if this is a retryable error

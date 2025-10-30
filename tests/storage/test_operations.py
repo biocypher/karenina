@@ -548,3 +548,325 @@ class TestVerificationResultORMConversion:
             assert loaded_result.verify_result is None
             assert loaded_result.rubric_evaluation_performed is True
             assert loaded_result.verify_rubric == {"Depth": 4, "Clarity": 5}
+
+
+class TestUsageTrackingPersistence:
+    """Test persistence of usage_metadata and agent_metrics fields (Issue #1 Prevention)."""
+
+    def test_usage_metadata_round_trip(self, temp_db):
+        """Test usage_metadata persists correctly through save/load cycle."""
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import Session
+
+        from karenina.schemas import VerificationResult
+        from karenina.storage.models import Base, BenchmarkModel, VerificationResultModel, VerificationRunModel
+        from karenina.storage.operations import _create_result_model, _model_to_verification_result
+
+        # Create a result with usage_metadata
+        usage_metadata = {
+            "answer_generation": {
+                "input_tokens": 200,
+                "output_tokens": 100,
+                "total_tokens": 300,
+                "model": "gpt-4o-mini",
+            },
+            "parsing": {
+                "input_tokens": 150,
+                "output_tokens": 80,
+                "total_tokens": 230,
+                "model": "gpt-4o-mini",
+            },
+            "total": {
+                "input_tokens": 350,
+                "output_tokens": 180,
+                "total_tokens": 530,
+            },
+        }
+
+        result = VerificationResult(
+            question_id="test_q_usage",
+            template_id="test_tpl_usage",
+            completed_without_errors=True,
+            template_verification_performed=True,
+            verify_result=True,
+            rubric_evaluation_performed=False,
+            question_text="Test question?",
+            raw_llm_response="Test response",
+            answering_model="openai/gpt-4o-mini",
+            parsing_model="openai/gpt-4o-mini",
+            execution_time=1.5,
+            timestamp="2025-01-01 00:00:00",
+            usage_metadata=usage_metadata,  # CRITICAL FIELD
+        )
+
+        # Save to database
+        engine = create_engine(temp_db)
+        Base.metadata.create_all(engine)
+
+        with Session(engine) as session:
+            # Create benchmark and run
+            benchmark = BenchmarkModel(name="Usage Test Benchmark", version="1.0")
+            session.add(benchmark)
+            session.commit()
+
+            run = VerificationRunModel(
+                id="test_run_usage",
+                benchmark_id=benchmark.id,
+                run_name="Usage Test Run",
+                status="completed",
+                config={},
+                total_questions=1,
+            )
+            session.add(run)
+            session.commit()
+
+            # Save result
+            model = _create_result_model("test_run_usage", result)
+            session.add(model)
+            session.commit()
+
+            # Load result
+            loaded_model = session.query(VerificationResultModel).filter_by(question_id="test_q_usage").first()
+            assert loaded_model is not None, "Result model not found in database"
+
+            # CRITICAL: Verify usage_metadata was saved
+            assert loaded_model.usage_metadata is not None, "usage_metadata was not saved to database"
+            assert loaded_model.usage_metadata == usage_metadata, "usage_metadata does not match"
+
+            # Convert back to VerificationResult
+            loaded_result = _model_to_verification_result(loaded_model)
+
+            # CRITICAL: Verify usage_metadata persists through conversion
+            assert loaded_result.usage_metadata is not None, "usage_metadata was lost during conversion"
+            assert loaded_result.usage_metadata == usage_metadata, "usage_metadata changed during round-trip"
+
+    def test_agent_metrics_round_trip(self, temp_db):
+        """Test agent_metrics persists correctly through save/load cycle."""
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import Session
+
+        from karenina.schemas import VerificationResult
+        from karenina.storage.models import Base, BenchmarkModel, VerificationResultModel, VerificationRunModel
+        from karenina.storage.operations import _create_result_model, _model_to_verification_result
+
+        # Create a result with agent_metrics
+        agent_metrics = {
+            "iterations": 3,
+            "tool_calls": 5,
+            "tools_used": ["web_search", "calculator", "file_read"],
+        }
+
+        result = VerificationResult(
+            question_id="test_q_agent",
+            template_id="test_tpl_agent",
+            completed_without_errors=True,
+            template_verification_performed=True,
+            verify_result=True,
+            rubric_evaluation_performed=False,
+            question_text="Test question?",
+            raw_llm_response="Test response",
+            answering_model="openai/gpt-4o-mini",
+            parsing_model="openai/gpt-4o-mini",
+            execution_time=2.5,
+            timestamp="2025-01-01 00:00:00",
+            agent_metrics=agent_metrics,  # CRITICAL FIELD
+        )
+
+        # Save to database
+        engine = create_engine(temp_db)
+        Base.metadata.create_all(engine)
+
+        with Session(engine) as session:
+            # Create benchmark and run
+            benchmark = BenchmarkModel(name="Agent Test Benchmark", version="1.0")
+            session.add(benchmark)
+            session.commit()
+
+            run = VerificationRunModel(
+                id="test_run_usage",
+                benchmark_id=benchmark.id,
+                run_name="Agent Test Run",
+                status="completed",
+                config={},
+                total_questions=1,
+            )
+            session.add(run)
+            session.commit()
+
+            # Save result
+            model = _create_result_model("test_run_agent", result)
+            session.add(model)
+            session.commit()
+
+            # Load result
+            loaded_model = session.query(VerificationResultModel).filter_by(question_id="test_q_agent").first()
+            assert loaded_model is not None, "Result model not found in database"
+
+            # CRITICAL: Verify agent_metrics was saved
+            assert loaded_model.agent_metrics is not None, "agent_metrics was not saved to database"
+            assert loaded_model.agent_metrics == agent_metrics, "agent_metrics does not match"
+
+            # Convert back to VerificationResult
+            loaded_result = _model_to_verification_result(loaded_model)
+
+            # CRITICAL: Verify agent_metrics persists through conversion
+            assert loaded_result.agent_metrics is not None, "agent_metrics was lost during conversion"
+            assert loaded_result.agent_metrics == agent_metrics, "agent_metrics changed during round-trip"
+
+    def test_null_usage_fields_persist(self, temp_db):
+        """Test that null usage_metadata and agent_metrics persist correctly."""
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import Session
+
+        from karenina.schemas import VerificationResult
+        from karenina.storage.models import Base, BenchmarkModel, VerificationResultModel, VerificationRunModel
+        from karenina.storage.operations import _create_result_model, _model_to_verification_result
+
+        # Create a result with null usage fields
+        result = VerificationResult(
+            question_id="test_q_null",
+            template_id="test_tpl_null",
+            completed_without_errors=True,
+            template_verification_performed=True,
+            verify_result=True,
+            rubric_evaluation_performed=False,
+            question_text="Test question?",
+            raw_llm_response="Test response",
+            answering_model="openai/gpt-4o-mini",
+            parsing_model="openai/gpt-4o-mini",
+            execution_time=1.0,
+            timestamp="2025-01-01 00:00:00",
+            usage_metadata=None,  # Explicitly None
+            agent_metrics=None,  # Explicitly None
+        )
+
+        # Save to database
+        engine = create_engine(temp_db)
+        Base.metadata.create_all(engine)
+
+        with Session(engine) as session:
+            benchmark = BenchmarkModel(name="Null Test Benchmark", version="1.0")
+            session.add(benchmark)
+            session.commit()
+
+            run = VerificationRunModel(
+                id="test_run_usage",
+                benchmark_id=benchmark.id,
+                run_name="Null Test Run",
+                status="completed",
+                config={},
+                total_questions=1,
+            )
+            session.add(run)
+            session.commit()
+
+            # Save result
+            model = _create_result_model("test_run_null", result)
+            session.add(model)
+            session.commit()
+
+            # Load result
+            loaded_model = session.query(VerificationResultModel).filter_by(question_id="test_q_null").first()
+            loaded_result = _model_to_verification_result(loaded_model)
+
+            # Verify nulls persist
+            assert loaded_result.usage_metadata is None, "usage_metadata should be None"
+            assert loaded_result.agent_metrics is None, "agent_metrics should be None"
+
+    def test_update_result_with_usage_fields(self, temp_db):
+        """Test _update_result_model() correctly updates usage fields."""
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import Session
+
+        from karenina.schemas import VerificationResult
+        from karenina.storage.models import Base, BenchmarkModel, VerificationResultModel, VerificationRunModel
+        from karenina.storage.operations import (
+            _create_result_model,
+            _model_to_verification_result,
+            _update_result_model,
+        )
+
+        # Create initial result without usage fields
+        result_v1 = VerificationResult(
+            question_id="test_q_update",
+            template_id="test_tpl_update",
+            completed_without_errors=True,
+            template_verification_performed=True,
+            verify_result=True,
+            rubric_evaluation_performed=False,
+            question_text="Test question?",
+            raw_llm_response="Test response",
+            answering_model="openai/gpt-4o-mini",
+            parsing_model="openai/gpt-4o-mini",
+            execution_time=1.0,
+            timestamp="2025-01-01 00:00:00",
+            usage_metadata=None,
+            agent_metrics=None,
+        )
+
+        engine = create_engine(temp_db)
+        Base.metadata.create_all(engine)
+
+        with Session(engine) as session:
+            benchmark = BenchmarkModel(name="Update Test Benchmark", version="1.0")
+            session.add(benchmark)
+            session.commit()
+
+            run = VerificationRunModel(
+                id="test_run_usage",
+                benchmark_id=benchmark.id,
+                run_name="Update Test Run",
+                status="completed",
+                config={},
+                total_questions=1,
+            )
+            session.add(run)
+            session.commit()
+
+            # Save initial result
+            model = _create_result_model("test_run_update", result_v1)
+            session.add(model)
+            session.commit()
+
+            # Now update with usage fields
+            result_v2 = VerificationResult(
+                question_id="test_q_update",
+                template_id="test_tpl_update",
+                completed_without_errors=True,
+                template_verification_performed=True,
+                verify_result=True,
+                rubric_evaluation_performed=False,
+                question_text="Test question?",
+                raw_llm_response="Test response",
+                answering_model="openai/gpt-4o-mini",
+                parsing_model="openai/gpt-4o-mini",
+                execution_time=2.0,
+                timestamp="2025-01-01 00:00:00",
+                usage_metadata={
+                    "answer_generation": {
+                        "input_tokens": 100,
+                        "output_tokens": 50,
+                        "total_tokens": 150,
+                        "model": "gpt-4o-mini",
+                    }
+                },
+                agent_metrics={
+                    "iterations": 2,
+                    "tool_calls": 3,
+                    "tools_used": ["search"],
+                },
+            )
+
+            # Update the model
+            _update_result_model(model, result_v2)
+            session.commit()
+
+            # Load and verify
+            loaded_model = session.query(VerificationResultModel).filter_by(question_id="test_q_update").first()
+            loaded_result = _model_to_verification_result(loaded_model)
+
+            # CRITICAL: Verify usage fields were updated
+            assert loaded_result.usage_metadata is not None, "usage_metadata not updated"
+            assert loaded_result.usage_metadata["answer_generation"]["input_tokens"] == 100
+            assert loaded_result.agent_metrics is not None, "agent_metrics not updated"
+            assert loaded_result.agent_metrics["iterations"] == 2

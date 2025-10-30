@@ -7,6 +7,11 @@ from typing import Any, get_args, get_origin
 from ....schemas.domain import BaseAnswer
 from ....schemas.shared import SearchResultItem
 
+# Import and re-export _invoke_llm_with_retry with usage tracking support
+from ..verification_utils import _invoke_llm_with_retry
+
+__all__ = ["_invoke_llm_with_retry"]
+
 logger = logging.getLogger(__name__)
 
 
@@ -121,40 +126,6 @@ def _extract_attribute_descriptions(json_schema: str, attribute_names: list[str]
             # Fallback if description not found
             attribute_descriptions[attr] = f"Evidence for {attr}"
     return attribute_descriptions
-
-
-def _invoke_llm_with_retry(llm: Any, messages: list[Any], max_retries: int = 3) -> str:
-    """Invoke LLM with retry logic for transient failures.
-
-    This helper provides basic retry functionality for LLM invocations,
-    primarily for handling transient network errors or rate limiting.
-
-    Args:
-        llm: Initialized LLM instance
-        messages: List of LangChain messages to send
-        max_retries: Maximum number of retry attempts (default: 3)
-
-    Returns:
-        Raw text response from LLM
-
-    Raises:
-        Exception: If all retries are exhausted
-
-    Note:
-        This is separate from the excerpt validation retry logic in deep_judgment_parse,
-        which handles specific validation failures with custom error feedback.
-    """
-    for attempt in range(max_retries):
-        try:
-            response = llm.invoke(messages)
-            return response.content if hasattr(response, "content") else str(response)
-        except Exception as e:
-            logger.warning(f"LLM invocation attempt {attempt + 1}/{max_retries} failed: {e}")
-            if attempt == max_retries - 1:
-                raise
-            # Simple exponential backoff could be added here
-            continue
-    raise RuntimeError("Unreachable code")
 
 
 def format_excerpts_for_reasoning(excerpts: dict[str, list[dict[str, Any]]]) -> str:

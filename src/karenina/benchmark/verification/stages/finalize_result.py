@@ -91,6 +91,31 @@ class FinalizeResultStage(BaseVerificationStage):
         # Rubric evaluation was performed if RubricEvaluationStage ran and set verify_rubric
         rubric_evaluation_performed = context.get_result_field("verify_rubric") is not None
 
+        # Aggregate usage tracking metadata
+        usage_tracker = context.get_artifact("usage_tracker")
+        usage_metadata = None
+        agent_metrics = None
+
+        if usage_tracker is not None:
+            # Get aggregated usage summary across all stages
+            usage_metadata = usage_tracker.get_total_summary()
+
+            # Get agent metrics if available (from answer generation with MCP agents)
+            agent_metrics = usage_tracker.get_agent_metrics()
+
+            # Log usage summary
+            if usage_metadata:
+                total_info = usage_metadata.get("total", {})
+                logger.info(
+                    f"Usage tracking summary - Total tokens: {total_info.get('total_tokens', 0)} "
+                    f"(input: {total_info.get('input_tokens', 0)}, output: {total_info.get('output_tokens', 0)})"
+                )
+            if agent_metrics:
+                logger.info(
+                    f"Agent metrics - Iterations: {agent_metrics.get('iterations', 0)}, "
+                    f"Tool calls: {agent_metrics.get('tool_calls', 0)}"
+                )
+
         # Build VerificationResult from context
         result = VerificationResult(
             # Identity & Metadata
@@ -158,6 +183,9 @@ class FinalizeResultStage(BaseVerificationStage):
             # Search-Enhanced Deep-Judgment Metadata
             deep_judgment_search_enabled=context.get_result_field("deep_judgment_search_enabled", False),
             hallucination_risk_assessment=context.get_result_field("hallucination_risk_assessment"),
+            # LLM Usage Tracking Metadata
+            usage_metadata=usage_metadata,
+            agent_metrics=agent_metrics,
         )
 
         # Store final result
