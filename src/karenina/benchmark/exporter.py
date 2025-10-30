@@ -1,4 +1,25 @@
-"""Export functionality for verification results."""
+"""Export functionality for verification execution results.
+
+This module provides functions for exporting verification execution results
+(VerificationResult objects) to CSV and JSON formats. These exports focus on
+the OUTPUTS of verification runs - what happened when questions were verified.
+
+Key Functions:
+- export_verification_results_json(): Export complete verification results as JSON
+- export_verification_results_csv(): Export verification results as CSV with rubric columns
+- create_export_filename(): Generate filename for exports
+
+Note: This module is distinct from benchmark/core/exports.py, which handles
+exporting benchmark STRUCTURE/METADATA (questions, templates, rubrics definition),
+not verification execution results.
+
+Usage:
+    from karenina.benchmark import export_verification_results_csv, export_verification_results_json
+
+    # Export verification job results
+    json_export = export_verification_results_json(job, results)
+    csv_export = export_verification_results_csv(job, results, global_rubric)
+"""
 
 import csv
 import json
