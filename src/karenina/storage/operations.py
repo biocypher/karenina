@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 from sqlalchemy import select
 
-from ..utils.checkpoint_converter import generate_template_id
+from ..utils.checkpoint import generate_template_id
 from .db_config import DBConfig
 from .engine import get_session, init_database
 from .models import (

@@ -1,4 +1,4 @@
-from karenina.utils.code_parser import extract_and_combine_codeblocks
+from karenina.utils.code import extract_and_combine_codeblocks
 
 
 def test_extract_and_combine_codeblocks_empty() -> None:

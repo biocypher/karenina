@@ -552,7 +552,7 @@ def generate_answer_templates_from_questions_file(
     generate answer templates for each question using the structured approach,
     and return a dictionary mapping question.id to the generated Answer class.
     """
-    from karenina.utils.code_parser import extract_and_combine_codeblocks
+    from karenina.utils.code import extract_and_combine_codeblocks
 
     # Use the reader function to get all questions
     all_questions = read_questions_from_file(questions_py_path)

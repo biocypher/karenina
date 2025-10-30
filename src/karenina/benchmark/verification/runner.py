@@ -7,7 +7,7 @@ from typing import Any
 
 from ...schemas.domain import Rubric
 from ...schemas.workflow import ModelConfig, VerificationResult
-from ...utils.checkpoint_converter import generate_template_id
+from ...utils.checkpoint import generate_template_id
 from .stage import VerificationContext
 from .stage_orchestrator import StageOrchestrator
 

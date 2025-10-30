@@ -1165,7 +1165,7 @@ class Benchmark:
             SchemaOrgQuestion,
             SchemaOrgSoftwareSourceCode,
         )
-        from ..utils.checkpoint_converter import convert_rubric_trait_to_rating
+        from ..utils.checkpoint import convert_rubric_trait_to_rating
 
         # Create answer object using model_validate to handle aliased fields
         accepted_answer = SchemaOrgAnswer.model_validate(

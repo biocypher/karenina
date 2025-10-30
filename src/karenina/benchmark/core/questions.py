@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from ...schemas.domain import Question
     from .base import BenchmarkBase
 
-from ...utils.checkpoint_converter import add_question_to_benchmark
+from ...utils.checkpoint import add_question_to_benchmark
 
 
 class QuestionManager:
