@@ -5,7 +5,7 @@ import time
 
 import pytest
 
-from karenina.llm.manual_traces import ManualTraceManager
+from karenina.infrastructure.llm.manual_traces import ManualTraceManager
 
 
 def test_concurrent_access() -> None:

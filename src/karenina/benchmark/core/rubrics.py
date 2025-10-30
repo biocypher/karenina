@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from .base import BenchmarkBase
 
-from ...schemas.rubric_class import ManualRubricTrait, MetricRubricTrait, Rubric, RubricTrait
-from ...utils.checkpoint_converter import (
+from ...schemas.domain import ManualRubricTrait, MetricRubricTrait, Rubric, RubricTrait
+from ...utils.checkpoint import (
     add_global_rubric_to_benchmark,
     extract_global_rubric_from_benchmark,
 )
@@ -42,7 +42,7 @@ class RubricManager:
         Raises:
             ValueError: If question not found
         """
-        from ...utils.checkpoint_converter import convert_rubric_trait_to_rating
+        from ...utils.checkpoint import convert_rubric_trait_to_rating
 
         # Find the question
         found = False

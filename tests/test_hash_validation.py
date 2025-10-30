@@ -2,8 +2,9 @@
 
 import pytest
 
-from karenina.benchmark.models import ModelConfig
-from karenina.benchmark.verification.runner import _is_valid_md5_hash, run_single_model_verification
+from karenina.benchmark.verification.runner import run_single_model_verification
+from karenina.benchmark.verification.verification_utils import _is_valid_md5_hash
+from karenina.schemas import ModelConfig
 
 
 def test_is_valid_md5_hash() -> None:
@@ -33,7 +34,7 @@ def test_is_valid_md5_hash() -> None:
 
 def test_manual_interface_valid_hash() -> None:
     """Test that manual interface accepts valid MD5 hash as question_id."""
-    from karenina.llm.manual_traces import clear_manual_traces, load_manual_traces
+    from karenina.infrastructure.llm.manual_traces import clear_manual_traces, load_manual_traces
 
     # Clear any existing traces
     clear_manual_traces()
@@ -65,7 +66,7 @@ def test_manual_interface_valid_hash() -> None:
 
     # Simple answer template
     template_code = """
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -122,7 +123,7 @@ def test_manual_interface_invalid_hash() -> None:
 
     # Simple answer template
     template_code = """
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -173,7 +174,7 @@ def test_non_manual_interface_ignores_hash_validation() -> None:
 
     # Simple answer template
     template_code = """
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -224,7 +225,7 @@ def test_hash_validation_error_message() -> None:
     )
 
     template_code = """
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):

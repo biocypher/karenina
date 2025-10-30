@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from .base import BenchmarkBase
 
-from ..models import FinishedTemplate
-from ..verification.validation import validate_answer_template
+from ...schemas.workflow import FinishedTemplate
+from ..verification.utils.validation import validate_answer_template
 
 
 class TemplateManager:

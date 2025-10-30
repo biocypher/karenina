@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from karenina.benchmark import Benchmark
-from karenina.benchmark.models import VerificationResult
+from karenina.schemas import VerificationResult
 
 
 class TestResultsSeparation:

@@ -8,15 +8,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from karenina.benchmark.models import ModelConfig
 from karenina.benchmark.verification.runner import run_single_model_verification
+from karenina.schemas import ModelConfig
 
 
 @pytest.fixture
 def test_template_code():
     """Minimal Answer template for testing."""
     return """
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 
 class Answer(BaseAnswer):
     id: str

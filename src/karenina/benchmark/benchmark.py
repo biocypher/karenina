@@ -14,10 +14,11 @@ from typing import TYPE_CHECKING, Any, Union
 
 if TYPE_CHECKING:
     from ..schemas.checkpoint import SchemaOrgQuestion
-    from ..schemas.question_class import Question
+    from ..schemas.domain import Question
 
-from ..answers.generator import generate_answer_template, load_answer_templates_from_json
-from ..schemas.rubric_class import ManualRubricTrait, Rubric, RubricTrait
+from ..domain.answers.generator import generate_answer_template, load_answer_templates_from_json
+from ..schemas.domain import ManualRubricTrait, Rubric, RubricTrait
+from ..schemas.workflow import FinishedTemplate, VerificationConfig, VerificationResult
 from .core import (
     BenchmarkBase,
     ExportManager,
@@ -28,7 +29,6 @@ from .core import (
     TemplateManager,
     VerificationManager,
 )
-from .models import FinishedTemplate, VerificationConfig, VerificationResult
 
 
 class Benchmark:
@@ -937,7 +937,7 @@ class Benchmark:
 
     def validate(self) -> tuple[bool, str]:
         """Validate the benchmark structure and all templates."""
-        from .verification.validation import validate_answer_template
+        from .verification.utils.validation import validate_answer_template
 
         # Validate benchmark structure
         is_valid, error_msg = self._base.validate()
@@ -1165,7 +1165,7 @@ class Benchmark:
             SchemaOrgQuestion,
             SchemaOrgSoftwareSourceCode,
         )
-        from ..utils.checkpoint_converter import convert_rubric_trait_to_rating
+        from ..utils.checkpoint import convert_rubric_trait_to_rating
 
         # Create answer object using model_validate to handle aliased fields
         accepted_answer = SchemaOrgAnswer.model_validate(

@@ -5,8 +5,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from karenina.benchmark.models import ModelConfig
-from karenina.benchmark.verification.embedding_utils import (
+from karenina.benchmark.verification.tools.embedding_check import (
     _convert_to_comparable_string,
     _get_embedding_model_name,
     _get_embedding_threshold,
@@ -15,6 +14,7 @@ from karenina.benchmark.verification.embedding_utils import (
     compute_embedding_similarity,
     perform_embedding_check,
 )
+from karenina.schemas import ModelConfig
 
 
 class TestEmbeddingCheckConfiguration:
@@ -345,7 +345,7 @@ class TestEmbeddingCheckIntegration:
 
     def test_embedding_utils_import(self) -> None:
         """Test that embedding utilities can be imported successfully."""
-        from karenina.benchmark.verification.embedding_utils import (
+        from karenina.benchmark.verification.tools.embedding_check import (
             check_semantic_equivalence,
             clear_embedding_model_cache,
             compute_embedding_similarity,
@@ -366,7 +366,7 @@ class TestEmbeddingModelCaching:
 
     def test_cache_management(self) -> None:
         """Test cache preloading and cleanup."""
-        from karenina.benchmark.verification.embedding_utils import (
+        from karenina.benchmark.verification.tools.embedding_check import (
             _embedding_model_cache,
             clear_embedding_model_cache,
             preload_embedding_model,
@@ -393,7 +393,7 @@ class TestEmbeddingModelCaching:
 
     def test_cache_reuse(self) -> None:
         """Test that cached models are reused across calls."""
-        from karenina.benchmark.verification.embedding_utils import (
+        from karenina.benchmark.verification.tools.embedding_check import (
             _embedding_model_cache,
             _get_cached_embedding_model,
             _get_embedding_model_name,

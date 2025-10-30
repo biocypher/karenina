@@ -6,8 +6,8 @@ in deep-judgment to automatically extract attribute names from templates.
 
 from pydantic import Field
 
-from karenina.benchmark.verification.parser_utils import _extract_attribute_names_from_class
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.benchmark.verification.utils.parsing import _extract_attribute_names_from_class
+from karenina.schemas.domain import BaseAnswer
 
 
 class TestExtractAttributeNames:

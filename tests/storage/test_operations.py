@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from karenina.benchmark import Benchmark
-from karenina.schemas.question_class import Question
+from karenina.schemas.domain import Question
 from karenina.storage import DBConfig, load_benchmark, save_benchmark
 
 
@@ -415,3 +415,136 @@ class TestBenchmarkMethods:
 
         loaded = Benchmark.load_from_db("Chain Test", temp_db)
         assert loaded.name == "Chain Test"
+
+
+class TestVerificationResultORMConversion:
+    """Test ORM conversion functions for VerificationResult (Task 5.2)."""
+
+    def test_evaluation_mode_fields_round_trip(self, temp_db):
+        """Test that evaluation mode tracking fields are properly saved and loaded."""
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import Session
+
+        from karenina.schemas import VerificationResult
+        from karenina.storage.models import Base, BenchmarkModel, VerificationResultModel, VerificationRunModel
+        from karenina.storage.operations import _create_result_model, _model_to_verification_result
+
+        # Create database
+        engine = create_engine(temp_db)
+        Base.metadata.create_all(engine)
+
+        # Create a test VerificationResult with evaluation mode fields
+        result = VerificationResult(
+            question_id="test_q123",
+            template_id="test_t456",
+            completed_without_errors=True,
+            error=None,
+            question_text="Test question?",
+            raw_llm_response="Test response",
+            template_verification_performed=True,  # NEW FIELD
+            verify_result=True,
+            rubric_evaluation_performed=True,  # NEW FIELD
+            verify_rubric={"Clarity": 5},
+            answering_model="test/model",
+            parsing_model="test/model",
+            execution_time=1.5,
+            timestamp="2025-10-29 12:00:00",
+        )
+
+        with Session(engine) as session:
+            # Create benchmark and run for foreign keys
+            benchmark = BenchmarkModel(name="Test Benchmark", version="1.0")
+            session.add(benchmark)
+            session.flush()  # Get benchmark.id
+
+            run = VerificationRunModel(
+                id="test_run",
+                benchmark_id=benchmark.id,
+                run_name="Test Run",
+                status="completed",
+                config={},
+                total_questions=1,
+            )
+            session.add(run)
+            session.commit()
+
+            # Convert to ORM model and save
+            model = _create_result_model("test_run", result)
+            session.add(model)
+            session.commit()
+
+            # Verify fields in database
+            assert model.template_verification_performed is True
+            assert model.rubric_evaluation_performed is True
+
+            # Load back and convert to Pydantic
+            loaded_model = session.query(VerificationResultModel).filter_by(question_id="test_q123").first()
+            assert loaded_model is not None
+
+            loaded_result = _model_to_verification_result(loaded_model)
+
+            # Verify round-trip preserves evaluation mode fields
+            assert loaded_result.template_verification_performed is True
+            assert loaded_result.verify_result is True
+            assert loaded_result.rubric_evaluation_performed is True
+            assert loaded_result.verify_rubric == {"Clarity": 5}
+
+    def test_evaluation_mode_fields_rubric_only(self, temp_db):
+        """Test round-trip for rubric_only mode (template not performed)."""
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import Session
+
+        from karenina.schemas import VerificationResult
+        from karenina.storage.models import Base, BenchmarkModel, VerificationResultModel, VerificationRunModel
+        from karenina.storage.operations import _create_result_model, _model_to_verification_result
+
+        engine = create_engine(temp_db)
+        Base.metadata.create_all(engine)
+
+        # Rubric-only mode: template not performed, verify_result is None
+        result = VerificationResult(
+            question_id="test_q_rubric_only",
+            template_id="no_template",
+            completed_without_errors=True,
+            error=None,
+            question_text="Test question?",
+            raw_llm_response="Test response",
+            template_verification_performed=False,  # Template skipped
+            verify_result=None,  # Should be None when template skipped
+            rubric_evaluation_performed=True,  # Rubric was done
+            verify_rubric={"Depth": 4, "Clarity": 5},
+            answering_model="test/model",
+            parsing_model="test/model",
+            execution_time=1.0,
+            timestamp="2025-10-29 12:00:00",
+        )
+
+        with Session(engine) as session:
+            # Create benchmark and run for foreign keys
+            benchmark = BenchmarkModel(name="Rubric Test Benchmark", version="1.0")
+            session.add(benchmark)
+            session.flush()
+
+            run = VerificationRunModel(
+                id="test_run_rubric",
+                benchmark_id=benchmark.id,
+                run_name="Rubric Only Run",
+                status="completed",
+                config={},
+                total_questions=1,
+            )
+            session.add(run)
+            session.commit()
+
+            model = _create_result_model("test_run_rubric", result)
+            session.add(model)
+            session.commit()
+
+            loaded_model = session.query(VerificationResultModel).filter_by(question_id="test_q_rubric_only").first()
+            loaded_result = _model_to_verification_result(loaded_model)
+
+            # Verify rubric-only mode fields
+            assert loaded_result.template_verification_performed is False
+            assert loaded_result.verify_result is None
+            assert loaded_result.rubric_evaluation_performed is True
+            assert loaded_result.verify_rubric == {"Depth": 4, "Clarity": 5}

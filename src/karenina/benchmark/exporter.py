@@ -1,4 +1,25 @@
-"""Export functionality for verification results."""
+"""Export functionality for verification execution results.
+
+This module provides functions for exporting verification execution results
+(VerificationResult objects) to CSV and JSON formats. These exports focus on
+the OUTPUTS of verification runs - what happened when questions were verified.
+
+Key Functions:
+- export_verification_results_json(): Export complete verification results as JSON
+- export_verification_results_csv(): Export verification results as CSV with rubric columns
+- create_export_filename(): Generate filename for exports
+
+Note: This module is distinct from benchmark/core/exports.py, which handles
+exporting benchmark STRUCTURE/METADATA (questions, templates, rubrics definition),
+not verification execution results.
+
+Usage:
+    from karenina.benchmark import export_verification_results_csv, export_verification_results_json
+
+    # Export verification job results
+    json_export = export_verification_results_json(job, results)
+    csv_export = export_verification_results_csv(job, results, global_rubric)
+"""
 
 import csv
 import json
@@ -7,7 +28,7 @@ import time
 from io import StringIO
 from typing import Any, Protocol
 
-from .models import VerificationJob, VerificationResult
+from ..schemas.workflow import VerificationJob, VerificationResult
 
 
 class HasTraitNames(Protocol):
@@ -143,8 +164,10 @@ def export_verification_results_json(job: VerificationJob, results: dict[str, Ve
             "raw_llm_response": result.raw_llm_response,
             "parsed_gt_response": result.parsed_gt_response,
             "parsed_llm_response": result.parsed_llm_response,
+            "template_verification_performed": result.template_verification_performed,
             "verify_result": _serialize_verification_result(result.verify_result),
             "verify_granular_result": _serialize_verification_result(result.verify_granular_result),
+            "rubric_evaluation_performed": result.rubric_evaluation_performed,
             "verify_rubric": result.verify_rubric,
             "keywords": result.keywords,
             "answering_model": result.answering_model,
@@ -316,8 +339,10 @@ def export_verification_results_csv(
         "raw_llm_response",
         "parsed_gt_response",
         "parsed_llm_response",
+        "template_verification_performed",
         "verify_result",
         "verify_granular_result",
+        "rubric_evaluation_performed",
         "keywords",
     ]
 
@@ -389,8 +414,10 @@ def export_verification_results_csv(
             "parsed_llm_response": _safe_json_serialize(
                 result.parsed_llm_response, result.question_id, "parsed_llm_response"
             ),
+            "template_verification_performed": result.template_verification_performed,
             "verify_result": _serialize_verification_result(result.verify_result),
             "verify_granular_result": _serialize_verification_result(result.verify_granular_result),
+            "rubric_evaluation_performed": result.rubric_evaluation_performed,
             "keywords": _safe_json_serialize(result.keywords, result.question_id, "keywords"),
             "answering_model": result.answering_model,
             "parsing_model": result.parsing_model,

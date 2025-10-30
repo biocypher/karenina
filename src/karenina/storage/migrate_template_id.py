@@ -20,7 +20,7 @@ from pathlib import Path
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session
 
-from ..utils.checkpoint_converter import generate_template_id
+from ..utils.checkpoint import generate_template_id
 
 
 def migrate_database(db_path: str) -> None:

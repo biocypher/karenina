@@ -2,8 +2,13 @@
 
 import pytest
 
-from karenina.llm.manual_llm import ManualLLM, ManualTraceNotFoundError
-from karenina.llm.manual_traces import ManualTraceError, ManualTraceManager, clear_manual_traces, load_manual_traces
+from karenina.infrastructure.llm.manual_llm import ManualLLM, ManualTraceNotFoundError
+from karenina.infrastructure.llm.manual_traces import (
+    ManualTraceError,
+    ManualTraceManager,
+    clear_manual_traces,
+    load_manual_traces,
+)
 
 
 def test_manual_trace_manager_helpful_error_messages() -> None:

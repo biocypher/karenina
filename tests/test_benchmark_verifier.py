@@ -2,15 +2,16 @@
 
 from unittest.mock import Mock, patch
 
-from karenina.benchmark.models import VerificationConfig
-from karenina.benchmark.verification.runner import _strip_markdown_fences, _system_prompt_compose
+from karenina.benchmark.verification.utils.parsing import _strip_markdown_fences
+from karenina.benchmark.verification.verification_utils import _system_prompt_compose
 from karenina.benchmark.verifier import run_question_verification, validate_answer_template
+from karenina.schemas import VerificationConfig
 
 
 def test_validate_answer_template_valid() -> None:
     """Test validation of a valid answer template."""
     template_code = '''
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -36,7 +37,7 @@ class Answer(BaseAnswer):
 def test_validate_answer_template_with_literal() -> None:
     """Test validation of a template using Literal type."""
     template_code = '''
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 from pydantic import Field
 from typing import Literal
 
@@ -63,7 +64,7 @@ class Answer(BaseAnswer):
 def test_validate_answer_template_no_answer_class() -> None:
     """Test validation fails when no Answer class is found."""
     template_code = """
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 
 class SomeOtherClass(BaseAnswer):
     pass
@@ -79,7 +80,7 @@ class SomeOtherClass(BaseAnswer):
 def test_validate_answer_template_no_verify_method() -> None:
     """Test validation fails when Answer class has no verify method."""
     template_code = """
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 
 class Answer(BaseAnswer):
     response: str = "test"
@@ -96,7 +97,7 @@ class Answer(BaseAnswer):
 def test_validate_answer_template_invalid_syntax() -> None:
     """Test validation fails with invalid Python syntax."""
     template_code = """
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 
 class Answer(BaseAnswer):
     def verify(self
@@ -110,7 +111,7 @@ class Answer(BaseAnswer):
     assert Answer is None
 
 
-@patch("karenina.llm.interface.init_chat_model")
+@patch("karenina.infrastructure.llm.interface.init_chat_model")
 def test_run_question_verification_template_validation_failure(mock_init_model) -> None:
     """Test verification with invalid template."""
     config = VerificationConfig(
@@ -134,13 +135,13 @@ def test_run_question_verification_template_validation_failure(mock_init_model) 
     assert len(results) == 1
     result = list(results.values())[0]
 
-    assert result.success is False
+    assert result.completed_without_errors is False
     assert "Template validation failed" in result.error
     assert result.question_id == "test_id"
     assert result.question_text == "What is 2+2?"
 
 
-@patch("karenina.llm.interface.init_chat_model")
+@patch("karenina.infrastructure.llm.interface.init_chat_model")
 def test_run_question_verification_success(mock_init_model) -> None:
     """Test successful verification run."""
     # Mock the LLM responses
@@ -167,7 +168,7 @@ def test_run_question_verification_success(mock_init_model) -> None:
     )
 
     # Mock the PydanticOutputParser
-    with patch("karenina.benchmark.verification.runner.PydanticOutputParser") as mock_parser_class:
+    with patch("karenina.benchmark.verification.stages.parse_template.PydanticOutputParser") as mock_parser_class:
         mock_parser = Mock()
         mock_parser.get_format_instructions.return_value = "Format the response as JSON with the following structure..."
         mock_parser.parse.return_value = mock_answer
@@ -185,7 +186,7 @@ def test_run_question_verification_success(mock_init_model) -> None:
         )
 
         valid_template = """
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -206,7 +207,7 @@ class Answer(BaseAnswer):
         assert len(results) == 1
         result = list(results.values())[0]
 
-        assert result.success is True
+        assert result.completed_without_errors is True
         assert result.error is None
         assert result.question_id == "test_id"
         assert result.question_text == "What is 2+2?"
@@ -216,7 +217,7 @@ class Answer(BaseAnswer):
         assert result.verify_result is True
 
 
-@patch("karenina.llm.interface.init_chat_model")
+@patch("karenina.infrastructure.llm.interface.init_chat_model")
 def test_run_question_verification_markdown_fenced_json(mock_init_model) -> None:
     """Test successful parsing of markdown-fenced JSON response."""
     # Mock the LLM responses with markdown fences
@@ -237,7 +238,7 @@ def test_run_question_verification_markdown_fenced_json(mock_init_model) -> None
     )
 
     # Mock the PydanticOutputParser
-    with patch("karenina.benchmark.verification.runner.PydanticOutputParser") as mock_parser_class:
+    with patch("karenina.benchmark.verification.stages.parse_template.PydanticOutputParser") as mock_parser_class:
         mock_parser = Mock()
         mock_parser.get_format_instructions.return_value = "Format the response as JSON with the following structure..."
         mock_parser.parse.return_value = mock_answer
@@ -255,7 +256,7 @@ def test_run_question_verification_markdown_fenced_json(mock_init_model) -> None
         )
 
         valid_template = """
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -276,7 +277,7 @@ class Answer(BaseAnswer):
         assert len(results) == 1
         result = list(results.values())[0]
 
-        assert result.success is True
+        assert result.completed_without_errors is True
         assert result.error is None
         assert result.question_id == "test_id"
         assert result.question_text == "What is 2+2?"
@@ -289,7 +290,7 @@ class Answer(BaseAnswer):
         mock_parser.parse.assert_called_once_with('{"response": "4"}')
 
 
-@patch("karenina.llm.interface.init_chat_model")
+@patch("karenina.infrastructure.llm.interface.init_chat_model")
 def test_run_question_verification_malformed_json(mock_init_model) -> None:
     """Test handling of malformed JSON from LLM."""
     # Mock the LLM responses with malformed JSON
@@ -304,7 +305,7 @@ def test_run_question_verification_malformed_json(mock_init_model) -> None:
     )
 
     # Mock the PydanticOutputParser to raise an exception
-    with patch("karenina.benchmark.verification.runner.PydanticOutputParser") as mock_parser_class:
+    with patch("karenina.benchmark.verification.stages.parse_template.PydanticOutputParser") as mock_parser_class:
         mock_parser = Mock()
         mock_parser.get_format_instructions.return_value = "Format the response as JSON with the following structure..."
         mock_parser.parse.side_effect = Exception("Invalid JSON format")
@@ -322,7 +323,7 @@ def test_run_question_verification_malformed_json(mock_init_model) -> None:
         )
 
         valid_template = """
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -343,7 +344,7 @@ class Answer(BaseAnswer):
         assert len(results) == 1
         result = list(results.values())[0]
 
-        assert result.success is False
+        assert result.completed_without_errors is False
         assert "Parsing failed: Invalid JSON format" in result.error
         assert result.question_id == "test_id"
         assert result.question_text == "What is 2+2?"
@@ -422,7 +423,7 @@ Please format your response as JSON.
 def test_validate_answer_template_no_correct_field() -> None:
     """Test validation passes when Answer class has no correct field (optional)."""
     template_code = """
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -442,7 +443,7 @@ class Answer(BaseAnswer):
 def test_validate_answer_template_model_post_init_dict() -> None:
     """Test validation passes with model_post_init assigning dict to correct."""
     template_code = """
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -464,7 +465,7 @@ class Answer(BaseAnswer):
 def test_validate_answer_template_correct_non_dict() -> None:
     """Test validation fails when model_post_init assigns non-dict to correct."""
     template_code = """
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):

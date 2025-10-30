@@ -6,10 +6,10 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Union
 
 if TYPE_CHECKING:
-    from ...schemas.question_class import Question
+    from ...schemas.domain import Question
     from .base import BenchmarkBase
 
-from ...utils.checkpoint_converter import add_question_to_benchmark
+from ...utils.checkpoint import add_question_to_benchmark
 
 
 class QuestionManager:
@@ -68,7 +68,7 @@ class QuestionManager:
             q_id = manager.add_question("What is 6*7?", "42", answer_template=MyAnswer)
         """
         # Import Question class here to avoid circular imports
-        from ...schemas.question_class import Question
+        from ...schemas.domain import Question
 
         # Handle Question object input
         if isinstance(question, Question):
@@ -99,7 +99,7 @@ class QuestionManager:
         if answer_template is not None:
             if inspect.isclass(answer_template):
                 # Import BaseAnswer here to avoid circular imports
-                from ...schemas.answer_class import BaseAnswer
+                from ...schemas.domain import BaseAnswer
 
                 # Validate that it's an Answer class
                 if not issubclass(answer_template, BaseAnswer):
@@ -225,7 +225,7 @@ class QuestionManager:
         Raises:
             ValueError: If question not found
         """
-        from ...schemas.question_class import Question
+        from ...schemas.domain import Question
 
         q_data = self.get_question(question_id)
         return Question(
@@ -242,7 +242,7 @@ class QuestionManager:
         Returns:
             List of Question objects
         """
-        from ...schemas.question_class import Question
+        from ...schemas.domain import Question
 
         objects = []
         for q_data in self.get_all_questions():
@@ -267,7 +267,7 @@ class QuestionManager:
         Returns:
             The question ID that was assigned
         """
-        from ...schemas.question_class import Question
+        from ...schemas.domain import Question
 
         if not isinstance(question_obj, Question):
             raise ValueError("question_obj must be a Question instance")

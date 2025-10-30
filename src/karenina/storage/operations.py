@@ -10,12 +10,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from ...schemas.workflow import VerificationResult
     from ..benchmark.benchmark import Benchmark
-    from ..benchmark.models import VerificationResult
 
 from sqlalchemy import select
 
-from ..utils.checkpoint_converter import generate_template_id
+from ..utils.checkpoint import generate_template_id
 from .db_config import DBConfig
 from .engine import get_session, init_database
 from .models import (
@@ -149,7 +149,7 @@ def save_benchmark(
             question_rubric_dict = None
             if q_data.get("question_rubric"):
                 try:
-                    from ..schemas.rubric_class import ManualRubricTrait, RubricTrait
+                    from ..schemas.domain import ManualRubricTrait, RubricTrait
 
                     rubric_traits = q_data["question_rubric"]
                     if isinstance(rubric_traits, list) and len(rubric_traits) > 0:
@@ -272,7 +272,7 @@ def load_benchmark(
     """
     # Import here to avoid circular imports
     from ..benchmark.benchmark import Benchmark
-    from ..schemas.question_class import Question
+    from ..schemas.domain import Question
 
     # Convert storage URL to DBConfig if needed
     db_config = DBConfig(storage_url=storage) if isinstance(storage, str) else storage
@@ -341,7 +341,7 @@ def load_benchmark(
             # Set question-specific rubric if present
             if bq.question_rubric:
                 # Convert JSON rubric back to Rubric object
-                from ..schemas.rubric_class import ManualRubricTrait, Rubric, RubricTrait
+                from ..schemas.domain import ManualRubricTrait, Rubric, RubricTrait
 
                 traits = []
                 manual_traits = []
@@ -542,8 +542,10 @@ def _create_result_model(run_id: str, result: "VerificationResult") -> Verificat
         raw_llm_response=result.raw_llm_response,
         parsed_gt_response=result.parsed_gt_response,
         parsed_llm_response=result.parsed_llm_response,
+        template_verification_performed=result.template_verification_performed,
         verify_result=result.verify_result,
         verify_granular_result=result.verify_granular_result,
+        rubric_evaluation_performed=result.rubric_evaluation_performed,
         verify_rubric=result.verify_rubric,
         evaluation_rubric=result.evaluation_rubric,
         keywords=result.keywords,
@@ -597,8 +599,10 @@ def _update_result_model(model: VerificationResultModel, result: "VerificationRe
     model.raw_llm_response = result.raw_llm_response
     model.parsed_gt_response = result.parsed_gt_response
     model.parsed_llm_response = result.parsed_llm_response
+    model.template_verification_performed = result.template_verification_performed
     model.verify_result = result.verify_result
     model.verify_granular_result = result.verify_granular_result
+    model.rubric_evaluation_performed = result.rubric_evaluation_performed
     model.verify_rubric = result.verify_rubric
     model.evaluation_rubric = result.evaluation_rubric
     model.keywords = result.keywords
@@ -638,7 +642,7 @@ def _update_result_model(model: VerificationResultModel, result: "VerificationRe
 
 def _model_to_verification_result(model: VerificationResultModel) -> "VerificationResult":
     """Convert VerificationResultModel to VerificationResult."""
-    from ..benchmark.models import VerificationResult
+    from ...schemas.workflow import VerificationResult
 
     return VerificationResult(
         question_id=model.question_id,
@@ -649,8 +653,10 @@ def _model_to_verification_result(model: VerificationResultModel) -> "Verificati
         raw_llm_response=model.raw_llm_response,
         parsed_gt_response=model.parsed_gt_response,
         parsed_llm_response=model.parsed_llm_response,
+        template_verification_performed=model.template_verification_performed,
         verify_result=model.verify_result,
         verify_granular_result=model.verify_granular_result,
+        rubric_evaluation_performed=model.rubric_evaluation_performed,
         verify_rubric=model.verify_rubric,
         evaluation_rubric=model.evaluation_rubric,
         keywords=model.keywords,

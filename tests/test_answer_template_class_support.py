@@ -6,8 +6,7 @@ import pytest
 from pydantic import Field
 
 from karenina.benchmark import Benchmark
-from karenina.schemas.answer_class import BaseAnswer
-from karenina.schemas.question_class import Question
+from karenina.schemas.domain import BaseAnswer, Question
 
 
 class TestAnswerClassSupport:
@@ -386,7 +385,7 @@ class TestAnswerClassIntegration:
         )
 
         # Add question-specific rubric
-        from karenina.schemas.rubric_class import RubricTrait
+        from karenina.schemas.domain import RubricTrait
 
         rubric_trait = RubricTrait(
             name="Quality Assessment",

@@ -15,11 +15,10 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Literal, Union
 
 if TYPE_CHECKING:
-    from ...schemas.question_class import Question
-    from ...schemas.rubric_class import Rubric
+    from ...schemas.domain import Question, Rubric
 
-from ..models import ModelConfig, VerificationConfig
-from ..verification.rubric_evaluator import RubricEvaluator
+from ...schemas.workflow import ModelConfig, VerificationConfig
+from ..verification.evaluators.rubric_evaluator import RubricEvaluator
 from .models import LogEvent, StepEval, TaskEvalResult
 
 
@@ -244,7 +243,7 @@ class TaskEval:
             concatenated_logs = "\n\n".join(relevant_logs)
 
             # Check for conflicts between standalone and question rubrics
-            from ..verification.template_utils import extract_rubric_traits_from_template
+            from ..verification.utils.parsing import extract_rubric_traits_from_template
             from .helpers import check_rubric_conflicts
 
             standalone_traits, question_traits = check_rubric_conflicts(
@@ -353,7 +352,7 @@ class TaskEval:
             concatenated_logs = "\n\n".join(relevant_logs)
 
             # Check for conflicts between standalone and question rubrics
-            from ..verification.template_utils import extract_rubric_traits_from_template
+            from ..verification.utils.parsing import extract_rubric_traits_from_template
             from .helpers import check_rubric_conflicts
 
             standalone_traits, question_traits = check_rubric_conflicts(
@@ -424,7 +423,7 @@ class TaskEval:
 
         Handles both Question objects and dictionary objects from Benchmark.
         """
-        from ...schemas.question_class import Question
+        from ...schemas.domain import Question
 
         if isinstance(question, Question):
             return {
@@ -517,7 +516,7 @@ class TaskEval:
         # Temporarily add the response to manual traces
         import time
 
-        from ...llm.manual_traces import get_trace_manager
+        from ...infrastructure.llm.manual_traces import get_trace_manager
 
         trace_manager = get_trace_manager()
 
@@ -634,7 +633,7 @@ class TaskEval:
         if not rubrics:
             return None
 
-        from ...schemas.rubric_class import ManualRubricTrait, Rubric, RubricTrait
+        from ...schemas.domain import ManualRubricTrait, Rubric, RubricTrait
 
         # Check for trait name conflicts first (across all trait types)
         all_trait_names = []

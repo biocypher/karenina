@@ -1,4 +1,31 @@
-"""Export and reporting functionality for benchmarks."""
+"""Export and reporting functionality for benchmark structure and metadata.
+
+This module provides the ExportManager class for exporting benchmark STRUCTURE
+and METADATA - the definition of the benchmark itself (questions, templates,
+rubrics, statistics), not verification execution results.
+
+Key Methods:
+- to_dict(): Export benchmark as dictionary
+- to_markdown(): Export benchmark as markdown document
+- to_csv(): Export questions as CSV
+- get_summary(): Get benchmark statistics
+- get_statistics(): Get detailed statistics
+- check_readiness(): Check if benchmark is ready for verification
+- get_health_report(): Get comprehensive health report
+- export_to_file(): Export to file in various formats
+
+Note: This module is distinct from benchmark/exporter.py, which handles
+exporting verification EXECUTION RESULTS (what happened during verification),
+not benchmark structure/metadata.
+
+Usage:
+    from karenina.benchmark import Benchmark
+
+    benchmark = Benchmark.load("path/to/benchmark.jsonld")
+    # ExportManager is accessed via Benchmark.export_manager
+    summary = benchmark.export_manager.get_summary()
+    benchmark_dict = benchmark.export_manager.to_dict()
+"""
 
 import csv
 import tempfile
@@ -14,7 +41,28 @@ if TYPE_CHECKING:
 
 
 class ExportManager:
-    """Manager for export functionality and reporting."""
+    """Manager for exporting benchmark structure, metadata, and reporting.
+
+    This class handles exporting the benchmark STRUCTURE and METADATA:
+    - Questions and their definitions
+    - Templates and their definitions
+    - Rubrics and their definitions
+    - Statistics and health reports
+    - Benchmark metadata (name, version, creator, etc.)
+
+    This is distinct from benchmark/exporter.py functions which export
+    verification EXECUTION RESULTS (what happened when questions were verified).
+
+    Examples:
+        >>> benchmark = Benchmark.load("benchmark.jsonld")
+        >>> # Export benchmark structure
+        >>> summary = benchmark.export_manager.get_summary()
+        >>> markdown = benchmark.export_manager.to_markdown()
+        >>> # Check readiness
+        >>> readiness = benchmark.export_manager.check_readiness()
+        >>> # Export to file
+        >>> benchmark.export_manager.export_to_file("export.json", format="json")
+    """
 
     def __init__(
         self, base: "BenchmarkBase", templates_manager: "TemplateManager", rubrics_manager: "RubricManager"

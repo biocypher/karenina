@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from ...schemas.checkpoint import JsonLdCheckpoint
-from ...utils.checkpoint_converter import (
+from ...utils.checkpoint import (
     create_jsonld_benchmark,
     extract_questions_from_benchmark,
     validate_jsonld_benchmark,
@@ -126,7 +126,7 @@ class BenchmarkBase:
         if item.id:
             return str(item.id)
         # Generate from question text if no ID
-        from ...utils.checkpoint_converter import generate_question_id
+        from ...utils.checkpoint import generate_question_id
 
         return generate_question_id(item.item.text)
 

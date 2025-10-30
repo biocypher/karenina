@@ -37,7 +37,7 @@ def mock_llm_response() -> None:
     return """Here's your answer template:
 
 ```python
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -53,7 +53,7 @@ This template should work well for your question."""
 @pytest.fixture
 def mock_code_blocks() -> None:
     """Mock extracted code blocks."""
-    return """from karenina.schemas.answer_class import BaseAnswer
+    return """from karenina.schemas.domain import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -66,7 +66,7 @@ class Answer(BaseAnswer):
 @pytest.fixture
 def valid_template_code() -> None:
     """Valid template code for testing."""
-    return """from karenina.schemas.answer_class import BaseAnswer
+    return """from karenina.schemas.domain import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -408,7 +408,7 @@ class TestTemplateExportImport:
         # Setup mock return value
         mock_templates = {}
         # Use different template code for import
-        import_template = """from karenina.schemas.answer_class import BaseAnswer
+        import_template = """from karenina.schemas.domain import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -439,7 +439,7 @@ class Answer(BaseAnswer):
         sample_benchmark.add_answer_template("q1", valid_template_code)
 
         # Setup mock return value
-        import_template = """from karenina.schemas.answer_class import BaseAnswer
+        import_template = """from karenina.schemas.domain import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):

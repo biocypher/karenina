@@ -6,8 +6,8 @@ and exception handling.
 
 import pytest
 
-from karenina.benchmark.models import ModelConfig, VerificationConfig, VerificationResult
 from karenina.benchmark.verification.exceptions import ExcerptNotFoundError
+from karenina.schemas import ModelConfig, VerificationConfig, VerificationResult
 
 
 # Helper to create a minimal parsing model for tests
@@ -87,6 +87,7 @@ class TestVerificationConfigDeepJudgment:
             deep_judgment_enabled=True,
             abstention_enabled=True,
             rubric_enabled=True,
+            evaluation_mode="template_and_rubric",
         )
 
         assert config.deep_judgment_enabled is True
@@ -388,6 +389,7 @@ class TestVerificationConfigSearchEnhancedDeepJudgment:
             deep_judgment_search_enabled=True,
             abstention_enabled=True,
             rubric_enabled=True,
+            evaluation_mode="template_and_rubric",
         )
 
         assert config.deep_judgment_enabled is True

@@ -4,12 +4,12 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ...schemas.rubric_class import Rubric
+    from ...schemas.domain import Rubric
 
-from ..models import ModelConfig
-from ..verification.rubric_evaluator import RubricEvaluator
+from ...schemas.workflow import ModelConfig
+from ..verification.evaluators.rubric_evaluator import RubricEvaluator
 
-# Import the shared function from template_utils
+# Import the shared function from utils.parsing
 
 
 def check_rubric_conflicts(
@@ -120,7 +120,7 @@ def evaluate_question_with_rubric(
     if answer_template:
         question_rubric_traits = extract_traits_func(answer_template)
         if question_rubric_traits:
-            from ...schemas.rubric_class import Rubric
+            from ...schemas.domain import Rubric
 
             question_rubric = Rubric(traits=question_rubric_traits)
 

@@ -55,21 +55,21 @@ This page provides comprehensive API documentation for all Karenina classes, met
 
 ## LLM Interface
 
-::: karenina.llm.interface
+::: karenina.infrastructure.llm.interface
     options:
       show_source: true
       heading_level: 3
 
 ## Question Utilities
 
-::: karenina.questions.extractor
+::: karenina.domain.questions.extractor
     options:
       show_source: true
       heading_level: 3
 
 ## Answer Generation
 
-::: karenina.answers.generator
+::: karenina.domain.answers.generator
     options:
       show_source: true
       heading_level: 3
