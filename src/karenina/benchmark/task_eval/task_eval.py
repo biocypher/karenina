@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from ...schemas.rubric_class import Rubric
 
 from ..models import ModelConfig, VerificationConfig
-from ..verification.rubric_evaluator import RubricEvaluator
+from ..verification.evaluators.rubric_evaluator import RubricEvaluator
 from .models import LogEvent, StepEval, TaskEvalResult
 
 
@@ -244,7 +244,7 @@ class TaskEval:
             concatenated_logs = "\n\n".join(relevant_logs)
 
             # Check for conflicts between standalone and question rubrics
-            from ..verification.template_utils import extract_rubric_traits_from_template
+            from ..verification.utils.parsing import extract_rubric_traits_from_template
             from .helpers import check_rubric_conflicts
 
             standalone_traits, question_traits = check_rubric_conflicts(
@@ -353,7 +353,7 @@ class TaskEval:
             concatenated_logs = "\n\n".join(relevant_logs)
 
             # Check for conflicts between standalone and question rubrics
-            from ..verification.template_utils import extract_rubric_traits_from_template
+            from ..verification.utils.parsing import extract_rubric_traits_from_template
             from .helpers import check_rubric_conflicts
 
             standalone_traits, question_traits = check_rubric_conflicts(

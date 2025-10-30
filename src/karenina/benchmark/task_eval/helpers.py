@@ -7,9 +7,9 @@ if TYPE_CHECKING:
     from ...schemas.rubric_class import Rubric
 
 from ..models import ModelConfig
-from ..verification.rubric_evaluator import RubricEvaluator
+from ..verification.evaluators.rubric_evaluator import RubricEvaluator
 
-# Import the shared function from template_utils
+# Import the shared function from utils.parsing
 
 
 def check_rubric_conflicts(
