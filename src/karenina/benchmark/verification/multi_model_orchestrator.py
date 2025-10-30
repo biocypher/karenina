@@ -6,8 +6,8 @@ from typing import Any, Literal, cast
 from ...schemas.rubric_class import Rubric
 from ...utils.async_utils import AsyncConfig, execute_with_config
 from ..models import ModelConfig, VerificationConfig, VerificationResult
-from .embedding_utils import clear_embedding_model_cache, preload_embedding_model
 from .runner import run_single_model_verification
+from .tools.embedding_check import clear_embedding_model_cache, preload_embedding_model
 
 
 def _create_verification_task(
@@ -127,7 +127,7 @@ def run_question_verification(
 
     # Preload embedding model if embedding check is enabled
     try:
-        from .embedding_utils import _should_use_embedding_check
+        from .tools.embedding_check import _should_use_embedding_check
 
         if _should_use_embedding_check():
             preload_embedding_model()
@@ -267,7 +267,7 @@ def run_question_verification(
 
     # Clean up embedding model cache after job completion
     try:
-        from .embedding_utils import _should_use_embedding_check
+        from .tools.embedding_check import _should_use_embedding_check
 
         if _should_use_embedding_check():
             clear_embedding_model_cache()
