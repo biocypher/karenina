@@ -126,6 +126,15 @@ def run_single_model_verification(
     context.set_artifact("answering_model_str", answering_model_str)
     context.set_artifact("parsing_model_str", parsing_model_str)
 
+    # Determine evaluation mode automatically if not explicitly set
+    # If rubric is provided and mode is template_only, upgrade to template_and_rubric
+    if (
+        rubric
+        and (rubric.traits or rubric.manual_traits or rubric.metric_traits)
+        and evaluation_mode == "template_only"
+    ):
+        evaluation_mode = "template_and_rubric"
+
     # Build stage orchestrator from configuration
     orchestrator = StageOrchestrator.from_config(
         answering_model=answering_model,

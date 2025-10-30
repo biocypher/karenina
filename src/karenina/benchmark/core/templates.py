@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from .base import BenchmarkBase
 
 from ..models import FinishedTemplate
-from ..verification.validation import validate_answer_template
+from ..verification.utils.validation import validate_answer_template
 
 
 class TemplateManager:

@@ -25,19 +25,20 @@ from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from ...schemas.answer_class import BaseAnswer
-from ..models import ModelConfig, VerificationConfig
-from .fuzzy_match import fuzzy_match_excerpt
-from .parser_utils import (
+from ....schemas import SearchResultItem
+from ....schemas.answer_class import BaseAnswer
+from ...models import ModelConfig, VerificationConfig
+from ..tools.fuzzy_match import fuzzy_match_excerpt
+from ..tools.search_tools import create_search_tool
+from ..utils.parsing import (
     _extract_attribute_descriptions,
     _extract_attribute_names_from_class,
+    _format_search_results_for_llm,
     _invoke_llm_with_retry,
     _strip_markdown_fences,
     format_excerpts_for_reasoning,
     format_reasoning_for_parsing,
-    format_search_results_for_llm,
 )
-from .search_tools import create_search_tool
 
 logger = logging.getLogger(__name__)
 
@@ -187,7 +188,7 @@ Return JSON format:
         cleaned_response = _strip_markdown_fences(raw_response)
 
         try:
-            parsed_excerpts = json.loads(cleaned_response)
+            parsed_excerpts = {} if cleaned_response is None else json.loads(cleaned_response)
         except json.JSONDecodeError as e:
             logger.warning(f"Failed to parse excerpt JSON (attempt {attempt + 1}/{max_retries + 1}): {e}")
             if attempt < max_retries:
@@ -317,11 +318,28 @@ Return JSON format:
                 for (_attr, excerpt_obj, _), search_result in zip(excerpts_to_search, search_results, strict=False):
                     # Convert list[SearchResultItem] to list[dict] for JSON serialization
                     if isinstance(search_result, list):
+                        # Check if it's a list of SearchResultItem objects or already dicts
+                        if search_result and isinstance(search_result[0], SearchResultItem):
+                            excerpt_obj["search_results"] = [
+                                {"title": item.title, "content": item.content, "url": item.url}
+                                for item in search_result
+                            ]
+                        elif search_result and isinstance(search_result[0], dict):
+                            # Already in dict format
+                            excerpt_obj["search_results"] = search_result
+                        else:
+                            # Empty list or unknown format
+                            excerpt_obj["search_results"] = []
+                    elif isinstance(search_result, str):
+                        # Backward compatibility: string result
+                        excerpt_obj["search_results"] = search_result
+                    elif isinstance(search_result, SearchResultItem):
+                        # Single SearchResultItem
                         excerpt_obj["search_results"] = [
-                            {"title": item.title, "content": item.content, "url": item.url} for item in search_result
+                            {"title": search_result.title, "content": search_result.content, "url": search_result.url}
                         ]
                     else:
-                        # Shouldn't happen with new interface, but handle gracefully
+                        # Unknown format
                         excerpt_obj["search_results"] = []
                         logger.warning(f"Unexpected search result type: {type(search_result)}")
 
@@ -382,7 +400,7 @@ Be conservative - only assign "none" when evidence is very strong."""
 
                 # Format search results for LLM (list[dict] -> string)
                 if isinstance(search_results_raw, list):
-                    search_results_formatted = format_search_results_for_llm(search_results_raw)
+                    search_results_formatted = _format_search_results_for_llm(search_results_raw)
                 else:
                     # Backward compatibility: if stored as string, use as-is
                     search_results_formatted = search_results_raw
@@ -420,7 +438,7 @@ Return JSON format with assessments for ALL excerpts:
                 raw_response = _invoke_llm_with_retry(parsing_llm, messages)
                 model_calls += 1
                 cleaned_response = _strip_markdown_fences(raw_response)
-                assessment_data = json.loads(cleaned_response)
+                assessment_data = {} if cleaned_response is None else json.loads(cleaned_response)
 
                 # Match assessments back to excerpts
                 for assessment in assessment_data.get("excerpt_assessments", []):
@@ -559,7 +577,7 @@ Return JSON format with ONLY the attributes listed above:
     cleaned_response = _strip_markdown_fences(raw_response)
 
     try:
-        reasoning_raw = json.loads(cleaned_response)
+        reasoning_raw = {} if cleaned_response is None else json.loads(cleaned_response)
     except json.JSONDecodeError as e:
         logger.warning(f"Failed to parse reasoning JSON: {e}")
         reasoning_raw = {}  # Gracefully handle failures
@@ -642,6 +660,8 @@ Your task is to extract the final attribute values based on the reasoning traces
     from langchain_core.output_parsers import PydanticOutputParser
 
     parser = PydanticOutputParser(pydantic_object=RawAnswer)
+    if cleaned_response is None:
+        raise ValueError("Empty response from LLM for parameter extraction")
     parsed_answer = parser.parse(cleaned_response)
 
     stages_completed.append("parameters")

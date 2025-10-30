@@ -32,12 +32,12 @@ from ...llm.interface import init_chat_model_unified
 from ...schemas.rubric_class import Rubric
 from ...utils.checkpoint_converter import generate_template_id
 from ..models import ModelConfig, VerificationConfig, VerificationResult
-from .abstention_checker import detect_abstention
-from .deep_judgment import deep_judgment_parse
-from .embedding_utils import perform_embedding_check
-from .parser_utils import _strip_markdown_fences
-from .rubric_evaluator import RubricEvaluator
-from .validation import validate_answer_template
+from .evaluators.abstention_checker import detect_abstention
+from .evaluators.deep_judgment import deep_judgment_parse
+from .evaluators.rubric_evaluator import RubricEvaluator
+from .tools.embedding_check import perform_embedding_check
+from .utils.parsing import _strip_markdown_fences
+from .utils.validation import validate_answer_template
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -368,7 +368,7 @@ def run_single_model_verification(
         ground_truth = None
         if _should_expose_ground_truth():
             try:
-                from .template_utils import create_test_instance_from_answer_class
+                from .utils.parsing import create_test_instance_from_answer_class
 
                 # Create test instance and extract ground truth
                 _, ground_truth = create_test_instance_from_answer_class(RawAnswer)

@@ -937,7 +937,7 @@ class Benchmark:
 
     def validate(self) -> tuple[bool, str]:
         """Validate the benchmark structure and all templates."""
-        from .verification.validation import validate_answer_template
+        from .verification.utils.validation import validate_answer_template
 
         # Validate benchmark structure
         is_valid, error_msg = self._base.validate()

@@ -5,7 +5,7 @@ Evaluates LLM responses against qualitative rubric criteria.
 
 import logging
 
-from ..rubric_evaluator import RubricEvaluator
+from ..evaluators.rubric_evaluator import RubricEvaluator
 from ..stage import BaseVerificationStage, VerificationContext
 
 # Set up logger

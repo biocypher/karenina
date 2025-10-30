@@ -11,9 +11,9 @@ from langchain_core.output_parsers import PydanticOutputParser
 
 from ....llm.interface import init_chat_model_unified
 from ...models import VerificationConfig
-from ..deep_judgment import deep_judgment_parse
-from ..parser_utils import _strip_markdown_fences
+from ..evaluators.deep_judgment import deep_judgment_parse
 from ..stage import BaseVerificationStage, VerificationContext
+from ..utils.parsing import _strip_markdown_fences
 from ..verification_utils import _should_expose_ground_truth, _system_prompt_compose
 
 # Set up logger
@@ -138,7 +138,7 @@ class ParseTemplateStage(BaseVerificationStage):
         ground_truth = None
         if _should_expose_ground_truth():
             try:
-                from ..template_utils import create_test_instance_from_answer_class
+                from ..utils.parsing import create_test_instance_from_answer_class
 
                 # Create test instance and extract ground truth
                 _, ground_truth = create_test_instance_from_answer_class(RawAnswer)

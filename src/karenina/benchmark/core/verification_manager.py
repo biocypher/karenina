@@ -11,8 +11,8 @@ if TYPE_CHECKING:
 
 from ...utils.checkpoint_converter import generate_template_id
 from ..models import VerificationConfig, VerificationResult
-from ..verification.orchestrator import run_question_verification
-from ..verification.validation import validate_answer_template
+from ..verification.multi_model_orchestrator import run_question_verification
+from ..verification.utils.validation import validate_answer_template
 
 
 class VerificationManager:
