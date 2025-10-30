@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from karenina.benchmark.models import ModelConfig
-from karenina.benchmark.verification.rubric_evaluator import RubricEvaluator
+from karenina.benchmark.verification.evaluators.rubric_evaluator import RubricEvaluator
 from karenina.schemas.rubric_class import ManualRubricTrait, Rubric, RubricTrait
 
 

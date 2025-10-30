@@ -3,7 +3,7 @@
 from unittest.mock import Mock, patch
 
 from karenina.benchmark.models import VerificationConfig
-from karenina.benchmark.verification.parser_utils import _strip_markdown_fences
+from karenina.benchmark.verification.utils.parsing import _strip_markdown_fences
 from karenina.benchmark.verification.verification_utils import _system_prompt_compose
 from karenina.benchmark.verifier import run_question_verification, validate_answer_template
 
@@ -135,7 +135,7 @@ def test_run_question_verification_template_validation_failure(mock_init_model) 
     assert len(results) == 1
     result = list(results.values())[0]
 
-    assert result.success is False
+    assert result.completed_without_errors is False
     assert "Template validation failed" in result.error
     assert result.question_id == "test_id"
     assert result.question_text == "What is 2+2?"
@@ -168,7 +168,7 @@ def test_run_question_verification_success(mock_init_model) -> None:
     )
 
     # Mock the PydanticOutputParser
-    with patch("karenina.benchmark.verification.runner.PydanticOutputParser") as mock_parser_class:
+    with patch("karenina.benchmark.verification.stages.parse_template.PydanticOutputParser") as mock_parser_class:
         mock_parser = Mock()
         mock_parser.get_format_instructions.return_value = "Format the response as JSON with the following structure..."
         mock_parser.parse.return_value = mock_answer
@@ -207,7 +207,7 @@ class Answer(BaseAnswer):
         assert len(results) == 1
         result = list(results.values())[0]
 
-        assert result.success is True
+        assert result.completed_without_errors is True
         assert result.error is None
         assert result.question_id == "test_id"
         assert result.question_text == "What is 2+2?"
@@ -238,7 +238,7 @@ def test_run_question_verification_markdown_fenced_json(mock_init_model) -> None
     )
 
     # Mock the PydanticOutputParser
-    with patch("karenina.benchmark.verification.runner.PydanticOutputParser") as mock_parser_class:
+    with patch("karenina.benchmark.verification.stages.parse_template.PydanticOutputParser") as mock_parser_class:
         mock_parser = Mock()
         mock_parser.get_format_instructions.return_value = "Format the response as JSON with the following structure..."
         mock_parser.parse.return_value = mock_answer
@@ -277,7 +277,7 @@ class Answer(BaseAnswer):
         assert len(results) == 1
         result = list(results.values())[0]
 
-        assert result.success is True
+        assert result.completed_without_errors is True
         assert result.error is None
         assert result.question_id == "test_id"
         assert result.question_text == "What is 2+2?"
@@ -305,7 +305,7 @@ def test_run_question_verification_malformed_json(mock_init_model) -> None:
     )
 
     # Mock the PydanticOutputParser to raise an exception
-    with patch("karenina.benchmark.verification.runner.PydanticOutputParser") as mock_parser_class:
+    with patch("karenina.benchmark.verification.stages.parse_template.PydanticOutputParser") as mock_parser_class:
         mock_parser = Mock()
         mock_parser.get_format_instructions.return_value = "Format the response as JSON with the following structure..."
         mock_parser.parse.side_effect = Exception("Invalid JSON format")
@@ -344,7 +344,7 @@ class Answer(BaseAnswer):
         assert len(results) == 1
         result = list(results.values())[0]
 
-        assert result.success is False
+        assert result.completed_without_errors is False
         assert "Parsing failed: Invalid JSON format" in result.error
         assert result.question_id == "test_id"
         assert result.question_text == "What is 2+2?"

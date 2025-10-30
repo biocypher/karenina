@@ -253,7 +253,7 @@ class TestAnswerSourceCodeIntegration:
 
     def test_validation_system_preserves_source_code(self) -> None:
         """Test that the validation system preserves source code."""
-        from karenina.benchmark.verification.validation import validate_answer_template
+        from karenina.benchmark.verification.utils.validation import validate_answer_template
 
         template_code = '''
 from pydantic import Field
@@ -280,7 +280,7 @@ class Answer(BaseAnswer):
 
     def test_template_utils_preserves_source_code(self) -> None:
         """Test that template utils preserve source code."""
-        from karenina.benchmark.verification.template_utils import extract_ground_truth_from_template_code
+        from karenina.benchmark.verification.utils.parsing import extract_ground_truth_from_template_code
 
         template_code = '''
 from pydantic import Field

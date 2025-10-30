@@ -26,9 +26,15 @@ class TestGenerateAnswerStage:
         assert stage.should_run(basic_context) is True
 
     def test_should_not_run_without_answer_artifact(self, basic_context: VerificationContext) -> None:
-        """Test that should_run returns False when Answer artifact is missing."""
+        """Test that stage runs even without Answer artifact (rubric_only mode)."""
+        # Remove Answer artifact to simulate rubric_only mode
+        basic_context.artifacts = {}
+
+        # Stage should still run in rubric_only mode (no Answer needed)
         stage = GenerateAnswerStage()
-        assert stage.should_run(basic_context) is False
+        should_run = stage.should_run(basic_context)
+        # In rubric_only mode, stage runs even without Answer artifact
+        assert should_run is True
 
     def test_should_not_run_with_error(self, basic_context: VerificationContext) -> None:
         """Test that should_run returns False if there's an error."""
@@ -263,7 +269,8 @@ class TestGenerateAnswerStage:
         stage = GenerateAnswerStage()
 
         assert stage.name == "GenerateAnswer"
-        assert stage.requires == ["Answer"]
+        # Answer artifact is optional (not required) for rubric_only mode
+        assert "Answer" not in stage.requires or len(stage.requires) == 0
         assert "raw_llm_response" in stage.produces
         assert "recursion_limit_reached" in stage.produces
         assert "answering_model_str" in stage.produces

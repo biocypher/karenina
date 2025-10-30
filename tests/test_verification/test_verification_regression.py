@@ -242,7 +242,7 @@ class TestBasicRegression:
         assert new_result.verify_result is True
         assert new_result.completed_without_errors is True
 
-    @patch("karenina.benchmark.verification.rubric_evaluator.RubricEvaluator")
+    @patch("karenina.benchmark.verification.stages.rubric_evaluation.RubricEvaluator")
     @patch("karenina.benchmark.verification.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
@@ -300,10 +300,7 @@ class TestBasicRegression:
 
         # Mock rubric evaluator
         mock_evaluator = Mock()
-        mock_evaluator.evaluate_traits.return_value = (
-            {"Clarity": 8},  # trait_result
-            {"Clarity": "Very clear answer"},  # trait_reasoning
-        )
+        mock_evaluator.evaluate_rubric.return_value = {"Clarity": 8}
         mock_evaluator_class.return_value = mock_evaluator
 
         # Setup rubric
@@ -919,7 +916,7 @@ class TestAdvancedRegression:
         """
         pytest.skip("Metric trait evaluation is tested in combined features test")
 
-    @patch("karenina.benchmark.verification.rubric_evaluator.RubricEvaluator")
+    @patch("karenina.benchmark.verification.stages.rubric_evaluation.RubricEvaluator")
     @patch("karenina.benchmark.verification.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
@@ -976,15 +973,12 @@ class TestAdvancedRegression:
 
         # Mock rubric evaluator for both trait types
         mock_evaluator = Mock()
-        # Regular traits
-        mock_evaluator.evaluate_traits.return_value = (
-            {"Clarity": 9, "Completeness": 8},  # trait_result
-            {"Clarity": "Very clear answer", "Completeness": "Complete solution"},  # trait_reasoning
-        )
-        # Metric traits
-        mock_confusion_lists = {"Accuracy": {"tp": ["Correct value"], "tn": [], "fp": [], "fn": []}}
+        # Return dict directly, not Mock object
+        mock_evaluator.evaluate_rubric = Mock(return_value={"Clarity": 8, "Completeness": 5})
+        # Mock confusion lists - use actual extracted value '42' to match legacy implementation
+        mock_confusion_lists = {"Accuracy": {"tp": ["42"], "tn": [], "fp": [], "fn": []}}
         mock_metrics = {"Accuracy": {"precision": 1.0, "recall": 1.0, "f1": 1.0}}
-        mock_evaluator.evaluate_metric_traits.return_value = (mock_confusion_lists, mock_metrics)
+        mock_evaluator.evaluate_metric_traits = Mock(return_value=(mock_confusion_lists, mock_metrics))
         mock_evaluator_class.return_value = mock_evaluator
 
         # Setup comprehensive rubric

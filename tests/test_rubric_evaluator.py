@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from karenina.benchmark.models import INTERFACE_LANGCHAIN, INTERFACE_MANUAL, INTERFACE_OPENROUTER, ModelConfig
-from karenina.benchmark.verification.rubric_evaluator import RubricEvaluator
+from karenina.benchmark.verification.evaluators.rubric_evaluator import RubricEvaluator
 from karenina.schemas.rubric_class import Rubric, RubricTrait
 
 
@@ -40,7 +40,7 @@ class TestRubricEvaluator:
             system_prompt="You are a helpful assistant.",
         )
 
-    @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
+    @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
     def test_evaluator_initialization(self, mock_init_model, mock_model_config) -> None:
         """Test RubricEvaluator initialization."""
         mock_llm = Mock()
@@ -54,7 +54,7 @@ class TestRubricEvaluator:
             model="gpt-4.1-mini", provider="openai", temperature=0.1, interface="langchain"
         )
 
-    @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
+    @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
     def test_evaluate_empty_rubric(self, mock_init_model, mock_model_config) -> None:
         """Test evaluation with empty rubric."""
         mock_llm = Mock()
@@ -67,7 +67,7 @@ class TestRubricEvaluator:
 
         assert result == {}
 
-    @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
+    @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
     def test_evaluate_rubric_success(self, mock_init_model, mock_model_config, sample_rubric) -> None:
         """Test successful rubric evaluation."""
         mock_llm = Mock()
@@ -90,7 +90,7 @@ class TestRubricEvaluator:
         assert result["accuracy"] is True
         assert result["completeness"] == 4
 
-    @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
+    @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
     def test_evaluate_rubric_partial_response(self, mock_init_model, mock_model_config, sample_rubric) -> None:
         """Test evaluation with partial response from LLM."""
         mock_llm = Mock()
@@ -111,7 +111,7 @@ class TestRubricEvaluator:
         # Should only include traits that were returned
         assert "completeness" not in result or result["completeness"] is None
 
-    @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
+    @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
     def test_evaluate_rubric_mixed_types(self, mock_init_model, mock_model_config) -> None:
         """Test evaluation with mixed boolean and score traits."""
         mock_llm = Mock()
@@ -140,7 +140,7 @@ class TestRubricEvaluator:
         assert result["bool_trait"] is False
         assert result["score_trait"] == 2
 
-    @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
+    @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
     def test_evaluator_with_different_providers(self, mock_init_model) -> None:
         """Test evaluator with different model providers."""
         test_configs = [
@@ -168,7 +168,7 @@ class TestRubricEvaluator:
             assert evaluator.model_config.model_name == model
             assert evaluator.llm == mock_llm
 
-    @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
+    @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
     def test_evaluate_rubric_integration(self, mock_init_model, mock_model_config) -> None:
         """Integration test with comprehensive rubric evaluation."""
         mock_llm = Mock()
@@ -265,7 +265,7 @@ class TestRubricEvaluatorEdgeCases:
         )
 
         # Should not raise errors during validation
-        with patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified") as mock_init:
+        with patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified") as mock_init:
             mock_init.return_value = Mock()
             evaluator = RubricEvaluator(config)
             assert evaluator.model_config == config
@@ -282,12 +282,12 @@ class TestRubricEvaluatorEdgeCases:
         )
 
         # Should not raise errors during validation
-        with patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified") as mock_init:
+        with patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified") as mock_init:
             mock_init.return_value = Mock()
             evaluator = RubricEvaluator(config)
             assert evaluator.model_config == config
 
-    @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
+    @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
     def test_evaluator_initialization_llm_failure(self, mock_init_model) -> None:
         """Test RubricEvaluator initialization with LLM initialization failure."""
         config = ModelConfig(
@@ -305,7 +305,7 @@ class TestRubricEvaluatorEdgeCases:
         with pytest.raises(RuntimeError, match="Failed to initialize LLM for rubric evaluation"):
             RubricEvaluator(config)
 
-    @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
+    @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
     def test_evaluator_initialization_provider_validation_error_message(self, _mock_init_model) -> None:
         """Test that provider validation error message includes interface information."""
         config = ModelConfig(
@@ -327,7 +327,7 @@ class TestRubricEvaluatorEdgeCases:
             assert "openrouter" in error_msg
             assert "manual" in error_msg
 
-    @patch("karenina.benchmark.verification.rubric_evaluator.init_chat_model_unified")
+    @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
     def test_evaluator_handles_different_interface_types(self, mock_init_model) -> None:
         """Test that evaluator properly handles different interface types."""
         mock_init_model.return_value = Mock()

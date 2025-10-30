@@ -2,7 +2,7 @@
 
 import pytest
 
-from karenina.benchmark.verification.search_tools import create_search_tool
+from karenina.benchmark.verification.tools.search_tools import create_search_tool
 from karenina.schemas import SearchResultItem
 
 
