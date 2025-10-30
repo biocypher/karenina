@@ -1,23 +1,24 @@
 """LEGACY: Original monolithic verification implementation.
 
-⚠️ DEPRECATION WARNING ⚠️
+⚠️ TEST FIXTURE - NOT FOR PRODUCTION USE ⚠️
 
 This module contains the original monolithic verification implementation that has been
 replaced by a modern stage-based pipeline architecture. It is preserved ONLY for:
 1. Regression testing to prove behavioral equivalence with the new implementation
-2. Historical reference during the migration period
+2. Historical reference
 
 DO NOT USE THIS CODE FOR NEW FEATURES OR MODIFICATIONS.
 
 The new stage-based implementation is located in:
-- runner.py: Main entry point with run_single_model_verification()
-- stage_orchestrator.py: Pipeline orchestration
-- stages/: Individual verification stages
+- benchmark/verification/runner.py: Main entry point with run_single_model_verification()
+- benchmark/verification/stage_orchestrator.py: Pipeline orchestration
+- benchmark/verification/stages/: Individual verification stages
 
-This file will be removed once all regression tests pass 100% and the migration is complete.
+This file has been moved to tests/fixtures/legacy/ to indicate it is no longer part
+of the production codebase. It remains available for regression testing purposes.
 
-Migration Status: Week 2 Complete - 107/108 tests passing (99.1%)
-Target Removal: End of Week 3 (after code cleanup and final validation)
+Migration Status: Complete - All regression tests passing (14/14 tests)
+Location: tests/fixtures/legacy/runner_legacy.py
 """
 
 import logging
@@ -27,23 +28,23 @@ from typing import Any
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_core.output_parsers import PydanticOutputParser
 
-from ...answers.generator import inject_question_id_into_answer_class
-from ...llm.interface import init_chat_model_unified
-from ...schemas.domain import Rubric
-from ...schemas.workflow import ModelConfig, VerificationConfig, VerificationResult
-from ...utils.checkpoint import generate_template_id
-from .evaluators.abstention_checker import detect_abstention
-from .evaluators.deep_judgment import deep_judgment_parse
-from .evaluators.rubric_evaluator import RubricEvaluator
-from .tools.embedding_check import perform_embedding_check
-from .utils.parsing import _strip_markdown_fences
-from .utils.validation import validate_answer_template
+from karenina.answers.generator import inject_question_id_into_answer_class
+from karenina.benchmark.verification.evaluators.abstention_checker import detect_abstention
+from karenina.benchmark.verification.evaluators.deep_judgment import deep_judgment_parse
+from karenina.benchmark.verification.evaluators.rubric_evaluator import RubricEvaluator
+from karenina.benchmark.verification.tools.embedding_check import perform_embedding_check
+from karenina.benchmark.verification.utils.parsing import _strip_markdown_fences
+from karenina.benchmark.verification.utils.validation import validate_answer_template
+from karenina.llm.interface import init_chat_model_unified
+from karenina.schemas.domain import Rubric
+from karenina.schemas.workflow import ModelConfig, VerificationConfig, VerificationResult
+from karenina.utils.checkpoint import generate_template_id
 
 # Set up logger
 logger = logging.getLogger(__name__)
 
 # Import shared utility functions from verification_utils
-from .verification_utils import (  # noqa: E402
+from karenina.benchmark.verification.verification_utils import (  # noqa: E402
     _construct_few_shot_prompt,
     _invoke_llm_with_retry,
     _is_valid_md5_hash,
@@ -368,7 +369,7 @@ def run_single_model_verification(
         ground_truth = None
         if _should_expose_ground_truth():
             try:
-                from .utils.parsing import create_test_instance_from_answer_class
+                from karenina.benchmark.verification.utils.parsing import create_test_instance_from_answer_class
 
                 # Create test instance and extract ground truth
                 _, ground_truth = create_test_instance_from_answer_class(RawAnswer)
@@ -506,7 +507,7 @@ Original Question: {question_text}
         # Step 5: Run verification
         try:
             # Standard field verification
-            field_verification_result = parsed_answer.verify()  # type: ignore[attr-defined]
+            field_verification_result = parsed_answer.verify()
 
             # Step 5.1: Run regex verification on the raw trace
             regex_verification_results = parsed_answer.verify_regex(raw_llm_response)

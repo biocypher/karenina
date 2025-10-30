@@ -1,26 +1,22 @@
-"""Regression tests for verification pipeline refactor.
-
-These tests compare the new stage-based pipeline against the legacy
-monolithic implementation to ensure 100% behavioral equivalence.
-
-Test Strategy:
-- Mock LLM calls for deterministic results
-- Run both implementations with identical inputs
-- Compare all VerificationResult fields
-- Test various configuration combinations
-"""
-
+import sys
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
 from karenina.benchmark.verification.runner import run_single_model_verification
-from karenina.benchmark.verification.runner_legacy import (
-    run_single_model_verification as run_single_model_verification_LEGACY,
-)
 from karenina.schemas import ModelConfig, VerificationResult
 from karenina.schemas.domain import Rubric, RubricTrait
+
+# Import legacy runner from test fixtures - use sys.path manipulation for test-only code
+_legacy_path = Path(__file__).parent.parent / "fixtures"
+sys.path.insert(0, str(_legacy_path))
+from legacy.runner_legacy import (  # noqa: E402
+    run_single_model_verification as run_single_model_verification_LEGACY,
+)
+
+sys.path.remove(str(_legacy_path))
 
 
 def compare_verification_results(
@@ -158,7 +154,7 @@ def compare_verification_results(
 class TestBasicRegression:
     """Basic regression tests for common verification scenarios."""
 
-    @patch("karenina.benchmark.verification.runner_legacy.init_chat_model_unified")
+    @patch("legacy.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
     def test_basic_template_verification_equivalence(
@@ -243,7 +239,7 @@ class TestBasicRegression:
         assert new_result.completed_without_errors is True
 
     @patch("karenina.benchmark.verification.stages.rubric_evaluation.RubricEvaluator")
-    @patch("karenina.benchmark.verification.runner_legacy.init_chat_model_unified")
+    @patch("legacy.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
     def test_template_with_rubric_equivalence(
@@ -346,7 +342,7 @@ class TestBasicRegression:
         assert new_result.verify_rubric is not None
         assert "Clarity" in new_result.verify_rubric
 
-    @patch("karenina.benchmark.verification.runner_legacy.init_chat_model_unified")
+    @patch("legacy.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
     def test_template_verification_failure_equivalence(
@@ -425,7 +421,7 @@ class TestBasicRegression:
         assert new_result.verify_result is False
         assert new_result.completed_without_errors is True  # Pipeline succeeded, answer was wrong
 
-    @patch("karenina.benchmark.verification.runner_legacy.init_chat_model_unified")
+    @patch("legacy.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
     def test_error_case_equivalence(
@@ -485,7 +481,7 @@ class TestBasicRegression:
         assert new_result.error is not None
         assert "Template validation failed" in new_result.error or "syntax" in new_result.error.lower()
 
-    @patch("karenina.benchmark.verification.runner_legacy.init_chat_model_unified")
+    @patch("legacy.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
     def test_few_shot_prompting_equivalence(
@@ -573,11 +569,11 @@ class TestBasicRegression:
 class TestAdvancedRegression:
     """Advanced regression tests for complex features."""
 
-    @patch("karenina.benchmark.verification.runner_legacy.detect_abstention")
+    @patch("legacy.runner_legacy.detect_abstention")
     @patch("karenina.benchmark.verification.stages.abstention_check.detect_abstention")
-    @patch("karenina.benchmark.verification.runner_legacy.deep_judgment_parse")
+    @patch("legacy.runner_legacy.deep_judgment_parse")
     @patch("karenina.benchmark.verification.stages.parse_template.deep_judgment_parse")
-    @patch("karenina.benchmark.verification.runner_legacy.init_chat_model_unified")
+    @patch("legacy.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
     def test_deep_judgment_parsing_equivalence(
@@ -715,9 +711,9 @@ class TestAdvancedRegression:
         assert new_result.deep_judgment_model_calls == 3
         assert new_result.verify_result is True
 
-    @patch("karenina.benchmark.verification.runner_legacy.detect_abstention")
+    @patch("legacy.runner_legacy.detect_abstention")
     @patch("karenina.benchmark.verification.stages.abstention_check.detect_abstention")
-    @patch("karenina.benchmark.verification.runner_legacy.init_chat_model_unified")
+    @patch("legacy.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
     def test_abstention_detection_equivalence(
@@ -812,9 +808,9 @@ class TestAdvancedRegression:
         # Verification should fail due to abstention
         assert new_result.verify_result is False
 
-    @patch("karenina.benchmark.verification.runner_legacy.perform_embedding_check")
+    @patch("legacy.runner_legacy.perform_embedding_check")
     @patch("karenina.benchmark.verification.stages.embedding_check.perform_embedding_check")
-    @patch("karenina.benchmark.verification.runner_legacy.init_chat_model_unified")
+    @patch("legacy.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
     def test_embedding_check_equivalence(
@@ -917,7 +913,7 @@ class TestAdvancedRegression:
         pytest.skip("Metric trait evaluation is tested in combined features test")
 
     @patch("karenina.benchmark.verification.stages.rubric_evaluation.RubricEvaluator")
-    @patch("karenina.benchmark.verification.runner_legacy.init_chat_model_unified")
+    @patch("legacy.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
     def test_all_features_combined_equivalence(
@@ -1065,7 +1061,7 @@ class TestAdvancedRegression:
 class TestEdgeCaseRegression:
     """Edge case regression tests."""
 
-    @patch("karenina.benchmark.verification.runner_legacy.init_chat_model_unified")
+    @patch("legacy.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
     def test_empty_response_equivalence(
@@ -1131,7 +1127,7 @@ class TestEdgeCaseRegression:
         assert new_result.completed_without_errors is False
         assert new_result.error is not None
 
-    @patch("karenina.benchmark.verification.runner_legacy.init_chat_model_unified")
+    @patch("legacy.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
     def test_parsing_failure_equivalence(
@@ -1211,7 +1207,7 @@ class TestEdgeCaseRegression:
         assert new_result.error is not None
         assert "Parsing failed" in new_result.error or "parsing" in new_result.error.lower()
 
-    @patch("karenina.benchmark.verification.runner_legacy.init_chat_model_unified")
+    @patch("legacy.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
     def test_invalid_template_equivalence(
@@ -1273,7 +1269,7 @@ class TestEdgeCaseRegression:
         # Both should have the same error about invalid template
         assert new_result.error == legacy_result.error
 
-    @patch("karenina.benchmark.verification.runner_legacy.init_chat_model_unified")
+    @patch("legacy.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
     def test_recursion_limit_equivalence(
@@ -1356,7 +1352,7 @@ class TestEdgeCaseRegression:
         assert new_result.completed_without_errors is True
         assert legacy_result.completed_without_errors is True
 
-    @patch("karenina.benchmark.verification.runner_legacy.init_chat_model_unified")
+    @patch("legacy.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
     def test_mcp_agent_equivalence(
