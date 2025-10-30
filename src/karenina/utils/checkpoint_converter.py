@@ -19,7 +19,7 @@ from ..schemas.checkpoint import (
     SchemaOrgRating,
     SchemaOrgSoftwareSourceCode,
 )
-from ..schemas.rubric_class import ManualRubricTrait, MetricRubricTrait, RubricTrait
+from ..schemas.domain import ManualRubricTrait, MetricRubricTrait, RubricTrait
 
 
 class BenchmarkConversionError(Exception):

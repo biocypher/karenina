@@ -5,14 +5,14 @@ from unittest.mock import patch
 import pytest
 
 from karenina.questions.reader import read_questions_from_file
-from karenina.schemas.question_class import Question
+from karenina.schemas.domain import Question
 
 
 def test_read_questions_from_file_success() -> None:
     """Test successfully reading questions from a valid Python file."""
     # Create a temporary questions.py file
     questions_content = """
-from karenina.schemas.question_class import Question
+from karenina.schemas.domain import Question
 
 question_1 = Question(
     question="Test question 1?",
@@ -75,7 +75,7 @@ def test_read_questions_from_file_missing_all_questions() -> None:
     """Test reading from a file without 'all_questions' variable raises AttributeError."""
     # Create a file without all_questions
     questions_content = """
-from karenina.schemas.question_class import Question
+from karenina.schemas.domain import Question
 
 some_other_variable = "test"
 """
@@ -97,7 +97,7 @@ def test_read_questions_from_file_invalid_python() -> None:
     """Test reading from a file with invalid Python syntax raises ImportError."""
     # Create a file with invalid Python syntax
     invalid_content = """
-from karenina.schemas.question_class import Question
+from karenina.schemas.domain import Question
 
 this is not valid python syntax !!!
 all_questions = []
@@ -173,7 +173,7 @@ def test_read_questions_from_file_spec_loader_none() -> None:
 def test_read_questions_from_file_different_filenames() -> None:
     """Test reading questions from files with different names."""
     questions_content = """
-from karenina.schemas.question_class import Question
+from karenina.schemas.domain import Question
 
 all_questions = [
     Question(question="Q?", raw_answer="A", tags=[])
@@ -201,7 +201,7 @@ all_questions = [
 def test_read_questions_from_file_module_sys_registration() -> None:
     """Test that modules are properly registered in sys.modules."""
     questions_content = """
-from karenina.schemas.question_class import Question
+from karenina.schemas.domain import Question
 
 all_questions = [
     Question(id="test", question="Q?", raw_answer="A", tags=[])
@@ -236,7 +236,7 @@ def test_read_questions_from_file_return_dict() -> None:
     """Test reading questions and returning as dictionary with return_dict=True."""
     # Create a temporary questions.py file with multiple questions
     questions_content = """
-from karenina.schemas.question_class import Question
+from karenina.schemas.domain import Question
 
 question_1 = Question(
     question="First question?",
@@ -293,7 +293,7 @@ all_questions = [question_1, question_2]
 def test_read_questions_from_file_return_dict_vs_list() -> None:
     """Test that return_dict=False returns list and return_dict=True returns dict with same content."""
     questions_content = """
-from karenina.schemas.question_class import Question
+from karenina.schemas.domain import Question
 
 question_1 = Question(
     question="Test question?",
@@ -358,7 +358,7 @@ all_questions = []
 def test_read_questions_from_file_default_behavior_unchanged() -> None:
     """Test that default behavior (return_dict=False) is unchanged."""
     questions_content = """
-from karenina.schemas.question_class import Question
+from karenina.schemas.domain import Question
 
 all_questions = [
     Question(question="Q?", raw_answer="A", tags=[])

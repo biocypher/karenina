@@ -9,7 +9,7 @@ from karenina.benchmark.verification.stages.abstention_check import AbstentionCh
 from karenina.benchmark.verification.stages.deep_judgment_autofail import DeepJudgmentAutoFailStage
 from karenina.benchmark.verification.stages.embedding_check import EmbeddingCheckStage
 from karenina.benchmark.verification.stages.verify_template import VerifyTemplateStage
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 
 
 class MockAnswer(BaseAnswer):

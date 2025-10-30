@@ -7,7 +7,7 @@ import time
 from io import StringIO
 from typing import Any, Protocol
 
-from .models import VerificationJob, VerificationResult
+from ..schemas.workflow import VerificationJob, VerificationResult
 
 
 class HasTraitNames(Protocol):

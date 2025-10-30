@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from karenina.benchmark import Benchmark
-from karenina.schemas.question_class import Question
+from karenina.schemas.domain import Question
 from karenina.storage import DBConfig, load_benchmark, save_benchmark
 
 
@@ -425,7 +425,7 @@ class TestVerificationResultORMConversion:
         from sqlalchemy import create_engine
         from sqlalchemy.orm import Session
 
-        from karenina.benchmark.models import VerificationResult
+        from karenina.schemas import VerificationResult
         from karenina.storage.models import Base, BenchmarkModel, VerificationResultModel, VerificationRunModel
         from karenina.storage.operations import _create_result_model, _model_to_verification_result
 
@@ -494,7 +494,7 @@ class TestVerificationResultORMConversion:
         from sqlalchemy import create_engine
         from sqlalchemy.orm import Session
 
-        from karenina.benchmark.models import VerificationResult
+        from karenina.schemas import VerificationResult
         from karenina.storage.models import Base, BenchmarkModel, VerificationResultModel, VerificationRunModel
         from karenina.storage.operations import _create_result_model, _model_to_verification_result
 

@@ -1,9 +1,8 @@
 """Tests for TaskEval functionality."""
 
-from karenina.benchmark.models import ModelConfig, VerificationConfig
 from karenina.benchmark.task_eval import TaskEval
-from karenina.schemas.question_class import Question
-from karenina.schemas.rubric_class import Rubric, RubricTrait
+from karenina.schemas import ModelConfig, VerificationConfig
+from karenina.schemas.domain import Question, Rubric, RubricTrait
 
 
 class TestTaskEvalBasics:
@@ -493,7 +492,7 @@ class TestTaskEvalRubricEvaluation:
 
         # Add question with answer template
         answer_template_code = '''
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -516,7 +515,7 @@ class Answer(BaseAnswer):
         task.add_question(question)
 
         # Add rubric
-        from karenina.schemas.rubric_class import Rubric, RubricTrait
+        from karenina.schemas.domain import Rubric, RubricTrait
 
         rubric = Rubric(
             traits=[
@@ -585,7 +584,7 @@ class Answer(BaseAnswer):
         task.add_question(question)
 
         # Add rubric
-        from karenina.schemas.rubric_class import Rubric, RubricTrait
+        from karenina.schemas.domain import Rubric, RubricTrait
 
         rubric = Rubric(
             traits=[
@@ -650,7 +649,7 @@ class Answer(BaseAnswer):
         task = TaskEval(task_id="conflict_test")
 
         # Add two rubrics with the same trait name
-        from karenina.schemas.rubric_class import Rubric, RubricTrait
+        from karenina.schemas.domain import Rubric, RubricTrait
 
         rubric1 = Rubric(
             traits=[
@@ -700,8 +699,8 @@ class Answer(BaseAnswer):
 
         # Create an answer template with rubric traits
         answer_template_code = '''
-from karenina.schemas.answer_class import BaseAnswer
-from karenina.schemas.rubric_class import RubricTrait
+from karenina.schemas.domain import BaseAnswer
+from karenina.schemas.domain import RubricTrait
 from pydantic import Field
 from typing import ClassVar
 
@@ -763,7 +762,7 @@ class Answer(BaseAnswer):
         task = TaskEval(task_id="template_conflict_test")
 
         # Add a standalone rubric with a trait name
-        from karenina.schemas.rubric_class import Rubric, RubricTrait
+        from karenina.schemas.domain import Rubric, RubricTrait
 
         standalone_rubric = Rubric(
             traits=[
@@ -774,8 +773,8 @@ class Answer(BaseAnswer):
 
         # Create an answer template with the same trait name
         answer_template_code = '''
-from karenina.schemas.answer_class import BaseAnswer
-from karenina.schemas.rubric_class import RubricTrait
+from karenina.schemas.domain import BaseAnswer
+from karenina.schemas.domain import RubricTrait
 from pydantic import Field
 from typing import ClassVar
 

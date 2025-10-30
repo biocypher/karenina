@@ -4,12 +4,12 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from karenina.benchmark.models import ModelConfig, VerificationResult
 from karenina.benchmark.verification.evaluators.abstention_checker import (
     detect_abstention,
     is_retryable_error,
 )
 from karenina.benchmark.verification.utils.parsing import _strip_markdown_fences
+from karenina.schemas import ModelConfig, VerificationResult
 
 
 class TestStripMarkdownFences:
@@ -311,7 +311,7 @@ class TestVerificationConfigAbstention:
 
     def test_verification_config_has_abstention_field(self):
         """Test that VerificationConfig has abstention_enabled field."""
-        from karenina.benchmark.models import ModelConfig, VerificationConfig
+        from karenina.schemas import ModelConfig, VerificationConfig
 
         parsing_model = ModelConfig(
             id="parser",
@@ -327,7 +327,7 @@ class TestVerificationConfigAbstention:
 
     def test_verification_config_abstention_enabled(self):
         """Test setting abstention_enabled to True."""
-        from karenina.benchmark.models import ModelConfig, VerificationConfig
+        from karenina.schemas import ModelConfig, VerificationConfig
 
         parsing_model = ModelConfig(
             id="parser",

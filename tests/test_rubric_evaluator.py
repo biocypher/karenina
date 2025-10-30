@@ -4,9 +4,9 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from karenina.benchmark.models import INTERFACE_LANGCHAIN, INTERFACE_MANUAL, INTERFACE_OPENROUTER, ModelConfig
 from karenina.benchmark.verification.evaluators.rubric_evaluator import RubricEvaluator
-from karenina.schemas.rubric_class import Rubric, RubricTrait
+from karenina.schemas import INTERFACE_LANGCHAIN, INTERFACE_MANUAL, INTERFACE_OPENROUTER, ModelConfig
+from karenina.schemas.domain import Rubric, RubricTrait
 
 
 class TestRubricEvaluator:

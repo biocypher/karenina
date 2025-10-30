@@ -15,12 +15,12 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from karenina.benchmark.models import ModelConfig, VerificationResult
 from karenina.benchmark.verification.runner import run_single_model_verification
 from karenina.benchmark.verification.runner_legacy import (
     run_single_model_verification as run_single_model_verification_LEGACY,
 )
-from karenina.schemas.rubric_class import Rubric, RubricTrait
+from karenina.schemas import ModelConfig, VerificationResult
+from karenina.schemas.domain import Rubric, RubricTrait
 
 
 def compare_verification_results(
@@ -646,7 +646,7 @@ class TestAdvancedRegression:
         # Returns: (parsed_answer, excerpts, reasoning, metadata)
         from pydantic import Field
 
-        from karenina.schemas.answer_class import BaseAnswer
+        from karenina.schemas.domain import BaseAnswer
 
         # Create a mock parsed answer
         class TestAnswer(BaseAnswer):
@@ -982,7 +982,7 @@ class TestAdvancedRegression:
         mock_evaluator_class.return_value = mock_evaluator
 
         # Setup comprehensive rubric
-        from karenina.schemas.rubric_class import MetricRubricTrait
+        from karenina.schemas.domain import MetricRubricTrait
 
         rubric = Rubric(
             traits=[

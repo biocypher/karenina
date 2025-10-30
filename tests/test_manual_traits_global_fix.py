@@ -4,9 +4,9 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from karenina.benchmark.models import ModelConfig, VerificationConfig
 from karenina.benchmark.task_eval.task_eval import TaskEval
-from karenina.schemas.rubric_class import ManualRubricTrait, Rubric
+from karenina.schemas import ModelConfig, VerificationConfig
+from karenina.schemas.domain import ManualRubricTrait, Rubric
 
 
 class TestManualTraitsGlobalEvaluation:
@@ -106,7 +106,7 @@ class TestManualTraitsGlobalEvaluation:
 
     def test_mixed_llm_and_manual_traits_global(self, verification_config) -> None:
         """Test mixed LLM and manual traits in global evaluation."""
-        from karenina.schemas.rubric_class import RubricTrait
+        from karenina.schemas.domain import RubricTrait
 
         # Define test callable
         def contains_python(text: str) -> bool:

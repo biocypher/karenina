@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from .base import BenchmarkBase
 
-from ...schemas.rubric_class import ManualRubricTrait, MetricRubricTrait, Rubric, RubricTrait
+from ...schemas.domain import ManualRubricTrait, MetricRubricTrait, Rubric, RubricTrait
 from ...utils.checkpoint_converter import (
     add_global_rubric_to_benchmark,
     extract_global_rubric_from_benchmark,

@@ -25,9 +25,9 @@ from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from ....schemas import SearchResultItem
-from ....schemas.answer_class import BaseAnswer
-from ...models import ModelConfig, VerificationConfig
+from ....schemas.domain import BaseAnswer
+from ....schemas.shared import SearchResultItem
+from ....schemas.workflow import ModelConfig, VerificationConfig
 from ..tools.fuzzy_match import fuzzy_match_excerpt
 from ..tools.search_tools import create_search_tool
 from ..utils.parsing import (

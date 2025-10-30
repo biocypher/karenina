@@ -5,7 +5,7 @@ Builds the final VerificationResult from accumulated context.
 
 import logging
 
-from ...models import VerificationResult
+from ....schemas.workflow import VerificationResult
 from ..stage import BaseVerificationStage, VerificationContext
 from ..verification_utils import _split_parsed_response
 

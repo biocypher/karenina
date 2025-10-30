@@ -5,8 +5,8 @@ import json
 import pytest
 
 from karenina.benchmark.exporter import export_verification_results_csv, export_verification_results_json
-from karenina.benchmark.models import ModelConfig, VerificationConfig, VerificationJob, VerificationResult
-from karenina.schemas.rubric_class import Rubric, RubricTrait
+from karenina.schemas import ModelConfig, VerificationConfig, VerificationJob, VerificationResult
+from karenina.schemas.domain import Rubric, RubricTrait
 
 
 @pytest.fixture
@@ -616,7 +616,7 @@ class TestEvaluationModeFieldsExport:
     @pytest.fixture
     def simple_mock_job(self):
         """Simple mock job for testing export without complex rubric config."""
-        from karenina.benchmark.models import ModelConfig, VerificationConfig, VerificationJob
+        from karenina.schemas import ModelConfig, VerificationConfig, VerificationJob
 
         answering_model = ModelConfig(
             id="test",
@@ -641,7 +641,7 @@ class TestEvaluationModeFieldsExport:
 
     def test_json_export_includes_evaluation_mode_fields(self, simple_mock_job) -> None:
         """Test JSON export includes template_verification_performed and rubric_evaluation_performed."""
-        from karenina.benchmark.models import VerificationResult
+        from karenina.schemas import VerificationResult
 
         # Create result with evaluation mode fields
         result = VerificationResult(
@@ -675,7 +675,7 @@ class TestEvaluationModeFieldsExport:
 
     def test_json_export_rubric_only_mode(self, simple_mock_job) -> None:
         """Test JSON export for rubric_only mode (template not performed)."""
-        from karenina.benchmark.models import VerificationResult
+        from karenina.schemas import VerificationResult
 
         result = VerificationResult(
             question_id="test_q_rubric_only",

@@ -14,7 +14,7 @@ from karenina.questions.extractor import (
 
 def test_question_id_hash_consistency() -> None:
     """Test that Question ID hash generation is consistent."""
-    from karenina.schemas.question_class import Question
+    from karenina.schemas.domain import Question
 
     q1 = Question(question="Test question", raw_answer="Answer", tags=[])
     q2 = Question(question="Test question", raw_answer="Answer", tags=[])
@@ -59,7 +59,7 @@ def test_extract_questions_from_excel_missing_columns() -> None:
 
 def test_generate_questions_file() -> None:
     """Test generating a Python file with questions."""
-    from karenina.schemas.question_class import Question
+    from karenina.schemas.domain import Question
 
     questions = [
         Question(
@@ -84,7 +84,7 @@ def test_generate_questions_file() -> None:
             content = f.read()
 
         # Check that the file contains the expected content
-        assert "from karenina.schemas.question_class import Question" in content
+        assert "from karenina.schemas.domain import Question" in content
         assert "question_1" in content
         assert "question_2" in content
         assert "all_questions" in content
@@ -114,7 +114,7 @@ def test_extract_and_generate_questions() -> None:
         assert Path(output_path).exists()
         with open(output_path) as f:
             content = f.read()
-            assert "from karenina.schemas.question_class import Question" in content
+            assert "from karenina.schemas.domain import Question" in content
             assert "Test question 1" in content
             assert "Answer 1" in content
             assert "all_questions" in content

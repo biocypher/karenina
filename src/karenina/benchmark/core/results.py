@@ -8,10 +8,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ...schemas.rubric_class import Rubric
+    from ...schemas.domain import Rubric
     from .base import BenchmarkBase
 
-from ..models import VerificationResult
+from ...schemas.workflow import VerificationResult
 
 
 class ResultsManager:

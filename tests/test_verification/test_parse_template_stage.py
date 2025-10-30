@@ -6,7 +6,7 @@ from pydantic import Field
 
 from karenina.benchmark.verification.stage import VerificationContext
 from karenina.benchmark.verification.stages.parse_template import ParseTemplateStage
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 
 
 class MockAnswer(BaseAnswer):

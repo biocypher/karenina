@@ -6,7 +6,7 @@ from typing import Literal
 from pydantic import Field
 
 from karenina.answers.generator import inject_question_id_into_answer_class
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 
 
 def read_answer_templates(answers_json_path: str | Path) -> dict[str, type]:

@@ -10,8 +10,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from ...schemas.workflow import VerificationResult
     from ..benchmark.benchmark import Benchmark
-    from ..benchmark.models import VerificationResult
 
 from sqlalchemy import select
 
@@ -149,7 +149,7 @@ def save_benchmark(
             question_rubric_dict = None
             if q_data.get("question_rubric"):
                 try:
-                    from ..schemas.rubric_class import ManualRubricTrait, RubricTrait
+                    from ..schemas.domain import ManualRubricTrait, RubricTrait
 
                     rubric_traits = q_data["question_rubric"]
                     if isinstance(rubric_traits, list) and len(rubric_traits) > 0:
@@ -272,7 +272,7 @@ def load_benchmark(
     """
     # Import here to avoid circular imports
     from ..benchmark.benchmark import Benchmark
-    from ..schemas.question_class import Question
+    from ..schemas.domain import Question
 
     # Convert storage URL to DBConfig if needed
     db_config = DBConfig(storage_url=storage) if isinstance(storage, str) else storage
@@ -341,7 +341,7 @@ def load_benchmark(
             # Set question-specific rubric if present
             if bq.question_rubric:
                 # Convert JSON rubric back to Rubric object
-                from ..schemas.rubric_class import ManualRubricTrait, Rubric, RubricTrait
+                from ..schemas.domain import ManualRubricTrait, Rubric, RubricTrait
 
                 traits = []
                 manual_traits = []
@@ -642,7 +642,7 @@ def _update_result_model(model: VerificationResultModel, result: "VerificationRe
 
 def _model_to_verification_result(model: VerificationResultModel) -> "VerificationResult":
     """Convert VerificationResultModel to VerificationResult."""
-    from ..benchmark.models import VerificationResult
+    from ...schemas.workflow import VerificationResult
 
     return VerificationResult(
         question_id=model.question_id,

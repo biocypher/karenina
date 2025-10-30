@@ -6,8 +6,8 @@ Manages stage execution, dependencies, and error handling.
 import logging
 import time
 
-from ...schemas.rubric_class import Rubric
-from ..models import ModelConfig, VerificationResult
+from ...schemas.domain import Rubric
+from ...schemas.workflow import ModelConfig, VerificationResult
 from .stage import StageList, StageRegistry, VerificationContext
 from .stages import (
     AbstentionCheckStage,

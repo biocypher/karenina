@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from karenina.benchmark import Benchmark
-from karenina.schemas.question_class import Question
+from karenina.schemas.domain import Question
 
 
 class TestBenchmarkQuestionObjectMethods:
@@ -125,7 +125,7 @@ class TestBenchmarkQuestionObjectMethods:
     def test_add_question_from_object_duplicate_id(self, sample_benchmark) -> None:
         """Test adding a question object that already exists."""
         # Create a Question object and add it
-        from karenina.schemas.question_class import Question
+        from karenina.schemas.domain import Question
 
         question_obj = Question(question="Duplicate test question", raw_answer="Duplicate test answer")
 
@@ -233,7 +233,7 @@ class TestTaskEvalBenchmarkIntegration:
 
         # Set a template for the question
         template_code = '''from pydantic import Field
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 
 class Answer(BaseAnswer):
     """Answer for math question."""

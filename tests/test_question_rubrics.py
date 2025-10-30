@@ -2,7 +2,7 @@
 
 import pytest
 
-from karenina.schemas.rubric_class import Rubric, RubricTrait, merge_rubrics
+from karenina.schemas.domain import Rubric, RubricTrait, merge_rubrics
 
 
 class TestQuestionRubrics:

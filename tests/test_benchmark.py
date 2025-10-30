@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from karenina.benchmark.benchmark import Benchmark
-from karenina.schemas.rubric_class import RubricTrait
+from karenina.schemas.domain import RubricTrait
 
 
 def test_create_benchmark() -> None:
@@ -591,7 +591,7 @@ def test_status_management() -> None:
 
 def test_clear_and_remove_operations() -> None:
     """Test clear and remove operations."""
-    from karenina.schemas.rubric_class import RubricTrait
+    from karenina.schemas.domain import RubricTrait
 
     benchmark = Benchmark.create("Clear Test")
 

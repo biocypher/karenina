@@ -11,9 +11,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from karenina.benchmark.models import ModelConfig, VerificationConfig
 from karenina.benchmark.verification.runner import run_single_model_verification
-from karenina.schemas import Rubric, RubricTrait
+from karenina.schemas import ModelConfig, Rubric, RubricTrait, VerificationConfig
 
 
 @pytest.fixture
@@ -85,7 +84,7 @@ class TestTemplateOnlyMode:
 
         # Define simple template (must inherit from BaseAnswer and have verify method)
         template_code = """
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -144,7 +143,7 @@ class TestTemplateAndRubricMode:
         mock_rubric_class.return_value = mock_evaluator
 
         template_code = """
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):

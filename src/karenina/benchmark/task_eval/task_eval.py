@@ -15,10 +15,9 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Literal, Union
 
 if TYPE_CHECKING:
-    from ...schemas.question_class import Question
-    from ...schemas.rubric_class import Rubric
+    from ...schemas.domain import Question, Rubric
 
-from ..models import ModelConfig, VerificationConfig
+from ...schemas.workflow import ModelConfig, VerificationConfig
 from ..verification.evaluators.rubric_evaluator import RubricEvaluator
 from .models import LogEvent, StepEval, TaskEvalResult
 
@@ -424,7 +423,7 @@ class TaskEval:
 
         Handles both Question objects and dictionary objects from Benchmark.
         """
-        from ...schemas.question_class import Question
+        from ...schemas.domain import Question
 
         if isinstance(question, Question):
             return {
@@ -634,7 +633,7 @@ class TaskEval:
         if not rubrics:
             return None
 
-        from ...schemas.rubric_class import ManualRubricTrait, Rubric, RubricTrait
+        from ...schemas.domain import ManualRubricTrait, Rubric, RubricTrait
 
         # Check for trait name conflicts first (across all trait types)
         all_trait_names = []

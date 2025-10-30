@@ -4,7 +4,7 @@ import pytest
 
 from karenina.answers.builder import AnswerBuilder
 from karenina.benchmark import Benchmark
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 
 
 class TestAnswerBuilder:

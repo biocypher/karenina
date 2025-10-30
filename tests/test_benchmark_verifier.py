@@ -2,16 +2,16 @@
 
 from unittest.mock import Mock, patch
 
-from karenina.benchmark.models import VerificationConfig
 from karenina.benchmark.verification.utils.parsing import _strip_markdown_fences
 from karenina.benchmark.verification.verification_utils import _system_prompt_compose
 from karenina.benchmark.verifier import run_question_verification, validate_answer_template
+from karenina.schemas import VerificationConfig
 
 
 def test_validate_answer_template_valid() -> None:
     """Test validation of a valid answer template."""
     template_code = '''
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -37,7 +37,7 @@ class Answer(BaseAnswer):
 def test_validate_answer_template_with_literal() -> None:
     """Test validation of a template using Literal type."""
     template_code = '''
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 from pydantic import Field
 from typing import Literal
 
@@ -64,7 +64,7 @@ class Answer(BaseAnswer):
 def test_validate_answer_template_no_answer_class() -> None:
     """Test validation fails when no Answer class is found."""
     template_code = """
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 
 class SomeOtherClass(BaseAnswer):
     pass
@@ -80,7 +80,7 @@ class SomeOtherClass(BaseAnswer):
 def test_validate_answer_template_no_verify_method() -> None:
     """Test validation fails when Answer class has no verify method."""
     template_code = """
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 
 class Answer(BaseAnswer):
     response: str = "test"
@@ -97,7 +97,7 @@ class Answer(BaseAnswer):
 def test_validate_answer_template_invalid_syntax() -> None:
     """Test validation fails with invalid Python syntax."""
     template_code = """
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 
 class Answer(BaseAnswer):
     def verify(self
@@ -186,7 +186,7 @@ def test_run_question_verification_success(mock_init_model) -> None:
         )
 
         valid_template = """
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -256,7 +256,7 @@ def test_run_question_verification_markdown_fenced_json(mock_init_model) -> None
         )
 
         valid_template = """
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -323,7 +323,7 @@ def test_run_question_verification_malformed_json(mock_init_model) -> None:
         )
 
         valid_template = """
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -423,7 +423,7 @@ Please format your response as JSON.
 def test_validate_answer_template_no_correct_field() -> None:
     """Test validation passes when Answer class has no correct field (optional)."""
     template_code = """
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -443,7 +443,7 @@ class Answer(BaseAnswer):
 def test_validate_answer_template_model_post_init_dict() -> None:
     """Test validation passes with model_post_init assigning dict to correct."""
     template_code = """
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -465,7 +465,7 @@ class Answer(BaseAnswer):
 def test_validate_answer_template_correct_non_dict() -> None:
     """Test validation fails when model_post_init assigns non-dict to correct."""
     template_code = """
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):

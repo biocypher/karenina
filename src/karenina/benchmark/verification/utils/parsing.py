@@ -4,8 +4,8 @@ import logging
 import re
 from typing import Any, get_args, get_origin
 
-from ....schemas import SearchResultItem
-from ....schemas.answer_class import BaseAnswer
+from ....schemas.domain import BaseAnswer
+from ....schemas.shared import SearchResultItem
 
 logger = logging.getLogger(__name__)
 
@@ -511,7 +511,7 @@ def extract_rubric_traits_from_template(answer_template: str) -> list[Any]:
     """
     try:
         # Prepare minimal execution environment similar to template validation
-        from ....schemas.rubric_class import Rubric, RubricTrait
+        from ....schemas.domain import Rubric, RubricTrait
 
         global_ns = {
             "__builtins__": __builtins__,

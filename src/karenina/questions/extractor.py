@@ -25,7 +25,7 @@ from typing import Any
 
 import pandas as pd
 
-from ..schemas.question_class import Question
+from ..schemas.domain import Question
 
 
 def read_file_to_dataframe(file_path: str, sheet_name: str | None = None) -> pd.DataFrame:
@@ -268,7 +268,7 @@ def generate_questions_file(
     """Generate the questions.py file with all extracted questions."""
 
     # Create the file content
-    content = """from karenina.schemas.question_class import Question
+    content = """from karenina.schemas.domain import Question
 
 # Auto-generated questions from file
 

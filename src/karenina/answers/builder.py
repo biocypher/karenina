@@ -190,7 +190,7 @@ class AnswerBuilder:
         local_ns: dict[str, Any] = {}
 
         # Add imports to the code
-        imports = "from karenina.schemas.answer_class import BaseAnswer\nfrom pydantic import Field\n\n"
+        imports = "from karenina.schemas.domain import BaseAnswer\nfrom pydantic import Field\n\n"
         final_code = imports + final_code
 
         try:
@@ -199,7 +199,7 @@ class AnswerBuilder:
 
             from pydantic import Field
 
-            from karenina.schemas.answer_class import BaseAnswer
+            from karenina.schemas.domain import BaseAnswer
 
             # Set up globals with necessary imports
             globals_dict = {

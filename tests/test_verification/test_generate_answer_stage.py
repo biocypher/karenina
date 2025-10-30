@@ -6,7 +6,7 @@ from langchain_core.messages import AIMessage
 
 from karenina.benchmark.verification.stage import VerificationContext
 from karenina.benchmark.verification.stages.generate_answer import GenerateAnswerStage
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 
 
 class TestGenerateAnswerStage:

@@ -2,8 +2,8 @@
 
 from unittest.mock import Mock, patch
 
-from karenina.benchmark.models import ModelConfig, VerificationConfig
 from karenina.benchmark.verifier import run_question_verification
+from karenina.schemas import ModelConfig, VerificationConfig
 
 
 def test_verification_config_replicate_count() -> None:
@@ -86,7 +86,7 @@ def test_run_question_verification_with_replicates(mock_init_model) -> None:
         )
 
         valid_template = """
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -173,7 +173,7 @@ def test_run_question_verification_single_replicate(mock_init_model) -> None:
         )
 
         valid_template = """
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):

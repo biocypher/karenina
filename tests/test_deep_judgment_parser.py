@@ -12,9 +12,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import Field
 
-from karenina.benchmark.models import ModelConfig, VerificationConfig
 from karenina.benchmark.verification.evaluators.deep_judgment import deep_judgment_parse
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas import ModelConfig, VerificationConfig
+from karenina.schemas.domain import BaseAnswer
 
 
 # Test answer template (use DrugAnswer to avoid pytest collection warning)

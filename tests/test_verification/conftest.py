@@ -2,9 +2,9 @@
 
 import pytest
 
-from karenina.benchmark.models import ModelConfig
 from karenina.benchmark.verification.stage import VerificationContext
-from karenina.schemas.rubric_class import Rubric, RubricTrait
+from karenina.schemas import ModelConfig
+from karenina.schemas.domain import Rubric, RubricTrait
 
 
 @pytest.fixture

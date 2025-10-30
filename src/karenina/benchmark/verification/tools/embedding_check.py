@@ -8,7 +8,7 @@ from typing import Any
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 from ....llm.interface import init_chat_model_unified
-from ...models import ModelConfig
+from ....schemas.workflow import ModelConfig
 
 # Global cache for embedding models (thread-safe)
 _embedding_model_cache: dict[str, Any] = {}

@@ -3,9 +3,9 @@
 import asyncio
 from typing import Any, Literal, cast
 
-from ...schemas.rubric_class import Rubric
+from ...schemas.domain import Rubric
+from ...schemas.workflow import ModelConfig, VerificationConfig, VerificationResult
 from ...utils.async_utils import AsyncConfig, execute_with_config
-from ..models import ModelConfig, VerificationConfig, VerificationResult
 from .runner import run_single_model_verification
 from .tools.embedding_check import clear_embedding_model_cache, preload_embedding_model
 

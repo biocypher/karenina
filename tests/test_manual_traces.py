@@ -2,7 +2,6 @@
 
 import pytest
 
-from karenina.benchmark.models import ModelConfig
 from karenina.llm.interface import init_chat_model_unified
 from karenina.llm.manual_llm import ManualLLM, ManualTraceNotFoundError, create_manual_llm
 from karenina.llm.manual_traces import (
@@ -14,6 +13,7 @@ from karenina.llm.manual_traces import (
     has_manual_trace,
     load_manual_traces,
 )
+from karenina.schemas import ModelConfig
 
 
 class TestManualTraceManager:

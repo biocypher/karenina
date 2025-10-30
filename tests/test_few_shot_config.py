@@ -2,7 +2,7 @@
 
 import pytest
 
-from karenina.benchmark.models import FewShotConfig, ModelConfig, QuestionFewShotConfig, VerificationConfig
+from karenina.schemas import FewShotConfig, ModelConfig, QuestionFewShotConfig, VerificationConfig
 
 
 class TestFewShotConfig:

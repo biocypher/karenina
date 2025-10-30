@@ -2,7 +2,7 @@
 
 import inspect
 
-from ....schemas.answer_class import BaseAnswer
+from ....schemas.domain import BaseAnswer
 
 
 def validate_answer_template(template_code: str) -> tuple[bool, str | None, type | None]:

@@ -5,7 +5,6 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from karenina.benchmark.models import ModelConfig
 from karenina.benchmark.verification.tools.embedding_check import (
     _convert_to_comparable_string,
     _get_embedding_model_name,
@@ -15,6 +14,7 @@ from karenina.benchmark.verification.tools.embedding_check import (
     compute_embedding_similarity,
     perform_embedding_check,
 )
+from karenina.schemas import ModelConfig
 
 
 class TestEmbeddingCheckConfiguration:

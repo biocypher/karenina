@@ -20,10 +20,10 @@ from tqdm import tqdm
 
 from karenina.llm.interface import init_chat_model_unified
 from karenina.questions.reader import read_questions_from_file
-from karenina.schemas.answer_class import BaseAnswer  # noqa: F401
+from karenina.schemas.domain import BaseAnswer  # noqa: F401
 
 if TYPE_CHECKING:
-    from karenina.benchmark.models import ModelConfig
+    from karenina.schemas.workflow import ModelConfig
 
 
 class GroundTruthField(BaseModel):
@@ -518,7 +518,7 @@ def generate_answer_template(
         model_config = config
     else:
         # Import ModelConfig dynamically to avoid circular imports
-        from karenina.benchmark.models import ModelConfig
+        from karenina.schemas.workflow import ModelConfig
 
         # Create ModelConfig from individual parameters
         model_config = ModelConfig(

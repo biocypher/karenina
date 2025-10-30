@@ -5,12 +5,12 @@ from unittest.mock import Mock, patch
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
-from karenina.benchmark.models import ModelConfig
 from karenina.llm.interface import ChatSession, call_model, chat_sessions, init_chat_model_unified
 from karenina.llm.mcp_utils import (
     harmonize_agent_response,
     sync_create_mcp_client_and_tools,
 )
+from karenina.schemas import ModelConfig
 
 
 class TestHarmonizeAgentResponse:

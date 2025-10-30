@@ -6,7 +6,7 @@ from pathlib import Path
 
 from pydantic import Field
 
-from karenina.schemas.answer_class import BaseAnswer
+from karenina.schemas.domain import BaseAnswer
 
 
 class TestBaseAnswerSourceCode:

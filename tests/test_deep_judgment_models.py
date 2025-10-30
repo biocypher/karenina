@@ -6,8 +6,8 @@ and exception handling.
 
 import pytest
 
-from karenina.benchmark.models import ModelConfig, VerificationConfig, VerificationResult
 from karenina.benchmark.verification.exceptions import ExcerptNotFoundError
+from karenina.schemas import ModelConfig, VerificationConfig, VerificationResult
 
 
 # Helper to create a minimal parsing model for tests

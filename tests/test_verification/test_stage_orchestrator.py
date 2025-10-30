@@ -11,7 +11,6 @@ from unittest.mock import Mock
 
 import pytest
 
-from karenina.benchmark.models import ModelConfig, VerificationResult
 from karenina.benchmark.verification.stage import VerificationContext
 from karenina.benchmark.verification.stage_orchestrator import StageOrchestrator
 from karenina.benchmark.verification.stages import (
@@ -25,7 +24,8 @@ from karenina.benchmark.verification.stages import (
     ValidateTemplateStage,
     VerifyTemplateStage,
 )
-from karenina.schemas.rubric_class import Rubric, RubricTrait
+from karenina.schemas import ModelConfig, VerificationResult
+from karenina.schemas.domain import Rubric, RubricTrait
 
 
 class TestStageOrchestratorConfiguration:

@@ -3,7 +3,7 @@
 import pytest
 
 from karenina.benchmark import Benchmark
-from karenina.schemas.question_class import Question
+from karenina.schemas.domain import Question
 
 
 class TestRefactoredAddQuestion:

@@ -14,10 +14,11 @@ from typing import TYPE_CHECKING, Any, Union
 
 if TYPE_CHECKING:
     from ..schemas.checkpoint import SchemaOrgQuestion
-    from ..schemas.question_class import Question
+    from ..schemas.domain import Question
 
 from ..answers.generator import generate_answer_template, load_answer_templates_from_json
-from ..schemas.rubric_class import ManualRubricTrait, Rubric, RubricTrait
+from ..schemas.domain import ManualRubricTrait, Rubric, RubricTrait
+from ..schemas.workflow import FinishedTemplate, VerificationConfig, VerificationResult
 from .core import (
     BenchmarkBase,
     ExportManager,
@@ -28,7 +29,6 @@ from .core import (
     TemplateManager,
     VerificationManager,
 )
-from .models import FinishedTemplate, VerificationConfig, VerificationResult
 
 
 class Benchmark:

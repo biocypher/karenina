@@ -29,9 +29,9 @@ from langchain_core.output_parsers import PydanticOutputParser
 
 from ...answers.generator import inject_question_id_into_answer_class
 from ...llm.interface import init_chat_model_unified
-from ...schemas.rubric_class import Rubric
+from ...schemas.domain import Rubric
+from ...schemas.workflow import ModelConfig, VerificationConfig, VerificationResult
 from ...utils.checkpoint_converter import generate_template_id
-from ..models import ModelConfig, VerificationConfig, VerificationResult
 from .evaluators.abstention_checker import detect_abstention
 from .evaluators.deep_judgment import deep_judgment_parse
 from .evaluators.rubric_evaluator import RubricEvaluator

@@ -2,7 +2,7 @@
 
 import pytest
 
-from karenina.benchmark.models import (
+from karenina.schemas import (
     INTERFACE_LANGCHAIN,
     INTERFACE_MANUAL,
     INTERFACE_OPENROUTER,

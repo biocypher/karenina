@@ -9,8 +9,8 @@ if TYPE_CHECKING:
     from .results import ResultsManager
     from .rubrics import RubricManager
 
+from ...schemas.workflow import VerificationConfig, VerificationResult
 from ...utils.checkpoint_converter import generate_template_id
-from ..models import VerificationConfig, VerificationResult
 from ..verification.multi_model_orchestrator import run_question_verification
 from ..verification.utils.validation import validate_answer_template
 

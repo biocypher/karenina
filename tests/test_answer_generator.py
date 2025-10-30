@@ -67,7 +67,7 @@ def test_generate_answer_templates_from_questions_file() -> None:
 
     # Create a temporary questions.py file
     questions_content = """
-from karenina.schemas.question_class import Question
+from karenina.schemas.domain import Question
 
 question_1 = Question(
     question="Test question 1?",
@@ -211,7 +211,7 @@ def test_generate_answer_templates_reader_integration() -> None:
 
     # Create a temporary questions.py file
     questions_content = """
-from karenina.schemas.question_class import Question
+from karenina.schemas.domain import Question
 
 question_1 = Question(
     question="Integration test question?",
@@ -265,7 +265,7 @@ def test_generate_answer_templates_reader_with_dict_compatibility() -> None:
 
     # Create a temporary questions.py file
     questions_content = """
-from karenina.schemas.question_class import Question
+from karenina.schemas.domain import Question
 
 question_1 = Question(
     question="Dictionary compatibility test?",

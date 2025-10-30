@@ -4,12 +4,11 @@ from unittest.mock import Mock, patch
 
 from pydantic import Field
 
-from karenina.benchmark.models import VerificationResult
 from karenina.benchmark.verification.stage import VerificationContext
 from karenina.benchmark.verification.stages.finalize_result import FinalizeResultStage
 from karenina.benchmark.verification.stages.rubric_evaluation import RubricEvaluationStage
-from karenina.schemas.answer_class import BaseAnswer
-from karenina.schemas.rubric_class import MetricRubricTrait
+from karenina.schemas import VerificationResult
+from karenina.schemas.domain import BaseAnswer, MetricRubricTrait
 
 
 class MockAnswer(BaseAnswer):
@@ -43,7 +42,7 @@ class TestRubricEvaluationStage:
 
     def test_should_not_run_with_empty_rubric(self, basic_context: VerificationContext) -> None:
         """Test that stage skips when rubric has no traits."""
-        from karenina.schemas.rubric_class import Rubric
+        from karenina.schemas.domain import Rubric
 
         basic_context.rubric = Rubric(traits=[])
 
@@ -85,7 +84,7 @@ class TestRubricEvaluationStage:
         basic_context: VerificationContext,
     ) -> None:
         """Test evaluation of metric traits."""
-        from karenina.schemas.rubric_class import Rubric
+        from karenina.schemas.domain import Rubric
 
         # Create rubric with metric traits
         metric_trait = MetricRubricTrait(

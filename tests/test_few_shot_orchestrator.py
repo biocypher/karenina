@@ -1,7 +1,7 @@
 """Tests for few-shot prompting in the verification orchestrator."""
 
-from karenina.benchmark.models import ModelConfig, VerificationConfig
 from karenina.benchmark.verification.multi_model_orchestrator import _create_verification_task
+from karenina.schemas import ModelConfig, VerificationConfig
 
 
 def test_create_verification_task_with_few_shot() -> None:

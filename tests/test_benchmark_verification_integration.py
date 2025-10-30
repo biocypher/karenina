@@ -8,8 +8,8 @@ from unittest.mock import patch
 import pytest
 
 from karenina.benchmark.benchmark import Benchmark
-from karenina.benchmark.models import ModelConfig, VerificationConfig, VerificationResult
-from karenina.schemas.rubric_class import RubricTrait
+from karenina.schemas import ModelConfig, VerificationConfig, VerificationResult
+from karenina.schemas.domain import RubricTrait
 
 
 @pytest.fixture

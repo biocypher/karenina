@@ -5,9 +5,9 @@ Main entry point for running verification using the stage-based pipeline archite
 
 from typing import Any
 
-from ...schemas.rubric_class import Rubric
+from ...schemas.domain import Rubric
+from ...schemas.workflow import ModelConfig, VerificationResult
 from ...utils.checkpoint_converter import generate_template_id
-from ..models import ModelConfig, VerificationResult
 from .stage import VerificationContext
 from .stage_orchestrator import StageOrchestrator
 

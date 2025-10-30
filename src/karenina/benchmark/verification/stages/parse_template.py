@@ -10,7 +10,7 @@ from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_core.output_parsers import PydanticOutputParser
 
 from ....llm.interface import init_chat_model_unified
-from ...models import VerificationConfig
+from ....schemas.workflow import VerificationConfig
 from ..evaluators.deep_judgment import deep_judgment_parse
 from ..stage import BaseVerificationStage, VerificationContext
 from ..utils.parsing import _strip_markdown_fences
