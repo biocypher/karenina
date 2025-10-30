@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from karenina.answers.generator import inject_question_id_into_answer_class
+from karenina.domain.answers.generator import inject_question_id_into_answer_class
 from karenina.schemas.domain import BaseAnswer
 
 

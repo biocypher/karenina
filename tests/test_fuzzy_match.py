@@ -4,7 +4,7 @@ This module tests the fuzzy matching functionality used to validate
 excerpts in the deep-judgment feature.
 """
 
-from karenina.benchmark.verification.fuzzy_match import fuzzy_match_excerpt, fuzzy_match_excerpt_with_context
+from karenina.benchmark.verification.tools.fuzzy_match import fuzzy_match_excerpt, fuzzy_match_excerpt_with_context
 
 
 class TestFuzzyMatchExcerpt:

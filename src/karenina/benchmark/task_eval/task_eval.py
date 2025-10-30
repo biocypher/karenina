@@ -516,7 +516,7 @@ class TaskEval:
         # Temporarily add the response to manual traces
         import time
 
-        from ...llm.manual_traces import get_trace_manager
+        from ...infrastructure.llm.manual_traces import get_trace_manager
 
         trace_manager = get_trace_manager()
 

@@ -356,7 +356,7 @@ class Answer(BaseAnswer):
 
         try:
             # Import here to avoid circular imports
-            from karenina.answers.reader import read_answer_templates
+            from karenina.domain.answers.reader import read_answer_templates
 
             # This function uses exec internally and should preserve source code
             answer_dict = read_answer_templates(temp_path)

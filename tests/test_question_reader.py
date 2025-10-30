@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from karenina.questions.reader import read_questions_from_file
+from karenina.domain.questions.reader import read_questions_from_file
 from karenina.schemas.domain import Question
 
 
@@ -140,7 +140,7 @@ def test_read_questions_from_file_spec_creation_fails() -> None:
 
     try:
         # Mock importlib.util.spec_from_file_location to return None
-        with patch("karenina.questions.reader.importlib.util.spec_from_file_location", return_value=None):
+        with patch("karenina.domain.questions.reader.importlib.util.spec_from_file_location", return_value=None):
             with pytest.raises(ImportError) as exc_info:
                 read_questions_from_file(tmp_path)
 
@@ -161,7 +161,7 @@ def test_read_questions_from_file_spec_loader_none() -> None:
         class MockSpec:
             loader = None
 
-        with patch("karenina.questions.reader.importlib.util.spec_from_file_location", return_value=MockSpec()):
+        with patch("karenina.domain.questions.reader.importlib.util.spec_from_file_location", return_value=MockSpec()):
             with pytest.raises(ImportError) as exc_info:
                 read_questions_from_file(tmp_path)
 

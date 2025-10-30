@@ -7,7 +7,7 @@ from typing import Any
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
-from ....llm.interface import init_chat_model_unified
+from ....infrastructure.llm.interface import init_chat_model_unified
 from ....schemas.workflow import ModelConfig
 
 # Global cache for embedding models (thread-safe)

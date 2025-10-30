@@ -10,7 +10,7 @@ from typing import Any
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
-from ....llm.interface import init_chat_model_unified
+from ....infrastructure.llm.interface import init_chat_model_unified
 from ....schemas.domain import ManualRubricTrait, MetricRubricTrait, Rubric, RubricTrait
 from ....schemas.workflow import INTERFACES_NO_PROVIDER_REQUIRED, ModelConfig
 

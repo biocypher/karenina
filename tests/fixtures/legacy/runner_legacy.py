@@ -28,14 +28,14 @@ from typing import Any
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_core.output_parsers import PydanticOutputParser
 
-from karenina.answers.generator import inject_question_id_into_answer_class
 from karenina.benchmark.verification.evaluators.abstention_checker import detect_abstention
 from karenina.benchmark.verification.evaluators.deep_judgment import deep_judgment_parse
 from karenina.benchmark.verification.evaluators.rubric_evaluator import RubricEvaluator
 from karenina.benchmark.verification.tools.embedding_check import perform_embedding_check
 from karenina.benchmark.verification.utils.parsing import _strip_markdown_fences
 from karenina.benchmark.verification.utils.validation import validate_answer_template
-from karenina.llm.interface import init_chat_model_unified
+from karenina.domain.answers.generator import inject_question_id_into_answer_class
+from karenina.infrastructure.llm.interface import init_chat_model_unified
 from karenina.schemas.domain import Rubric
 from karenina.schemas.workflow import ModelConfig, VerificationConfig, VerificationResult
 from karenina.utils.checkpoint import generate_template_id

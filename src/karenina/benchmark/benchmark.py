@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from ..schemas.checkpoint import SchemaOrgQuestion
     from ..schemas.domain import Question
 
-from ..answers.generator import generate_answer_template, load_answer_templates_from_json
+from ..domain.answers.generator import generate_answer_template, load_answer_templates_from_json
 from ..schemas.domain import ManualRubricTrait, Rubric, RubricTrait
 from ..schemas.workflow import FinishedTemplate, VerificationConfig, VerificationResult
 from .core import (

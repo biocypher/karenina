@@ -3,7 +3,7 @@
 Validates the Pydantic template syntax and injects question ID.
 """
 
-from ....answers.generator import inject_question_id_into_answer_class
+from ....domain.answers.generator import inject_question_id_into_answer_class
 from ..stage import BaseVerificationStage, VerificationContext
 from ..utils.validation import validate_answer_template
 

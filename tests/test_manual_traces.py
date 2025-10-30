@@ -2,9 +2,9 @@
 
 import pytest
 
-from karenina.llm.interface import init_chat_model_unified
-from karenina.llm.manual_llm import ManualLLM, ManualTraceNotFoundError, create_manual_llm
-from karenina.llm.manual_traces import (
+from karenina.infrastructure.llm.interface import init_chat_model_unified
+from karenina.infrastructure.llm.manual_llm import ManualLLM, ManualTraceNotFoundError, create_manual_llm
+from karenina.infrastructure.llm.manual_traces import (
     ManualTraceError,
     ManualTraceManager,
     clear_manual_traces,

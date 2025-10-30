@@ -9,7 +9,7 @@ from typing import Any
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_core.output_parsers import PydanticOutputParser
 
-from ....llm.interface import init_chat_model_unified
+from ....infrastructure.llm.interface import init_chat_model_unified
 from ....schemas.workflow import VerificationConfig
 from ..evaluators.deep_judgment import deep_judgment_parse
 from ..stage import BaseVerificationStage, VerificationContext

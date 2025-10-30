@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from karenina.llm.manual_traces import ManualTraceManager, get_memory_usage_info
+from karenina.infrastructure.llm.manual_traces import ManualTraceManager, get_memory_usage_info
 
 
 def test_session_timeout_initialization() -> None:
@@ -108,7 +108,7 @@ def test_access_updates_last_access() -> None:
 
 def test_global_memory_usage_function() -> None:
     """Test the global memory usage function."""
-    from karenina.llm.manual_traces import clear_manual_traces, load_manual_traces
+    from karenina.infrastructure.llm.manual_traces import clear_manual_traces, load_manual_traces
 
     # Clear any existing traces
     clear_manual_traces()

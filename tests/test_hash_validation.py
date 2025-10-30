@@ -34,7 +34,7 @@ def test_is_valid_md5_hash() -> None:
 
 def test_manual_interface_valid_hash() -> None:
     """Test that manual interface accepts valid MD5 hash as question_id."""
-    from karenina.llm.manual_traces import clear_manual_traces, load_manual_traces
+    from karenina.infrastructure.llm.manual_traces import clear_manual_traces, load_manual_traces
 
     # Clear any existing traces
     clear_manual_traces()

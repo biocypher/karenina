@@ -7,7 +7,7 @@ from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from ....llm.interface import init_chat_model_unified
+from ....infrastructure.llm.interface import init_chat_model_unified
 from ....schemas.workflow import ModelConfig
 from ..utils.prompts import ABSTENTION_DETECTION_SYS, ABSTENTION_DETECTION_USER
 

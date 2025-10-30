@@ -35,7 +35,7 @@ def test_verification_config_replicate_count() -> None:
     assert config.replicate_count == 3
 
 
-@patch("karenina.llm.interface.init_chat_model")
+@patch("karenina.infrastructure.llm.interface.init_chat_model")
 def test_run_question_verification_with_replicates(mock_init_model) -> None:
     """Test that verification runs multiple replicates when configured."""
     # Mock the LLM responses
@@ -122,7 +122,7 @@ class Answer(BaseAnswer):
             assert result.parsing_replicate == replicate_num
 
 
-@patch("karenina.llm.interface.init_chat_model")
+@patch("karenina.infrastructure.llm.interface.init_chat_model")
 def test_run_question_verification_single_replicate(mock_init_model) -> None:
     """Test that single replicate doesn't include replicate numbers."""
     # Mock the LLM responses

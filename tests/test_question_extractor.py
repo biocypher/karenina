@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from karenina.questions.extractor import (
+from karenina.domain.questions.extractor import (
     extract_and_generate_questions,
     extract_questions_from_excel,
     generate_questions_file,

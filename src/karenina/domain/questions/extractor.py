@@ -25,7 +25,7 @@ from typing import Any
 
 import pandas as pd
 
-from ..schemas.domain import Question
+from ...schemas.domain import Question
 
 
 def read_file_to_dataframe(file_path: str, sheet_name: str | None = None) -> pd.DataFrame:

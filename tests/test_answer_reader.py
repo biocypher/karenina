@@ -4,7 +4,7 @@ import tempfile
 
 import pytest
 
-from karenina.answers.reader import read_answer_templates
+from karenina.domain.answers.reader import read_answer_templates
 
 
 def test_read_answer_templates_success() -> None:

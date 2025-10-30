@@ -2,8 +2,8 @@
 
 import pytest
 
-from karenina.answers.builder import AnswerBuilder
 from karenina.benchmark import Benchmark
+from karenina.domain.answers.builder import AnswerBuilder
 from karenina.schemas.domain import BaseAnswer
 
 

@@ -111,7 +111,7 @@ class Answer(BaseAnswer):
     assert Answer is None
 
 
-@patch("karenina.llm.interface.init_chat_model")
+@patch("karenina.infrastructure.llm.interface.init_chat_model")
 def test_run_question_verification_template_validation_failure(mock_init_model) -> None:
     """Test verification with invalid template."""
     config = VerificationConfig(
@@ -141,7 +141,7 @@ def test_run_question_verification_template_validation_failure(mock_init_model) 
     assert result.question_text == "What is 2+2?"
 
 
-@patch("karenina.llm.interface.init_chat_model")
+@patch("karenina.infrastructure.llm.interface.init_chat_model")
 def test_run_question_verification_success(mock_init_model) -> None:
     """Test successful verification run."""
     # Mock the LLM responses
@@ -217,7 +217,7 @@ class Answer(BaseAnswer):
         assert result.verify_result is True
 
 
-@patch("karenina.llm.interface.init_chat_model")
+@patch("karenina.infrastructure.llm.interface.init_chat_model")
 def test_run_question_verification_markdown_fenced_json(mock_init_model) -> None:
     """Test successful parsing of markdown-fenced JSON response."""
     # Mock the LLM responses with markdown fences
@@ -290,7 +290,7 @@ class Answer(BaseAnswer):
         mock_parser.parse.assert_called_once_with('{"response": "4"}')
 
 
-@patch("karenina.llm.interface.init_chat_model")
+@patch("karenina.infrastructure.llm.interface.init_chat_model")
 def test_run_question_verification_malformed_json(mock_init_model) -> None:
     """Test handling of malformed JSON from LLM."""
     # Mock the LLM responses with malformed JSON

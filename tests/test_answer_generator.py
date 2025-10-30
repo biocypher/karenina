@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from karenina.answers.generator import (
+from karenina.domain.answers.generator import (
     generate_answer_template,
     generate_answer_templates_from_questions_file,
     load_answer_templates_from_json,
@@ -31,7 +31,7 @@ def mock_llm() -> None:
 def test_generate_answer_template(mock_llm) -> None:
     """Test generating an answer template."""
     # Mock at the _build_chain level to return pre-parsed results
-    from karenina.answers.generator import AttributeDescriptions, GroundTruthField, GroundTruthSpec
+    from karenina.domain.answers.generator import AttributeDescriptions, GroundTruthField, GroundTruthSpec
 
     # Phase 1 result: ground truth specification
     gt_spec = GroundTruthSpec(attributes=[GroundTruthField(name="answer", type="bool", ground_truth=True)])
@@ -43,7 +43,7 @@ def test_generate_answer_template(mock_llm) -> None:
     mock_chain = MagicMock()
     mock_chain.invoke.side_effect = [gt_spec, fd_spec]
 
-    with patch("karenina.answers.generator._build_chain", return_value=mock_chain):
+    with patch("karenina.domain.answers.generator._build_chain", return_value=mock_chain):
         result = generate_answer_template(
             question="Test question?",
             raw_answer="Yes",
@@ -63,7 +63,7 @@ def test_generate_answer_template(mock_llm) -> None:
 
 def test_generate_answer_templates_from_questions_file() -> None:
     """Test generating answer templates from a questions file."""
-    from karenina.answers.generator import AttributeDescriptions, GroundTruthField, GroundTruthSpec
+    from karenina.domain.answers.generator import AttributeDescriptions, GroundTruthField, GroundTruthSpec
 
     # Create a temporary questions.py file
     questions_content = """
@@ -89,7 +89,7 @@ all_questions = [question_1]
         mock_chain = MagicMock()
         mock_chain.invoke.side_effect = [gt_spec, fd_spec] * 2  # Called twice for both tests
 
-        with patch("karenina.answers.generator._build_chain", return_value=mock_chain):
+        with patch("karenina.domain.answers.generator._build_chain", return_value=mock_chain):
             # Test without return_blocks
             result = generate_answer_templates_from_questions_file(
                 tmp_path,
@@ -206,8 +206,8 @@ def test_load_answer_templates_from_json_invalid_code() -> None:
 
 def test_generate_answer_templates_reader_integration() -> None:
     """Test that the generator properly integrates with the new reader module."""
-    from karenina.answers.generator import AttributeDescriptions, GroundTruthField, GroundTruthSpec
-    from karenina.questions.reader import read_questions_from_file
+    from karenina.domain.answers.generator import AttributeDescriptions, GroundTruthField, GroundTruthSpec
+    from karenina.domain.questions.reader import read_questions_from_file
 
     # Create a temporary questions.py file
     questions_content = """
@@ -242,7 +242,7 @@ all_questions = [question_1]
         mock_chain.invoke.side_effect = [gt_spec, fd_spec]
 
         # Test that the generator uses the reader correctly
-        with patch("karenina.answers.generator._build_chain", return_value=mock_chain):
+        with patch("karenina.domain.answers.generator._build_chain", return_value=mock_chain):
             result = generate_answer_templates_from_questions_file(tmp_path)
             assert len(result) == 1
             assert expected_id in result
@@ -260,8 +260,8 @@ all_questions = [question_1]
 
 def test_generate_answer_templates_reader_with_dict_compatibility() -> None:
     """Test that the generator works with the updated reader function (backward compatibility)."""
-    from karenina.answers.generator import AttributeDescriptions, GroundTruthField, GroundTruthSpec
-    from karenina.questions.reader import read_questions_from_file
+    from karenina.domain.answers.generator import AttributeDescriptions, GroundTruthField, GroundTruthSpec
+    from karenina.domain.questions.reader import read_questions_from_file
 
     # Create a temporary questions.py file
     questions_content = """
@@ -300,7 +300,7 @@ all_questions = [question_1]
         mock_chain.invoke.side_effect = [gt_spec, fd_spec]
 
         # Test that the generator still works with the reader (uses default list behavior)
-        with patch("karenina.answers.generator._build_chain", return_value=mock_chain):
+        with patch("karenina.domain.answers.generator._build_chain", return_value=mock_chain):
             result = generate_answer_templates_from_questions_file(tmp_path)
             assert len(result) == 1
             assert expected_id in result

@@ -18,8 +18,8 @@ from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field, ValidationError, field_validator
 from tqdm import tqdm
 
-from karenina.llm.interface import init_chat_model_unified
-from karenina.questions.reader import read_questions_from_file
+from karenina.domain.questions.reader import read_questions_from_file
+from karenina.infrastructure.llm.interface import init_chat_model_unified
 from karenina.schemas.domain import BaseAnswer  # noqa: F401
 
 if TYPE_CHECKING:

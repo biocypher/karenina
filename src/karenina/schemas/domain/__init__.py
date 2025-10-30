@@ -9,6 +9,7 @@ from .rubric import (
     RubricEvaluation,
     RubricTrait,
     TraitKind,
+    merge_rubrics,
 )
 
 __all__ = [
@@ -21,4 +22,5 @@ __all__ = [
     "MetricRubricTrait",
     "RubricEvaluation",
     "TraitKind",
+    "merge_rubrics",
 ]

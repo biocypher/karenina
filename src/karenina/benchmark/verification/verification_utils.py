@@ -140,7 +140,7 @@ def _invoke_llm_with_retry(
                     # No event loop running, safe to use asyncio.run
                     response = asyncio.run(invoke_agent_async())
 
-                from ...llm.mcp_utils import harmonize_agent_response
+                from ...infrastructure.llm.mcp_utils import harmonize_agent_response
 
                 return harmonize_agent_response(response), recursion_limit_reached
             else:
