@@ -115,18 +115,36 @@ class ParseTemplateStage(BaseVerificationStage):
         # Build model string for result
         if parsing_model.interface == "openrouter":
             parsing_model_str = parsing_model.model_name
+        elif parsing_model.interface == "openai_endpoint":
+            parsing_model_str = f"endpoint/{parsing_model.model_name}"
         else:
             parsing_model_str = f"{parsing_model.model_provider}/{parsing_model.model_name}"
         context.set_artifact("parsing_model_str", parsing_model_str)
 
         # Step 1: Initialize parsing LLM
         try:
-            parsing_llm = init_chat_model_unified(
-                model=parsing_model.model_name,
-                provider=parsing_model.model_provider,
-                temperature=parsing_model.temperature,
-                interface=parsing_model.interface,
-            )
+            if parsing_model.interface == "openai_endpoint":
+                # Require endpoint configuration
+                if not parsing_model.endpoint_base_url:
+                    raise ValueError("endpoint_base_url is required for openai_endpoint interface")
+                if not parsing_model.endpoint_api_key:
+                    raise ValueError("endpoint_api_key is required for openai_endpoint interface")
+
+                parsing_llm = init_chat_model_unified(
+                    model=parsing_model.model_name,
+                    provider=parsing_model.model_provider,
+                    temperature=parsing_model.temperature,
+                    interface=parsing_model.interface,
+                    endpoint_base_url=parsing_model.endpoint_base_url,
+                    endpoint_api_key=parsing_model.endpoint_api_key.get_secret_value(),
+                )
+            else:
+                parsing_llm = init_chat_model_unified(
+                    model=parsing_model.model_name,
+                    provider=parsing_model.model_provider,
+                    temperature=parsing_model.temperature,
+                    interface=parsing_model.interface,
+                )
         except Exception as e:
             error_msg = f"Failed to initialize parsing model: {type(e).__name__}: {e}"
             logger.error(error_msg)
