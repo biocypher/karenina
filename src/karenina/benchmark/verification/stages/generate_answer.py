@@ -97,6 +97,8 @@ class GenerateAnswerStage(BaseVerificationStage):
         # Build model string for result
         if answering_model.interface == "openrouter":
             answering_model_str = answering_model.model_name
+        elif answering_model.interface == "openai_endpoint":
+            answering_model_str = f"endpoint/{answering_model.model_name}"
         else:
             answering_model_str = f"{answering_model.model_provider}/{answering_model.model_name}"
         context.set_artifact("answering_model_str", answering_model_str)
@@ -128,6 +130,23 @@ class GenerateAnswerStage(BaseVerificationStage):
                     temperature=answering_model.temperature,
                     interface=answering_model.interface,
                     question_hash=context.question_id,
+                    mcp_urls_dict=answering_model.mcp_urls_dict,
+                    mcp_tool_filter=answering_model.mcp_tool_filter,
+                )
+            elif answering_model.interface == "openai_endpoint":
+                # Require endpoint configuration
+                if not answering_model.endpoint_base_url:
+                    raise ValueError("endpoint_base_url is required for openai_endpoint interface")
+                if not answering_model.endpoint_api_key:
+                    raise ValueError("endpoint_api_key is required for openai_endpoint interface")
+
+                answering_llm = init_chat_model_unified(
+                    model=answering_model.model_name,
+                    provider=answering_model.model_provider,
+                    temperature=answering_model.temperature,
+                    interface=answering_model.interface,
+                    endpoint_base_url=answering_model.endpoint_base_url,
+                    endpoint_api_key=answering_model.endpoint_api_key.get_secret_value(),
                     mcp_urls_dict=answering_model.mcp_urls_dict,
                     mcp_tool_filter=answering_model.mcp_tool_filter,
                 )

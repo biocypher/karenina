@@ -2,13 +2,14 @@
 
 from typing import Any, Literal, cast
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
 # Interface constants
 INTERFACE_OPENROUTER = "openrouter"
 INTERFACE_MANUAL = "manual"
 INTERFACE_LANGCHAIN = "langchain"
-INTERFACES_NO_PROVIDER_REQUIRED = [INTERFACE_OPENROUTER, INTERFACE_MANUAL]
+INTERFACE_OPENAI_ENDPOINT = "openai_endpoint"
+INTERFACES_NO_PROVIDER_REQUIRED = [INTERFACE_OPENROUTER, INTERFACE_MANUAL, INTERFACE_OPENAI_ENDPOINT]
 
 
 class QuestionFewShotConfig(BaseModel):
@@ -357,8 +358,11 @@ class ModelConfig(BaseModel):
     model_provider: str
     model_name: str
     temperature: float = 0.1
-    interface: Literal["langchain", "openrouter", "manual"] = "langchain"
+    interface: Literal["langchain", "openrouter", "manual", "openai_endpoint"] = "langchain"
     system_prompt: str
     max_retries: int = 2  # Optional max retries for template generation
     mcp_urls_dict: dict[str, str] | None = None  # Optional MCP server URLs
     mcp_tool_filter: list[str] | None = None  # Optional list of MCP tools to include
+    # OpenAI Endpoint configuration (for openai_endpoint interface)
+    endpoint_base_url: str | None = None  # Custom endpoint base URL
+    endpoint_api_key: SecretStr | None = None  # User-provided API key

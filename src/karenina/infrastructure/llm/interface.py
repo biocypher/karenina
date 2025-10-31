@@ -47,6 +47,9 @@ class ChatRequest(BaseModel):
     session_id: str | None = None
     system_message: str | None = None
     temperature: float | None = 0.7
+    interface: str | None = None
+    endpoint_base_url: str | None = None
+    endpoint_api_key: str | None = None
 
 
 class ChatResponse(BaseModel):
@@ -70,6 +73,9 @@ class ChatSession:
         temperature: float = 0.7,
         mcp_urls_dict: dict[str, str] | None = None,
         mcp_tool_filter: list[str] | None = None,
+        interface: str = "langchain",
+        endpoint_base_url: str | None = None,
+        endpoint_api_key: str | None = None,
     ):
         self.session_id = session_id
         self.model = model
@@ -77,6 +83,9 @@ class ChatSession:
         self.temperature = temperature
         self.mcp_urls_dict = mcp_urls_dict
         self.mcp_tool_filter = mcp_tool_filter
+        self.interface = interface
+        self.endpoint_base_url = endpoint_base_url
+        self.endpoint_api_key = endpoint_api_key
         self.messages: list[BaseMessage] = []
         self.llm = None
         self.is_agent = False  # Track if LLM is actually a LangGraph agent
@@ -89,10 +98,12 @@ class ChatSession:
             self.llm = init_chat_model_unified(
                 model=self.model,
                 provider=self.provider,
-                interface="langchain",
+                interface=self.interface,
                 temperature=self.temperature,
                 mcp_urls_dict=self.mcp_urls_dict,
                 mcp_tool_filter=self.mcp_tool_filter,
+                endpoint_base_url=self.endpoint_base_url,
+                endpoint_api_key=self.endpoint_api_key,
             )
             # Check if we got an agent by looking for 'invoke' vs 'stream' methods
             # Agents typically have additional methods like 'stream' for state management
@@ -136,6 +147,43 @@ class ChatOpenRouter(ChatOpenAI):
         )
 
 
+class ChatOpenAIEndpoint(ChatOpenAI):
+    """ChatOpenAI wrapper for user-provided custom endpoints.
+
+    Unlike ChatOpenRouter, this does NOT automatically read from environment.
+    API key must be explicitly provided by the user.
+    """
+
+    openai_api_key: SecretStr | None = Field(alias="api_key", default=None)
+
+    @property
+    def lc_secrets(self) -> dict[str, str]:
+        # Return empty dict - we don't want LangChain trying to read from env
+        return {}
+
+    def __init__(
+        self,
+        base_url: str,
+        openai_api_key: str | SecretStr | None = None,
+        **kwargs: Any,
+    ) -> None:
+        # Do NOT fallback to environment - require explicit API key
+        if openai_api_key is None:
+            raise ValueError(
+                "API key is required for openai_endpoint interface. "
+                "This interface does not automatically read from environment variables."
+            )
+
+        if isinstance(openai_api_key, str):
+            openai_api_key = SecretStr(openai_api_key)
+
+        super().__init__(
+            base_url=base_url,
+            api_key=openai_api_key,
+            **kwargs,
+        )
+
+
 def init_chat_model_unified(
     model: str,
     provider: str | None = None,
@@ -143,21 +191,23 @@ def init_chat_model_unified(
     question_hash: str | None = None,
     mcp_urls_dict: dict[str, str] | None = None,
     mcp_tool_filter: list[str] | None = None,
+    endpoint_base_url: str | None = None,
+    endpoint_api_key: str | SecretStr | None = None,
     **kwargs: Any,
 ) -> Any:
     """Initialize a chat model using the unified interface.
 
     This function provides a unified way to initialize different chat models
-    across various interfaces (LangChain, OpenRouter, Manual) with consistent
+    across various interfaces (LangChain, OpenRouter, OpenAI Endpoint, Manual) with consistent
     parameter handling. When MCP URLs are provided, creates a LangGraph agent
     with tools from MCP servers.
 
     Args:
         model: The model name (e.g., "gemini-2.0-flash", "gpt-4.1-mini", "claude-3-sonnet")
         provider: The model provider (e.g., "google_genai", "openai", "anthropic").
-                 Optional for OpenRouter and Manual interfaces.
+                 Optional for OpenRouter, OpenAI Endpoint, and Manual interfaces.
         interface: The interface to use for model initialization.
-                  Supported values: "langchain", "openrouter", "manual"
+                  Supported values: "langchain", "openrouter", "openai_endpoint", "manual"
         question_hash: The MD5 hash of the question (required for manual interface)
         mcp_urls_dict: Dictionary mapping tool names to MCP server URLs.
                       When provided, creates a LangGraph agent with MCP tools.
@@ -166,8 +216,14 @@ def init_chat_model_unified(
         mcp_tool_filter: Optional list of tool names to include from MCP servers.
                         If provided, only tools with names in this list will be used.
                         Ignored if mcp_urls_dict is None.
+        endpoint_base_url: Custom base URL for openai_endpoint interface.
+                          Required for openai_endpoint interface.
+                          Used to connect to OpenAI-compatible endpoints (vLLM, Ollama, etc.)
+        endpoint_api_key: API key for openai_endpoint interface.
+                         Required for openai_endpoint interface.
+                         Must be explicitly provided - does NOT read from environment.
         **kwargs: Additional keyword arguments passed to the underlying model
-                 initialization (e.g., temperature, max_tokens, api_key)
+                 initialization (e.g., temperature, max_tokens)
 
     Returns:
         An initialized model instance or LangGraph agent ready for inference
@@ -183,6 +239,14 @@ def init_chat_model_unified(
 
         Initialize an OpenAI model via OpenRouter:
         >>> model = init_chat_model_unified("gpt-4.1-mini", interface="openrouter")
+
+        Initialize OpenAI-compatible endpoint with explicit API key:
+        >>> model = init_chat_model_unified(
+        ...     "llama2",
+        ...     interface="openai_endpoint",
+        ...     endpoint_base_url="http://localhost:11434/v1",
+        ...     endpoint_api_key="your-api-key"
+        ... )
 
         Initialize with MCP tools:
         >>> mcp_urls = {"biocontext": "https://mcp.biocontext.ai/mcp/"}
@@ -208,6 +272,20 @@ def init_chat_model_unified(
         base_model = init_chat_model(model=model, model_provider=provider, **kwargs)
     elif interface == "openrouter":
         base_model = ChatOpenRouter(model=model, **kwargs)
+    elif interface == "openai_endpoint":
+        if endpoint_base_url is None:
+            raise ValueError("endpoint_base_url is required for openai_endpoint interface")
+        if endpoint_api_key is None:
+            raise ValueError(
+                "endpoint_api_key is required for openai_endpoint interface. "
+                "Pass the API key explicitly - this interface does not read from environment."
+            )
+        base_model = ChatOpenAIEndpoint(
+            base_url=endpoint_base_url,
+            openai_api_key=endpoint_api_key,
+            model=model,
+            **kwargs,
+        )
     elif interface == "manual":
         if question_hash is None:
             raise ValueError("question_hash is required for manual interface")
@@ -252,6 +330,9 @@ def call_model(
     temperature: float = 0.7,
     mcp_urls_dict: dict[str, str] | None = None,
     mcp_tool_filter: list[str] | None = None,
+    interface: str = "langchain",
+    endpoint_base_url: str | None = None,
+    endpoint_api_key: str | None = None,
 ) -> ChatResponse:
     """
     Call a language model and return the response, supporting conversational context.
@@ -265,6 +346,9 @@ def call_model(
         temperature: Model temperature for response generation
         mcp_urls_dict: Optional dictionary mapping tool names to MCP server URLs
         mcp_tool_filter: Optional list of tool names to include from MCP servers
+        interface: The interface to use ("langchain", "openrouter", "openai_endpoint", "manual")
+        endpoint_base_url: Custom base URL for openai_endpoint interface
+        endpoint_api_key: API key for openai_endpoint interface
 
     Returns:
         ChatResponse with the model's response and session information
@@ -278,7 +362,15 @@ def call_model(
     if session_id is None or session_id not in chat_sessions:
         session_id = str(uuid.uuid4())
         chat_sessions[session_id] = ChatSession(
-            session_id, model, provider, temperature, mcp_urls_dict, mcp_tool_filter
+            session_id,
+            model,
+            provider,
+            temperature,
+            mcp_urls_dict,
+            mcp_tool_filter,
+            interface,
+            endpoint_base_url,
+            endpoint_api_key,
         )
 
     session = chat_sessions[session_id]
