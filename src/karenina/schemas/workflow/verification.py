@@ -373,7 +373,13 @@ class VerificationResult(BaseModel):
     #   "total": {"input_tokens": 600, "output_tokens": 360, "total_tokens": 960}
     # }
     agent_metrics: dict[str, Any] | None = None  # MCP agent execution metrics (only if agent used)
-    # Structure: {"iterations": 3, "tool_calls": 5, "tools_used": ["mcp__brave_search", "mcp__read_resource"]}
+    # Structure: {
+    #   "iterations": 3,  # Number of agent think-act cycles
+    #   "tool_calls": 5,  # Total tool invocations
+    #   "tools_used": ["mcp__brave_search", "mcp__read_resource"],  # Unique tool names used
+    #   "suspect_failed_tool_calls": 2,  # Count of tool calls with error-like output patterns
+    #   "suspect_failed_tools": ["mcp__brave_search"]  # List of tools with suspected failures
+    # }
 
     # Metric trait evaluation metadata (confusion-matrix analysis)
     metric_trait_confusion_lists: dict[str, dict[str, list[str]]] | None = None  # Confusion lists per metric trait

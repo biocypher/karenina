@@ -18,6 +18,34 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 # Set up logger
 logger = logging.getLogger(__name__)
 
+# ============================================================================
+# Tool Call Failure Detection Patterns
+# ============================================================================
+
+# Regex patterns to detect suspected tool failures in tool message content
+# Compiled with case-insensitive flag for better matching
+TOOL_FAILURE_PATTERNS = [
+    # Error indicators
+    re.compile(r"\berror\b", re.IGNORECASE),
+    re.compile(r"\bfailed\b", re.IGNORECASE),
+    re.compile(r"\bexception\b", re.IGNORECASE),
+    re.compile(r"\btraceback\b", re.IGNORECASE),
+    re.compile(r"\bstack\s+trace\b", re.IGNORECASE),
+    # HTTP errors
+    re.compile(r"\b404\b", re.IGNORECASE),
+    re.compile(r"\b500\b", re.IGNORECASE),
+    re.compile(r"\b502\b", re.IGNORECASE),
+    re.compile(r"\b503\b", re.IGNORECASE),
+    re.compile(r"\btimeout\b", re.IGNORECASE),
+    # API failures
+    re.compile(r"\binvalid\b", re.IGNORECASE),
+    re.compile(r"\bunauthorized\b", re.IGNORECASE),
+    re.compile(r"\bforbidden\b", re.IGNORECASE),
+    re.compile(r"\bnot\s+found\b", re.IGNORECASE),
+    re.compile(r"\bcannot\b", re.IGNORECASE),
+    re.compile(r"\bunable\s+to\b", re.IGNORECASE),
+]
+
 
 # ============================================================================
 # Error Handling and Retry Logic
@@ -66,11 +94,23 @@ def _extract_agent_metrics(response: Any) -> dict[str, Any] | None:
     """
     Extract agent execution metrics from LangGraph agent response.
 
+    This function analyzes agent messages to track:
+    - Iterations (AI message cycles)
+    - Tool calls (successful tool invocations)
+    - Tools used (unique tool names)
+    - Suspected failed tool calls (tools with error-like output patterns)
+
     Args:
         response: Agent response object from LangGraph (dict with "messages" key)
 
     Returns:
-        Dict with agent metrics (iterations, tool_calls, tools_used) or None if extraction fails
+        Dict with agent metrics:
+        - iterations: Number of AI message cycles
+        - tool_calls: Total tool invocations
+        - tools_used: Sorted list of unique tool names
+        - suspect_failed_tool_calls: Count of tool calls with error-like patterns
+        - suspect_failed_tools: Sorted list of tools with suspected failures
+        Returns None if extraction fails
     """
     if not response or not isinstance(response, dict):
         return None
@@ -83,6 +123,8 @@ def _extract_agent_metrics(response: Any) -> dict[str, Any] | None:
     iterations = 0
     tool_calls = 0
     tools_used = set()
+    suspect_failed_tool_calls = 0
+    suspect_failed_tools = set()
 
     for msg in messages:
         # Check message type
@@ -102,10 +144,36 @@ def _extract_agent_metrics(response: Any) -> dict[str, Any] | None:
                 if tool_name:
                     tools_used.add(tool_name)
 
+                # Check for suspected failures in tool output
+                is_suspect_failure = False
+
+                # Check content field for error patterns
+                content = getattr(msg, "content", None)
+                if content and isinstance(content, str):
+                    # Test against all failure patterns
+                    for pattern in TOOL_FAILURE_PATTERNS:
+                        if pattern.search(content):
+                            is_suspect_failure = True
+                            break
+
+                # Check status field if available (some tool messages have status)
+                if not is_suspect_failure:
+                    status = getattr(msg, "status", None)
+                    if status and isinstance(status, str) and status.lower() in ["error", "failed", "failure"]:
+                        is_suspect_failure = True
+
+                # Track suspected failure
+                if is_suspect_failure:
+                    suspect_failed_tool_calls += 1
+                    if tool_name:
+                        suspect_failed_tools.add(tool_name)
+
     return {
         "iterations": iterations,
         "tool_calls": tool_calls,
         "tools_used": sorted(tools_used),  # Sort for deterministic output
+        "suspect_failed_tool_calls": suspect_failed_tool_calls,
+        "suspect_failed_tools": sorted(suspect_failed_tools),  # Sort for deterministic output
     }
 
 
