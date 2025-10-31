@@ -541,7 +541,7 @@ class TaskEval:
             if rubric and (rubric.traits or rubric.manual_traits):
                 try:
                     evaluator = RubricEvaluator(parsing_model, self.callable_registry)
-                    rubric_scores = evaluator.evaluate_rubric(
+                    rubric_scores, _ = evaluator.evaluate_rubric(
                         question=question_text, answer=response_text, rubric=rubric
                     )
                 except Exception as e:
@@ -586,7 +586,9 @@ class TaskEval:
             try:
                 evaluator = RubricEvaluator(parsing_model, self.callable_registry)
                 question_text = question_dict.get("question", "")
-                rubric_scores = evaluator.evaluate_rubric(question=question_text, answer=response_text, rubric=rubric)
+                rubric_scores, _ = evaluator.evaluate_rubric(
+                    question=question_text, answer=response_text, rubric=rubric
+                )
             except Exception as e:
                 print(f"Warning: RubricEvaluator failed in fallback: {e}")
                 rubric_scores = {}

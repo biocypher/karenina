@@ -588,6 +588,9 @@ def _create_result_model(run_id: str, result: "VerificationResult") -> Verificat
         # Metric trait fields
         metric_trait_confusion_lists=result.metric_trait_confusion_lists,
         metric_trait_metrics=result.metric_trait_metrics,
+        # LLM usage tracking fields
+        usage_metadata=result.usage_metadata,
+        agent_metrics=result.agent_metrics,
     )
 
 
@@ -638,11 +641,14 @@ def _update_result_model(model: VerificationResultModel, result: "VerificationRe
     # Metric trait fields
     model.metric_trait_confusion_lists = result.metric_trait_confusion_lists
     model.metric_trait_metrics = result.metric_trait_metrics
+    # LLM usage tracking fields
+    model.usage_metadata = result.usage_metadata
+    model.agent_metrics = result.agent_metrics
 
 
 def _model_to_verification_result(model: VerificationResultModel) -> "VerificationResult":
     """Convert VerificationResultModel to VerificationResult."""
-    from ...schemas.workflow import VerificationResult
+    from karenina.schemas.workflow import VerificationResult
 
     return VerificationResult(
         question_id=model.question_id,
@@ -700,4 +706,7 @@ def _model_to_verification_result(model: VerificationResultModel) -> "Verificati
         # Metric trait fields
         metric_trait_confusion_lists=model.metric_trait_confusion_lists,
         metric_trait_metrics=model.metric_trait_metrics,
+        # LLM usage tracking fields
+        usage_metadata=model.usage_metadata,
+        agent_metrics=model.agent_metrics,
     )

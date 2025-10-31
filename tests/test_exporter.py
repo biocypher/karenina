@@ -708,3 +708,338 @@ class TestEvaluationModeFieldsExport:
     # Note: CSV export tests omitted due to complexity of test setup
     # The CSV export code has been updated to include the new fields in headers (lines 321, 324)
     # and data rows (lines 396, 399). Manual testing confirms functionality.
+
+
+class TestUsageMetadataExport:
+    """Test export of usage_metadata and agent_metrics fields (Issue #1 Prevention)."""
+
+    @pytest.fixture
+    def simple_mock_job(self):
+        """Simple mock job for testing export without complex rubric config."""
+        from karenina.schemas import ModelConfig, VerificationConfig, VerificationJob
+
+        model = ModelConfig(
+            id="test",
+            model_provider="openai",
+            model_name="gpt-4.1-mini",
+            temperature=0.0,
+            interface="langchain",
+            system_prompt="Test.",
+        )
+
+        config = VerificationConfig(
+            answering_models=[model],
+            parsing_models=[model],
+            replicate_count=1,
+        )
+
+        return VerificationJob(
+            job_id="test-job",
+            run_name="Test Run",
+            status="completed",
+            config=config,
+            total_questions=1,
+            processed_count=1,
+            successful_count=1,
+            failed_count=0,
+            percentage=100.0,
+        )
+
+    def test_json_export_includes_usage_metadata(self, simple_mock_job):
+        """Test JSON export includes usage_metadata field."""
+        from karenina.schemas.workflow import VerificationResult
+
+        # Create result with usage_metadata
+        usage_metadata = {
+            "answer_generation": {
+                "input_tokens": 200,
+                "output_tokens": 100,
+                "total_tokens": 300,
+                "model": "gpt-4o-mini",
+            },
+            "parsing": {
+                "input_tokens": 150,
+                "output_tokens": 80,
+                "total_tokens": 230,
+                "model": "gpt-4o-mini",
+            },
+            "total": {
+                "input_tokens": 350,
+                "output_tokens": 180,
+                "total_tokens": 530,
+            },
+        }
+
+        result = VerificationResult(
+            question_id="test_q_usage",
+            template_id="test_tpl",
+            completed_without_errors=True,
+            template_verification_performed=True,
+            verify_result=True,
+            rubric_evaluation_performed=False,
+            question_text="Test question?",
+            raw_llm_response="Test response",
+            answering_model="openai/gpt-4o-mini",
+            parsing_model="openai/gpt-4o-mini",
+            execution_time=1.5,
+            timestamp="2025-01-01 00:00:00",
+            usage_metadata=usage_metadata,  # CRITICAL FIELD
+        )
+
+        results = {f"{result.question_id}_{result.answering_model}_{result.parsing_model}": result}
+
+        # Export to JSON
+        json_content = export_verification_results_json(simple_mock_job, results)
+        data = json.loads(json_content)
+
+        # Verify usage_metadata is in export
+        result_data = data["results"][f"{result.question_id}_{result.answering_model}_{result.parsing_model}"]
+        assert "usage_metadata" in result_data, "usage_metadata field missing from JSON export"
+        assert result_data["usage_metadata"] == usage_metadata, "usage_metadata does not match"
+
+    def test_json_export_includes_agent_metrics(self, simple_mock_job):
+        """Test JSON export includes agent_metrics field."""
+        from karenina.schemas.workflow import VerificationResult
+
+        # Create result with agent_metrics
+        agent_metrics = {
+            "iterations": 3,
+            "tool_calls": 5,
+            "tools_used": ["web_search", "calculator", "file_read"],
+        }
+
+        result = VerificationResult(
+            question_id="test_q_agent",
+            template_id="test_tpl",
+            completed_without_errors=True,
+            template_verification_performed=True,
+            verify_result=True,
+            rubric_evaluation_performed=False,
+            question_text="Test question?",
+            raw_llm_response="Test response",
+            answering_model="openai/gpt-4o-mini",
+            parsing_model="openai/gpt-4o-mini",
+            execution_time=2.5,
+            timestamp="2025-01-01 00:00:00",
+            agent_metrics=agent_metrics,  # CRITICAL FIELD
+        )
+
+        results = {f"{result.question_id}_{result.answering_model}_{result.parsing_model}": result}
+
+        # Export to JSON
+        json_content = export_verification_results_json(simple_mock_job, results)
+        data = json.loads(json_content)
+
+        # Verify agent_metrics is in export
+        result_data = data["results"][f"{result.question_id}_{result.answering_model}_{result.parsing_model}"]
+        assert "agent_metrics" in result_data, "agent_metrics field missing from JSON export"
+        assert result_data["agent_metrics"] == agent_metrics, "agent_metrics does not match"
+
+    def test_json_export_null_usage_fields(self, simple_mock_job):
+        """Test JSON export handles null usage_metadata and agent_metrics."""
+        from karenina.schemas.workflow import VerificationResult
+
+        result = VerificationResult(
+            question_id="test_q_null",
+            template_id="test_tpl",
+            completed_without_errors=True,
+            template_verification_performed=True,
+            verify_result=True,
+            rubric_evaluation_performed=False,
+            question_text="Test question?",
+            raw_llm_response="Test response",
+            answering_model="openai/gpt-4o-mini",
+            parsing_model="openai/gpt-4o-mini",
+            execution_time=1.0,
+            timestamp="2025-01-01 00:00:00",
+            usage_metadata=None,
+            agent_metrics=None,
+        )
+
+        results = {f"{result.question_id}_{result.answering_model}_{result.parsing_model}": result}
+
+        # Export to JSON
+        json_content = export_verification_results_json(simple_mock_job, results)
+        data = json.loads(json_content)
+
+        # Verify null values are handled (converted to empty string or null)
+        result_data = data["results"][f"{result.question_id}_{result.answering_model}_{result.parsing_model}"]
+        assert "usage_metadata" in result_data
+        assert "agent_metrics" in result_data
+        # Null should be preserved as null or converted to empty string
+        assert result_data["usage_metadata"] in [None, ""]
+        assert result_data["agent_metrics"] in [None, ""]
+
+    def test_csv_export_includes_usage_metadata_column(self, simple_mock_job):
+        """Test CSV export includes usage_metadata column."""
+        from karenina.schemas.workflow import VerificationResult
+
+        usage_metadata = {
+            "answer_generation": {
+                "input_tokens": 100,
+                "output_tokens": 50,
+                "total_tokens": 150,
+                "model": "gpt-4o-mini",
+            },
+            "total": {"input_tokens": 100, "output_tokens": 50, "total_tokens": 150},
+        }
+
+        result = VerificationResult(
+            question_id="test_q_csv",
+            template_id="test_tpl",
+            completed_without_errors=True,
+            template_verification_performed=True,
+            verify_result=True,
+            rubric_evaluation_performed=False,
+            question_text="Test?",
+            raw_llm_response="Response",
+            answering_model="openai/gpt-4o-mini",
+            parsing_model="openai/gpt-4o-mini",
+            execution_time=1.0,
+            timestamp="2025-01-01 00:00:00",
+            usage_metadata=usage_metadata,
+        )
+
+        results = {f"{result.question_id}_{result.answering_model}_{result.parsing_model}": result}
+
+        # Export to CSV
+        csv_content = export_verification_results_csv(simple_mock_job, results)
+        lines = csv_content.strip().split("\n")
+
+        # Check header includes usage_metadata
+        header = lines[0]
+        assert "usage_metadata" in header, "usage_metadata column missing from CSV header"
+
+        # Check data row includes usage_metadata
+        data_row = lines[1]
+        # usage_metadata should be serialized as JSON string
+        assert "answer_generation" in data_row or '"answer_generation"' in data_row, (
+            "usage_metadata data missing or incorrectly serialized in CSV"
+        )
+
+    def test_csv_export_includes_agent_metrics_column(self, simple_mock_job):
+        """Test CSV export includes agent_metrics column."""
+        from karenina.schemas.workflow import VerificationResult
+
+        agent_metrics = {
+            "iterations": 3,
+            "tool_calls": 5,
+            "tools_used": ["web_search", "calculator"],
+        }
+
+        result = VerificationResult(
+            question_id="test_q_csv_agent",
+            template_id="test_tpl",
+            completed_without_errors=True,
+            template_verification_performed=True,
+            verify_result=True,
+            rubric_evaluation_performed=False,
+            question_text="Test?",
+            raw_llm_response="Response",
+            answering_model="openai/gpt-4o-mini",
+            parsing_model="openai/gpt-4o-mini",
+            execution_time=2.0,
+            timestamp="2025-01-01 00:00:00",
+            agent_metrics=agent_metrics,
+        )
+
+        results = {f"{result.question_id}_{result.answering_model}_{result.parsing_model}": result}
+
+        # Export to CSV
+        csv_content = export_verification_results_csv(simple_mock_job, results)
+        lines = csv_content.strip().split("\n")
+
+        # Check header includes agent_metrics
+        header = lines[0]
+        assert "agent_metrics" in header, "agent_metrics column missing from CSV header"
+
+        # Check data row includes agent_metrics
+        data_row = lines[1]
+        # agent_metrics should be serialized as JSON string
+        assert "iterations" in data_row or '"iterations"' in data_row, (
+            "agent_metrics data missing or incorrectly serialized in CSV"
+        )
+
+    def test_csv_export_null_usage_fields(self, simple_mock_job):
+        """Test CSV export handles null usage fields as empty strings."""
+        from karenina.schemas.workflow import VerificationResult
+
+        result = VerificationResult(
+            question_id="test_q_csv_null",
+            template_id="test_tpl",
+            completed_without_errors=True,
+            template_verification_performed=True,
+            verify_result=True,
+            rubric_evaluation_performed=False,
+            question_text="Test?",
+            raw_llm_response="Response",
+            answering_model="openai/gpt-4o-mini",
+            parsing_model="openai/gpt-4o-mini",
+            execution_time=1.0,
+            timestamp="2025-01-01 00:00:00",
+            usage_metadata=None,
+            agent_metrics=None,
+        )
+
+        results = {f"{result.question_id}_{result.answering_model}_{result.parsing_model}": result}
+
+        # Export to CSV
+        csv_content = export_verification_results_csv(simple_mock_job, results)
+        lines = csv_content.strip().split("\n")
+
+        # Headers should still include the columns
+        header = lines[0]
+        assert "usage_metadata" in header
+        assert "agent_metrics" in header
+
+        # Data row should have empty strings for null values (not cause errors)
+        # CSV export should complete without errors
+        assert len(lines) == 2, "CSV export should have header + 1 data row"
+
+    def test_csv_export_json_serialization_escaping(self, simple_mock_job):
+        """Test CSV export properly escapes JSON in usage fields."""
+        from karenina.schemas.workflow import VerificationResult
+
+        # Create usage_metadata with characters that need escaping in CSV
+        usage_metadata = {
+            "answer_generation": {
+                "input_tokens": 100,
+                "output_tokens": 50,
+                "total_tokens": 150,
+                "model": "gpt-4o-mini",
+                "note": 'Test with "quotes" and, commas',
+            }
+        }
+
+        result = VerificationResult(
+            question_id="test_q_escape",
+            template_id="test_tpl",
+            completed_without_errors=True,
+            template_verification_performed=True,
+            verify_result=True,
+            rubric_evaluation_performed=False,
+            question_text="Test?",
+            raw_llm_response="Response",
+            answering_model="openai/gpt-4o-mini",
+            parsing_model="openai/gpt-4o-mini",
+            execution_time=1.0,
+            timestamp="2025-01-01 00:00:00",
+            usage_metadata=usage_metadata,
+        )
+
+        results = {f"{result.question_id}_{result.answering_model}_{result.parsing_model}": result}
+
+        # Export to CSV
+        csv_content = export_verification_results_csv(simple_mock_job, results)
+        lines = csv_content.strip().split("\n")
+
+        # Should not raise errors and should have proper CSV structure
+        assert len(lines) == 2
+
+        # Parse CSV to verify it's valid
+        import csv
+        from io import StringIO
+
+        reader = csv.reader(StringIO(csv_content))
+        rows = list(reader)
+        assert len(rows) == 2, "CSV should parse to exactly 2 rows"

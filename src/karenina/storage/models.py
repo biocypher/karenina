@@ -290,6 +290,10 @@ class VerificationResultModel(Base):
     metric_trait_confusion_lists: Mapped[dict[str, dict[str, list[str]]] | None] = mapped_column(JSON, nullable=True)
     metric_trait_metrics: Mapped[dict[str, dict[str, float]] | None] = mapped_column(JSON, nullable=True)
 
+    # LLM usage tracking metadata
+    usage_metadata: Mapped[dict[str, dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
+    agent_metrics: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
 
