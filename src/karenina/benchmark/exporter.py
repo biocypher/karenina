@@ -202,6 +202,9 @@ def export_verification_results_json(job: VerificationJob, results: dict[str, Ve
             # Metric trait fields
             "metric_trait_confusion_lists": result.metric_trait_confusion_lists,
             "metric_trait_metrics": result.metric_trait_metrics,
+            # LLM usage tracking fields
+            "usage_metadata": result.usage_metadata,
+            "agent_metrics": result.agent_metrics,
         }
 
     return json.dumps(export_data, indent=2, ensure_ascii=False)
@@ -390,6 +393,9 @@ def export_verification_results_csv(
             # Metric trait fields
             "metric_trait_confusion_lists",
             "metric_trait_metrics",
+            # LLM usage tracking fields
+            "usage_metadata",
+            "agent_metrics",
         ]
     )
 
@@ -404,7 +410,7 @@ def export_verification_results_csv(
     for _question_id, result in results.items():
         row = {
             "question_id": result.question_id,
-            "completed_without_errors": result.completed_without_errors,
+            "success": result.completed_without_errors,  # Header uses 'success', not 'completed_without_errors'
             "error": result.error or "",
             "question_text": result.question_text,
             "raw_llm_response": result.raw_llm_response,
@@ -469,6 +475,13 @@ def export_verification_results_csv(
             "metric_trait_metrics": _safe_json_serialize(
                 result.metric_trait_metrics, result.question_id, "metric_trait_metrics"
             ),
+            # LLM usage tracking fields
+            "usage_metadata": _safe_json_serialize(result.usage_metadata, result.question_id, "usage_metadata")
+            if result.usage_metadata
+            else "",
+            "agent_metrics": _safe_json_serialize(result.agent_metrics, result.question_id, "agent_metrics")
+            if result.agent_metrics
+            else "",
         }
 
         # Add global rubric trait values (optimized with dictionary comprehension)

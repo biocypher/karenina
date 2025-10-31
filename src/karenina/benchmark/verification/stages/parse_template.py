@@ -6,6 +6,7 @@ Parses LLM responses into Pydantic objects using standard or deep-judgment parsi
 import logging
 from typing import Any
 
+from langchain_core.callbacks import get_usage_metadata_callback
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_core.output_parsers import PydanticOutputParser
 
@@ -13,6 +14,7 @@ from ....infrastructure.llm.interface import init_chat_model_unified
 from ....schemas.workflow import VerificationConfig
 from ..evaluators.deep_judgment import deep_judgment_parse
 from ..stage import BaseVerificationStage, VerificationContext
+from ..utils import UsageTracker
 from ..utils.parsing import _strip_markdown_fences
 from ..verification_utils import _should_expose_ground_truth, _system_prompt_compose
 
@@ -103,6 +105,12 @@ class ParseTemplateStage(BaseVerificationStage):
         raw_llm_response = context.get_artifact("raw_llm_response")
         Answer = context.get_artifact("Answer")
         RawAnswer = context.get_artifact("RawAnswer")
+
+        # Retrieve usage tracker from previous stage or initialize new one
+        usage_tracker = context.get_artifact("usage_tracker")
+        if usage_tracker is None:
+            usage_tracker = UsageTracker()
+            logger.warning("No usage tracker found in context, initializing new one")
 
         # Build model string for result
         if parsing_model.interface == "openrouter":
@@ -210,8 +218,15 @@ Original Question: {context.question_text}
                 attributes_without_excerpts = dj_metadata.get("attributes_without_excerpts", None)
                 hallucination_risk_assessment = dj_metadata.get("hallucination_risk", None)
             else:
-                # Standard single-stage parsing
-                parsing_response = parsing_llm.invoke(parsing_messages)
+                # Standard single-stage parsing with usage tracking
+                with get_usage_metadata_callback() as cb:
+                    parsing_response = parsing_llm.invoke(parsing_messages)
+
+                # Track the parsing call
+                usage_metadata = dict(cb.usage_metadata) if cb.usage_metadata else {}
+                if usage_metadata:
+                    usage_tracker.track_call("parsing", parsing_model_str, usage_metadata)
+
                 raw_parsing_response = (
                     parsing_response.content if hasattr(parsing_response, "content") else str(parsing_response)
                 )
@@ -229,6 +244,9 @@ Original Question: {context.question_text}
         # Store results
         context.set_artifact("parsed_answer", parsed_answer)
         context.set_artifact("deep_judgment_performed", deep_judgment_performed)
+
+        # Store updated usage tracker for next stages
+        context.set_artifact("usage_tracker", usage_tracker)
         context.set_artifact("extracted_excerpts", extracted_excerpts)
         context.set_artifact("attribute_reasoning", attribute_reasoning)
         context.set_artifact("deep_judgment_stages_completed", deep_judgment_stages_completed)

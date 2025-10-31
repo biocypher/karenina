@@ -7,6 +7,7 @@ import logging
 
 from ..evaluators.rubric_evaluator import RubricEvaluator
 from ..stage import BaseVerificationStage, VerificationContext
+from ..utils import UsageTracker
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -92,9 +93,22 @@ class RubricEvaluationStage(BaseVerificationStage):
         raw_llm_response = context.get_artifact("raw_llm_response")
         rubric = context.rubric
 
+        # Retrieve usage tracker from previous stage or initialize new one
+        usage_tracker = context.get_artifact("usage_tracker")
+        if usage_tracker is None:
+            usage_tracker = UsageTracker()
+            logger.warning("No usage tracker found in context, initializing new one")
+
         rubric_result = None
         metric_confusion_lists = None
         metric_results = None
+
+        # Build model string for tracking
+        parsing_model = context.parsing_model
+        if parsing_model.interface == "openrouter":
+            parsing_model_str = parsing_model.model_name
+        else:
+            parsing_model_str = f"{parsing_model.model_provider}/{parsing_model.model_name}"
 
         try:
             # Create rubric evaluator with parsing model
@@ -102,11 +116,16 @@ class RubricEvaluationStage(BaseVerificationStage):
 
             # Evaluate standard rubric traits
             if rubric is not None:
-                rubric_result = evaluator.evaluate_rubric(
+                rubric_result, usage_metadata_list = evaluator.evaluate_rubric(
                     question=context.question_text,
                     answer=raw_llm_response,
                     rubric=rubric,
                 )
+
+                # Track rubric evaluation calls
+                for usage_metadata in usage_metadata_list:
+                    if usage_metadata:
+                        usage_tracker.track_call("rubric_evaluation", parsing_model_str, usage_metadata)
 
             # Evaluate metric traits separately
             if rubric is not None and rubric.metric_traits:
@@ -116,11 +135,16 @@ class RubricEvaluationStage(BaseVerificationStage):
                 for trait in rubric.metric_traits:
                     logger.debug(f"  - Trait: {trait.name} (mode: {trait.evaluation_mode}, metrics: {trait.metrics})")
 
-                metric_confusion_lists, metric_results = evaluator.evaluate_metric_traits(
+                metric_confusion_lists, metric_results, metric_usage_metadata_list = evaluator.evaluate_metric_traits(
                     question=context.question_text,
                     answer=raw_llm_response,
                     metric_traits=rubric.metric_traits,
                 )
+
+                # Track metric trait evaluation calls
+                for usage_metadata in metric_usage_metadata_list:
+                    if usage_metadata:
+                        usage_tracker.track_call("rubric_evaluation", parsing_model_str, usage_metadata)
 
                 logger.info(
                     f"Metric evaluation complete. Results: {list(metric_results.keys()) if metric_results else 'None'}"
@@ -144,6 +168,9 @@ class RubricEvaluationStage(BaseVerificationStage):
         context.set_artifact("rubric_result", rubric_result)
         context.set_artifact("metric_confusion_lists", metric_confusion_lists)
         context.set_artifact("metric_results", metric_results)
+
+        # Store updated usage tracker for next stages
+        context.set_artifact("usage_tracker", usage_tracker)
 
         # Store in result builder
         context.set_result_field("verify_rubric", rubric_result)

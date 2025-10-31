@@ -4,6 +4,7 @@ import json
 import logging
 from typing import Any
 
+from langchain_core.callbacks import get_usage_metadata_callback
 from langchain_core.messages import HumanMessage, SystemMessage
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
@@ -83,7 +84,7 @@ def detect_abstention(
     raw_llm_response: str,
     parsing_model: ModelConfig,
     question_text: str,
-) -> tuple[bool, bool, str | None]:
+) -> tuple[bool, bool, str | None, dict[str, Any]]:
     """
     Detect if the model refused to answer or abstained from answering.
 
@@ -97,14 +98,15 @@ def detect_abstention(
         question_text: The original question that was asked
 
     Returns:
-        Tuple of (abstention_detected, check_performed, reasoning):
+        Tuple of (abstention_detected, check_performed, reasoning, usage_metadata):
         - abstention_detected: True if model refused/abstained, False if genuine attempt
         - check_performed: True if check completed successfully, False if check failed
         - reasoning: The LLM's explanation for its determination (None if check failed)
+        - usage_metadata: Token usage metadata from LangChain callback
 
     Examples:
         >>> config = ModelConfig(id="parser", model_provider="openai", ...)
-        >>> detected, performed, reasoning = detect_abstention("I cannot answer this", config, "What is X?")
+        >>> detected, performed, reasoning, metadata = detect_abstention("I cannot answer this", config, "What is X?")
         >>> print(detected, performed, reasoning)
         True, True, "Response contains explicit refusal pattern"
     """
@@ -121,8 +123,10 @@ def detect_abstention(
         reraise=True,
         before_sleep=_log_retry,
     )
-    def _detect_with_retry() -> tuple[bool, bool, str | None]:
+    def _detect_with_retry() -> tuple[bool, bool, str | None, dict[str, Any]]:
         """Inner function with retry logic."""
+        usage_metadata: dict[str, Any] = {}
+
         try:
             # Initialize the parsing model for abstention detection
             llm = init_chat_model_unified(
@@ -140,8 +144,11 @@ def detect_abstention(
                 HumanMessage(content=user_prompt),
             ]
 
-            # Invoke the LLM
-            response = llm.invoke(messages)
+            # Invoke the LLM with usage metadata callback
+            with get_usage_metadata_callback() as cb:
+                response = llm.invoke(messages)
+            usage_metadata = dict(cb.usage_metadata) if cb.usage_metadata else {}
+
             raw_response = response.content if hasattr(response, "content") else str(response)
 
             # Parse the JSON response
@@ -155,12 +162,12 @@ def detect_abstention(
             reasoning = result.get("reasoning", "No reasoning provided")
             logger.debug(f"Abstention check result: {abstention_detected} - Reasoning: {reasoning}")
 
-            return abstention_detected, True, reasoning
+            return abstention_detected, True, reasoning, usage_metadata
 
         except json.JSONDecodeError as e:
             # JSON parsing failed - log and treat as check failure
             logger.warning(f"Failed to parse abstention detection response as JSON: {e}")
-            return False, False, None
+            return False, False, None, usage_metadata
 
         except Exception as e:
             # Check if this is a retryable error
@@ -170,11 +177,11 @@ def detect_abstention(
             else:
                 # Non-retryable error - log and treat as check failure
                 logger.warning(f"Abstention detection failed with non-retryable error: {e}")
-                return False, False, None
+                return False, False, None, usage_metadata
 
     try:
         return _detect_with_retry()
     except Exception as e:
         # All retries exhausted or unhandled error
         logger.error(f"Abstention detection failed after all retries: {e}")
-        return False, False, None
+        return False, False, None, {}

@@ -19,6 +19,7 @@ from .prompts import (
     ANSWER_EVALUATION_SYS,
     ANSWER_EVALUATION_USER,
 )
+from .usage_tracker import UsageMetadata, UsageTracker
 from .validation import validate_answer_template
 
 __all__ = [
@@ -41,4 +42,7 @@ __all__ = [
     "ANSWER_EVALUATION_USER",
     # Validation
     "validate_answer_template",
+    # Usage tracking
+    "UsageMetadata",
+    "UsageTracker",
 ]

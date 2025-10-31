@@ -70,9 +70,9 @@ class TestGenerateAnswerStage:
         mock_llm = MagicMock()
         mock_init_llm.return_value = mock_llm
 
-        # Mock LLM response
+        # Mock LLM response (4-tuple: response, recursion_limit_reached, usage_metadata, agent_metrics)
         mock_response = AIMessage(content="The answer is 4")
-        mock_invoke.return_value = (mock_response, False)
+        mock_invoke.return_value = (mock_response, False, {}, None)
 
         # Execute stage
         stage = GenerateAnswerStage()
@@ -110,9 +110,9 @@ class TestGenerateAnswerStage:
         mock_llm = MagicMock()
         mock_init_llm.return_value = mock_llm
 
-        # Mock LLM response
+        # Mock LLM response (4-tuple: response, recursion_limit_reached, usage_metadata, agent_metrics)
         mock_response = AIMessage(content="Answer from MCP agent")
-        mock_invoke.return_value = (mock_response, False)
+        mock_invoke.return_value = (mock_response, False, {}, None)
 
         # Execute stage
         stage = GenerateAnswerStage()
@@ -148,8 +148,9 @@ class TestGenerateAnswerStage:
         mock_init_llm.return_value = mock_llm
 
         # Mock successful response (retry logic is in _invoke_llm_with_retry)
+        # 4-tuple: response, recursion_limit_reached, usage_metadata, agent_metrics
         mock_response = AIMessage(content="Success after retry")
-        mock_invoke.return_value = (mock_response, False)
+        mock_invoke.return_value = (mock_response, False, {}, None)
 
         # Execute stage
         stage = GenerateAnswerStage()
@@ -181,8 +182,9 @@ class TestGenerateAnswerStage:
         mock_init_llm.return_value = mock_llm
 
         # Mock response with recursion limit flag
+        # 4-tuple: response, recursion_limit_reached, usage_metadata, agent_metrics
         mock_response = AIMessage(content="Partial response before recursion limit")
-        mock_invoke.return_value = (mock_response, True)  # recursion_limit_reached = True
+        mock_invoke.return_value = (mock_response, True, {}, None)  # recursion_limit_reached = True
 
         # Execute stage
         stage = GenerateAnswerStage()
@@ -225,9 +227,9 @@ class TestGenerateAnswerStage:
         mock_llm = MagicMock()
         mock_init_llm.return_value = mock_llm
 
-        # Mock response
+        # Mock response (4-tuple: response, recursion_limit_reached, usage_metadata, agent_metrics)
         mock_response = AIMessage(content="Answer using few-shot examples")
-        mock_invoke.return_value = (mock_response, False)
+        mock_invoke.return_value = (mock_response, False, {}, None)
 
         # Execute stage
         stage = GenerateAnswerStage()

@@ -7,6 +7,7 @@ import logging
 
 from ..evaluators.abstention_checker import detect_abstention
 from ..stage import BaseVerificationStage, VerificationContext
+from ..utils import UsageTracker
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -82,12 +83,29 @@ class AbstentionCheckStage(BaseVerificationStage):
         """
         raw_llm_response = context.get_artifact("raw_llm_response")
 
+        # Retrieve usage tracker from previous stage or initialize new one
+        usage_tracker = context.get_artifact("usage_tracker")
+        if usage_tracker is None:
+            usage_tracker = UsageTracker()
+            logger.warning("No usage tracker found in context, initializing new one")
+
+        # Build model string for tracking
+        parsing_model = context.parsing_model
+        if parsing_model.interface == "openrouter":
+            parsing_model_str = parsing_model.model_name
+        else:
+            parsing_model_str = f"{parsing_model.model_provider}/{parsing_model.model_name}"
+
         # Detect abstention
-        abstention_detected, abstention_check_performed, abstention_reasoning = detect_abstention(
+        abstention_detected, abstention_check_performed, abstention_reasoning, usage_metadata = detect_abstention(
             raw_llm_response=raw_llm_response,
             parsing_model=context.parsing_model,
             question_text=context.question_text,
         )
+
+        # Track the abstention check call
+        if usage_metadata:
+            usage_tracker.track_call("abstention_check", parsing_model_str, usage_metadata)
 
         abstention_override_applied = False
 
@@ -108,6 +126,9 @@ class AbstentionCheckStage(BaseVerificationStage):
         context.set_artifact("abstention_detected", abstention_detected)
         context.set_artifact("abstention_override_applied", abstention_override_applied)
         context.set_artifact("abstention_reasoning", abstention_reasoning)
+
+        # Store updated usage tracker for next stages
+        context.set_artifact("usage_tracker", usage_tracker)
 
         # Store in result builder
         context.set_result_field("abstention_check_performed", abstention_check_performed)

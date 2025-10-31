@@ -360,6 +360,21 @@ class VerificationResult(BaseModel):
     # Scale: "none" = lowest risk (strong external evidence), "high" = highest risk (weak/no evidence)
     # Only populated when deep_judgment_search_enabled=True
 
+    # LLM usage tracking metadata
+    usage_metadata: dict[str, dict[str, Any]] | None = None  # Token usage breakdown by verification stage
+    # Structure: {
+    #   "answer_generation": {
+    #     "input_tokens": 150, "output_tokens": 200, "total_tokens": 350,
+    #     "model": "gpt-4.1-mini-2025-04-14",
+    #     "input_token_details": {"audio": 0, "cache_read": 0},
+    #     "output_token_details": {"audio": 0, "reasoning": 0}
+    #   },
+    #   "parsing": {...}, "rubric_evaluation": {...}, "abstention_check": {...},
+    #   "total": {"input_tokens": 600, "output_tokens": 360, "total_tokens": 960}
+    # }
+    agent_metrics: dict[str, Any] | None = None  # MCP agent execution metrics (only if agent used)
+    # Structure: {"iterations": 3, "tool_calls": 5, "tools_used": ["mcp__brave_search", "mcp__read_resource"]}
+
     # Metric trait evaluation metadata (confusion-matrix analysis)
     metric_trait_confusion_lists: dict[str, dict[str, list[str]]] | None = None  # Confusion lists per metric trait
     # Structure: {"trait_name": {"tp": ["excerpt1", ...], "tn": [...], "fp": [...], "fn": [...]}}
