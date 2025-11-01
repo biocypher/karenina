@@ -229,7 +229,7 @@ def execute_sequential(
     total = len(tasks)
 
     for idx, task in enumerate(tasks, 1):
-        # Call progress callback BEFORE starting task (with None result)
+        # Call progress callback BEFORE starting task (with preview result)
         if progress_callback:
             # Create a minimal result-like object for progress tracking
             from ...schemas.workflow import VerificationResult
@@ -243,7 +243,7 @@ def execute_sequential(
                 answering_model=task["answering_model"].id,
                 parsing_model=task["parsing_model"].id,
                 execution_time=0.0,
-                timestamp="",
+                timestamp="",  # Empty timestamp indicates "starting" event
             )
             progress_callback(idx, total, preview_result)
 
@@ -251,8 +251,10 @@ def execute_sequential(
         result_key, result = execute_task(task)
         results[result_key] = result
 
-        # Progress callback after completion is now redundant since we show before
-        # Removing this to avoid double progress updates
+        # Call progress callback AFTER completion (with actual result)
+        # This allows the service to remove from in_progress_questions and update counts
+        if progress_callback:
+            progress_callback(idx, total, result)
 
     return results
 
