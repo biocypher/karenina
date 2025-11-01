@@ -583,3 +583,60 @@ class TestBenchmarkVerificationIntegration:
 
         finally:
             tmp_path.unlink(missing_ok=True)
+
+    @patch("karenina.benchmark.core.verification_manager.run_verification_batch")
+    def test_progress_callback_integration(self, mock_run_batch, sample_benchmark, sample_config) -> None:
+        """Test that progress callback is properly adapted and called during verification."""
+        benchmark, (q1_id, q2_id, q3_id) = sample_benchmark
+
+        # Track progress callback calls
+        progress_calls = []
+
+        def progress_callback(percentage: float, message: str) -> None:
+            progress_calls.append({"percentage": percentage, "message": message})
+
+        # Mock the batch runner to simulate progress
+        def mock_batch_runner(**kwargs):
+            # Get the batch progress callback from kwargs
+            batch_callback = kwargs.get("progress_callback")
+
+            mock_result = VerificationResult(
+                question_id=q1_id,
+                template_id="no_template",
+                success=True,
+                question_text="What is 2 + 2?",
+                raw_llm_response="4",
+                answering_model="test",
+                parsing_model="test",
+                execution_time=1.0,
+                timestamp="2023-01-01T00:00:00",
+                completed_without_errors=True,
+            )
+
+            # Simulate calling the batch progress callback
+            if batch_callback:
+                # Simulate progress: task 1 of 2, task 2 of 2
+                batch_callback(1, 2, mock_result)
+                batch_callback(2, 2, mock_result)
+
+            return {f"{q1_id}_test": mock_result}
+
+        mock_run_batch.side_effect = mock_batch_runner
+
+        # Run verification with progress callback
+        benchmark.run_verification(
+            config=sample_config,
+            question_ids=[q1_id],
+            progress_callback=progress_callback,
+        )
+
+        # Verify progress callback was called
+        assert len(progress_calls) >= 2  # At least 2 progress updates
+
+        # Check first call: 50% progress
+        assert progress_calls[0]["percentage"] == 50.0
+        assert "Verified 1/2 tasks" in progress_calls[0]["message"]
+
+        # Check second call: 100% progress
+        assert progress_calls[1]["percentage"] == 100.0
+        assert "Verified 2/2 tasks" in progress_calls[1]["message"]

@@ -321,9 +321,21 @@ class VerificationManager:
         if config.db_config is not None:
             storage_url = config.db_config.storage_url
 
+        # Create progress callback adapter if needed
+        # Benchmark expects: Callable[[float, str], None] (percentage, message)
+        # batch_runner expects: Callable[[int, int, VerificationResult], None] (current, total, result)
+        batch_progress_callback = None
+        if progress_callback:
+
+            def adapter(current: int, total: int, result: VerificationResult) -> None:
+                # Convert to percentage and create message
+                percentage = (current / total) * 100 if total > 0 else 0
+                message = f"Verified {current}/{total} tasks - {result.question_id}"
+                progress_callback(percentage, message)
+
+            batch_progress_callback = adapter
+
         # Call batch runner with all templates
-        # Note: progress_callback is not passed because batch_runner uses different signature
-        # Callable[[int, int, VerificationResult], None] vs Callable[[float, str], None]
         results = run_verification_batch(
             templates=templates,
             config=config,
@@ -333,12 +345,8 @@ class VerificationManager:
             async_enabled=async_enabled,  # Can override env var
             storage_url=storage_url,
             benchmark_name=self.base.name,
-            progress_callback=None,  # Different signature than Benchmark expects
+            progress_callback=batch_progress_callback,
         )
-
-        # Emit final progress if callback provided
-        if progress_callback:
-            progress_callback(100.0, "Verification complete")
 
         return results
 
