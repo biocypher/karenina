@@ -323,15 +323,17 @@ class VerificationManager:
 
         # Create progress callback adapter if needed
         # Benchmark expects: Callable[[float, str], None] (percentage, message)
-        # batch_runner expects: Callable[[int, int, VerificationResult], None] (current, total, result)
+        # batch_runner expects: Callable[[int, int, VerificationResult | None], None] (current, total, result)
         batch_progress_callback = None
         if progress_callback:
 
-            def adapter(current: int, total: int, result: VerificationResult) -> None:
+            def adapter(current: int, total: int, result: VerificationResult | None) -> None:
                 # Convert to percentage and create message
-                percentage = (current / total) * 100 if total > 0 else 0
-                message = f"Verified {current}/{total} tasks - {result.question_id}"
-                progress_callback(percentage, message)
+                # This is called BEFORE starting each task to show current item being processed
+                percentage = ((current - 1) / total) * 100 if total > 0 else 0
+                if result:
+                    message = f"Verifying {result.question_id} ({current}/{total})"
+                    progress_callback(percentage, message)
 
             batch_progress_callback = adapter
 

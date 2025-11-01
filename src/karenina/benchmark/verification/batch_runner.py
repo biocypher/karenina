@@ -212,14 +212,15 @@ def execute_task(task: dict[str, Any]) -> tuple[str, VerificationResult]:
 
 def execute_sequential(
     tasks: list[dict[str, Any]],
-    progress_callback: Callable[[int, int, VerificationResult], None] | None = None,
+    progress_callback: Callable[[int, int, VerificationResult | None], None] | None = None,
 ) -> dict[str, VerificationResult]:
     """
     Execute tasks one at a time.
 
     Args:
         tasks: List of task dictionaries
-        progress_callback: Optional callback(current, total, result) for progress updates
+        progress_callback: Optional callback(current, total, result | None) for progress updates
+                          Called twice per task: before (with None) and after (with result)
 
     Returns:
         Dictionary mapping result keys to verification results
@@ -228,11 +229,30 @@ def execute_sequential(
     total = len(tasks)
 
     for idx, task in enumerate(tasks, 1):
+        # Call progress callback BEFORE starting task (with None result)
+        if progress_callback:
+            # Create a minimal result-like object for progress tracking
+            from ...schemas.workflow import VerificationResult
+
+            preview_result = VerificationResult(
+                question_id=task["question_id"],
+                template_id="no_template",
+                completed_without_errors=False,
+                question_text=task["question_text"],
+                raw_llm_response="",
+                answering_model=task["answering_model"].id,
+                parsing_model=task["parsing_model"].id,
+                execution_time=0.0,
+                timestamp="",
+            )
+            progress_callback(idx, total, preview_result)
+
+        # Execute the task
         result_key, result = execute_task(task)
         results[result_key] = result
 
-        if progress_callback:
-            progress_callback(idx, total, result)
+        # Progress callback after completion is now redundant since we show before
+        # Removing this to avoid double progress updates
 
     return results
 
@@ -372,7 +392,7 @@ def run_verification_batch(
     max_workers: int | None = None,
     storage_url: str | None = None,
     benchmark_name: str | None = None,
-    progress_callback: Callable[[int, int, VerificationResult], None] | None = None,
+    progress_callback: Callable[[int, int, VerificationResult | None], None] | None = None,
 ) -> dict[str, VerificationResult]:
     """
     Run batch verification with combinatorial expansion.
@@ -389,7 +409,8 @@ def run_verification_batch(
         max_workers: Maximum parallel workers (defaults to KARENINA_ASYNC_MAX_WORKERS env var)
         storage_url: Optional database URL for auto-save
         benchmark_name: Optional benchmark name for auto-save
-        progress_callback: Optional callback(current, total, result) for progress updates
+        progress_callback: Optional callback(current, total, result | None) for progress updates
+                          Called before starting each task with preview result
 
     Returns:
         Dictionary mapping result keys to verification results
