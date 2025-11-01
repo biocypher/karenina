@@ -9,9 +9,9 @@ if TYPE_CHECKING:
     from .results import ResultsManager
     from .rubrics import RubricManager
 
-from ...schemas.workflow import VerificationConfig, VerificationResult
+from ...schemas.workflow import FinishedTemplate, VerificationConfig, VerificationResult
 from ...utils.checkpoint import generate_template_id
-from ..verification.multi_model_orchestrator import run_question_verification
+from ..verification import run_verification_batch
 from ..verification.utils.validation import validate_answer_template
 
 
@@ -31,6 +31,7 @@ class VerificationManager:
         config: VerificationConfig,
         run_name: str | None = None,
         job_id: str | None = None,
+        async_enabled: bool | None = None,
     ) -> dict[str, VerificationResult]:
         """
         Verify a single question.
@@ -40,6 +41,7 @@ class VerificationManager:
             config: Verification configuration
             run_name: Optional run name for tracking
             job_id: Optional job ID for tracking
+            async_enabled: Optional async control (overrides KARENINA_ASYNC_ENABLED env var if provided)
 
         Returns:
             Dictionary mapping result keys to VerificationResult objects
@@ -52,6 +54,7 @@ class VerificationManager:
             question_ids=[question_id],
             run_name=run_name,
             job_id=job_id,
+            async_enabled=async_enabled,
         )
 
     def verify_questions(
@@ -60,6 +63,7 @@ class VerificationManager:
         config: VerificationConfig,
         run_name: str | None = None,
         job_id: str | None = None,
+        async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
     ) -> dict[str, VerificationResult]:
         """
@@ -70,6 +74,7 @@ class VerificationManager:
             config: Verification configuration
             run_name: Optional run name for tracking
             job_id: Optional job ID for tracking
+            async_enabled: Optional async control (overrides KARENINA_ASYNC_ENABLED env var if provided)
             progress_callback: Optional callback for progress updates
 
         Returns:
@@ -80,6 +85,7 @@ class VerificationManager:
             question_ids=question_ids,
             run_name=run_name,
             job_id=job_id,
+            async_enabled=async_enabled,
             progress_callback=progress_callback,
         )
 
@@ -92,6 +98,7 @@ class VerificationManager:
         author: str | None = None,
         run_name: str | None = None,
         job_id: str | None = None,
+        async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
     ) -> dict[str, VerificationResult]:
         """
@@ -105,6 +112,7 @@ class VerificationManager:
             author: Filter by author name
             run_name: Optional run name for tracking
             job_id: Optional job ID for tracking
+            async_enabled: Optional async control (overrides KARENINA_ASYNC_ENABLED env var if provided)
             progress_callback: Optional callback for progress updates
 
         Returns:
@@ -129,6 +137,7 @@ class VerificationManager:
             question_ids=question_ids,
             run_name=run_name,
             job_id=job_id,
+            async_enabled=async_enabled,
             progress_callback=progress_callback,
         )
 
@@ -137,6 +146,7 @@ class VerificationManager:
         config: VerificationConfig,
         run_name: str | None = None,
         job_id: str | None = None,
+        async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
     ) -> dict[str, VerificationResult]:
         """
@@ -146,6 +156,7 @@ class VerificationManager:
             config: Verification configuration
             run_name: Optional run name for tracking
             job_id: Optional job ID for tracking
+            async_enabled: Optional async control (overrides KARENINA_ASYNC_ENABLED env var if provided)
             progress_callback: Optional callback for progress updates
 
         Returns:
@@ -156,6 +167,7 @@ class VerificationManager:
             question_ids=None,  # This defaults to all finished questions
             run_name=run_name,
             job_id=job_id,
+            async_enabled=async_enabled,
             progress_callback=progress_callback,
         )
 
@@ -165,6 +177,7 @@ class VerificationManager:
         config: VerificationConfig,
         run_name: str | None = None,
         job_id: str | None = None,
+        async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
     ) -> dict[str, VerificationResult]:
         """
@@ -175,6 +188,7 @@ class VerificationManager:
             config: Verification configuration
             run_name: Optional run name for tracking
             job_id: Optional job ID for tracking
+            async_enabled: Optional async control (overrides KARENINA_ASYNC_ENABLED env var if provided)
             progress_callback: Optional callback for progress updates
 
         Returns:
@@ -191,6 +205,7 @@ class VerificationManager:
             question_ids=selected_questions,
             run_name=run_name,
             job_id=job_id,
+            async_enabled=async_enabled,
             progress_callback=progress_callback,
         )
 
@@ -245,6 +260,7 @@ class VerificationManager:
         question_ids: list[str] | None = None,
         run_name: str | None = None,
         job_id: str | None = None,
+        async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
     ) -> dict[str, VerificationResult]:
         """
@@ -255,10 +271,11 @@ class VerificationManager:
             question_ids: Optional list of question IDs to verify (default: all finished)
             run_name: Optional run name for tracking
             job_id: Optional job ID for tracking
+            async_enabled: Optional async control (overrides KARENINA_ASYNC_ENABLED env var if provided)
             progress_callback: Optional callback for progress updates
 
         Returns:
-            Dictionary mapping question IDs to VerificationResult objects
+            Dictionary mapping result keys to VerificationResult objects
         """
         # If no question IDs provided, verify all finished questions
         if question_ids is None:
@@ -280,96 +297,48 @@ class VerificationManager:
             if not is_valid:
                 raise ValueError(f"Invalid template for question {q_id}: {error_msg}")
 
-        results: dict[str, VerificationResult] = {}
-        total_questions = len(question_ids)
-
-        for i, q_id in enumerate(question_ids):
+        # Build FinishedTemplate objects from benchmark questions
+        templates = []
+        for q_id in question_ids:
             q_data = self.base._questions_cache[q_id]
-            template_code = q_data["answer_template"]
+            template = FinishedTemplate(
+                question_id=q_id,
+                question_text=q_data["question"],
+                question_preview=q_data["question"][:100],
+                template_code=q_data["answer_template"],
+                last_modified=q_data.get("dateModified", datetime.now().isoformat()),
+                few_shot_examples=q_data.get("few_shot_examples"),
+                question_rubric=q_data.get("question_rubric"),
+                keywords=q_data.get("keywords"),
+            )
+            templates.append(template)
 
-            # Update progress
-            if progress_callback:
-                progress = (i / total_questions) * 100
-                progress_callback(progress, f"Verifying question {q_id}")
+        # Get global rubric
+        global_rubric = self.rubric_manager.get_global_rubric()
 
-            # Merge global and question-specific rubrics
-            rubric = self.rubric_manager.get_merged_rubric_for_question(q_id)
+        # Determine storage_url from config if db_config is present
+        storage_url = None
+        if config.db_config is not None:
+            storage_url = config.db_config.storage_url
 
-            # Extract and resolve few-shot examples for this question
-            few_shot_examples = None
-            if config.few_shot_config and config.few_shot_config.enabled:
-                # Get available examples from question data
-                available_examples = q_data.get("few_shot_examples", [])
-                if available_examples:
-                    # Resolve examples using FewShotConfig
-                    few_shot_examples = config.few_shot_config.resolve_examples_for_question(q_id, available_examples)
+        # Call batch runner with all templates
+        # Note: progress_callback is not passed because batch_runner uses different signature
+        # Callable[[int, int, VerificationResult], None] vs Callable[[float, str], None]
+        results = run_verification_batch(
+            templates=templates,
+            config=config,
+            run_name=run_name,
+            job_id=job_id,
+            global_rubric=global_rubric,
+            async_enabled=async_enabled,  # Can override env var
+            storage_url=storage_url,
+            benchmark_name=self.base.name,
+            progress_callback=None,  # Different signature than Benchmark expects
+        )
 
-            try:
-                # Run verification for this question using the orchestrator
-                question_results = run_question_verification(
-                    question_id=q_id,
-                    question_text=q_data["question"],
-                    template_code=template_code,
-                    config=config,
-                    rubric=rubric,
-                    few_shot_examples=few_shot_examples,
-                )
-
-                # Store all results from this question (may be multiple due to model combinations)
-                results.update(question_results)
-
-            except Exception as e:
-                # Create error result for this question
-                template_id = generate_template_id(template_code)
-                error_result = VerificationResult(
-                    question_id=q_id,
-                    template_id=template_id,
-                    completed_without_errors=False,
-                    error=f"Verification failed: {str(e)}",
-                    question_text=q_data["question"],
-                    raw_llm_response="",
-                    answering_model="unknown",
-                    parsing_model="unknown",
-                    execution_time=0.0,
-                    timestamp=datetime.now().isoformat(),
-                    run_name=run_name,
-                    job_id=job_id,
-                )
-                results[q_id] = error_result
-
-        # Final progress update
+        # Emit final progress if callback provided
         if progress_callback:
             progress_callback(100.0, "Verification complete")
-
-        # Auto-save results to database if db_config is provided
-        if config.db_config is not None:
-            try:
-                # Generate a unique run_id
-                import uuid
-
-                from ...storage.operations import save_verification_results
-
-                actual_run_id = job_id if job_id else str(uuid.uuid4())
-                actual_run_name = run_name if run_name else f"run_{actual_run_id[:8]}"
-
-                # Convert config to dict for storage
-                config_dict = config.model_dump(exclude={"db_config"})
-
-                # Save to database
-                save_verification_results(
-                    results=results,
-                    db_config=config.db_config,
-                    run_id=actual_run_id,
-                    benchmark_name=self.base.name,
-                    run_name=actual_run_name,
-                    config=config_dict,
-                )
-            except Exception as e:
-                # Log error but don't fail the verification
-                print(f"Warning: Failed to save verification results to database: {e}")
-
-        # Note: Results are not auto-stored in checkpoint anymore
-        # They remain in memory only and must be explicitly exported if needed
 
         return results
 
