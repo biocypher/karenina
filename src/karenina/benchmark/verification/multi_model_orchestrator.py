@@ -1,11 +1,11 @@
 """Orchestration logic for multi-model verification."""
 
-import asyncio
+import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from ...schemas.domain import Rubric
 from ...schemas.workflow import ModelConfig, VerificationConfig, VerificationResult
-from ...utils.async_utils import AsyncConfig, execute_with_config
 from .runner import run_single_model_verification
 from .tools.embedding_check import clear_embedding_model_cache, preload_embedding_model
 
@@ -104,7 +104,8 @@ def run_question_verification(
     template_code: str,
     config: VerificationConfig,
     rubric: Rubric | None = None,
-    async_config: AsyncConfig | None = None,
+    async_enabled: bool | None = None,
+    max_workers: int | None = None,
     keywords: list[str] | None = None,
     few_shot_examples: list[dict[str, str]] | None = None,
 ) -> dict[str, VerificationResult]:
@@ -117,13 +118,21 @@ def run_question_verification(
         template_code: Python code defining the Answer class
         config: Verification configuration with multiple models
         rubric: Optional rubric for qualitative evaluation
-        async_config: Optional async configuration (uses environment default if not provided)
+        async_enabled: Enable parallel execution (uses environment default if not provided)
+        max_workers: Maximum number of worker threads (uses environment default if not provided)
+        keywords: Optional keywords for verification
+        few_shot_examples: Optional few-shot examples
 
     Returns:
         Dictionary of VerificationResult keyed by combination ID
     """
-    if async_config is None:
-        async_config = AsyncConfig.from_env()
+    # Read async settings from parameters or environment
+    if async_enabled is None:
+        async_enabled = os.getenv("KARENINA_ASYNC_ENABLED", "true").lower() == "true"
+
+    if max_workers is None:
+        max_workers_env = os.getenv("KARENINA_ASYNC_MAX_WORKERS")
+        max_workers = int(max_workers_env) if max_workers_env else 2
 
     # Preload embedding model if embedding check is enabled
     try:
@@ -177,22 +186,23 @@ def run_question_verification(
                 verification_tasks.append(task)
 
     # Execute tasks (sync or async based on config)
-    if async_config.enabled and len(verification_tasks) > 1:
-        # Async execution: chunk and parallelize
-        try:
-            task_results = asyncio.run(
-                execute_with_config(
-                    items=verification_tasks,
-                    sync_function=_execute_verification_task,
-                    config=async_config,
-                )
-            )
-        except Exception as e:
-            # Fallback to sync execution if async fails
-            print(f"Warning: Async execution failed, falling back to sync: {e}")
-            task_results = [_execute_verification_task(task) for task in verification_tasks]
+    if async_enabled and len(verification_tasks) > 1:
+        # Parallel execution using ThreadPoolExecutor
+        task_results = []
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all tasks and collect futures
+            future_to_task = {executor.submit(_execute_verification_task, task): task for task in verification_tasks}
+
+            # Collect results as they complete
+            for future in as_completed(future_to_task):
+                try:
+                    result = future.result()
+                    task_results.append(result)
+                except Exception as e:
+                    print(f"Warning: Task execution failed: {e}")
+                    continue
     else:
-        # Sync execution: simple loop (original behavior)
+        # Sequential execution: simple loop (original behavior)
         task_results = []
         for task in verification_tasks:
             task_result = _execute_verification_task(task)
