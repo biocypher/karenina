@@ -692,9 +692,10 @@ class Benchmark:
         config: VerificationConfig,
         run_name: str | None = None,
         job_id: str | None = None,
+        async_enabled: bool | None = None,
     ) -> dict[str, VerificationResult]:
         """Verify a single question."""
-        return self._verification_manager.verify_question(question_id, config, run_name, job_id)
+        return self._verification_manager.verify_question(question_id, config, run_name, job_id, async_enabled)
 
     def verify_questions(
         self,
@@ -702,10 +703,13 @@ class Benchmark:
         config: VerificationConfig,
         run_name: str | None = None,
         job_id: str | None = None,
+        async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
     ) -> dict[str, VerificationResult]:
         """Verify multiple specific questions."""
-        return self._verification_manager.verify_questions(question_ids, config, run_name, job_id, progress_callback)
+        return self._verification_manager.verify_questions(
+            question_ids, config, run_name, job_id, async_enabled, progress_callback
+        )
 
     def verify_filtered(
         self,
@@ -716,11 +720,12 @@ class Benchmark:
         author: str | None = None,
         run_name: str | None = None,
         job_id: str | None = None,
+        async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
     ) -> dict[str, VerificationResult]:
         """Verify questions matching specific criteria."""
         return self._verification_manager.verify_filtered(
-            config, finished, has_template, has_rubric, author, run_name, job_id, progress_callback
+            config, finished, has_template, has_rubric, author, run_name, job_id, async_enabled, progress_callback
         )
 
     def verify_all_finished(
@@ -728,10 +733,13 @@ class Benchmark:
         config: VerificationConfig,
         run_name: str | None = None,
         job_id: str | None = None,
+        async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
     ) -> dict[str, VerificationResult]:
         """Verify all finished questions in the benchmark."""
-        return self._verification_manager.verify_all_finished(config, run_name, job_id, progress_callback)
+        return self._verification_manager.verify_all_finished(
+            config, run_name, job_id, async_enabled, progress_callback
+        )
 
     def verify_custom(
         self,
@@ -739,10 +747,13 @@ class Benchmark:
         config: VerificationConfig,
         run_name: str | None = None,
         job_id: str | None = None,
+        async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
     ) -> dict[str, VerificationResult]:
         """Verify questions selected by a custom function."""
-        return self._verification_manager.verify_custom(question_selector, config, run_name, job_id, progress_callback)
+        return self._verification_manager.verify_custom(
+            question_selector, config, run_name, job_id, async_enabled, progress_callback
+        )
 
     def verify_dry_run(
         self,
@@ -758,10 +769,13 @@ class Benchmark:
         question_ids: list[str] | None = None,
         run_name: str | None = None,
         job_id: str | None = None,
+        async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
     ) -> dict[str, VerificationResult]:
         """Run verification on the benchmark using existing execution system."""
-        return self._verification_manager.run_verification(config, question_ids, run_name, job_id, progress_callback)
+        return self._verification_manager.run_verification(
+            config, question_ids, run_name, job_id, async_enabled, progress_callback
+        )
 
     def verify_with_mixed_configs(
         self,

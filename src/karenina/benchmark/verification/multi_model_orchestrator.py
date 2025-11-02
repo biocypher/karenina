@@ -1,11 +1,11 @@
 """Orchestration logic for multi-model verification."""
 
-import asyncio
-from typing import Any, Literal, cast
+import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any
 
 from ...schemas.domain import Rubric
 from ...schemas.workflow import ModelConfig, VerificationConfig, VerificationResult
-from ...utils.async_utils import AsyncConfig, execute_with_config
 from .runner import run_single_model_verification
 from .tools.embedding_check import clear_embedding_model_cache, preload_embedding_model
 
@@ -104,7 +104,8 @@ def run_question_verification(
     template_code: str,
     config: VerificationConfig,
     rubric: Rubric | None = None,
-    async_config: AsyncConfig | None = None,
+    async_enabled: bool | None = None,
+    max_workers: int | None = None,
     keywords: list[str] | None = None,
     few_shot_examples: list[dict[str, str]] | None = None,
 ) -> dict[str, VerificationResult]:
@@ -117,13 +118,21 @@ def run_question_verification(
         template_code: Python code defining the Answer class
         config: Verification configuration with multiple models
         rubric: Optional rubric for qualitative evaluation
-        async_config: Optional async configuration (uses environment default if not provided)
+        async_enabled: Enable parallel execution (uses environment default if not provided)
+        max_workers: Maximum number of worker threads (uses environment default if not provided)
+        keywords: Optional keywords for verification
+        few_shot_examples: Optional few-shot examples
 
     Returns:
         Dictionary of VerificationResult keyed by combination ID
     """
-    if async_config is None:
-        async_config = AsyncConfig.from_env()
+    # Read async settings from parameters or environment
+    if async_enabled is None:
+        async_enabled = os.getenv("KARENINA_ASYNC_ENABLED", "true").lower() == "true"
+
+    if max_workers is None:
+        max_workers_env = os.getenv("KARENINA_ASYNC_MAX_WORKERS")
+        max_workers = int(max_workers_env) if max_workers_env else 2
 
     # Preload embedding model if embedding check is enabled
     try:
@@ -135,120 +144,65 @@ def run_question_verification(
         # If preloading fails, embedding check will handle it gracefully per question
         pass
 
-    # Build list of all verification tasks
+    # Build list of all verification tasks via combinatorial expansion
     verification_tasks = []
 
-    # Handle legacy single model config
-    if hasattr(config, "answering_model_provider") and config.answering_model_provider:
-        # Legacy single model mode - create single model configs and handle replicates
-        answering_model = ModelConfig(
-            id="answering-legacy",
-            model_provider=config.answering_model_provider or "",
-            model_name=config.answering_model_name or "",
-            temperature=config.answering_temperature or 0.1,
-            interface=cast(Literal["langchain", "openrouter", "manual"], config.answering_interface or "langchain"),
-            system_prompt=config.answering_system_prompt
-            or "You are an expert assistant. Answer the question accurately and concisely.",
-        )
+    # Get model configurations
+    answering_models = config.answering_models
+    parsing_models = config.parsing_models
+    replicate_count = config.replicate_count
 
-        parsing_model = ModelConfig(
-            id="parsing-legacy",
-            model_provider=config.parsing_model_provider or "",
-            model_name=config.parsing_model_name or "",
-            temperature=config.parsing_temperature or 0.1,
-            interface=cast(Literal["langchain", "openrouter", "manual"], config.parsing_interface or "langchain"),
-            system_prompt=config.parsing_system_prompt
-            or "You are a validation assistant. Parse and validate responses against the given Pydantic template.",
-        )
+    for answering_model in answering_models:
+        for parsing_model in parsing_models:
+            for replicate in range(1, replicate_count + 1):
+                # For single replicate, don't include replicate numbers
+                answering_replicate = None if replicate_count == 1 else replicate
+                parsing_replicate = None if replicate_count == 1 else replicate
 
-        # Create tasks for legacy mode with replicates
-        for replicate in range(1, getattr(config, "replicate_count", 1) + 1):
-            # For single replicate, don't include replicate numbers
-            answering_replicate = None if getattr(config, "replicate_count", 1) == 1 else replicate
-            parsing_replicate = None if getattr(config, "replicate_count", 1) == 1 else replicate
-
-            task = _create_verification_task(
-                question_id=question_id,
-                question_text=question_text,
-                template_code=template_code,
-                answering_model=answering_model,
-                parsing_model=parsing_model,
-                run_name=getattr(config, "run_name", None),
-                job_id=getattr(config, "job_id", None),
-                answering_replicate=answering_replicate,
-                parsing_replicate=parsing_replicate,
-                rubric=rubric,
-                keywords=keywords,
-                few_shot_examples=few_shot_examples,
-                few_shot_enabled=config.is_few_shot_enabled(),
-                abstention_enabled=getattr(config, "abstention_enabled", False),
-                deep_judgment_enabled=getattr(config, "deep_judgment_enabled", False),
-                deep_judgment_max_excerpts_per_attribute=getattr(config, "deep_judgment_max_excerpts_per_attribute", 3),
-                deep_judgment_fuzzy_match_threshold=getattr(config, "deep_judgment_fuzzy_match_threshold", 0.80),
-                deep_judgment_excerpt_retry_attempts=getattr(config, "deep_judgment_excerpt_retry_attempts", 2),
-                deep_judgment_search_enabled=getattr(config, "deep_judgment_search_enabled", False),
-                deep_judgment_search_tool=getattr(config, "deep_judgment_search_tool", "tavily"),
-            )
-            verification_tasks.append(task)
-
-    else:
-        # New multi-model mode
-        answering_models = getattr(config, "answering_models", [])
-        parsing_models = getattr(config, "parsing_models", [])
-        replicate_count = getattr(config, "replicate_count", 1)
-
-        for answering_model in answering_models:
-            for parsing_model in parsing_models:
-                for replicate in range(1, replicate_count + 1):
-                    # For single replicate, don't include replicate numbers
-                    answering_replicate = None if replicate_count == 1 else replicate
-                    parsing_replicate = None if replicate_count == 1 else replicate
-
-                    task = _create_verification_task(
-                        question_id=question_id,
-                        question_text=question_text,
-                        template_code=template_code,
-                        answering_model=answering_model,
-                        parsing_model=parsing_model,
-                        run_name=getattr(config, "run_name", None),
-                        job_id=getattr(config, "job_id", None),
-                        answering_replicate=answering_replicate,
-                        parsing_replicate=parsing_replicate,
-                        rubric=rubric,
-                        keywords=keywords,
-                        few_shot_examples=few_shot_examples,
-                        few_shot_enabled=config.is_few_shot_enabled(),
-                        abstention_enabled=getattr(config, "abstention_enabled", False),
-                        deep_judgment_enabled=getattr(config, "deep_judgment_enabled", False),
-                        deep_judgment_max_excerpts_per_attribute=getattr(
-                            config, "deep_judgment_max_excerpts_per_attribute", 3
-                        ),
-                        deep_judgment_fuzzy_match_threshold=getattr(
-                            config, "deep_judgment_fuzzy_match_threshold", 0.80
-                        ),
-                        deep_judgment_excerpt_retry_attempts=getattr(config, "deep_judgment_excerpt_retry_attempts", 2),
-                        deep_judgment_search_enabled=getattr(config, "deep_judgment_search_enabled", False),
-                        deep_judgment_search_tool=getattr(config, "deep_judgment_search_tool", "tavily"),
-                    )
-                    verification_tasks.append(task)
+                task = _create_verification_task(
+                    question_id=question_id,
+                    question_text=question_text,
+                    template_code=template_code,
+                    answering_model=answering_model,
+                    parsing_model=parsing_model,
+                    run_name=getattr(config, "run_name", None),
+                    job_id=getattr(config, "job_id", None),
+                    answering_replicate=answering_replicate,
+                    parsing_replicate=parsing_replicate,
+                    rubric=rubric,
+                    keywords=keywords,
+                    few_shot_examples=few_shot_examples,
+                    few_shot_enabled=config.is_few_shot_enabled(),
+                    abstention_enabled=getattr(config, "abstention_enabled", False),
+                    deep_judgment_enabled=getattr(config, "deep_judgment_enabled", False),
+                    deep_judgment_max_excerpts_per_attribute=getattr(
+                        config, "deep_judgment_max_excerpts_per_attribute", 3
+                    ),
+                    deep_judgment_fuzzy_match_threshold=getattr(config, "deep_judgment_fuzzy_match_threshold", 0.80),
+                    deep_judgment_excerpt_retry_attempts=getattr(config, "deep_judgment_excerpt_retry_attempts", 2),
+                    deep_judgment_search_enabled=getattr(config, "deep_judgment_search_enabled", False),
+                    deep_judgment_search_tool=getattr(config, "deep_judgment_search_tool", "tavily"),
+                )
+                verification_tasks.append(task)
 
     # Execute tasks (sync or async based on config)
-    if async_config.enabled and len(verification_tasks) > 1:
-        # Async execution: chunk and parallelize
-        try:
-            task_results = asyncio.run(
-                execute_with_config(
-                    items=verification_tasks,
-                    sync_function=_execute_verification_task,
-                    config=async_config,
-                )
-            )
-        except Exception as e:
-            # Fallback to sync execution if async fails
-            print(f"Warning: Async execution failed, falling back to sync: {e}")
-            task_results = [_execute_verification_task(task) for task in verification_tasks]
+    if async_enabled and len(verification_tasks) > 1:
+        # Parallel execution using ThreadPoolExecutor
+        task_results = []
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all tasks and collect futures
+            future_to_task = {executor.submit(_execute_verification_task, task): task for task in verification_tasks}
+
+            # Collect results as they complete
+            for future in as_completed(future_to_task):
+                try:
+                    result = future.result()
+                    task_results.append(result)
+                except Exception as e:
+                    print(f"Warning: Task execution failed: {e}")
+                    continue
     else:
-        # Sync execution: simple loop (original behavior)
+        # Sequential execution: simple loop (original behavior)
         task_results = []
         for task in verification_tasks:
             task_result = _execute_verification_task(task)

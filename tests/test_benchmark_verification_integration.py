@@ -121,8 +121,8 @@ class TestBenchmarkVerificationIntegration:
         assert is_valid
         assert error_msg == "Benchmark is valid"
 
-    @patch("karenina.benchmark.core.verification_manager.run_question_verification")
-    def test_run_verification_basic(self, mock_run_verification, sample_benchmark, sample_config) -> None:
+    @patch("karenina.benchmark.core.verification_manager.run_verification_batch")
+    def test_run_verification_basic(self, mock_run_batch, sample_benchmark, sample_config) -> None:
         """Test basic run_verification functionality."""
         benchmark, (q1_id, q2_id, q3_id) = sample_benchmark
 
@@ -137,9 +137,10 @@ class TestBenchmarkVerificationIntegration:
             parsing_model="openai/gpt-4.1-mini",
             execution_time=1.5,
             timestamp="2023-01-01T00:00:00",
+            completed_without_errors=True,
         )
 
-        mock_run_verification.return_value = {f"{q1_id}_test": mock_verification_result}
+        mock_run_batch.return_value = {f"{q1_id}_test": mock_verification_result}
 
         # Run verification on specific question
         results = benchmark.run_verification(
@@ -148,22 +149,23 @@ class TestBenchmarkVerificationIntegration:
         )
 
         # Verify the call was made correctly
-        mock_run_verification.assert_called_once()
-        call_args = mock_run_verification.call_args
-        assert call_args[1]["question_id"] == q1_id
-        assert call_args[1]["question_text"] == "What is 2 + 2?"
+        mock_run_batch.assert_called_once()
+        call_args = mock_run_batch.call_args
+        assert len(call_args[1]["templates"]) == 1
+        assert call_args[1]["templates"][0].question_id == q1_id
+        assert call_args[1]["templates"][0].question_text == "What is 2 + 2?"
         assert call_args[1]["config"] == sample_config
 
         # Verify results
         assert len(results) == 1
         assert f"{q1_id}_test" in results
-        assert results[f"{q1_id}_test"].success
+        assert results[f"{q1_id}_test"].completed_without_errors
 
     def test_verify_question_single(self, sample_benchmark, sample_config) -> None:
         """Test single question verification."""
         benchmark, (q1_id, q2_id, q3_id) = sample_benchmark
 
-        with patch("karenina.benchmark.core.verification_manager.run_question_verification") as mock_verify:
+        with patch("karenina.benchmark.core.verification_manager.run_verification_batch") as mock_verify:
             mock_result = VerificationResult(
                 question_id=q1_id,
                 template_id="no_template",
@@ -174,6 +176,7 @@ class TestBenchmarkVerificationIntegration:
                 parsing_model="test",
                 execution_time=1.0,
                 timestamp="2023-01-01T00:00:00",
+                completed_without_errors=True,
             )
             mock_verify.return_value = {f"{q1_id}_result": mock_result}
 
@@ -186,7 +189,7 @@ class TestBenchmarkVerificationIntegration:
         """Test filtered verification."""
         benchmark, (q1_id, q2_id, q3_id) = sample_benchmark
 
-        with patch("karenina.benchmark.core.verification_manager.run_question_verification") as mock_verify:
+        with patch("karenina.benchmark.core.verification_manager.run_verification_batch") as mock_verify:
             mock_verify.return_value = {}
 
             # Test filtering by finished status
@@ -195,15 +198,17 @@ class TestBenchmarkVerificationIntegration:
                 finished=True,
             )
 
-            # Should have been called twice (for q1 and q2, not q3 since it's unfinished)
-            assert mock_verify.call_count == 2
+            # Should have been called once with 2 templates (for q1 and q2, not q3 since it's unfinished)
+            assert mock_verify.call_count == 1
+            call_args = mock_verify.call_args
+            assert len(call_args[1]["templates"]) == 2
 
     def test_verify_dry_run(self, sample_benchmark, sample_config) -> None:
         """Test dry run verification."""
         benchmark, (q1_id, q2_id, q3_id) = sample_benchmark
 
         # Dry run should not call actual verification
-        with patch("karenina.benchmark.core.verification_manager.run_question_verification") as mock_verify:
+        with patch("karenina.benchmark.core.verification_manager.run_verification_batch") as mock_verify:
             results = benchmark.verify_dry_run(sample_config)
 
             # Should not call actual verification
@@ -270,6 +275,7 @@ class TestBenchmarkVerificationIntegration:
             parsing_model="test",
             execution_time=1.0,
             timestamp="2023-01-01T00:00:00",
+            completed_without_errors=True,
         )
 
         result2 = VerificationResult(
@@ -283,6 +289,7 @@ class TestBenchmarkVerificationIntegration:
             parsing_model="test",
             execution_time=0.5,
             timestamp="2023-01-01T00:01:00",
+            completed_without_errors=False,
         )
 
         results = {
@@ -321,6 +328,7 @@ class TestBenchmarkVerificationIntegration:
             parsing_model="test",
             execution_time=1.0,
             timestamp="2023-01-01T00:00:00",
+            completed_without_errors=True,
         )
 
         result2 = VerificationResult(
@@ -334,6 +342,7 @@ class TestBenchmarkVerificationIntegration:
             parsing_model="test",
             execution_time=0.8,
             timestamp="2023-01-01T00:02:00",
+            completed_without_errors=False,
         )
 
         benchmark.store_verification_results({f"{q1_id}_run1": result1}, "run1")
@@ -364,6 +373,7 @@ class TestBenchmarkVerificationIntegration:
             parsing_model="test",
             execution_time=1.0,
             timestamp="2023-01-01T00:00:00",
+            completed_without_errors=True,
         )
 
         result2 = VerificationResult(
@@ -376,6 +386,7 @@ class TestBenchmarkVerificationIntegration:
             parsing_model="test",
             execution_time=1.2,
             timestamp="2023-01-01T00:01:00",
+            completed_without_errors=True,
         )
 
         benchmark.store_verification_results(
@@ -410,6 +421,7 @@ class TestBenchmarkVerificationIntegration:
             parsing_model="test",
             execution_time=1.0,
             timestamp="2023-01-01T00:00:00",
+            completed_without_errors=True,
         )
 
         benchmark.store_verification_results({f"{q1_id}_test": result}, "test_run")
@@ -440,6 +452,7 @@ class TestBenchmarkVerificationIntegration:
             parsing_model="test1",
             execution_time=1.0,
             timestamp="2023-01-01T00:00:00",
+            completed_without_errors=True,
         )
 
         failure_result = VerificationResult(
@@ -453,6 +466,7 @@ class TestBenchmarkVerificationIntegration:
             parsing_model="test2",
             execution_time=0.5,
             timestamp="2023-01-01T00:01:00",
+            completed_without_errors=False,
         )
 
         benchmark.store_verification_results(
@@ -503,8 +517,8 @@ class TestBenchmarkVerificationIntegration:
                 question_ids=[q4_id],
             )
 
-    @patch("karenina.benchmark.verification.orchestrator.run_question_verification")
-    def test_verification_with_run_name_storage(self, mock_run_verification, sample_benchmark, sample_config) -> None:
+    @patch("karenina.benchmark.core.verification_manager.run_verification_batch")
+    def test_verification_with_run_name_storage(self, mock_run_batch, sample_benchmark, sample_config) -> None:
         """Test that results can be stored when run_name is provided."""
         benchmark, (q1_id, q2_id, q3_id) = sample_benchmark
 
@@ -518,13 +532,14 @@ class TestBenchmarkVerificationIntegration:
             parsing_model="test",
             execution_time=1.0,
             timestamp="2023-01-01T00:00:00",
+            completed_without_errors=True,
             embedding_check_performed=False,
             regex_validations_performed=False,
             recursion_limit_reached=False,
         )
 
         expected_key = f"{q1_id}_test-answering_test-parsing"
-        mock_run_verification.return_value = {expected_key: mock_result}
+        mock_run_batch.return_value = {expected_key: mock_result}
 
         # Run verification with run_name
         results = benchmark.run_verification(
@@ -556,6 +571,7 @@ class TestBenchmarkVerificationIntegration:
             parsing_model="test",
             execution_time=1.0,
             timestamp="2023-01-01T00:00:00",
+            completed_without_errors=True,
             embedding_check_performed=False,
             regex_validations_performed=False,
             recursion_limit_reached=False,
@@ -583,3 +599,70 @@ class TestBenchmarkVerificationIntegration:
 
         finally:
             tmp_path.unlink(missing_ok=True)
+
+    @patch("karenina.benchmark.core.verification_manager.run_verification_batch")
+    def test_progress_callback_integration(self, mock_run_batch, sample_benchmark, sample_config) -> None:
+        """Test that progress callback shows items being processed (before execution)."""
+        benchmark, (q1_id, q2_id, q3_id) = sample_benchmark
+
+        # Track progress callback calls
+        progress_calls = []
+
+        def progress_callback(percentage: float, message: str) -> None:
+            progress_calls.append({"percentage": percentage, "message": message, "question_id": None})
+            # Extract question ID from message for verification
+            if "Verifying" in message:
+                # Message format: "Verifying {question_id} (X/Y)"
+                parts = message.split(" ")
+                if len(parts) >= 2:
+                    progress_calls[-1]["question_id"] = parts[1]
+
+        # Mock the batch runner to simulate progress
+        def mock_batch_runner(**kwargs):
+            # Get the batch progress callback from kwargs
+            batch_callback = kwargs.get("progress_callback")
+
+            mock_result = VerificationResult(
+                question_id=q1_id,
+                template_id="no_template",
+                success=True,
+                question_text="What is 2 + 2?",
+                raw_llm_response="4",
+                answering_model="test",
+                parsing_model="test",
+                execution_time=1.0,
+                timestamp="2023-01-01T00:00:00",
+                completed_without_errors=True,
+            )
+
+            # Simulate calling the batch progress callback BEFORE each task
+            # (This matches the new behavior where callback is called before execution)
+            if batch_callback:
+                # Task 1 of 2 (before starting)
+                batch_callback(1, 2, mock_result)
+                # Task 2 of 2 (before starting)
+                batch_callback(2, 2, mock_result)
+
+            return {f"{q1_id}_test": mock_result}
+
+        mock_run_batch.side_effect = mock_batch_runner
+
+        # Run verification with progress callback
+        benchmark.run_verification(
+            config=sample_config,
+            question_ids=[q1_id],
+            progress_callback=progress_callback,
+        )
+
+        # Verify progress callback was called
+        assert len(progress_calls) >= 2  # At least 2 progress updates
+
+        # Check first call: shows item about to be processed (0% because it's the first item)
+        assert progress_calls[0]["percentage"] == 0.0
+        assert "Verifying" in progress_calls[0]["message"]
+        assert "(1/2)" in progress_calls[0]["message"]
+
+        # Check second call: shows second item about to be processed
+        assert progress_calls[1]["percentage"] == 50.0
+        assert "Verifying" in progress_calls[1]["message"]
+        assert "(2/2)" in progress_calls[1]["message"]
