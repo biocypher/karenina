@@ -211,7 +211,12 @@ def generate_task_queue(
 # ============================================================================
 
 
-def execute_task(task: dict[str, Any], answer_cache: AnswerTraceCache | None = None) -> tuple[str, VerificationResult]:
+def execute_task(
+    task: dict[str, Any],
+    answer_cache: AnswerTraceCache | None = None,
+    cache_status: str | None = None,
+    cached_answer_data: dict[str, Any] | None = None,
+) -> tuple[str, VerificationResult]:
     """
     Execute verification task and return unique key + result.
 
@@ -223,6 +228,8 @@ def execute_task(task: dict[str, Any], answer_cache: AnswerTraceCache | None = N
     Args:
         task: Task dictionary with all verification parameters
         answer_cache: Optional answer cache for sharing traces across judges
+        cache_status: Optional pre-checked cache status ("MISS" or "HIT") to avoid double-checking
+        cached_answer_data: Optional pre-fetched cached answer data (when cache_status="HIT")
 
     Returns:
         Tuple of (result_key, verification_result)
@@ -246,12 +253,12 @@ def execute_task(task: dict[str, Any], answer_cache: AnswerTraceCache | None = N
 
     result_key = "_".join(key_parts)
 
-    # Check answer cache if available
-    cached_answer_data = None
+    # Check answer cache if available (unless already checked by caller)
     should_generate = True
     cache_key = None
 
-    if answer_cache:
+    if answer_cache and cache_status is None:
+        # Cache not pre-checked by caller, check it now
         cache_key = _generate_answer_cache_key(task)
         status, cached_answer_data = answer_cache.get_or_reserve(cache_key)
 
@@ -264,6 +271,10 @@ def execute_task(task: dict[str, Any], answer_cache: AnswerTraceCache | None = N
             )
 
         should_generate = status == "MISS"
+    elif answer_cache and cache_status is not None:
+        # Cache pre-checked by caller, use provided status
+        cache_key = _generate_answer_cache_key(task)
+        should_generate = cache_status == "MISS"
 
     # Execute verification
     try:
@@ -483,9 +494,11 @@ def execute_parallel(
                     with progress_lock:
                         progress_callback(completed_count[0] + 1, total, preview_result)
 
-                # Execute the task
+                # Execute the task with pre-checked cache status to avoid double-checking
                 try:
-                    result_key, verification_result = execute_task(task, answer_cache)
+                    result_key, verification_result = execute_task(
+                        task, answer_cache, cache_status=status, cached_answer_data=cached_answer_data
+                    )
 
                     # Store result at original index
                     with results_lock:
