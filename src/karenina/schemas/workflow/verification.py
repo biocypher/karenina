@@ -4,7 +4,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from ...utils.async_utils import AsyncConfig
 from .models import (
     INTERFACE_LANGCHAIN,
     INTERFACES_NO_PROVIDER_REQUIRED,
@@ -397,7 +396,6 @@ class VerificationJob(BaseModel):
     run_name: str  # User-defined or auto-generated run name
     status: Literal["pending", "running", "completed", "failed", "cancelled"]
     config: VerificationConfig
-    async_config: AsyncConfig | None = None
 
     # Database storage
     storage_url: str | None = None  # Database URL for auto-save functionality
@@ -410,12 +408,13 @@ class VerificationJob(BaseModel):
     failed_count: int = 0
     percentage: float = 0.0
     current_question: str = ""
-    estimated_time_remaining: float | None = None
+    last_task_duration: float | None = None  # Execution time of last completed task
 
     # WebSocket streaming progress fields
     in_progress_questions: list[str] = Field(default_factory=list)
-    ema_seconds_per_item: float = 0.0
-    last_update_ts: float | None = None
+
+    # Task timing tracking (maps question_id to start time)
+    task_start_times: dict[str, float] = Field(default_factory=dict)
 
     # Timing
     start_time: float | None = None
@@ -426,16 +425,25 @@ class VerificationJob(BaseModel):
     error_message: str | None = None
 
     def task_started(self, question_id: str) -> None:
-        """Mark a task as started and add to in-progress list."""
+        """Mark a task as started and record start time."""
         import time
 
         if question_id not in self.in_progress_questions:
             self.in_progress_questions.append(question_id)
-        self.last_update_ts = time.time()
 
-    def task_finished(self, question_id: str, success: bool, duration_seconds: float, ema_alpha: float = 0.3) -> None:
-        """Mark a task as finished, update counts and EMA."""
+        # Record task start time
+        self.task_start_times[question_id] = time.time()
+
+    def task_finished(self, question_id: str, success: bool) -> None:
+        """Mark a task as finished, calculate duration, and update counts."""
         import time
+
+        # Calculate task duration from recorded start time
+        task_duration = 0.0
+        if question_id in self.task_start_times:
+            task_duration = time.time() - self.task_start_times[question_id]
+            # Clean up start time
+            del self.task_start_times[question_id]
 
         # Remove from in-progress list
         if question_id in self.in_progress_questions:
@@ -448,26 +456,24 @@ class VerificationJob(BaseModel):
         else:
             self.failed_count += 1
 
-        # Update EMA for time estimation
-        if self.ema_seconds_per_item == 0.0:
-            # First item: initialize EMA with actual duration
-            self.ema_seconds_per_item = duration_seconds
-        else:
-            # Update EMA: new_ema = alpha * current + (1 - alpha) * previous
-            self.ema_seconds_per_item = ema_alpha * duration_seconds + (1 - ema_alpha) * self.ema_seconds_per_item
-
-        # Calculate estimated remaining time using EMA
-        remaining_questions = self.total_questions - self.processed_count
-        self.estimated_time_remaining = self.ema_seconds_per_item * remaining_questions
-
         # Update percentage
         self.percentage = (self.processed_count / self.total_questions) * 100 if self.total_questions > 0 else 0.0
 
-        # Update timestamp
-        self.last_update_ts = time.time()
+        # Track last task duration
+        self.last_task_duration = task_duration
 
     def to_dict(self) -> dict[str, Any]:
         """Convert job to dictionary for API response."""
+        # Calculate duration if job has started
+        duration = None
+        if self.start_time:
+            if self.end_time:
+                duration = self.end_time - self.start_time  # Completed
+            else:
+                import time
+
+                duration = time.time() - self.start_time  # In progress
+
         return {
             "job_id": self.job_id,
             "run_name": self.run_name,
@@ -478,13 +484,12 @@ class VerificationJob(BaseModel):
             "failed_count": self.failed_count,
             "percentage": self.percentage,
             "current_question": self.current_question,
-            "estimated_time_remaining": self.estimated_time_remaining,
+            "duration_seconds": duration,
+            "last_task_duration": self.last_task_duration,
             "error_message": self.error_message,
             "start_time": self.start_time,
             "end_time": self.end_time,
-            # WebSocket streaming fields
             "in_progress_questions": self.in_progress_questions,
-            "ema_seconds_per_item": self.ema_seconds_per_item,
         }
 
 
@@ -522,7 +527,8 @@ class VerificationStatusResponse(BaseModel):
     total_count: int
     successful_count: int
     failed_count: int
-    estimated_time_remaining: float | None = None
+    duration_seconds: float | None = None
+    last_task_duration: float | None = None
     error: str | None = None
     results: dict[str, VerificationResult] | None = None
 

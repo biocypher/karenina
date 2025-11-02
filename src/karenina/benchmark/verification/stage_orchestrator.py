@@ -218,9 +218,9 @@ class StageOrchestrator:
                 context.mark_error(error_msg)
                 # Continue to FinalizeResultStage even on error
 
-        # Calculate execution time
-        execution_time = time.time() - start_time
-        context.set_result_field("execution_time", execution_time)
+            # Update execution time after each stage so FinalizeResultStage has access to it
+            execution_time = time.time() - start_time
+            context.set_result_field("execution_time", execution_time)
 
         # Extract final result
         final_result = context.get_artifact("final_result")

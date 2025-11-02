@@ -1,11 +1,11 @@
 """Utility functions and helpers for Karenina.
 
 This package contains various utility functions and helper classes used
-throughout the Karenina framework, including code parsing, async execution,
+throughout the Karenina framework, including code parsing, answer caching,
 checkpoint conversion, and other common operations.
 """
 
-from .async_utils import AsyncConfig, execute_with_config, run_async_chunked, run_sync_with_progress
+from .answer_cache import AnswerTraceCache, CacheEntry
 from .checkpoint import (
     BenchmarkConversionError,
     add_global_rubric_to_benchmark,
@@ -22,11 +22,9 @@ from .checkpoint import (
 from .code import extract_and_combine_codeblocks
 
 __all__ = [
-    # Async utilities
-    "AsyncConfig",
-    "execute_with_config",
-    "run_async_chunked",
-    "run_sync_with_progress",
+    # Answer caching
+    "AnswerTraceCache",
+    "CacheEntry",
     # Checkpoint utilities
     "BenchmarkConversionError",
     "generate_template_id",
