@@ -42,10 +42,10 @@ class TestAnswerTraceCache:
         cache = AnswerTraceCache()
         key = "test_question_model1"
 
-        answer_data, should_generate = cache.get_or_reserve(key)
+        status, answer_data = cache.get_or_reserve(key)
 
+        assert status == "MISS"
         assert answer_data is None
-        assert should_generate is True
         assert key in cache._cache
         assert cache._cache[key].is_complete is False
 
@@ -62,10 +62,10 @@ class TestAnswerTraceCache:
         cache.complete(key, test_data, error=None)
 
         # Second call should hit cache
-        answer_data, should_generate = cache.get_or_reserve(key)
+        status, answer_data = cache.get_or_reserve(key)
 
+        assert status == "HIT"
         assert answer_data == test_data
-        assert should_generate is False
 
     def test_cache_handles_failure(self):
         """Test that cache handles failed answer generation."""
@@ -79,58 +79,61 @@ class TestAnswerTraceCache:
         error = Exception("LLM failed")
         cache.complete(key, None, error=error)
 
-        # Second call should allow retry
-        answer_data, should_generate = cache.get_or_reserve(key)
+        # Second call should allow retry (treated as MISS)
+        status, answer_data = cache.get_or_reserve(key)
 
+        assert status == "MISS"
         assert answer_data is None
-        assert should_generate is True
 
-    def test_waiting_for_in_progress_answer(self):
-        """Test that tasks wait for in-progress answers."""
-        cache = AnswerTraceCache(wait_timeout=2.0)
+    def test_in_progress_returns_immediately(self):
+        """Test that IN_PROGRESS status is returned immediately without blocking."""
+        cache = AnswerTraceCache()
         key = "test_question_model1"
 
         # First task reserves slot
-        cache.get_or_reserve(key)
+        status1, _ = cache.get_or_reserve(key)
+        assert status1 == "MISS"
 
-        # Simulate second task waiting
-        test_data = {"raw_llm_response": "Test answer"}
-
-        def complete_after_delay():
-            time.sleep(0.5)
-            cache.complete(key, test_data, error=None)
-
-        # Start background thread to complete the answer
-        thread = threading.Thread(target=complete_after_delay)
-        thread.start()
-
-        # Second task should wait and receive cached answer
+        # Second task should get IN_PROGRESS immediately (no blocking)
         start_time = time.time()
-        answer_data, should_generate = cache.get_or_reserve(key)
+        status2, answer_data = cache.get_or_reserve(key)
         elapsed = time.time() - start_time
 
-        thread.join()
+        assert status2 == "IN_PROGRESS"
+        assert answer_data is None
+        assert elapsed < 0.1  # Should return immediately
 
+        # After completion, third task should hit cache
+        test_data = {"raw_llm_response": "Test answer"}
+        cache.complete(key, test_data, error=None)
+
+        status3, answer_data = cache.get_or_reserve(key)
+        assert status3 == "HIT"
         assert answer_data == test_data
-        assert should_generate is False
-        assert 0.4 < elapsed < 1.0  # Should have waited ~0.5s
 
-    def test_timeout_prevents_deadlock(self):
-        """Test that timeout prevents deadlock."""
-        cache = AnswerTraceCache(wait_timeout=0.5)
+    def test_in_progress_statistics(self):
+        """Test that IN_PROGRESS encounters are tracked in statistics."""
+        cache = AnswerTraceCache()
         key = "test_question_model1"
 
-        # First task reserves slot but never completes
+        # First call - MISS
         cache.get_or_reserve(key)
+        stats = cache.get_stats()
+        assert stats["misses"] == 1
+        assert stats["waits"] == 0
 
-        # Second task should timeout and proceed to generate
-        start_time = time.time()
-        answer_data, should_generate = cache.get_or_reserve(key)
-        elapsed = time.time() - start_time
+        # Second call while in progress - IN_PROGRESS
+        cache.get_or_reserve(key)
+        stats = cache.get_stats()
+        assert stats["waits"] == 1  # Tracks IN_PROGRESS returns
 
-        assert answer_data is None
-        assert should_generate is True
-        assert 0.4 < elapsed < 1.0  # Should have timed out after ~0.5s
+        # Complete the entry
+        cache.complete(key, {"data": "test"}, error=None)
+
+        # Third call - HIT
+        cache.get_or_reserve(key)
+        stats = cache.get_stats()
+        assert stats["hits"] == 1
 
     def test_cache_statistics(self):
         """Test cache statistics tracking."""
@@ -149,39 +152,55 @@ class TestAnswerTraceCache:
         assert stats["hits"] == 1
         assert stats["misses"] == 1
 
-    def test_thread_safety_multiple_waiters(self):
-        """Test that multiple tasks can wait for the same answer."""
-        cache = AnswerTraceCache(wait_timeout=2.0)
+    def test_thread_safety_multiple_callers(self):
+        """Test that multiple tasks can safely check the cache concurrently."""
+        cache = AnswerTraceCache()
         key = "test_question_model1"
         test_data = {"raw_llm_response": "Test answer"}
 
         # First task reserves slot
-        cache.get_or_reserve(key)
+        status, _ = cache.get_or_reserve(key)
+        assert status == "MISS"
 
         results = []
 
-        def waiter_task():
-            answer_data, should_generate = cache.get_or_reserve(key)
-            results.append((answer_data, should_generate))
+        def concurrent_check():
+            status, answer_data = cache.get_or_reserve(key)
+            results.append((status, answer_data))
 
-        # Start multiple waiting tasks
-        threads = [threading.Thread(target=waiter_task) for _ in range(5)]
+        # Start multiple concurrent checks
+        threads = [threading.Thread(target=concurrent_check) for _ in range(5)]
         for t in threads:
             t.start()
 
-        # Complete after brief delay
-        time.sleep(0.2)
-        cache.complete(key, test_data, error=None)
-
-        # Wait for all threads
+        # All should get IN_PROGRESS immediately
         for t in threads:
             t.join()
 
-        # All waiters should receive the cached answer
         assert len(results) == 5
-        for answer_data, should_generate in results:
+        for status, answer_data in results:
+            assert status == "IN_PROGRESS"
+            assert answer_data is None
+
+        # After completion, all new checks should HIT
+        cache.complete(key, test_data, error=None)
+
+        results_after = []
+
+        def concurrent_check_after():
+            status, answer_data = cache.get_or_reserve(key)
+            results_after.append((status, answer_data))
+
+        threads_after = [threading.Thread(target=concurrent_check_after) for _ in range(5)]
+        for t in threads_after:
+            t.start()
+        for t in threads_after:
+            t.join()
+
+        assert len(results_after) == 5
+        for status, answer_data in results_after:
+            assert status == "HIT"
             assert answer_data == test_data
-            assert should_generate is False
 
 
 class TestCacheKeyGeneration:

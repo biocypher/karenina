@@ -13,7 +13,6 @@ from typing import Any
 from ...schemas.domain import Rubric
 from ...schemas.workflow import FinishedTemplate, VerificationConfig, VerificationResult
 from ...utils.answer_cache import AnswerTraceCache
-from ...utils.async_utils import AsyncConfig
 
 logger = logging.getLogger(__name__)
 
@@ -234,7 +233,17 @@ def execute_task(task: dict[str, Any], answer_cache: AnswerTraceCache | None = N
 
     if answer_cache:
         cache_key = _generate_answer_cache_key(task)
-        cached_answer_data, should_generate = answer_cache.get_or_reserve(cache_key)
+        status, cached_answer_data = answer_cache.get_or_reserve(cache_key)
+
+        # With new non-blocking cache, IN_PROGRESS should be handled by caller
+        # This function should only be called when ready to execute
+        if status == "IN_PROGRESS":
+            raise RuntimeError(
+                f"execute_task() called with IN_PROGRESS cache status for {cache_key}. "
+                "Caller should handle requeuing for IN_PROGRESS tasks."
+            )
+
+        should_generate = status == "MISS"
 
     # Execute verification
     try:
@@ -295,7 +304,7 @@ def execute_sequential(
         Dictionary mapping result keys to verification results
     """
     # Create answer cache for sharing traces across judges
-    answer_cache = AnswerTraceCache(wait_timeout=300.0)
+    answer_cache = AnswerTraceCache()
 
     results = {}
     total = len(tasks)
@@ -345,10 +354,10 @@ def execute_parallel(
     progress_callback: Callable[[int, int, VerificationResult | None], None] | None = None,
 ) -> dict[str, VerificationResult]:
     """
-    Execute tasks in parallel chunks with progress tracking.
+    Execute tasks in parallel with intelligent retry and answer cache optimization.
 
-    This function creates a thread-safe answer cache to share answers across
-    multiple judges evaluating the same answering model output, even in parallel mode.
+    This function creates a thread-safe answer cache and uses task shuffling and
+    progressive retry to maximize cache hits while avoiding blocking.
 
     Args:
         tasks: List of task dictionaries
@@ -357,76 +366,153 @@ def execute_parallel(
                           Called when task starts (with preview) and completes (with actual result)
 
     Returns:
-        Dictionary mapping result keys to verification results
+        Dictionary mapping result keys to verification results (in original task order)
     """
-    import asyncio
+    import queue
+    import random
     import threading
 
     if max_workers is None:
         max_workers = int(os.getenv("KARENINA_ASYNC_MAX_WORKERS", "2"))
 
-    config = AsyncConfig(enabled=True, max_workers=max_workers)
-
     # Create thread-safe answer cache for sharing traces across judges
-    answer_cache = AnswerTraceCache(wait_timeout=300.0)
+    answer_cache = AnswerTraceCache()
 
-    # Thread-safe counter for tracking progress across parallel tasks
+    # Preserve original order and shuffle for better cache distribution
+    indexed_tasks = [(idx, task) for idx, task in enumerate(tasks)]
+    random.shuffle(indexed_tasks)
+
+    # Create work queue with (original_index, task, retry_count)
+    work_queue: queue.Queue[tuple[int, dict[str, Any], int] | None] = queue.Queue()
+    for idx, task in indexed_tasks:
+        work_queue.put((idx, task, 0))
+
+    # Thread-safe storage for results (indexed by original position)
+    results_lock = threading.Lock()
+    results_by_index: dict[int, tuple[str, VerificationResult]] = {}
+
+    # Thread-safe progress tracking
     progress_lock = threading.Lock()
-    completed_count = [0]  # Use list to allow mutation in closure
+    completed_count = [0]
     total = len(tasks)
 
-    def execute_task_with_cache(task: dict[str, Any]) -> tuple[str, VerificationResult]:
-        """Wrapper to pass cache to execute_task."""
-        return execute_task(task, answer_cache)
+    # Retry configuration
+    RETRY_WAIT_SECONDS = 30
 
-    def on_task_start_wrapper(task: dict[str, Any]) -> None:
-        """Called when a task starts - thread-safe."""
-        if progress_callback:
-            # Create preview result for "starting" event
-            preview_result = VerificationResult(
-                question_id=task["question_id"],
-                template_id="no_template",
-                completed_without_errors=False,
-                question_text=task["question_text"],
-                raw_llm_response="",
-                answering_model=task["answering_model"].id,
-                parsing_model=task["parsing_model"].id,
-                execution_time=0.0,
-                timestamp="",  # Empty timestamp indicates "starting" event
-            )
-            with progress_lock:
-                # Preview shows next task number (completed + 1)
-                progress_callback(completed_count[0] + 1, total, preview_result)
+    # Completion tracking
+    tasks_completed_event = threading.Event()
 
-    def on_task_done_wrapper(_task: dict[str, Any], result: tuple[str, VerificationResult] | Exception) -> None:
-        """Called when a task completes - thread-safe."""
-        if progress_callback and not isinstance(result, Exception):
-            result_key, verification_result = result
-            with progress_lock:
-                completed_count[0] += 1
-                progress_callback(completed_count[0], total, verification_result)
+    def worker() -> None:
+        """Worker function that processes tasks from queue with retry logic."""
+        while True:
+            try:
+                # Get next task (non-blocking to allow checking for shutdown)
+                try:
+                    item = work_queue.get(timeout=1.0)
+                except queue.Empty:
+                    # Check if all tasks are completed
+                    with results_lock:
+                        if len(results_by_index) == total:
+                            tasks_completed_event.set()
+                    continue
 
-    # Execute all tasks with progress callbacks
-    from ...utils.async_utils import execute_with_config
+                # Check for shutdown signal
+                if item is None:
+                    work_queue.task_done()
+                    break
 
-    task_results = asyncio.run(
-        execute_with_config(
-            items=tasks,
-            sync_function=execute_task_with_cache,
-            config=config,
-            on_task_start=on_task_start_wrapper if progress_callback else None,
-            on_task_done=on_task_done_wrapper if progress_callback else None,
-        )
-    )
+                original_index, task, retry_count = item
 
-    # Convert to dictionary
+                # Check answer cache first
+                cache_key = _generate_answer_cache_key(task)
+                status, cached_answer_data = answer_cache.get_or_reserve(cache_key)
+
+                if status == "IN_PROGRESS":
+                    # Another worker is generating this answer
+                    # Always call task_done() immediately after get()
+                    work_queue.task_done()
+
+                    if retry_count == 0:
+                        # First encounter: immediately requeue and move to next task
+                        logger.debug(f"Task {cache_key} in progress (retry={retry_count}), requeueing immediately")
+                        work_queue.put((original_index, task, retry_count + 1))
+                        continue
+                    else:
+                        # Subsequent encounter: wait 30s then requeue
+                        logger.debug(
+                            f"Task {cache_key} still in progress (retry={retry_count}), waiting {RETRY_WAIT_SECONDS}s"
+                        )
+                        time.sleep(RETRY_WAIT_SECONDS)
+                        work_queue.put((original_index, task, retry_count + 1))
+                        continue
+
+                # Status is MISS or HIT - ready to execute
+                # Call preview progress callback
+                if progress_callback:
+                    preview_result = VerificationResult(
+                        question_id=task["question_id"],
+                        template_id="no_template",
+                        completed_without_errors=False,
+                        question_text=task["question_text"],
+                        raw_llm_response="",
+                        answering_model=task["answering_model"].id,
+                        parsing_model=task["parsing_model"].id,
+                        execution_time=0.0,
+                        timestamp="",  # Empty timestamp indicates "starting" event
+                    )
+                    with progress_lock:
+                        progress_callback(completed_count[0] + 1, total, preview_result)
+
+                # Execute the task
+                try:
+                    result_key, verification_result = execute_task(task, answer_cache)
+
+                    # Store result at original index
+                    with results_lock:
+                        results_by_index[original_index] = (result_key, verification_result)
+                        # Check if all tasks are now complete
+                        if len(results_by_index) == total:
+                            tasks_completed_event.set()
+
+                    # Call completion progress callback
+                    if progress_callback:
+                        with progress_lock:
+                            completed_count[0] += 1
+                            progress_callback(completed_count[0], total, verification_result)
+
+                except Exception as e:
+                    logger.error(f"Task execution failed for {cache_key}: {e}")
+                    # Don't raise - log and continue
+
+                finally:
+                    work_queue.task_done()
+
+            except Exception as e:
+                logger.error(f"Worker error: {e}")
+                work_queue.task_done()
+
+    # Start worker threads
+    workers = []
+    for _ in range(max_workers):
+        t = threading.Thread(target=worker, daemon=True)
+        t.start()
+        workers.append(t)
+
+    # Wait for all tasks to actually complete (not just queue empty)
+    tasks_completed_event.wait()
+
+    # Send shutdown signal to workers
+    for _ in range(max_workers):
+        work_queue.put(None)
+
+    # Wait for workers to finish
+    for t in workers:
+        t.join(timeout=5.0)
+
+    # Restore original order and convert to dictionary
     results = {}
-    for result in task_results:
-        if isinstance(result, Exception):
-            logger.error(f"Task execution failed: {result}")
-            continue
-
-        result_key, verification_result = result
+    for idx in sorted(results_by_index.keys()):
+        result_key, verification_result = results_by_index[idx]
         results[result_key] = verification_result
 
     # Log cache statistics
@@ -434,7 +520,7 @@ def execute_parallel(
     if stats["hits"] > 0 or stats["waits"] > 0:
         logger.info(
             f"Answer cache statistics (parallel mode): {stats['hits']} hits, {stats['misses']} misses, "
-            f"{stats['waits']} waits, {stats['timeouts']} timeouts"
+            f"{stats['waits']} IN_PROGRESS encounters, {stats['timeouts']} timeouts"
         )
 
     return results

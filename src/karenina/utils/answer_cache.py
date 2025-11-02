@@ -35,115 +35,94 @@ class CacheEntry:
 
 
 class AnswerTraceCache:
-    """Thread-safe cache for answer traces with synchronization.
+    """Thread-safe cache for answer traces with non-blocking synchronization.
 
     This cache prevents duplicate answer generation when multiple judges
     (parsing models) need to evaluate the same answering model output.
 
     Features:
     - Thread-safe: All operations protected by lock
-    - Race condition prevention: Tasks wait for in-progress answers
-    - Timeout protection: Tasks don't wait forever
-    - Fault tolerance: Failed generations don't block other tasks
+    - Non-blocking: Returns immediately with status, no waiting
+    - Race condition prevention: Caller handles requeuing for in-progress answers
+    - Fault tolerance: Failed generations allow retry
 
     Example:
         ```python
-        cache = AnswerTraceCache(wait_timeout=300.0)
+        cache = AnswerTraceCache()
 
         # Thread 1: Generates answer
-        answer_data, should_generate = cache.get_or_reserve(key)
-        if should_generate:
+        status, answer_data = cache.get_or_reserve(key)
+        if status == "MISS":
             # Generate answer...
             cache.complete(key, answer_data, error=None)
 
-        # Thread 2: Waits for answer
-        answer_data, should_generate = cache.get_or_reserve(key)
-        # Thread 2 waits, then receives cached answer
-        # should_generate = False, answer_data contains the answer
+        # Thread 2: Gets IN_PROGRESS status
+        status, answer_data = cache.get_or_reserve(key)
+        # status == "IN_PROGRESS", caller should requeue task
+        # Later, after thread 1 completes:
+        status, answer_data = cache.get_or_reserve(key)
+        # status == "HIT", answer_data contains the cached answer
         ```
     """
 
-    def __init__(self, wait_timeout: float = 300.0) -> None:
-        """Initialize answer cache.
-
-        Args:
-            wait_timeout: Maximum seconds to wait for in-progress answer (default: 5 minutes)
-        """
+    def __init__(self) -> None:
+        """Initialize answer cache."""
         self._cache: dict[str, CacheEntry] = {}
         self._lock = threading.Lock()
-        self._wait_timeout = wait_timeout
         self._stats_hits = 0
         self._stats_misses = 0
-        self._stats_waits = 0
-        self._stats_timeouts = 0
+        self._stats_waits = 0  # Now tracks IN_PROGRESS returns
+        self._stats_timeouts = 0  # Deprecated, kept for backward compatibility
 
-    def get_or_reserve(self, key: str) -> tuple[dict[str, Any] | None, bool]:
+    def get_or_reserve(self, key: str) -> tuple[str, dict[str, Any] | None]:
         """Get cached answer or reserve slot for generation.
 
-        This method implements a three-state cache with synchronization:
+        This method implements a three-state cache without blocking:
         1. COMPLETED: Return cached answer
-        2. IN_PROGRESS: Wait for completion, then return answer
+        2. IN_PROGRESS: Return status immediately, caller should requeue
         3. MISSING: Reserve slot and signal caller to generate
 
         Args:
             key: Cache key (question_id, answering_model_id, replicate)
 
         Returns:
-            Tuple of (answer_data, should_generate):
-            - If answer cached: (data, False)
-            - If answer in-progress: waits, then (data, False)
-            - If missing: (None, True) and reserves slot
+            Tuple of (status, answer_data):
+            - If answer cached: ("HIT", data)
+            - If answer in-progress: ("IN_PROGRESS", None) - caller should requeue
+            - If missing: ("MISS", None) - caller should generate
         """
-        max_retries = 3
+        with self._lock:
+            entry = self._cache.get(key)
 
-        for _attempt in range(max_retries):
-            with self._lock:
-                entry = self._cache.get(key)
+            if entry is None:
+                # MISSING: Reserve slot for generation
+                self._cache[key] = CacheEntry(is_complete=False)
+                self._stats_misses += 1
+                logger.debug(f"Cache miss: {key} - reserving slot")
+                return "MISS", None
 
-                if entry is None:
-                    # MISSING: Reserve slot for generation
+            if entry.is_complete:
+                # COMPLETED or FAILED
+                if entry.error:
+                    # Previous generation failed, allow retry
+                    logger.warning(
+                        f"Previous answer generation failed for {key} (error: {entry.error}), allowing retry"
+                    )
+                    del self._cache[key]
+                    # Treat as miss to allow retry
                     self._cache[key] = CacheEntry(is_complete=False)
                     self._stats_misses += 1
-                    logger.debug(f"Cache miss: {key} - reserving slot")
-                    return None, True
+                    return "MISS", None
 
-                if entry.is_complete:
-                    # COMPLETED or FAILED
-                    if entry.error:
-                        # Previous generation failed, allow retry
-                        logger.warning(
-                            f"Previous answer generation failed for {key} (error: {entry.error}), allowing retry"
-                        )
-                        del self._cache[key]
-                        continue
+                # Success! Return cached answer
+                self._stats_hits += 1
+                logger.debug(f"Cache hit: {key}")
+                return "HIT", entry.answer_data
 
-                    # Success! Return cached answer
-                    self._stats_hits += 1
-                    logger.debug(f"Cache hit: {key}")
-                    return entry.answer_data, False
-
-            # IN_PROGRESS: Wait for completion (outside lock to avoid blocking other tasks)
-            logger.info(f"Answer in-progress for {key}, waiting (timeout: {self._wait_timeout}s)")
+            # IN_PROGRESS: Return immediately, let caller handle requeuing
+            logger.debug(f"Answer in-progress for {key}, returning IN_PROGRESS status")
             self._stats_waits += 1
-
-            signaled = entry.event.wait(timeout=self._wait_timeout)
-
-            if not signaled:
-                # Timeout: Proceed with own generation to avoid deadlock
-                self._stats_timeouts += 1
-                logger.warning(
-                    f"Timeout waiting for answer generation: {key} "
-                    f"(waited {self._wait_timeout}s). Proceeding with own generation."
-                )
-                # Don't return cached data - let task generate its own answer
-                return None, True
-
-            # Event signaled, check cache again
-            # (entry might now be complete or failed)
-
-        # Should rarely reach here (max retries exhausted)
-        logger.error(f"Failed to acquire answer after {max_retries} attempts: {key}")
-        return None, True
+            return "IN_PROGRESS", None
 
     def complete(self, key: str, answer_data: dict[str, Any] | None, error: Exception | None = None) -> None:
         """Mark answer generation as complete and notify waiting tasks.
