@@ -34,6 +34,7 @@ def run_single_model_verification(
     deep_judgment_search_enabled: bool = False,
     deep_judgment_search_tool: str | Any = "tavily",
     evaluation_mode: str = "template_only",
+    cached_answer_data: dict[str, Any] | None = None,
 ) -> VerificationResult:
     """
     Run verification for a single question with specific answering and parsing models.
@@ -68,6 +69,9 @@ def run_single_model_verification(
             - "template_only": Template verification only (default)
             - "template_and_rubric": Template verification + rubric evaluation
             - "rubric_only": Skip template, only evaluate rubrics on raw response
+        cached_answer_data: Optional cached answer data from previous generation.
+            If provided, the GenerateAnswerStage will skip LLM invocation and use
+            this cached data. Used to share answers across multiple judges.
 
     Returns:
         VerificationResult with all details and optional rubric scores
@@ -108,6 +112,8 @@ def run_single_model_verification(
         deep_judgment_search_tool=deep_judgment_search_tool,
         # Few-Shot Configuration
         few_shot_examples=few_shot_examples,
+        # Answer Caching
+        cached_answer_data=cached_answer_data,
     )
 
     # Compute model strings for result (needed even if validation fails)

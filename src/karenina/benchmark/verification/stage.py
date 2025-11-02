@@ -56,6 +56,11 @@ class VerificationContext:
         # Few-Shot Configuration
         few_shot_examples: List of question-answer pairs for few-shot prompting
 
+        # Answer Caching
+        cached_answer_data: Optional cached answer data from previous generation.
+            If provided, GenerateAnswerStage will use this instead of calling LLM.
+            Used to share answers across multiple judges.
+
         # Artifacts (populated by stages)
         artifacts: Dictionary storing stage outputs (raw_answer, parsed_answer, etc.)
 
@@ -99,6 +104,9 @@ class VerificationContext:
 
     # Few-Shot Configuration
     few_shot_examples: list[dict[str, str]] | None = None
+
+    # Answer Caching
+    cached_answer_data: dict[str, Any] | None = None
 
     # Artifacts (populated by stages)
     artifacts: dict[str, Any] = field(default_factory=dict)

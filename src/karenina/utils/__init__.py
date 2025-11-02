@@ -2,9 +2,10 @@
 
 This package contains various utility functions and helper classes used
 throughout the Karenina framework, including code parsing, async execution,
-checkpoint conversion, and other common operations.
+answer caching, checkpoint conversion, and other common operations.
 """
 
+from .answer_cache import AnswerTraceCache, CacheEntry
 from .async_utils import AsyncConfig, execute_with_config, run_async_chunked, run_sync_with_progress
 from .checkpoint import (
     BenchmarkConversionError,
@@ -22,6 +23,9 @@ from .checkpoint import (
 from .code import extract_and_combine_codeblocks
 
 __all__ = [
+    # Answer caching
+    "AnswerTraceCache",
+    "CacheEntry",
     # Async utilities
     "AsyncConfig",
     "execute_with_config",

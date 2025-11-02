@@ -12,6 +12,7 @@ from typing import Any
 
 from ...schemas.domain import Rubric
 from ...schemas.workflow import FinishedTemplate, VerificationConfig, VerificationResult
+from ...utils.answer_cache import AnswerTraceCache
 from ...utils.async_utils import AsyncConfig
 
 logger = logging.getLogger(__name__)
@@ -20,6 +21,45 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 # Helper Functions
 # ============================================================================
+
+
+def _generate_answer_cache_key(task: dict[str, Any]) -> str:
+    """Generate cache key for answer traces.
+
+    Cache key format: {question_id}_{answering_model_id}_{replicate}
+
+    Args:
+        task: Task dictionary
+
+    Returns:
+        Cache key string
+    """
+    question_id = task["question_id"]
+    answering_model_id = task["answering_model"].id
+    replicate = task.get("replicate")
+
+    if replicate is None:
+        return f"{question_id}_{answering_model_id}"
+    else:
+        return f"{question_id}_{answering_model_id}_rep{replicate}"
+
+
+def _extract_answer_data_from_result(result: VerificationResult) -> dict[str, Any]:
+    """Extract answer data from verification result for caching.
+
+    Args:
+        result: Verification result
+
+    Returns:
+        Dictionary with answer data to cache
+    """
+    return {
+        "raw_llm_response": result.raw_llm_response,
+        "usage_metadata": result.usage_metadata.get("answer_generation") if result.usage_metadata else None,
+        "agent_metrics": result.agent_metrics,
+        "recursion_limit_reached": result.recursion_limit_reached,
+        "answering_mcp_servers": result.answering_mcp_servers,
+    }
 
 
 def _merge_rubrics(
@@ -152,21 +192,25 @@ def generate_task_queue(
 # ============================================================================
 
 
-def execute_task(task: dict[str, Any]) -> tuple[str, VerificationResult]:
+def execute_task(task: dict[str, Any], answer_cache: AnswerTraceCache | None = None) -> tuple[str, VerificationResult]:
     """
     Execute verification task and return unique key + result.
+
+    This function supports answer caching to avoid regenerating answers
+    when multiple judges evaluate the same answering model output.
 
     Key format: {question_id}_{answering}_{parsing}_rep{N}_{job_id}_{timestamp}
 
     Args:
         task: Task dictionary with all verification parameters
+        answer_cache: Optional answer cache for sharing traces across judges
 
     Returns:
         Tuple of (result_key, verification_result)
     """
     from .runner import run_single_model_verification
 
-    # Generate unique key
+    # Generate unique result key
     key_parts = [
         task["question_id"],
         task["answering_model"].id,
@@ -183,31 +227,53 @@ def execute_task(task: dict[str, Any]) -> tuple[str, VerificationResult]:
 
     result_key = "_".join(key_parts)
 
-    # Execute verification
-    result = run_single_model_verification(
-        question_id=task["question_id"],
-        question_text=task["question_text"],
-        template_code=task["template_code"],
-        answering_model=task["answering_model"],
-        parsing_model=task["parsing_model"],
-        run_name=task.get("run_name"),
-        job_id=task.get("job_id"),
-        answering_replicate=task["replicate"],
-        parsing_replicate=task["replicate"],
-        rubric=task["rubric"],
-        keywords=task.get("keywords"),
-        few_shot_examples=task.get("few_shot_examples"),
-        few_shot_enabled=task.get("few_shot_enabled", False),
-        abstention_enabled=task.get("abstention_enabled", False),
-        deep_judgment_enabled=task.get("deep_judgment_enabled", False),
-        deep_judgment_max_excerpts_per_attribute=task.get("deep_judgment_max_excerpts_per_attribute", 3),
-        deep_judgment_fuzzy_match_threshold=task.get("deep_judgment_fuzzy_match_threshold", 0.80),
-        deep_judgment_excerpt_retry_attempts=task.get("deep_judgment_excerpt_retry_attempts", 2),
-        deep_judgment_search_enabled=task.get("deep_judgment_search_enabled", False),
-        deep_judgment_search_tool=task.get("deep_judgment_search_tool", "tavily"),
-    )
+    # Check answer cache if available
+    cached_answer_data = None
+    should_generate = True
+    cache_key = None
 
-    return result_key, result
+    if answer_cache:
+        cache_key = _generate_answer_cache_key(task)
+        cached_answer_data, should_generate = answer_cache.get_or_reserve(cache_key)
+
+    # Execute verification
+    try:
+        result = run_single_model_verification(
+            question_id=task["question_id"],
+            question_text=task["question_text"],
+            template_code=task["template_code"],
+            answering_model=task["answering_model"],
+            parsing_model=task["parsing_model"],
+            run_name=task.get("run_name"),
+            job_id=task.get("job_id"),
+            answering_replicate=task["replicate"],
+            parsing_replicate=task["replicate"],
+            rubric=task["rubric"],
+            keywords=task.get("keywords"),
+            few_shot_examples=task.get("few_shot_examples"),
+            few_shot_enabled=task.get("few_shot_enabled", False),
+            abstention_enabled=task.get("abstention_enabled", False),
+            deep_judgment_enabled=task.get("deep_judgment_enabled", False),
+            deep_judgment_max_excerpts_per_attribute=task.get("deep_judgment_max_excerpts_per_attribute", 3),
+            deep_judgment_fuzzy_match_threshold=task.get("deep_judgment_fuzzy_match_threshold", 0.80),
+            deep_judgment_excerpt_retry_attempts=task.get("deep_judgment_excerpt_retry_attempts", 2),
+            deep_judgment_search_enabled=task.get("deep_judgment_search_enabled", False),
+            deep_judgment_search_tool=task.get("deep_judgment_search_tool", "tavily"),
+            cached_answer_data=cached_answer_data,
+        )
+
+        # If we generated a new answer, cache it for other tasks
+        if answer_cache and should_generate and cache_key:
+            answer_data = _extract_answer_data_from_result(result)
+            answer_cache.complete(cache_key, answer_data, error=None)
+
+        return result_key, result
+
+    except Exception as e:
+        # If answer generation failed and we reserved the slot, mark it as failed
+        if answer_cache and should_generate and cache_key:
+            answer_cache.complete(cache_key, None, error=e)
+        raise
 
 
 def execute_sequential(
@@ -217,6 +283,9 @@ def execute_sequential(
     """
     Execute tasks one at a time.
 
+    This function creates an answer cache to share answers across multiple
+    judges evaluating the same answering model output.
+
     Args:
         tasks: List of task dictionaries
         progress_callback: Optional callback(current, total, result | None) for progress updates
@@ -225,6 +294,9 @@ def execute_sequential(
     Returns:
         Dictionary mapping result keys to verification results
     """
+    # Create answer cache for sharing traces across judges
+    answer_cache = AnswerTraceCache(wait_timeout=300.0)
+
     results = {}
     total = len(tasks)
 
@@ -247,14 +319,22 @@ def execute_sequential(
             )
             progress_callback(idx, total, preview_result)
 
-        # Execute the task
-        result_key, result = execute_task(task)
+        # Execute the task with answer cache
+        result_key, result = execute_task(task, answer_cache)
         results[result_key] = result
 
         # Call progress callback AFTER completion (with actual result)
         # This allows the service to remove from in_progress_questions and update counts
         if progress_callback:
             progress_callback(idx, total, result)
+
+    # Log cache statistics
+    stats = answer_cache.get_stats()
+    if stats["hits"] > 0 or stats["waits"] > 0:
+        logger.info(
+            f"Answer cache statistics: {stats['hits']} hits, {stats['misses']} misses, "
+            f"{stats['waits']} waits, {stats['timeouts']} timeouts"
+        )
 
     return results
 
@@ -266,6 +346,9 @@ def execute_parallel(
 ) -> dict[str, VerificationResult]:
     """
     Execute tasks in parallel chunks with progress tracking.
+
+    This function creates a thread-safe answer cache to share answers across
+    multiple judges evaluating the same answering model output, even in parallel mode.
 
     Args:
         tasks: List of task dictionaries
@@ -284,10 +367,17 @@ def execute_parallel(
 
     config = AsyncConfig(enabled=True, max_workers=max_workers)
 
+    # Create thread-safe answer cache for sharing traces across judges
+    answer_cache = AnswerTraceCache(wait_timeout=300.0)
+
     # Thread-safe counter for tracking progress across parallel tasks
     progress_lock = threading.Lock()
     completed_count = [0]  # Use list to allow mutation in closure
     total = len(tasks)
+
+    def execute_task_with_cache(task: dict[str, Any]) -> tuple[str, VerificationResult]:
+        """Wrapper to pass cache to execute_task."""
+        return execute_task(task, answer_cache)
 
     def on_task_start_wrapper(task: dict[str, Any]) -> None:
         """Called when a task starts - thread-safe."""
@@ -322,7 +412,7 @@ def execute_parallel(
     task_results = asyncio.run(
         execute_with_config(
             items=tasks,
-            sync_function=execute_task,
+            sync_function=execute_task_with_cache,
             config=config,
             on_task_start=on_task_start_wrapper if progress_callback else None,
             on_task_done=on_task_done_wrapper if progress_callback else None,
@@ -338,6 +428,14 @@ def execute_parallel(
 
         result_key, verification_result = result
         results[result_key] = verification_result
+
+    # Log cache statistics
+    stats = answer_cache.get_stats()
+    if stats["hits"] > 0 or stats["waits"] > 0:
+        logger.info(
+            f"Answer cache statistics (parallel mode): {stats['hits']} hits, {stats['misses']} misses, "
+            f"{stats['waits']} waits, {stats['timeouts']} timeouts"
+        )
 
     return results
 

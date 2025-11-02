@@ -80,7 +80,11 @@ class GenerateAnswerStage(BaseVerificationStage):
 
     def execute(self, context: VerificationContext) -> None:
         """
-        Generate answer using configured LLM.
+        Generate answer using configured LLM or use cached answer.
+
+        This stage checks if cached answer data is available in the context.
+        If so, it injects the cached data and skips LLM invocation. This
+        optimization allows multiple judges to share the same answering trace.
 
         Args:
             context: Verification context
@@ -92,6 +96,48 @@ class GenerateAnswerStage(BaseVerificationStage):
             - Sets context.artifacts["answering_mcp_servers"]
             - Sets context.error if LLM call fails fatally
         """
+        # Check if cached answer data is available
+        if context.cached_answer_data is not None:
+            logger.info(f"Using cached answer for question {context.question_id}")
+
+            # Extract cached data
+            raw_llm_response = context.cached_answer_data.get("raw_llm_response", "")
+            recursion_limit_reached = context.cached_answer_data.get("recursion_limit_reached", False)
+            answering_mcp_servers = context.cached_answer_data.get("answering_mcp_servers")
+            usage_metadata = context.cached_answer_data.get("usage_metadata")
+            agent_metrics = context.cached_answer_data.get("agent_metrics")
+
+            # Store cached data in context
+            context.set_artifact("raw_llm_response", raw_llm_response)
+            context.set_artifact("recursion_limit_reached", recursion_limit_reached)
+            context.set_artifact("answering_mcp_servers", answering_mcp_servers)
+
+            # Build model string for result
+            answering_model = context.answering_model
+            if answering_model.interface == "openrouter":
+                answering_model_str = answering_model.model_name
+            elif answering_model.interface == "openai_endpoint":
+                answering_model_str = f"endpoint/{answering_model.model_name}"
+            else:
+                answering_model_str = f"{answering_model.model_provider}/{answering_model.model_name}"
+            context.set_artifact("answering_model_str", answering_model_str)
+
+            # Set result fields
+            context.set_result_field("raw_llm_response", raw_llm_response)
+            context.set_result_field("recursion_limit_reached", recursion_limit_reached)
+            context.set_result_field("answering_mcp_servers", answering_mcp_servers)
+
+            # Handle usage tracking for cached answers
+            usage_tracker = UsageTracker()
+            if usage_metadata:
+                usage_tracker.track_call("answer_generation", answering_model_str, usage_metadata)
+            if agent_metrics:
+                usage_tracker.set_agent_metrics(agent_metrics)
+            context.set_artifact("usage_tracker", usage_tracker)
+
+            return  # Skip LLM invocation
+
+        # No cached answer - proceed with normal answer generation
         answering_model = context.answering_model
 
         # Build model string for result
