@@ -6,7 +6,7 @@ answer caching, checkpoint conversion, and other common operations.
 """
 
 from .answer_cache import AnswerTraceCache, CacheEntry
-from .async_utils import AsyncConfig, run_sync_with_progress
+from .async_utils import run_sync_with_progress
 from .checkpoint import (
     BenchmarkConversionError,
     add_global_rubric_to_benchmark,
@@ -26,8 +26,7 @@ __all__ = [
     # Answer caching
     "AnswerTraceCache",
     "CacheEntry",
-    # Async utilities (AsyncConfig kept for backward compatibility)
-    "AsyncConfig",
+    # Async utilities
     "run_sync_with_progress",
     # Checkpoint utilities
     "BenchmarkConversionError",

@@ -4,7 +4,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from ...utils.async_utils import AsyncConfig
 from .models import (
     INTERFACE_LANGCHAIN,
     INTERFACES_NO_PROVIDER_REQUIRED,
@@ -397,7 +396,6 @@ class VerificationJob(BaseModel):
     run_name: str  # User-defined or auto-generated run name
     status: Literal["pending", "running", "completed", "failed", "cancelled"]
     config: VerificationConfig
-    async_config: AsyncConfig | None = None
 
     # Database storage
     storage_url: str | None = None  # Database URL for auto-save functionality

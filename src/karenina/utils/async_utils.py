@@ -1,38 +1,14 @@
 """Async utilities for parallelizing synchronous operations.
 
-This module provides utilities for parallel execution.
-For new code, use ThreadPoolExecutor directly (see generation_service.py or batch_runner.py for examples).
+This module provides utilities for sequential execution with progress tracking.
+For parallel execution, use ThreadPoolExecutor directly (see generation_service.py or batch_runner.py for examples).
 """
 
-import os
 from collections.abc import Callable
 from typing import TypeVar
 
-from pydantic import BaseModel
-
 T = TypeVar("T")
 R = TypeVar("R")
-
-
-class AsyncConfig(BaseModel):
-    """Simple async configuration for backward compatibility.
-
-    DEPRECATED: Use direct boolean flags and max_workers instead.
-    This class is maintained only for schema compatibility.
-    """
-
-    enabled: bool = True
-    max_workers: int | None = None
-
-    @classmethod
-    def from_env(cls) -> "AsyncConfig":
-        """Create configuration from environment variables."""
-        enabled = os.getenv("KARENINA_ASYNC_ENABLED", "true").lower() == "true"
-        max_workers = None
-        if workers_env := os.getenv("KARENINA_ASYNC_MAX_WORKERS"):
-            max_workers = int(workers_env)
-
-        return cls(enabled=enabled, max_workers=max_workers)
 
 
 def run_sync_with_progress(
