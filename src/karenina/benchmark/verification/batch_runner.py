@@ -52,9 +52,29 @@ def _extract_answer_data_from_result(result: VerificationResult) -> dict[str, An
     Returns:
         Dictionary with answer data to cache
     """
+    # Extract usage metadata for answer generation stage
+    # Convert from stage summary format to callback metadata format
+    # Stage summary: {"input_tokens": 123, "model": "gpt-4", ...}
+    # Callback format: {"gpt-4": {"input_tokens": 123, ...}}
+    usage_metadata = None
+    if result.usage_metadata and "answer_generation" in result.usage_metadata:
+        stage_summary = result.usage_metadata["answer_generation"]
+        if stage_summary and isinstance(stage_summary, dict):
+            # Extract model name and create callback-style nested dict
+            model_name = stage_summary.get("model", "unknown")
+            usage_metadata = {
+                model_name: {
+                    "input_tokens": stage_summary.get("input_tokens", 0),
+                    "output_tokens": stage_summary.get("output_tokens", 0),
+                    "total_tokens": stage_summary.get("total_tokens", 0),
+                    "input_token_details": stage_summary.get("input_token_details", {}),
+                    "output_token_details": stage_summary.get("output_token_details", {}),
+                }
+            }
+
     return {
         "raw_llm_response": result.raw_llm_response,
-        "usage_metadata": result.usage_metadata.get("answer_generation") if result.usage_metadata else None,
+        "usage_metadata": usage_metadata,
         "agent_metrics": result.agent_metrics,
         "recursion_limit_reached": result.recursion_limit_reached,
         "answering_mcp_servers": result.answering_mcp_servers,
