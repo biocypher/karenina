@@ -220,12 +220,24 @@ def _build_chain(stage: str, config: "ModelConfig") -> Any:
     )
 
     # Use karenina's unified model interface
-    model = init_chat_model_unified(
-        model=config.model_name,
-        provider=config.model_provider,
-        interface=config.interface,
-        temperature=config.temperature,
-    )
+    model_params = {
+        "model": config.model_name,
+        "provider": config.model_provider,
+        "interface": config.interface,
+        "temperature": config.temperature,
+    }
+
+    # Add endpoint configuration for openai_endpoint interface
+    if config.interface == "openai_endpoint":
+        model_params["endpoint_base_url"] = config.endpoint_base_url
+        if config.endpoint_api_key is not None:
+            # Extract secret value if it's a SecretStr
+            if hasattr(config.endpoint_api_key, "get_secret_value"):
+                model_params["endpoint_api_key"] = config.endpoint_api_key.get_secret_value()
+            else:
+                model_params["endpoint_api_key"] = config.endpoint_api_key
+
+    model = init_chat_model_unified(**model_params)  # type: ignore[arg-type]
 
     return prompt | model | parser
 
@@ -266,12 +278,24 @@ def _generate_with_retry(
                     ]
                 )
 
-                model = init_chat_model_unified(
-                    model=config.model_name,
-                    provider=config.model_provider,
-                    interface=config.interface,
-                    temperature=config.temperature,
-                )
+                model_params = {
+                    "model": config.model_name,
+                    "provider": config.model_provider,
+                    "interface": config.interface,
+                    "temperature": config.temperature,
+                }
+
+                # Add endpoint configuration for openai_endpoint interface
+                if config.interface == "openai_endpoint":
+                    model_params["endpoint_base_url"] = config.endpoint_base_url
+                    if config.endpoint_api_key is not None:
+                        # Extract secret value if it's a SecretStr
+                        if hasattr(config.endpoint_api_key, "get_secret_value"):
+                            model_params["endpoint_api_key"] = config.endpoint_api_key.get_secret_value()
+                        else:
+                            model_params["endpoint_api_key"] = config.endpoint_api_key
+
+                model = init_chat_model_unified(**model_params)  # type: ignore[arg-type]
 
                 chain = prompt | model | parser
 
@@ -496,6 +520,8 @@ def generate_answer_template(
     model_provider: str | None = None,
     temperature: float | None = None,
     interface: str | None = None,
+    endpoint_base_url: str | None = None,
+    endpoint_api_key: str | None = None,
     config: "ModelConfig | None" = None,
 ) -> str:
     """
@@ -508,6 +534,8 @@ def generate_answer_template(
         model_provider: The provider of the model (when not using config).
         temperature: The temperature of the model (when not using config).
         interface: The interface to use (when not using config).
+        endpoint_base_url: The OpenAI-compatible endpoint base URL (when not using config).
+        endpoint_api_key: The API key for the endpoint (when not using config).
         config: ModelConfig object (takes precedence over individual params).
 
     Returns:
@@ -517,7 +545,9 @@ def generate_answer_template(
         # Use provided ModelConfig
         model_config = config
     else:
-        # Import ModelConfig dynamically to avoid circular imports
+        # Import ModelConfig and SecretStr dynamically to avoid circular imports
+        from pydantic import SecretStr
+
         from karenina.schemas.workflow import ModelConfig
 
         # Create ModelConfig from individual parameters
@@ -528,6 +558,8 @@ def generate_answer_template(
             temperature=temperature if temperature is not None else 0.0,
             interface=interface or "langchain",  # type: ignore[arg-type]
             system_prompt="",  # Not used in structured generation
+            endpoint_base_url=endpoint_base_url,
+            endpoint_api_key=SecretStr(endpoint_api_key) if endpoint_api_key else None,
         )
 
     # Phase 1 & 2: Generate structured outputs (ground truth + field descriptions)
