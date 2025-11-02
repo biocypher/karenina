@@ -2,9 +2,15 @@
 
 This module provides thin wrappers around synchronous functions to enable
 parallel execution while maintaining a single source of truth for business logic.
+
+DEPRECATION NOTE:
+- run_async_chunked() and run_async_batched() are deprecated
+- Use ThreadPoolExecutor directly for parallel execution (see generation_service.py or batch_runner.py for examples)
+- Only run_sync_with_progress() is maintained for backward compatibility
 """
 
 import asyncio
+import warnings
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, TypeVar
@@ -25,11 +31,17 @@ async def run_async_chunked(
     on_task_done: Callable[[T, R | Exception], None] | None = None,
 ) -> list[R]:
     """
+    DEPRECATED: Use ThreadPoolExecutor directly instead.
+
     Run a synchronous function on a list of items in parallel chunks.
 
     This is a thin wrapper that enables async execution of sync functions
     without modifying the core business logic. Items are processed in chunks
     to avoid overwhelming the system or hitting rate limits.
+
+    .. deprecated::
+        Use ThreadPoolExecutor with as_completed() for better control and simpler code.
+        See generation_service.py or batch_runner.py for examples.
 
     Args:
         items: List of items to process
@@ -53,6 +65,13 @@ async def run_async_chunked(
         # Results: ["HELLO", "WORLD", "ASYNC"]
         ```
     """
+    warnings.warn(
+        "run_async_chunked() is deprecated. Use ThreadPoolExecutor with as_completed() instead. "
+        "See generation_service.py or batch_runner.py for examples.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
     if not items:
         return []
 
@@ -132,11 +151,17 @@ async def run_async_batched(
     on_task_done: Callable[[T, R | Exception], None] | None = None,
 ) -> list[R]:
     """
+    DEPRECATED: Use ThreadPoolExecutor directly instead.
+
     Run a synchronous function on batches of items with controlled concurrency.
 
     This is useful when you need finer control over the execution pattern,
     such as processing items in sequential batches with limited parallelism
     within each batch.
+
+    .. deprecated::
+        Use ThreadPoolExecutor with as_completed() for better control and simpler code.
+        See generation_service.py or batch_runner.py for examples.
 
     Args:
         items: List of items to process
@@ -149,6 +174,13 @@ async def run_async_batched(
     Returns:
         List of results maintaining the same order as input items
     """
+    warnings.warn(
+        "run_async_batched() is deprecated. Use ThreadPoolExecutor with as_completed() instead. "
+        "See generation_service.py or batch_runner.py for examples.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
     if not items:
         return []
 
@@ -250,14 +282,20 @@ def run_sync_with_progress(
 
 
 class AsyncConfig(BaseModel):
-    """Configuration for async processing behavior."""
+    """Configuration for async processing behavior.
+
+    DEPRECATED: This class and its associated parameters are deprecated.
+    Use simple boolean enabled flag and max_workers instead.
+
+    Only enabled and max_workers are still used. All other fields are ignored.
+    """
 
     enabled: bool = True
-    chunk_size: int = 5
+    chunk_size: int = 5  # DEPRECATED: No longer used
     max_workers: int | None = None
-    batch_size: int | None = None
-    concurrent_batches: int | None = None
-    delay_between_batches: float = 0.5
+    batch_size: int | None = None  # DEPRECATED: No longer used
+    concurrent_batches: int | None = None  # DEPRECATED: No longer used
+    delay_between_batches: float = 0.5  # DEPRECATED: No longer used
 
     @classmethod
     def from_env(cls) -> "AsyncConfig":
@@ -299,10 +337,16 @@ async def execute_with_config(
     on_task_done: Callable[[T, R | Exception], None] | None = None,
 ) -> list[R]:
     """
+    DEPRECATED: Use ThreadPoolExecutor directly instead.
+
     Execute function with the given configuration (sync or async).
 
     This is the main entry point that switches between sync and async
     execution based on configuration.
+
+    .. deprecated::
+        Use ThreadPoolExecutor with as_completed() for parallel execution.
+        See generation_service.py or batch_runner.py for examples.
 
     Args:
         items: List of items to process
@@ -315,6 +359,13 @@ async def execute_with_config(
     Returns:
         List of results maintaining the same order as input items
     """
+    warnings.warn(
+        "execute_with_config() is deprecated. Use ThreadPoolExecutor with as_completed() instead. "
+        "See generation_service.py or batch_runner.py for examples.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
     if not config.enabled:
         # Synchronous execution
         return run_sync_with_progress(items, sync_function, progress_callback)

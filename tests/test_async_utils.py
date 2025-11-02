@@ -1,4 +1,8 @@
-"""Tests for async utilities module."""
+"""Tests for async utilities module.
+
+NOTE: These tests cover deprecated functions that will be removed in a future version.
+The functions are deprecated in favor of direct ThreadPoolExecutor usage.
+"""
 
 import time
 
@@ -10,6 +14,9 @@ from karenina.utils.async_utils import (
     run_async_chunked,
     run_sync_with_progress,
 )
+
+# Suppress deprecation warnings for these tests since we're testing deprecated functions
+pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
 
 def slow_function(item: str) -> str:
