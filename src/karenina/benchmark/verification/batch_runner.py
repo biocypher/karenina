@@ -262,25 +262,61 @@ def execute_sequential(
 def execute_parallel(
     tasks: list[dict[str, Any]],
     max_workers: int | None = None,
+    progress_callback: Callable[[int, int, VerificationResult | None], None] | None = None,
 ) -> dict[str, VerificationResult]:
     """
-    Execute tasks in parallel chunks.
+    Execute tasks in parallel chunks with progress tracking.
 
     Args:
         tasks: List of task dictionaries
         max_workers: Optional maximum number of parallel workers (defaults to env var or 2)
+        progress_callback: Optional callback(current, total, result | None) for progress updates
+                          Called when task starts (with preview) and completes (with actual result)
 
     Returns:
         Dictionary mapping result keys to verification results
     """
     import asyncio
+    import threading
 
     if max_workers is None:
         max_workers = int(os.getenv("KARENINA_ASYNC_MAX_WORKERS", "2"))
 
     config = AsyncConfig(enabled=True, max_workers=max_workers)
 
-    # Execute all tasks
+    # Thread-safe counter for tracking progress across parallel tasks
+    progress_lock = threading.Lock()
+    completed_count = [0]  # Use list to allow mutation in closure
+    total = len(tasks)
+
+    def on_task_start_wrapper(task: dict[str, Any]) -> None:
+        """Called when a task starts - thread-safe."""
+        if progress_callback:
+            # Create preview result for "starting" event
+            preview_result = VerificationResult(
+                question_id=task["question_id"],
+                template_id="no_template",
+                completed_without_errors=False,
+                question_text=task["question_text"],
+                raw_llm_response="",
+                answering_model=task["answering_model"].id,
+                parsing_model=task["parsing_model"].id,
+                execution_time=0.0,
+                timestamp="",  # Empty timestamp indicates "starting" event
+            )
+            with progress_lock:
+                # Preview shows next task number (completed + 1)
+                progress_callback(completed_count[0] + 1, total, preview_result)
+
+    def on_task_done_wrapper(_task: dict[str, Any], result: tuple[str, VerificationResult] | Exception) -> None:
+        """Called when a task completes - thread-safe."""
+        if progress_callback and not isinstance(result, Exception):
+            result_key, verification_result = result
+            with progress_lock:
+                completed_count[0] += 1
+                progress_callback(completed_count[0], total, verification_result)
+
+    # Execute all tasks with progress callbacks
     from ...utils.async_utils import execute_with_config
 
     task_results = asyncio.run(
@@ -288,6 +324,8 @@ def execute_parallel(
             items=tasks,
             sync_function=execute_task,
             config=config,
+            on_task_start=on_task_start_wrapper if progress_callback else None,
+            on_task_done=on_task_done_wrapper if progress_callback else None,
         )
     )
 
@@ -442,7 +480,7 @@ def run_verification_batch(
 
     # Execute tasks
     if async_enabled:
-        results = execute_parallel(task_queue, max_workers=max_workers)
+        results = execute_parallel(task_queue, max_workers=max_workers, progress_callback=progress_callback)
     else:
         results = execute_sequential(task_queue, progress_callback=progress_callback)
 
