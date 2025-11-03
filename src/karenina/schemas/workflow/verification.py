@@ -1,5 +1,7 @@
 """Verification configuration and result models."""
 
+import json
+from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -266,6 +268,88 @@ class VerificationConfig(BaseModel):
         """
         config = self.get_few_shot_config()
         return config is not None and config.enabled
+
+    @classmethod
+    def from_preset(
+        cls,
+        preset_id: str,
+        presets_file_path: Path | None = None,
+    ) -> "VerificationConfig":
+        """
+        Load a VerificationConfig from a saved preset.
+
+        Args:
+            preset_id: The UUID of the preset to load
+            presets_file_path: Optional path to benchmark_presets.json.
+                              If None, uses default location (project root).
+
+        Returns:
+            VerificationConfig instance loaded from the preset
+
+        Raises:
+            FileNotFoundError: If the presets file doesn't exist
+            ValueError: If the preset_id is not found or the config is invalid
+            json.JSONDecodeError: If the presets file is corrupted
+
+        Example:
+            >>> config = VerificationConfig.from_preset("550e8400-e29b-41d4-a716-446655440000")
+            >>> # Use the config for verification
+            >>> results = verify_questions(checkpoint, config)
+        """
+        # Determine presets file path
+        if presets_file_path is None:
+            # Default to project root (5 levels up from this file)
+            # karenina/src/karenina/schemas/workflow/verification.py -> project root
+            project_root = Path(__file__).parent.parent.parent.parent.parent
+            presets_file_path = project_root / "benchmark_presets.json"
+
+        # Resolve to absolute path
+        presets_file_path = presets_file_path.resolve()
+
+        # Check if file exists
+        if not presets_file_path.exists():
+            raise FileNotFoundError(
+                f"Presets file not found at {presets_file_path}. Create presets using the GUI or karenina-server API."
+            )
+
+        # Load presets file
+        try:
+            with open(presets_file_path) as f:
+                data = json.load(f)
+        except json.JSONDecodeError as e:
+            raise json.JSONDecodeError(
+                f"Presets file at {presets_file_path} is corrupted: {e.msg}",
+                e.doc,
+                e.pos,
+            ) from e
+
+        # Get presets dict
+        presets = data.get("presets", {})
+        if not presets:
+            raise ValueError(
+                f"No presets found in {presets_file_path}. Create presets using the GUI or karenina-server API."
+            )
+
+        # Find preset by ID
+        if preset_id not in presets:
+            available_ids = list(presets.keys())
+            raise ValueError(f"Preset with ID '{preset_id}' not found. Available preset IDs: {available_ids}")
+
+        preset = presets[preset_id]
+
+        # Extract config
+        config_data = preset.get("config")
+        if not config_data:
+            raise ValueError(f"Preset '{preset_id}' has no configuration data")
+
+        # Create VerificationConfig instance from the config dict
+        # The __init__ will handle validation
+        try:
+            return cls(**config_data)
+        except Exception as e:
+            raise ValueError(
+                f"Failed to load preset '{preset_id}' (name: '{preset.get('name', 'unknown')}'): {e}"
+            ) from e
 
 
 class VerificationResult(BaseModel):
