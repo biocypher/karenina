@@ -269,6 +269,174 @@ class VerificationConfig(BaseModel):
         config = self.get_few_shot_config()
         return config is not None and config.enabled
 
+    # ===== Preset Utility Class Methods =====
+    # These methods provide reusable utilities for preset management
+    # and can be used by both core and server implementations.
+
+    @classmethod
+    def sanitize_model_config(cls, model: dict[str, Any]) -> dict[str, Any]:
+        """
+        Sanitize model configuration to remove interface-specific fields.
+
+        This method removes fields that don't apply to a model's interface type,
+        ensuring only relevant configuration is saved in presets.
+
+        Args:
+            model: Model configuration dictionary
+
+        Returns:
+            Sanitized model configuration with only applicable fields
+
+        Example:
+            >>> config = {"interface": "langchain", "endpoint_base_url": "http://..."}
+            >>> sanitized = VerificationConfig.sanitize_model_config(config)
+            >>> # endpoint_base_url removed since interface is not openai_endpoint
+        """
+        sanitized: dict[str, Any] = {
+            "id": model["id"],
+            "model_provider": model["model_provider"],
+            "model_name": model["model_name"],
+            "temperature": model["temperature"],
+            "interface": model["interface"],
+            "system_prompt": model["system_prompt"],
+        }
+
+        # Include max_retries if present
+        if "max_retries" in model:
+            sanitized["max_retries"] = model["max_retries"]
+
+        # Only include endpoint fields for openai_endpoint interface
+        if model["interface"] == "openai_endpoint":
+            if "endpoint_base_url" in model and model["endpoint_base_url"]:
+                sanitized["endpoint_base_url"] = model["endpoint_base_url"]
+            if "endpoint_api_key" in model and model["endpoint_api_key"]:
+                sanitized["endpoint_api_key"] = model["endpoint_api_key"]
+
+        # Only include MCP fields if they have values
+        if "mcp_urls_dict" in model and model["mcp_urls_dict"]:
+            sanitized["mcp_urls_dict"] = model["mcp_urls_dict"]
+        if "mcp_tool_filter" in model and model["mcp_tool_filter"]:
+            sanitized["mcp_tool_filter"] = model["mcp_tool_filter"]
+
+        return sanitized
+
+    @classmethod
+    def sanitize_preset_name(cls, name: str) -> str:
+        """
+        Convert preset name to safe filename.
+
+        Transforms a preset name into a sanitized filename by:
+        - Converting to lowercase
+        - Replacing spaces with hyphens
+        - Removing non-alphanumeric characters (except hyphens)
+        - Removing consecutive hyphens
+        - Limiting length to 96 characters
+        - Adding .json extension
+
+        Args:
+            name: Preset name
+
+        Returns:
+            Sanitized filename (e.g., "Quick Test" -> "quick-test.json")
+
+        Example:
+            >>> VerificationConfig.sanitize_preset_name("My Test Config!")
+            "my-test-config.json"
+        """
+        import re
+
+        sanitized = name.lower()
+        sanitized = sanitized.replace(" ", "-")
+        sanitized = re.sub(r"[^a-z0-9-]", "", sanitized)
+        sanitized = re.sub(r"-+", "-", sanitized)
+        sanitized = sanitized.strip("-")
+
+        if not sanitized:
+            sanitized = "preset"
+
+        if len(sanitized) > 96:
+            sanitized = sanitized[:96]
+
+        return f"{sanitized}.json"
+
+    @classmethod
+    def validate_preset_metadata(cls, name: str, description: str | None = None) -> None:
+        """
+        Validate preset name and description length limits.
+
+        Note: This method only validates basic metadata constraints (length limits).
+        Name uniqueness must be checked separately by the caller (server has the list).
+
+        Args:
+            name: Preset name
+            description: Optional preset description
+
+        Raises:
+            ValueError: If validation fails
+
+        Example:
+            >>> VerificationConfig.validate_preset_metadata("Test", "A test preset")
+            >>> # Passes validation
+            >>> VerificationConfig.validate_preset_metadata("", "Description")
+            ValueError: Preset name cannot be empty
+        """
+        # Validate name
+        if not name or not isinstance(name, str) or len(name.strip()) == 0:
+            raise ValueError("Preset name cannot be empty")
+
+        if len(name) > 100:
+            raise ValueError("Preset name cannot exceed 100 characters")
+
+        # Validate description if provided
+        if description is not None and len(description) > 500:
+            raise ValueError("Description cannot exceed 500 characters")
+
+    @classmethod
+    def create_preset_structure(
+        cls,
+        preset_id: str,
+        name: str,
+        description: str | None,
+        config_dict: dict[str, Any],
+        created_at: str,
+        updated_at: str,
+    ) -> dict[str, Any]:
+        """
+        Create standardized preset data structure.
+
+        This method provides a consistent format for preset metadata across
+        all preset operations.
+
+        Args:
+            preset_id: UUID for the preset
+            name: Preset name
+            description: Optional preset description
+            config_dict: VerificationConfig as dictionary
+            created_at: ISO format timestamp
+            updated_at: ISO format timestamp
+
+        Returns:
+            Preset dictionary with standardized structure
+
+        Example:
+            >>> preset = VerificationConfig.create_preset_structure(
+            ...     preset_id="abc-123",
+            ...     name="Test",
+            ...     description="A test preset",
+            ...     config_dict={...},
+            ...     created_at="2025-11-03T12:00:00Z",
+            ...     updated_at="2025-11-03T12:00:00Z"
+            ... )
+        """
+        return {
+            "id": preset_id,
+            "name": name,
+            "description": description,
+            "config": config_dict,
+            "created_at": created_at,
+            "updated_at": updated_at,
+        }
+
     def save_preset(
         self,
         name: str,
@@ -297,7 +465,6 @@ class VerificationConfig(BaseModel):
             >>> print(f"Saved to {metadata['filepath']}")
         """
         import os
-        import re
         import uuid
         from datetime import UTC, datetime
 
@@ -314,16 +481,8 @@ class VerificationConfig(BaseModel):
 
         presets_dir = presets_dir.resolve()
 
-        # Validate name
-        if not name or not isinstance(name, str) or len(name.strip()) == 0:
-            raise ValueError("Preset name cannot be empty")
-
-        if len(name) > 100:
-            raise ValueError("Preset name cannot exceed 100 characters")
-
-        # Validate description if provided
-        if description is not None and len(description) > 500:
-            raise ValueError("Description cannot exceed 500 characters")
+        # Validate metadata using class method
+        self.validate_preset_metadata(name, description)
 
         # Ensure directory exists
         presets_dir.mkdir(parents=True, exist_ok=True)
@@ -332,68 +491,27 @@ class VerificationConfig(BaseModel):
         preset_id = str(uuid.uuid4())
         now = datetime.now(UTC).isoformat()
 
-        # Convert config to dict with sanitization
+        # Convert config to dict and sanitize models
         config_dict = self.model_dump(mode="json")
 
-        # Sanitize model configurations to remove interface-specific fields
-        def sanitize_model(model: dict[str, Any]) -> dict[str, Any]:
-            """Remove fields that don't apply to the model's interface."""
-            sanitized = {
-                "id": model["id"],
-                "model_provider": model["model_provider"],
-                "model_name": model["model_name"],
-                "temperature": model["temperature"],
-                "interface": model["interface"],
-                "system_prompt": model["system_prompt"],
-            }
-
-            # Include max_retries if present
-            if "max_retries" in model:
-                sanitized["max_retries"] = model["max_retries"]
-
-            # Only include endpoint fields for openai_endpoint interface
-            if model["interface"] == "openai_endpoint":
-                if "endpoint_base_url" in model and model["endpoint_base_url"]:
-                    sanitized["endpoint_base_url"] = model["endpoint_base_url"]
-                if "endpoint_api_key" in model and model["endpoint_api_key"]:
-                    sanitized["endpoint_api_key"] = model["endpoint_api_key"]
-
-            # Only include MCP fields if they have values
-            if "mcp_urls_dict" in model and model["mcp_urls_dict"]:
-                sanitized["mcp_urls_dict"] = model["mcp_urls_dict"]
-            if "mcp_tool_filter" in model and model["mcp_tool_filter"]:
-                sanitized["mcp_tool_filter"] = model["mcp_tool_filter"]
-
-            return sanitized
-
-        # Sanitize answering and parsing models
+        # Sanitize answering and parsing models using class method
         if "answering_models" in config_dict:
-            config_dict["answering_models"] = [sanitize_model(m) for m in config_dict["answering_models"]]
+            config_dict["answering_models"] = [self.sanitize_model_config(m) for m in config_dict["answering_models"]]
         if "parsing_models" in config_dict:
-            config_dict["parsing_models"] = [sanitize_model(m) for m in config_dict["parsing_models"]]
+            config_dict["parsing_models"] = [self.sanitize_model_config(m) for m in config_dict["parsing_models"]]
 
-        # Create preset structure
-        preset = {
-            "id": preset_id,
-            "name": name,
-            "description": description,
-            "config": config_dict,
-            "created_at": now,
-            "updated_at": now,
-        }
+        # Create preset structure using class method
+        preset = self.create_preset_structure(
+            preset_id=preset_id,
+            name=name,
+            description=description,
+            config_dict=config_dict,
+            created_at=now,
+            updated_at=now,
+        )
 
-        # Sanitize filename: convert to lowercase, replace spaces with hyphens
-        sanitized = name.lower()
-        sanitized = sanitized.replace(" ", "-")
-        sanitized = re.sub(r"[^a-z0-9-]", "", sanitized)
-        sanitized = re.sub(r"-+", "-", sanitized)
-        sanitized = sanitized.strip("-")
-        if not sanitized:
-            sanitized = "preset"
-        if len(sanitized) > 96:
-            sanitized = sanitized[:96]
-
-        filename = f"{sanitized}.json"
+        # Generate safe filename using class method
+        filename = self.sanitize_preset_name(name)
         filepath = presets_dir / filename
 
         # Check if file already exists
