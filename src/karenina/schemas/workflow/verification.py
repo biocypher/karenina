@@ -269,87 +269,198 @@ class VerificationConfig(BaseModel):
         config = self.get_few_shot_config()
         return config is not None and config.enabled
 
-    @classmethod
-    def from_preset(
-        cls,
-        preset_id: str,
-        presets_file_path: Path | None = None,
-    ) -> "VerificationConfig":
+    def save_preset(
+        self,
+        name: str,
+        description: str | None = None,
+        presets_dir: Path | None = None,
+    ) -> dict[str, Any]:
         """
-        Load a VerificationConfig from a saved preset.
+        Save this VerificationConfig as a preset file.
 
         Args:
-            preset_id: The UUID of the preset to load
-            presets_file_path: Optional path to benchmark_presets.json.
-                              If None, uses default location (project root).
+            name: Preset name
+            description: Optional preset description
+            presets_dir: Optional path to presets directory.
+                        If None, uses KARENINA_PRESETS_DIR env or default location.
+
+        Returns:
+            Dictionary with preset metadata (id, name, description, filepath, created_at, updated_at)
+
+        Raises:
+            ValueError: If name is invalid
+            IOError: If file operations fail
+
+        Example:
+            >>> config = VerificationConfig(...)
+            >>> metadata = config.save_preset("Quick Test", "Fast testing configuration")
+            >>> print(f"Saved to {metadata['filepath']}")
+        """
+        import os
+        import re
+        import uuid
+        from datetime import UTC, datetime
+
+        # Determine presets directory
+        if presets_dir is None:
+            # Check environment variable first
+            env_presets_dir = os.getenv("KARENINA_PRESETS_DIR")
+            if env_presets_dir:
+                presets_dir = Path(env_presets_dir)
+            else:
+                # Default to benchmark_presets/ directory in project root
+                project_root = Path(__file__).parent.parent.parent.parent.parent
+                presets_dir = project_root / "benchmark_presets"
+
+        presets_dir = presets_dir.resolve()
+
+        # Validate name
+        if not name or not isinstance(name, str) or len(name.strip()) == 0:
+            raise ValueError("Preset name cannot be empty")
+
+        if len(name) > 100:
+            raise ValueError("Preset name cannot exceed 100 characters")
+
+        # Validate description if provided
+        if description is not None and len(description) > 500:
+            raise ValueError("Description cannot exceed 500 characters")
+
+        # Ensure directory exists
+        presets_dir.mkdir(parents=True, exist_ok=True)
+
+        # Generate preset ID and timestamps
+        preset_id = str(uuid.uuid4())
+        now = datetime.now(UTC).isoformat()
+
+        # Convert config to dict with sanitization
+        config_dict = self.model_dump(mode="json")
+
+        # Sanitize model configurations to remove interface-specific fields
+        def sanitize_model(model: dict[str, Any]) -> dict[str, Any]:
+            """Remove fields that don't apply to the model's interface."""
+            sanitized = {
+                "id": model["id"],
+                "model_provider": model["model_provider"],
+                "model_name": model["model_name"],
+                "temperature": model["temperature"],
+                "interface": model["interface"],
+                "system_prompt": model["system_prompt"],
+            }
+
+            # Include max_retries if present
+            if "max_retries" in model:
+                sanitized["max_retries"] = model["max_retries"]
+
+            # Only include endpoint fields for openai_endpoint interface
+            if model["interface"] == "openai_endpoint":
+                if "endpoint_base_url" in model and model["endpoint_base_url"]:
+                    sanitized["endpoint_base_url"] = model["endpoint_base_url"]
+                if "endpoint_api_key" in model and model["endpoint_api_key"]:
+                    sanitized["endpoint_api_key"] = model["endpoint_api_key"]
+
+            # Only include MCP fields if they have values
+            if "mcp_urls_dict" in model and model["mcp_urls_dict"]:
+                sanitized["mcp_urls_dict"] = model["mcp_urls_dict"]
+            if "mcp_tool_filter" in model and model["mcp_tool_filter"]:
+                sanitized["mcp_tool_filter"] = model["mcp_tool_filter"]
+
+            return sanitized
+
+        # Sanitize answering and parsing models
+        if "answering_models" in config_dict:
+            config_dict["answering_models"] = [sanitize_model(m) for m in config_dict["answering_models"]]
+        if "parsing_models" in config_dict:
+            config_dict["parsing_models"] = [sanitize_model(m) for m in config_dict["parsing_models"]]
+
+        # Create preset structure
+        preset = {
+            "id": preset_id,
+            "name": name,
+            "description": description,
+            "config": config_dict,
+            "created_at": now,
+            "updated_at": now,
+        }
+
+        # Sanitize filename: convert to lowercase, replace spaces with hyphens
+        sanitized = name.lower()
+        sanitized = sanitized.replace(" ", "-")
+        sanitized = re.sub(r"[^a-z0-9-]", "", sanitized)
+        sanitized = re.sub(r"-+", "-", sanitized)
+        sanitized = sanitized.strip("-")
+        if not sanitized:
+            sanitized = "preset"
+        if len(sanitized) > 96:
+            sanitized = sanitized[:96]
+
+        filename = f"{sanitized}.json"
+        filepath = presets_dir / filename
+
+        # Check if file already exists
+        if filepath.exists():
+            raise ValueError(f"A preset file already exists at {filepath}. Please use a different name.")
+
+        # Write preset to file
+        with open(filepath, "w") as f:
+            json.dump(preset, f, indent=2)
+
+        return {
+            "id": preset_id,
+            "name": name,
+            "description": description,
+            "filepath": str(filepath),
+            "created_at": now,
+            "updated_at": now,
+        }
+
+    @classmethod
+    def from_preset(cls, filepath: Path) -> "VerificationConfig":
+        """
+        Load a VerificationConfig from a preset file.
+
+        Args:
+            filepath: Path to the preset JSON file
 
         Returns:
             VerificationConfig instance loaded from the preset
 
         Raises:
-            FileNotFoundError: If the presets file doesn't exist
-            ValueError: If the preset_id is not found or the config is invalid
-            json.JSONDecodeError: If the presets file is corrupted
+            FileNotFoundError: If the preset file doesn't exist
+            json.JSONDecodeError: If the preset file is corrupted
+            ValueError: If the config is invalid
 
         Example:
-            >>> config = VerificationConfig.from_preset("550e8400-e29b-41d4-a716-446655440000")
-            >>> # Use the config for verification
+            >>> config = VerificationConfig.from_preset(Path("benchmark_presets/quick-test.json"))
             >>> results = verify_questions(checkpoint, config)
         """
-        # Determine presets file path
-        if presets_file_path is None:
-            # Default to project root (5 levels up from this file)
-            # karenina/src/karenina/schemas/workflow/verification.py -> project root
-            project_root = Path(__file__).parent.parent.parent.parent.parent
-            presets_file_path = project_root / "benchmark_presets.json"
-
-        # Resolve to absolute path
-        presets_file_path = presets_file_path.resolve()
+        filepath = filepath.resolve()
 
         # Check if file exists
-        if not presets_file_path.exists():
-            raise FileNotFoundError(
-                f"Presets file not found at {presets_file_path}. Create presets using the GUI or karenina-server API."
-            )
+        if not filepath.exists():
+            raise FileNotFoundError(f"Preset file not found at {filepath}")
 
-        # Load presets file
+        # Load preset file
         try:
-            with open(presets_file_path) as f:
-                data = json.load(f)
+            with open(filepath) as f:
+                preset = json.load(f)
         except json.JSONDecodeError as e:
             raise json.JSONDecodeError(
-                f"Presets file at {presets_file_path} is corrupted: {e.msg}",
+                f"Preset file at {filepath} is corrupted: {e.msg}",
                 e.doc,
                 e.pos,
             ) from e
 
-        # Get presets dict
-        presets = data.get("presets", {})
-        if not presets:
-            raise ValueError(
-                f"No presets found in {presets_file_path}. Create presets using the GUI or karenina-server API."
-            )
-
-        # Find preset by ID
-        if preset_id not in presets:
-            available_ids = list(presets.keys())
-            raise ValueError(f"Preset with ID '{preset_id}' not found. Available preset IDs: {available_ids}")
-
-        preset = presets[preset_id]
-
         # Extract config
         config_data = preset.get("config")
         if not config_data:
-            raise ValueError(f"Preset '{preset_id}' has no configuration data")
+            raise ValueError(f"Preset file '{filepath}' has no configuration data")
 
         # Create VerificationConfig instance from the config dict
-        # The __init__ will handle validation
         try:
             return cls(**config_data)
         except Exception as e:
-            raise ValueError(
-                f"Failed to load preset '{preset_id}' (name: '{preset.get('name', 'unknown')}'): {e}"
-            ) from e
+            preset_name = preset.get("name", "unknown")
+            raise ValueError(f"Failed to load preset '{preset_name}' from {filepath}: {e}") from e
 
 
 class VerificationResult(BaseModel):
