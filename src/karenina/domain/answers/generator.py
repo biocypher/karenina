@@ -75,17 +75,36 @@ class AttributeDescriptions(BaseModel):
 
 
 class JSONOnlyOutputParser(BaseOutputParser[Any]):
-    """Parser ensuring output is valid JSON before delegating to Pydantic parser."""
+    """Parser ensuring output is valid JSON before delegating to Pydantic parser.
+
+    This parser handles markdown-wrapped JSON responses by stripping code blocks
+    before attempting JSON parsing.
+    """
 
     def __init__(self, inner: PydanticOutputParser[Any]):
         self._inner = inner
 
     def parse(self, text: str) -> Any:
+        from karenina.utils.code import extract_and_combine_codeblocks
+
+        # Try parsing directly first
         try:
             json.loads(text)
-        except json.JSONDecodeError as exc:
-            raise ValueError("Model response is not valid JSON") from exc
-        return self._inner.parse(text)
+            return self._inner.parse(text)
+        except json.JSONDecodeError:
+            # If direct parsing fails, try stripping markdown code blocks
+            stripped = extract_and_combine_codeblocks(text)
+            if stripped:
+                try:
+                    json.loads(stripped)
+                    return self._inner.parse(stripped)
+                except json.JSONDecodeError as exc:
+                    raise ValueError(
+                        f"Model response is not valid JSON even after stripping code blocks: {exc}"
+                    ) from exc
+            else:
+                # No code blocks found, original text is invalid
+                raise ValueError("Model response is not valid JSON") from None
 
     @property
     def _type(self) -> str:
