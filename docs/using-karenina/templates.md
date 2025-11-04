@@ -1,331 +1,344 @@
-# Associating Templates to Questions
+# Answer Templates
 
-Templates define the structure for evaluating LLM responses. This guide covers manual template creation and automatic generation using the `generate_answer_template` method.
+Templates define how to evaluate LLM responses programmatically. This guide covers what templates are, why they're useful, and how to create them automatically or manually.
 
-## Understanding Templates
+## What Are Templates?
 
-Templates in Karenina are Pydantic classes that:
+**Answer templates** are Pydantic classes that specify:
 
-- **Structure LLM responses** into parseable formats
-- **Define evaluation criteria** through validation methods
-- **Standardize assessment** across different question types
-- **Enable programmatic verification** of answer correctness
+- **What information to extract** from free-text LLM responses
+- **How to verify correctness** by comparing extracted data against expected answers
+- **The structure of expected answers** (e.g., a drug name, a number, a list of items)
 
-## Manual Template Creation
+Templates enable **LLM-as-a-judge evaluation**: The answering model generates free text, and the judge model extracts structured data from that text using the template schema. The template then programmatically verifies correctness.
+
+## Why Use Templates?
+
+Templates provide several key benefits:
+
+1. **Flexible Input**: Answering models can respond naturally without strict formatting constraints
+2. **Structured Evaluation**: Judge models extract specific fields, making evaluation deterministic
+3. **Programmatic Verification**: The `verify()` method implements custom logic for checking correctness
+4. **Reusable Patterns**: Templates can be generated automatically for common question types
+5. **Transparent Logic**: Evaluation criteria are explicit and inspectable
+
+## Automatic Template Generation (Recommended)
+
+**The recommended approach** is to let Karenina automatically generate templates using an LLM. This is fast, consistent, and works well for most question types.
+
+### Basic Generation
+
+```python
+from karenina import Benchmark
+from karenina.schemas import ModelConfig
+
+# Create benchmark and add questions
+benchmark = Benchmark.create(name="Genomics Knowledge Benchmark")
+
+benchmark.add_question(
+    question="How many chromosomes are in a human somatic cell?",
+    raw_answer="46"
+)
+
+benchmark.add_question(
+    question="What is the approved drug target of Venetoclax?",
+    raw_answer="BCL2"
+)
+
+benchmark.add_question(
+    question="How many protein subunits does hemoglobin A have?",
+    raw_answer="4"
+)
+
+# Configure the LLM for template generation
+model_config = ModelConfig(
+    id="gpt-4.1-mini",
+    model_provider="openai",
+    model_name="gpt-4.1-mini",
+    temperature=0.1,
+    interface="langchain"
+)
+
+# Generate templates for all questions
+print("Generating templates...")
+results = benchmark.generate_all_templates(model_config=model_config)
+
+print(f"Generated {len(results)} templates successfully")
+```
+
+**What happens:**
+1. Karenina sends each question + answer to the LLM
+2. The LLM generates a Pydantic class tailored to that specific question
+3. The template is automatically validated and associated with the question
+4. Questions are marked as "finished" and ready for verification
+
+### Generated Template Example
+
+For the question "What is the approved drug target of Venetoclax?" with answer "BCL2", the LLM might generate:
+
+```python
+class Answer(BaseAnswer):
+    target: str = Field(description="The protein target mentioned in the response")
+
+    def model_post_init(self, __context):
+        self.correct = {"target": "BCL2"}
+
+    def verify(self) -> bool:
+        return self.target.strip().upper() == self.correct["target"].upper()
+```
+
+This template:
+- Extracts the `target` field from free-text responses
+- Compares it case-insensitively against "BCL2"
+- Returns `True` if they match, `False` otherwise
+
+---
+
+## Manual Template Creation (Advanced)
+
+For full control over evaluation logic, you can write templates manually. This is useful for complex verification requirements or custom validation rules.
 
 ### Basic Template Structure
 
-Create templates manually by defining Pydantic classes that inherit from `BaseAnswer`:
+Templates inherit from `BaseAnswer` and define:
+
+1. **Fields**: What data to extract (with descriptions for the judge LLM)
+2. **`model_post_init`**: Where to set the correct answer
+3. **`verify()`**: Logic to check correctness
 
 ```python
-from karenina.schemas import BaseAnswer
+from karenina.domain.answers import BaseAnswer
 from pydantic import Field
 
-class MultipleChoiceAnswer(BaseAnswer):
-    selected_option: str = Field(description="The letter or option selected by the model")
-    reasoning: str = Field(description="The model's explanation for their choice")
+class Answer(BaseAnswer):
+    count: int = Field(description="The number of chromosomes mentioned in the response")
 
     def model_post_init(self, __context):
-        # Define the correct answer
-        self.correct = {"selected_option": "A"}
+        self.correct = {"count": 46}
 
     def verify(self) -> bool:
-        """Check if the selected option is correct"""
-        return self.selected_option == self.correct["selected_option"]
+        return self.count == self.correct["count"]
 ```
 
-### Assigning Templates to Questions
+### Adding Manual Templates to Questions
 
 ```python
-# Create a question
-question = benchmark.add_question(
-    content="What is the capital of France? A) Paris B) London C) Rome D) Madrid"
+# Option 1: Provide template code when adding the question
+template_code = '''class Answer(BaseAnswer):
+    target: str = Field(description="The protein target mentioned")
+
+    def model_post_init(self, __context):
+        self.correct = {"target": "BCL2"}
+
+    def verify(self) -> bool:
+        return self.target.strip().upper() == self.correct["target"].upper()
+'''
+
+benchmark.add_question(
+    question="What is the approved drug target of Venetoclax?",
+    raw_answer="BCL2",
+    answer_template=template_code,
+    finished=True  # Mark as ready for verification
 )
 
-# Assign the template manually
-question.answer_template = MultipleChoiceAnswer
+# Option 2: Add template to existing question
+question_id = benchmark.add_question(
+    question="How many protein subunits does hemoglobin A have?",
+    raw_answer="4"
+)
+
+template_code = '''class Answer(BaseAnswer):
+    count: int = Field(description="The number of subunits mentioned")
+
+    def model_post_init(self, __context):
+        self.correct = {"count": 4}
+
+    def verify(self) -> bool:
+        return self.count == self.correct["count"]
+'''
+
 ```
 
 ### Complex Template Example
 
+For more sophisticated evaluation, you can include multiple fields and custom logic:
+
 ```python
-class EssayAnswer(BaseAnswer):
-    main_points: List[str] = Field(description="Key points mentioned in the essay")
-    thesis_statement: str = Field(description="The main argument or thesis")
-    evidence_quality: int = Field(description="Quality of evidence (1-5 scale)", ge=1, le=5)
-    coherence: int = Field(description="Logical flow and coherence (1-5 scale)", ge=1, le=5)
+from typing import List
+
+template_code = '''class Answer(BaseAnswer):
+    diseases: List[str] = Field(description="List of diseases mentioned in the response")
+    inflammatory_count: int = Field(description="Number of inflammatory diseases identified")
 
     def model_post_init(self, __context):
         self.correct = {
-            "required_points": ["point1", "point2", "point3"],
-            "min_evidence_quality": 3,
-            "min_coherence": 3
+            "inflammatory_diseases": ["asthma", "bronchitis", "pneumonia"],
+            "non_inflammatory": ["emphysema", "pulmonary fibrosis"]
         }
 
     def verify(self) -> bool:
-        # Check if at least 2 of 3 required points are mentioned
-        points_covered = sum(1 for point in self.correct["required_points"]
-                           if any(point.lower() in mp.lower() for mp in self.main_points))
+        # Check if the correct inflammatory diseases are identified
+        identified = [d.lower().strip() for d in self.diseases]
+        correct_identified = sum(1 for d in self.correct["inflammatory_diseases"]
+                                if d in identified)
 
-        return (points_covered >= 2 and
-                self.evidence_quality >= self.correct["min_evidence_quality"] and
-                self.coherence >= self.correct["min_coherence"])
-```
+        # At least 2 out of 3 correct inflammatory diseases
+        return correct_identified >= 2
+'''
 
-## Automatic Template Generation
-
-### Basic Template Generation
-
-Use the `generate_answer_template` method to automatically create templates:
-
-```python
-from karenina.schemas import ModelConfiguration
-
-# Configure the model for template generation
-model_config = ModelConfiguration(
-    provider="openai",
-    model="gpt-4",
-    temperature=0.1
-)
-
-# Generate template for a single question
-question.generate_answer_template(
-    model_config=model_config,
-    system_prompt="Create a Pydantic class to evaluate responses to this question."
+benchmark.add_question(
+    question="Which of the following are inflammatory lung diseases: asthma, bronchitis, pneumonia, emphysema, pulmonary fibrosis?",
+    raw_answer="asthma, bronchitis, pneumonia",
+    answer_template=template_code,
+    finished=True
 )
 ```
 
-### Batch Template Generation
+---
 
-Generate templates for multiple questions at once:
+## Template Structure Deep Dive
+
+### Required Components
+
+Every template must include these three components:
+
+**1. Field Definitions**
+
+Fields specify what data to extract. Each field should have a clear description that guides the judge LLM:
 
 ```python
-# Generate templates for all unfinished questions
-benchmark.generate_answer_templates(
-    model_config=model_config,
-    system_prompt="""
-    Create a Pydantic class that inherits from BaseAnswer to evaluate responses to this question.
-    Include appropriate fields with descriptions and a verify() method that checks correctness.
-    Consider the question type and create appropriate evaluation criteria.
-    """
+target: str = Field(description="The protein target mentioned in the response")
+count: int = Field(description="The number of items mentioned")
+is_correct: bool = Field(description="Whether the response is factually accurate")
+```
+
+**2. `model_post_init` Method**
+
+This method sets the correct answer(s) that will be compared during verification:
+
+```python
+def model_post_init(self, __context):
+    self.correct = {"target": "BCL2"}
+```
+
+**3. `verify()` Method**
+
+This method implements the comparison logic and returns `True` if the answer is correct:
+
+```python
+def verify(self) -> bool:
+    return self.target.strip().upper() == self.correct["target"].upper()
+```
+
+### Field Types
+
+Templates can use various field types depending on the expected answer:
+
+```python
+# String fields
+gene_name: str = Field(description="The gene symbol")
+
+# Integer fields
+chromosome_count: int = Field(description="Number of chromosomes")
+
+# Boolean fields
+is_correct: bool = Field(description="Whether the statement is true")
+
+# List fields
+proteins: List[str] = Field(description="List of proteins mentioned")
+
+# Float fields with constraints
+score: float = Field(description="Accuracy score 0.0-1.0", ge=0.0, le=1.0)
+```
+
+---
+
+## When to Use Which Approach
+
+### Use Automatic Generation When:
+
+✅ You have many questions to process
+✅ Questions follow standard patterns (factual recall, numerical answers, multiple choice)
+✅ You want consistency across templates
+✅ You're prototyping or testing quickly
+
+### Use Manual Creation When:
+
+✅ You need very specific verification logic
+✅ The question requires multi-step validation
+✅ You want to implement tolerance ranges or fuzzy matching
+✅ You're creating reusable template libraries
+✅ Automatic generation doesn't produce the desired structure
+
+---
+
+## Complete Example
+
+Here's a complete workflow showing automatic template generation:
+
+```python
+from karenina import Benchmark
+from karenina.schemas import ModelConfig, VerificationConfig
+
+# 1. Create benchmark and add questions
+benchmark = Benchmark.create(
+    name="Genomics Knowledge Benchmark",
+    description="Testing LLM knowledge of genomics",
+    version="1.0.0"
 )
+
+# Add questions
+questions = [
+    ("How many chromosomes are in a human somatic cell?", "46"),
+    ("What is the approved drug target of Venetoclax?", "BCL2"),
+    ("How many protein subunits does hemoglobin A have?", "4")
+]
+
+for q, a in questions:
+    benchmark.add_question(question=q, raw_answer=a, author={"name": "Bio Curator"})
+
+# 2. Generate templates automatically
+model_config = ModelConfig(
+    id="gpt-4.1-mini",
+    model_provider="openai",
+    model_name="gpt-4.1-mini",
+    temperature=0.1,
+    interface="langchain"
+)
+
+print("Generating templates...")
+results = benchmark.generate_all_templates(model_config=model_config)
+print(f"✓ Generated {len(results)} templates")
+
+# 3. Templates are now ready - proceed to verification
+config = VerificationConfig(
+    answering_models=[model_config],
+    parsing_models=[model_config]
+)
+
+results = benchmark.run_verification(config)
+print(f"✓ Verification complete: {len(results)} questions evaluated")
+
+# 4. Save benchmark
+benchmark.save("genomics_benchmark.jsonld")
 ```
 
-### Custom System Prompts
-
-Tailor the generation process with specific instructions:
-
-```python
-# For math problems
-math_prompt = """
-Create a Pydantic template for evaluating mathematical solutions.
-Include fields for:
-- final_answer: The numerical or algebraic result
-- solution_method: The approach used
-- steps_shown: Whether work is shown (boolean)
-- calculation_accuracy: Correctness of calculations (1-5 scale)
-
-The verify() method should check if the final answer matches the expected result.
-"""
-
-# For science questions
-science_prompt = """
-Create a Pydantic template for scientific explanations.
-Include fields for:
-- key_concepts: List of scientific concepts mentioned
-- accuracy: Factual correctness (1-5 scale)
-- completeness: How comprehensive the explanation is (1-5 scale)
-- scientific_reasoning: Quality of logical reasoning (1-5 scale)
-
-The verify() method should ensure key concepts are covered and accuracy is high.
-"""
-
-# Apply different prompts to different question types
-for question in benchmark.questions:
-    category = question.metadata.get("category")
-
-    if category == "mathematics":
-        question.generate_answer_template(model_config, math_prompt)
-    elif category == "science":
-        question.generate_answer_template(model_config, science_prompt)
-    else:
-        question.generate_answer_template(model_config, "Create appropriate template")
-```
-
-## Template Validation and Quality Control
-
-### Validating Generated Templates
-
-```python
-def validate_template(question):
-    """Validate that a template is properly structured"""
-    if question.answer_template is None:
-        return False, "No template assigned"
-
-    # Check if template inherits from BaseAnswer
-    if not issubclass(question.answer_template, BaseAnswer):
-        return False, "Template doesn't inherit from BaseAnswer"
-
-    # Check if verify method is implemented
-    if not hasattr(question.answer_template, 'verify'):
-        return False, "Template missing verify() method"
-
-    return True, "Template is valid"
-
-# Validate all templates
-for question in benchmark.questions:
-    is_valid, message = validate_template(question)
-    if not is_valid:
-        print(f"Question {question.id}: {message}")
-```
-
-### Testing Templates
-
-```python
-def test_template(question, sample_response):
-    """Test a template with a sample response"""
-    try:
-        # Create template instance
-        template_instance = question.answer_template()
-
-        # Simulate LLM parsing (normally done by judge LLM)
-        # This would be replaced by actual LLM parsing in practice
-        parsed_response = {"field1": "value1", "field2": "value2"}
-
-        # Populate template
-        populated_template = question.answer_template(**parsed_response)
-
-        # Test verification
-        is_correct = populated_template.verify()
-
-        return True, is_correct
-    except Exception as e:
-        return False, str(e)
-```
-
-## Template Reusability
-
-### Shared Template Library
-
-Create reusable templates for common question types:
-
-```python
-class TrueFalseAnswer(BaseAnswer):
-    answer: bool = Field(description="True or False response")
-    confidence: float = Field(description="Confidence level 0.0-1.0", ge=0.0, le=1.0)
-
-    def model_post_init(self, __context):
-        # Correct answer set per question
-        pass
-
-    def verify(self) -> bool:
-        return self.answer == self.correct.get("answer", False)
-
-class NumericalAnswer(BaseAnswer):
-    value: float = Field(description="Numerical answer")
-    units: str = Field(description="Units of measurement", default="")
-
-    def model_post_init(self, __context):
-        self.tolerance = self.correct.get("tolerance", 0.01)
-
-    def verify(self) -> bool:
-        expected = self.correct["value"]
-        return abs(self.value - expected) <= self.tolerance
-
-# Apply templates to appropriate questions
-for question in benchmark.questions:
-    question_type = question.metadata.get("type")
-
-    if question_type == "true_false":
-        question.answer_template = TrueFalseAnswer
-    elif question_type == "numerical":
-        question.answer_template = NumericalAnswer
-```
-
-### Template Inheritance
-
-Create specialized templates through inheritance:
-
-```python
-class BasicMathAnswer(BaseAnswer):
-    answer: float = Field(description="Numerical result")
-
-    def verify(self) -> bool:
-        return abs(self.answer - self.correct["answer"]) <= 0.01
-
-class AlgebraAnswer(BasicMathAnswer):
-    """Specialized for algebra problems"""
-    expression: str = Field(description="Algebraic expression if applicable")
-    steps: List[str] = Field(description="Solution steps", default=[])
-
-    def verify(self) -> bool:
-        # Check numerical answer first
-        if not super().verify():
-            return False
-
-        # Additional checks for algebra
-        return len(self.steps) >= 2  # Require showing work
-
-class GeometryAnswer(BasicMathAnswer):
-    """Specialized for geometry problems"""
-    diagram_described: bool = Field(description="Whether spatial relationships are described")
-    theorem_used: str = Field(description="Mathematical theorem applied", default="")
-
-    def verify(self) -> bool:
-        # Check numerical answer first
-        if not super().verify():
-            return False
-
-        # Geometry-specific validation
-        return self.diagram_described and len(self.theorem_used) > 0
-```
-
-## Managing Template Evolution
-
-### Template Versioning
-
-```python
-class AnswerTemplateV1(BaseAnswer):
-    answer: str = Field(description="Basic answer field")
-
-    def verify(self) -> bool:
-        return self.answer == self.correct["answer"]
-
-class AnswerTemplateV2(BaseAnswer):
-    answer: str = Field(description="Enhanced answer field")
-    confidence: float = Field(description="Confidence score", default=0.0)
-    reasoning: str = Field(description="Explanation", default="")
-
-    def verify(self) -> bool:
-        # Enhanced verification logic
-        basic_check = self.answer == self.correct["answer"]
-        confidence_check = self.confidence >= 0.7
-
-        return basic_check and confidence_check
-```
-
-### Template Migration
-
-```python
-def migrate_templates(benchmark, old_template_class, new_template_class):
-    """Migrate questions from old template to new template"""
-    migrated_count = 0
-
-    for question in benchmark.questions:
-        if question.answer_template == old_template_class:
-            question.answer_template = new_template_class
-            migrated_count += 1
-
-    print(f"Migrated {migrated_count} questions to new template")
-
-# Example migration
-migrate_templates(benchmark, AnswerTemplateV1, AnswerTemplateV2)
-```
+---
 
 ## Next Steps
 
-Once you have templates set up for your questions:
+Once you have templates set up for your questions, you can:
 
-- [Configure rubrics](rubrics.md) for additional scoring criteria
+- [Create rubrics](rubrics.md) for qualitative assessment criteria
 - [Run verification](verification.md) to evaluate LLM responses
-- [Analyze results](../api-reference.md#verification-results) to assess performance
+- [Analyze results](verification.md#analyzing-results) to assess model performance
+- [Save your benchmark](saving-loading.md) using checkpoints or database
+
+---
+
+## Related Documentation
+
+- [Adding Questions](adding-questions.md) - Populate your benchmark with questions
+- [Rubrics](rubrics.md) - Assess qualitative aspects beyond factual correctness
+- [Verification](verification.md) - Run evaluations with multiple models
+- [Quick Start](../quickstart.md) - End-to-end workflow example
