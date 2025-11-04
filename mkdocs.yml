@@ -115,6 +115,7 @@ nav:
     - Few-Shot Prompting: advanced/few-shot.md
     - System Integration: advanced/integration.md
   - API Reference: api-reference.md
+  - Troubleshooting: troubleshooting.md
 
 extra:
   social:
