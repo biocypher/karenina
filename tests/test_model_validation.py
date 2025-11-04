@@ -35,7 +35,6 @@ class TestModelConfigurationValidation:
         """Test valid configuration for openrouter interface (no provider required)."""
         config = ModelConfig(
             id="test-openrouter",
-            model_provider="",  # Empty provider is allowed for openrouter
             model_name="openrouter/model",
             temperature=0.2,
             interface=INTERFACE_OPENROUTER,
@@ -44,14 +43,13 @@ class TestModelConfigurationValidation:
 
         # Should not raise any errors
         assert config.id == "test-openrouter"
-        assert config.model_provider == ""
+        assert config.model_provider is None
         assert config.interface == INTERFACE_OPENROUTER
 
     def test_valid_manual_model_config(self) -> None:
         """Test valid configuration for manual interface (no provider required)."""
         config = ModelConfig(
             id="test-manual",
-            model_provider="",  # Empty provider is allowed for manual
             model_name="manual-model",
             temperature=0.0,
             interface=INTERFACE_MANUAL,
@@ -60,7 +58,7 @@ class TestModelConfigurationValidation:
 
         # Should not raise any errors
         assert config.id == "test-manual"
-        assert config.model_provider == ""
+        assert config.model_provider is None
         assert config.interface == INTERFACE_MANUAL
 
     def test_missing_model_provider_langchain_interface(self) -> None:
@@ -70,7 +68,7 @@ class TestModelConfigurationValidation:
                 answering_models=[
                     ModelConfig(
                         id="test-model",
-                        model_provider="",  # Empty provider should fail for langchain
+                        # No model_provider - should fail for langchain
                         model_name="gpt-4.1-mini",
                         temperature=0.1,
                         interface=INTERFACE_LANGCHAIN,
@@ -115,31 +113,63 @@ class TestModelConfigurationValidation:
                 ],
             )
 
-    def test_missing_system_prompt(self) -> None:
-        """Test that missing system prompt fails validation."""
-        with pytest.raises(ValueError, match="System prompt is required"):
-            VerificationConfig(
-                answering_models=[
-                    ModelConfig(
-                        id="test-model",
-                        model_provider="openai",
-                        model_name="gpt-4.1-mini",
-                        temperature=0.1,
-                        interface=INTERFACE_LANGCHAIN,
-                        system_prompt="",  # Empty system prompt should fail
-                    )
-                ],
-                parsing_models=[
-                    ModelConfig(
-                        id="parsing-model",
-                        model_provider="openai",
-                        model_name="gpt-4.1-mini",
-                        temperature=0.1,
-                        interface=INTERFACE_LANGCHAIN,
-                        system_prompt="You are a validator.",
-                    )
-                ],
-            )
+    def test_missing_system_prompt_uses_default(self) -> None:
+        """Test that missing/empty system prompt uses context-aware defaults."""
+        # Test with empty string
+        config = VerificationConfig(
+            answering_models=[
+                ModelConfig(
+                    id="test-model",
+                    model_provider="openai",
+                    model_name="gpt-4.1-mini",
+                    temperature=0.1,
+                    interface=INTERFACE_LANGCHAIN,
+                    system_prompt="",  # Empty system prompt should use default
+                )
+            ],
+            parsing_models=[
+                ModelConfig(
+                    id="parsing-model",
+                    model_provider="openai",
+                    model_name="gpt-4.1-mini",
+                    temperature=0.1,
+                    interface=INTERFACE_LANGCHAIN,
+                    system_prompt="",  # Empty system prompt should use default
+                )
+            ],
+        )
+
+        # Should apply context-aware defaults
+        assert "expert assistant" in config.answering_models[0].system_prompt.lower()
+        assert "validation assistant" in config.parsing_models[0].system_prompt.lower()
+
+        # Test with None
+        config2 = VerificationConfig(
+            answering_models=[
+                ModelConfig(
+                    id="test-model",
+                    model_provider="openai",
+                    model_name="gpt-4.1-mini",
+                    temperature=0.1,
+                    interface=INTERFACE_LANGCHAIN,
+                    # system_prompt not provided (defaults to None)
+                )
+            ],
+            parsing_models=[
+                ModelConfig(
+                    id="parsing-model",
+                    model_provider="openai",
+                    model_name="gpt-4.1-mini",
+                    temperature=0.1,
+                    interface=INTERFACE_LANGCHAIN,
+                    # system_prompt not provided (defaults to None)
+                )
+            ],
+        )
+
+        # Should apply context-aware defaults
+        assert "expert assistant" in config2.answering_models[0].system_prompt.lower()
+        assert "validation assistant" in config2.parsing_models[0].system_prompt.lower()
 
     def test_no_answering_models(self) -> None:
         """Test that configuration without answering models fails."""
@@ -267,7 +297,7 @@ class TestModelConfigurationValidation:
                 ),
                 ModelConfig(
                     id="openrouter-model",
-                    model_provider="",  # Empty provider for openrouter
+                    # No model_provider for openrouter
                     model_name="openrouter/model",
                     temperature=0.2,
                     interface=INTERFACE_OPENROUTER,
@@ -277,7 +307,7 @@ class TestModelConfigurationValidation:
             parsing_models=[
                 ModelConfig(
                     id="manual-model",
-                    model_provider="",  # Empty provider for manual
+                    # No model_provider for manual
                     model_name="manual-model",
                     temperature=0.0,
                     interface=INTERFACE_MANUAL,
@@ -290,12 +320,21 @@ class TestModelConfigurationValidation:
         assert len(config.answering_models) == 2
         assert len(config.parsing_models) == 1
         assert config.answering_models[0].interface == INTERFACE_LANGCHAIN
+        assert config.answering_models[0].model_provider == "openai"
         assert config.answering_models[1].interface == INTERFACE_OPENROUTER
+        assert config.answering_models[1].model_provider is None
         assert config.parsing_models[0].interface == INTERFACE_MANUAL
+        assert config.parsing_models[0].model_provider is None
 
     def test_interfaces_no_provider_required_constant(self) -> None:
         """Test that the INTERFACES_NO_PROVIDER_REQUIRED constant is correct."""
-        assert INTERFACES_NO_PROVIDER_REQUIRED == [INTERFACE_OPENROUTER, INTERFACE_MANUAL]
+        from karenina.schemas.workflow.models import INTERFACE_OPENAI_ENDPOINT
+
+        assert INTERFACES_NO_PROVIDER_REQUIRED == [
+            INTERFACE_OPENROUTER,
+            INTERFACE_MANUAL,
+            INTERFACE_OPENAI_ENDPOINT,
+        ]
         assert INTERFACE_LANGCHAIN not in INTERFACES_NO_PROVIDER_REQUIRED
 
 

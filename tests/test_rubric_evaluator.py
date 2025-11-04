@@ -243,7 +243,7 @@ class TestRubricEvaluatorEdgeCases:
         """Test RubricEvaluator initialization with missing provider for langchain."""
         config = ModelConfig(
             id="test-model",
-            model_provider="",  # Empty provider for langchain interface
+            # No model_provider - should fail for langchain interface
             model_name="gpt-4.1-mini",
             temperature=0.1,
             interface=INTERFACE_LANGCHAIN,
@@ -257,7 +257,7 @@ class TestRubricEvaluatorEdgeCases:
         """Test RubricEvaluator initialization with OpenRouter interface (no provider required)."""
         config = ModelConfig(
             id="test-openrouter",
-            model_provider="",  # Empty provider allowed for OpenRouter
+            # No model_provider for OpenRouter
             model_name="openrouter/model",
             temperature=0.1,
             interface=INTERFACE_OPENROUTER,
@@ -274,7 +274,7 @@ class TestRubricEvaluatorEdgeCases:
         """Test RubricEvaluator initialization with manual interface (no provider required)."""
         config = ModelConfig(
             id="test-manual",
-            model_provider="",  # Empty provider allowed for manual
+            # No model_provider for manual
             model_name="manual-model",
             temperature=0.1,
             interface=INTERFACE_MANUAL,
@@ -310,7 +310,7 @@ class TestRubricEvaluatorEdgeCases:
         """Test that provider validation error message includes interface information."""
         config = ModelConfig(
             id="test-model-123",
-            model_provider="",  # Empty provider for langchain
+            # No model_provider for langchain
             model_name="gpt-4.1-mini",
             temperature=0.1,
             interface=INTERFACE_LANGCHAIN,
@@ -343,7 +343,7 @@ class TestRubricEvaluatorEdgeCases:
             ),
             ModelConfig(
                 id="openrouter-model",
-                model_provider="",
+                # No model_provider for openrouter
                 model_name="openrouter/model",
                 temperature=0.1,
                 interface=INTERFACE_OPENROUTER,
@@ -351,7 +351,7 @@ class TestRubricEvaluatorEdgeCases:
             ),
             ModelConfig(
                 id="manual-model",
-                model_provider="",
+                # No model_provider for manual
                 model_name="manual-model",
                 temperature=0.1,
                 interface=INTERFACE_MANUAL,
