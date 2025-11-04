@@ -253,7 +253,7 @@ export OPENROUTER_API_KEY="your-openrouter-api-key"
 
 ## 🚀 Quick Start
 
-Get started with Karenina in just a few minutes! This guide will walk you through creating your first benchmark, adding questions, configuring models, and running verification.
+Get started with Karenina in just a few minutes! This example shows the basic workflow for creating a benchmark with automatic template generation.
 
 ### 1. Create a Benchmark
 
@@ -262,85 +262,72 @@ from karenina import Benchmark
 
 # Create a new benchmark
 benchmark = Benchmark.create(
-    name="Test benchmark",
-    description="Simple quick intro",
+    name="Genomics Knowledge Benchmark",
+    description="Testing LLM knowledge of genomics and molecular biology",
     version="1.0.0",
-    creator="Karenina Example",
+    creator="Your Name"
 )
 ```
 
 ### 2. Add Questions
 
 ```python
-# Add questions manually
-question = "What is the capital of France?"
-raw_answer = "Paris"
+# Add questions with answers
+questions = [
+    ("How many chromosomes are in a human somatic cell?", "46"),
+    ("What is the approved drug target of Venetoclax?", "BCL2"),
+    ("How many protein subunits does hemoglobin A have?", "4")
+]
 
-# Define the answer template manually
-template_code = '''class Answer(BaseAnswer):
-    answer: str = Field(description="the name of the city in the response")
-
-    def model_post_init(self, __context):
-        self.correct = {"answer": "Paris"}
-
-    def verify(self) -> bool:
-        return self.answer == self.correct["answer"]'''
-
-# Add the question to the benchmark
-qid = benchmark.add_question(
-    question=question,
-    raw_answer=raw_answer,
-    answer_template=template_code,
-    finished=True,  # Mark as ready for verification
-    author={"name": "Example Author", "email": "author@example.com"},
-)
+question_ids = []
+for q, a in questions:
+    qid = benchmark.add_question(
+        question=q,
+        raw_answer=a,
+        author={"name": "Bio Curator"}
+    )
+    question_ids.append(qid)
 ```
 
-### 3. Configure Models
+### 3. Generate Templates Automatically
 
 ```python
-from karenina.benchmark import ModelConfig, VerificationConfig
+from karenina.schemas import ModelConfig
 
-# Set up model configuration
-answering_models = [
-    ModelConfig(
-        id="gemini-2.5-flash",
-        model_provider="google_genai",
-        model_name="gemini-2.5-flash",
-        temperature=0.1,
-        interface="langchain",
-        system_prompt="You are a helpful assistant."
-    )
-]
-
-parsing_models = [
-    ModelConfig(
-        id="gemini-2.5-flash",
-        model_provider="google_genai",
-        model_name="gemini-2.5-flash",
-        temperature=0.0,
-        interface="langchain",
-        system_prompt="You are an LLM judge and, given a template, will judge the answer to the question"
-    )
-]
-
-config = VerificationConfig(
-    answering_models=answering_models,
-    parsing_models=parsing_models
+# Configure the LLM for template generation
+model_config = ModelConfig(
+    id="gpt-4.1-mini",
+    model_provider="openai",
+    model_name="gpt-4.1-mini",
+    temperature=0.1,
+    interface="langchain"
 )
+
+# Generate templates for all questions
+benchmark.generate_all_templates(model_config=model_config)
 ```
 
 ### 4. Run Verification
 
 ```python
+from karenina.schemas import VerificationConfig
+
+# Configure verification
+config = VerificationConfig(
+    answering_models=[model_config],
+    parsing_models=[model_config]
+)
+
 # Run verification
-results = benchmark.run_verification([qid], config)
+results = benchmark.run_verification(config)
 
 # Save your benchmark
-benchmark.save("my-first-benchmark.jsonld")
+benchmark.save("genomics_benchmark.jsonld")
 ```
 
-Congratulations! You've created your first Karenina benchmark.
+Congratulations! You've created your first Karenina benchmark with automatic template generation.
+
+**Next steps**: Check out the [complete tutorial](docs/quickstart.md) for advanced features like rubrics, few-shot prompting, and result analysis.
 
 ## 📚 Documentation
 
