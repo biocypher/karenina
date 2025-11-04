@@ -57,39 +57,367 @@ Karenina supports three types of evaluation traits:
 
 ### 1. LLM-Based Traits (`RubricTrait`)
 
-AI-evaluated traits where the parsing model assesses answer quality.
+**What they are:** AI-evaluated traits where the parsing model uses its judgment to assess subjective qualities of answers. The LLM reads your trait description and applies it to each answer, returning either a score or binary result.
 
-**Evaluation Kinds:**
-- **`score`**: 1-5 scale for nuanced assessment (1=Poor, 5=Excellent)
-- **`binary`**: Pass/fail evaluation (true/false)
+**When to use:**
+- Assessing **subjective qualities** that require human-like judgment (clarity, completeness, tone)
+- Evaluating **nuanced aspects** that can't be captured by pattern matching
+- Measuring **qualities** rather than extracting specific facts
+- When you need **flexible evaluation** that adapts to different answer styles
 
-**Structure:**
+**Two Evaluation Modes:**
+
+**1. Score Mode (1-5 scale):**
+- Provides **nuanced assessment** with gradations of quality
+- Scale: 1 (Poor) → 2 (Below Average) → 3 (Average) → 4 (Good) → 5 (Excellent)
+- Best for: Qualities that exist on a spectrum (clarity, conciseness, thoroughness)
+
 ```python
 from karenina.schemas import RubricTrait
 
+# Score-based trait: Measures conciseness on a 1-5 scale
 RubricTrait(
     name="Conciseness",
     description="Rate the conciseness of the answer on a scale from 1 (very verbose) to 5 (extremely concise).",
-    kind="score"  # or "binary"
+    kind="score"
+)
+
+# Score-based trait: Measures clarity
+RubricTrait(
+    name="Clarity",
+    description="Rate how clear and understandable the answer is, from 1 (confusing) to 5 (crystal clear).",
+    kind="score"
 )
 ```
 
+**2. Binary Mode (pass/fail):**
+- Provides **yes/no judgment** on whether criteria are met
+- Returns: `true` (pass) or `false` (fail)
+- Best for: Questions with clear criteria that either are or aren't satisfied
+
+```python
+# Binary trait: Checks for safety concerns
+RubricTrait(
+    name="Safety Concerns",
+    description="Does the answer include any mention of safety concerns or warnings?",
+    kind="binary"
+)
+
+# Binary trait: Checks for completeness
+RubricTrait(
+    name="Addresses All Parts",
+    description="Does the answer address all parts of the question?",
+    kind="binary"
+)
+```
+
+**How LLM-Based Evaluation Works:**
+
+1. **Prompt Construction**: The parsing model receives:
+   - The original question
+   - The model's answer
+   - Your trait description
+   - Scoring instructions (for score mode) or binary criteria (for binary mode)
+
+2. **LLM Judgment**: The parsing model analyzes the answer against your criteria
+
+3. **Structured Output**: The LLM returns:
+   - **Score mode**: Integer from 1-5
+   - **Binary mode**: Boolean (true/false)
+
+**Example Scenario:**
+
+```
+Question: "What is the approved drug target of Venetoclax?"
+
+Model Answer: "Venetoclax is a BCL-2 inhibitor that works by binding to the BCL-2 protein, which is an anti-apoptotic protein often overexpressed in certain cancers like chronic lymphocytic leukemia. By inhibiting BCL-2, venetoclax promotes apoptosis in cancer cells."
+
+Trait: Conciseness (score, 1-5)
+Trait Description: "Rate the conciseness of the answer on a scale from 1 (very verbose) to 5 (extremely concise)."
+
+LLM Evaluation Process:
+- Analyzes the answer length and detail
+- Considers if extra information (mechanism, cancer types) is necessary
+- Compares to an ideal concise answer: "BCL-2"
+
+Result: Score = 2 (verbose, includes unnecessary detail beyond the question)
+```
+
+**Best Practices for LLM-Based Traits:**
+
+✅ **Be specific in descriptions**:
+- ❌ Bad: "Is the answer good?"
+- ✅ Good: "Rate how clearly the answer explains the concept, from 1 (confusing) to 5 (crystal clear)."
+
+✅ **Provide clear scale anchors** for score mode:
+- Include what each extreme means (1 = very verbose, 5 = extremely concise)
+- Give context for middle values when helpful
+
+✅ **Use binary mode for yes/no criteria**:
+- "Does the answer contain citations?"
+- "Is the tone professional?"
+- "Does it address safety concerns?"
+
+✅ **Use score mode for gradable qualities**:
+- Clarity, conciseness, completeness
+- Organization, coherence, depth
+- Accuracy, relevance, specificity
+
+❌ **Avoid using LLM traits for**:
+- Exact keyword matching (use regex traits instead)
+- Factual extraction (use templates instead)
+- Classification metrics (use metric traits instead)
+
 ### 2. Regex-Based Traits (`ManualRubricTrait`)
 
-Deterministic pattern matching for format validation and keyword checks.
+**What they are:** Deterministic pattern-matching traits that check if answers match (or don't match) specific regex patterns. These provide **100% reproducible** validation without any LLM judgment.
+
+**When to use:**
+- Checking for **required terminology** or keywords
+- Validating **format compliance** (dates, gene symbols, IDs)
+- Detecting **prohibited content** (profanity, inappropriate terms)
+- Ensuring **specific patterns** are present or absent
+- When you need **deterministic evaluation** without LLM variability
 
 **Structure:**
 ```python
 from karenina.schemas import ManualRubricTrait
 
 ManualRubricTrait(
-    name="Contains BH3",
-    description="Answer must mention BH3 proteins",
-    pattern=r"\bBH3\b",  # Regex pattern
-    case_sensitive=False,
-    invert=False  # Set to True to fail if pattern matches
+    name="Trait Name",
+    description="What this pattern checks for",
+    pattern=r"regex_pattern",        # Python regex pattern
+    case_sensitive=False,              # Case-sensitive matching?
+    invert=False                       # Invert the result?
 )
 ```
+
+**Key Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | `str` | Descriptive name for the trait |
+| `description` | `str` | Explains what the pattern validates |
+| `pattern` | `str` | Python regex pattern to match |
+| `case_sensitive` | `bool` | `True` for case-sensitive, `False` for case-insensitive (default: `False`) |
+| `invert` | `bool` | `True` to **fail** if pattern matches, `False` to **pass** if pattern matches (default: `False`) |
+
+**Common Use Cases:**
+
+**1. Required Keyword Check:**
+
+Check that an answer mentions specific required terms:
+
+```python
+# Answer must mention "BH3 proteins"
+ManualRubricTrait(
+    name="Mentions BH3 Proteins",
+    description="Answer must mention BH3 proteins (the mechanism of BCL2 inhibition)",
+    pattern=r"\bBH3\b",
+    case_sensitive=False,
+    invert=False  # Pass if pattern found
+)
+
+# Answer must mention either "chromosome" or "chromosomes"
+ManualRubricTrait(
+    name="Mentions Chromosomes",
+    description="Answer must use the term 'chromosome' or 'chromosomes'",
+    pattern=r"\bchromosomes?\b",  # ? makes 's' optional
+    case_sensitive=False,
+    invert=False
+)
+```
+
+**2. Format Validation:**
+
+Ensure answers follow required formats:
+
+```python
+# Answer must include a gene symbol (all caps, 3-6 letters)
+ManualRubricTrait(
+    name="Contains Gene Symbol Format",
+    description="Answer must include a gene symbol in standard format (e.g., BCL2, TP53)",
+    pattern=r"\b[A-Z]{3,6}\d?\b",  # 3-6 uppercase letters, optional digit
+    case_sensitive=True,
+    invert=False
+)
+
+# Answer must include a numeric value
+ManualRubricTrait(
+    name="Includes Numeric Answer",
+    description="Answer must contain a number",
+    pattern=r"\b\d+\b",
+    case_sensitive=False,
+    invert=False
+)
+```
+
+**3. Prohibited Content Detection:**
+
+Check that answers DON'T contain unwanted patterns:
+
+```python
+# Answer must NOT contain URLs
+ManualRubricTrait(
+    name="No URLs",
+    description="Answer should not contain web URLs",
+    pattern=r"https?://[^\s]+",
+    case_sensitive=False,
+    invert=True  # FAIL if pattern is found
+)
+
+# Answer must NOT use informal language
+ManualRubricTrait(
+    name="No Informal Language",
+    description="Answer must avoid informal terms like 'basically', 'kinda', 'sorta'",
+    pattern=r"\b(basically|kinda|sorta|like\s+um)\b",
+    case_sensitive=False,
+    invert=True  # FAIL if pattern is found
+)
+```
+
+**4. Citation or Reference Check:**
+
+Verify that answers include proper citations:
+
+```python
+# Answer must include a citation in square brackets
+ManualRubricTrait(
+    name="Contains Citation",
+    description="Answer must include at least one citation [reference]",
+    pattern=r"\[[^\]]+\]",  # Matches [anything inside]
+    case_sensitive=False,
+    invert=False
+)
+```
+
+**Using `invert` Parameter:**
+
+The `invert` parameter changes the pass/fail logic:
+
+| `invert` | Pattern Matches | Result |
+|----------|----------------|--------|
+| `False` (default) | Pattern **found** in answer | ✅ Pass |
+| `False` (default) | Pattern **NOT found** in answer | ❌ Fail |
+| `True` | Pattern **found** in answer | ❌ Fail |
+| `True` | Pattern **NOT found** in answer | ✅ Pass |
+
+**Example:**
+
+```python
+# Normal: Pass if "BCL2" is found
+ManualRubricTrait(
+    name="Mentions BCL2",
+    description="Answer must mention BCL2",
+    pattern=r"\bBCL2\b",
+    invert=False
+)
+# "The drug targets BCL2" → ✅ Pass (pattern found)
+# "The drug targets TP53" → ❌ Fail (pattern not found)
+
+# Inverted: Pass if "BCL2" is NOT found
+ManualRubricTrait(
+    name="No Mention of BCL2",
+    description="Answer must not mention BCL2",
+    pattern=r"\bBCL2\b",
+    invert=True
+)
+# "The drug targets BCL2" → ❌ Fail (pattern found)
+# "The drug targets TP53" → ✅ Pass (pattern not found)
+```
+
+**Regex Pattern Tips:**
+
+**Word Boundaries (`\b`):**
+```python
+# Without word boundaries: matches partial words
+pattern=r"cell"
+# Matches: "cell", "cellular", "multicellular"
+
+# With word boundaries: matches complete words only
+pattern=r"\bcell\b"
+# Matches: "cell"
+# Doesn't match: "cellular", "multicellular"
+```
+
+**Optional Characters (`?`):**
+```python
+# Optional 's' for plural
+pattern=r"\bchromosomes?\b"
+# Matches: "chromosome" or "chromosomes"
+
+# Optional digit at end
+pattern=r"\bBCL\d?\b"
+# Matches: "BCL" or "BCL2" or "BCL6"
+```
+
+**Alternation (`|`):**
+```python
+# Match any of several options
+pattern=r"\b(BCL2|BCL-2|BCL 2)\b"
+# Matches: "BCL2", "BCL-2", or "BCL 2"
+```
+
+**Character Classes (`[]`):**
+```python
+# Match uppercase gene symbols
+pattern=r"\b[A-Z]{3,6}\b"
+# Matches: "TP53", "BCL2", "BRCA1"
+
+# Match numbers
+pattern=r"\b\d+\b"
+# Matches: "46", "123", "4"
+```
+
+**Best Practices for Regex Traits:**
+
+✅ **Use for deterministic checks**:
+- Exact keyword presence/absence
+- Format validation
+- Pattern compliance
+
+✅ **Test your regex patterns**:
+```python
+import re
+
+pattern = r"\bBCL2\b"
+test_cases = [
+    "BCL2 is the target",     # Should match
+    "BCL2-family proteins",   # Should NOT match (has hyphen)
+    "bcl2 variant",           # Should match if case_insensitive=False
+]
+
+for test in test_cases:
+    match = re.search(pattern, test, re.IGNORECASE if not case_sensitive else 0)
+    print(f"'{test}': {'Match' if match else 'No match'}")
+```
+
+✅ **Use word boundaries** to avoid partial matches:
+- ❌ `pattern=r"cell"` matches "cellular" and "multicellular"
+- ✅ `pattern=r"\bcell\b"` only matches "cell"
+
+✅ **Handle term variations**:
+```python
+# Accept multiple valid formats
+pattern=r"\b(BCL2|BCL-2|BCL 2)\b"  # All three formats valid
+```
+
+❌ **Avoid using regex traits for**:
+- Subjective quality assessment (use LLM traits instead)
+- Complex semantic matching (use embedding check instead)
+- Classification accuracy (use metric traits instead)
+
+**When to Use Each Trait Type:**
+
+| Need | Use This Trait Type |
+|------|---------------------|
+| Subjective quality assessment | LLM-Based (`RubricTrait`) |
+| Exact keyword or format validation | Regex-Based (`ManualRubricTrait`) |
+| Classification accuracy metrics | Metric-Based (`MetricRubricTrait`) |
+| Nuanced scoring (1-5) | LLM-Based (`RubricTrait`, kind="score") |
+| Yes/no judgment | LLM-Based (`RubricTrait`, kind="binary") |
+| Deterministic pattern matching | Regex-Based (`ManualRubricTrait`) |
+| Precision/recall/F1 computation | Metric-Based (`MetricRubricTrait`) |
 
 ### 3. Metric-Based Traits (`MetricRubricTrait`)
 
