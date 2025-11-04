@@ -268,8 +268,6 @@ Use Model Context Protocol servers for tool integration.
 - Validate MCP server configurations
 - Enable tool use in LLM responses
 
-**Learn more:** [Advanced: MCP Integration](advanced/mcp-integration.md)
-
 ---
 
 ### Manual Trace Upload
@@ -281,8 +279,6 @@ Replay pre-recorded LLM responses for testing and debugging using the `manual` i
 - Debug parsing issues without making real API calls
 - Create regression tests with recorded responses
 - Reproduce specific scenarios deterministically
-
-**Learn more:** [Advanced: Manual Traces](advanced/manual-traces.md)
 
 ---
 

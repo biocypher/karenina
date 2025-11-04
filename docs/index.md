@@ -45,8 +45,7 @@ Karenina is a framework for defining benchmarks in a rigorous and reproducible w
 - **[Abstention Detection](advanced/abstention-detection.md)** - Handle model refusals
 - **[Embedding Check](advanced/embedding-check.md)** - Semantic similarity fallback
 - **[Presets](advanced/presets.md)** - Save and reuse verification configurations
-- **[MCP Integration](advanced/mcp-integration.md)** - Model Context Protocol support
-- **[Manual Traces](advanced/manual-traces.md)** - Debug with pre-recorded responses
+- **[System Integration](advanced/integration.md)** - Server and GUI integration
 
 ### 📚 Reference
 - **[API Reference](api-reference.md)** - Complete API documentation

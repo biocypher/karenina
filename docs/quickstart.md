@@ -583,7 +583,7 @@ Now that you've completed your first benchmark, explore these guides:
 - **[Abstention Detection](advanced/abstention-detection.md)** - Handle model refusals
 - **[Embedding Check](advanced/embedding-check.md)** - Semantic similarity fallback
 - **[Presets](advanced/presets.md)** - Save and reuse verification configurations
-- **[MCP Integration](advanced/mcp-integration.md)** - Model Context Protocol support
+- **[System Integration](advanced/integration.md)** - Server and GUI integration
 
 ### Reference
 - **[Features Overview](features.md)** - Complete feature catalog
