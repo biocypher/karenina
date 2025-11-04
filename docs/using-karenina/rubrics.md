@@ -124,6 +124,249 @@ MetricRubricTrait(
 
 ---
 
+## Understanding Metric Traits: Two Evaluation Modes
+
+Metric-based traits deserve special attention because they operate in two distinct modes, each suited for different evaluation scenarios.
+
+### The Confusion Matrix Concept
+
+Metric traits evaluate classification accuracy using a **confusion matrix**. For any classification task, there are four possible outcomes:
+
+| Category | Definition | Example (Inflammatory Diseases) |
+|----------|------------|--------------------------------|
+| **TP (True Positive)** | Should be identified AND is identified | Model says "asthma" is inflammatory ✓ |
+| **FP (False Positive)** | Should NOT be identified BUT is identified | Model says "emphysema" is inflammatory ✗ |
+| **TN (True Negative)** | Should NOT be identified AND is not identified | Model doesn't list "emphysema" ✓ |
+| **FN (False Negative)** | Should be identified BUT is NOT identified | Model misses "bronchitis" ✗ |
+
+From these four categories, we compute classification metrics:
+- **Precision** = TP / (TP + FP) - "Of what the model identified, how many were correct?"
+- **Recall** = TP / (TP + FN) - "Of what should be identified, how many did the model find?"
+- **F1 Score** = 2 × (Precision × Recall) / (Precision + Recall) - "Harmonic mean of precision and recall"
+- **Accuracy** = (TP + TN) / (TP + TN + FP + FN) - "Overall correctness rate"
+
+### Mode 1: TP-Only Evaluation
+
+**When to use:** When you're identifying items from a **single category** and want to measure how accurately the model identifies them.
+
+**How it works:**
+- You provide **only `tp_instructions`** (items that should be identified)
+- You may provide **`fp_instructions`** (common incorrect items in the same domain)
+- Karenina automatically infers False Positives from the model's response:
+  - Any term the model extracts that's **not in `tp_instructions`** is treated as a False Positive
+  - If you provide `fp_instructions`, those are highlighted as expected FPs
+- True Negatives (TN) are not considered
+- False Negatives (FN) = items in `tp_instructions` that the model didn't mention
+
+**Evaluation Mode**: `"tp_only"` (automatically determined)
+
+**Example use case:** "Identify all inflammatory lung diseases from this list"
+
+```python
+from karenina.schemas import MetricRubricTrait
+
+# TP-Only Mode: Identifying inflammatory diseases
+inflammatory_trait = MetricRubricTrait(
+    name="Inflammatory Disease Identification",
+    description="Identify inflammatory lung diseases from a mixed list",
+    metrics=["precision", "recall", "f1"],
+
+    # Items that SHOULD be identified (True Positives)
+    tp_instructions=[
+        "asthma",
+        "bronchitis",
+        "pneumonia",
+        "pleurisy"
+    ],
+
+    # Common mistakes: items that should NOT be identified (False Positives)
+    fp_instructions=[
+        "emphysema",            # Obstructive, not inflammatory
+        "pulmonary fibrosis",   # Restrictive, not inflammatory
+        "sarcoidosis"           # Granulomatous, not inflammatory
+    ]
+    # Note: No tn_instructions or fn_instructions needed
+)
+```
+
+**What happens during evaluation:**
+1. The parsing model extracts disease names from the LLM's answer
+2. Each extracted disease is checked:
+   - **In `tp_instructions`?** → Count as True Positive (TP)
+   - **In `fp_instructions`?** → Count as False Positive (FP)
+   - **Not in either list?** → Also count as False Positive (FP) - unexpected term
+3. Items in `tp_instructions` that were NOT extracted → Count as False Negatives (FN)
+4. Compute metrics: Precision, Recall, F1
+
+**Example scenario:**
+
+```
+Question: "Which are inflammatory: asthma, bronchitis, pneumonia, emphysema, pulmonary fibrosis, sarcoidosis, pleurisy?"
+
+Model answer: "asthma, bronchitis, emphysema"
+
+Evaluation:
+- TP: 2 (asthma ✓, bronchitis ✓)
+- FP: 1 (emphysema ✗ - listed in fp_instructions)
+- FN: 2 (pneumonia ✗, pleurisy ✗ - should have been identified)
+
+Metrics:
+- Precision = 2/(2+1) = 0.67
+- Recall = 2/(2+2) = 0.50
+- F1 = 2*(0.67*0.50)/(0.67+0.50) = 0.57
+```
+
+### Mode 2: Full-Matrix Evaluation
+
+**When to use:** When you're evaluating **binary classification** (yes/no, positive/negative) and need to assess both what should be identified AND what should be excluded.
+
+**How it works:**
+- You provide **both `tp_instructions` AND `tn_instructions`**
+- You may also provide `fp_instructions` and `fn_instructions`
+- Karenina evaluates all four categories of the confusion matrix
+- Useful for computing accuracy, specificity, and complete classification performance
+
+**Evaluation Mode**: `"full_matrix"` (automatically determined when both TP and TN are provided)
+
+**Example use case:** "Classify each disease as either inflammatory or non-inflammatory"
+
+```python
+from karenina.schemas import MetricRubricTrait
+
+# Full-Matrix Mode: Binary classification of diseases
+classification_trait = MetricRubricTrait(
+    name="Inflammatory vs Non-Inflammatory Classification",
+    description="Classify diseases as inflammatory or non-inflammatory",
+    metrics=["precision", "recall", "f1", "accuracy", "specificity"],
+
+    # Items that SHOULD be classified as inflammatory (True Positives)
+    tp_instructions=[
+        "asthma",
+        "bronchitis",
+        "pneumonia",
+        "pleurisy"
+    ],
+
+    # Items that SHOULD be classified as non-inflammatory (True Negatives)
+    tn_instructions=[
+        "emphysema",
+        "pulmonary fibrosis",
+        "sarcoidosis",
+        "lung cancer",
+        "tuberculosis"
+    ],
+
+    # Optional: Common errors in classification
+    fp_instructions=[
+        "emphysema",        # Often wrongly called inflammatory
+        "sarcoidosis"       # Granulomatous, not inflammatory
+    ],
+
+    fn_instructions=[
+        "bronchitis",       # Sometimes missed
+        "pleurisy"          # Less commonly recognized
+    ]
+)
+```
+
+**What happens during evaluation:**
+1. The parsing model extracts disease names AND their classifications from the LLM's answer
+2. For each disease mentioned in the answer, check its classification:
+   - **Classified as inflammatory AND in `tp_instructions`?** → True Positive (TP)
+   - **Classified as inflammatory BUT in `tn_instructions`?** → False Positive (FP)
+   - **Classified as non-inflammatory AND in `tn_instructions`?** → True Negative (TN)
+   - **Classified as non-inflammatory BUT in `tp_instructions`?** → False Negative (FN)
+3. Compute all confusion matrix metrics
+
+**Example scenario:**
+
+```
+Question: "Classify each disease as inflammatory or non-inflammatory: asthma, bronchitis, emphysema, sarcoidosis"
+
+Model answer:
+- "Inflammatory: asthma, bronchitis, sarcoidosis"
+- "Non-inflammatory: emphysema"
+
+Evaluation:
+- TP: 2 (asthma ✓, bronchitis ✓)
+- FP: 1 (sarcoidosis ✗ - should be TN)
+- TN: 1 (emphysema ✓)
+- FN: 0 (none missed)
+
+Metrics:
+- Precision = 2/(2+1) = 0.67
+- Recall = 2/(2+0) = 1.00
+- F1 = 2*(0.67*1.00)/(0.67+1.00) = 0.80
+- Accuracy = (2+1)/(2+1+1+0) = 0.75
+- Specificity = 1/(1+1) = 0.50
+```
+
+### Choosing Between Modes
+
+| Scenario | Mode | Instructions Needed | Best For |
+|----------|------|---------------------|----------|
+| **Item identification** | TP-Only | `tp_instructions` (required)<br>`fp_instructions` (optional) | "Find all inflammatory diseases"<br>"Extract all gene names"<br>"List positive examples" |
+| **Binary classification** | Full-Matrix | `tp_instructions` (required)<br>`tn_instructions` (required)<br>`fp_instructions` (optional)<br>`fn_instructions` (optional) | "Classify as inflammatory or not"<br>"Label as positive or negative"<br>"Categorize as safe or unsafe" |
+
+**Key Differences:**
+
+| Aspect | TP-Only Mode | Full-Matrix Mode |
+|--------|--------------|------------------|
+| **Question type** | "Which items are X?" | "Classify each item as X or not-X" |
+| **TN handling** | Ignored (not tracked) | Explicitly tracked and counted |
+| **Accuracy metric** | Not available (requires TN) | Available |
+| **Specificity metric** | Not available (requires TN) | Available |
+| **FP detection** | Any non-TP term counts as FP | Only terms explicitly classified as positive but are in TN list |
+| **Use case** | Selection tasks | Classification tasks |
+
+### Automatic Mode Detection
+
+Karenina automatically determines the evaluation mode based on your instructions:
+
+```python
+# TP-Only Mode (automatic)
+# Reason: Only tp_instructions provided
+trait1 = MetricRubricTrait(
+    name="Disease Identification",
+    metrics=["precision", "recall", "f1"],
+    tp_instructions=["asthma", "bronchitis"],
+    fp_instructions=["emphysema"]  # Optional
+)
+# evaluation_mode: "tp_only" (automatically set)
+
+# Full-Matrix Mode (automatic)
+# Reason: Both tp_instructions AND tn_instructions provided
+trait2 = MetricRubricTrait(
+    name="Disease Classification",
+    metrics=["precision", "recall", "f1", "accuracy"],
+    tp_instructions=["asthma", "bronchitis"],
+    tn_instructions=["emphysema", "sarcoidosis"]
+)
+# evaluation_mode: "full_matrix" (automatically set)
+```
+
+### Best Practices for Metric Traits
+
+**For TP-Only Mode:**
+- ✅ Use when the question asks to **select** or **identify** items from a category
+- ✅ Provide comprehensive `tp_instructions` (all items that should be found)
+- ✅ Optionally provide `fp_instructions` to highlight common mistakes
+- ✅ Good for: "List all X", "Identify examples of Y", "Extract Z from the text"
+
+**For Full-Matrix Mode:**
+- ✅ Use when the question asks to **classify** or **categorize** items
+- ✅ Provide both `tp_instructions` (positive class) and `tn_instructions` (negative class)
+- ✅ Include all items that need classification in one of the two lists
+- ✅ Good for: "Classify each as X or not-X", "Label as positive/negative", "Categorize into groups"
+
+**General Guidelines:**
+- Use `repeated_extraction=True` (default) to remove duplicate mentions
+- Be specific with instruction terms to avoid ambiguity
+- Consider term variations (e.g., "asthma" vs "bronchial asthma")
+- Test your metric traits with sample answers first
+
+---
+
 ## Creating a Global Rubric
 
 Global rubrics apply to **all questions** in your benchmark. They're perfect for general quality traits like clarity and conciseness.
