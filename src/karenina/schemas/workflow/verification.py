@@ -13,6 +13,12 @@ from .models import (
     ModelConfig,
 )
 
+# Default system prompts for answering and parsing models
+DEFAULT_ANSWERING_SYSTEM_PROMPT = "You are an expert assistant. Answer the question accurately and concisely."
+DEFAULT_PARSING_SYSTEM_PROMPT = (
+    "You are a validation assistant. Parse and validate responses against the given Pydantic template."
+)
+
 
 class VerificationConfig(BaseModel):
     """Configuration for verification run with multiple models."""
@@ -80,28 +86,22 @@ class VerificationConfig(BaseModel):
         if "answering_models" not in data and any(k.startswith("answering_") for k in data):
             answering_model = ModelConfig(
                 id="answering-legacy",
-                model_provider=data.get("answering_model_provider", ""),
+                model_provider=data.get("answering_model_provider") or None,
                 model_name=data.get("answering_model_name", ""),
                 temperature=data.get("answering_temperature", 0.1),
                 interface=data.get("answering_interface", INTERFACE_LANGCHAIN),
-                system_prompt=data.get(
-                    "answering_system_prompt",
-                    "You are an expert assistant. Answer the question accurately and concisely.",
-                ),
+                system_prompt=data.get("answering_system_prompt", DEFAULT_ANSWERING_SYSTEM_PROMPT),
             )
             data["answering_models"] = [answering_model]
 
         if "parsing_models" not in data and any(k.startswith("parsing_") for k in data):
             parsing_model = ModelConfig(
                 id="parsing-legacy",
-                model_provider=data.get("parsing_model_provider", ""),
+                model_provider=data.get("parsing_model_provider") or None,
                 model_name=data.get("parsing_model_name", ""),
                 temperature=data.get("parsing_temperature", 0.1),
                 interface=data.get("parsing_interface", INTERFACE_LANGCHAIN),
-                system_prompt=data.get(
-                    "parsing_system_prompt",
-                    "You are a validation assistant. Parse and validate responses against the given Pydantic template.",
-                ),
+                system_prompt=data.get("parsing_system_prompt", DEFAULT_PARSING_SYSTEM_PROMPT),
             )
             data["parsing_models"] = [parsing_model]
 
@@ -119,6 +119,21 @@ class VerificationConfig(BaseModel):
                 global_mode=few_shot_mode,
                 global_k=few_shot_k,
             )
+
+        # Apply default system prompts to models that don't have one
+        if "answering_models" in data:
+            for model in data["answering_models"]:
+                if isinstance(model, ModelConfig) and not model.system_prompt:
+                    model.system_prompt = DEFAULT_ANSWERING_SYSTEM_PROMPT
+                elif isinstance(model, dict) and not model.get("system_prompt"):
+                    model["system_prompt"] = DEFAULT_ANSWERING_SYSTEM_PROMPT
+
+        if "parsing_models" in data:
+            for model in data["parsing_models"]:
+                if isinstance(model, ModelConfig) and not model.system_prompt:
+                    model.system_prompt = DEFAULT_PARSING_SYSTEM_PROMPT
+                elif isinstance(model, dict) and not model.get("system_prompt"):
+                    model["system_prompt"] = DEFAULT_PARSING_SYSTEM_PROMPT
 
         super().__init__(**data)
 

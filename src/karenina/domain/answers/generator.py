@@ -254,7 +254,7 @@ def _build_chain(stage: str, config: "ModelConfig") -> Any:
             if hasattr(config.endpoint_api_key, "get_secret_value"):
                 model_params["endpoint_api_key"] = config.endpoint_api_key.get_secret_value()
             else:
-                model_params["endpoint_api_key"] = config.endpoint_api_key
+                model_params["endpoint_api_key"] = config.endpoint_api_key  # type: ignore[assignment]
 
     model = init_chat_model_unified(**model_params)  # type: ignore[arg-type]
 
@@ -312,7 +312,7 @@ def _generate_with_retry(
                         if hasattr(config.endpoint_api_key, "get_secret_value"):
                             model_params["endpoint_api_key"] = config.endpoint_api_key.get_secret_value()
                         else:
-                            model_params["endpoint_api_key"] = config.endpoint_api_key
+                            model_params["endpoint_api_key"] = config.endpoint_api_key  # type: ignore[assignment]
 
                 model = init_chat_model_unified(**model_params)  # type: ignore[arg-type]
 

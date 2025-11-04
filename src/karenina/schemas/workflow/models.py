@@ -355,11 +355,11 @@ class ModelConfig(BaseModel):
     """Configuration for a single model."""
 
     id: str
-    model_provider: str
+    model_provider: str | None = None  # Optional - only required for langchain interface
     model_name: str
     temperature: float = 0.1
     interface: Literal["langchain", "openrouter", "manual", "openai_endpoint"] = "langchain"
-    system_prompt: str
+    system_prompt: str | None = None  # Optional - defaults applied based on context (answering/parsing)
     max_retries: int = 2  # Optional max retries for template generation
     mcp_urls_dict: dict[str, str] | None = None  # Optional MCP server URLs
     mcp_tool_filter: list[str] | None = None  # Optional list of MCP tools to include

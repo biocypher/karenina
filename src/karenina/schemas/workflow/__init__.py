@@ -10,6 +10,8 @@ from .models import (
     QuestionFewShotConfig,
 )
 from .verification import (
+    DEFAULT_ANSWERING_SYSTEM_PROMPT,
+    DEFAULT_PARSING_SYSTEM_PROMPT,
     FinishedTemplate,
     VerificationConfig,
     VerificationJob,
@@ -29,6 +31,9 @@ __all__ = [
     "INTERFACE_MANUAL",
     "INTERFACE_LANGCHAIN",
     "INTERFACES_NO_PROVIDER_REQUIRED",
+    # System prompt defaults
+    "DEFAULT_ANSWERING_SYSTEM_PROMPT",
+    "DEFAULT_PARSING_SYSTEM_PROMPT",
     # Verification
     "VerificationConfig",
     "VerificationResult",
