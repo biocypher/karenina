@@ -962,7 +962,7 @@ print("\n✓ Benchmark saved with verification results")
 
 After running verification:
 
-- [Analyze Results](saving-loading.md#export-results) - Export to CSV/JSON for deeper analysis
+- [Analyze Results](saving-loading.md#exporting-verification-results) - Export to CSV/JSON for deeper analysis
 - [Save Benchmark](saving-loading.md) - Persist results to database or checkpoint
 - [Advanced Features](../advanced/deep-judgment.md) - Use deep-judgment for detailed feedback
 - [Few-Shot Prompting](../advanced/few-shot.md) - Guide responses with examples

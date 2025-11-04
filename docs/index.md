@@ -277,9 +277,9 @@ Karenina uses two evaluation units:
 3. Explore the [Features Overview](features.md) to see what's possible
 
 **Ready to build benchmarks?**
-- Read the [User Guides](#-user-guides) for comprehensive tutorials
+- Read the [User Guides](#user-guides) for comprehensive tutorials
 - Check the [API Reference](api-reference.md) for complete method documentation
-- Browse [Advanced Features](#-advanced-features) for specialized capabilities
+- Browse [Advanced Features](#advanced-features) for specialized capabilities
 
 **Need help?**
 - Review [Troubleshooting](troubleshooting.md) for common issues

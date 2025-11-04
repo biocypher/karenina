@@ -165,7 +165,7 @@ Check raw LLM response text against regex patterns to enforce specific formats (
 - Combine regex results with template verification
 - Get detailed match reporting for debugging
 
-**Learn more:** [Templates](using-karenina/templates.md#regex-traits)
+**Learn more:** [Rubrics](using-karenina/rubrics.md#2-regex-based-traits-manualrubrictrait)
 
 ---
 
@@ -217,7 +217,7 @@ Export verification results and benchmarks in multiple formats.
 - Include/exclude rubric evaluation columns
 - Export checkpoint files (JSON-LD)
 
-**Learn more:** [Saving & Loading](using-karenina/saving-loading.md#export)
+**Learn more:** [Saving & Loading](using-karenina/saving-loading.md#exporting-verification-results)
 
 ---
 

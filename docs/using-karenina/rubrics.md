@@ -1146,9 +1146,9 @@ benchmark.save("genomics_benchmark.jsonld")
 Once you have rubrics configured:
 
 - [Run verification](verification.md) to apply both template and rubric evaluation
-- [Analyze results](verification.md#analyzing-results) to understand performance across different criteria
+- [Analyze results](verification.md#accessing-verification-results) to understand performance across different criteria
 - [Save and load benchmarks](saving-loading.md) to preserve your rubric configurations
-- [Export results](saving-loading.md#exporting-results) to CSV or JSON for further analysis
+- [Export results](saving-loading.md#exporting-verification-results) to CSV or JSON for further analysis
 
 ---
 

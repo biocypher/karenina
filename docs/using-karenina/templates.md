@@ -424,7 +424,7 @@ Once you have templates set up for your questions, you can:
 
 - [Create rubrics](rubrics.md) for qualitative assessment criteria
 - [Run verification](verification.md) to evaluate LLM responses
-- [Analyze results](verification.md#analyzing-results) to assess model performance
+- [Analyze results](verification.md#accessing-verification-results) to assess model performance
 - [Save your benchmark](saving-loading.md) using checkpoints or database
 
 ---
