@@ -113,6 +113,8 @@ nav:
     - Embedding Check: advanced/embedding-check.md
     - Configuration Presets: advanced/presets.md
     - Few-Shot Prompting: advanced/few-shot.md
+    - Manual Traces: advanced/manual-traces.md
+    - MCP Integration: advanced/mcp-integration.md
     - System Integration: advanced/integration.md
   - API Reference: api-reference.md
   - Troubleshooting: troubleshooting.md
