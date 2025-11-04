@@ -183,6 +183,45 @@ By encoding evaluation criteria into explicit, inspectable templates, benchmarks
 * **Audit** the evaluation rules directly.
 * **Debug** failures more easily by inspecting the structured outputs rather than opaque free text.
 
+## ✨ Features
+
+Karenina provides comprehensive tools for every stage of the benchmarking workflow:
+
+### Core Capabilities
+
+- **Question Management**: Extract questions from files (Excel, CSV, TSV) with rich metadata support
+- **Answer Templates**: Pydantic-based templates for structured evaluation and programmatic verification
+- **Rubric Evaluation**: Assess qualitative traits using three types:
+  - LLM-based traits (binary pass/fail or 1-5 scale)
+  - Regex-based traits (pattern matching for format validation)
+  - Metric-based traits (precision, recall, F1, accuracy)
+- **Benchmark Verification**: Run evaluations with four supported interfaces:
+  - `langchain` (OpenAI, Google Gemini, Anthropic Claude)
+  - `openrouter` (OpenRouter platform)
+  - `openai_endpoint` (OpenAI-compatible endpoints for local models)
+  - `manual` (Manual trace replay for testing/debugging)
+
+### Advanced Features
+
+- **Deep-Judgment Parsing**: Extract verbatim excerpts, reasoning traces, and confidence scores
+- **Abstention Detection**: Identify when models refuse to answer questions
+- **Embedding Check**: Semantic similarity fallback for false negatives
+- **Few-Shot Prompting**: Configure examples globally or per question
+- **Database Persistence**: SQLite storage with versioning
+- **Export & Reporting**: CSV and JSON formats for analysis
+- **Preset Management**: Save and reuse verification configurations
+
+[View complete feature catalog →](docs/features.md)
+
+## 🏗️ Architecture
+
+Karenina is a **standalone Python library** that can be used independently for all benchmarking workflows. For users who need a web interface or REST API, Karenina can optionally integrate with companion packages:
+
+- **karenina-server**: FastAPI-based REST API wrapper
+- **karenina-gui**: React-based web interface for visual benchmark management
+
+These packages provide additional features like job management, progress tracking, and browser-based editing, but are **not required** for core functionality.
+
 ## 📦 Installation
 
 ### Using uv (recommended)
@@ -307,10 +346,31 @@ Congratulations! You've created your first Karenina benchmark.
 
 Ready to explore more of Karenina's capabilities? Check out our comprehensive documentation:
 
+### Getting Started
+- [**Documentation Index**](docs/index.md) - Complete documentation overview with navigation
 - [**Installation Guide**](docs/install.md) - Detailed setup instructions and requirements
 - [**Quick Start Tutorial**](docs/quickstart.md) - Step-by-step guide to your first benchmark
-- [**Using Karenina**](docs/using-karenina/defining-benchmark.md) - Complete guide to all features and workflows
-- [**API Reference**](docs/api-reference.md) - Full API documentation and examples
+- [**Features Overview**](docs/features.md) - Complete feature catalog
+
+### User Guides
+- [**Defining Benchmarks**](docs/using-karenina/defining-benchmark.md) - Benchmark creation and metadata
+- [**Adding Questions**](docs/using-karenina/adding-questions.md) - File extraction and management
+- [**Templates**](docs/using-karenina/templates.md) - Creating and customizing answer templates
+- [**Rubrics**](docs/using-karenina/rubrics.md) - Evaluation criteria and trait types
+- [**Verification**](docs/using-karenina/verification.md) - Running evaluations and analyzing results
+- [**Saving & Loading**](docs/using-karenina/saving-loading.md) - Checkpoints, database, and export
+
+### Advanced Features
+- [**Deep-Judgment**](docs/advanced/deep-judgment.md) - Extract detailed feedback with excerpts
+- [**Few-Shot Prompting**](docs/advanced/few-shot.md) - Guide responses with examples
+- [**Abstention Detection**](docs/advanced/abstention-detection.md) - Handle model refusals
+- [**Embedding Check**](docs/advanced/embedding-check.md) - Semantic similarity fallback
+- [**Presets**](docs/advanced/presets.md) - Save and reuse verification configurations
+
+### Reference
+- [**API Reference**](docs/api-reference.md) - Complete API documentation
+- [**Configuration**](docs/configuration.md) - Environment variables and defaults
+- [**Troubleshooting**](docs/troubleshooting.md) - Common issues and solutions
 
 ## 🤝 Contributing
 
