@@ -1,655 +1,833 @@
-# Saving and Loading a Benchmark
+# Saving and Loading Benchmarks
 
-This guide covers how to persist and restore benchmarks using Karenina's checkpoint system based on JSON-LD format.
+This guide covers how to persist, restore, and export benchmarks using Karenina's checkpoint and database systems.
 
-## Understanding Checkpoints
+## Understanding Persistence
 
-Karenina uses **JSON-LD (JSON for Linked Data)** format for benchmark persistence:
+Karenina provides two main approaches for persisting benchmarks:
 
-- **JSON-LD** provides structured, semantic data representation
-- **Checkpoints** capture complete benchmark state including questions, templates, and results
-- **Cross-platform compatibility** ensures benchmarks work across different environments
-- **Version compatibility** maintains backward compatibility as Karenina evolves
+1. **Checkpoints (JSON-LD files)**: Portable, human-readable files perfect for sharing and version control
+2. **Database storage (SQLite)**: Structured storage with query capabilities for production use
 
-## Saving Benchmarks
+You can use both approaches together: databases for primary storage and checkpoints for backups and sharing.
 
-### Basic Save Operation
+---
+
+## Checkpoint Files (JSON-LD)
+
+Checkpoints are JSON-LD files that capture the complete state of a benchmark.
+
+### What Gets Saved
+
+A checkpoint includes:
+- Benchmark metadata (name, description, version)
+- All questions with their metadata
+- Answer templates
+- Rubrics (global and question-specific)
+- Verification results (if available)
+
+### JSON-LD Format
+
+Karenina uses **JSON-LD (JSON for Linked Data)** format following schema.org conventions:
+
+**Benefits:**
+- **Structured and semantic**: Machine-readable with clear data relationships
+- **Human-readable**: Open in any text editor to inspect contents
+- **Cross-platform**: Works across different environments
+- **Version-compatible**: Maintains backward compatibility
+
+---
+
+## Saving Checkpoints
+
+### Basic Save
+
+Save your benchmark to a JSON-LD checkpoint file:
 
 ```python
-# Save benchmark to default location
-benchmark.save("my-benchmark.jsonld")
+from pathlib import Path
+
+# Basic save
+benchmark.save(Path("genomics_benchmark.jsonld"))
 
 # Save to specific directory
-benchmark.save("/path/to/benchmarks/my-benchmark.jsonld")
-
-# Save with auto-generated filename based on benchmark name
-benchmark.save()  # Creates "benchmark-name-YYYYMMDD-HHMMSS.jsonld"
+benchmark.save(Path("benchmarks/genomics_benchmark.jsonld"))
 ```
 
-### Save with Metadata
-
-```python
-# Save with additional context
-benchmark.save(
-    "my-benchmark.jsonld",
-    save_metadata={
-        "created_by": "Jane Doe",
-        "purpose": "Q1 2024 model evaluation",
-        "notes": "Includes updated rubrics for math problems"
-    }
-)
-```
-
-### Incremental Saves / Checkpoints
-
-```python
-# Save checkpoint during long-running operations
-def run_with_checkpoints(benchmark, model_config):
-    # Generate templates
-    benchmark.generate_answer_templates(model_config)
-    benchmark.save_checkpoint("after-template-generation.jsonld")
-
-    # Run verification
-    results = benchmark.run_verification(model_config)
-    benchmark.save_checkpoint("after-verification.jsonld")
-
-    # Save final results
-    benchmark.save("final-benchmark.jsonld")
-
-    return results
-```
-
-### Selective Saving
-
-```python
-# Save only specific components
-benchmark.save(
-    "questions-only.jsonld",
-    include_templates=False,     # Skip answer templates
-    include_results=False,       # Skip verification results
-    include_rubrics=True         # Include rubric definitions
-)
-
-# Save only verification results
-benchmark.save_results("results-only.jsonld")
-```
-
-## Loading Benchmarks
-
-### Basic Load Operation
+### What Happens When You Save
 
 ```python
 from karenina import Benchmark
 
-# Load benchmark from file
-benchmark = Benchmark.load("my-benchmark.jsonld")
+# Create and populate benchmark
+benchmark = Benchmark.create(
+    name="Genomics Knowledge Benchmark",
+    version="1.0.0"
+)
 
-print(f"Loaded benchmark: {benchmark.name}")
-print(f"Questions: {len(benchmark.questions)}")
-print(f"Has templates: {benchmark.all_questions_have_templates()}")
+benchmark.add_question(
+    question="How many chromosomes are in a human somatic cell?",
+    raw_answer="46",
+    author={"name": "Bio Curator"}
+)
+
+benchmark.add_question(
+    question="What is the approved drug target of Venetoclax?",
+    raw_answer="BCL2",
+    author={"name": "Bio Curator"}
+)
+
+# Save checkpoint
+checkpoint_path = Path("genomics_benchmark.jsonld")
+benchmark.save(checkpoint_path)
+
+print(f"✓ Saved checkpoint to {checkpoint_path}")
+print(f"  Questions: {len(benchmark.questions)}")
+print(f"  Size: {checkpoint_path.stat().st_size} bytes")
 ```
 
-### Loading with Validation
+**Output:**
+```
+✓ Saved checkpoint to genomics_benchmark.jsonld
+  Questions: 2
+  Size: 4532 bytes
+```
+
+---
+
+## Loading Checkpoints
+
+### Basic Load
+
+Load a benchmark from a checkpoint file:
 
 ```python
-def load_with_validation(filepath):
-    """Load benchmark with comprehensive validation"""
+from karenina import Benchmark
+from pathlib import Path
+
+# Load benchmark
+benchmark = Benchmark.load(Path("genomics_benchmark.jsonld"))
+
+print(f"Loaded benchmark: {benchmark.name}")
+print(f"Version: {benchmark.version}")
+print(f"Questions: {len(benchmark.questions)}")
+
+# Access questions
+for qid in list(benchmark.questions.keys())[:3]:
+    question = benchmark.get_question(qid)
+    print(f"  • {question.question[:50]}...")
+```
+
+**Output:**
+```
+Loaded benchmark: Genomics Knowledge Benchmark
+Version: 1.0.0
+Questions: 2
+  • How many chromosomes are in a human somatic ce...
+  • What is the approved drug target of Venetoclax...
+```
+
+### Verify Loaded Data
+
+```python
+def load_and_verify(checkpoint_path: Path):
+    """Load benchmark with validation"""
     try:
-        benchmark = Benchmark.load(filepath)
+        benchmark = Benchmark.load(checkpoint_path)
 
-        # Validate loaded data
+        # Basic validation
         assert len(benchmark.questions) > 0, "No questions found"
+        assert benchmark.name, "Missing benchmark name"
 
-        # Check for required metadata
-        required_fields = ["name", "description"]
-        for field in required_fields:
-            assert getattr(benchmark, field), f"Missing required field: {field}"
+        print(f"✓ Successfully loaded: {benchmark.name}")
+        print(f"  Questions: {len(benchmark.questions)}")
 
-        print(f"✓ Successfully loaded and validated: {benchmark.name}")
+        # Check templates
+        questions_with_templates = sum(
+            1 for q in benchmark.questions.values()
+            if q.answer_template
+        )
+        print(f"  Templates: {questions_with_templates}/{len(benchmark.questions)}")
+
         return benchmark
 
     except Exception as e:
-        print(f"✗ Failed to load benchmark: {str(e)}")
+        print(f"✗ Failed to load: {str(e)}")
         return None
 
 # Load with validation
-benchmark = load_with_validation("my-benchmark.jsonld")
+benchmark = load_and_verify(Path("genomics_benchmark.jsonld"))
 ```
 
-### Partial Loading
-
-```python
-# Load only metadata (for quick inspection)
-metadata = Benchmark.load_metadata("my-benchmark.jsonld")
-print(f"Benchmark: {metadata['name']}")
-print(f"Questions: {metadata['question_count']}")
-print(f"Created: {metadata['created_date']}")
-
-# Load questions without templates (faster)
-benchmark = Benchmark.load(
-    "my-benchmark.jsonld",
-    load_templates=False,
-    load_results=False
-)
-```
+---
 
 ## Database Storage
 
-Karenina supports persistent storage in relational databases (SQLite, PostgreSQL, MySQL) via SQLAlchemy. Database storage is ideal for:
+Database storage provides structured persistence with query capabilities. For detailed database usage, see [Defining Benchmarks](defining-benchmark.md#database-persistence).
 
-- **Multi-user collaboration** with concurrent access
-- **Query and analysis** of benchmark data using SQL
-- **Production deployments** requiring robust persistence
-- **Integration** with existing data infrastructure
-
-### Quick Start with Database Storage
+### Quick Database Example
 
 ```python
-from karenina import Benchmark, save_benchmark, load_benchmark
+from karenina import Benchmark
+from pathlib import Path
 
-# Create and populate benchmark
+# Create benchmark
 benchmark = Benchmark.create(
-    name="My Benchmark",
-    description="Example benchmark",
+    name="Genomics Knowledge Benchmark",
     version="1.0.0"
 )
-benchmark.add_question("What is 2+2?", "4")
 
-# Save to SQLite database
-save_benchmark(benchmark, "sqlite:///benchmarks.db")
+# Add questions
+benchmark.add_question(
+    question="How many chromosomes are in a human somatic cell?",
+    raw_answer="46"
+)
+
+# Save to database (with optional checkpoint backup)
+benchmark.save_to_db(
+    storage="sqlite:///benchmarks.db",
+    checkpoint_path=Path("genomics_benchmark.jsonld")
+)
+
+print("✓ Saved to database and checkpoint")
 
 # Load from database
-loaded = load_benchmark("My Benchmark", "sqlite:///benchmarks.db")
-```
-
-### Database Configuration
-
-```python
-from karenina import DBConfig
-
-# SQLite (default, file-based)
-db_config = DBConfig(
-    storage_url="sqlite:///benchmarks.db",
-    auto_create=True,       # Auto-create tables if they don't exist
-    auto_commit=True,       # Auto-commit transactions
-    echo=False             # Disable SQL query logging
-)
-
-# PostgreSQL (production)
-db_config = DBConfig(
-    storage_url="postgresql://user:password@localhost:5432/karenina",
-    pool_size=10,           # Connection pool size
-    max_overflow=20,        # Max connections beyond pool_size
-    pool_recycle=3600,      # Recycle connections after 1 hour
-    pool_pre_ping=True     # Verify connections before use
-)
-
-# MySQL
-db_config = DBConfig(
-    storage_url="mysql+pymysql://user:password@localhost:3306/karenina"
-)
-
-# Save using DBConfig
-save_benchmark(benchmark, db_config)
-```
-
-### Save and Load Operations
-
-```python
-# Save benchmark to database
-save_benchmark(
-    benchmark,
-    storage="sqlite:///benchmarks.db",
-    checkpoint_path="backup.jsonld"  # Optional: also save JSON-LD checkpoint
-)
-
-# Load benchmark by name
-benchmark = load_benchmark(
-    benchmark_name="My Benchmark",
+loaded = Benchmark.load_from_db(
+    benchmark_name="Genomics Knowledge Benchmark",
     storage="sqlite:///benchmarks.db"
 )
 
-# Load with DBConfig object
-benchmark, db_config = load_benchmark(
-    benchmark_name="My Benchmark",
-    storage="sqlite:///benchmarks.db",
-    load_config=True  # Returns tuple of (Benchmark, DBConfig)
+print(f"✓ Loaded from database: {loaded.name}")
+```
+
+### When to Use Database vs Checkpoints
+
+| Use Case | Recommended Approach |
+|----------|---------------------|
+| **Development and prototyping** | Checkpoints only |
+| **Sharing benchmarks** | Checkpoints (portable files) |
+| **Production deployment** | Database primary, checkpoints for backup |
+| **Version control (Git)** | Checkpoints (diff-friendly) |
+| **Multi-user collaboration** | Database with checkpoint backups |
+| **Query and analytics** | Database |
+| **Backups** | Checkpoints |
+
+**Best Practice:** Use both!
+```python
+# Save to database for primary storage
+benchmark.save_to_db("sqlite:///production.db")
+
+# Also save checkpoint for backup/sharing
+benchmark.save(Path("backups/genomics_v1.0.0.jsonld"))
+```
+
+---
+
+## Exporting Verification Results
+
+After running verification, export results for analysis and reporting.
+
+### Export to CSV
+
+CSV format is ideal for spreadsheet analysis:
+
+```python
+from pathlib import Path
+
+# Run verification first
+from karenina.schemas import VerificationConfig, ModelConfig
+
+config = VerificationConfig(
+    answering_models=[ModelConfig(
+        id="gpt-4.1-mini",
+        model_provider="openai",
+        model_name="gpt-4.1-mini",
+        interface="langchain"
+    )],
+    parsing_models=[ModelConfig(
+        id="gpt-judge",
+        model_provider="openai",
+        model_name="gpt-4.1-mini",
+        interface="langchain"
+    )]
+)
+
+results = benchmark.run_verification(config)
+
+# Export to CSV
+benchmark.export_verification_results_to_file(
+    file_path=Path("results.csv"),
+    format="csv"
+)
+
+print("✓ Exported to results.csv")
+```
+
+**CSV Output Structure:**
+
+| question_id | question | expected_answer | model_answer | template_passed | answering_model | parsing_model | timestamp |
+|-------------|----------|-----------------|--------------|-----------------|-----------------|---------------|-----------|
+| abc123... | How many chromosomes... | 46 | There are 46 chromosomes... | True | gpt-4.1-mini | gpt-judge | 2024-03-15 14:30:22 |
+
+### Export to JSON
+
+JSON format is ideal for programmatic analysis:
+
+```python
+# Export to JSON
+benchmark.export_verification_results_to_file(
+    file_path=Path("results.json"),
+    format="json"
+)
+
+print("✓ Exported to results.json")
+```
+
+**JSON Output Structure:**
+```json
+{
+  "benchmark_name": "Genomics Knowledge Benchmark",
+  "export_timestamp": "2024-03-15T14:30:22",
+  "total_results": 3,
+  "results": [
+    {
+      "question_id": "abc123...",
+      "question": "How many chromosomes are in a human somatic cell?",
+      "expected_answer": "46",
+      "raw_response": "There are 46 chromosomes in a human somatic cell.",
+      "parsed_response": {"count": 46},
+      "verify_result": true,
+      "answering_model_id": "gpt-4.1-mini",
+      "parsing_model_id": "gpt-judge",
+      "timestamp": "2024-03-15T14:30:22"
+    }
+  ]
+}
+```
+
+### Export Specific Questions
+
+Export results for a subset of questions:
+
+```python
+# Get question IDs for chromosomes questions
+chromosome_qids = [
+    qid for qid in benchmark.questions.keys()
+    if "chromosome" in benchmark.get_question(qid).question.lower()
+]
+
+# Export only chromosome questions
+benchmark.export_verification_results_to_file(
+    file_path=Path("chromosome_results.csv"),
+    format="csv",
+    question_ids=chromosome_qids
+)
+
+print(f"✓ Exported {len(chromosome_qids)} chromosome questions")
+```
+
+### Export with Rubric Scores
+
+When rubrics are enabled, export includes rubric evaluations:
+
+```python
+# Export with rubric data
+benchmark.export_verification_results_to_file(
+    file_path=Path("results_with_rubrics.csv"),
+    format="csv"
 )
 ```
 
-### Benchmark Methods for Database
+**CSV includes rubric columns:**
 
-```python
-# Create and save benchmark
-benchmark = Benchmark.create(name="Test Benchmark")
-benchmark.add_question("Question 1?", "Answer 1")
+| question_id | template_passed | rubric_conciseness | rubric_clarity | rubric_bh3_mention |
+|-------------|-----------------|--------------------|-----------------|--------------------|
+| abc123... | True | 4 | 5 | True |
 
-# Save using benchmark method (returns self for chaining)
-benchmark.save_to_db("sqlite:///benchmarks.db")
-
-# Load using class method
-benchmark = Benchmark.load_from_db("Test Benchmark", "sqlite:///benchmarks.db")
-
-# Method chaining
-Benchmark.create(name="New Benchmark") \
-    .add_question("Q?", "A") \
-    .save_to_db("sqlite:///benchmarks.db")
-```
-
-### Updating Existing Benchmarks
-
-```python
-# Load existing benchmark
-benchmark = load_benchmark("My Benchmark", "sqlite:///benchmarks.db")
-
-# Make changes
-benchmark.description = "Updated description"
-benchmark.add_question("New question?", "New answer")
-
-# Save updates (automatically updates existing record)
-save_benchmark(benchmark, "sqlite:///benchmarks.db")
-```
-
-### Auto-Save Verification Results
-
-```python
-from karenina import VerificationConfig, DBConfig, ModelConfig
-
-# Configure verification with database storage
-db_config = DBConfig(storage_url="sqlite:///results.db")
-
-verification_config = VerificationConfig(
-    answering_model=ModelConfig(model_provider="openai", model_name="gpt-4.1-mini"),
-    parsing_model=ModelConfig(model_provider="openai", model_name="gpt-4.1-mini"),
-    db_config=db_config  # Auto-save results to database
-)
-
-# Run verification (results automatically saved to database)
-results = benchmark.run_verification(verification_config)
-```
-
-### Querying Database Views
-
-```python
-from karenina.storage import (
-    get_benchmark_summary,
-    get_verification_run_summary,
-    get_model_performance,
-    get_failed_verifications,
-    get_database_statistics
-)
-
-# Get benchmark summaries
-summaries = get_benchmark_summary("sqlite:///benchmarks.db")
-for summary in summaries:
-    print(f"{summary['benchmark_name']}: {summary['total_questions']} questions")
-
-# Get verification run statistics
-runs = get_verification_run_summary("sqlite:///results.db")
-for run in runs:
-    print(f"{run['run_name']}: {run['success_rate']:.1f}% success rate")
-
-# Get model performance statistics
-performance = get_model_performance("sqlite:///results.db")
-for model in performance:
-    print(f"{model['model_name']}: {model['success_rate_pct']:.1f}% success")
-
-# Get all failed verifications for debugging
-failures = get_failed_verifications("sqlite:///results.db")
-for failure in failures:
-    print(f"Question: {failure['question_text']}")
-    print(f"Error: {failure['error']}")
-
-# Get overall database statistics
-stats = get_database_statistics("sqlite:///benchmarks.db")
-print(f"Total benchmarks: {stats['total_benchmarks']}")
-print(f"Total questions: {stats['total_questions']}")
-```
-
-### Direct Database Access
-
-```python
-from karenina.storage import DBConfig, get_session
-from karenina.storage.models import BenchmarkModel, QuestionModel
-from sqlalchemy import select
-
-db_config = DBConfig(storage_url="sqlite:///benchmarks.db")
-
-# Use session context manager for custom queries
-with get_session(db_config) as session:
-    # Query all benchmarks
-    benchmarks = session.execute(select(BenchmarkModel)).scalars().all()
-
-    for b in benchmarks:
-        print(f"Benchmark: {b.name} (ID: {b.id})")
-        print(f"  Questions: {len(b.benchmark_questions)}")
-        print(f"  Created: {b.created_at}")
-
-    # Query specific questions
-    questions = session.execute(
-        select(QuestionModel).where(QuestionModel.question_text.like("%math%"))
-    ).scalars().all()
-
-    for q in questions:
-        print(f"Question: {q.question_text}")
-```
-
-### Database Schema Overview
-
-The database schema includes:
-
-**Core Tables:**
-- `benchmarks` - Benchmark metadata and configuration
-- `questions` - Shared question pool (deduplicated by MD5 hash)
-- `benchmark_questions` - Junction table with benchmark-specific data (templates, rubrics)
-- `verification_runs` - Verification run metadata and statistics
-- `verification_results` - Individual question verification results
-
-**Pre-built Views:**
-- `benchmark_summary_view` - Benchmark overviews with question counts
-- `verification_run_summary_view` - Run statistics and success rates
-- `question_usage_view` - Which benchmarks use each question
-- `latest_verification_results_view` - Most recent result per question-model pair
-- `model_performance_view` - Aggregated performance by model
-- `failed_verifications_view` - All failures with error details
-- `rubric_scores_aggregate_view` - Rubric statistics
-- `verification_history_timeline_view` - Chronological run history
-- `rubric_traits_by_type_view` - Rubric traits categorized by type
-
-### Database vs JSON-LD Checkpoints
-
-| Feature | Database Storage | JSON-LD Checkpoints |
-|---------|-----------------|---------------------|
-| **Query Support** | Full SQL queries | File-based search |
-| **Concurrent Access** | Multi-user safe | Single user |
-| **Deduplication** | Questions shared across benchmarks | Questions duplicated |
-| **Views & Analytics** | Built-in aggregation views | Manual analysis |
-| **Portability** | Database-dependent | Fully portable |
-| **Versioning** | Database migrations | File versioning |
-| **Best For** | Production, collaboration, analysis | Development, sharing, backups |
-
-**Recommendation:** Use both! Database for primary storage and queries, JSON-LD checkpoints for backups and sharing.
-
-```python
-# Dual persistence strategy
-benchmark.save_to_db("sqlite:///production.db")  # Primary storage
-benchmark.save("backups/benchmark-20240315.jsonld")  # Backup + sharing
-```
-
-### Database Maintenance
-
-```python
-from karenina.storage import init_database, drop_database, reset_database
-
-db_config = DBConfig(storage_url="sqlite:///benchmarks.db")
-
-# Initialize database (creates tables and views)
-init_database(db_config)
-
-# Reset database (WARNING: destructive!)
-reset_database(db_config)  # Drops and recreates all tables
-
-# Drop database (WARNING: destructive!)
-drop_database(db_config)  # Removes all tables and views
-```
+---
 
 ## Checkpoint Management
 
-### Creating Regular Checkpoints
+### Incremental Checkpoints
+
+Save checkpoints at key stages of your workflow:
 
 ```python
-class CheckpointManager:
-    def __init__(self, benchmark, base_path):
-        self.benchmark = benchmark
-        self.base_path = base_path
-        self.checkpoint_counter = 0
+from karenina import Benchmark
+from karenina.schemas import ModelConfig
+from pathlib import Path
 
-    def checkpoint(self, label=None):
-        """Create a checkpoint with optional label"""
-        if label:
-            filename = f"{self.benchmark.name}-{label}.jsonld"
-        else:
-            filename = f"{self.benchmark.name}-checkpoint-{self.checkpoint_counter:03d}.jsonld"
-            self.checkpoint_counter += 1
+# Create benchmark
+benchmark = Benchmark.create(
+    name="Genomics Knowledge Benchmark",
+    version="1.0.0"
+)
 
-        filepath = os.path.join(self.base_path, filename)
-        self.benchmark.save(filepath)
-        print(f"Checkpoint saved: {filename}")
-        return filepath
+# Add questions
+benchmark.add_question(
+    question="How many chromosomes are in a human somatic cell?",
+    raw_answer="46"
+)
+benchmark.add_question(
+    question="What is the approved drug target of Venetoclax?",
+    raw_answer="BCL2"
+)
 
-# Usage
-manager = CheckpointManager(benchmark, "checkpoints/")
-manager.checkpoint("before-verification")
+# Checkpoint 1: After adding questions
+benchmark.save(Path("checkpoints/01_questions_added.jsonld"))
+print("✓ Checkpoint 1: Questions added")
 
-# Run operations...
-results = benchmark.run_verification(model_config)
+# Generate templates
+model_config = ModelConfig(
+    id="gpt-4.1-mini",
+    model_provider="openai",
+    model_name="gpt-4.1-mini",
+    interface="langchain"
+)
+benchmark.generate_all_templates(model_config=model_config)
 
-manager.checkpoint("after-verification")
+# Checkpoint 2: After template generation
+benchmark.save(Path("checkpoints/02_templates_generated.jsonld"))
+print("✓ Checkpoint 2: Templates generated")
+
+# Create rubrics
+from karenina.schemas import RubricTrait
+benchmark.create_global_rubric(
+    name="Answer Quality",
+    traits=[
+        RubricTrait(
+            name="Conciseness",
+            description="Rate conciseness 1-5",
+            kind="score"
+        )
+    ]
+)
+
+# Checkpoint 3: After rubrics
+benchmark.save(Path("checkpoints/03_rubrics_created.jsonld"))
+print("✓ Checkpoint 3: Rubrics created")
+
+# Run verification
+from karenina.schemas import VerificationConfig
+config = VerificationConfig(
+    answering_models=[model_config],
+    parsing_models=[model_config],
+    rubric_enabled=True
+)
+results = benchmark.run_verification(config)
+
+# Final checkpoint: After verification
+benchmark.save(Path("checkpoints/04_verification_complete.jsonld"))
+print("✓ Checkpoint 4: Verification complete")
+
+# Save final version
+benchmark.save(Path("genomics_benchmark_final.jsonld"))
+print("✓ Final benchmark saved")
 ```
 
-### Checkpoint Comparison
+### Timestamped Backups
+
+Create timestamped backups automatically:
 
 ```python
-def compare_checkpoints(checkpoint1_path, checkpoint2_path):
+from datetime import datetime
+from pathlib import Path
+
+def save_with_timestamp(benchmark, base_name: str):
+    """Save benchmark with timestamp"""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{base_name}_{timestamp}.jsonld"
+    path = Path(f"backups/{filename}")
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    benchmark.save(path)
+
+    print(f"✓ Backup saved: {filename}")
+    return path
+
+# Save with timestamp
+save_with_timestamp(benchmark, "genomics_benchmark")
+```
+
+**Output:**
+```
+✓ Backup saved: genomics_benchmark_20240315_143022.jsonld
+```
+
+---
+
+## Comparing Checkpoints
+
+Compare two checkpoints to see what changed:
+
+```python
+def compare_checkpoints(path1: Path, path2: Path):
     """Compare two benchmark checkpoints"""
+    from karenina import Benchmark
 
-    bench1 = Benchmark.load(checkpoint1_path)
-    bench2 = Benchmark.load(checkpoint2_path)
+    bench1 = Benchmark.load(path1)
+    bench2 = Benchmark.load(path2)
 
-    print(f"=== Checkpoint Comparison ===")
-    print(f"Checkpoint 1: {checkpoint1_path}")
-    print(f"Checkpoint 2: {checkpoint2_path}")
+    print(f"=== Comparing Checkpoints ===")
+    print(f"Checkpoint 1: {path1.name}")
+    print(f"Checkpoint 2: {path2.name}")
     print()
 
-    # Compare basic metrics
-    print(f"Questions: {len(bench1.questions)} vs {len(bench2.questions)}")
+    # Compare questions
+    print(f"Questions:")
+    print(f"  {path1.name}: {len(bench1.questions)}")
+    print(f"  {path2.name}: {len(bench2.questions)}")
 
-    # Compare template status
-    bench1_templated = sum(1 for q in bench1.questions if q.answer_template)
-    bench2_templated = sum(1 for q in bench2.questions if q.answer_template)
-    print(f"Templated questions: {bench1_templated} vs {bench2_templated}")
+    # Compare templates
+    templates1 = sum(1 for q in bench1.questions.values() if q.answer_template)
+    templates2 = sum(1 for q in bench2.questions.values() if q.answer_template)
+    print(f"\nTemplates:")
+    print(f"  {path1.name}: {templates1}")
+    print(f"  {path2.name}: {templates2}")
 
-    # Compare verification results
-    bench1_verified = len(bench1.get_verification_results())
-    bench2_verified = len(bench2.get_verification_results())
-    print(f"Verified questions: {bench1_verified} vs {bench2_verified}")
+    # Compare rubrics
+    has_global1 = bench1.global_rubric is not None
+    has_global2 = bench2.global_rubric is not None
+    print(f"\nGlobal Rubric:")
+    print(f"  {path1.name}: {'Yes' if has_global1 else 'No'}")
+    print(f"  {path2.name}: {'Yes' if has_global2 else 'No'}")
 
-# Compare checkpoints
-compare_checkpoints("before-verification.jsonld", "after-verification.jsonld")
-```
-
-## Advanced Persistence Options
-
-### Custom Serialization
-
-```python
-# Save with custom serialization options
-benchmark.save(
-    "custom-format.jsonld",
-    compression=True,           # Compress JSON-LD output
-    pretty_print=True,          # Human-readable formatting
-    include_timestamps=True,    # Add creation/modification times
-    embed_schemas=True          # Include schema definitions inline
+# Compare before and after verification
+compare_checkpoints(
+    Path("checkpoints/02_templates_generated.jsonld"),
+    Path("checkpoints/04_verification_complete.jsonld")
 )
 ```
 
-### Backup and Recovery
+**Output:**
+```
+=== Comparing Checkpoints ===
+Checkpoint 1: 02_templates_generated.jsonld
+Checkpoint 2: 04_verification_complete.jsonld
+
+Questions:
+  02_templates_generated.jsonld: 2
+  04_verification_complete.jsonld: 2
+
+Templates:
+  02_templates_generated.jsonld: 2
+  04_verification_complete.jsonld: 2
+
+Global Rubric:
+  02_templates_generated.jsonld: No
+  04_verification_complete.jsonld: Yes
+```
+
+---
+
+## Portability and Sharing
+
+### Sharing Benchmarks with Collaborators
+
+Checkpoints are portable and can be easily shared:
 
 ```python
-import shutil
+# Prepare benchmark for sharing
+benchmark.save(Path("genomics_benchmark_v1.0.0.jsonld"))
+
+# Collaborator loads it
+from karenina import Benchmark
+from pathlib import Path
+
+benchmark = Benchmark.load(Path("genomics_benchmark_v1.0.0.jsonld"))
+print(f"Loaded shared benchmark: {benchmark.name}")
+print(f"Version: {benchmark.version}")
+```
+
+**Sharing checklist:**
+- ✅ Save to descriptive filename with version
+- ✅ Include README with benchmark purpose and usage
+- ✅ Document any special requirements (API keys, models)
+- ✅ Test loading on a different machine
+
+### Version Control with Git
+
+Checkpoints work well with Git:
+
+```bash
+# Add checkpoint to Git
+git add genomics_benchmark_v1.0.0.jsonld
+git commit -m "Add genomics benchmark v1.0.0"
+git push
+
+# Track benchmark evolution over time
+git log -- genomics_benchmark_v1.0.0.jsonld
+```
+
+**Git best practices:**
+- Use semantic versioning for checkpoint filenames
+- Include descriptive commit messages
+- Tag important versions: `git tag v1.0.0`
+- Use `.gitignore` for temporary checkpoints
+
+### Moving Benchmarks Between Environments
+
+Checkpoints are fully portable:
+
+```python
+# Development environment
+benchmark.save(Path("genomics_benchmark.jsonld"))
+
+# Copy file to production environment
+# scp genomics_benchmark.jsonld user@production:/data/
+
+# Production environment
+benchmark = Benchmark.load(Path("/data/genomics_benchmark.jsonld"))
+```
+
+---
+
+## Complete Workflow Example
+
+Here's a complete example showing checkpoints, database storage, and export:
+
+```python
+from karenina import Benchmark
+from karenina.schemas import VerificationConfig, ModelConfig, RubricTrait
+from pathlib import Path
+
+# 1. Create benchmark
+benchmark = Benchmark.create(
+    name="Genomics Knowledge Benchmark",
+    description="Testing LLM knowledge of genomics",
+    version="1.0.0",
+    creator="Bio Team"
+)
+
+# 2. Add questions
+questions = [
+    ("How many chromosomes are in a human somatic cell?", "46"),
+    ("What is the approved drug target of Venetoclax?", "BCL2"),
+    ("How many protein subunits does hemoglobin A have?", "4")
+]
+
+for q, a in questions:
+    benchmark.add_question(question=q, raw_answer=a, author={"name": "Bio Curator"})
+
+# Checkpoint 1
+benchmark.save(Path("checkpoints/step1_questions.jsonld"))
+print("✓ Checkpoint 1: Questions added")
+
+# 3. Generate templates
+model_config = ModelConfig(
+    id="gpt-4.1-mini",
+    model_provider="openai",
+    model_name="gpt-4.1-mini",
+    temperature=0.1,
+    interface="langchain"
+)
+benchmark.generate_all_templates(model_config=model_config)
+
+# Checkpoint 2
+benchmark.save(Path("checkpoints/step2_templates.jsonld"))
+print("✓ Checkpoint 2: Templates generated")
+
+# 4. Create rubric
+benchmark.create_global_rubric(
+    name="Answer Quality",
+    traits=[
+        RubricTrait(
+            name="Conciseness",
+            description="Rate conciseness 1-5",
+            kind="score"
+        ),
+        RubricTrait(
+            name="Clarity",
+            description="Is the answer clear?",
+            kind="binary"
+        )
+    ]
+)
+
+# Checkpoint 3
+benchmark.save(Path("checkpoints/step3_rubrics.jsonld"))
+print("✓ Checkpoint 3: Rubrics created")
+
+# 5. Run verification
+config = VerificationConfig(
+    answering_models=[model_config],
+    parsing_models=[model_config],
+    rubric_enabled=True
+)
+results = benchmark.run_verification(config)
+
+# Checkpoint 4
+benchmark.save(Path("checkpoints/step4_verified.jsonld"))
+print("✓ Checkpoint 4: Verification complete")
+
+# 6. Save to database with checkpoint
+benchmark.save_to_db(
+    storage="sqlite:///benchmarks.db",
+    checkpoint_path=Path("genomics_benchmark_v1.0.0.jsonld")
+)
+print("✓ Saved to database with checkpoint")
+
+# 7. Export results
+benchmark.export_verification_results_to_file(
+    file_path=Path("results.csv"),
+    format="csv"
+)
+benchmark.export_verification_results_to_file(
+    file_path=Path("results.json"),
+    format="json"
+)
+print("✓ Exported results to CSV and JSON")
+
+# 8. Create timestamped backup
 from datetime import datetime
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+backup_path = Path(f"backups/genomics_{timestamp}.jsonld")
+backup_path.parent.mkdir(parents=True, exist_ok=True)
+benchmark.save(backup_path)
+print(f"✓ Backup saved: {backup_path.name}")
 
-class BackupManager:
-    def __init__(self, backup_dir="backups"):
-        self.backup_dir = backup_dir
-        os.makedirs(backup_dir, exist_ok=True)
-
-    def create_backup(self, benchmark, label=None):
-        """Create timestamped backup"""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        if label:
-            filename = f"{benchmark.name}_{label}_{timestamp}.jsonld"
-        else:
-            filename = f"{benchmark.name}_backup_{timestamp}.jsonld"
-
-        backup_path = os.path.join(self.backup_dir, filename)
-        benchmark.save(backup_path)
-
-        return backup_path
-
-    def list_backups(self, benchmark_name):
-        """List all backups for a benchmark"""
-        backups = []
-        for filename in os.listdir(self.backup_dir):
-            if filename.startswith(benchmark_name) and filename.endswith(".jsonld"):
-                filepath = os.path.join(self.backup_dir, filename)
-                stat = os.stat(filepath)
-                backups.append({
-                    "filename": filename,
-                    "path": filepath,
-                    "size": stat.st_size,
-                    "modified": datetime.fromtimestamp(stat.st_mtime)
-                })
-
-        return sorted(backups, key=lambda x: x["modified"], reverse=True)
-
-    def restore_backup(self, backup_path):
-        """Restore benchmark from backup"""
-        return Benchmark.load(backup_path)
-
-# Usage
-backup_manager = BackupManager()
-
-# Create backup before major operations
-backup_path = backup_manager.create_backup(benchmark, "before-major-changes")
-
-# List available backups
-backups = backup_manager.list_backups(benchmark.name)
-for backup in backups:
-    print(f"{backup['filename']} - {backup['modified']} ({backup['size']} bytes)")
-
-# Restore from backup if needed
-if something_went_wrong:
-    benchmark = backup_manager.restore_backup(backup_path)
+print("\n=== Summary ===")
+print(f"Benchmark: {benchmark.name} v{benchmark.version}")
+print(f"Questions: {len(benchmark.questions)}")
+print(f"Verification results: {len(results)}")
+print(f"Checkpoints: 4")
+print(f"Database: Yes (sqlite:///benchmarks.db)")
+print(f"Exports: CSV and JSON")
+print(f"Backup: Yes")
 ```
 
-## Migration and Versioning
+**Output:**
+```
+✓ Checkpoint 1: Questions added
+✓ Checkpoint 2: Templates generated
+✓ Checkpoint 3: Rubrics created
+✓ Checkpoint 4: Verification complete
+✓ Saved to database with checkpoint
+✓ Exported results to CSV and JSON
+✓ Backup saved: genomics_20240315_143022.jsonld
 
-### Version Compatibility
-
-```python
-def check_version_compatibility(filepath):
-    """Check if benchmark file is compatible with current Karenina version"""
-    try:
-        metadata = Benchmark.load_metadata(filepath)
-        file_version = metadata.get("karenina_version", "unknown")
-        current_version = karenina.__version__
-
-        print(f"File version: {file_version}")
-        print(f"Current version: {current_version}")
-
-        # Add version compatibility logic here
-        return True  # Simplified for example
-
-    except Exception as e:
-        print(f"Cannot determine compatibility: {str(e)}")
-        return False
-
-# Check before loading
-if check_version_compatibility("old-benchmark.jsonld"):
-    benchmark = Benchmark.load("old-benchmark.jsonld")
-else:
-    print("Benchmark may not be compatible with current version")
+=== Summary ===
+Benchmark: Genomics Knowledge Benchmark v1.0.0
+Questions: 3
+Verification results: 3
+Checkpoints: 4
+Database: Yes (sqlite:///benchmarks.db)
+Exports: CSV and JSON
+Backup: Yes
 ```
 
-### Benchmark Merging
-
-```python
-def merge_benchmarks(*benchmark_paths, output_path):
-    """Merge multiple benchmarks into a single benchmark"""
-
-    benchmarks = [Benchmark.load(path) for path in benchmark_paths]
-
-    # Create merged benchmark
-    merged = Benchmark(
-        name=f"merged-{datetime.now().strftime('%Y%m%d')}",
-        description="Merged benchmark from multiple sources"
-    )
-
-    # Combine questions from all benchmarks
-    for i, benchmark in enumerate(benchmarks):
-        for question in benchmark.questions:
-            # Add source information to metadata
-            question.metadata["source_benchmark"] = benchmark.name
-            question.metadata["source_index"] = i
-
-            merged.add_question(question)
-
-    # Save merged benchmark
-    merged.save(output_path)
-
-    print(f"Merged {len(benchmarks)} benchmarks into {output_path}")
-    print(f"Total questions: {len(merged.questions)}")
-
-    return merged
-
-# Merge multiple benchmarks
-merged = merge_benchmarks(
-    "math-benchmark.jsonld",
-    "science-benchmark.jsonld",
-    "literature-benchmark.jsonld",
-    output_path="comprehensive-benchmark.jsonld"
-)
-```
+---
 
 ## Best Practices
 
 ### Naming Conventions
 
-```python
-# Use descriptive, consistent names
-benchmark.save("medical-diagnosis-v2-20240315.jsonld")
-benchmark.save("k12-math-assessment-final.jsonld")
-benchmark.save("code-review-benchmark-pilot.jsonld")
+Use descriptive, versioned filenames:
 
-# Include version and date information
-benchmark.save(f"{benchmark.name}-v{benchmark.version}-{datetime.now():%Y%m%d}.jsonld")
+```python
+# ✅ Good: Descriptive with version and date
+benchmark.save(Path("genomics_benchmark_v1.0.0_20240315.jsonld"))
+benchmark.save(Path("drug_targets_benchmark_v2.1.0.jsonld"))
+
+# ❌ Bad: Generic or unclear names
+benchmark.save(Path("benchmark.jsonld"))
+benchmark.save(Path("test.jsonld"))
 ```
 
-### File Organization
+### Directory Organization
 
-```python
-# Organize benchmarks in logical directories
-benchmark.save("benchmarks/medical/diagnosis-v2.jsonld")
-benchmark.save("benchmarks/education/k12-math.jsonld")
-benchmark.save("checkpoints/2024-03/diagnosis-checkpoint-1.jsonld")
+Organize checkpoints logically:
+
+```
+project/
+├── benchmarks/
+│   ├── genomics_v1.0.0.jsonld
+│   ├── drug_targets_v1.0.0.jsonld
+│   └── proteins_v1.0.0.jsonld
+├── checkpoints/
+│   └── genomics/
+│       ├── 01_questions.jsonld
+│       ├── 02_templates.jsonld
+│       ├── 03_rubrics.jsonld
+│       └── 04_verified.jsonld
+├── backups/
+│   ├── genomics_20240315.jsonld
+│   └── genomics_20240316.jsonld
+└── exports/
+    ├── results.csv
+    └── results.json
 ```
 
-### Regular Maintenance
+### Backup Strategy
+
+Implement a regular backup strategy:
 
 ```python
-def cleanup_old_checkpoints(directory, keep_days=30):
-    """Remove checkpoint files older than specified days"""
-    cutoff = datetime.now() - timedelta(days=keep_days)
+from pathlib import Path
+from datetime import datetime
+
+def backup_benchmark(benchmark, backup_dir: Path):
+    """Create daily backup"""
+    backup_dir.mkdir(parents=True, exist_ok=True)
+
+    # Daily backup
+    date_str = datetime.now().strftime("%Y%m%d")
+    daily_backup = backup_dir / f"{benchmark.name}_{date_str}.jsonld"
+
+    if not daily_backup.exists():
+        benchmark.save(daily_backup)
+        print(f"✓ Daily backup: {daily_backup.name}")
+    else:
+        print(f"  Daily backup already exists for {date_str}")
+
+# Backup after important changes
+backup_benchmark(benchmark, Path("backups"))
+```
+
+### Cleanup Old Checkpoints
+
+Remove old temporary checkpoints periodically:
+
+```python
+from pathlib import Path
+from datetime import datetime, timedelta
+
+def cleanup_old_checkpoints(checkpoint_dir: Path, keep_days: int = 30):
+    """Remove checkpoint files older than keep_days"""
+    cutoff_date = datetime.now() - timedelta(days=keep_days)
 
     removed = 0
-    for filename in os.listdir(directory):
-        if "checkpoint" in filename and filename.endswith(".jsonld"):
-            filepath = os.path.join(directory, filename)
-            if datetime.fromtimestamp(os.path.getmtime(filepath)) < cutoff:
-                os.remove(filepath)
+    for checkpoint in checkpoint_dir.glob("*.jsonld"):
+        # Check if it's a temporary checkpoint (contains 'checkpoint' in name)
+        if "checkpoint" in checkpoint.name.lower():
+            mtime = datetime.fromtimestamp(checkpoint.stat().st_mtime)
+            if mtime < cutoff_date:
+                checkpoint.unlink()
                 removed += 1
+                print(f"  Removed: {checkpoint.name}")
 
-    print(f"Removed {removed} old checkpoint files")
+    print(f"✓ Removed {removed} old checkpoints (older than {keep_days} days)")
 
-# Regular cleanup
-cleanup_old_checkpoints("checkpoints/", keep_days=30)
+# Cleanup old checkpoints
+cleanup_old_checkpoints(Path("checkpoints"), keep_days=30)
 ```
+
+---
 
 ## Next Steps
 
-With benchmarks saved and loaded:
+After saving and loading benchmarks:
 
-- Share benchmarks with team members for collaborative evaluation
-- Version control benchmark files for tracking changes over time
-- Set up automated backup systems for important benchmark data
+- [Run Verification](verification.md) - Evaluate LLM responses
+- [Advanced Features](../advanced/deep-judgment.md) - Use deep-judgment for detailed feedback
+- [Share Benchmarks](#portability-and-sharing) - Collaborate with your team
+
+---
+
+## Related Documentation
+
+- [Defining Benchmarks](defining-benchmark.md) - Benchmark creation and database persistence
+- [Verification](verification.md) - Run evaluations
+- [Templates](templates.md) - Structured answer evaluation
+- [Rubrics](rubrics.md) - Qualitative assessment criteria
+- [Quick Start](../quickstart.md) - End-to-end workflow example
