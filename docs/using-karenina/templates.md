@@ -92,6 +92,99 @@ This template:
 - Compares it case-insensitively against "BCL2"
 - Returns `True` if they match, `False` otherwise
 
+### How Automatic Template Generation Works
+
+Understanding the template generation process helps you troubleshoot issues and make informed decisions about when to use automatic vs manual templates.
+
+**High-Level Process:**
+
+When you call `generate_all_templates(model_config)`, Karenina performs these steps for each question:
+
+**1. Prepare the Context**
+
+Karenina packages the question and expected answer into a structured prompt:
+
+```
+Question: What is the approved drug target of Venetoclax?
+Expected Answer: BCL2
+
+Task: Generate a Pydantic template class that can:
+- Extract relevant information from free-text responses
+- Verify correctness against the expected answer
+```
+
+**2. Send to LLM**
+
+The configured LLM (e.g., `gpt-4.1-mini`) receives:
+- The question-answer pair
+- Instructions on Pydantic template structure
+- Requirements for the `verify()` method
+- Examples of well-formed templates
+
+**3. LLM Generates Template Code**
+
+The LLM analyzes the question type and generates appropriate Python code:
+
+```python
+class Answer(BaseAnswer):
+    target: str = Field(description="The protein target mentioned in the response")
+
+    def model_post_init(self, __context):
+        self.correct = {"target": "BCL2"}
+
+    def verify(self) -> bool:
+        return self.target.strip().upper() == self.correct["target"].upper()
+```
+
+The LLM tailors the template to the question:
+- **Simple factual questions** → Single field with exact matching
+- **Numerical questions** → Integer/float fields with tolerance ranges
+- **List-based questions** → List fields with subset matching
+- **Complex questions** → Multiple fields with composite verification logic
+
+**4. Validate the Template**
+
+Karenina validates the generated code:
+- **Syntax check**: Ensures valid Python code
+- **Structure check**: Verifies inheritance from `BaseAnswer`
+- **Method check**: Confirms presence of `model_post_init` and `verify()`
+- **Field check**: Validates Pydantic field definitions
+
+If validation fails, the template is rejected and marked for manual review.
+
+**5. Associate with Question**
+
+Once validated, Karenina:
+- Stores the template code with the question
+- Marks the question as "finished" (ready for verification)
+- Makes the template available for the verification pipeline
+
+**6. Ready for Verification**
+
+Questions with templates can now be used in verification:
+
+```python
+# The template is automatically used during verification
+results = benchmark.run_verification(config)
+```
+
+**What Makes Template Generation Effective:**
+
+- **LLM Code Generation Proficiency**: Modern LLMs excel at generating structured code like Pydantic classes
+- **Context-Aware**: The LLM sees both the question and answer, allowing it to create appropriate extraction logic
+- **Verification Logic**: The LLM can infer reasonable comparison strategies (case-insensitive, numeric tolerance, etc.)
+- **Consistency**: Automated generation ensures uniform template structure across large benchmark sets
+
+**When Generation Might Fail:**
+
+Template generation works well for most questions, but may struggle with:
+- **Ambiguous questions** where the correct extraction strategy is unclear
+- **Complex multi-part answers** requiring intricate verification logic
+- **Domain-specific validation** needing specialized knowledge
+- **Edge cases** with unusual answer formats
+
+In these cases, you can fall back to [manual template creation](#manual-template-creation-advanced).
+
 ---
 
 ## Manual Template Creation (Advanced)
