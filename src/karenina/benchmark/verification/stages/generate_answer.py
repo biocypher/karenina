@@ -11,7 +11,7 @@ from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from ....infrastructure.llm.interface import init_chat_model_unified
 from ..stage import BaseVerificationStage, VerificationContext
 from ..utils import UsageTracker
-from ..verification_utils import _construct_few_shot_prompt, _invoke_llm_with_retry, _is_valid_md5_hash
+from ..verification_utils import _construct_few_shot_prompt, _invoke_llm_with_retry
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -157,15 +157,16 @@ class GenerateAnswerStage(BaseVerificationStage):
         if answering_mcp_servers:
             logger.info(f"Answering model MCP servers: {answering_mcp_servers}")
 
-        # Step 1: Validate question_id for manual interface
-        if answering_model.interface == "manual" and not _is_valid_md5_hash(context.question_id):
-            error_msg = (
-                f"Invalid question_id format for manual interface: '{context.question_id}'. "
-                "question_id must be a 32-character hexadecimal MD5 hash when using manual interface. "
-                "This hash is typically generated during question extraction from the question text."
+        # Step 1: For manual interface, compute MD5 hash from question text
+        question_hash_for_manual = None
+        if answering_model.interface == "manual":
+            import hashlib
+
+            # Convert question text to MD5 hash for manual trace lookup
+            question_hash_for_manual = hashlib.md5(context.question_text.encode("utf-8")).hexdigest()
+            logger.info(
+                f"Manual interface: Using MD5 hash '{question_hash_for_manual}' from question text for trace lookup"
             )
-            context.mark_error(error_msg)
-            return
 
         # Step 2: Initialize answering LLM
         try:
@@ -175,7 +176,7 @@ class GenerateAnswerStage(BaseVerificationStage):
                     provider=answering_model.model_provider,
                     temperature=answering_model.temperature,
                     interface=answering_model.interface,
-                    question_hash=context.question_id,
+                    question_hash=question_hash_for_manual,
                     mcp_urls_dict=answering_model.mcp_urls_dict,
                     mcp_tool_filter=answering_model.mcp_tool_filter,
                 )
@@ -252,6 +253,12 @@ class GenerateAnswerStage(BaseVerificationStage):
                     raw_llm_response += "\n\n[Note: Recursion limit reached - partial response shown]"
             else:
                 raw_llm_response = response.content if hasattr(response, "content") else str(response)
+
+            # For manual interface, retrieve agent metrics if available
+            if answering_model.interface == "manual" and hasattr(answering_llm, "get_agent_metrics"):
+                manual_agent_metrics = answering_llm.get_agent_metrics()
+                if manual_agent_metrics:
+                    usage_tracker.set_agent_metrics(manual_agent_metrics)
 
         except Exception as e:
             # Check if this is a recursion limit error that wasn't caught earlier

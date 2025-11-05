@@ -11,6 +11,9 @@ if TYPE_CHECKING:
 
 from ...utils.checkpoint import add_question_to_benchmark
 
+# Sentinel value to detect if finished parameter was explicitly provided
+_NOT_PROVIDED = object()
+
 
 class QuestionManager:
     """Manager for question CRUD operations and metadata."""
@@ -25,7 +28,7 @@ class QuestionManager:
         raw_answer: str | None = None,
         answer_template: str | type | None = None,
         question_id: str | None = None,
-        finished: bool = False,
+        finished: bool | object = _NOT_PROVIDED,
         author: dict[str, Any] | None = None,
         sources: list[dict[str, Any]] | None = None,
         custom_metadata: dict[str, Any] | None = None,
@@ -44,7 +47,7 @@ class QuestionManager:
             raw_answer: The expected answer text (required if question is str)
             answer_template: Optional Python code (str), Answer class (type), or None
             question_id: Optional question ID (will be generated if not provided)
-            finished: Whether the template is finished
+            finished: Whether the template is finished (auto-set to True if answer_template provided)
             author: Optional author information
             sources: Optional source documents
             custom_metadata: Optional custom metadata
@@ -61,7 +64,7 @@ class QuestionManager:
             q_obj = Question(question="What is Python?", raw_answer="A programming language")
             q_id = manager.add_question(q_obj)
 
-            # New usage with Answer class
+            # New usage with Answer class - automatically marked as finished
             class MyAnswer(BaseAnswer):
                 value: int
                 def verify(self): return self.value == 42
@@ -69,6 +72,9 @@ class QuestionManager:
         """
         # Import Question class here to avoid circular imports
         from ...schemas.domain import Question
+
+        # Track whether user provided an answer template (before we set default)
+        user_provided_template = answer_template is not None
 
         # Handle Question object input
         if isinstance(question, Question):
@@ -128,6 +134,17 @@ class QuestionManager:
 
         # At this point, answer_template is guaranteed to be a string
         assert isinstance(answer_template, str), "answer_template should be a string at this point"
+
+        # Auto-set finished flag if user provided a template but didn't explicitly set finished
+        # This enables backend usage (like ManualTraces) to skip the manual mark_finished() call
+        # Frontend behavior is preserved since it always explicitly passes finished=False
+        if finished is _NOT_PROVIDED:
+            # User didn't provide finished parameter - auto-set based on template presence
+            finished = bool(user_provided_template)
+        # else: User explicitly provided finished value, use it as-is
+
+        # Type narrowing: finished is guaranteed to be bool at this point
+        assert isinstance(finished, bool), "finished must be bool after sentinel check"
 
         q_id = add_question_to_benchmark(
             self.base._checkpoint,
