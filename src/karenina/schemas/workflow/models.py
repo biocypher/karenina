@@ -1,8 +1,11 @@
 """Model configuration and few-shot configuration models."""
 
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field, SecretStr, model_validator
+
+if TYPE_CHECKING:
+    pass
 
 # Interface constants
 INTERFACE_OPENROUTER = "openrouter"
@@ -354,9 +357,9 @@ class FewShotConfig(BaseModel):
 class ModelConfig(BaseModel):
     """Configuration for a single model."""
 
-    id: str
+    id: str | None = None  # Optional - defaults to "manual" for manual interface
     model_provider: str | None = None  # Optional - only required for langchain interface
-    model_name: str
+    model_name: str | None = None  # Optional - defaults to "manual" for manual interface
     temperature: float = 0.1
     interface: Literal["langchain", "openrouter", "manual", "openai_endpoint"] = "langchain"
     system_prompt: str | None = None  # Optional - defaults applied based on context (answering/parsing)
@@ -366,3 +369,37 @@ class ModelConfig(BaseModel):
     # OpenAI Endpoint configuration (for openai_endpoint interface)
     endpoint_base_url: str | None = None  # Custom endpoint base URL
     endpoint_api_key: SecretStr | None = None  # User-provided API key
+    # Manual interface configuration
+    manual_traces: Any = Field(default=None, exclude=True)  # Excluded from serialization; type: ManualTraces | None
+
+    @model_validator(mode="after")
+    def validate_manual_interface(self) -> "ModelConfig":
+        """Validate manual interface configuration and set defaults."""
+        if self.interface == INTERFACE_MANUAL:
+            # Manual interface requires manual_traces
+            if self.manual_traces is None:
+                raise ValueError(
+                    "manual_traces is required when interface='manual'. "
+                    "Create a ManualTraces instance and pass it to ModelConfig."
+                )
+
+            # Set defaults for manual interface
+            if self.id is None:
+                self.id = "manual"
+            if self.model_name is None:
+                self.model_name = "manual"
+
+            # MCP not supported with manual interface
+            if self.mcp_urls_dict is not None:
+                raise ValueError(
+                    "MCP tools are not supported with manual interface. "
+                    "Manual traces are precomputed and cannot use dynamic tools."
+                )
+        else:
+            # Non-manual interfaces require id and model_name
+            if self.id is None:
+                raise ValueError("id is required for non-manual interfaces")
+            if self.model_name is None:
+                raise ValueError("model_name is required for non-manual interfaces")
+
+        return self

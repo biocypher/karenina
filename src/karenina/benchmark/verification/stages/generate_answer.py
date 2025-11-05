@@ -253,6 +253,12 @@ class GenerateAnswerStage(BaseVerificationStage):
             else:
                 raw_llm_response = response.content if hasattr(response, "content") else str(response)
 
+            # For manual interface, retrieve agent metrics if available
+            if answering_model.interface == "manual" and hasattr(answering_llm, "get_agent_metrics"):
+                manual_agent_metrics = answering_llm.get_agent_metrics()
+                if manual_agent_metrics:
+                    usage_tracker.set_agent_metrics(manual_agent_metrics)
+
         except Exception as e:
             # Check if this is a recursion limit error that wasn't caught earlier
             if "GraphRecursionError" in str(type(e).__name__) or "recursion_limit" in str(e).lower():
