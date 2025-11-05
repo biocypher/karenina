@@ -296,6 +296,9 @@ class VerificationConfig(BaseModel):
         This method removes fields that don't apply to a model's interface type,
         ensuring only relevant configuration is saved in presets.
 
+        Note: manual_traces field is automatically excluded (not saved in presets).
+        Manual traces must be uploaded separately when using a preset with manual interface.
+
         Args:
             model: Model configuration dictionary
 

@@ -31,6 +31,7 @@ class ManualTraceManager:
         # Session-based storage for manual traces
         self._traces: dict[str, str] = {}
         self._trace_timestamps: dict[str, float] = {}
+        self._trace_metrics: dict[str, dict[str, Any] | None] = {}  # Agent metrics for each trace
         self._session_timeout = session_timeout_seconds
         self._cleanup_timer: threading.Timer | None = None
         self._last_access = time.time()
@@ -59,7 +60,34 @@ class ManualTraceManager:
             for question_hash, trace in json_data.items():
                 self._traces[question_hash] = str(trace)
                 self._trace_timestamps[question_hash] = current_time
+                self._trace_metrics[question_hash] = None  # No metrics for JSON-loaded traces
 
+            self._last_access = current_time
+            self._restart_cleanup_timer()
+
+    def set_trace(self, question_hash: str, trace: str, agent_metrics: dict[str, Any] | None = None) -> None:
+        """
+        Set a manual trace programmatically with optional agent metrics.
+
+        Args:
+            question_hash: MD5 hash of the question
+            trace: The precomputed trace string
+            agent_metrics: Optional agent metrics dictionary (tool calls, failures, etc.)
+
+        Raises:
+            ManualTraceError: If question_hash format is invalid
+        """
+        if not self._is_valid_md5_hash(question_hash):
+            raise ManualTraceError(
+                f"Invalid question hash format: '{question_hash}'. "
+                "Question hashes must be 32-character hexadecimal MD5 hashes."
+            )
+
+        with self._lock:
+            current_time = time.time()
+            self._traces[question_hash] = str(trace)
+            self._trace_timestamps[question_hash] = current_time
+            self._trace_metrics[question_hash] = agent_metrics
             self._last_access = current_time
             self._restart_cleanup_timer()
 
@@ -76,6 +104,22 @@ class ManualTraceManager:
         with self._lock:
             self._last_access = time.time()
             return self._traces.get(question_hash)
+
+    def get_trace_with_metrics(self, question_hash: str) -> tuple[str | None, dict[str, Any] | None]:
+        """
+        Get a manual trace and its agent metrics for a specific question hash.
+
+        Args:
+            question_hash: MD5 hash of the question
+
+        Returns:
+            Tuple of (trace, agent_metrics) where either can be None
+        """
+        with self._lock:
+            self._last_access = time.time()
+            trace = self._traces.get(question_hash)
+            metrics = self._trace_metrics.get(question_hash)
+            return trace, metrics
 
     def has_trace(self, question_hash: str) -> bool:
         """
@@ -106,6 +150,7 @@ class ManualTraceManager:
         with self._lock:
             self._traces.clear()
             self._trace_timestamps.clear()
+            self._trace_metrics.clear()
             if self._cleanup_timer:
                 self._cleanup_timer.cancel()
                 self._cleanup_timer = None
@@ -159,6 +204,7 @@ class ManualTraceManager:
             if current_time - self._last_access >= self._session_timeout:
                 self._traces.clear()
                 self._trace_timestamps.clear()
+                self._trace_metrics.clear()
                 if self._cleanup_timer:
                     self._cleanup_timer.cancel()
                     self._cleanup_timer = None
@@ -174,6 +220,7 @@ class ManualTraceManager:
             for hash_key in expired_hashes:
                 self._traces.pop(hash_key, None)
                 self._trace_timestamps.pop(hash_key, None)
+                self._trace_metrics.pop(hash_key, None)
 
             # Restart timer if we still have traces
             if self._traces:
@@ -304,3 +351,195 @@ def get_manual_trace_count() -> int:
 def get_memory_usage_info() -> dict[str, Any]:
     """Get memory usage information for manual traces."""
     return _trace_manager.get_memory_usage_info()
+
+
+def set_manual_trace(question_hash: str, trace: str, agent_metrics: dict[str, Any] | None = None) -> None:
+    """
+    Set a manual trace programmatically with optional agent metrics.
+
+    Args:
+        question_hash: MD5 hash of the question
+        trace: The precomputed trace string
+        agent_metrics: Optional agent metrics dictionary (tool calls, failures, etc.)
+
+    Raises:
+        ManualTraceError: If question_hash format is invalid
+    """
+    _trace_manager.set_trace(question_hash, trace, agent_metrics)
+
+
+def get_manual_trace_with_metrics(question_hash: str) -> tuple[str | None, dict[str, Any] | None]:
+    """
+    Get a manual trace and its agent metrics for a specific question hash.
+
+    Args:
+        question_hash: MD5 hash of the question
+
+    Returns:
+        Tuple of (trace, agent_metrics) where either can be None
+    """
+    return _trace_manager.get_trace_with_metrics(question_hash)
+
+
+def get_manual_trace_manager() -> ManualTraceManager:
+    """
+    Get the global trace manager instance.
+
+    This is useful for programmatic access to the trace manager,
+    particularly for the ManualTraces class.
+    """
+    return _trace_manager
+
+
+class ManualTraces:
+    """
+    Manages manual traces for a specific benchmark.
+
+    This class provides a high-level API for registering traces programmatically,
+    with support for both string traces and LangChain message lists (with tool call metrics).
+    """
+
+    def __init__(self, benchmark: "Any") -> None:
+        """
+        Initialize ManualTraces with a benchmark.
+
+        Args:
+            benchmark: The Benchmark object containing questions
+
+        Note:
+            This enables question text to hash mapping via the benchmark's question cache.
+        """
+        self._benchmark = benchmark
+        self._trace_manager = get_manual_trace_manager()
+
+    def register_trace(self, question_identifier: str, trace: str | list[Any], map_to_id: bool = False) -> None:
+        """
+        Register a single trace by question ID or text.
+
+        Args:
+            question_identifier: Either a question hash (32-char MD5) or question text
+            trace: Either a string trace or list of LangChain messages
+            map_to_id: If True, treat question_identifier as text and convert to hash
+
+        Raises:
+            ValueError: If question not found in benchmark (when map_to_id=True)
+            ManualTraceError: If question_hash format is invalid
+            TypeError: If trace format is invalid
+        """
+        # Convert text to hash if needed
+        question_hash = self._question_text_to_hash(question_identifier) if map_to_id else question_identifier
+
+        # Validate hash format
+        if not self._trace_manager._is_valid_md5_hash(question_hash):
+            raise ManualTraceError(
+                f"Invalid question hash: '{question_hash}'. "
+                "Question hashes must be 32-character hexadecimal MD5 hashes."
+            )
+
+        # Preprocess trace (handle both string and message list formats)
+        harmonized_trace, agent_metrics = self._preprocess_trace(trace)
+
+        # Store in trace manager
+        self._trace_manager.set_trace(question_hash=question_hash, trace=harmonized_trace, agent_metrics=agent_metrics)
+
+    def register_traces(self, traces_dict: dict[str, str | list[Any]], map_to_id: bool = False) -> None:
+        """
+        Batch register traces.
+
+        Args:
+            traces_dict: Dictionary with question identifiers as keys and traces as values
+            map_to_id: If True, treat keys as question text and convert to hashes
+
+        Raises:
+            ValueError: If any question not found in benchmark (when map_to_id=True)
+            ManualTraceError: If any question_hash format is invalid
+            TypeError: If any trace format is invalid
+        """
+        for identifier, trace in traces_dict.items():
+            self.register_trace(identifier, trace, map_to_id=map_to_id)
+
+    def _question_text_to_hash(self, question_text: str) -> str:
+        """
+        Convert question text to MD5 hash using the same algorithm as Question.id.
+
+        Args:
+            question_text: The question text
+
+        Returns:
+            MD5 hash of the question text
+
+        Raises:
+            ValueError: If question not found in benchmark
+        """
+        import hashlib
+
+        computed_hash = hashlib.md5(question_text.encode("utf-8")).hexdigest()
+
+        # Search through benchmark's questions to find matching question
+        # Note: _questions_cache uses URN format IDs as keys, but we need the MD5 hash
+        for question_urn_id in self._benchmark._questions_cache:
+            question_data = self._benchmark.get_question(question_urn_id)
+            if question_data["question"] == question_text:
+                # Found the question, return the MD5 hash (not the URN ID)
+                return computed_hash
+
+        # Question not found
+        available_count = len(self._benchmark._questions_cache)
+        raise ValueError(
+            f"Question not found in benchmark: '{question_text[:50]}...'\n"
+            f"Computed hash: {computed_hash}\n"
+            f"Available questions in benchmark: {available_count}\n"
+            "Note: Question text must match EXACTLY (case-sensitive, including whitespace)."
+        )
+
+    def _preprocess_trace(self, trace: str | list[Any]) -> tuple[str, dict[str, Any] | None]:
+        """
+        Process trace and extract agent metrics if applicable.
+
+        For string traces: Returns as-is with no metrics.
+        For LangChain message lists: Extracts tool calls, failures, and harmonizes to string.
+
+        Args:
+            trace: Either a string trace or list of LangChain messages
+
+        Returns:
+            Tuple of (harmonized_trace_string, agent_metrics_dict_or_None)
+
+        Raises:
+            TypeError: If trace format is invalid
+        """
+        if isinstance(trace, str):
+            # Plain string trace - no metrics
+            return trace, None
+
+        elif isinstance(trace, list):
+            # LangChain message format - extract metrics and harmonize
+            try:
+                from karenina.benchmark.verification.verification_utils import _extract_agent_metrics
+                from karenina.infrastructure.llm.mcp_utils import harmonize_agent_response
+
+                # Build response object expected by extraction function
+                response = {"messages": trace}
+
+                # Extract metrics (tool calls, failures, etc.)
+                agent_metrics = _extract_agent_metrics(response)
+
+                # Convert to string trace
+                harmonized_trace = harmonize_agent_response(response)
+
+                return harmonized_trace, agent_metrics
+
+            except ImportError as e:
+                raise ManualTraceError(
+                    f"Failed to import required preprocessing functions: {e}\n"
+                    "This may indicate a dependency issue in the verification module."
+                ) from e
+
+            except Exception as e:
+                raise ManualTraceError(
+                    f"Failed to preprocess LangChain message list: {e}\n"
+                    "Ensure the message list contains valid LangChain message objects."
+                ) from e
+
+        else:
+            raise TypeError(f"Invalid trace format: expected str or list[BaseMessage], got {type(trace).__name__}")

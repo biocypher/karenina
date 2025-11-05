@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import AIMessage, BaseMessage
 
-from .manual_traces import get_manual_trace
+from .manual_traces import get_manual_trace, get_manual_trace_with_metrics
 
 if TYPE_CHECKING:
     from .interface import LLMError
@@ -111,6 +111,16 @@ class ManualLLM:
             )
 
         return trace
+
+    def get_agent_metrics(self) -> dict[str, Any] | None:
+        """
+        Get agent metrics for this trace if available.
+
+        Returns:
+            Agent metrics dictionary or None if no metrics available
+        """
+        _, metrics = get_manual_trace_with_metrics(self.question_hash)
+        return metrics
 
 
 def create_manual_llm(question_hash: str, **_kwargs: Any) -> ManualLLM:
