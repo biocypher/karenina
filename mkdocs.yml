@@ -95,6 +95,7 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - About: about.md
   - Install: install.md
   - Quick Start: quickstart.md
   - Features: features.md
