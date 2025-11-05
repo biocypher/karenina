@@ -29,6 +29,7 @@ from .core import (
     TemplateManager,
     VerificationManager,
 )
+from .core.questions import _NOT_PROVIDED
 
 
 class Benchmark:
@@ -177,7 +178,7 @@ class Benchmark:
         raw_answer: str | None = None,
         answer_template: str | type | None = None,
         question_id: str | None = None,
-        finished: bool = False,
+        finished: bool | object = _NOT_PROVIDED,
         author: dict[str, Any] | None = None,
         sources: list[dict[str, Any]] | None = None,
         custom_metadata: dict[str, Any] | None = None,
@@ -195,7 +196,7 @@ class Benchmark:
             raw_answer: The expected answer text (required if question is str)
             answer_template: Optional Python code (str), Answer class (type), or None
             question_id: Optional question ID (will be generated if not provided)
-            finished: Whether the template is finished
+            finished: Whether the template is finished (auto-set to True if answer_template provided)
             author: Optional author information
             sources: Optional source documents
             custom_metadata: Optional custom metadata
