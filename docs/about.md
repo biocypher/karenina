@@ -7,11 +7,11 @@
 Consider a simple multiple-choice question:
 
 ```python
-question = "What is the capital of Italy?"
-possible_answers = ["Rome", "Milan", "Paris", "New York"]
+question = "Which protein regulates programmed cell death (apoptosis)?"
+possible_answers = ["BCL2", "p53", "Insulin", "Hemoglobin"]
 ```
 
-When we query a standard LLM, it usually responds in free text (e.g., `"I think the answer is Rome, because it is the capital of Italy."`). To evaluate such an answer programmatically, we have three approaches:
+When we query a standard LLM, it usually responds in free text (e.g., `"BCL2 is the protein that regulates apoptosis by preventing cell death."`). To evaluate such an answer programmatically, we have three approaches:
 
 #### 1. Constrain the Answering Model's Output
 
@@ -23,12 +23,12 @@ We directly instruct the answering model to return a response in a machine-frien
 You are answering a multiple-choice question.
 Return only the letter of your choice.
 
-Question: What is the capital of Italy?
+Question: Which protein regulates programmed cell death (apoptosis)?
 Options:
-A) Rome
-B) Milan
-C) Paris
-D) New York
+A) BCL2
+B) p53
+C) Insulin
+D) Hemoglobin
 
 Answer:
 ```
@@ -47,16 +47,16 @@ Instead of constraining the answering model, we keep its output free-form and re
 
 **Example:**
 
-* **Answering model output:** `"The capital of Italy is Rome, of course."`
+* **Answering model output:** `"BCL2 is an anti-apoptotic protein that prevents cell death."`
 * **Judge model prompt:**
   ```text
   The following is a student's answer to a multiple-choice question.
-  Question: What is the capital of Italy?
-  Options: Rome, Milan, Paris, New York.
-  Student's answer: "The capital of Italy is Rome, of course."
+  Question: Which protein regulates programmed cell death (apoptosis)?
+  Options: BCL2, p53, Insulin, Hemoglobin.
+  Student's answer: "BCL2 is an anti-apoptotic protein that prevents cell death."
   Which option does this correspond to? Provide a justification.
   ```
-* **Judge model output:** `"The student clearly selected Rome, which is correct."`
+* **Judge model output:** `"The student clearly selected BCL2, which is correct as it regulates apoptosis."`
 
 **Pros**: Flexible, allows natural answering
 **Cons**: Judge response is also free text, requiring parsing; potential inconsistencies
@@ -81,13 +81,13 @@ from karenina.domain.answers import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
-    answer: str = Field(description="The name of the city in the response")
+    answer: str = Field(description="The name of the protein mentioned in the response")
 
     def model_post_init(self, __context):
-        self.correct = {"answer": "Rome"}
+        self.correct = {"answer": "BCL2"}
 
     def verify(self) -> bool:
-        return self.answer.strip().lower() == self.correct["answer"].strip().lower()
+        return self.answer.strip().upper() == self.correct["answer"].strip().upper()
 ```
 
 **Key aspects:**
@@ -97,7 +97,7 @@ class Answer(BaseAnswer):
 **2. Answering model generates free text:**
 
 ```
-"The capital of Italy is Rome."
+"BCL2 is the protein that regulates apoptosis by preventing cell death."
 ```
 
 **3. Judge model parses into structured format:**
@@ -107,7 +107,7 @@ from langchain_core.output_parsers import PydanticOutputParser
 
 parser = PydanticOutputParser(pydantic_object=Answer)
 prompt = parser.get_format_instructions()
-prompt += "\n LLM Answer: The capital of Italy is Rome."
+prompt += "\n LLM Answer: BCL2 is the protein that regulates apoptosis by preventing cell death."
 
 judge_answer = llm.invoke(prompt)
 ```
@@ -115,7 +115,7 @@ judge_answer = llm.invoke(prompt)
 **Judge output (structured JSON):**
 
 ```json
-{"answer": "Rome"}
+{"answer": "BCL2"}
 ```
 
 **4. Verification step:**
@@ -173,8 +173,14 @@ Karenina rubrics support **three types of traits**, each suited for different ev
 AI-evaluated qualitative assessments where a Judge LLM evaluates subjective qualities of answers.
 
 **Examples:**
+
 - **Score-based (1-5):** "Rate the conciseness of the answer" or "How clear is the explanation?"
 - **Binary (pass/fail):** "Does the answer mention safety concerns?" or "Is the response complete?"
+
+**More precise, domain-specific examples:**
+
+- **Score-based (1-5):** "Rate the scientific accuracy of the answer" or "How well does the explanation integrate molecular mechanisms?"
+- **Binary (pass/fail):** "Does the answer distinguish between prokaryotes and eukaryotes?" or "Does the response mention relevant molecular pathways?"
 
 ### 2. Regex Pattern Traits
 
@@ -182,9 +188,11 @@ Deterministic validation using regular expressions for format compliance and key
 
 **Examples:**
 
-- "Answer must include a valid email format"
-- "Answer should not contain URLs" (inverted matching)
-- "Must mention specific technical terms"
+- "Answer must contain a DNA sequence (pattern: `[ATCG]+`)"
+- "Response must include enzyme names (pattern: `\w+ase\b`)"
+- "Answer should mention pH values (pattern: `pH\s*\d+\.?\d*`)"
+- "Response must contain concentration units (pattern: `\d+\.?\d*\s*(mM|μM|nM|M)`)"
+- "Answer should include EC enzyme classification numbers (pattern: `EC\s*\d+\.\d+\.\d+\.\d+`)"
 
 ### 3. Metric-Based Traits
 
