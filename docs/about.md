@@ -162,22 +162,70 @@ By encoding evaluation criteria into explicit, inspectable templates, benchmarks
 
 ---
 
-## Feature Comparison: Templates vs Rubrics
+## Beyond Templates: Rubrics for Quality Assessment
 
-Karenina uses two evaluation units:
+While templates excel at verifying **factual correctness**, many evaluation scenarios require assessing **qualitative traits**, format compliance, or quantitative metrics. This is where **rubrics** come in.
 
-| Aspect | Answer Templates | Rubrics |
-|--------|-----------------|---------|
-| **Purpose** | Verify factual correctness | Assess qualitative traits |
-| **Evaluation** | Programmatic comparison | LLM judgment, regex, or metrics |
-| **Best for** | Precise, unambiguous answers | Subjective qualities, format validation |
-| **Trait Types** | N/A | LLM-based, regex-based, metric-based |
-| **Output** | Pass/fail per field | Boolean, score (1-5), or metrics |
-| **Examples** | "BCL2", "46 chromosomes" | "Is the answer concise?", "Must match pattern" |
-| **Scope** | Per question | Global or per question |
+Karenina rubrics support **three types of traits**, each suited for different evaluation needs:
 
-[Learn more about Templates →](using-karenina/templates.md) | [Learn more about Rubrics →](using-karenina/rubrics.md)
+### 1. LLM-Based Traits
+
+AI-evaluated qualitative assessments where a Judge LLM evaluates subjective qualities of answers.
+
+**Examples:**
+- **Score-based (1-5):** "Rate the conciseness of the answer" or "How clear is the explanation?"
+- **Binary (pass/fail):** "Does the answer mention safety concerns?" or "Is the response complete?"
+
+### 2. Regex Pattern Traits
+
+Deterministic validation using regular expressions for format compliance and keyword detection.
+
+**Examples:**
+
+- "Answer must include a valid email format"
+- "Answer should not contain URLs" (inverted matching)
+- "Must mention specific technical terms"
+
+### 3. Metric-Based Traits
+
+Quantitative evaluation using **confusion matrix metrics**. You specify lists of terms that should or should not appear in the answer, and the system extracts these terms to compute standard metrics like precision, recall, and F1 score.
+
+**How it works:**
+
+- Define **True Positive (TP) instructions**: Terms that SHOULD be present and correctly identified
+- Define **False Positive (FP) instructions**: Terms that SHOULD NOT appear (incorrect terms in same domain)
+- The system extracts term mentions from the answer and computes metrics based on what was found
+
+**Example:**
+
+- "Identify inflammatory lung diseases": Specify correct diseases (asthma, bronchitis, pneumonia) as TP instructions and incorrect diseases (emphysema, pulmonary fibrosis) as FP instructions
+- Metrics computed: precision (accuracy of mentioned diseases), recall (coverage of expected diseases), F1 score
+
+> **Learn more:** See the [Rubrics User Guide](using-karenina/rubrics.md) for detailed examples, configuration options, and best practices for all three trait types.
 
 ---
 
-[Back to Home](index.md) | [View All Features](features.md) | [Get Started](quickstart.md)
+## Feature Comparison: Templates vs Rubrics
+
+Karenina uses **two complementary evaluation units** to provide comprehensive assessment:
+
+| Aspect | Answer Templates | Rubrics |
+|--------|-----------------|---------|
+| **Purpose** | Verify factual correctness | Assess qualitative traits, format, and metrics |
+| **Evaluation Method** | Programmatic field comparison | Three approaches:<br>• LLM judgment<br>• Regex patterns<br>• Term extraction + metrics |
+| **Best for** | Precise, unambiguous answers | Subjective qualities, format validation, quantitative analysis |
+| **Trait Types** | Single verification method | **Three types:**<br>• LLM-based (qualitative)<br>• Regex-based (format)<br>• Metric-based (term extraction) |
+| **Output** | Pass/fail per field | • Boolean (binary traits)<br>• Scores 1-5 (score traits)<br>• Precision/Recall/F1 (metric traits) |
+| **Examples** | `"BCL2"`, `"46 chromosomes"` | • "Is the answer concise?" (LLM)<br>• Match email pattern (regex)<br>• Extract diseases for F1 score (metric) |
+| **Scope** | Per question | Global or per question |
+| **Automation** | Auto-generated from Q&A pairs | Reusable across benchmarks |
+
+**When to use what:**
+
+- Use **templates** when you need to verify specific factual content or structured data
+- Use **LLM-based rubrics** for subjective quality assessment (clarity, conciseness, tone)
+- Use **regex rubrics** for format compliance and deterministic keyword checks
+- Use **metric rubrics** when evaluating classification accuracy by extracting and measuring term coverage
+- Use **both together** for comprehensive evaluation covering correctness AND quality
+
+[Learn more about Templates →](using-karenina/templates.md) | [Learn more about Rubrics →](using-karenina/rubrics.md)
