@@ -67,6 +67,7 @@ print(f"Generated {len(results)} templates successfully")
 ```
 
 **What happens:**
+
 1. Karenina sends each question + answer to the LLM
 2. The LLM generates a Pydantic class tailored to that specific question
 3. The template is automatically validated and associated with the question
@@ -88,6 +89,7 @@ class Answer(BaseAnswer):
 ```
 
 This template:
+
 - Extracts the `target` field from free-text responses
 - Compares it case-insensitively against "BCL2"
 - Returns `True` if they match, `False` otherwise
@@ -98,90 +100,110 @@ Understanding the template generation process helps you troubleshoot issues and 
 
 **High-Level Process:**
 
-When you call `generate_all_templates(model_config)`, Karenina performs these steps for each question:
+When you call `generate_all_templates(model_config)`, Karenina performs a **three-phase structured generation** for each question:
 
-**1. Prepare the Context**
+**Phase 1: Ground Truth Extraction**
 
-Karenina packages the question and expected answer into a structured prompt:
+The LLM analyzes the question-answer pair and generates a JSON specification defining the attributes needed for verification.
 
-```
-Question: What is the approved drug target of Venetoclax?
-Expected Answer: BCL2
+Example for "What is the approved drug target of Venetoclax?" (answer: "BCL2"):
 
-Task: Generate a Pydantic template class that can:
-- Extract relevant information from free-text responses
-- Verify correctness against the expected answer
-```
-
-**2. Send to LLM**
-
-The configured LLM (e.g., `gpt-4.1-mini`) receives:
-- The question-answer pair
-- Instructions on Pydantic template structure
-- Requirements for the `verify()` method
-- Examples of well-formed templates
-
-**3. LLM Generates Template Code**
-
-The LLM analyzes the question type and generates appropriate Python code:
-
-```python
-class Answer(BaseAnswer):
-    target: str = Field(description="The protein target mentioned in the response")
-
-    def model_post_init(self, __context):
-        self.correct = {"target": "BCL2"}
-
-    def verify(self) -> bool:
-        return self.target.strip().upper() == self.correct["target"].upper()
+```json
+{
+  "attributes": [
+    {
+      "name": "mentions_bcl2_protein",
+      "type": "bool",
+      "ground_truth": true
+    },
+    {
+      "name": "mentions_apoptosis_regulation",
+      "type": "bool",
+      "ground_truth": false
+    }
+  ]
+}
 ```
 
-The LLM tailors the template to the question:
-- **Simple factual questions** → Single field with exact matching
-- **Numerical questions** → Integer/float fields with tolerance ranges
-- **List-based questions** → List fields with subset matching
-- **Complex questions** → Multiple fields with composite verification logic
+**Important design principle:** The system strongly **suggests boolean-based evaluation** rather than free-text string matching. Text-based assessment is typically converted to boolean checks for concept presence.
 
-**4. Validate the Template**
+**Phase 2: Field Description Generation**
 
-Karenina validates the generated code:
-- **Syntax check**: Ensures valid Python code
-- **Structure check**: Verifies inheritance from `BaseAnswer`
-- **Method check**: Confirms presence of `model_post_init` and `verify()`
-- **Field check**: Validates Pydantic field definitions
+Using the ground truth specification, the LLM generates clear instructions for each attribute that will guide the judge model during response parsing.
 
-If validation fails, the template is rejected and marked for manual review.
+Example output:
 
-**5. Associate with Question**
-
-Once validated, Karenina:
-- Stores the template code with the question
-- Marks the question as "finished" (ready for verification)
-- Makes the template available for the verification pipeline
-
-**6. Ready for Verification**
-
-Questions with templates can now be used in verification:
-
-```python
-# The template is automatically used during verification
-results = benchmark.run_verification(config)
+```json
+{
+  "field_descriptions": {
+    "mentions_bcl2_protein": "Answer with true if the response mentions BCL2 or semantically related terms; otherwise answer false.",
+    "mentions_apoptosis_regulation": "Answer with true if the response discusses apoptosis regulation mechanisms; otherwise answer false."
+  }
+}
 ```
 
-**What Makes Template Generation Effective:**
+These descriptions emphasize **semantic equivalence** over exact string matching.
 
-- **LLM Code Generation Proficiency**: Modern LLMs excel at generating structured code like Pydantic classes
-- **Context-Aware**: The LLM sees both the question and answer, allowing it to create appropriate extraction logic
-- **Verification Logic**: The LLM can infer reasonable comparison strategies (case-insensitive, numeric tolerance, etc.)
-- **Consistency**: Automated generation ensures uniform template structure across large benchmark sets
+**Phase 3: Code Generation**
+
+Karenina programmatically builds the Pydantic class using the structured outputs from Phases 1 and 2. The generated code includes:
+
+- Field definitions with judge instructions from Phase 2
+- The `model_post_init()` method with ground truth values from Phase 1
+- The `verify()` method with type-appropriate comparison logic
+- The `verify_granular()` method for partial credit (multi-attribute templates only)
+
+**Validation and Storage**
+
+After generation, Karenina validates the Python code and stores it with the question. If validation fails, the system retries with error context (up to 3 attempts total).
+
+**What Makes This Approach Effective:**
+
+- **Structured Outputs**: JSON schema validation ensures consistent, parseable results from the LLM
+- **Semantic Evaluation**: Boolean attributes capture concept presence, making verification robust to paraphrasing
+- **Type Safety**: Enforced constraints prevent ambiguous evaluation strategies
+- **Retry Logic**: Failed validations trigger automatic regeneration with error context
+- **Partial Credit**: Multi-attribute templates support granular scoring automatically
+
+**Why Boolean Attributes?**
+
+The system strongly prefers boolean attributes over string extraction because:
+
+- **Flexibility**: Judges check if concepts are present, not exact phrases
+- **Deterministic**: `true`/`false` comparisons are unambiguous
+- **Robust**: Handles paraphrasing, synonyms, and variations naturally
+- **Avoids pitfalls**: No need for case normalization, fuzzy matching, or string similarity thresholds
+
+**Trade-off: Speed vs. Rigor**
+
+The current approach **may expose ground truth to the judge model** through field descriptions. For example, asking "Answer with true if the response mentions BCL2" reveals that BCL2 is the expected answer. The judge becomes aware of what's "correct" rather than acting as a pure information extractor.
+
+**Alternative approach (more rigorous but requires manual curation):**
+
+- Have the judge extract information **without knowing the correct answer**
+- Field descriptions would be neutral (e.g., "Extract the protein target mentioned")
+- All verification logic stays in the `verify()` method
+- Judge models act as pure parsers, not evaluators
+
+**Current approach (faster but less rigorous):**
+
+- Field descriptions include hints about correctness
+- Allows automated template generation with minimal manual curation
+- Judge models perform some evaluation during extraction
+- Faster to deploy at scale
+
+This is a **design trade-off**: a more rigorous benchmark requires more manual template curation, while the current automated approach prioritizes speed and scalability at the cost of some methodological purity.
+
+If you need the more rigorous approach, see [Manual Template Creation](#manual-template-creation-advanced) for how to write templates with neutral field descriptions.
 
 **When Generation Might Fail:**
 
 Template generation works well for most questions, but may struggle with:
-- **Ambiguous questions** where the correct extraction strategy is unclear
-- **Complex multi-part answers** requiring intricate verification logic
-- **Domain-specific validation** needing specialized knowledge
-- **Edge cases** with unusual answer formats
+
+- **Highly ambiguous questions** where even the ground truth is unclear
+- **Complex compositional logic** requiring interdependent attribute checks
+- **Domain-specific tolerance requirements** (e.g., "within 10% is acceptable")
+- **Unusual answer formats** that don't fit the structured attribute model
 
 In these cases, you can fall back to [manual template creation](#manual-template-creation-advanced).
 
@@ -193,16 +215,55 @@ For full control over evaluation logic, you can write templates manually. This i
 
 ### Basic Template Structure
 
-Templates inherit from `BaseAnswer` and define:
+Templates inherit from `BaseAnswer` and must include these **three required components**:
 
-1. **Fields**: What data to extract (with descriptions for the judge LLM)
-2. **`model_post_init`**: Where to set the correct answer
-3. **`verify()`**: Logic to check correctness
+**1. Field Definitions**
+
+Fields specify what data to extract. Each field should have a clear description that guides the judge LLM:
 
 ```python
 from karenina.domain.answers import BaseAnswer
 from pydantic import Field
 
+# String fields
+target: str = Field(description="The protein target mentioned in the response")
+
+# Integer/Float fields
+count: int = Field(description="The number of items mentioned")
+score: float = Field(description="Accuracy score 0.0-1.0", ge=0.0, le=1.0)
+
+# Boolean fields (recommended for rigorous evaluation - see trade-off discussion above)
+mentions_bcl2: bool = Field(description="Extract the protein target mentioned in the response")
+
+# List fields
+proteins: List[str] = Field(description="List of proteins mentioned")
+```
+
+**2. `model_post_init(self, __context)` Method** (required)
+
+- **Purpose**: Initialize the ground truth values after Pydantic constructs the model
+- **Returns**: `None` (no return value)
+- **Usage**: Set `self.correct` dictionary with expected values
+
+```python
+def model_post_init(self, __context):
+    self.correct = {"count": 46}
+```
+
+**3. `verify(self) -> bool` Method** (required)
+
+- **Purpose**: Determine if the extracted answer is correct
+- **Returns**: `bool` - `True` if correct, `False` if incorrect
+- **Usage**: Compare extracted field values against `self.correct`
+
+```python
+def verify(self) -> bool:
+    return self.count == self.correct["count"]
+```
+
+**Complete Example:**
+
+```python
 class Answer(BaseAnswer):
     count: int = Field(description="The number of chromosomes mentioned in the response")
 
@@ -213,10 +274,67 @@ class Answer(BaseAnswer):
         return self.count == self.correct["count"]
 ```
 
-### Adding Manual Templates to Questions
+### Optional Method: Granular Scoring
+
+**`verify_granular(self) -> float`** (optional)
+
+- **Purpose**: Calculate partial credit for multi-attribute templates
+- **Returns**: `float` between 0.0 and 1.0 representing the fraction of correct attributes
+- **Usage**: Count matching attributes and return the percentage
+- **Note**: Automatically generated for multi-attribute templates; rarely needed for manual templates
 
 ```python
-# Option 1: Provide template code when adding the question
+def verify_granular(self) -> float:
+    correct_count = 0
+    total_count = 2
+
+    if self.field1 == self.correct["field1"]:
+        correct_count += 1
+    if self.field2 == self.correct["field2"]:
+        correct_count += 1
+
+    return correct_count / total_count
+```
+
+### Adding Manual Templates to Questions
+
+You can add templates in three ways:
+
+**Option 1: Pass an Answer class directly (recommended)**
+
+You can pass the class object directly, and Karenina will **automatically extract the source code**:
+
+```python
+from karenina.domain.answers import BaseAnswer
+from pydantic import Field
+
+# Use any descriptive class name you like
+class VenetoclaxAnswer(BaseAnswer):
+    target: str = Field(description="The protein target mentioned")
+
+    def model_post_init(self, __context):
+        self.correct = {"target": "BCL2"}
+
+    def verify(self) -> bool:
+        return self.target.strip().upper() == self.correct["target"].upper()
+
+# Pass the class directly - source code extraction happens automatically
+benchmark.add_question(
+    question="What is the approved drug target of Venetoclax?",
+    raw_answer="BCL2",
+    answer_template=VenetoclaxAnswer
+    # finished=True is automatically set when answer_template is provided
+)
+```
+
+**How automatic source code extraction works:**
+- For classes defined in files: `inspect.getsource()` captures the source code automatically
+- For classes defined in notebooks: Use `YourClassName.set_source_code_from_notebook()` or the `@capture_answer_source` decorator
+- For exec-created classes: Set `YourClassName._source_code` manually
+
+**Option 2: Pass template code as a string**
+
+```python
 template_code = '''class Answer(BaseAnswer):
     target: str = Field(description="The protein target mentioned")
 
@@ -233,13 +351,17 @@ benchmark.add_question(
     answer_template=template_code,
     finished=True  # Mark as ready for verification
 )
+```
 
-# Option 2: Add template to existing question
+**Option 3: Add template to existing question**
+
+```python
 question_id = benchmark.add_question(
     question="How many protein subunits does hemoglobin A have?",
     raw_answer="4"
 )
 
+# Later, add the template using add_answer_template
 template_code = '''class Answer(BaseAnswer):
     count: int = Field(description="The number of subunits mentioned")
 
@@ -250,6 +372,7 @@ template_code = '''class Answer(BaseAnswer):
         return self.count == self.correct["count"]
 '''
 
+benchmark.add_answer_template(question_id, template_code)
 ```
 
 ### Complex Template Example
@@ -289,79 +412,20 @@ benchmark.add_question(
 
 ---
 
-## Template Structure Deep Dive
-
-### Required Components
-
-Every template must include these three components:
-
-**1. Field Definitions**
-
-Fields specify what data to extract. Each field should have a clear description that guides the judge LLM:
-
-```python
-target: str = Field(description="The protein target mentioned in the response")
-count: int = Field(description="The number of items mentioned")
-is_correct: bool = Field(description="Whether the response is factually accurate")
-```
-
-**2. `model_post_init` Method**
-
-This method sets the correct answer(s) that will be compared during verification:
-
-```python
-def model_post_init(self, __context):
-    self.correct = {"target": "BCL2"}
-```
-
-**3. `verify()` Method**
-
-This method implements the comparison logic and returns `True` if the answer is correct:
-
-```python
-def verify(self) -> bool:
-    return self.target.strip().upper() == self.correct["target"].upper()
-```
-
-### Field Types
-
-Templates can use various field types depending on the expected answer:
-
-```python
-# String fields
-gene_name: str = Field(description="The gene symbol")
-
-# Integer fields
-chromosome_count: int = Field(description="Number of chromosomes")
-
-# Boolean fields
-is_correct: bool = Field(description="Whether the statement is true")
-
-# List fields
-proteins: List[str] = Field(description="List of proteins mentioned")
-
-# Float fields with constraints
-score: float = Field(description="Accuracy score 0.0-1.0", ge=0.0, le=1.0)
-```
-
----
-
 ## When to Use Which Approach
 
 ### Use Automatic Generation When:
 
-✅ You have many questions to process
-✅ Questions follow standard patterns (factual recall, numerical answers, multiple choice)
-✅ You want consistency across templates
-✅ You're prototyping or testing quickly
+- You have many questions to process
+- Questions follow standard patterns (factual recall, numerical answers, multiple choice)
+- You're prototyping or testing quickly
 
 ### Use Manual Creation When:
 
-✅ You need very specific verification logic
-✅ The question requires multi-step validation
-✅ You want to implement tolerance ranges or fuzzy matching
-✅ You're creating reusable template libraries
-✅ Automatic generation doesn't produce the desired structure
+- You need very specific verification logic
+- You want to implement tolerance ranges or fuzzy matching
+- You're creating reusable template libraries
+- Automatic generation doesn't produce the desired structure
 
 ---
 
