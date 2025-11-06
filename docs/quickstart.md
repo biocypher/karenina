@@ -276,6 +276,7 @@ print("This will compute precision, recall, and F1 score for this specific quest
 ```
 
 **Key Distinction:**
+
 - **Global rubrics** (clarity, conciseness): Assessed for every question → generic quality metrics
 - **Question-specific rubrics** (gene format, disease classification): Assessed for one question → domain-specific validation
 
