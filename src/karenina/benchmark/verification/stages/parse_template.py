@@ -126,6 +126,15 @@ class ParseTemplateStage(BaseVerificationStage):
             # Note: model_name is guaranteed non-None by ModelConfig validator
             assert parsing_model.model_name is not None, "model_name must not be None"
 
+            # Build base kwargs for model initialization
+            model_kwargs: dict[str, Any] = {
+                "model": parsing_model.model_name,
+                "provider": parsing_model.model_provider,
+                "temperature": parsing_model.temperature,
+                "interface": parsing_model.interface,
+            }
+
+            # Add interface-specific parameters
             if parsing_model.interface == "openai_endpoint":
                 # Require endpoint configuration
                 if not parsing_model.endpoint_base_url:
@@ -133,21 +142,14 @@ class ParseTemplateStage(BaseVerificationStage):
                 if not parsing_model.endpoint_api_key:
                     raise ValueError("endpoint_api_key is required for openai_endpoint interface")
 
-                parsing_llm = init_chat_model_unified(
-                    model=parsing_model.model_name,
-                    provider=parsing_model.model_provider,
-                    temperature=parsing_model.temperature,
-                    interface=parsing_model.interface,
-                    endpoint_base_url=parsing_model.endpoint_base_url,
-                    endpoint_api_key=parsing_model.endpoint_api_key.get_secret_value(),
-                )
-            else:
-                parsing_llm = init_chat_model_unified(
-                    model=parsing_model.model_name,
-                    provider=parsing_model.model_provider,
-                    temperature=parsing_model.temperature,
-                    interface=parsing_model.interface,
-                )
+                model_kwargs["endpoint_base_url"] = parsing_model.endpoint_base_url
+                model_kwargs["endpoint_api_key"] = parsing_model.endpoint_api_key.get_secret_value()
+
+            # Add any extra kwargs if provided (e.g., vendor-specific API keys)
+            if parsing_model.extra_kwargs:
+                model_kwargs.update(parsing_model.extra_kwargs)
+
+            parsing_llm = init_chat_model_unified(**model_kwargs)
         except Exception as e:
             error_msg = f"Failed to initialize parsing model: {type(e).__name__}: {e}"
             logger.error(error_msg)

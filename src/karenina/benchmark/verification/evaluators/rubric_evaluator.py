@@ -53,12 +53,19 @@ class RubricEvaluator:
         self.callable_registry = callable_registry or {}
 
         try:
-            self.llm = init_chat_model_unified(
-                model=model_config.model_name,
-                provider=model_config.model_provider,
-                temperature=model_config.temperature,
-                interface=model_config.interface,
-            )
+            # Build kwargs for model initialization
+            model_kwargs: dict[str, Any] = {
+                "model": model_config.model_name,
+                "provider": model_config.model_provider,
+                "temperature": model_config.temperature,
+                "interface": model_config.interface,
+            }
+
+            # Add any extra kwargs if provided (e.g., vendor-specific API keys)
+            if model_config.extra_kwargs:
+                model_kwargs.update(model_config.extra_kwargs)
+
+            self.llm = init_chat_model_unified(**model_kwargs)
         except Exception as e:
             raise RuntimeError(f"Failed to initialize LLM for rubric evaluation: {e}") from e
 

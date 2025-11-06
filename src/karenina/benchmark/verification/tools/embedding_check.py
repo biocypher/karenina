@@ -213,12 +213,19 @@ def check_semantic_equivalence(
         # Note: model_name is guaranteed non-None by ModelConfig validator
         assert parsing_model.model_name is not None, "model_name must not be None"
 
-        parsing_llm = init_chat_model_unified(
-            model=parsing_model.model_name,
-            provider=parsing_model.model_provider,
-            temperature=parsing_model.temperature,
-            interface=parsing_model.interface,
-        )
+        # Build kwargs for model initialization
+        model_kwargs: dict[str, Any] = {
+            "model": parsing_model.model_name,
+            "provider": parsing_model.model_provider,
+            "temperature": parsing_model.temperature,
+            "interface": parsing_model.interface,
+        }
+
+        # Add any extra kwargs if provided (e.g., vendor-specific API keys)
+        if parsing_model.extra_kwargs:
+            model_kwargs.update(parsing_model.extra_kwargs)
+
+        parsing_llm = init_chat_model_unified(**model_kwargs)
 
         # Convert data to readable strings
         gt_text = _convert_to_comparable_string(ground_truth_data)
