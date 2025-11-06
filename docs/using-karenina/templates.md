@@ -328,6 +328,7 @@ benchmark.add_question(
 ```
 
 **How automatic source code extraction works:**
+
 - For classes defined in files: `inspect.getsource()` captures the source code automatically
 - For classes defined in notebooks: Use `YourClassName.set_source_code_from_notebook()` or the `@capture_answer_source` decorator
 - For exec-created classes: Set `YourClassName._source_code` manually
