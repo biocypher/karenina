@@ -551,7 +551,7 @@ config.embedding_check_enabled = True  # This overrides preset
 
 ### Model Selection
 - Use `gpt-4.1-mini` for development (fast, cost-effective)
-- Use `gpt-4o` for production (higher quality)
+- Use `gpt-4.1-mini` for production (higher quality)
 - Set `temperature=0.0` for deterministic benchmarking
 - Test with multiple models for comparison
 
