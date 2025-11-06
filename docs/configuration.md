@@ -1,468 +1,54 @@
 # Configuration
 
-This guide explains how to configure Karenina for your benchmarking workflows.
+This guide covers all configuration options available in Karenina, including environment variables, programmatic configuration, and the precedence mechanism.
 
-## What is Configuration?
+---
 
-**Configuration** in Karenina controls:
-- LLM provider selection (OpenAI, Google, Anthropic, OpenRouter)
-- Model selection for answering and parsing
-- Feature toggles (embedding check, abstention detection)
-- Execution behavior (parallel vs sequential)
-- Database location
+## Overview
 
-Configuration uses a combination of environment variables and programmatic settings to provide flexibility across different use cases.
+Karenina provides flexible configuration to control:
+- **LLM providers and models**: OpenAI, Google, Anthropic, OpenRouter
+- **Features**: Embedding check, abstention detection, rubric evaluation
+- **Execution**: Parallel vs sequential processing
+- **Database**: SQLite database location
+
+---
 
 ## Configuration Methods
 
 Karenina supports two configuration approaches:
 
-1. **Environment Variables**: Global settings that affect all operations
+1. **Environment Variables**: Global settings affecting all operations
 2. **Programmatic Configuration**: Per-operation settings via Python code
 
-Both methods work together with clear precedence rules.
+### Configuration Precedence
+
+Understanding precedence is crucial for predictable behavior:
+
+1. **Explicit arguments** (including preset values) - Always used if provided
+2. **Environment variables** - Used only if explicitly set AND no programmatic argument provided
+3. **Field defaults** - Used if no env var set and no explicit argument
+
+**Key principle**: Environment variables are only read when they are explicitly set. If an environment variable is not set, Karenina uses the field default. If you explicitly pass an argument (or load from a preset), it always takes precedence over environment variables.
+
+---
 
 ## Environment Variables
 
-### LLM API Keys
+### API Keys
 
-Required for accessing LLM providers:
+API keys are required to use LLM providers. These are always configured via environment variables.
 
-```bash
-# OpenAI (for GPT models)
-export OPENAI_API_KEY="sk-..."
+| Variable | Description | Required For |
+|----------|-------------|--------------|
+| `OPENAI_API_KEY` | OpenAI API key | OpenAI models (GPT-4, etc.) |
+| `GOOGLE_API_KEY` | Google API key | Google models (Gemini) |
+| `ANTHROPIC_API_KEY` | Anthropic API key | Anthropic models (Claude) |
+| `OPENROUTER_API_KEY` | OpenRouter API key | OpenRouter unified access |
 
-# Google (for Gemini models)
-export GOOGLE_API_KEY="AIza..."
+#### Setting API Keys
 
-# Anthropic (for Claude models)
-export ANTHROPIC_API_KEY="sk-ant-..."
-
-# OpenRouter (for unified access)
-export OPENROUTER_API_KEY="sk-or-..."
-```
-
-**Security Best Practices**:
-- Never commit API keys to version control
-- Use `.env` files (added to `.gitignore`)
-- Rotate keys regularly
-- Use separate keys for development and production
-
-### Database Configuration
-
-Optional database location:
-
-```bash
-# Default: dbs/karenina.db
-export DB_PATH="dbs/genomics.db"
-```
-
-### Feature Toggles
-
-Enable optional features:
-
-```bash
-# Embedding Check (semantic similarity fallback)
-export EMBEDDING_CHECK="true"
-export EMBEDDING_CHECK_MODEL="all-MiniLM-L6-v2"
-export EMBEDDING_CHECK_THRESHOLD="0.85"
-
-# Abstention Detection (refusal detection)
-export ABSTENTION_CHECK_ENABLED="true"
-```
-
-### Execution Control
-
-Control parallel execution:
-
-```bash
-# Enable parallel verification (default: true)
-export KARENINA_ASYNC_ENABLED="true"
-export KARENINA_ASYNC_MAX_WORKERS="2"
-
-# Disable for sequential execution
-export KARENINA_ASYNC_ENABLED="false"
-```
-
-## Programmatic Configuration
-
-### Model Configuration
-
-Configure LLM models using `ModelConfig`:
-
-```python
-from karenina.schemas import ModelConfig
-
-# Configure answering model
-answering_model = ModelConfig(
-    model_name="gpt-4.1-mini",
-    model_provider="openai",
-    temperature=0.0
-)
-
-# Configure parsing model (can be different)
-parsing_model = ModelConfig(
-    model_name="gpt-4.1-mini",
-    model_provider="openai",
-    temperature=0.0
-)
-```
-
-**Supported Providers**:
-- `"openai"` - OpenAI GPT models
-- `"google"` - Google Gemini models
-- `"anthropic"` - Anthropic Claude models
-- `"openrouter"` - OpenRouter unified access
-
-**Common Models**:
-- `"gpt-4.1-mini"` (default) - Fast, cost-effective
-- `"gpt-4o"` - More capable, higher cost
-- `"claude-3-5-sonnet-20241022"` - Anthropic's flagship
-- `"gemini-2.0-flash-exp"` - Google's latest
-
-### Verification Configuration
-
-Configure verification behavior:
-
-```python
-from karenina.schemas import VerificationConfig, ModelConfig
-
-model_config = ModelConfig(
-    model_name="gpt-4.1-mini",
-    model_provider="openai",
-    temperature=0.0
-)
-
-config = VerificationConfig(
-    answering_models=[model_config],
-    parsing_models=[model_config],
-    replicate_count=3,
-    rubric_enabled=True,
-    deep_judgment_enabled=False,
-    abstention_enabled=False
-)
-```
-
-## Default Configuration
-
-Karenina uses sensible defaults:
-
-```python
-# Default LLM Model
-model_name = "gpt-4.1-mini"
-model_provider = "openai"
-temperature = 0.0
-
-# Default Features
-embedding_check = False
-abstention_check = False
-deep_judgment = False
-
-# Default Execution
-async_enabled = True
-max_workers = 2
-
-# Default Database
-db_path = "dbs/karenina.db"
-```
-
-## Configuration Precedence
-
-Settings are applied in this order (highest to lowest):
-
-1. **Programmatic Configuration** (in code) - Highest priority
-2. **Environment Variables** - Medium priority
-3. **Default Values** (hardcoded) - Lowest priority
-
-**Example**:
-```python
-import os
-
-# 1. Set environment variable
-os.environ["EMBEDDING_CHECK"] = "true"
-
-# 2. Environment variable takes effect globally
-# All verifications will have embedding check enabled
-
-# 3. Override for specific operation
-config = VerificationConfig(
-    answering_models=[model_config],
-    parsing_models=[model_config],
-    # This specific config ignores environment variable
-)
-```
-
-## Common Configuration Scenarios
-
-### Scenario 1: Change Default Model
-
-Switch from gpt-4.1-mini to gpt-4o:
-
-```python
-from karenina import Benchmark
-from karenina.schemas import ModelConfig, VerificationConfig
-
-# Create benchmark
-benchmark = Benchmark.create(
-    name="Drug Target Benchmark",
-    description="Testing drug target knowledge",
-    version="1.0.0"
-)
-
-benchmark.add_question(
-    question="What is the approved drug target of Venetoclax?",
-    raw_answer="BCL2"
-)
-
-# Use GPT-4o instead of default
-model_config = ModelConfig(
-    model_name="gpt-4o",  # Changed from gpt-4.1-mini
-    model_provider="openai",
-    temperature=0.0
-)
-
-# Generate templates with new model
-benchmark.generate_all_templates(model_config=model_config)
-
-# Verify with same model
-config = VerificationConfig(
-    answering_models=[model_config],
-    parsing_models=[model_config],
-    replicate_count=3
-)
-
-results = benchmark.run_verification(config)
-```
-
-### Scenario 2: Enable Embedding Check
-
-Add semantic similarity fallback:
-
-```python
-import os
-from karenina import Benchmark
-from karenina.schemas import ModelConfig, VerificationConfig
-
-# Enable embedding check globally
-os.environ["EMBEDDING_CHECK"] = "true"
-os.environ["EMBEDDING_CHECK_MODEL"] = "all-MiniLM-L6-v2"
-os.environ["EMBEDDING_CHECK_THRESHOLD"] = "0.85"
-
-# Create benchmark
-benchmark = Benchmark.create(
-    name="Genomics Knowledge Benchmark",
-    description="Testing LLM knowledge of genomics",
-    version="1.0.0"
-)
-
-benchmark.add_question(
-    question="Which chromosome contains the HBB gene?",
-    raw_answer="Chromosome 11"
-)
-
-# Generate and verify (embedding check active)
-model_config = ModelConfig(
-    model_name="gpt-4.1-mini",
-    model_provider="openai",
-    temperature=0.0
-)
-
-benchmark.generate_all_templates(model_config=model_config)
-
-config = VerificationConfig(
-    answering_models=[model_config],
-    parsing_models=[model_config],
-    replicate_count=3
-)
-
-results = benchmark.run_verification(config)
-
-# Check if embedding check rescued any failures
-override_count = sum(
-    1 for r in results.values() if r.embedding_override_applied
-)
-print(f"Embedding check rescued {override_count} failures")
-```
-
-### Scenario 3: Multi-Model Comparison
-
-Compare multiple models:
-
-```python
-from karenina import Benchmark
-from karenina.schemas import ModelConfig, VerificationConfig
-
-# Create benchmark
-benchmark = Benchmark.create(
-    name="Model Comparison Benchmark",
-    description="Comparing GPT-4.1-mini vs GPT-4o",
-    version="1.0.0"
-)
-
-benchmark.add_question(
-    question="What is the approved drug target of Venetoclax?",
-    raw_answer="BCL2"
-)
-
-# Configure multiple models
-gpt_mini = ModelConfig(
-    model_name="gpt-4.1-mini",
-    model_provider="openai",
-    temperature=0.0
-)
-
-gpt_4o = ModelConfig(
-    model_name="gpt-4o",
-    model_provider="openai",
-    temperature=0.0
-)
-
-# Generate templates once
-benchmark.generate_all_templates(model_config=gpt_mini)
-
-# Verify with multiple models
-config = VerificationConfig(
-    answering_models=[gpt_mini, gpt_4o],  # Compare both
-    parsing_models=[gpt_mini],
-    replicate_count=3
-)
-
-results = benchmark.run_verification(config)
-
-# Analyze per-model performance
-for question_id, result in results.items():
-    print(f"Question: {result.question}")
-    print(f"GPT-4.1-mini: {result.verify_result}")
-    print(f"Models tested: {result.models_used}")
-```
-
-### Scenario 4: Development vs Production
-
-Different configurations for different environments:
-
-```python
-import os
-from karenina import Benchmark
-from karenina.schemas import ModelConfig, VerificationConfig
-
-# Development configuration
-if os.getenv("ENV") == "development":
-    model_config = ModelConfig(
-        model_name="gpt-4.1-mini",  # Cheaper model
-        model_provider="openai",
-        temperature=0.0
-    )
-    replicate_count = 1  # Faster
-    rubric_enabled = False  # Skip for speed
-
-# Production configuration
-else:
-    model_config = ModelConfig(
-        model_name="gpt-4o",  # Better model
-        model_provider="openai",
-        temperature=0.0
-    )
-    replicate_count = 5  # More replicates
-    rubric_enabled = True  # Full evaluation
-
-# Create benchmark
-benchmark = Benchmark.create(
-    name="Drug Target Benchmark",
-    description="Testing drug target knowledge",
-    version="1.0.0"
-)
-
-benchmark.add_question(
-    question="What is the approved drug target of Venetoclax?",
-    raw_answer="BCL2"
-)
-
-# Generate and verify with environment-specific config
-benchmark.generate_all_templates(model_config=model_config)
-
-config = VerificationConfig(
-    answering_models=[model_config],
-    parsing_models=[model_config],
-    replicate_count=replicate_count,
-    rubric_enabled=rubric_enabled
-)
-
-results = benchmark.run_verification(config)
-```
-
-### Scenario 5: Custom Database Location
-
-Use a specific database file:
-
-```python
-import os
-from pathlib import Path
-from karenina import Benchmark
-
-# Set custom database path
-os.environ["DB_PATH"] = "dbs/genomics_production.db"
-
-# Or use programmatic path
-db_path = Path("dbs/genomics_production.db")
-
-# Create benchmark
-benchmark = Benchmark.create(
-    name="Genomics Benchmark",
-    description="Production genomics evaluation",
-    version="1.0.0"
-)
-
-benchmark.add_question(
-    question="What is the approved drug target of Venetoclax?",
-    raw_answer="BCL2"
-)
-
-# Save to custom database
-benchmark.save_to_db(db_path)
-
-# Load from custom database
-loaded = Benchmark.load_from_db(
-    db_path,
-    "Genomics Benchmark"
-)
-```
-
-## Environment Variable Reference
-
-### LLM API Keys
-
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `OPENAI_API_KEY` | OpenAI API key | For OpenAI models |
-| `GOOGLE_API_KEY` | Google API key | For Google models |
-| `ANTHROPIC_API_KEY` | Anthropic API key | For Anthropic models |
-| `OPENROUTER_API_KEY` | OpenRouter API key | For OpenRouter models |
-
-### Feature Toggles
-
-| Variable | Description | Default | Values |
-|----------|-------------|---------|--------|
-| `EMBEDDING_CHECK` | Enable semantic fallback | `false` | `true`, `false` |
-| `EMBEDDING_CHECK_MODEL` | SentenceTransformer model | `all-MiniLM-L6-v2` | Model name |
-| `EMBEDDING_CHECK_THRESHOLD` | Similarity threshold | `0.85` | `0.0` - `1.0` |
-| `ABSTENTION_CHECK_ENABLED` | Enable refusal detection | `false` | `true`, `false` |
-
-### Execution Control
-
-| Variable | Description | Default | Values |
-|----------|-------------|---------|--------|
-| `KARENINA_ASYNC_ENABLED` | Enable parallel execution | `true` | `true`, `false` |
-| `KARENINA_ASYNC_MAX_WORKERS` | Number of parallel workers | `2` | Integer |
-
-### Database
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DB_PATH` | SQLite database path | `dbs/karenina.db` |
-
-## Setting Environment Variables
-
-### Using .env File (Recommended)
+**Option 1: Using .env file (Recommended)**
 
 Create a `.env` file in your project root:
 
@@ -470,288 +56,581 @@ Create a `.env` file in your project root:
 # .env
 OPENAI_API_KEY="sk-..."
 GOOGLE_API_KEY="AIza..."
-DB_PATH="dbs/karenina.db"
-EMBEDDING_CHECK="true"
-EMBEDDING_CHECK_THRESHOLD="0.85"
+ANTHROPIC_API_KEY="sk-ant-..."
+OPENROUTER_API_KEY="sk-or-..."
 ```
 
-**Important**: Add `.env` to `.gitignore` to avoid committing secrets!
-
-### Using Shell Export
+**Important**: Add `.env` to `.gitignore` to prevent committing secrets:
 
 ```bash
-# Temporary (current session only)
-export OPENAI_API_KEY="sk-..."
-export EMBEDDING_CHECK="true"
+echo ".env" >> .gitignore
+```
 
-# Permanent (add to ~/.bashrc or ~/.zshrc)
+If using Python's `dotenv` package, load the file:
+
+```python
+from dotenv import load_dotenv
+load_dotenv()
+
+from karenina import Benchmark
+```
+
+**Option 2: Shell export (temporary)**
+
+Set for current session only:
+
+```bash
+export OPENAI_API_KEY="sk-..."
+export GOOGLE_API_KEY="AIza..."
+```
+
+**Option 3: Shell config (permanent)**
+
+Add to `~/.bashrc` or `~/.zshrc`:
+
+```bash
 echo 'export OPENAI_API_KEY="sk-..."' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-### Using Python
+**Option 4: In Python code**
+
+Set before importing Karenina:
 
 ```python
 import os
-
-# Set before importing karenina
 os.environ["OPENAI_API_KEY"] = "sk-..."
-os.environ["EMBEDDING_CHECK"] = "true"
 
 from karenina import Benchmark
 ```
 
-## Configuration Best Practices
+#### Best Practices
 
-### API Keys
+- ✅ Use `.env` files for local development
+- ✅ Use different keys for dev and production
+- ✅ Rotate keys regularly
+- ✅ Add `.env` to `.gitignore`
+- ❌ **Never** commit API keys to version control
+- ❌ **Never** share keys between team members
 
-**Do**:
-- Store in environment variables or `.env` files
-- Use different keys for dev and production
-- Rotate keys regularly
-- Add `.env` to `.gitignore`
-
-**Don't**:
-- Commit API keys to version control
-- Share keys between team members
-- Use production keys in development
-
-### Model Selection
-
-**Do**:
-- Use `gpt-4.1-mini` for development (fast, cheap)
-- Use `gpt-4o` for production (better quality)
-- Test with multiple models for comparison
-- Set `temperature=0.0` for deterministic results
-
-**Don't**:
-- Use expensive models unnecessarily
-- Set high temperatures for benchmarking
-- Mix different models without documentation
+---
 
 ### Feature Toggles
 
-**Do**:
-- Enable `EMBEDDING_CHECK` for better recall
-- Enable `ABSTENTION_CHECK_ENABLED` for safety testing
-- Document which features are enabled
-- Test with features on and off
+These settings enable or configure advanced features. They can be set via environment variables OR programmatically via `VerificationConfig`.
 
-**Don't**:
-- Enable all features by default (performance impact)
-- Forget to document enabled features
-- Use different settings across environments without reason
+| Variable | Description | Default | Values |
+|----------|-------------|---------|--------|
+| `EMBEDDING_CHECK` | Enable semantic similarity fallback | `false` | `true`, `false` |
+| `EMBEDDING_CHECK_MODEL` | SentenceTransformer model for embeddings | `all-MiniLM-L6-v2` | Model name |
+| `EMBEDDING_CHECK_THRESHOLD` | Similarity threshold (0.0-1.0) | `0.85` | Float |
+| `ABSTENTION_CHECK_ENABLED` | Enable refusal/abstention detection | `false` | `true`, `false` |
 
-### Database Configuration
+**What these features do**:
 
-**Do**:
-- Use descriptive database names
-- Organize databases by project or domain
-- Back up databases regularly
-- Use absolute paths for clarity
+- **`EMBEDDING_CHECK`**: Enables semantic similarity fallback for answer verification. When enabled, if template parsing fails, Karenina computes embedding similarity between the LLM response and expected answer. If similarity exceeds the threshold, the answer is marked as correct. See [Embedding Check](advanced/embedding-check.md) for details.
 
-**Don't**:
-- Share databases across unrelated projects
-- Store databases in temporary directories
-- Use generic names like `test.db`
+- **`EMBEDDING_CHECK_MODEL`**: The SentenceTransformer model used for computing embeddings. Common options: `all-MiniLM-L6-v2` (default, fast), `all-mpnet-base-v2` (better quality), `multi-qa-mpnet-base-dot-v1` (optimized for semantic search).
 
-## Checking Configuration
+- **`EMBEDDING_CHECK_THRESHOLD`**: Cosine similarity threshold (0.0-1.0) for accepting answers. Higher values = stricter matching. `0.85` is a balanced default. Increase for stricter validation, decrease for more lenient matching.
 
-### View Current Settings
+- **`ABSTENTION_CHECK_ENABLED`**: Enables detection of refusals or abstentions (e.g., "I cannot answer this question"). When enabled, Karenina uses an LLM to determine if the model refused to answer. See [Abstention Detection](advanced/abstention-detection.md) for details.
 
-```python
-import os
-
-# Check API keys (masked)
-openai_key = os.getenv("OPENAI_API_KEY")
-print(f"OpenAI key: {'Set' if openai_key else 'Not set'}")
-
-# Check feature toggles
-embedding_check = os.getenv("EMBEDDING_CHECK", "false")
-print(f"Embedding check: {embedding_check}")
-
-# Check database path
-db_path = os.getenv("DB_PATH", "dbs/karenina.db")
-print(f"Database: {db_path}")
+**Example**:
+```bash
+export EMBEDDING_CHECK="true"
+export EMBEDDING_CHECK_MODEL="all-mpnet-base-v2"
+export EMBEDDING_CHECK_THRESHOLD="0.90"
+export ABSTENTION_CHECK_ENABLED="true"
 ```
 
-### Verify Configuration
+**Precedence**: These can also be configured via `VerificationConfig` (see below). Programmatic arguments take precedence over environment variables.
+
+---
+
+### Execution Control
+
+These settings control how Karenina executes verification tasks. They can be set via environment variables OR programmatically via `VerificationConfig`.
+
+| Variable | Description | Default | Values |
+|----------|-------------|---------|--------|
+| `KARENINA_ASYNC_ENABLED` | Enable parallel execution | `true` | `true`, `false` |
+| `KARENINA_ASYNC_MAX_WORKERS` | Number of parallel workers | `2` | Integer |
+
+**What these settings do**:
+
+- **`KARENINA_ASYNC_ENABLED`**: Controls whether verification runs in parallel (multiple questions at once) or sequentially (one at a time). Parallel execution is faster but uses more API quota. Set to `false` for sequential execution (useful for debugging or rate-limit-sensitive scenarios).
+
+- **`KARENINA_ASYNC_MAX_WORKERS`**: Number of parallel workers (questions processed simultaneously). Higher values = faster execution but more API quota usage and potential rate limits. Recommended: `2-4` for typical use, `1` for debugging, `8-16` for bulk processing (if your API quota allows).
+
+**Example**:
+```bash
+# Enable parallel processing with 4 workers
+export KARENINA_ASYNC_ENABLED="true"
+export KARENINA_ASYNC_MAX_WORKERS="4"
+
+# Disable for sequential execution (debugging)
+export KARENINA_ASYNC_ENABLED="false"
+```
+
+**Precedence**: These can also be configured via `VerificationConfig` (see below). Programmatic arguments take precedence over environment variables.
+
+---
+
+### Database Location
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DB_PATH` | SQLite database file path | `dbs/karenina.db` |
+
+**What this setting does**:
+
+- **`DB_PATH`**: Path to the SQLite database file used for storing benchmark data. Relative paths are resolved from the current working directory. Absolute paths are recommended for production use.
+
+**Example**:
+```bash
+# Relative path
+export DB_PATH="dbs/my_project.db"
+
+# Absolute path (recommended for production)
+export DB_PATH="/path/to/project/dbs/benchmark.db"
+```
+
+**Best practices**:
+- Use descriptive database names (`genomics_benchmark.db`, not `test.db`)
+- Organize databases by project or domain
+- Back up databases regularly
+- Use absolute paths for production
+
+---
+
+### Presets Directory
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `KARENINA_PRESETS_DIR` | Directory for storing configuration presets | `benchmark_presets/` |
+
+**What this setting does**:
+
+- **`KARENINA_PRESETS_DIR`**: Directory where `VerificationConfig` presets are saved and loaded. Used by `config.save_preset()` and `VerificationConfig.from_preset()`. See [Configuration Presets](advanced/presets.md) for details.
+
+**Example**:
+```bash
+export KARENINA_PRESETS_DIR="/path/to/my/presets"
+```
+
+---
+
+## Programmatic Configuration
+
+### Model Configuration
+
+Use `ModelConfig` to specify LLM models for answering and parsing:
 
 ```python
 from karenina.schemas import ModelConfig
 
-# Create model config
 model_config = ModelConfig(
+    id="my-model",                 # Unique identifier
+    model_name="gpt-4.1-mini",     # Model name
+    model_provider="openai",       # Provider: openai, google, anthropic, openrouter
+    temperature=0.0,               # Temperature (0.0 = deterministic)
+    system_prompt="Custom prompt"  # Optional system prompt
+)
+```
+
+**Supported providers**:
+- `"openai"` - OpenAI (GPT-4, GPT-4o, GPT-4.1-mini, etc.)
+- `"google"` - Google (Gemini models)
+- `"anthropic"` - Anthropic (Claude models)
+- `"openrouter"` - OpenRouter (unified access to multiple providers)
+
+**Common models**:
+- `"gpt-4.1-mini"` (default) - Fast, cost-effective, recommended for most use cases
+- `"gpt-4o"` - Higher quality, more expensive
+- `"claude-3-5-sonnet-20241022"` - Anthropic's flagship model
+- `"gemini-2.0-flash-exp"` - Google's latest fast model
+
+**Temperature**: Set to `0.0` for deterministic benchmarking (recommended). Higher values introduce randomness.
+
+---
+
+### Verification Configuration
+
+Use `VerificationConfig` to control verification behavior. This is the primary configuration object for running verification.
+
+```python
+from karenina.schemas import VerificationConfig, ModelConfig
+
+# Define models
+model_config = ModelConfig(
+    id="answering-model",
     model_name="gpt-4.1-mini",
     model_provider="openai",
     temperature=0.0
 )
 
-# Verify settings
-print(f"Model: {model_config.model_name}")
-print(f"Provider: {model_config.model_provider}")
-print(f"Temperature: {model_config.temperature}")
+# Create verification config
+config = VerificationConfig(
+    # Models
+    answering_models=[model_config],        # Models to benchmark (can test multiple)
+    parsing_models=[model_config],          # Models for parsing/grading responses
+
+    # Execution
+    replicate_count=3,                      # Number of times to run each question
+
+    # Feature toggles
+    rubric_enabled=True,                    # Enable rubric-based evaluation
+    deep_judgment_enabled=False,            # Enable multi-stage parsing with excerpts
+    abstention_enabled=False,               # Enable abstention/refusal detection
+
+    # Embedding check settings (can override env vars)
+    embedding_check_enabled=True,           # Enable semantic similarity fallback
+    embedding_check_model="all-MiniLM-L6-v2",  # Embedding model
+    embedding_check_threshold=0.85,         # Similarity threshold (0.0-1.0)
+
+    # Async execution settings (can override env vars)
+    async_enabled=True,                     # Enable parallel execution
+    async_max_workers=4                     # Number of parallel workers
+)
 ```
 
-## Troubleshooting
+**Configuration options**:
 
-### Issue: API Key Not Found
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `answering_models` | `list[ModelConfig]` | Models to benchmark (can test multiple) | Required |
+| `parsing_models` | `list[ModelConfig]` | Models for parsing/grading responses | Required |
+| `replicate_count` | `int` | Number of times to run each question | `1` |
+| `rubric_enabled` | `bool` | Enable rubric-based evaluation | `False` |
+| `deep_judgment_enabled` | `bool` | Enable multi-stage parsing with excerpts | `False` |
+| `abstention_enabled` | `bool` | Enable abstention/refusal detection | `False` |
+| `embedding_check_enabled` | `bool` | Enable semantic similarity fallback | `False` |
+| `embedding_check_model` | `str` | SentenceTransformer model for embeddings | `"all-MiniLM-L6-v2"` |
+| `embedding_check_threshold` | `float` | Similarity threshold (0.0-1.0) | `0.85` |
+| `async_enabled` | `bool` | Enable parallel execution | `True` |
+| `async_max_workers` | `int` | Number of parallel workers | `2` |
 
-**Error**: `ValueError: OPENAI_API_KEY not set`
+**See also**:
+- [Running Verification](using-karenina/verification.md) - Complete guide to verification
+- [Deep-Judgment](advanced/deep-judgment.md) - Multi-stage parsing feature
+- [Abstention Detection](advanced/abstention-detection.md) - Refusal detection
+- [Embedding Check](advanced/embedding-check.md) - Semantic similarity fallback
+- [Configuration Presets](advanced/presets.md) - Saving and loading configurations
 
-**Solutions**:
+---
+
+## Default Values
+
+Karenina uses these defaults when no configuration is provided:
+
+```python
+# Model defaults
+model_name = "gpt-4.1-mini"
+model_provider = "openai"
+temperature = 0.0
+
+# Feature defaults
+embedding_check_enabled = False
+embedding_check_model = "all-MiniLM-L6-v2"
+embedding_check_threshold = 0.85
+abstention_enabled = False
+deep_judgment_enabled = False
+rubric_enabled = False
+
+# Execution defaults
+async_enabled = True
+async_max_workers = 2
+
+# Database default
+db_path = "dbs/karenina.db"
+```
+
+---
+
+## Using .env Files
+
+**Recommended approach** for managing environment variables:
+
+1. Create a `.env` file in your project root:
+
+```bash
+# .env
+# API Keys
+OPENAI_API_KEY="sk-..."
+GOOGLE_API_KEY="AIza..."
+ANTHROPIC_API_KEY="sk-ant-..."
+
+# Database
+DB_PATH="dbs/karenina.db"
+
+# Feature toggles
+EMBEDDING_CHECK="true"
+EMBEDDING_CHECK_MODEL="all-mpnet-base-v2"
+EMBEDDING_CHECK_THRESHOLD="0.90"
+ABSTENTION_CHECK_ENABLED="true"
+
+# Execution control
+KARENINA_ASYNC_ENABLED="true"
+KARENINA_ASYNC_MAX_WORKERS="4"
+
+# Presets
+KARENINA_PRESETS_DIR="benchmark_presets"
+```
+
+2. Add `.env` to `.gitignore`:
+
+```bash
+echo ".env" >> .gitignore
+```
+
+3. Load in Python (if needed):
+
+```python
+from dotenv import load_dotenv
+load_dotenv()
+
+from karenina import Benchmark
+```
+
+---
+
+## Configuration Precedence Examples
+
+### Example 1: No env vars, no explicit args → defaults
+
+```python
+# No environment variables set
+config = VerificationConfig(
+    answering_models=[model],
+    parsing_models=[model]
+)
+
+print(config.embedding_check_enabled)  # False (field default)
+print(config.async_max_workers)  # 2 (field default)
+```
+
+### Example 2: Env vars set, no explicit args → env values
+
+```bash
+export EMBEDDING_CHECK="true"
+export KARENINA_ASYNC_MAX_WORKERS="8"
+```
+
+```python
+config = VerificationConfig(
+    answering_models=[model],
+    parsing_models=[model]
+)
+
+print(config.embedding_check_enabled)  # True (from env)
+print(config.async_max_workers)  # 8 (from env)
+```
+
+### Example 3: Env vars set, explicit args → explicit args override
+
+```bash
+export EMBEDDING_CHECK="true"
+export KARENINA_ASYNC_MAX_WORKERS="8"
+```
+
+```python
+config = VerificationConfig(
+    answering_models=[model],
+    parsing_models=[model],
+    embedding_check_enabled=False,  # Overrides env (env says True)
+    async_max_workers=4  # Overrides env (env says 8)
+)
+
+print(config.embedding_check_enabled)  # False (explicit arg)
+print(config.async_max_workers)  # 4 (explicit arg)
+```
+
+### Example 4: Loading preset with env vars → preset values override
+
+```bash
+export EMBEDDING_CHECK="true"
+export KARENINA_ASYNC_MAX_WORKERS="8"
+```
+
+```python
+# Preset file contains: embedding_check_enabled=False, async_max_workers=5
+config = VerificationConfig.from_preset(Path("my-preset.json"))
+
+print(config.embedding_check_enabled)  # False (from preset)
+print(config.async_max_workers)  # 5 (from preset)
+```
+
+---
+
+## Configuration Verification
+
+Verify your configuration is set correctly:
+
+```python
+import os
+from karenina.schemas import ModelConfig, VerificationConfig
+
+# Check API keys (masked for security)
+print("API Keys:")
+print(f"  OpenAI: {'✓' if os.getenv('OPENAI_API_KEY') else '✗'}")
+print(f"  Google: {'✓' if os.getenv('GOOGLE_API_KEY') else '✗'}")
+print(f"  Anthropic: {'✓' if os.getenv('ANTHROPIC_API_KEY') else '✗'}")
+
+# Check environment variables
+print("\nEnvironment Variables:")
+print(f"  EMBEDDING_CHECK: {os.getenv('EMBEDDING_CHECK', 'not set')}")
+print(f"  KARENINA_ASYNC_ENABLED: {os.getenv('KARENINA_ASYNC_ENABLED', 'not set')}")
+print(f"  DB_PATH: {os.getenv('DB_PATH', 'not set (using default)')}")
+
+# Create a config and check effective values
+model = ModelConfig(
+    id="test",
+    model_name="gpt-4.1-mini",
+    model_provider="openai",
+    temperature=0.0
+)
+
+config = VerificationConfig(
+    answering_models=[model],
+    parsing_models=[model]
+)
+
+print("\nEffective VerificationConfig Values:")
+print(f"  embedding_check_enabled: {config.embedding_check_enabled}")
+print(f"  embedding_check_model: {config.embedding_check_model}")
+print(f"  embedding_check_threshold: {config.embedding_check_threshold}")
+print(f"  async_enabled: {config.async_enabled}")
+print(f"  async_max_workers: {config.async_max_workers}")
+```
+
+---
+
+## Troubleshooting Configuration
+
+### API key not found
+
 ```bash
 # Check if key is set
 echo $OPENAI_API_KEY
 
-# Set key
+# Set temporarily
 export OPENAI_API_KEY="sk-..."
 
-# Or in Python
+# Set in Python
 import os
 os.environ["OPENAI_API_KEY"] = "sk-..."
 ```
 
-### Issue: Wrong Model Selected
+### Wrong model selected
 
-**Error**: Model not behaving as expected
-
-**Solutions**:
 ```python
-# Verify model configuration
+# Verify model config
 model_config = ModelConfig(
+    id="test",
     model_name="gpt-4.1-mini",  # Check spelling
     model_provider="openai",     # Check provider
-    temperature=0.0              # Check temperature
+    temperature=0.0
 )
 
-# Print config for debugging
+# Print for debugging
 print(model_config.model_dump())
 ```
 
-### Issue: Features Not Working
+### Features not activating
 
-**Error**: Embedding check or abstention not activating
-
-**Solutions**:
 ```bash
-# Verify environment variables are set
-env | grep -E "EMBEDDING|ABSTENTION"
+# Check environment variables
+env | grep -E "EMBEDDING|ABSTENTION|ASYNC"
 
 # Set explicitly
 export EMBEDDING_CHECK="true"
 export ABSTENTION_CHECK_ENABLED="true"
+export KARENINA_ASYNC_ENABLED="true"
 
-# Restart Python session to pick up changes
+# Restart Python session
 ```
 
-### Issue: Database Conflicts
+### Environment variables not being read
 
-**Error**: `sqlite3.OperationalError: database is locked`
+**Issue**: You set an env var but it's not being used.
 
-**Solutions**:
-```python
-# Use different database paths for parallel operations
-import os
-os.environ["DB_PATH"] = "dbs/worker_1.db"
-
-# Or use absolute paths
-from pathlib import Path
-db_path = Path("/absolute/path/to/dbs/karenina.db")
-```
-
-## Complete Configuration Example
-
-This example shows all configuration options:
+**Solution**: Environment variables are only read if not explicitly provided in code. If you pass an explicit argument, it takes precedence. This is by design.
 
 ```python
-import os
-from pathlib import Path
-from karenina import Benchmark
-from karenina.schemas import ModelConfig, VerificationConfig
-
-# 1. Set environment variables
-os.environ["OPENAI_API_KEY"] = "sk-..."
-os.environ["DB_PATH"] = "dbs/genomics.db"
-os.environ["EMBEDDING_CHECK"] = "true"
-os.environ["EMBEDDING_CHECK_THRESHOLD"] = "0.85"
-os.environ["ABSTENTION_CHECK_ENABLED"] = "true"
-os.environ["KARENINA_ASYNC_ENABLED"] = "true"
-os.environ["KARENINA_ASYNC_MAX_WORKERS"] = "4"
-
-# 2. Create benchmark
-benchmark = Benchmark.create(
-    name="Genomics Knowledge Benchmark",
-    description="Comprehensive genomics evaluation",
-    version="1.0.0"
-)
-
-# 3. Add questions
-benchmark.add_question(
-    question="What is the approved drug target of Venetoclax?",
-    raw_answer="BCL2",
-    author={"name": "Pharma Curator"}
-)
-
-benchmark.add_question(
-    question="Which chromosome contains the HBB gene?",
-    raw_answer="Chromosome 11",
-    author={"name": "Genetics Curator"}
-)
-
-# 4. Configure models
-model_config = ModelConfig(
-    model_name="gpt-4.1-mini",
-    model_provider="openai",
-    temperature=0.0
-)
-
-# 5. Generate templates
-benchmark.generate_all_templates(model_config=model_config)
-
-# 6. Configure verification
+# This will NOT use EMBEDDING_CHECK env var
 config = VerificationConfig(
-    answering_models=[model_config],
-    parsing_models=[model_config],
-    replicate_count=3,
-    rubric_enabled=True,
-    deep_judgment_enabled=False
+    ...,
+    embedding_check_enabled=False  # Explicit arg takes precedence
 )
 
-# 7. Run verification
-results = benchmark.run_verification(config)
-
-# 8. Analyze results
-success_count = sum(1 for r in results.values() if r.verify_result)
-total_count = len(results)
-print(f"Success rate: {success_count}/{total_count}")
-
-# 9. Save to database
-db_path = Path(os.getenv("DB_PATH", "dbs/karenina.db"))
-benchmark.save_to_db(db_path)
+# This WILL use EMBEDDING_CHECK env var (if set)
+config = VerificationConfig(...)  # No explicit arg
 ```
 
-## Related Documentation
+### Preset not overriding environment variables
 
-- **Quick Start**: Basic usage without configuration details
-- **Advanced Features**: Features that require configuration
-  - [Embedding Check](advanced/embedding-check.md) - Semantic fallback configuration
-  - [Abstention Detection](advanced/abstention-detection.md) - Refusal detection setup
-  - [Deep-Judgment](advanced/deep-judgment.md) - Multi-stage parsing configuration
-- **API Reference**: Complete ModelConfig and VerificationConfig documentation
-- **Troubleshooting**: Solutions for common configuration issues
+**Issue**: You load a preset but env vars seem to be used instead.
 
-## Summary
+**Solution**: Presets should always override env vars. If this isn't working, check:
+1. The preset file actually contains the fields
+2. The preset JSON is valid
+3. You're not passing explicit arguments after loading the preset
 
-Karenina configuration uses:
+```python
+# Correct: Preset values will override env vars
+config = VerificationConfig.from_preset(Path("preset.json"))
 
-1. **Environment Variables** for global settings (API keys, feature toggles)
-2. **Programmatic Configuration** for per-operation settings (models, parameters)
-3. **Clear Precedence** (code > environment > defaults)
+# Incorrect: Explicit args override preset
+config = VerificationConfig.from_preset(Path("preset.json"))
+config.embedding_check_enabled = True  # This overrides preset
+```
 
-**Default model**: `gpt-4.1-mini` with `temperature=0.0` for deterministic benchmarking.
+---
 
-Configure based on your needs:
-- Development → Fast, cheap models with minimal features
-- Production → Better models with full feature set
-- Research → Multiple models with all features enabled
+## Best Practices
+
+### API Keys
+- Store in environment variables or `.env` files
+- **Never** commit API keys to version control
+- Use different keys for dev and production
+- Rotate keys regularly
+
+### Model Selection
+- Use `gpt-4.1-mini` for development (fast, cost-effective)
+- Use `gpt-4o` for production (higher quality)
+- Set `temperature=0.0` for deterministic benchmarking
+- Test with multiple models for comparison
+
+### Features
+- Enable `EMBEDDING_CHECK` for better recall on fuzzy matches
+- Enable `ABSTENTION_CHECK_ENABLED` for safety/refusal testing
+- Enable `rubric_enabled` for detailed evaluation
+- Document which features are enabled in your project
+
+### Execution
+- Use `async_enabled=True` with `async_max_workers=2-4` for typical workloads
+- Increase `async_max_workers` for bulk processing (watch API rate limits)
+- Set `async_enabled=False` for debugging or when order matters
+
+### Database
+- Use descriptive database names (`genomics_benchmark.db`, not `test.db`)
+- Organize databases by project or domain
+- Back up databases regularly
+- Use absolute paths for production deployments
+
+### Configuration Management
+- Use `.env` files for global defaults
+- Use `VerificationConfig` for operation-specific settings
+- Save common configurations as presets (see [Configuration Presets](advanced/presets.md))
+- Document your configuration choices in project README
+
+---
+
+## Next Steps
+
+- **[Quick Start](quickstart.md)** - Create your first benchmark
+- **[Running Verification](using-karenina/verification.md)** - Complete verification guide
+- **[Configuration Presets](advanced/presets.md)** - Save and load configurations
+- **[Advanced Features](advanced/)** - Deep-dive into specific features
+- **[API Reference](api-reference.md)** - Complete API documentation
