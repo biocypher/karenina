@@ -391,6 +391,10 @@ class VerificationConfig(BaseModel):
         if "mcp_tool_filter" in model and model["mcp_tool_filter"]:
             sanitized["mcp_tool_filter"] = model["mcp_tool_filter"]
 
+        # Include extra_kwargs if present (vendor-specific API keys, custom parameters, etc.)
+        if "extra_kwargs" in model and model["extra_kwargs"]:
+            sanitized["extra_kwargs"] = model["extra_kwargs"]
+
         return sanitized
 
     @classmethod

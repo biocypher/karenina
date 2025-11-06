@@ -369,6 +369,9 @@ class ModelConfig(BaseModel):
     # OpenAI Endpoint configuration (for openai_endpoint interface)
     endpoint_base_url: str | None = None  # Custom endpoint base URL
     endpoint_api_key: SecretStr | None = None  # User-provided API key
+    # Extra keyword arguments to pass to the underlying model interface
+    # Useful for passing vendor-specific API keys, custom parameters, etc.
+    extra_kwargs: dict[str, Any] | None = None
     # Manual interface configuration
     manual_traces: Any = Field(default=None, exclude=True)  # Excluded from serialization; type: ManualTraces | None
 
