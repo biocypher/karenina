@@ -159,16 +159,16 @@ model_config = ModelConfig(
 ```python
 # OpenAI
 "gpt-4.1-mini"  # Default, recommended
-"gpt-4o"
-"gpt-4-turbo"
+"gpt-5-mini"
+"gpt-5"
 
 # Anthropic
-"claude-3-5-sonnet-20241022"
-"claude-3-opus-20240229"
+"claude-4-5-sonnet"
+"claude-4-5-opus"
 
 # Google
-"gemini-2.0-flash-exp"
-"gemini-1.5-pro"
+"gemini-2.5-flash"
+"gemini-2.5-pro"
 ```
 
 ### Issue: Wrong Provider for Model
@@ -241,7 +241,7 @@ from karenina.schemas import ModelConfig
 
 # Try more capable model
 model_config = ModelConfig(
-    model_name="gpt-4o",  # More capable than gpt-4.1-mini
+    model_name="gpt-4.1-mini",  # More capable than gpt-4.1-mini
     model_provider="openai",
     temperature=0.0
 )
@@ -294,7 +294,7 @@ benchmark.add_question(
 from karenina.schemas import ModelConfig
 
 model_config = ModelConfig(
-    model_name="gpt-4o",  # More reliable
+    model_name="gpt-4.1-mini",  # More reliable
     model_provider="openai",
     temperature=0.0
 )
@@ -725,7 +725,7 @@ config = VerificationConfig(
 ```python
 # ❌ Slow - expensive model
 model_config = ModelConfig(
-    model_name="gpt-4o",  # Slower, more expensive
+    model_name="gpt-4.1-mini",  # Slower, more expensive
     model_provider="openai"
 )
 
