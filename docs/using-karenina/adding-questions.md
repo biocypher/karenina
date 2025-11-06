@@ -111,15 +111,6 @@ for q in questions:
     benchmark.add_question(**q)
 ```
 
-### Column Name Examples
-
-The extraction utility is flexible with column naming. Here are common variations it recognizes:
-
-**Question column:** "Question", "question", "Question Text", "Prompt"
-**Answer column:** "Answer", "answer", "Expected Answer", "Correct Answer"
-**Author column:** "Author", "author", "Creator", "Author Name"
-**Keywords column:** "Keywords", "keywords", "Tags", "topics"
-
 ## Working with Questions
 
 ### Accessing Questions
