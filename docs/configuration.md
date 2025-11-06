@@ -7,6 +7,7 @@ This guide covers all configuration options available in Karenina, including env
 ## Overview
 
 Karenina provides flexible configuration to control:
+
 - **LLM providers and models**: OpenAI, Google, Anthropic, OpenRouter
 - **Features**: Embedding check, abstention detection, rubric evaluation
 - **Execution**: Parallel vs sequential processing
@@ -37,7 +38,7 @@ Understanding precedence is crucial for predictable behavior:
 
 ### API Keys
 
-API keys are required to use LLM providers. These are always configured via environment variables.
+API keys are required to use LLM providers. These are typically configured via environment variables, but can also be passed directly through the `extra_kwargs` field in `ModelConfig` (see [Extra Keyword Arguments](#extra-keyword-arguments) for details).
 
 | Variable | Description | Required For |
 |----------|-------------|--------------|
@@ -197,6 +198,7 @@ export DB_PATH="/path/to/project/dbs/benchmark.db"
 ```
 
 **Best practices**:
+
 - Use descriptive database names (`genomics_benchmark.db`, not `test.db`)
 - Organize databases by project or domain
 - Back up databases regularly
@@ -223,100 +225,51 @@ export KARENINA_PRESETS_DIR="/path/to/my/presets"
 
 ## Programmatic Configuration
 
-### Model Configuration
+For detailed information about configuring models and verification, see the dedicated guides:
 
-Use `ModelConfig` to specify LLM models for answering and parsing:
+- **[Model Configuration](using-karenina/model-configuration.md)** - Complete guide to `ModelConfig` including:
 
-```python
-from karenina.schemas import ModelConfig
+    - All interfaces (langchain, openai_endpoint, openrouter, manual)
+    - Model providers (OpenAI, Google, Anthropic, etc.)
+    - Temperature and system prompts
+    - **`extra_kwargs` for passing API keys and vendor-specific parameters**
+    - MCP tool integration
+    - Common configuration patterns
 
-model_config = ModelConfig(
-    id="my-model",                 # Unique identifier
-    model_name="gpt-4.1-mini",     # Model name
-    model_provider="openai",       # Provider: openai, google, anthropic, openrouter
-    temperature=0.0,               # Temperature (0.0 = deterministic)
-    system_prompt="Custom prompt"  # Optional system prompt
-)
-```
+- **[Running Verification](using-karenina/verification.md)** - Complete guide to `VerificationConfig` including:
+    - Multi-model testing
+    - Replication for statistical analysis
+    - Evaluation modes (template_only, template_and_rubric, rubric_only)
+    - Advanced features (abstention detection, deep judgment)
+    - Progress tracking and result analysis
 
-**Supported providers**:
-- `"openai"` - OpenAI (GPT-4, GPT-4o, GPT-4.1-mini, etc.)
-- `"google"` - Google (Gemini models)
-- `"anthropic"` - Anthropic (Claude models)
-- `"openrouter"` - OpenRouter (unified access to multiple providers)
-
-**Common models**:
-- `"gpt-4.1-mini"` (default) - Fast, cost-effective, recommended for most use cases
-- `"gpt-4o"` - Higher quality, more expensive
-- `"claude-3-5-sonnet-20241022"` - Anthropic's flagship model
-- `"gemini-2.0-flash-exp"` - Google's latest fast model
-
-**Temperature**: Set to `0.0` for deterministic benchmarking (recommended). Higher values introduce randomness.
-
----
-
-### Verification Configuration
-
-Use `VerificationConfig` to control verification behavior. This is the primary configuration object for running verification.
+### Quick Example
 
 ```python
 from karenina.schemas import VerificationConfig, ModelConfig
 
-# Define models
-model_config = ModelConfig(
-    id="answering-model",
+# Define a model
+model = ModelConfig(
+    id="gpt-4.1-mini",
     model_name="gpt-4.1-mini",
     model_provider="openai",
+    interface="langchain",
     temperature=0.0
 )
 
-# Create verification config
+# Configure verification
 config = VerificationConfig(
-    # Models
-    answering_models=[model_config],        # Models to benchmark (can test multiple)
-    parsing_models=[model_config],          # Models for parsing/grading responses
-
-    # Execution
-    replicate_count=3,                      # Number of times to run each question
-
-    # Feature toggles
-    rubric_enabled=True,                    # Enable rubric-based evaluation
-    deep_judgment_enabled=False,            # Enable multi-stage parsing with excerpts
-    abstention_enabled=False,               # Enable abstention/refusal detection
-
-    # Embedding check settings (can override env vars)
-    embedding_check_enabled=True,           # Enable semantic similarity fallback
-    embedding_check_model="all-MiniLM-L6-v2",  # Embedding model
-    embedding_check_threshold=0.85,         # Similarity threshold (0.0-1.0)
-
-    # Async execution settings (can override env vars)
-    async_enabled=True,                     # Enable parallel execution
-    async_max_workers=4                     # Number of parallel workers
+    answering_models=[model],
+    parsing_models=[model],
+    rubric_enabled=True,
+    replicate_count=3
 )
+
+# Run verification
+results = benchmark.run_verification(config)
 ```
 
-**Configuration options**:
-
-| Parameter | Type | Description | Default |
-|-----------|------|-------------|---------|
-| `answering_models` | `list[ModelConfig]` | Models to benchmark (can test multiple) | Required |
-| `parsing_models` | `list[ModelConfig]` | Models for parsing/grading responses | Required |
-| `replicate_count` | `int` | Number of times to run each question | `1` |
-| `rubric_enabled` | `bool` | Enable rubric-based evaluation | `False` |
-| `deep_judgment_enabled` | `bool` | Enable multi-stage parsing with excerpts | `False` |
-| `abstention_enabled` | `bool` | Enable abstention/refusal detection | `False` |
-| `embedding_check_enabled` | `bool` | Enable semantic similarity fallback | `False` |
-| `embedding_check_model` | `str` | SentenceTransformer model for embeddings | `"all-MiniLM-L6-v2"` |
-| `embedding_check_threshold` | `float` | Similarity threshold (0.0-1.0) | `0.85` |
-| `async_enabled` | `bool` | Enable parallel execution | `True` |
-| `async_max_workers` | `int` | Number of parallel workers | `2` |
-
-**See also**:
-- [Running Verification](using-karenina/verification.md) - Complete guide to verification
-- [Deep-Judgment](advanced/deep-judgment.md) - Multi-stage parsing feature
-- [Abstention Detection](advanced/abstention-detection.md) - Refusal detection
-- [Embedding Check](advanced/embedding-check.md) - Semantic similarity fallback
-- [Configuration Presets](advanced/presets.md) - Saving and loading configurations
+For comprehensive examples and all configuration options, see the guides above
 
 ---
 
@@ -630,6 +583,7 @@ config.embedding_check_enabled = True  # This overrides preset
 ## Next Steps
 
 - **[Quick Start](quickstart.md)** - Create your first benchmark
+- **[Model Configuration](using-karenina/model-configuration.md)** - Complete guide to ModelConfig and extra_kwargs
 - **[Running Verification](using-karenina/verification.md)** - Complete verification guide
 - **[Configuration Presets](advanced/presets.md)** - Save and load configurations
 - **[Advanced Features](advanced/)** - Deep-dive into specific features
