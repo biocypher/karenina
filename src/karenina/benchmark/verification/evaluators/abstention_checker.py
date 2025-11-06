@@ -129,6 +129,9 @@ def detect_abstention(
 
         try:
             # Initialize the parsing model for abstention detection
+            # Note: model_name is guaranteed non-None by ModelConfig validator
+            assert parsing_model.model_name is not None, "model_name must not be None"
+
             llm = init_chat_model_unified(
                 model=parsing_model.model_name,
                 provider=parsing_model.model_provider,

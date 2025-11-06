@@ -123,6 +123,9 @@ class ParseTemplateStage(BaseVerificationStage):
 
         # Step 1: Initialize parsing LLM
         try:
+            # Note: model_name is guaranteed non-None by ModelConfig validator
+            assert parsing_model.model_name is not None, "model_name must not be None"
+
             if parsing_model.interface == "openai_endpoint":
                 # Require endpoint configuration
                 if not parsing_model.endpoint_base_url:

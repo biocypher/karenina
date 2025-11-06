@@ -114,6 +114,9 @@ class GenerateAnswerStage(BaseVerificationStage):
 
             # Build model string for result
             answering_model = context.answering_model
+            # Note: model_name is guaranteed non-None by ModelConfig validator
+            assert answering_model.model_name is not None, "model_name must not be None"
+
             if answering_model.interface == "openrouter":
                 answering_model_str = answering_model.model_name
             elif answering_model.interface == "openai_endpoint":
@@ -139,6 +142,8 @@ class GenerateAnswerStage(BaseVerificationStage):
 
         # No cached answer - proceed with normal answer generation
         answering_model = context.answering_model
+        # Note: model_name is guaranteed non-None by ModelConfig validator
+        assert answering_model.model_name is not None, "model_name must not be None"
 
         # Build model string for result
         if answering_model.interface == "openrouter":
