@@ -76,6 +76,10 @@ config = VerificationConfig(
 
 ### ModelConfig Parameters
 
+For a comprehensive guide to `ModelConfig` including all parameters, interfaces, providers, and the `extra_kwargs` feature, see the **[Model Configuration Guide](model-configuration.md)**.
+
+**Quick reference**:
+
 | Parameter | Type | Description | Example |
 |-----------|------|-------------|---------|
 | `id` | `str` | Unique identifier for this model | `"gpt-4.1-mini"` |
@@ -84,6 +88,7 @@ config = VerificationConfig(
 | `temperature` | `float` | Sampling temperature (0.0-1.0) | `0.7` for creativity, `0.0` for determinism |
 | `interface` | `str` | Interface type | `"langchain"`, `"openrouter"`, `"openai_endpoint"`, `"manual"` |
 | `system_prompt` | `str` | Optional system prompt | `"You are a knowledgeable genomics expert"` |
+| `extra_kwargs` | `dict` | Additional keyword arguments | See [Model Configuration](model-configuration.md#extra-keyword-arguments) |
 
 ---
 
@@ -971,6 +976,7 @@ After running verification:
 
 ## Related Documentation
 
+- [Model Configuration](model-configuration.md) - Comprehensive guide to ModelConfig parameters and extra_kwargs
 - [Defining Benchmarks](defining-benchmark.md) - Creating and configuring benchmarks
 - [Templates](templates.md) - Structured answer evaluation
 - [Rubrics](rubrics.md) - Qualitative assessment criteria
