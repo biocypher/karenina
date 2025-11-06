@@ -26,7 +26,7 @@ from karenina.schemas import ModelConfig
 model_config = ModelConfig(
     id="my-model",                 # Unique identifier
     model_name="gpt-4.1-mini",     # Model name
-    model_provider="openai",       # Provider: openai, google, anthropic, etc.
+    model_provider="openai",       # Provider: openai, google_genai, anthropic, etc.
     temperature=0.0,               # Temperature (0.0 = deterministic)
     interface="langchain"          # Interface: langchain, openai_endpoint, openrouter, manual
 )
@@ -80,15 +80,17 @@ model_config = ModelConfig(
 ```
 
 **When to use**:
+
 - ✅ Working with OpenAI, Google, Anthropic, or other LangChain-supported providers
 - ✅ Need standardized interface across multiple providers
 - ✅ Want built-in retry logic and error handling
 
 **Requirements**:
+
 - API key must be set in environment variables (see [Configuration](../configuration.md#api-keys))
 - Or API key can be passed via `extra_kwargs` (see [Extra Keyword Arguments](#extra-keyword-arguments))
 
-**Supported providers**: `openai`, `google_genai`, `anthropic`, and others
+**Supported providers**: `openai`, `google_genai`, `anthropic`, and others (see [langchain documentation](https://reference.langchain.com/python/langchain/models/?h=init_chat#langchain.chat_models.init_chat_model(model)))
 
 ---
 
@@ -99,7 +101,7 @@ Use this interface for **custom endpoints** that implement the OpenAI-compatible
 ```python
 model_config = ModelConfig(
     id="local-model",
-    model_name="llama-3.2-8b",
+    model_name="glm-4.6",
     interface="openai_endpoint",
     endpoint_base_url="http://localhost:8000/v1",
     endpoint_api_key="dummy-key",  # Some servers require a key
@@ -108,11 +110,13 @@ model_config = ModelConfig(
 ```
 
 **When to use**:
+
 - ✅ Running local models (vLLM, Ollama, etc.)
 - ✅ Using custom inference servers
 - ✅ OpenAI-compatible APIs
 
 **Requirements**:
+
 - `endpoint_base_url` must point to your server
 - Some servers require `endpoint_api_key` (even if just a dummy value)
 
@@ -132,14 +136,15 @@ model_config = ModelConfig(
 ```
 
 **When to use**:
+
 - ✅ Want unified billing across multiple providers
-- ✅ Need access to models not directly available via their APIs
 - ✅ Want to switch between providers easily
 
 **Requirements**:
 - `OPENROUTER_API_KEY` must be set in environment variables
+- pass the api key via `extra_kwargs`
 
-**Note**: `model_provider` is not required for OpenRouter interface
+**Note**: `model_provider` is not required for OpenRouter interface since the provider is specified in the `model_name`
 
 ---
 
@@ -167,12 +172,14 @@ model_config = ModelConfig(
 ```
 
 **When to use**:
+
 - ✅ Testing workflows without API costs
 - ✅ Debugging specific scenarios
 - ✅ Evaluating pre-recorded LLM responses
 - ✅ Comparing different answer generation approaches
 
 **For comprehensive documentation**, including:
+
 - LangChain message list support
 - Tool call metrics extraction
 - Batch registration
@@ -240,7 +247,7 @@ The `temperature` parameter controls randomness in model outputs:
 - **`0.7-0.9`** - High randomness (creative responses)
 - **`1.0+`** - Maximum randomness
 
-**For benchmarking**: Always use `temperature=0.0` to ensure reproducible results.
+**For benchmarking**: Always use `temperature=0.0` to ensure reproducible results. If you instead want to asess wheter your results are consistent in different runs, you can use higher temperatures and check if the results are consistent.
 
 ```python
 # Deterministic benchmarking (recommended)
@@ -249,7 +256,7 @@ answering_model = ModelConfig(
     model_name="gpt-4.1-mini",
     model_provider="openai",
     interface="langchain",
-    temperature=0.0  # Deterministic
+    temperature=0.3  # Low randomness
 )
 
 # Parsing/judging should always be deterministic
@@ -267,6 +274,7 @@ parsing_model = ModelConfig(
 ## Extra Keyword Arguments
 
 The `extra_kwargs` field allows you to pass additional keyword arguments to the underlying model interface. This is useful for:
+
 - **Passing API keys directly** (alternative to environment variables)
 - **Vendor-specific parameters** (custom headers, special options)
 - **Advanced model configuration** (thinking mode, chat templates, generation parameters)
@@ -289,6 +297,7 @@ model_config = ModelConfig(
 ```
 
 **Note**: While this works, storing API keys in environment variables (`.env` files) is still the recommended approach for security. This approach is useful for:
+
 - Testing with multiple API keys
 - Temporary key usage
 - Programmatic key management
@@ -346,6 +355,7 @@ The arguments are passed to different places depending on the interface:
 | `openrouter` | Passed to OpenRouter API call |
 
 **Common use cases**:
+
 - Passing API keys without environment variables
 - Enabling/disabling vendor-specific features (thinking, streaming, etc.)
 - Passing generation parameters (max_tokens, top_p, frequency_penalty, etc.)
@@ -370,11 +380,13 @@ answering_model = ModelConfig(
 ```
 
 **When to use custom system prompts**:
+
 - ✅ Domain-specific expertise needed (e.g., "You are a genomics expert")
 - ✅ Specific tone or style required
 - ✅ Additional context or constraints
 
 **Default system prompts** (if not specified):
+
 - **Template generation**: Instruction to create structured output templates
 - **Answering models**: Basic instruction to answer the question
 - **Parsing models**: Instruction to extract structured data using the template
@@ -403,12 +415,14 @@ model_config = ModelConfig(
 ```
 
 **Parameters**:
+
 - `mcp_urls_dict`: Maps tool categories to MCP server URLs
 - `mcp_tool_filter`: Optional list of allowed tool names
 
 **Supported interfaces**: `langchain`, `openai_endpoint`, `openrouter` (not supported with `manual` interface)
 
 **For comprehensive documentation**, including:
+
 - MCP server setup and structure
 - Tool discovery and invocation
 - Multiple MCP server configuration
@@ -447,9 +461,9 @@ Configure different models for specific tasks (optimal for cost/quality):
 ```python
 # High-quality model for answering
 answering_model = ModelConfig(
-    id="gpt-4.1-mini",
-    model_name="gpt-4.1-mini",
-    model_provider="openai",
+    id="sonnet-4.5",
+    model_name="claude-4.5-sonnet",
+    model_provider="anthropic",
     interface="langchain",
     temperature=0.0
 )
@@ -507,8 +521,8 @@ Configure a locally-hosted model:
 
 ```python
 local_model = ModelConfig(
-    id="local-llama",
-    model_name="llama-3.2-8b",
+    id="local-qwen",
+    model_name="qwen-3-235",
     interface="openai_endpoint",
     endpoint_base_url="http://localhost:8000/v1",
     endpoint_api_key="dummy",
@@ -538,12 +552,14 @@ genomics_model = ModelConfig(
 ## Best Practices
 
 ### For Benchmarking
+
 - ✅ Always use `temperature=0.0` for reproducible results
 - ✅ Use the same parsing model across different answering models for fair comparison
 - ✅ Document your model configurations in your project README
 - ✅ Use descriptive `id` values (e.g., "gpt-4.1-mini-biology-expert")
 
 ### For API Keys
+
 - ✅ Store API keys in `.env` files (see [Configuration](../configuration.md#api-keys))
 - ✅ Use different keys for development and production
 - ✅ Rotate keys regularly
@@ -551,12 +567,14 @@ genomics_model = ModelConfig(
 - ⚠️ Only pass keys via `extra_kwargs` when necessary (testing, temporary use)
 
 ### For Model Selection
+
 - ✅ Use `gpt-4.1-mini` as the default (fast, cost-effective)
-- ✅ Use `gpt-4.1-mini` for higher quality (more expensive)
+- ✅ Use `gpt-5` or `claude-4-5-sonnet` for higher quality (more expensive)
 - ✅ Use same model for all roles initially (simpler)
 - ✅ Optimize later: cheaper model for parsing/templates, expensive for answering
 
 ### For System Prompts
+
 - ✅ Keep system prompts concise and focused
 - ✅ Test different prompts systematically
 - ✅ Document any custom prompts in your benchmark metadata
@@ -593,6 +611,7 @@ Error: Model 'gpt-4-mini' not found
 ```
 
 **Solution**: Check the correct model name for your provider:
+
 - OpenAI: `gpt-4.1-mini`, `gpt-4.1-mini`, `gpt-4-turbo`
 - Google: `gemini-2.5-flash`, `gemini-1.5-pro`
 - Anthropic: `claude-sonnet-4.5`, `claude-3-5-sonnet-20241022`
@@ -606,6 +625,7 @@ Error: Connection refused to http://localhost:8000/v1
 ```
 
 **Solution**:
+
 1. Verify your inference server is running
 2. Check the `endpoint_base_url` is correct
 3. Ensure the endpoint implements OpenAI-compatible API
