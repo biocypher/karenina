@@ -43,6 +43,15 @@ class VerificationConfig(BaseModel):
     # Abstention detection settings
     abstention_enabled: bool = False  # Enable abstention/refusal detection
 
+    # Embedding check settings (semantic similarity fallback)
+    embedding_check_enabled: bool = False  # Enable semantic similarity fallback
+    embedding_check_model: str = "all-MiniLM-L6-v2"  # SentenceTransformer model for embeddings
+    embedding_check_threshold: float = 0.85  # Similarity threshold (0.0-1.0)
+
+    # Async execution settings
+    async_enabled: bool = True  # Enable parallel execution
+    async_max_workers: int = 2  # Number of parallel workers
+
     # Deep-judgment settings (multi-stage parsing with excerpts and reasoning)
     deep_judgment_enabled: bool = False  # Enable deep-judgment analysis (default: disabled)
     deep_judgment_max_excerpts_per_attribute: int = 3  # Max excerpts to extract per attribute
@@ -81,7 +90,53 @@ class VerificationConfig(BaseModel):
     parsing_system_prompt: str | None = None
 
     def __init__(self, **data: Any) -> None:
-        """Initialize with backward compatibility for single model configs."""
+        """
+        Initialize with backward compatibility for single model configs.
+
+        Configuration precedence (highest to lowest):
+        1. Explicit arguments (including preset values)
+        2. Environment variables (only if set)
+        3. Field defaults
+        """
+        import contextlib
+        import os
+
+        # Read environment variables for embedding check settings (only if not explicitly provided AND env var is set)
+        if "embedding_check_enabled" not in data:
+            env_val = os.getenv("EMBEDDING_CHECK")
+            if env_val is not None:
+                data["embedding_check_enabled"] = env_val.lower() in ("true", "1", "yes")
+            # else: let Pydantic use field default (False)
+
+        if "embedding_check_model" not in data:
+            env_val = os.getenv("EMBEDDING_CHECK_MODEL")
+            if env_val is not None:
+                data["embedding_check_model"] = env_val
+            # else: let Pydantic use field default ("all-MiniLM-L6-v2")
+
+        if "embedding_check_threshold" not in data:
+            env_val = os.getenv("EMBEDDING_CHECK_THRESHOLD")
+            if env_val is not None:
+                # Invalid env var value will let Pydantic use field default (0.85)
+                with contextlib.suppress(ValueError):
+                    data["embedding_check_threshold"] = float(env_val)
+            # else: let Pydantic use field default (0.85)
+
+        # Read environment variables for async execution settings (only if not explicitly provided AND env var is set)
+        if "async_enabled" not in data:
+            env_val = os.getenv("KARENINA_ASYNC_ENABLED")
+            if env_val is not None:
+                data["async_enabled"] = env_val.lower() in ("true", "1", "yes")
+            # else: let Pydantic use field default (True)
+
+        if "async_max_workers" not in data:
+            env_val = os.getenv("KARENINA_ASYNC_MAX_WORKERS")
+            if env_val is not None:
+                # Invalid env var value will let Pydantic use field default (2)
+                with contextlib.suppress(ValueError):
+                    data["async_max_workers"] = int(env_val)
+            # else: let Pydantic use field default (2)
+
         # If legacy single model fields are provided, convert to arrays
         if "answering_models" not in data and any(k.startswith("answering_") for k in data):
             answering_model = ModelConfig(

@@ -210,6 +210,9 @@ def check_semantic_equivalence(
 
     try:
         # Initialize parsing LLM
+        # Note: model_name is guaranteed non-None by ModelConfig validator
+        assert parsing_model.model_name is not None, "model_name must not be None"
+
         parsing_llm = init_chat_model_unified(
             model=parsing_model.model_name,
             provider=parsing_model.model_provider,
