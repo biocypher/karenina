@@ -41,7 +41,7 @@ model_config = ModelConfig(
 | Parameter | Type | Description | Example |
 |-----------|------|-------------|---------|
 | `id` | `str` | Unique identifier for this model configuration | `"gpt-4.1-mini"`, `"my-custom-model"` |
-| `model_name` | `str` | Full model name as recognized by the provider | `"gpt-4.1-mini"`, `"claude-sonnet-4.5"`, `"gemini-2.0-flash-exp"` |
+| `model_name` | `str` | Full model name as recognized by the provider | `"gpt-4.1-mini"`, `"claude-sonnet-4.5"`, `"gemini-2.5-flash"` |
 | `interface` | `str` | Interface type (see [Interfaces](#interfaces)) | `"langchain"`, `"openai_endpoint"`, `"openrouter"`, `"manual"` |
 
 ### Optional Parameters
@@ -71,8 +71,8 @@ Karenina supports four interfaces for connecting to LLMs. Choose based on your u
 
 ```python
 model_config = ModelConfig(
-    id="gpt-4o",
-    model_name="gpt-4o",
+    id="gpt-4.1-mini",
+    model_name="gpt-4.1-mini",
     model_provider="openai",
     interface="langchain",
     temperature=0.0
@@ -190,9 +190,9 @@ Model providers are specified with the `model_provider` parameter (required for 
 
 | Provider | Value | Example Models | API Key Required |
 |----------|-------|----------------|------------------|
-| OpenAI | `"openai"` | `gpt-4o`, `gpt-4.1-mini`, `gpt-4-turbo` | `OPENAI_API_KEY` |
-| Google | `"google_genai"` | `gemini-2.0-flash-exp`, `gemini-1.5-pro` | `GOOGLE_API_KEY` |
-| Anthropic | `"anthropic"` | `claude-sonnet-4.5`, `claude-3-5-sonnet-20241022` | `ANTHROPIC_API_KEY` |
+| OpenAI | `"openai"` | `gpt-4.1-mini`, `gpt-4.1-mini`, `gpt-4-turbo` | `OPENAI_API_KEY` |
+| Google | `"google_genai"` | `gemini-2.5-flash`, `gemini-2.5-pro` | `GOOGLE_API_KEY` |
+| Anthropic | `"anthropic"` | `claude-4-5-sonnet`, `claude-4-5-opus` | `ANTHROPIC_API_KEY` |
 
 ### Example Configurations
 
@@ -207,11 +207,11 @@ model_config = ModelConfig(
 )
 ```
 
-**Google (Gemini 2.0 Flash)**
+**Google (Gemini 2.5 Flash)**
 ```python
 model_config = ModelConfig(
     id="gemini-flash",
-    model_name="gemini-2.0-flash-exp",
+    model_name="gemini-2.5-flash",
     model_provider="google_genai",
     interface="langchain",
     temperature=0.0
@@ -278,7 +278,7 @@ If you don't want to use environment variables for API keys, you can pass them d
 ```python
 model_config = ModelConfig(
     id="gemini-with-key",
-    model_name="gemini-2.0-flash-exp",
+    model_name="gemini-2.5-flash",
     model_provider="google_genai",
     interface="langchain",
     temperature=0.0,
@@ -447,8 +447,8 @@ Configure different models for specific tasks (optimal for cost/quality):
 ```python
 # High-quality model for answering
 answering_model = ModelConfig(
-    id="gpt-4o",
-    model_name="gpt-4o",
+    id="gpt-4.1-mini",
+    model_name="gpt-4.1-mini",
     model_provider="openai",
     interface="langchain",
     temperature=0.0
@@ -491,7 +491,7 @@ models_to_test = [
     ),
     ModelConfig(
         id="gemini-flash",
-        model_name="gemini-2.0-flash-exp",
+        model_name="gemini-2.5-flash",
         model_provider="google_genai",
         interface="langchain",
         temperature=0.0
@@ -552,7 +552,7 @@ genomics_model = ModelConfig(
 
 ### For Model Selection
 - ✅ Use `gpt-4.1-mini` as the default (fast, cost-effective)
-- ✅ Use `gpt-4o` for higher quality (more expensive)
+- ✅ Use `gpt-4.1-mini` for higher quality (more expensive)
 - ✅ Use same model for all roles initially (simpler)
 - ✅ Optimize later: cheaper model for parsing/templates, expensive for answering
 
@@ -593,8 +593,8 @@ Error: Model 'gpt-4-mini' not found
 ```
 
 **Solution**: Check the correct model name for your provider:
-- OpenAI: `gpt-4.1-mini`, `gpt-4o`, `gpt-4-turbo`
-- Google: `gemini-2.0-flash-exp`, `gemini-1.5-pro`
+- OpenAI: `gpt-4.1-mini`, `gpt-4.1-mini`, `gpt-4-turbo`
+- Google: `gemini-2.5-flash`, `gemini-1.5-pro`
 - Anthropic: `claude-sonnet-4.5`, `claude-3-5-sonnet-20241022`
 
 ---

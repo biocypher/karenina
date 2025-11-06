@@ -161,7 +161,7 @@ config = VerificationConfig(
         ModelConfig(
             id="gemini-pro",
             model_provider="google",
-            model_name="gemini-2.0-flash-exp",
+            model_name="gemini-2.5-flash",
             temperature=0.7,
             interface="langchain"
         )
@@ -553,7 +553,7 @@ anthropic_model = ModelConfig(
 google_model = ModelConfig(
     id="gemini-pro",
     model_provider="google",
-    model_name="gemini-2.0-flash-exp",
+    model_name="gemini-2.5-flash",
     interface="langchain"
 )
 ```
@@ -883,7 +883,7 @@ answering_models = [
     ModelConfig(
         id="gemini-flash",
         model_provider="google",
-        model_name="gemini-2.0-flash-exp",
+        model_name="gemini-2.5-flash",
         temperature=0.7,
         interface="langchain",
         system_prompt="You are a genomics expert. Answer concisely."

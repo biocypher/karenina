@@ -38,7 +38,7 @@ Understanding precedence is crucial for predictable behavior:
 
 ### API Keys
 
-API keys are required to use LLM providers. These are typically configured via environment variables, but can also be passed directly through the `extra_kwargs` field in `ModelConfig` (see [Extra Keyword Arguments](#extra-keyword-arguments) for details).
+API keys are required to use LLM providers. These are typically configured via environment variables, but can also be passed directly through the `extra_kwargs` field in `ModelConfig` (see [Extra Keyword Arguments](using-karenina/model-configuration.md#extra-keyword-arguments) for details).
 
 | Variable | Description | Required For |
 |----------|-------------|--------------|
@@ -586,5 +586,5 @@ config.embedding_check_enabled = True  # This overrides preset
 - **[Model Configuration](using-karenina/model-configuration.md)** - Complete guide to ModelConfig and extra_kwargs
 - **[Running Verification](using-karenina/verification.md)** - Complete verification guide
 - **[Configuration Presets](advanced/presets.md)** - Save and load configurations
-- **[Advanced Features](advanced/)** - Deep-dive into specific features
+- **[Advanced Features](features.md)** - Deep-dive into specific features
 - **[API Reference](api-reference.md)** - Complete API documentation

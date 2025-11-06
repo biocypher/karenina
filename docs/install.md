@@ -93,8 +93,6 @@ uv run pytest
 uv run ruff check .
 ```
 
-See the [Contributing Guide](contributing.md) for development workflow details.
-
 ---
 
 ## Troubleshooting
@@ -138,4 +136,4 @@ After installation, you need to configure Karenina:
 1. **[Configuration](configuration.md)** - **Start here!** Set up API keys and configure Karenina
 2. **[Quick Start](quickstart.md)** - Create your first benchmark
 3. **[User Guides](using-karenina/defining-benchmark.md)** - Learn how to use Karenina
-4. **[Advanced Features](advanced/)** - Explore advanced capabilities
+4. **[Advanced Features](advanced/presets.md)** - Explore advanced capabilities
