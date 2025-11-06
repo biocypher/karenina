@@ -5,6 +5,7 @@ Generates LLM responses to questions using the configured answering model.
 
 import logging
 import traceback
+from typing import Any
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
@@ -175,16 +176,19 @@ class GenerateAnswerStage(BaseVerificationStage):
 
         # Step 2: Initialize answering LLM
         try:
+            # Build base kwargs for model initialization
+            model_kwargs: dict[str, Any] = {
+                "model": answering_model.model_name,
+                "provider": answering_model.model_provider,
+                "temperature": answering_model.temperature,
+                "interface": answering_model.interface,
+                "mcp_urls_dict": answering_model.mcp_urls_dict,
+                "mcp_tool_filter": answering_model.mcp_tool_filter,
+            }
+
+            # Add interface-specific parameters
             if answering_model.interface == "manual":
-                answering_llm = init_chat_model_unified(
-                    model=answering_model.model_name,
-                    provider=answering_model.model_provider,
-                    temperature=answering_model.temperature,
-                    interface=answering_model.interface,
-                    question_hash=question_hash_for_manual,
-                    mcp_urls_dict=answering_model.mcp_urls_dict,
-                    mcp_tool_filter=answering_model.mcp_tool_filter,
-                )
+                model_kwargs["question_hash"] = question_hash_for_manual
             elif answering_model.interface == "openai_endpoint":
                 # Require endpoint configuration
                 if not answering_model.endpoint_base_url:
@@ -192,25 +196,14 @@ class GenerateAnswerStage(BaseVerificationStage):
                 if not answering_model.endpoint_api_key:
                     raise ValueError("endpoint_api_key is required for openai_endpoint interface")
 
-                answering_llm = init_chat_model_unified(
-                    model=answering_model.model_name,
-                    provider=answering_model.model_provider,
-                    temperature=answering_model.temperature,
-                    interface=answering_model.interface,
-                    endpoint_base_url=answering_model.endpoint_base_url,
-                    endpoint_api_key=answering_model.endpoint_api_key.get_secret_value(),
-                    mcp_urls_dict=answering_model.mcp_urls_dict,
-                    mcp_tool_filter=answering_model.mcp_tool_filter,
-                )
-            else:
-                answering_llm = init_chat_model_unified(
-                    model=answering_model.model_name,
-                    provider=answering_model.model_provider,
-                    temperature=answering_model.temperature,
-                    interface=answering_model.interface,
-                    mcp_urls_dict=answering_model.mcp_urls_dict,
-                    mcp_tool_filter=answering_model.mcp_tool_filter,
-                )
+                model_kwargs["endpoint_base_url"] = answering_model.endpoint_base_url
+                model_kwargs["endpoint_api_key"] = answering_model.endpoint_api_key.get_secret_value()
+
+            # Add any extra kwargs if provided (e.g., vendor-specific API keys)
+            if answering_model.extra_kwargs:
+                model_kwargs.update(answering_model.extra_kwargs)
+
+            answering_llm = init_chat_model_unified(**model_kwargs)
         except Exception as e:
             error_msg = f"Failed to initialize answering model: {type(e).__name__}: {e}"
             logger.error(error_msg)

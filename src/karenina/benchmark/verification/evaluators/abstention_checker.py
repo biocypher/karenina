@@ -132,12 +132,19 @@ def detect_abstention(
             # Note: model_name is guaranteed non-None by ModelConfig validator
             assert parsing_model.model_name is not None, "model_name must not be None"
 
-            llm = init_chat_model_unified(
-                model=parsing_model.model_name,
-                provider=parsing_model.model_provider,
-                temperature=0.0,  # Use temperature 0 for consistent detection
-                interface=parsing_model.interface,
-            )
+            # Build kwargs for model initialization
+            model_kwargs: dict[str, Any] = {
+                "model": parsing_model.model_name,
+                "provider": parsing_model.model_provider,
+                "temperature": 0.0,  # Use temperature 0 for consistent detection
+                "interface": parsing_model.interface,
+            }
+
+            # Add any extra kwargs if provided (e.g., vendor-specific API keys)
+            if parsing_model.extra_kwargs:
+                model_kwargs.update(parsing_model.extra_kwargs)
+
+            llm = init_chat_model_unified(**model_kwargs)
 
             # Construct the prompt
             user_prompt = ABSTENTION_DETECTION_USER.format(question=question_text, response=raw_llm_response)

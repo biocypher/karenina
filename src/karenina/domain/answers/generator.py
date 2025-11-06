@@ -239,7 +239,7 @@ def _build_chain(stage: str, config: "ModelConfig") -> Any:
     )
 
     # Use karenina's unified model interface
-    model_params = {
+    model_params: dict[str, Any] = {
         "model": config.model_name,
         "provider": config.model_provider,
         "interface": config.interface,
@@ -254,9 +254,13 @@ def _build_chain(stage: str, config: "ModelConfig") -> Any:
             if hasattr(config.endpoint_api_key, "get_secret_value"):
                 model_params["endpoint_api_key"] = config.endpoint_api_key.get_secret_value()
             else:
-                model_params["endpoint_api_key"] = config.endpoint_api_key  # type: ignore[assignment]
+                model_params["endpoint_api_key"] = config.endpoint_api_key
 
-    model = init_chat_model_unified(**model_params)  # type: ignore[arg-type]
+    # Add any extra kwargs if provided (e.g., vendor-specific API keys)
+    if config.extra_kwargs:
+        model_params.update(config.extra_kwargs)
+
+    model = init_chat_model_unified(**model_params)
 
     return prompt | model | parser
 
@@ -297,7 +301,7 @@ def _generate_with_retry(
                     ]
                 )
 
-                model_params = {
+                model_params: dict[str, Any] = {
                     "model": config.model_name,
                     "provider": config.model_provider,
                     "interface": config.interface,
@@ -312,9 +316,13 @@ def _generate_with_retry(
                         if hasattr(config.endpoint_api_key, "get_secret_value"):
                             model_params["endpoint_api_key"] = config.endpoint_api_key.get_secret_value()
                         else:
-                            model_params["endpoint_api_key"] = config.endpoint_api_key  # type: ignore[assignment]
+                            model_params["endpoint_api_key"] = config.endpoint_api_key
 
-                model = init_chat_model_unified(**model_params)  # type: ignore[arg-type]
+                # Add any extra kwargs if provided (e.g., vendor-specific API keys)
+                if config.extra_kwargs:
+                    model_params.update(config.extra_kwargs)
+
+                model = init_chat_model_unified(**model_params)
 
                 chain = prompt | model | parser
 
