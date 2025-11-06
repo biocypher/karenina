@@ -45,7 +45,7 @@ class TestAddQuestionBackwardCompatibility:
 
         question_data = benchmark.get_question(q_id)
         assert question_data["answer_template"] == template_code
-        assert question_data["finished"] is False  # Not finished by default
+        assert question_data["finished"] is True  # Auto-set to True when template provided
 
     def test_kwargs_with_custom_id(self) -> None:
         """Test add_question with custom question ID."""

@@ -1,5 +1,6 @@
 """Question management functionality for benchmarks."""
 
+import ast
 import inspect
 from collections.abc import Iterator
 from datetime import datetime
@@ -13,6 +14,40 @@ from ...utils.checkpoint import add_question_to_benchmark
 
 # Sentinel value to detect if finished parameter was explicitly provided
 _NOT_PROVIDED = object()
+
+
+def _rename_answer_class_to_standard(source_code: str, original_class_name: str) -> str:
+    """
+    Rename a BaseAnswer subclass to 'Answer' in source code.
+
+    This allows users to define classes with any name (e.g., VenetoclaxAnswer),
+    but stores them with the standard 'Answer' name that the verification system expects.
+
+    Args:
+        source_code: The source code containing the class definition
+        original_class_name: The original name of the class to rename
+
+    Returns:
+        Modified source code with the class renamed to 'Answer'
+    """
+    # If already named "Answer", no change needed
+    if original_class_name == "Answer":
+        return source_code
+
+    try:
+        tree = ast.parse(source_code)
+
+        # Find and rename the class definition
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef) and node.name == original_class_name:
+                node.name = "Answer"
+
+        # Convert back to source code
+        return ast.unparse(tree)
+    except Exception:
+        # If AST parsing fails, fall back to simple string replacement
+        # This is a safety net but should rarely be needed
+        return source_code.replace(f"class {original_class_name}(", "class Answer(")
 
 
 class QuestionManager:
@@ -111,11 +146,19 @@ class QuestionManager:
                 if not issubclass(answer_template, BaseAnswer):
                     raise TypeError(f"answer_template class must inherit from BaseAnswer, got {answer_template}")
 
+                # Capture the original class name for renaming
+                original_class_name = getattr(answer_template, "__name__", "Answer")
+
                 # Convert Answer class to source code string
                 try:
                     # First try to get source code using the BaseAnswer method
                     source_code = answer_template.get_source_code()
-                    answer_template = source_code if source_code is not None else inspect.getsource(answer_template)
+                    if source_code is None:
+                        source_code = inspect.getsource(answer_template)
+
+                    # Rename the class to "Answer" for verification system compatibility
+                    # This allows users to use any class name (e.g., VenetoclaxAnswer)
+                    answer_template = _rename_answer_class_to_standard(source_code, original_class_name)
                 except (OSError, TypeError) as e:
                     class_name = getattr(answer_template, "__name__", "Unknown")
                     raise ValueError(
