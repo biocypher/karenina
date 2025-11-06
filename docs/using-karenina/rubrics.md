@@ -7,7 +7,7 @@ Rubrics provide qualitative evaluation criteria beyond the basic template verifi
 **Rubrics** are collections of evaluation traits that assess qualitative aspects of LLM responses:
 
 - **Qualitative assessment** - Evaluate traits like clarity, completeness, and style
-- **Supplement template verification** - Templates check factual correctness, rubrics assess quality
+- **Supplement template verification** - Templates check factual correctness, rubrics assess traits that usually don't have a ground truth or simply characterize the answer style
 - **Multiple trait types** - LLM-based, regex-based, and metric-based evaluation
 - **Flexible scope** - Apply globally to all questions or to specific questions only
 
@@ -20,7 +20,7 @@ Rubrics are essential for comprehensive evaluation:
 1. **Quality Beyond Correctness**: Assess traits like clarity and conciseness that aren't captured by factual verification
 2. **Domain Validation**: Check for required terminology or concepts in specialized domains
 3. **Safety and Compliance**: Ensure responses meet safety standards or avoid prohibited content
-4. **Quantitative Metrics**: Measure classification accuracy with precision, recall, and F1 scores
+4. **Quantitative Metrics**: Assessing the completeness of an answer by measuring precision, recall, and F1 scores with respect to a list of terms or concepts that we expect to be present/absent in the answer.
 5. **Consistent Standards**: Apply uniform evaluation criteria across question sets
 
 ## Rubric Scope: Global vs Question-Specific
@@ -32,6 +32,7 @@ Rubrics can be applied at two different scopes:
 **Global rubrics** are evaluated for **every question** in your benchmark. Use global rubrics for traits that should be assessed universally.
 
 **Best for:**
+
 - General quality traits (clarity, conciseness, completeness)
 - Safety requirements that apply to all responses
 - Style guidelines that should be consistent throughout
@@ -43,6 +44,7 @@ Rubrics can be applied at two different scopes:
 **Question-specific rubrics** are evaluated for **a single question only**. Use question-specific rubrics for domain validation or specialized requirements.
 
 **Best for:**
+
 - Domain-specific terminology checks
 - Question-specific validation requirements
 - Classification or categorization metrics
@@ -60,6 +62,7 @@ Karenina supports three types of evaluation traits:
 **What they are:** AI-evaluated traits where the parsing model uses its judgment to assess subjective qualities of answers. The LLM reads your trait description and applies it to each answer, returning either a score or binary result.
 
 **When to use:**
+
 - Assessing **subjective qualities** that require human-like judgment (clarity, completeness, tone)
 - Evaluating **nuanced aspects** that can't be captured by pattern matching
 - Measuring **qualities** rather than extracting specific facts
@@ -68,6 +71,7 @@ Karenina supports three types of evaluation traits:
 **Two Evaluation Modes:**
 
 **1. Score Mode (1-5 scale):**
+
 - Provides **nuanced assessment** with gradations of quality
 - Scale: 1 (Poor) → 2 (Below Average) → 3 (Average) → 4 (Good) → 5 (Excellent)
 - Best for: Qualities that exist on a spectrum (clarity, conciseness, thoroughness)
@@ -91,6 +95,7 @@ RubricTrait(
 ```
 
 **2. Binary Mode (pass/fail):**
+
 - Provides **yes/no judgment** on whether criteria are met
 - Returns: `true` (pass) or `false` (fail)
 - Best for: Questions with clear criteria that either are or aren't satisfied
@@ -103,10 +108,10 @@ RubricTrait(
     kind="binary"
 )
 
-# Binary trait: Checks for completeness
+# Binary trait: Conciseness of the first sentence
 RubricTrait(
-    name="Addresses All Parts",
-    description="Does the answer address all parts of the question?",
+    name="Conciseness of the first sentence",
+    description="The first sentence of the answer should be a concise summary of the answer.",
     kind="binary"
 )
 ```
@@ -114,16 +119,19 @@ RubricTrait(
 **How LLM-Based Evaluation Works:**
 
 1. **Prompt Construction**: The parsing model receives:
-   - The original question
-   - The model's answer
-   - Your trait description
-   - Scoring instructions (for score mode) or binary criteria (for binary mode)
 
-2. **LLM Judgment**: The parsing model analyzes the answer against your criteria
+    - The original question
+    - The model's answer
+    - Your trait description
+    - Scoring instructions (for score mode) or binary criteria (for binary mode)
+
+2. **LLM Judgment**: The parsing model analyzes the answer against your criteria.
 
 3. **Structured Output**: The LLM returns:
-   - **Score mode**: Integer from 1-5
-   - **Binary mode**: Boolean (true/false)
+
+    - **Score mode**: Integer from 1–5
+    - **Binary mode**: Boolean (true/false)
+
 
 **Example Scenario:**
 
@@ -145,25 +153,30 @@ Result: Score = 2 (verbose, includes unnecessary detail beyond the question)
 
 **Best Practices for LLM-Based Traits:**
 
-✅ **Be specific in descriptions**:
-- ❌ Bad: "Is the answer good?"
-- ✅ Good: "Rate how clearly the answer explains the concept, from 1 (confusing) to 5 (crystal clear)."
+**Be specific in descriptions**:
 
-✅ **Provide clear scale anchors** for score mode:
+- Bad: "Is the answer good?"
+- Good: "Rate how clearly the answer explains the concept, from 1 (confusing) to 5 (crystal clear)."
+
+**Provide clear scale anchors** for score mode:
+
 - Include what each extreme means (1 = very verbose, 5 = extremely concise)
 - Give context for middle values when helpful
 
-✅ **Use binary mode for yes/no criteria**:
+**Use binary mode for yes/no criteria**:
+
 - "Does the answer contain citations?"
 - "Is the tone professional?"
 - "Does it address safety concerns?"
 
-✅ **Use score mode for gradable qualities**:
+**Use score mode for gradable qualities**:
+
 - Clarity, conciseness, completeness
 - Organization, coherence, depth
 - Accuracy, relevance, specificity
 
-❌ **Avoid using LLM traits for**:
+**Avoid using LLM traits for**:
+
 - Exact keyword matching (use regex traits instead)
 - Factual extraction (use templates instead)
 - Classification metrics (use metric traits instead)
@@ -173,6 +186,7 @@ Result: Score = 2 (verbose, includes unnecessary detail beyond the question)
 **What they are:** Deterministic pattern-matching traits that check if answers match (or don't match) specific regex patterns. These provide **100% reproducible** validation without any LLM judgment.
 
 **When to use:**
+
 - Checking for **required terminology** or keywords
 - Validating **format compliance** (dates, gene symbols, IDs)
 - Detecting **prohibited content** (profanity, inappropriate terms)
@@ -371,12 +385,13 @@ pattern=r"\b\d+\b"
 
 **Best Practices for Regex Traits:**
 
-✅ **Use for deterministic checks**:
+**Use for deterministic checks**:
+
 - Exact keyword presence/absence
 - Format validation
 - Pattern compliance
 
-✅ **Test your regex patterns**:
+**Test your regex patterns**:
 ```python
 import re
 
@@ -392,22 +407,24 @@ for test in test_cases:
     print(f"'{test}': {'Match' if match else 'No match'}")
 ```
 
-✅ **Use word boundaries** to avoid partial matches:
+**Use word boundaries** to avoid partial matches:
+
 - ❌ `pattern=r"cell"` matches "cellular" and "multicellular"
 - ✅ `pattern=r"\bcell\b"` only matches "cell"
 
-✅ **Handle term variations**:
+**Handle term variations**:
 ```python
 # Accept multiple valid formats
 pattern=r"\b(BCL2|BCL-2|BCL 2)\b"  # All three formats valid
 ```
 
-❌ **Avoid using regex traits for**:
+**Avoid using regex traits for:**
+
 - Subjective quality assessment (use LLM traits instead)
 - Complex semantic matching (use embedding check instead)
 - Classification accuracy (use metric traits instead)
 
-**When to Use Each Trait Type:**
+### When to Use Each Trait Type
 
 | Need | Use This Trait Type |
 |------|---------------------|
@@ -424,6 +441,7 @@ pattern=r"\b(BCL2|BCL-2|BCL 2)\b"  # All three formats valid
 Confusion matrix-based traits for quantitative classification evaluation.
 
 **Available Metrics:**
+
 - **Precision**: TP / (TP + FP)
 - **Recall**: TP / (TP + FN)
 - **F1 Score**: 2 × (Precision × Recall) / (Precision + Recall)
@@ -468,6 +486,7 @@ Metric traits evaluate classification accuracy using a **confusion matrix**. For
 | **FN (False Negative)** | Should be identified BUT is NOT identified | Model misses "bronchitis" ✗ |
 
 From these four categories, we compute classification metrics:
+
 - **Precision** = TP / (TP + FP) - "Of what the model identified, how many were correct?"
 - **Recall** = TP / (TP + FN) - "Of what should be identified, how many did the model find?"
 - **F1 Score** = 2 × (Precision × Recall) / (Precision + Recall) - "Harmonic mean of precision and recall"
@@ -478,6 +497,7 @@ From these four categories, we compute classification metrics:
 **When to use:** When you're identifying items from a **single category** and want to measure how accurately the model identifies them.
 
 **How it works:**
+
 - You provide **only `tp_instructions`** (items that should be identified)
 - You may provide **`fp_instructions`** (common incorrect items in the same domain)
 - Karenina automatically infers False Positives from the model's response:
@@ -518,6 +538,7 @@ inflammatory_trait = MetricRubricTrait(
 ```
 
 **What happens during evaluation:**
+
 1. The parsing model extracts disease names from the LLM's answer
 2. Each extracted disease is checked:
    - **In `tp_instructions`?** → Count as True Positive (TP)
@@ -549,6 +570,7 @@ Metrics:
 **When to use:** When you're evaluating **binary classification** (yes/no, positive/negative) and need to assess both what should be identified AND what should be excluded.
 
 **How it works:**
+
 - You provide **both `tp_instructions` AND `tn_instructions`**
 - You may also provide `fp_instructions` and `fn_instructions`
 - Karenina evaluates all four categories of the confusion matrix
@@ -598,6 +620,7 @@ classification_trait = MetricRubricTrait(
 ```
 
 **What happens during evaluation:**
+
 1. The parsing model extracts disease names AND their classifications from the LLM's answer
 2. For each disease mentioned in the answer, check its classification:
    - **Classified as inflammatory AND in `tp_instructions`?** → True Positive (TP)
@@ -676,6 +699,7 @@ trait2 = MetricRubricTrait(
 ### Best Practices for Metric Traits
 
 **For TP-Only Mode:**
+
 - ✅ Use when the question asks to **select** or **identify** items from a category
 - ✅ Provide comprehensive `tp_instructions` (all items that should be found)
 - ✅ Optionally provide `fp_instructions` to highlight common mistakes
@@ -688,6 +712,7 @@ trait2 = MetricRubricTrait(
 - ✅ Good for: "Classify each as X or not-X", "Label as positive/negative", "Categorize into groups"
 
 **General Guidelines:**
+
 - Use `repeated_extraction=True` (default) to remove duplicate mentions
 - Be specific with instruction terms to avoid ambiguity
 - Consider term variations (e.g., "asthma" vs "bronchial asthma")
@@ -747,6 +772,7 @@ benchmark.set_global_rubric(global_rubric)
 ```
 
 **What happens during verification:**
+
 - The parsing model evaluates **both** traits (Conciseness and Clarity) for **all three questions**
 - Each question receives scores from 1-5 for each trait
 - Results show how responses perform on general quality metrics
@@ -787,6 +813,7 @@ benchmark.add_question(
 ```
 
 **What happens during verification:**
+
 - The regex pattern checks **only** the Venetoclax answer for "BH3"
 - Other questions are NOT checked for this pattern
 - Returns `True` if the pattern is found, `False` otherwise
@@ -831,6 +858,7 @@ benchmark.add_question(
 ```
 
 **What happens during verification:**
+
 - The parsing model extracts disease names from the answer
 - Each disease is categorized as TP (correct inflammatory), FP (incorrect inflammatory), or FN (missed inflammatory)
 - Precision, recall, and F1 score are calculated
@@ -901,6 +929,7 @@ benchmark.add_question(
 ```
 
 **Result:**
+
 - **Question 1** (chromosomes): Evaluated for Conciseness and Clarity (global rubric)
 - **Question 2** (Venetoclax): Evaluated for Conciseness, Clarity (global rubric) + BH3 mention check (question-specific rubric)
 - **Question 3** (hemoglobin): Evaluated for Conciseness and Clarity (global rubric)
@@ -986,45 +1015,32 @@ Question: Which of the following are inflammatory lung diseases...
 
 ## Rubric Best Practices
 
-### Use Global Rubrics For
+**Design effective rubrics**:
 
-✅ **Universal quality traits**:
-- Clarity, conciseness, completeness
-- General style requirements
-- Safety checks that apply to all responses
+- Keep trait descriptions clear and specific
+- Test rubric traits with sample answers before full evaluation
+- Use appropriate trait types for your evaluation needs (see [When to Use Each Trait Type](#when-to-use-each-trait-type))
+- Consider both global and question-specific scopes (see [Rubric Scope](#rubric-scope-global-vs-question-specific))
 
-✅ **Benchmark-wide standards**:
-- Evaluation criteria that should be consistent across all questions
+**For LLM-based traits**:
 
-### Use Question-Specific Rubrics For
+- Provide clear scale anchors for score mode (what 1 and 5 represent)
+- Use binary mode for yes/no criteria, score mode for gradable qualities
+- Avoid using LLM traits for tasks better suited to regex or metrics
 
-✅ **Domain-specific validation**:
-- Required terminology checks (e.g., "must mention BH3")
-- Question-specific format requirements
+**For regex-based traits**:
 
-✅ **Classification metrics**:
-- Precision/recall for categorization questions
-- Accuracy for multi-label classification
+- Test your patterns before deployment
+- Use word boundaries (`\b`) to avoid partial matches
+- Consider case sensitivity requirements carefully
+- Use `invert=True` when checking for prohibited content
 
-✅ **Specialized requirements**:
-- Checks that only make sense for specific questions
+**For metric-based traits**:
 
-### Choose the Right Trait Type
-
-**LLM-Based Traits (`RubricTrait`)**:
-- Qualitative assessment requiring judgment
-- Scoring nuanced qualities (clarity, completeness)
-- When you need 1-5 scale or binary pass/fail
-
-**Regex-Based Traits (`ManualRubricTrait`)**:
-- Deterministic format validation
-- Keyword or terminology checks
-- When you need exact pattern matching
-
-**Metric-Based Traits (`MetricRubricTrait`)**:
-- Classification or categorization questions
-- When you need quantitative metrics (precision, recall, F1)
-- Multi-label evaluation with confusion matrix
+- Choose the correct evaluation mode (TP-only vs full-matrix) based on your question type
+- Provide comprehensive instruction lists
+- Use `repeated_extraction=True` to handle duplicate mentions
+- Consider term variations in your instruction lists
 
 ---
 
