@@ -283,7 +283,7 @@ model_config = ModelConfig(
     interface="langchain",
     temperature=0.0,
     extra_kwargs={
-        "google_api_key": "AIzaSyCwhRMmRpuVOpGKGWdONBqm3Dty0XZS0iw"
+        "google_api_key": "your_key"
     }
 )
 ```
