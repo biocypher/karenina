@@ -2,6 +2,23 @@
 
 This guide covers how to persist, restore, and export benchmarks using Karenina's checkpoint and database systems.
 
+**Quick Navigation:**
+
+- [Understanding Persistence](#understanding-persistence) - Checkpoints vs database storage overview
+- [Checkpoint Files (JSON-LD)](#checkpoint-files-json-ld) - Portable, human-readable file format
+- [Saving Checkpoints](#saving-checkpoints) - Save benchmark state to JSON-LD files
+- [Loading Checkpoints](#loading-checkpoints) - Restore benchmarks from files
+- [Database Storage](#database-storage) - SQLite persistence with query capabilities
+- [Automatic Database Storage](#automatic-database-storage-during-verification) - Auto-save verification results
+- [Exporting Verification Results](#exporting-verification-results) - Export to CSV and JSON formats
+- [Checkpoint Management](#checkpoint-management) - Incremental saves and timestamped backups
+- [Comparing Checkpoints](#comparing-checkpoints) - Track changes between versions
+- [Portability and Sharing](#portability-and-sharing) - Share benchmarks and version control
+- [Complete Workflow Example](#complete-workflow-example) - End-to-end save/load/export workflow
+- [Best Practices](#best-practices) - Naming conventions, organization, and cleanup
+
+---
+
 ## Understanding Persistence
 
 Karenina provides two main approaches for persisting benchmarks:
@@ -31,6 +48,7 @@ A checkpoint includes:
 Karenina uses **JSON-LD (JSON for Linked Data)** format following schema.org conventions:
 
 **Benefits:**
+
 - **Structured and semantic**: Machine-readable with clear data relationships
 - **Human-readable**: Open in any text editor to inspect contents
 - **Cross-platform**: Works across different environments
@@ -220,6 +238,115 @@ benchmark.save_to_db("sqlite:///production.db")
 # Also save checkpoint for backup/sharing
 benchmark.save(Path("backups/genomics_v1.0.0.jsonld"))
 ```
+
+### Automatic Database Storage During Verification
+
+Karenina can automatically save verification results to a database as they are generated. This is especially useful for long-running verification jobs where you want results persisted immediately.
+
+**Configure automatic storage:**
+
+```python
+from karenina.schemas import VerificationConfig, ModelConfig
+from karenina.storage import DBConfig
+
+# Create database configuration
+db_config = DBConfig(
+    storage_url="sqlite:///benchmarks.db",
+    auto_create=True  # Create tables if they don't exist
+)
+
+# Configure verification with database
+config = VerificationConfig(
+    answering_models=[model_config],
+    parsing_models=[judge_config],
+    rubric_enabled=True,
+    db_config=db_config  # Enable automatic database storage
+)
+
+# Run verification - results are automatically saved to database
+results = benchmark.run_verification(config)
+
+print("✓ Verification complete and results saved to database")
+```
+
+**How it works:**
+
+1. When `db_config` is set in `VerificationConfig`, verification results are automatically saved to the specified database after completion
+2. The `AUTOSAVE_DATABASE` environment variable controls this behavior (defaults to `"true"`)
+3. Results are saved with metadata including run name, timestamp, and configuration details
+4. This happens transparently without requiring manual `save_to_db()` calls
+
+**Benefits:**
+
+- **No data loss**: Results are persisted immediately after verification completes
+- **Automatic**: No need to remember to call `save_to_db()` after verification
+- **Production-ready**: Ideal for automated pipelines and long-running jobs
+- **Queryable**: Results are immediately available for database queries and analytics
+
+**Disabling auto-save:**
+
+If you need to disable automatic database storage temporarily:
+
+```bash
+# Set environment variable
+export AUTOSAVE_DATABASE="false"
+```
+
+Or use `db_config=None` in `VerificationConfig`:
+
+```python
+config = VerificationConfig(
+    answering_models=[model_config],
+    parsing_models=[judge_config],
+    db_config=None  # No automatic database storage
+)
+```
+
+**Example with full workflow:**
+
+```python
+from karenina import Benchmark
+from karenina.schemas import VerificationConfig, ModelConfig
+from karenina.storage import DBConfig
+from pathlib import Path
+
+# Load benchmark
+benchmark = Benchmark.load(Path("genomics_benchmark.jsonld"))
+
+# Configure database
+db_config = DBConfig(
+    storage_url="sqlite:///production.db",
+    auto_create=True
+)
+
+# Configure verification with automatic database storage
+model_config = ModelConfig(
+    id="gpt-4.1-mini",
+    model_provider="openai",
+    model_name="gpt-4.1-mini",
+    temperature=0.7,
+    interface="langchain"
+)
+
+config = VerificationConfig(
+    answering_models=[model_config],
+    parsing_models=[model_config],
+    rubric_enabled=True,
+    replicate_count=3,
+    db_config=db_config  # Automatic storage enabled
+)
+
+# Run verification - results are auto-saved to database
+results = benchmark.run_verification(config)
+
+print(f"✓ {len(results)} verification results saved to database")
+
+# Optional: Also save a checkpoint for backup/sharing
+benchmark.save(Path("checkpoints/genomics_verified.jsonld"))
+print("✓ Checkpoint saved for backup")
+```
+
+For more details on database queries and analytics, see [Database Queries](../advanced/database-queries.md).
 
 ---
 
@@ -540,6 +667,7 @@ print(f"Version: {benchmark.version}")
 ```
 
 **Sharing checklist:**
+
 - ✅ Save to descriptive filename with version
 - ✅ Include README with benchmark purpose and usage
 - ✅ Document any special requirements (API keys, models)
@@ -560,6 +688,7 @@ git log -- genomics_benchmark_v1.0.0.jsonld
 ```
 
 **Git best practices:**
+
 - Use semantic versioning for checkpoint filenames
 - Include descriptive commit messages
 - Tag important versions: `git tag v1.0.0`

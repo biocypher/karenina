@@ -178,15 +178,18 @@ export KARENINA_ASYNC_ENABLED="false"
 
 ---
 
-### Database Location
+### Database Configuration
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `DB_PATH` | SQLite database file path | `dbs/karenina.db` |
+| `AUTOSAVE_DATABASE` | Auto-save verification results to database | `true` |
 
-**What this setting does**:
+**What these settings do**:
 
 - **`DB_PATH`**: Path to the SQLite database file used for storing benchmark data. Relative paths are resolved from the current working directory. Absolute paths are recommended for production use.
+
+- **`AUTOSAVE_DATABASE`**: Controls automatic persistence of verification results to the database when `db_config` is provided in `VerificationConfig`. When `true` (default), verification results are automatically saved to the database after completion. Set to `false` to disable auto-save even when `db_config` is configured.
 
 **Example**:
 ```bash
@@ -195,6 +198,9 @@ export DB_PATH="dbs/my_project.db"
 
 # Absolute path (recommended for production)
 export DB_PATH="/path/to/project/dbs/benchmark.db"
+
+# Disable auto-save of verification results
+export AUTOSAVE_DATABASE="false"
 ```
 
 **Best practices**:
@@ -203,6 +209,8 @@ export DB_PATH="/path/to/project/dbs/benchmark.db"
 - Organize databases by project or domain
 - Back up databases regularly
 - Use absolute paths for production
+- Keep `AUTOSAVE_DATABASE="true"` for production to ensure results are persisted
+- Set `AUTOSAVE_DATABASE="false"` only for testing or debugging scenarios
 
 ---
 
@@ -295,8 +303,9 @@ rubric_enabled = False
 async_enabled = True
 async_max_workers = 2
 
-# Database default
+# Database defaults
 db_path = "dbs/karenina.db"
+autosave_database = True
 ```
 
 ---
@@ -316,6 +325,7 @@ ANTHROPIC_API_KEY="sk-ant-..."
 
 # Database
 DB_PATH="dbs/karenina.db"
+AUTOSAVE_DATABASE="true"
 
 # Feature toggles
 EMBEDDING_CHECK="true"

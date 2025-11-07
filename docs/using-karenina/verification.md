@@ -13,6 +13,7 @@ This guide covers how to configure and execute verification to evaluate LLM resp
 - [Advanced Options](#advanced-configuration-options) - Abstention, deep judgment, system prompts
 - [LLM Interfaces](#using-different-llm-interfaces) - LangChain, OpenRouter, local models, manual
 - [Results](#accessing-verification-results) - Access and analyze verification data
+- [Automatic Database Storage](#automatic-database-storage) - Auto-save results to database
 - [Progress Tracking](#progress-tracking) - Monitor real-time verification progress
 - [Answer Caching](#answer-caching) - Automatic efficiency optimization
 - [Complete Example](#complete-example) - End-to-end verification workflow
@@ -671,6 +672,75 @@ print(f"Template Accuracy: {metrics['template_accuracy']:.1%}")
 print(f"Rubric Averages: {metrics['rubric_averages']}")
 print(f"Abstention Rate: {metrics['abstention_rate']:.1%}")
 ```
+
+---
+
+## Automatic Database Storage
+
+Karenina can automatically save verification results to a database as they are generated. This is especially useful for production deployments and long-running verification jobs.
+
+### Configure Automatic Storage
+
+Add a `DBConfig` to your `VerificationConfig` to enable automatic database persistence:
+
+```python
+from karenina.schemas import VerificationConfig, ModelConfig
+from karenina.storage import DBConfig
+
+# Create database configuration
+db_config = DBConfig(
+    storage_url="sqlite:///benchmarks.db",
+    auto_create=True  # Create tables if they don't exist
+)
+
+# Configure verification with database
+config = VerificationConfig(
+    answering_models=[model_config],
+    parsing_models=[judge_config],
+    rubric_enabled=True,
+    db_config=db_config  # Enable automatic database storage
+)
+
+# Run verification - results are automatically saved to database
+results = benchmark.run_verification(config)
+
+print("✓ Verification complete and results saved to database")
+```
+
+### How It Works
+
+1. When `db_config` is set in `VerificationConfig`, verification results are automatically saved to the specified database after completion
+2. The `AUTOSAVE_DATABASE` environment variable controls this behavior (defaults to `"true"`)
+3. Results are saved with metadata including run name, timestamp, and configuration details
+4. This happens transparently without requiring manual `save_to_db()` calls
+
+### Benefits
+
+- **No data loss**: Results are persisted immediately after verification completes
+- **Automatic**: No need to remember to call `save_to_db()` after verification
+- **Production-ready**: Ideal for automated pipelines and long-running jobs
+- **Queryable**: Results are immediately available for database queries and analytics
+
+### Disabling Auto-Save
+
+To disable automatic database storage temporarily:
+
+```bash
+# Set environment variable
+export AUTOSAVE_DATABASE="false"
+```
+
+Or use `db_config=None` in `VerificationConfig`:
+
+```python
+config = VerificationConfig(
+    answering_models=[model_config],
+    parsing_models=[judge_config],
+    db_config=None  # No automatic database storage
+)
+```
+
+For detailed information about database storage options, see [Automatic Database Storage During Verification](saving-loading.md#automatic-database-storage-during-verification) and [Configuration](../configuration.md#database-configuration).
 
 ---
 
