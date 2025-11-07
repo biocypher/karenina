@@ -2,6 +2,23 @@
 
 This guide covers how to configure and execute verification to evaluate LLM responses using your benchmark questions, templates, and rubrics.
 
+**Quick Navigation:**
+
+- [Understanding Verification](#understanding-verification) - Core concepts and workflow
+- [Basic Configuration](#basic-verification-configuration) - Setting up VerificationConfig
+- [Running Verification](#running-verification) - Execute verification and select questions
+- [Multi-Model Support](#multi-model-support) - Test multiple models simultaneously
+- [Replication](#replication-for-statistical-analysis) - Statistical significance through repeated runs
+- [Evaluation Modes](#evaluation-modes) - Template-only, rubric-only, or combined
+- [Advanced Options](#advanced-configuration-options) - Abstention, deep judgment, system prompts
+- [LLM Interfaces](#using-different-llm-interfaces) - LangChain, OpenRouter, local models, manual
+- [Results](#accessing-verification-results) - Access and analyze verification data
+- [Progress Tracking](#progress-tracking) - Monitor real-time verification progress
+- [Answer Caching](#answer-caching) - Automatic efficiency optimization
+- [Complete Example](#complete-example) - End-to-end verification workflow
+
+---
+
 ## Understanding Verification
 
 Verification in Karenina evaluates LLM responses through a structured workflow:
@@ -74,21 +91,7 @@ config = VerificationConfig(
 )
 ```
 
-### ModelConfig Parameters
-
 For a comprehensive guide to `ModelConfig` including all parameters, interfaces, providers, and the `extra_kwargs` feature, see the **[Model Configuration Guide](model-configuration.md)**.
-
-**Quick reference**:
-
-| Parameter | Type | Description | Example |
-|-----------|------|-------------|---------|
-| `id` | `str` | Unique identifier for this model | `"gpt-4.1-mini"` |
-| `model_provider` | `str` | Provider name | `"openai"`, `"anthropic"`, `"google"` |
-| `model_name` | `str` | Full model name | `"gpt-4.1-mini"`, `"claude-sonnet-4.5"` |
-| `temperature` | `float` | Sampling temperature (0.0-1.0) | `0.7` for creativity, `0.0` for determinism |
-| `interface` | `str` | Interface type | `"langchain"`, `"openrouter"`, `"openai_endpoint"`, `"manual"` |
-| `system_prompt` | `str` | Optional system prompt | `"You are a knowledgeable genomics expert"` |
-| `extra_kwargs` | `dict` | Additional keyword arguments | See [Model Configuration](model-configuration.md#extra-keyword-arguments) |
 
 ---
 
@@ -306,8 +309,9 @@ for question_id, question_results in results_by_question.items():
 ```
 
 **Use Cases:**
+
 - **Model Reliability**: Assess how consistently a model answers correctly
-- **Statistical Significance**: Run 10+ replicates for robust metrics
+- **Statistical Significance**: Run k replicates for robust metrics
 - **Temperature Effects**: Compare variance at different temperature settings
 
 ---
@@ -338,6 +342,7 @@ results = benchmark.run_verification(config)
 ```
 
 **When to use:**
+
 - Testing template parsing accuracy
 - Fastest verification (no rubric overhead)
 - Focus on structured output correctness
@@ -364,6 +369,7 @@ results = benchmark.run_verification(config)
 ```
 
 **When to use:**
+
 - Production benchmarking with full metrics
 - Evaluate both correctness (template) and quality (rubric)
 - Comprehensive model assessment
@@ -390,20 +396,11 @@ results = benchmark.run_verification(config)
 ```
 
 **When to use:**
+
 - Qualitative evaluation without structured output requirements
 - Rubric development and tuning
 - Open-ended response evaluation
 - Focus on content quality over format
-
-### Choosing an Evaluation Mode
-
-| Need | Recommended Mode | Why |
-|------|-----------------|-----|
-| Test template parsing | `template_only` | Fastest, focuses on structure |
-| Production benchmarking | `template_and_rubric` | Complete evaluation |
-| Rubric development | `rubric_only` | Skip template overhead |
-| Open-ended responses | `rubric_only` | No structure requirements |
-| Quality + Correctness | `template_and_rubric` | Both metrics |
 
 ---
 
@@ -517,6 +514,7 @@ config = VerificationConfig(
 ```
 
 **Temperature Guidelines:**
+
 - **0.0**: Deterministic, always returns same answer (best for factual questions)
 - **0.3-0.5**: Slight variation, mostly consistent (good balance)
 - **0.7-0.9**: Creative, more diverse responses (good for open-ended questions)
@@ -526,96 +524,45 @@ config = VerificationConfig(
 
 ## Using Different LLM Interfaces
 
-Karenina supports four interface types for connecting to different LLM providers.
+Karenina supports four interface types for connecting to LLM providers:
 
-### Interface 1: langchain (OpenAI, Google, Anthropic)
+1. **`langchain`** - Default interface for major cloud providers (OpenAI, Anthropic, Google)
+2. **`openrouter`** - Unified access to 200+ models through OpenRouter API
+3. **`openai_endpoint`** - Custom OpenAI-compatible endpoints (Ollama, vLLM, local models)
+4. **`manual`** - Pre-recorded traces for testing without API calls
 
-Use LangChain for major cloud providers:
-
+**Quick Example:**
 ```python
-# OpenAI via LangChain
-openai_model = ModelConfig(
+# Cloud provider via LangChain
+cloud_model = ModelConfig(
     id="gpt-4.1-mini",
     model_provider="openai",
     model_name="gpt-4.1-mini",
-    interface="langchain"
+    interface="langchain",
+    temperature=0.0
 )
 
-# Anthropic via LangChain
-anthropic_model = ModelConfig(
-    id="claude-sonnet",
-    model_provider="anthropic",
-    model_name="claude-sonnet-4.5",
-    interface="langchain"
-)
-
-# Google via LangChain
-google_model = ModelConfig(
-    id="gemini-pro",
-    model_provider="google",
-    model_name="gemini-2.5-flash",
-    interface="langchain"
-)
-```
-
-**Environment Variables Required:**
-```bash
-export OPENAI_API_KEY="your-openai-key"
-export ANTHROPIC_API_KEY="your-anthropic-key"
-export GOOGLE_API_KEY="your-google-key"
-```
-
-### Interface 2: openrouter
-
-Use OpenRouter to access 200+ models through a single API:
-
-```python
-openrouter_model = ModelConfig(
-    id="sonnet-via-openrouter",
-    model_provider="openrouter",
-    model_name="anthropic/claude-sonnet-4.5",
-    interface="openrouter"
-)
-```
-
-**Environment Variable Required:**
-```bash
-export OPENROUTER_API_KEY="your-openrouter-key"
-```
-
-### Interface 3: openai_endpoint (Local Models, Ollama)
-
-Connect to OpenAI-compatible endpoints like Ollama, vLLM, or local servers:
-
-```python
+# Local model via custom endpoint
 local_model = ModelConfig(
     id="llama-local",
     model_name="llama3.1:70b",
     interface="openai_endpoint",
     endpoint_base_url="http://localhost:11434/v1",
-    endpoint_api_key="ollama"  # Ollama doesn't require real key
+    endpoint_api_key="ollama",
+    temperature=0.0
 )
 ```
 
-**Use Cases:**
-- Local models via Ollama
-- Self-hosted LLMs
-- Custom API endpoints
-- Private deployments
+For comprehensive documentation on all four interfaces, including:
 
-### Interface 4: manual (Testing without API Calls)
+- Detailed configuration examples
+- Environment variable setup
+- Provider-specific options
+- The `extra_kwargs` feature for advanced configuration
+- MCP tool integration
+- System prompts and custom parameters
 
-Use pre-recorded traces for testing and debugging:
-
-```python
-manual_model = ModelConfig(
-    id="manual-traces",
-    interface="manual"
-)
-
-# Upload manual traces via GUI or API
-# Useful for testing evaluation logic without API costs
-```
+See the **[Model Configuration Guide](model-configuration.md)**.
 
 ---
 
@@ -822,6 +769,7 @@ Result: Same answer reused 3 times (efficient, guaranteed consistent)
 ### Cache Behavior
 
 The answer cache is:
+
 - **Automatic**: No configuration required, works transparently
 - **Thread-Safe**: Safe for parallel execution
 - **Per-Question**: Cache key includes question ID, answering model ID, and replicate number
@@ -846,6 +794,7 @@ config = VerificationConfig(
 ```
 
 **Result:**
+
 - Replicate 0: Answer generated once, reused by all 3 judges
 - Replicate 1: New answer generated once, reused by all 3 judges
 
