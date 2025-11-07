@@ -14,6 +14,7 @@ This guide explains how to integrate Model Context Protocol (MCP) servers to pro
 - Custom domain-specific tools
 
 **Key Benefits**:
+
 - Extend LLM capabilities beyond text generation
 - Access real-time data during verification
 - Standardized tool invocation protocol
@@ -24,6 +25,7 @@ This guide explains how to integrate Model Context Protocol (MCP) servers to pro
 MCP integration allows LLMs to access external information when answering benchmark questions:
 
 **Use Cases**:
+
 - **Current information**: Search web for recent drug approvals
 - **Database access**: Query genomics databases for gene information
 - **File operations**: Read configuration files or data files
@@ -307,6 +309,7 @@ for tool in tools:
 **Scenario**: Benchmark tests LLM knowledge of recent drug approvals.
 
 **Setup**:
+
 - Deploy MCP server with web search tool
 - Configure verification with MCP server URL
 - Questions ask about recent FDA approvals
@@ -318,6 +321,7 @@ for tool in tools:
 **Scenario**: Questions require querying a genomics database.
 
 **Setup**:
+
 - Deploy MCP server with database query tool
 - Configure database connection in MCP server
 - Questions ask about specific genes
@@ -329,6 +333,7 @@ for tool in tools:
 **Scenario**: Benchmark uses data files with drug-target mappings.
 
 **Setup**:
+
 - Deploy MCP server with file read tool
 - Store drug-target data in structured files
 - Configure file system access permissions
@@ -340,6 +345,7 @@ for tool in tools:
 **Scenario**: Questions require real-time API data.
 
 **Setup**:
+
 - Deploy MCP server with API call tools
 - Configure API keys and endpoints
 - Questions ask about live data
@@ -426,6 +432,7 @@ python verify_with_mcp.py
 ### Server Configuration
 
 **Do**:
+
 - Validate MCP server before verification
 - Use HTTPS in production
 - Implement authentication for MCP servers
@@ -433,6 +440,7 @@ python verify_with_mcp.py
 - Log tool invocations for debugging
 
 **Don't**:
+
 - Expose MCP servers publicly without authentication
 - Allow unrestricted file system access
 - Skip server validation before use
@@ -441,6 +449,7 @@ python verify_with_mcp.py
 ### Tool Design
 
 **Do**:
+
 - Provide clear tool descriptions
 - Use typed parameters with JSON schema
 - Return structured data
@@ -448,6 +457,7 @@ python verify_with_mcp.py
 - Document tool capabilities
 
 **Don't**:
+
 - Create tools with side effects (prefer read-only)
 - Skip parameter validation
 - Return unstructured text
@@ -456,6 +466,7 @@ python verify_with_mcp.py
 ### Security
 
 **Do**:
+
 - Validate all tool parameters
 - Restrict tool permissions (principle of least privilege)
 - Implement rate limiting
@@ -463,6 +474,7 @@ python verify_with_mcp.py
 - Use network firewalls
 
 **Don't**:
+
 - Trust tool input without validation
 - Grant excessive permissions
 - Skip logging
@@ -525,6 +537,7 @@ for tool in tools:
 **Cause**: Tool invocations add latency.
 
 **Solution**:
+
 - Use faster MCP servers (local is better than remote)
 - Cache tool results when possible
 - Reduce network latency
@@ -533,12 +546,14 @@ for tool in tools:
 ## Limitations
 
 **Current Limitations**:
+
 - MCP integration primarily designed for server/GUI deployment
 - Standalone library support is experimental
 - Tool invocation tracking may be limited
 - Some providers may not support function calling
 
 **Best Use**:
+
 - Use with karenina-server and karenina-gui for full features
 - Standalone library works but with reduced visibility into tool usage
 - Consider manual traces for reproducible testing instead

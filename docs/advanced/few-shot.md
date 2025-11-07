@@ -18,6 +18,7 @@ Answer: [Model will answer here]
 ```
 
 This technique can significantly improve:
+
 - **Response quality**: Models learn from good examples
 - **Consistency**: Responses follow demonstrated patterns
 - **Format adherence**: Models match example structure
@@ -714,6 +715,7 @@ few_shot_config = FewShotConfig(
    ```
 
 2. **Use deterministic example selection**:
+
    - K-shot mode automatically uses question ID as seed for reproducibility
    - Results should be consistent across runs
 
@@ -733,6 +735,7 @@ Few-shot prompting increases token consumption:
 ### Latency
 
 More examples slightly increase latency:
+
 - Token generation time: ~50-100ms per 100 tokens
 - 3 examples: +50-200ms additional latency
 

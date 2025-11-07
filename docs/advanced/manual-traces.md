@@ -1,7 +1,5 @@
 # Manual Trace System
 
-**Last Updated**: 2025-11-05
-
 This guide explains how to use the Manual Trace System to evaluate pre-generated LLM responses without making live API calls during verification.
 
 ---
@@ -107,6 +105,7 @@ benchmark.run_verification(config)
 **Purpose**: High-level API for managing manual traces for a specific benchmark
 
 **Key Methods**:
+
 - `__init__(benchmark)` - Initialize with benchmark for question mapping
 - `register_trace(question_identifier, trace, map_to_id=False)` - Register single trace
 - `register_traces(traces_dict, map_to_id=False)` - Batch register traces
@@ -119,12 +118,14 @@ benchmark.run_verification(config)
 **Purpose**: Session-based thread-safe storage for manual traces
 
 **Key Features**:
+
 - Thread-safe storage with `threading.RLock()`
 - Session timeout (default: 1 hour) with automatic cleanup
 - Storage for both traces and agent metrics
 - MD5 hash validation
 
 **Key Methods**:
+
 - `set_trace(question_hash, trace, agent_metrics=None)` - Store trace programmatically
 - `get_trace(question_hash)` - Retrieve trace
 - `get_trace_with_metrics(question_hash)` - Retrieve trace and metrics
@@ -136,6 +137,7 @@ benchmark.run_verification(config)
 **Purpose**: LangChain-compatible LLM that returns precomputed traces
 
 **Key Methods**:
+
 - `invoke(messages)` - Return precomputed trace as AIMessage
 - `get_agent_metrics()` - Retrieve agent metrics for trace
 - `with_structured_output(schema)` - Compatibility method
@@ -146,6 +148,7 @@ benchmark.run_verification(config)
 **New Field**: `manual_traces: Any = Field(default=None, exclude=True)`
 
 **Validation**:
+
 - Enforces `manual_traces` requirement for manual interface
 - Auto-sets `id="manual"` and `model_name="manual"` for manual interface
 - Validates that MCP tools are not used with manual interface
@@ -313,11 +316,13 @@ benchmark.run_verification(config)
 ### Question Mapping
 
 **Hash Generation**:
+
 - Uses MD5 hash of UTF-8 encoded question text: `hashlib.md5(question_text.encode("utf-8")).hexdigest()`
 - Same algorithm as `Question.id` property in `schemas/domain/question.py`
 - Results in 32-character hexadecimal string
 
 **Validation**:
+
 - When `map_to_id=True`, question text is searched in benchmark's `_questions_cache`
 - Raises `ValueError` if question not found, with computed hash and available count
 - Exact text matching (case-sensitive, including whitespace)
@@ -329,11 +334,13 @@ benchmark.run_verification(config)
 ### Trace Format Processing
 
 **String Traces**:
+
 - Stored as-is with no preprocessing
 - No agent metrics extracted (`metrics = None`)
 - Simplest format for basic answer evaluation
 
 **LangChain Message Lists**:
+
 1. **Validation**: Must be list of `BaseMessage` objects (AIMessage, ToolMessage, etc.)
 2. **Metrics Extraction**:
    - Calls `_extract_agent_metrics(response)` from `verification_utils.py`
@@ -344,6 +351,7 @@ benchmark.run_verification(config)
 4. **Storage**: Both harmonized trace and metrics stored together
 
 **Error Handling**:
+
 - `TypeError` raised for invalid trace formats (not str or list)
 - `ManualTraceError` raised for preprocessing failures (import errors, etc.)
 
@@ -352,6 +360,7 @@ benchmark.run_verification(config)
 ### Agent Metrics Propagation
 
 **Flow**:
+
 1. `ManualTraces._preprocess_trace()` extracts metrics during registration
 2. `ManualTraceManager.set_trace()` stores metrics alongside trace
 3. `ManualLLM.get_agent_metrics()` retrieves metrics during verification
@@ -373,18 +382,21 @@ benchmark.run_verification(config)
 ### Session-Based Storage
 
 **Design**:
+
 - Global singleton `ManualTraceManager` instance
 - Thread-safe with `threading.RLock()`
 - Session timeout: 1 hour (3600 seconds)
 - Automatic cleanup of expired traces
 
 **Cleanup Strategy**:
+
 1. **Timer-Based**: `threading.Timer` triggers cleanup after timeout
 2. **Activity-Based**: Timer resets on any trace access
 3. **Trace-Level**: Individual traces have timestamps, expired traces removed
 4. **Session-Level**: If no activity for timeout period, entire session clears
 
 **Memory Management**:
+
 - `get_memory_usage_info()` provides trace count, character count, estimated bytes
 - Useful for monitoring large-scale trace storage
 
@@ -393,6 +405,7 @@ benchmark.run_verification(config)
 ### ModelConfig Validation
 
 **Requirements for Manual Interface**:
+
 1. `interface` must be `"manual"`
 2. `manual_traces` must not be `None` (raises `ValueError` if missing)
 3. `id` defaults to `"manual"` if not provided
@@ -400,6 +413,7 @@ benchmark.run_verification(config)
 5. `mcp_urls_dict` must be `None` (raises `ValueError` if MCP configured)
 
 **Preset Compatibility**:
+
 - `manual_traces` field marked with `Field(exclude=True)`
 - Automatically excluded from Pydantic serialization
 - Presets save config structure but not trace data
@@ -414,11 +428,13 @@ benchmark.run_verification(config)
 ### 1. Question Text Matching
 
 **Do**:
+
 - Use exact question text from benchmark (case-sensitive, including whitespace)
 - Use `map_to_id=True` when working with question text
 - Verify question text matches benchmark before registration
 
 **Don't**:
+
 - Modify question text (trim whitespace, change case, etc.)
 - Assume approximate matching will work
 - Register traces for questions not in benchmark
@@ -430,11 +446,13 @@ benchmark.run_verification(config)
 ### 2. Trace Format Selection
 
 **Use String Traces When**:
+
 - Answers are simple text without tool calls
 - No agent metrics needed
 - Simplest workflow sufficient
 
 **Use LangChain Message Lists When**:
+
 - Preserving tool call history is important
 - Agent metrics (tool calls, failures) are valuable
 - Comparing agent-based vs. non-agent-based approaches
@@ -476,16 +494,19 @@ ValueError: MCP tools are not supported with manual interface
 ### 4. Performance Optimization
 
 **Batch Registration**:
+
 - Use `register_traces()` instead of multiple `register_trace()` calls
 - Reduces overhead for large trace sets
 - More readable code
 
 **Memory Management**:
+
 - Monitor trace count with `get_manual_trace_count()`
 - Check memory usage with `get_memory_usage_info()`
 - Clear traces with `clear_manual_traces()` when done
 
 **Session Cleanup**:
+
 - Traces auto-expire after 1 hour of inactivity
 - Manual cleanup with `clear_manual_traces()` if needed
 - Activity resets timeout (any trace access)
@@ -673,11 +694,13 @@ ManualTraceNotFoundError: No manual trace found for question hash: '936dbc8755f6
 ```
 
 **Causes**:
+
 1. Trace not registered for that question
 2. Question text mismatch during registration
 3. Traces cleared or expired
 
 **Solutions**:
+
 1. Verify trace was registered: `has_manual_trace(question_hash)`
 2. Check exact question text matches benchmark
 3. Re-register traces if session expired
@@ -693,11 +716,13 @@ ValueError: Question not found in benchmark: 'What is 2+2?...'
 ```
 
 **Causes**:
+
 1. Question text doesn't match benchmark exactly
 2. Question not added to benchmark
 3. Whitespace/case differences
 
 **Solutions**:
+
 1. Export CSV mapper to see exact question text
 2. Verify question was added to benchmark
 3. Check for hidden whitespace or case differences
@@ -713,9 +738,11 @@ TypeError: Invalid trace format: expected str or list[BaseMessage], got <class '
 ```
 
 **Causes**:
+
 1. Passing invalid trace format (not str or list of messages)
 
 **Solutions**:
+
 1. Use string: `"The answer is 4"`
 2. Use message list: `[AIMessage(content="..."), ToolMessage(...)]`
 3. Don't use dicts or other formats
@@ -725,15 +752,18 @@ TypeError: Invalid trace format: expected str or list[BaseMessage], got <class '
 ### Issue: Agent metrics not appearing
 
 **Symptoms**:
+
 - Verification result missing tool call counts
 - Metrics are None or 0
 
 **Causes**:
+
 1. Using string trace format (no metrics)
 2. Message list doesn't contain tool calls
 3. Preprocessing failed silently
 
 **Solutions**:
+
 1. Verify using message list format, not string
 2. Ensure messages include ToolMessage objects
 3. Check message structure matches LangChain format
@@ -810,6 +840,7 @@ def get_memory_usage_info() -> Dict[str, Any]:
 **File**: `karenina/tests/test_manual_traces.py`
 
 **Coverage**:
+
 - ManualTraces class initialization
 - Trace registration (by hash, by text, batch)
 - Format handling (string, message list)
@@ -826,6 +857,7 @@ def get_memory_usage_info() -> Dict[str, Any]:
 **File**: `karenina/tests/test_manual_traces_integration.py`
 
 **Coverage**:
+
 - Complete workflows (string traces, message traces)
 - Batch registration
 - Delayed trace population
@@ -864,9 +896,3 @@ The Manual Trace System enables:
 5. **Production-Ready** - Thread-safe, session-based, with automatic cleanup
 
 **Key Workflow**: Create benchmark → Initialize `ManualTraces` → Register traces → Create `ModelConfig` with `interface="manual"` → Run verification
-
----
-
-**Implementation Status**: Complete ✅
-**Test Coverage**: 31 tests passing ✅
-**Last Updated**: 2025-11-05

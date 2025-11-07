@@ -7,6 +7,7 @@ Embedding check provides a semantic fallback mechanism that can rescue verificat
 **Embedding check** is an optional feature that uses sentence embeddings to detect semantically equivalent answers that fail strict template matching. When verification fails, this feature computes the semantic similarity between the expected answer and the model's response. If similarity exceeds a configurable threshold, an LLM validates semantic equivalence and can override the initial failure.
 
 **Key benefits:**
+
 - **Reduces false negatives**: Catches paraphrased but correct answers
 - **Flexible evaluation**: Handles structural variations without changing templates
 - **Semantic awareness**: Uses deep learning embeddings for meaning comparison
@@ -62,10 +63,12 @@ Override Result: False → True ✓
 **Scenario**: LLM provides the correct answer with different wording.
 
 **Example**:
+
 - Expected Answer: "BCL2"
 - Model Response: "The BCL-2 protein"
 
 **Result**:
+
 - Initial verification: `False` (different structure)
 - Embedding similarity: `0.91`
 - Semantic check: `True` (same protein mentioned)
@@ -76,10 +79,12 @@ Override Result: False → True ✓
 **Scenario**: Same number in different representations.
 
 **Example**:
+
 - Expected Answer: "46"
 - Model Response: "Forty-six chromosomes"
 
 **Result**:
+
 - Initial verification: `False` (string "46" ≠ "Forty-six chromosomes")
 - Embedding similarity: `0.88`
 - Semantic check: `True` (same numerical value)
@@ -90,10 +95,12 @@ Override Result: False → True ✓
 **Scenario**: Correct information in different structure.
 
 **Example**:
+
 - Expected Answer: "4"
 - Model Response: "Hemoglobin A consists of four protein subunits"
 
 **Result**:
+
 - Initial verification: `False` (template expects just number)
 - Embedding similarity: `0.86`
 - Semantic check: `True` (correct count mentioned)
@@ -303,20 +310,6 @@ print(f"Override rate: {overrides_applied / embedding_checks_performed * 100:.1f
 ### When Enabled
 
 Embedding check only runs on **failed verifications**, so the impact depends on your failure rate.
-
-**Time per embedding check:**
-- Embedding generation: ~50-200ms
-- Similarity computation: <1ms
-- LLM semantic validation: ~500-2000ms
-- **Total: ~550-2200ms per check**
-
-**Resource usage:**
-
-| Model | Disk Size | RAM (Loaded) |
-|-------|-----------|--------------|
-| `all-MiniLM-L6-v2` | ~90 MB | ~400 MB |
-| `all-mpnet-base-v2` | ~420 MB | ~1.2 GB |
-| `multi-qa-MiniLM-L6-cos-v1` | ~90 MB | ~400 MB |
 
 **Cost impact:**
 
@@ -546,6 +539,7 @@ for qid, result in results.items():
 **Symptom**: `embedding_check_performed` is always `False`
 
 **Solutions**:
+
 1. Verify environment variable is set: `os.getenv("EMBEDDING_CHECK")`
 2. Check that initial verification is failing (embedding check only runs on failures)
 3. Ensure sentence-transformers is installed: `pip install sentence-transformers`
@@ -555,6 +549,7 @@ for qid, result in results.items():
 **Symptom**: Embedding checks run but never override results
 
 **Solutions**:
+
 1. Lower the similarity threshold: `os.environ["EMBEDDING_CHECK_THRESHOLD"] = "0.80"`
 2. Review similarity scores to see if they're below threshold
 3. Try a more accurate embedding model: `all-mpnet-base-v2`
@@ -564,6 +559,7 @@ for qid, result in results.items():
 **Symptom**: High override rate (>20%) suggesting false positives
 
 **Solutions**:
+
 1. Raise the similarity threshold: `os.environ["EMBEDDING_CHECK_THRESHOLD"] = "0.90"`
 2. Review templates to ensure they're capturing expected variations
 3. Manually inspect overridden cases to identify patterns
@@ -573,6 +569,7 @@ for qid, result in results.items():
 **Symptom**: Verification takes too long with embedding check enabled
 
 **Solutions**:
+
 1. Use faster embedding model: `all-MiniLM-L6-v2` or `all-distilroberta-v1`
 2. Increase threshold to reduce LLM validation calls
 3. Improve templates to reduce initial verification failures

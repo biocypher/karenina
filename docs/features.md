@@ -1,6 +1,24 @@
 # Karenina Features
 
-Karenina is a comprehensive framework for LLM benchmarking with powerful evaluation capabilities. This page provides an overview of all major features available in the karenina Python library.
+Karenina is a comprehensive benchmarking system for Large Language Models (LLMs) designed to make domain-specific benchmark creation accessible to experts without requiring LLM-technical infrastructure knowledge.
+
+**Core challenge**: Standardizing domain expertise into runnable benchmarks through **templates** (verify factual correctness) and **rubrics** (assess qualitative traits, format compliance, and metrics).
+
+**Architecture**: Standalone Python library with optional GUI integration for no-code accessibility.
+
+This page provides an overview of all major features available in the karenina Python library.
+
+## Quick Navigation
+
+**Core Features**: [Question Management](#question-management) | [Answer Templates](#answer-template-generation) | [Verification](#benchmark-verification) | [Rubrics](#rubric-evaluation)
+
+**Advanced Evaluation**: [Few-Shot Prompting](#few-shot-prompting) | [Deep-Judgment](#deep-judgment-parsing) | [Abstention Detection](#abstention-detection) | [Embedding Check](#embedding-check-semantic-fallback) | [Regex Validation](#regex-validation)
+
+**Data Management**: [Database](#database-persistence) | [Checkpoints](#checkpoint-management) | [Export & Reporting](#export--reporting)
+
+**Configuration**: [Settings](#configuration-management) | [Presets](#preset-management) | [MCP Integration](#mcp-integration) | [Manual Trace Upload](#manual-trace-upload)
+
+**Other**: [Integration with Server & GUI](#integration-with-server-gui) | [Feature Comparison](#feature-comparison-templates-vs-rubrics) | [Workflow Overview](#workflow-overview) | [Next Steps](#next-steps)
 
 ---
 
@@ -10,6 +28,7 @@ Karenina is a comprehensive framework for LLM benchmarking with powerful evaluat
 Extract and manage benchmark questions with rich metadata support.
 
 **What you can do:**
+
 - Load questions from files (Excel, CSV, TSV)
 - Map columns to question text, answers, and metadata
 - Add questions programmatically
@@ -27,6 +46,7 @@ Create structured evaluation templates that define what correct answers should c
 Answer templates are Pydantic models that specify how to evaluate model outputs. They define what information should be extracted from answers and how to verify correctness programmatically.
 
 **What you can do:**
+
 - Generate templates automatically using LLMs
 - Create templates for multiple questions in batches
 - Define precise attribute types (strings, numbers, booleans, lists)
@@ -41,12 +61,14 @@ Answer templates are Pydantic models that specify how to evaluate model outputs.
 Evaluate LLM responses against your templates and rubrics.
 
 **Supported Interfaces:**
+
 - **`langchain`**: access all of the supported LLM providers via LangChain
 - **`openrouter`**: access any model from the OpenRouter platform
 - **`openai_endpoint`**: OpenAI-compatible endpoints
 - **`manual`**: Manual trace replay for testing/debugging (no API calls)
 
 **What you can do:**
+
 - Run verification with any supported interface and provider
 - Use different models for answering vs parsing (judge)
 - Run multiple replications for statistical significance
@@ -63,14 +85,17 @@ Evaluate LLM responses against your templates and rubrics.
 Assess qualitative aspects of answers using LLM-based, regex-based, or metric-based criteria.
 
 **What rubrics are:**
+
 Rubrics define evaluation criteria for subjective qualities like clarity, safety, conciseness, or compliance with specific formats. Unlike templates (which verify factual correctness), rubrics assess answer quality.
 
 **Three trait types:**
+
 - **LLM-based traits**: AI evaluates qualities (binary pass/fail or 1-5 scale)
 - **Regex-based traits**: Pattern matching for format validation
 - **Metric-based traits**: Confusion matrix metrics (precision, recall, F1, accuracy)
 
 **What you can do:**
+
 - Create global rubrics applied to all questions
 - Create question-specific rubrics
 - Use LLM traits for subjective assessment (clarity, safety, etc.)
@@ -89,6 +114,7 @@ Rubrics define evaluation criteria for subjective qualities like clarity, safety
 Guide LLM responses by providing examples.
 
 **What you can do:**
+
 - Configure few-shot examples globally or per question
 - Use "all" mode (include all available examples)
 - Use "k-shot" mode (include k random examples)
@@ -104,9 +130,11 @@ Guide LLM responses by providing examples.
 Extract detailed feedback with evidence, reasoning, and confidence scores.
 
 **What it does:**
+
 Deep-judgment uses a multi-stage parsing pipeline to extract specific excerpts from answers, reasoning traces explaining the evaluation, and confidence scores. This provides much richer feedback than standard pass/fail verification.
 
 **What you can do:**
+
 - Enable deep-judgment parsing in verification config
 - Get verbatim excerpts with confidence scoring
 - Access reasoning traces explaining why answers passed/failed
@@ -121,9 +149,11 @@ Deep-judgment uses a multi-stage parsing pipeline to extract specific excerpts f
 Identify when models refuse to answer questions.
 
 **What it does:**
+
 Detects patterns like "I don't know", "I cannot answer", or other refusals to provide information. When detected, the verification result is overridden and the abstention reasoning is stored.
 
 **What you can do:**
+
 - Enable via environment variable: `ABSTENTION_CHECK_ENABLED=true`
 - Automatically detect common abstention patterns
 - Store abstention reasoning for analysis
@@ -140,12 +170,14 @@ Catch semantically correct answers that fail format checks.
 When verification fails, embedding check uses semantic similarity (via SentenceTransformer) to determine if the answer is semantically equivalent to the expected answer. This prevents false negatives from format differences.
 
 **What you can do:**
+
 - Enable via environment variable: `EMBEDDING_CHECK=true`
 - Configure similarity threshold and model
 - Automatically override false negatives to true positives
 - Combine with template verification for robust evaluation
 
 **Trade-offs:**
+
 - Only triggers on failed verifications
 - Zero performance impact when disabled
 
@@ -157,9 +189,11 @@ When verification fails, embedding check uses semantic similarity (via SentenceT
 Validate answer formats with pattern matching.
 
 **What it does:**
+
 Check raw LLM response text against regex patterns to enforce specific formats (e.g., "answers must be enclosed in brackets").
 
 **What you can do:**
+
 - Define patterns in template fields
 - Use match types: exact, contains, count, all
 - Combine regex results with template verification
@@ -175,6 +209,7 @@ Check raw LLM response text against regex patterns to enforce specific formats (
 Store benchmarks, questions, and verification results in SQLite.
 
 **What you can do:**
+
 - Auto-save verification results to database
 - Track verification run history
 - Version questions with template_id
@@ -190,6 +225,7 @@ Store benchmarks, questions, and verification results in SQLite.
 Save and load complete benchmark state as JSON-LD files.
 
 **What checkpoints contain:**
+
 - All questions with metadata
 - Answer templates
 - Rubrics (global and question-specific)
@@ -197,6 +233,7 @@ Save and load complete benchmark state as JSON-LD files.
 - Question versioning information
 
 **What you can do:**
+
 - Save benchmark state: `benchmark.save_checkpoint(path)`
 - Load benchmark state: `Benchmark.load_checkpoint(path)`
 - Share benchmarks across systems
@@ -210,6 +247,7 @@ Save and load complete benchmark state as JSON-LD files.
 Export verification results and benchmarks in multiple formats.
 
 **What you can do:**
+
 - Export to JSON (complete data structure)
 - Export to CSV (tabular format for analysis)
 - Configure which columns to include
@@ -227,6 +265,7 @@ Export verification results and benchmarks in multiple formats.
 Customize Karenina's behavior with environment variables and programmatic settings.
 
 **What you can configure:**
+
 - Default LLM model: `KARENINA_DEFAULT_MODEL`
 - API keys: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
 - Database location: `KARENINA_DB_PATH`
@@ -242,6 +281,7 @@ Customize Karenina's behavior with environment variables and programmatic settin
 Save and reuse verification configurations across benchmarks.
 
 **What presets contain:**
+
 - Model configurations (answering, parsing, judging)
 - Enabled features (deep-judgment, abstention, embedding check)
 - Rubric settings
@@ -249,6 +289,7 @@ Save and reuse verification configurations across benchmarks.
 - MCP integration settings
 
 **What you can do:**
+
 - Save current config as named preset
 - Load saved presets to restore configurations
 - Update preset metadata
@@ -263,10 +304,13 @@ Save and reuse verification configurations across benchmarks.
 Use Model Context Protocol servers for tool integration.
 
 **What you can do:**
+
 - Configure MCP servers for verification runs
 - Support multiple MCP servers simultaneously
 - Validate MCP server configurations
 - Enable tool use in LLM responses
+
+**Learn more:** [Advanced: MCP Integration](advanced/mcp-integration.md)
 
 ---
 
@@ -274,11 +318,14 @@ Use Model Context Protocol servers for tool integration.
 Replay pre-recorded LLM responses for testing and debugging using the `manual` interface.
 
 **What you can do:**
+
 - Upload JSON-based trace files
 - Bypass live LLM calls for reproducibility (uses `manual` interface, no API costs)
 - Debug parsing issues without making real API calls
 - Create regression tests with recorded responses
 - Reproduce specific scenarios deterministically
+
+**Learn more:** [Advanced: Manual Traces](advanced/manual-traces.md)
 
 ---
 
@@ -287,12 +334,24 @@ Replay pre-recorded LLM responses for testing and debugging using the `manual` i
 **Karenina as a standalone library:**
 Everything documented here works independently as a Python library. You can use karenina programmatically in scripts, notebooks, or applications.
 
-**Optional integration:**
-Karenina can be integrated with optional companion packages:
-- **karenina-server**: FastAPI-based REST API wrapper
-- **karenina-gui**: React-based web interface
+**Graphical User Interface (Optional):**
+To guarantee **additional accessibility** to the framework, a **web-based graphical interface** is available for domain experts, curators, and non-technical users who prefer not to work with code.
 
-These packages provide a web UI, job management, and progress tracking, but are not required for core functionality.
+**What the GUI provides:**
+
+- **Visual question and metadata extraction** from files (Excel, CSV, TSV)
+- **Template generation** with interactive preview and editing
+- **No-code rubric curation** (LLM-based, regex, and metric traits)
+- **Checkpointing and verification execution** with real-time progress monitoring
+- **Results visualization** and export management
+
+**Implementation:**
+The GUI is built using two companion packages:
+
+- **[karenina-server](https://github.com/biocypher/karenina-server)**: FastAPI-based REST API wrapper exposing karenina backend
+- **[karenina-gui](https://github.com/biocypher/karenina-gui)**: TypeScript/React web application providing the user interface
+
+**Note**: Coordination and deployment instructions for the full web-based stack are still a work in progress and will be released soon.
 
 **Learn more:** [Advanced: Integration](advanced/integration.md)
 

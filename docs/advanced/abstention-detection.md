@@ -41,6 +41,7 @@ When enabled, abstention detection adds an extra analysis step after the LLM gen
 ```
 
 The parsing model examines the raw response text and determines whether it represents abstention. If detected, the system stores:
+
 - **Detection flag**: Boolean indicating abstention was found
 - **Reasoning**: LLM explanation of why it's considered abstention
 - **Metadata**: Additional context about the refusal
@@ -272,21 +273,25 @@ print("✓ Results saved with abstention metadata")
 ### When to Use Abstention Detection
 
 ✅ **Safety and Compliance Testing**:
+
 - Verify models refuse harmful requests
 - Test policy adherence
 - Ensure appropriate safety boundaries
 
 ✅ **Capability Assessment**:
+
 - Identify knowledge boundaries
 - Understand when models lack information
 - Map capability limitations
 
 ✅ **Quality Benchmarking**:
+
 - Distinguish refusals from incorrect answers
 - Analyze abstention rates across topics
 - Compare model safety behaviors
 
 ✅ **Medical/Legal/Financial Domains**:
+
 - Verify models defer to professionals appropriately
 - Test compliance with regulatory requirements
 - Ensure models don't provide unauthorized advice
@@ -514,11 +519,13 @@ Each abstention check uses the parsing model:
 ### Recommendation
 
 Enable abstention detection **selectively** for:
+
 - Safety and compliance testing
 - Capability boundary exploration
 - Domains where abstention is meaningful (medical, legal, etc.)
 
 Disable for:
+
 - Pure factual recall benchmarks
 - High-volume testing where speed matters
 - Questions unlikely to trigger abstention

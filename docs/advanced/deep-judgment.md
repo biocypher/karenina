@@ -88,6 +88,7 @@ Deep-judgment uses a **three-stage autoregressive process** where each stage bui
 The parsing model identifies **verbatim quotes** from the LLM response that support each template attribute.
 
 **For each attribute**:
+
 - Extract 0-3 excerpts (configurable)
 - Assign confidence level: low/medium/high
 - Validate excerpts actually exist in the response (fuzzy matching)
@@ -141,6 +142,291 @@ Parsed Answer:
 If any attribute has **missing excerpts** (no verbatim evidence found), verification **automatically fails** even if the final parsed answer seems correct. This ensures all claims are backed by explicit evidence.
 
 **Exception**: If abstention is detected (LLM refused to answer), auto-fail is skipped since abstention takes priority.
+
+---
+
+## Search-Enhanced Deep-Judgment
+
+**Search-enhanced deep-judgment** extends the standard three-stage process with an additional validation layer that checks extracted excerpts against external evidence sources. This helps detect potential hallucinations by verifying that the information in excerpts can be corroborated by external search results.
+
+### How It Works
+
+When search enhancement is enabled, the deep-judgment process adds two additional steps between Stage 1 (Excerpt Extraction) and Stage 2 (Reasoning Generation):
+
+**Standard Deep-Judgment**:
+```
+Stage 1: Extract Excerpts → Stage 2: Generate Reasoning → Stage 3: Parse Attributes
+```
+
+**Search-Enhanced Deep-Judgment**:
+```
+Stage 1: Extract Excerpts
+  → Search Validation (query external sources)
+  → Stage 1.5: Hallucination Risk Assessment (per excerpt)
+  → Stage 2: Generate Reasoning (with risk context)
+  → Stage 3: Parse Attributes
+```
+
+### Search Validation Process
+
+After excerpts are extracted in Stage 1, the system:
+
+1. **Collects all non-empty excerpts** from the extraction stage
+2. **Performs batch search** using a search tool (default: Tavily) to find external evidence for each excerpt
+3. **Stores search results** with each excerpt for later analysis
+4. **Assesses hallucination risk** (Stage 1.5) by comparing each excerpt against its search results:
+
+    - `none`: Search strongly supports the excerpt with multiple corroborating sources
+    - `low`: Search generally supports the excerpt with minor discrepancies
+    - `medium`: Search provides mixed evidence or contradictions
+    - `high`: Search contradicts the excerpt or provides no supporting evidence
+
+5. **Uses risk scores** in Stage 2 reasoning to inform confidence in each attribute
+6. **Calculates attribute-level risk** as the maximum risk across all excerpts for that attribute
+
+
+### Benefits
+
+**Enhanced Transparency**:
+
+- See not just what the LLM said, but whether external sources support it
+- Understand which claims have strong vs. weak external validation
+
+**Hallucination Detection**:
+
+- Automatically flag excerpts that cannot be verified externally
+- Identify potential model confabulations or outdated information
+
+**Audit Trail**:
+
+- Full record of search results used to validate each excerpt
+- Per-excerpt and per-attribute risk assessments
+
+### Example
+
+```python
+Question: "What is the approved drug target of Venetoclax?"
+
+LLM Response: "Venetoclax targets the BCL-2 protein, which is an anti-apoptotic protein."
+
+Standard Deep-Judgment:
+  Excerpt: "targets the BCL-2 protein"
+  Confidence: high
+  Reasoning: "The excerpt explicitly states BCL-2 as the target protein"
+  drug_target: "BCL-2" ✓
+
+Search-Enhanced Deep-Judgment:
+  Excerpt: "targets the BCL-2 protein"
+  Confidence: high
+  Search Results: [
+    {"title": "Venetoclax - Wikipedia", "content": "Venetoclax is a BCL-2 inhibitor..."},
+    {"title": "FDA Drug Label", "content": "Mechanism: Inhibits BCL-2 protein..."}
+  ]
+  Hallucination Risk: none (strong external corroboration)
+  Reasoning: "The excerpt is strongly supported by multiple authoritative sources"
+  drug_target: "BCL-2" ✓
+```
+
+### Enabling Search Enhancement
+
+Enable search-enhanced deep-judgment in your verification configuration:
+
+```python
+from karenina import Benchmark
+from karenina.schemas import VerificationConfig, ModelConfig
+
+# Configure models
+model_config = ModelConfig(
+    id="gpt-4.1-mini",
+    model_provider="openai",
+    model_name="gpt-4.1-mini",
+    temperature=0.0,
+    interface="langchain"
+)
+
+# Enable search-enhanced deep-judgment
+config = VerificationConfig(
+    answering_models=[model_config],
+    parsing_models=[model_config],
+    deep_judgment_enabled=True,              # Enable deep-judgment
+    deep_judgment_search_enabled=True,       # Enable search validation
+    deep_judgment_search_tool="tavily"       # Use Tavily search (default)
+)
+
+results = benchmark.run_verification(config)
+```
+
+### Accessing Search Results
+
+When search enhancement is enabled, verification results include additional metadata:
+
+```python
+for question_id, result in results.items():
+    if result.deep_judgment_search_enabled:
+        # Access hallucination risk scores per attribute
+        if result.hallucination_risk_assessment:
+            for attr, risk in result.hallucination_risk_assessment.items():
+                print(f"{attr}: {risk} hallucination risk")
+
+        # Access excerpts with search results
+        if result.extracted_excerpts:
+            for attr, excerpts in result.extracted_excerpts.items():
+                print(f"\nAttribute: {attr}")
+                for exc in excerpts:
+                    print(f"  Excerpt: {exc['text']}")
+                    print(f"  Risk: {exc.get('hallucination_risk', 'unknown')}")
+
+                    # Access search results for this excerpt
+                    if 'search_results' in exc:
+                        print(f"  Search Results:")
+                        for sr in exc['search_results']:
+                            print(f"    - {sr.get('title', 'No title')}: {sr['content'][:100]}...")
+                            if sr.get('url'):
+                                print(f"      URL: {sr['url']}")
+```
+
+### Swapping Search Tools
+
+Karenina supports multiple search tool configurations:
+
+#### Built-in Tools
+
+Currently, Tavily is the only built-in search tool:
+
+```python
+config = VerificationConfig(
+    deep_judgment_search_enabled=True,
+    deep_judgment_search_tool="tavily"  # Built-in Tavily search
+)
+```
+
+**Requirements**: Install Tavily dependencies:
+```bash
+pip install langchain-community tavily-python
+```
+
+Set your Tavily API key:
+```bash
+export TAVILY_API_KEY="your-api-key"
+```
+
+#### Custom Langchain Tools
+
+You can provide any Langchain tool instance that implements the search interface:
+
+```python
+from langchain.tools import Tool
+
+def my_custom_search(query: str) -> str:
+    """Custom search function that returns JSON array of results."""
+    # Your custom search logic here
+    results = [
+        {
+            "title": "Result Title",
+            "content": "Result content snippet...",
+            "url": "https://example.com/source"
+        }
+    ]
+    return json.dumps(results)
+
+# Create Langchain tool
+custom_tool = Tool(
+    name="my_search",
+    func=my_custom_search,
+    description="Custom search tool"
+)
+
+# Use in verification config
+config = VerificationConfig(
+    deep_judgment_search_enabled=True,
+    deep_judgment_search_tool=custom_tool  # Pass custom tool instance
+)
+```
+
+**Tool Interface Requirements**:
+
+- Input: `str` (single query) or `list[str]` (batch queries)
+- Output: JSON string or list of dicts with structure:
+  ```python
+  [
+      {
+          "title": str | None,      # Optional: Result title
+          "content": str,            # Required: Result content/snippet
+          "url": str | None          # Optional: Source URL
+      }
+  ]
+  ```
+
+#### MCP Tools (via Langchain Adapters)
+
+You can use MCP (Model Context Protocol) search tools through langchain adapters:
+
+```python
+from langchain_mcp_adapters import create_langchain_tool
+
+# Initialize MCP search tool
+mcp_search_tool = create_langchain_tool(
+    server="your-mcp-server",
+    tool_name="search"
+)
+
+# Use in verification config
+config = VerificationConfig(
+    deep_judgment_search_enabled=True,
+    deep_judgment_search_tool=mcp_search_tool
+)
+```
+
+#### Direct Callable Functions
+
+For simple cases, you can pass a callable function directly:
+
+```python
+def simple_search(query: str | list[str]) -> list[dict] | list[list[dict]]:
+    """Simple search function."""
+    if isinstance(query, list):
+        # Handle batch queries
+        return [[{"title": None, "content": f"Results for {q}", "url": None}] for q in query]
+    else:
+        # Handle single query
+        return [{"title": None, "content": f"Results for {query}", "url": None}]
+
+config = VerificationConfig(
+    deep_judgment_search_enabled=True,
+    deep_judgment_search_tool=simple_search  # Pass function directly
+)
+```
+
+### Performance Considerations
+
+Search enhancement adds significant overhead:
+
+- **Standard deep-judgment**: 3-5 LLM calls per question
+- **Search-enhanced deep-judgment**: 3-5 LLM calls + N search queries (where N = total number of excerpts)
+
+**Example overhead**:
+
+- Template with 5 attributes
+- 3 excerpts per attribute = 15 total excerpts
+- **15 search queries** + hallucination assessment call
+
+**Cost implications**:
+
+- Search API costs (e.g., Tavily: $1-5 per 1000 queries depending on plan)
+- Additional LLM call for hallucination assessment
+- Increased latency (search queries are batched but still add ~1-3 seconds)
+
+**Recommendation**: Use search enhancement selectively for:
+
+- High-stakes verification where hallucination detection is critical
+- Domains with rapidly changing information (e.g., current events, medical research)
+- Questions about factual claims that can be externally verified
+
+Avoid for:
+
+- High-volume benchmarks where cost/latency are concerns
+- Subjective or opinion-based questions
+- Information that cannot be found via web search
 
 ---
 
@@ -399,22 +685,26 @@ print("✓ Results saved with deep-judgment metadata")
 ### When to Use Deep-Judgment
 
 ✅ **High-stakes evaluation** where evidence transparency is critical:
+
 - Medical diagnosis benchmarks
 - Legal document analysis
 - Scientific fact-checking
 - Regulatory compliance
 
 ✅ **Debugging parsing failures**:
+
 - Understanding why verification fails
 - Identifying gaps in LLM responses
 - Refining question or template design
 
 ✅ **Quality assurance**:
+
 - Ensuring responses contain sufficient evidence
 - Validating that answers aren't just plausible-sounding
 - Auditing LLM reasoning processes
 
 ✅ **Research applications**:
+
 - Studying how LLMs construct answers
 - Analyzing excerpt quality patterns
 - Comparing evidence provision across models
@@ -422,15 +712,18 @@ print("✓ Results saved with deep-judgment metadata")
 ### When NOT to Use Deep-Judgment
 
 ❌ **High-volume verification** where speed is critical:
+
 - Deep-judgment is 3-5x slower than standard parsing
 - Uses 3-5 LLM calls per question vs. 1 call for standard
 
 ❌ **Low-stakes evaluation** where audit trails aren't needed:
+
 - Quick prototyping
 - Informal testing
 - Cost-sensitive applications
 
 ❌ **Questions with templates that don't need evidence**:
+
 - Multiple choice questions
 - True/false questions
 - Questions where the answer is self-evident
@@ -445,6 +738,7 @@ Deep-judgment significantly increases verification time:
 
 - **Standard parsing**: 1 LLM call per question (~500-2000ms)
 - **Deep-judgment parsing**: 3-5 LLM calls per question (~1500-10000ms)
+
   - Stage 1 (excerpts): 1 call + retries
   - Stage 2 (reasoning): 1 call
   - Stage 3 (parameters): 1 call
@@ -484,6 +778,7 @@ deep_judgment_fuzzy_match_threshold=0.90
 ```
 
 **Trade-offs**:
+
 - **Lower threshold (0.60-0.75)**: More lenient, may accept paraphrased excerpts
 - **Higher threshold (0.85-0.95)**: Stricter, only accepts near-exact matches
 
@@ -503,6 +798,7 @@ deep_judgment_excerpt_retry_attempts=5
 ```
 
 **Trade-offs**:
+
 - **Fewer retries**: Faster but may miss valid excerpts
 - **More retries**: More thorough but slower and more expensive
 
@@ -522,6 +818,7 @@ deep_judgment_max_excerpts_per_attribute=5
 ```
 
 **Trade-offs**:
+
 - **Fewer excerpts**: Faster, simpler results
 - **More excerpts**: More comprehensive evidence, but slower
 
@@ -532,6 +829,7 @@ deep_judgment_max_excerpts_per_attribute=5
 ### 1. Start with Standard Parsing
 
 Begin with standard parsing for your entire benchmark. Only enable deep-judgment when you need to:
+
 - Debug specific parsing failures
 - Audit high-stakes results
 - Understand model behavior
@@ -555,6 +853,7 @@ class OpinionAnswer(BaseAnswer):
 ### 3. Review Missing Excerpt Explanations
 
 When excerpts are missing, read the LLM explanations to understand if:
+
 - The question needs refinement
 - The template expects information not in the response
 - The answering model's response is incomplete
@@ -599,6 +898,7 @@ When deep-judgment detects missing excerpts, verification automatically fails. H
 ### Auto-Fail Conditions
 
 Verification fails when:
+
 1. Deep-judgment is enabled
 2. One or more attributes have no supporting excerpts
 3. Abstention is NOT detected (abstention takes priority)
@@ -624,6 +924,7 @@ Result:
 1. **Review the LLM response**: Does it actually contain the missing information?
 2. **Check the explanation**: Why couldn't deep-judgment find an excerpt?
 3. **Refine your approach**:
+
    - Adjust the question to be more specific
    - Modify the template to match what's actually answerable
    - Update answering model's system prompt to provide more detail

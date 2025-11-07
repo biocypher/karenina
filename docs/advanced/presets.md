@@ -12,6 +12,7 @@ Configuration presets allow you to save, load, and share complete verification c
 - **Advanced features**: Deep-judgment, abstention detection, few-shot configuration
 
 Presets make it easy to:
+
 - **Reuse configurations**: Quickly switch between different benchmark setups
 - **Ensure consistency**: Use the same configuration across multiple runs
 - **Share setups**: Export and share configurations with teammates
@@ -114,12 +115,14 @@ Preset saved to: benchmark_presets/genomics-standard-config.json
 Presets include:
 
 **✓ Included**:
+
 - All model configurations (answering_models, parsing_models)
 - Evaluation settings (replicate_count, parsing_only, evaluation_mode)
 - Rubric settings (rubric_enabled, rubric_trait_names)
 - Advanced features (abstention_enabled, deep_judgment_*, few_shot_config)
 
 **✗ Excluded**:
+
 - Job-specific metadata (run_name)
 - Database configuration (db_config)
 
@@ -594,12 +597,14 @@ results2 = benchmark2.run_verification(config)
 ### 1. Use Descriptive Names
 
 **Good names:**
+
 - "GPT-4 Production Config"
 - "Quick Smoke Test"
 - "Claude with Deep Judgment"
 - "Multi-Model Comparison Setup"
 
 **Avoid:**
+
 - Vague names: "Test 1", "Config", "Setup"
 - Timestamp-only names: "2025-11-03"
 - Overly long names (keep under 50 characters)
@@ -644,6 +649,7 @@ git commit -m "Add genomics benchmark presets"
 ```
 
 This allows you to:
+
 - Track changes to configurations over time
 - Revert to previous configurations
 - Share presets with teammates

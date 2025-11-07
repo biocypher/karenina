@@ -7,6 +7,7 @@ This guide explains how the Karenina library integrates with optional web-based 
 **Karenina** is a standalone Python library for LLM benchmarking. Everything documented in this guide works independently using pure Python code.
 
 **Optional integration** with web-based components provides:
+
 - **karenina-server**: REST API layer for remote access
 - **karenina-gui**: Interactive web interface for visual workflows
 
@@ -46,6 +47,7 @@ Karenina uses a three-tier architecture:
 ```
 
 **Key Points**:
+
 - Each tier has clear responsibilities
 - Core library works independently
 - Server provides API access
@@ -119,6 +121,7 @@ The server adds API access for remote workflows.
 ### Features
 
 **REST API**:
+
 - Question extraction endpoints
 - Template generation endpoints
 - Verification endpoints
@@ -126,12 +129,14 @@ The server adds API access for remote workflows.
 - Database operations
 
 **Job Management**:
+
 - UUID-based job tracking
 - Progress polling
 - WebSocket streaming
 - Cancellation support
 
 **Static File Serving**:
+
 - Serves built GUI in production
 - Single-port deployment
 
@@ -195,6 +200,7 @@ karenina-server serve --host 0.0.0.0 --port 8080
 ```
 
 **Access**:
+
 - GUI: http://localhost:8080
 - API: http://localhost:8080/api/*
 
@@ -205,18 +211,21 @@ The GUI provides an interactive web interface.
 ### Features
 
 **Template Generation Tab**:
+
 - File upload (Excel/CSV/TSV)
 - Question extraction
 - Template generation
 - Real-time progress tracking
 
 **Curator Tab**:
+
 - Code editor with syntax highlighting
 - Metadata editing
 - Few-shot example management
 - Template status tracking
 
 **Benchmark Tab**:
+
 - Configuration management
 - Verification execution
 - Results visualization
@@ -263,6 +272,7 @@ karenina-server serve --host 0.0.0.0 --port 8080
 ### Standalone Library Benefits
 
 **Advantages**:
+
 - No dependencies beyond Python packages
 - Scriptable workflows
 - CI/CD integration
@@ -270,6 +280,7 @@ karenina-server serve --host 0.0.0.0 --port 8080
 - Full programmatic control
 
 **Use Cases**:
+
 - Automated testing pipelines
 - Research notebooks
 - Batch processing
@@ -278,6 +289,7 @@ karenina-server serve --host 0.0.0.0 --port 8080
 ### Server Integration Benefits
 
 **Advantages**:
+
 - Remote access via REST API
 - Multi-user support (future)
 - Language-agnostic clients
@@ -285,6 +297,7 @@ karenina-server serve --host 0.0.0.0 --port 8080
 - Background processing
 
 **Use Cases**:
+
 - Team collaboration
 - Remote benchmarking
 - Service integration
@@ -293,6 +306,7 @@ karenina-server serve --host 0.0.0.0 --port 8080
 ### GUI Integration Benefits
 
 **Advantages**:
+
 - Visual workflow management
 - Real-time progress tracking
 - Interactive data exploration
@@ -300,6 +314,7 @@ karenina-server serve --host 0.0.0.0 --port 8080
 - Template curation tools
 
 **Use Cases**:
+
 - Non-technical users
 - Interactive exploration
 - Template refinement
@@ -386,6 +401,7 @@ loaded = Benchmark.load(db_path, "Genomics Knowledge Benchmark")
 ```
 
 **Key Points**:
+
 - Single source of truth
 - Shared database across tiers
 - SQLite for simplicity
@@ -549,12 +565,14 @@ benchmark.save_results(Path("dbs/drugs.db"), results)
 ### Standalone Development
 
 **Do**:
+
 - Use library for scripted workflows
 - Save checkpoints frequently
 - Use database for persistence
 - Test in notebooks first
 
 **Don't**:
+
 - Mix library and API calls unnecessarily
 - Duplicate data across formats
 - Skip database backups
@@ -562,12 +580,14 @@ benchmark.save_results(Path("dbs/drugs.db"), results)
 ### Server Development
 
 **Do**:
+
 - Use job tracking for long operations
 - Handle errors gracefully
 - Monitor background jobs
 - Use WebSocket for real-time updates
 
 **Don't**:
+
 - Poll too frequently (respect rate limits)
 - Ignore job cleanup
 - Mix sync and async patterns
@@ -575,12 +595,14 @@ benchmark.save_results(Path("dbs/drugs.db"), results)
 ### GUI Development
 
 **Do**:
+
 - Use GUI for interactive workflows
 - Leverage real-time progress tracking
 - Save checkpoints before major changes
 - Export results regularly
 
 **Don't**:
+
 - Rely on session state (cleared on refresh)
 - Edit templates without backup
 - Skip configuration validation
@@ -588,12 +610,14 @@ benchmark.save_results(Path("dbs/drugs.db"), results)
 ### Hybrid Workflows
 
 **Do**:
+
 - Generate templates via library/server
 - Curate in GUI
 - Run verification via library
 - Analyze in GUI
 
 **Don't**:
+
 - Switch tiers mid-workflow unnecessarily
 - Lose track of data location
 - Skip synchronization points
@@ -605,6 +629,7 @@ benchmark.save_results(Path("dbs/drugs.db"), results)
 **Problem**: GUI can't connect to server
 
 **Solutions**:
+
 - Verify server is running: `curl http://localhost:8080/api/health`
 - Check CORS configuration
 - Verify proxy settings in `vite.config.ts`
@@ -615,6 +640,7 @@ benchmark.save_results(Path("dbs/drugs.db"), results)
 **Problem**: Database locked or inaccessible
 
 **Solutions**:
+
 - Close other connections
 - Check file permissions
 - Use absolute paths
@@ -625,6 +651,7 @@ benchmark.save_results(Path("dbs/drugs.db"), results)
 **Problem**: Jobs stuck in "running" state
 
 **Solutions**:
+
 - Check server logs for errors
 - Verify background workers running
 - Cancel and restart job
@@ -635,6 +662,7 @@ benchmark.save_results(Path("dbs/drugs.db"), results)
 **Problem**: Real-time progress not updating
 
 **Solutions**:
+
 - Verify WebSocket endpoint accessible
 - Check browser console for errors
 - Fall back to polling mode
