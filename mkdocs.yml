@@ -95,17 +95,33 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Install: install.md
+  - About: about.md
+  - Installation: install.md
   - Quick Start: quickstart.md
-  - Using Karenina:
+  - User Guides:
     - Defining a Benchmark: using-karenina/defining-benchmark.md
     - Adding Questions: using-karenina/adding-questions.md
     - Accessing and Filtering: using-karenina/accessing-filtering.md
     - Templates: using-karenina/templates.md
     - Rubrics: using-karenina/rubrics.md
+    - Model Configuration: using-karenina/model-configuration.md
     - Running Verification: using-karenina/verification.md
     - Saving and Loading: using-karenina/saving-loading.md
+
+  - Features:
+    - Overview: features.md
+    - Advanced Features:
+      - Deep-Judgment: advanced/deep-judgment.md
+      - Abstention Detection: advanced/abstention-detection.md
+      - Embedding Check: advanced/embedding-check.md
+      - Configuration Presets: advanced/presets.md
+      - Few-Shot Prompting: advanced/few-shot.md
+      - Manual Traces: advanced/manual-traces.md
+      - MCP Integration: advanced/mcp-integration.md
+      - System Integration: advanced/integration.md
+  - Configuration: configuration.md
   - API Reference: api-reference.md
+  - Troubleshooting: troubleshooting.md
 
 extra:
   social:

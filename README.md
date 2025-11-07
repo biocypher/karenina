@@ -9,9 +9,30 @@
 
 **A comprehensive benchmarking system for Large Language Models (LLMs)**
 
-[Quick Start](#-quick-start) • [Installation](#-installation) • [Documentation](#-documentation) • [Contributing](#-contributing)
+[Installation](#-installation) • [Quick Start](#-quick-start) • [Features](#-features) • [Documentation](#-documentation) • [Contributing](#-contributing)
 
 </div>
+
+---
+
+## 📑 Table of Contents
+
+- [About Karenina](#-about-karenina)
+- [Architecture](#%EF%B8%8F-architecture)
+- [Understanding the Problem](#-the-problem)
+  - [Approach 1: Constrained Output](#1-constrain-the-answering-models-output)
+  - [Approach 2: LLM as Judge](#2-use-an-llm-as-a-judge-free-text-evaluation)
+  - [The Karenina Strategy](#-the-karenina-strategy)
+- [Quick Start](#-quick-start)
+- [Why Templates](#-why-templates)
+- [Templates vs Rubrics](#-templates-vs-rubrics)
+- [Features](#-features)
+- [Installation](#-installation)
+- [Documentation](#-documentation)
+- [Contributing](#-contributing)
+
+---
+
 
 ## 🎯 About Karenina
 
@@ -25,18 +46,40 @@ Karenina is a framework designed to standardize domain expertise and concepts in
 - **JSON-LD format** enables seamless integration between Python library and GUI interface
 - **Utilities to run and manage benchmarks**, although its primary focus remains on standardization and accessibility rather than execution infrastructure
 
-At the heart of Karenina is the notion of a **template**. A template describes both the **question/task** to be posed to a model and the **structure of the expected answer**. By enforcing structured outputs, Karenina ensures that benchmarks are not only reproducible but also programmatically evaluable.
+At the heart of Karenina are two key concepts: **templates** and **rubrics**. Templates verify factual correctness through structured answer parsing, while rubrics assess qualitative traits, format compliance, and quantitative metrics.
+
+## 🏗️ Architecture
+
+Karenina is a **standalone Python library** that can be used independently for all benchmarking workflows through Python code.
+
+### Graphical User Interface
+
+To guarantee **additional accessibility** to the framework, a **web-based graphical interface** is available for users who prefer not to work with code. This no-code interface covers most features provided by the backend, including:
+
+- **Visual question and metadata extraction** from files (Excel, CSV, TSV)
+- **Template generation** with interactive preview and editing
+- **No-code rubric curation** (LLM-based, regex, and metric traits)
+- **Checkpointing and verification execution** with real-time progress monitoring
+- **Results visualization** and export management
+
+The GUI makes the Karenina framework accessible to domain experts, curators, and non-technical users who want to create and run benchmarks without writing Python code.
+
+**Implementation**: The graphical interface is built using two companion packages:
+- [karenina-server](https://github.com/biocypher/karenina-server) - Exposes the karenina backend as a FastAPI-based REST API
+- [karenina-gui](https://github.com/biocypher/karenina-gui) - TypeScript/React web application providing the user interface
+
+**Note**: Coordination and deployment instructions for the full web-based stack are still a work in progress and will be released soon.
 
 ## 🤔 The Problem
 
 Let us introduce how Karenina approaches the problem of LLM benchmarking by considering a simple example: we want to task an LLM with a simple **multiple-choice question**:
 
 ```python
-question = "What is the capital of Italy?"
-possible_answers = ["Rome", "Milan", "Paris", "New York"]
+question = "Which protein regulates programmed cell death (apoptosis)?"
+possible_answers = ["BCL2", "p53", "Insulin", "Hemoglobin"]
 ```
 
-When we query a standard LLM, it usually responds in **free text** (e.g., `"I think the answer is Rome, because it is the capital of Italy."`). To evaluate such an answer programmatically we could use the following approaches:
+When we query a standard LLM, it usually responds in **free text** (e.g., `"BCL2 is the protein that regulates apoptosis by preventing cell death."`). To evaluate such an answer programmatically we could use the following approaches:
 
 ### 1. Constrain the answering model's output
 
@@ -48,23 +91,17 @@ We directly instruct the answering model to return a response in a machine-frien
 You are answering a multiple-choice question.
 Return only the letter of your choice.
 
-Question: What is the capital of Italy?
+Question: Which protein regulates programmed cell death (apoptosis)?
 Options:
-A) Rome
-B) Milan
-C) Paris
-D) New York
+A) BCL2
+B) p53
+C) Insulin
+D) Hemoglobin
 
 Answer:
 ```
 
-**Model output:**
-
-```
-A
-```
-
-This output is trivially parseable (`"Rome"`) and can be matched against the expected answer by writing dedicated parsing code.
+**Model output:** `A`
 
 The main advantage of this approach is its simplicity and reliability: once the model respects the instruction, evaluation can be fully automated with minimal overhead. However, its weakness lies in the fragility of prompt adherence. Many general-purpose LLMs do not always comply with rigid output constraints, especially across diverse domains or when questions become complex. In practice, this means users must design very careful prompts and may still face occasional formatting failures. Moreover, every time we have a different answer/question format we may need to come up with different dedicated prompting and parsing strategies.
 
@@ -74,21 +111,16 @@ Instead of constraining the answering model, we can keep its output free-form an
 
 **Example:**
 
-* **Answering model output:**
-  `"The capital of Italy is Rome, of course."`
-
+* **Answering model output:** `"BCL2 is an anti-apoptotic protein that prevents cell death."`
 * **Judge model prompt:**
-
   ```text
   The following is a student's answer to a multiple-choice question.
-  Question: What is the capital of Italy?
-  Options: Rome, Milan, Paris, New York.
-  Student's answer: "The capital of Italy is Rome, of course."
+  Question: Which protein regulates programmed cell death (apoptosis)?
+  Options: BCL2, p53, Insulin, Hemoglobin.
+  Student's answer: "BCL2 is an anti-apoptotic protein that prevents cell death."
   Which option does this correspond to? Provide a justification.
   ```
-
-* **Judge model output (free text):**
-  `"The student clearly selected Rome, which is correct."`
+* **Judge model output:** `"The student clearly selected BCL2, which is correct as it regulates apoptosis."`
 
 The advantage here is flexibility: the answering model is free to behave naturally, without tight formatting constraints, which is particularly useful in open-ended or exploratory settings. However, this shifts the ambiguity to the judge's response, which is also often free text. While the judge usually interprets correctly, the result again requires parsing, and subtle differences in wording may cause errors or inconsistencies. Thus, while this strategy increases robustness to different kinds of answers, it does so at the cost of reintroducing unstructured evaluation one step later.
 
@@ -103,118 +135,60 @@ This setup allows the judge to flexibly interpret free text while ensuring that 
 
 ### Example Workflow
 
-**1. Answering model output (free text):**
-```
-"The capital of Italy is Rome."
-```
+**1. Define a Pydantic template:**
 
-**2. Pydantic template definition:**
 ```python
+from karenina.domain.answers import BaseAnswer
+from pydantic import Field
+
 class Answer(BaseAnswer):
-    answer: str = Field(description="The name of the city in the response")
+    answer: str = Field(description="The name of the protein mentioned in the response")
 
     def model_post_init(self, __context):
-        self.correct = {"answer": "Rome"}
+        self.correct = {"answer": "BCL2"}
 
     def verify(self) -> bool:
-        return self.answer == self.correct["answer"]
+        return self.answer.strip().upper() == self.correct["answer"].strip().upper()
 ```
 
-Two key aspects are worth highlighting:
+**Key aspects:**
+- The `answer` attribute uses `Field` description to guide the judge
+- The `verify` method implements custom validation logic
 
-- The `answer` attribute is decorated with a `Field` description, which provides additional context to the judge about what it should extract.
-- The `verify` method implements a custom validation logic, comparing the parsed answer against the ground truth.
+**2. Answering model generates free text:**
 
-**3. Prompting the judge model:**
+```
+"BCL2 is the protein that regulates apoptosis by preventing cell death."
+```
+
+**3. Judge model parses into structured format:**
 
 ```python
 from langchain_core.output_parsers import PydanticOutputParser
 
 parser = PydanticOutputParser(pydantic_object=Answer)
 prompt = parser.get_format_instructions()
-prompt += "\n LLM Answer: The capital of Italy is Rome."
+prompt += "\n LLM Answer: BCL2 is the protein that regulates apoptosis by preventing cell death."
+
+judge_answer = llm.invoke(prompt)
 ```
 
-By leveraging LangChain utilities, the correct formatting instructions are automatically derived from the Pydantic class itself, ensuring consistency between schema and prompt.
+**Judge output (structured JSON):**
 
-**4. Judge model output (structured JSON):**
 ```json
-{"answer": "Rome"}
+{"answer": "BCL2"}
 ```
 
-**5. Verification:**
+**4. Verification step:**
+
 ```python
 populated_answer = Answer(**judge_answer)
 result = populated_answer.verify()  # True
 ```
 
-The result of `verify()` indicates whether the extracted answer matches the expected one.
-
-## 🎯 Why Templates
-
-Templates play a central role in Karenina by standardizing how answers are parsed, verified, and evaluated. Their use provides several key benefits:
-
-### 1. Unified Parsing and Evaluation
-
-Without templates, each benchmark would require bespoke parsing pipelines downstream of the inference process. By contrast, templates allow parsing to happen **directly through the judge LLM**. The free-text answer from the answering model is mapped into a structured format (e.g., a Pydantic class), ensuring that:
-
-* Evaluation logic is **bundled with the question–answer pair** itself.
-* The same benchmark can seamlessly accommodate **different answer formats** without custom code.
-
-### 2. Streamlined Benchmark Creation
-
-Since LLMs are proficient at code generation, they can often **auto-generate Pydantic classes** from raw question–answer pairs. This means that large portions of benchmark creation can be partially automated, reducing manual effort while improving consistency.
-
-### 3. Cognitive Offloading for the Judge
-
-By embedding the evaluation schema in templates, the **Judge LLM's task is simplified**. Instead of reasoning about both the content and the evaluation logic, the judge focuses only on interpreting the free-text answer and filling in the template. This reduces ambiguity, minimizes error, and makes evaluations more robust.
-
-### 4. Extensibility and Reusability
-
-Templates make it straightforward to extend benchmarks:
-
-* New tasks can be added by defining new templates without re-engineering downstream code.
-* The same evaluation logic can be reused across multiple benchmarks with minimal adaptation.
-
-### 5. Transparency and Debuggability
-
-By encoding evaluation criteria into explicit, inspectable templates, benchmarks become more transparent. This allows developers to:
-
-* **Audit** the evaluation rules directly.
-* **Debug** failures more easily by inspecting the structured outputs rather than opaque free text.
-
-## 📦 Installation
-
-### Using uv (recommended)
-```bash
-uv add karenina
-```
-
-### Using pip
-```bash
-pip install karenina
-```
-
-### Environment Setup
-Set up your LLM provider API keys:
-
-```bash
-# OpenAI
-export OPENAI_API_KEY="your-openai-api-key"
-
-# Google (Gemini)
-export GOOGLE_API_KEY="your-google-api-key"
-
-# Anthropic (Claude)
-export ANTHROPIC_API_KEY="your-anthropic-api-key"
-
-# OpenRouter (optional)
-export OPENROUTER_API_KEY="your-openrouter-api-key"
-```
-
 ## 🚀 Quick Start
 
-Get started with Karenina in just a few minutes! This guide will walk you through creating your first benchmark, adding questions, configuring models, and running verification.
+Get started with Karenina in just a few minutes! This example demonstrates the core workflow: create a benchmark, add questions, generate templates, and run verification.
 
 ### 1. Create a Benchmark
 
@@ -223,94 +197,362 @@ from karenina import Benchmark
 
 # Create a new benchmark
 benchmark = Benchmark.create(
-    name="Test benchmark",
-    description="Simple quick intro",
+    name="Genomics Knowledge Benchmark",
+    description="Testing LLM knowledge of genomics and molecular biology",
     version="1.0.0",
-    creator="Karenina Example",
+    creator="Your Name"
 )
 ```
 
 ### 2. Add Questions
 
 ```python
-# Add questions manually
-question = "What is the capital of France?"
-raw_answer = "Paris"
+# Add questions with answers
+questions = [
+    ("How many chromosomes are in a human somatic cell?", "46"),
+    ("What is the approved drug target of Venetoclax?", "BCL2"),
+    ("How many protein subunits does hemoglobin A have?", "4")
+]
 
-# Define the answer template manually
-template_code = '''class Answer(BaseAnswer):
-    answer: str = Field(description="the name of the city in the response")
+question_ids = []
+for q, a in questions:
+    qid = benchmark.add_question(
+        question=q,
+        raw_answer=a,
+        author={"name": "Bio Curator"}
+    )
+    question_ids.append(qid)
+```
 
-    def model_post_init(self, __context):
-        self.correct = {"answer": "Paris"}
+**Note:** You can also extract questions from Excel, CSV, or TSV files. See [Adding Questions](docs/using-karenina/adding-questions.md) for file extraction examples.
 
-    def verify(self) -> bool:
-        return self.answer == self.correct["answer"]'''
+### 3. Generate Templates Automatically
 
-# Add the question to the benchmark
-qid = benchmark.add_question(
-    question=question,
-    raw_answer=raw_answer,
-    answer_template=template_code,
-    finished=True,  # Mark as ready for verification
-    author={"name": "Example Author", "email": "author@example.com"},
+```python
+from karenina.schemas import ModelConfig
+
+# Configure the LLM for template generation
+model_config = ModelConfig(
+    id="gpt-4.1-mini",
+    model_provider="openai",
+    model_name="gpt-4.1-mini",
+    temperature=0.1,
+    interface="langchain"
+)
+
+# Generate templates for all questions
+benchmark.generate_all_templates(model_config=model_config)
+```
+
+**Note:** Templates can also be written manually for complex custom logic. See [Templates Guide](docs/using-karenina/templates.md) for details.
+
+### 4. Add Rubrics (Optional)
+
+```python
+from karenina.schemas import RubricTrait
+
+# Create a global rubric to assess answer quality
+benchmark.create_global_rubric(
+    name="Answer Quality",
+    traits=[
+        RubricTrait(
+            name="Conciseness",
+            description="Rate how concise the answer is (1-5)",
+            kind="score"
+        )
+    ]
 )
 ```
 
-### 3. Configure Models
+### 5. Run Verification
 
 ```python
-from karenina.benchmark import ModelConfig, VerificationConfig
+from karenina.schemas import VerificationConfig
 
-# Set up model configuration
-answering_models = [
-    ModelConfig(
-        id="gemini-2.5-flash",
-        model_provider="google_genai",
-        model_name="gemini-2.5-flash",
-        temperature=0.1,
-        interface="langchain",
-        system_prompt="You are a helpful assistant."
-    )
-]
-
-parsing_models = [
-    ModelConfig(
-        id="gemini-2.5-flash",
-        model_provider="google_genai",
-        model_name="gemini-2.5-flash",
-        temperature=0.0,
-        interface="langchain",
-        system_prompt="You are an LLM judge and, given a template, will judge the answer to the question"
-    )
-]
-
+# Configure verification
 config = VerificationConfig(
-    answering_models=answering_models,
-    parsing_models=parsing_models
+    answering_models=[model_config],
+    parsing_models=[model_config],
+    rubric_enabled=True
+)
+
+# Run verification
+results = benchmark.run_verification(config)
+
+# Analyze results
+passed = sum(1 for r in results.values() if r.verify_result)
+print(f"Pass Rate: {(passed/len(results)*100):.1f}%")
+```
+
+### 6. Save and Export
+
+```python
+# Save benchmark checkpoint
+benchmark.save("genomics_benchmark.jsonld")
+
+# Export results to CSV
+from pathlib import Path
+benchmark.export_verification_results_to_file(
+    file_path=Path("results.csv"),
+    format="csv"
 )
 ```
 
-### 4. Run Verification
+Congratulations! You've created your first Karenina benchmark with automatic template generation and rubric-based evaluation.
 
-```python
-# Run verification
-results = benchmark.run_verification([qid], config)
+**Next steps**: Explore the [complete tutorial](docs/quickstart.md) for:
+- Question-specific rubrics (regex and metric-based)
+- File extraction from Excel/CSV
+- Multiple model comparison
+- Few-shot prompting
+- Result analysis and visualization
 
-# Save your benchmark
-benchmark.save("my-first-benchmark.jsonld")
+## 🎯 Why Templates
+
+Templates play a central role in Karenina by standardizing how answers are parsed, verified, and evaluated. Their use provides several key benefits:
+
+### 1. Unified Parsing and Evaluation
+
+Templates allow parsing to happen **directly through the judge LLM**. The free-text answer from the answering model is mapped into a structured format (e.g., a Pydantic class), ensuring that:
+
+* Evaluation logic is **bundled with the question-answer pair** itself
+* The same benchmark can seamlessly accommodate **different answer formats** without custom code
+
+### 2. Streamlined Benchmark Creation
+
+Since LLMs are proficient at code generation, they can often **auto-generate Pydantic classes** from raw question-answer pairs. This means that large portions of benchmark creation can be partially automated, reducing manual effort while improving consistency.
+
+### 3. Cognitive Offloading for the Judge
+
+By embedding the evaluation schema in templates, the **judge LLM's task is simplified**. Instead of reasoning about both the content and the evaluation logic, the judge focuses only on interpreting the free-text answer and filling in the template.
+
+### 4. Extensibility and Reusability
+
+Templates make it straightforward to extend benchmarks:
+
+* New tasks can be added by defining new templates without re-engineering downstream code
+* The same evaluation logic can be reused across multiple benchmarks with minimal adaptation
+
+### 5. Transparency and Debuggability
+
+By encoding evaluation criteria into explicit, inspectable templates, benchmarks become more transparent. This allows developers to:
+
+* **Audit** the evaluation rules directly
+* **Debug** failures more easily by inspecting the structured outputs rather than opaque free text
+
+---
+
+## 🎨 Templates vs Rubrics
+
+While templates excel at verifying **factual correctness**, many evaluation scenarios require assessing **qualitative traits**, format compliance, or quantitative metrics. This is where **rubrics** complement templates.
+
+### Feature Comparison
+
+| Aspect | Answer Templates | Rubrics |
+|--------|-----------------|---------|
+| **Purpose** | Verify factual correctness | Assess qualitative traits, format, and metrics |
+| **Evaluation Method** | Programmatic field comparison | Three approaches:<br>• LLM judgment<br>• Regex patterns<br>• Term extraction + metrics |
+| **Best for** | Precise, unambiguous answers | Subjective qualities, format validation, quantitative analysis |
+| **Trait Types** | Single verification method | **Three types:**<br>• LLM-based (qualitative)<br>• Regex-based (format)<br>• Metric-based (term extraction) |
+| **Output** | Pass/fail per field | • Boolean (binary traits)<br>• Scores 1-5 (score traits)<br>• Precision/Recall/F1 (metric traits) |
+| **Examples** | `"BCL2"`, `"46 chromosomes"` | • "Is the answer concise?" (LLM)<br>• Match email pattern (regex)<br>• Extract diseases for F1 score (metric) |
+| **Scope** | Per question | Global or per question |
+
+### Rubric Types
+
+Karenina supports **three types of rubric traits**, each suited for different evaluation needs:
+
+**1. LLM-Based Traits**
+
+AI-evaluated qualitative assessments where a judge LLM evaluates subjective qualities:
+
+- **Score-based (1-5):** "Rate the scientific accuracy of the answer"
+- **Binary (pass/fail):** "Does the answer mention safety concerns?"
+
+**2. Regex Pattern Traits**
+
+Deterministic validation using regular expressions for format compliance:
+
+- "Answer must contain a DNA sequence (pattern: `[ATCG]+`)"
+- "Response must include enzyme names (pattern: `\w+ase\b`)"
+
+**3. Metric-Based Traits**
+
+Quantitative evaluation using confusion matrix metrics:
+
+- Define terms that SHOULD appear (True Positives)
+- Define terms that SHOULD NOT appear (False Positives)
+- System computes precision, recall, and F1 scores
+
+**When to use what:**
+
+- Use **templates** when you need to verify specific factual content or structured data
+- Use **LLM-based rubrics** for subjective quality assessment (clarity, conciseness, tone)
+- Use **regex rubrics** for format compliance and deterministic keyword checks
+- Use **metric rubrics** when evaluating classification accuracy by extracting and measuring term coverage
+- Use **both together** for comprehensive evaluation covering correctness AND quality
+
+[Learn more about Templates →](docs/using-karenina/templates.md) | [Learn more about Rubrics →](docs/using-karenina/rubrics.md)
+
+## ✨ Features
+
+Karenina provides comprehensive tools for every stage of the benchmarking workflow:
+
+### Core Capabilities
+
+- **Question Management**: Extract questions from files (Excel, CSV, TSV) with rich metadata support
+- **Answer Templates**: Pydantic-based templates for structured evaluation and programmatic verification
+- **Rubric Evaluation**: Assess qualitative traits using three types:
+  - LLM-based traits (binary pass/fail or 1-5 scale)
+  - Regex-based traits (pattern matching for format validation)
+  - Metric-based traits (precision, recall, F1, accuracy)
+- **Benchmark Verification**: Run evaluations with four supported interfaces:
+  - `langchain` (OpenAI, Google Gemini, Anthropic Claude)
+  - `openrouter` (OpenRouter platform)
+  - `openai_endpoint` (OpenAI-compatible endpoints for local models)
+  - `manual` (Manual trace replay for testing/debugging)
+
+### Advanced Features
+
+- **Deep-Judgment Parsing**: Extract verbatim excerpts, reasoning traces, and confidence scores
+- **Abstention Detection**: Identify when models refuse to answer questions
+- **Embedding Check**: Semantic similarity fallback for false negatives
+- **Few-Shot Prompting**: Configure examples globally or per question
+- **Database Persistence**: SQLite storage with versioning
+- **Export & Reporting**: CSV and JSON formats for analysis
+- **Preset Management**: Save and reuse verification configurations
+
+[View complete feature catalog →](docs/features.md)
+
+## 📦 Installation
+
+### Prerequisites
+
+- Python 3.11 or higher
+- Git
+- `uv` (Python's fast package manager - recommended)
+
+### Install uv
+
+If you don't have `uv` installed:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-Congratulations! You've created your first Karenina benchmark.
+For other installation methods, see [uv's documentation](https://docs.astral.sh/uv/getting-started/installation/).
+
+### Install Karenina
+
+**Note:** Karenina is not yet published to PyPI. Install from the GitHub repository:
+
+```bash
+# Clone the repository
+git clone https://github.com/biocypher/karenina.git
+cd karenina
+
+# Install with uv (recommended)
+uv pip install -e .
+
+# Or use pip
+pip install -e .
+```
+
+The `-e` flag installs in editable mode, allowing you to pull updates with `git pull` without reinstalling.
+
+### Environment Setup
+
+Configure API keys for LLM providers:
+
+| Provider | Variable | Models |
+|----------|----------|--------|
+| OpenAI | `OPENAI_API_KEY` | GPT-4, GPT-4 mini |
+| Google | `GOOGLE_API_KEY` | Gemini |
+| Anthropic | `ANTHROPIC_API_KEY` | Claude |
+| OpenRouter | `OPENROUTER_API_KEY` | Unified access |
+
+**Recommended: Create a `.env` file in your project root**
+
+```bash
+OPENAI_API_KEY="sk-..."
+GOOGLE_API_KEY="AIza..."
+ANTHROPIC_API_KEY="sk-ant-..."
+```
+
+Then add `.env` to `.gitignore` to prevent committing secrets:
+
+```bash
+echo ".env" >> .gitignore
+```
+
+**Alternative: Export to your shell**
+
+```bash
+export OPENAI_API_KEY="sk-..."
+```
+
+**Note**: API keys can also be passed programmatically via `extra_kwargs` in `ModelConfig`. See the [Configuration Guide](docs/configuration.md) for all options including feature toggles, execution control, and database settings.
+
+### Verify Installation
+
+Test that Karenina is installed correctly:
+
+```python
+from karenina import Benchmark
+
+# Create a simple benchmark
+benchmark = Benchmark.create(
+    name="test-benchmark",
+    description="Installation verification",
+    version="1.0.0"
+)
+
+print(f"✓ Karenina installed successfully!")
+print(f"✓ Benchmark created: {benchmark.name}")
+```
+
+For detailed setup instructions, troubleshooting, and development installation, see the [Installation Guide](docs/install.md).
 
 ## 📚 Documentation
 
 Ready to explore more of Karenina's capabilities? Check out our comprehensive documentation:
 
+### Viewing Documentation Locally
+
+You can view the full documentation with a live preview using MkDocs:
+
+```bash
+# From the karenina directory
+uv run mkdocs serve
+```
+
+Then open your browser to `http://127.0.0.1:8000` to browse the documentation with full navigation and search.
+
+### Getting Started
+- [**Documentation Index**](docs/index.md) - Complete documentation overview with navigation
 - [**Installation Guide**](docs/install.md) - Detailed setup instructions and requirements
 - [**Quick Start Tutorial**](docs/quickstart.md) - Step-by-step guide to your first benchmark
-- [**Using Karenina**](docs/using-karenina/defining-benchmark.md) - Complete guide to all features and workflows
-- [**API Reference**](docs/api-reference.md) - Full API documentation and examples
+- [**Features Overview**](docs/features.md) - Complete feature catalog
+
+### User Guides
+- [**Defining Benchmarks**](docs/using-karenina/defining-benchmark.md) - Benchmark creation and metadata
+- [**Adding Questions**](docs/using-karenina/adding-questions.md) - File extraction and management
+- [**Templates**](docs/using-karenina/templates.md) - Creating and customizing answer templates
+- [**Rubrics**](docs/using-karenina/rubrics.md) - Evaluation criteria and trait types
+- [**Verification**](docs/using-karenina/verification.md) - Running evaluations and analyzing results
+- [**Saving & Loading**](docs/using-karenina/saving-loading.md) - Checkpoints, database, and export
+
+### Advanced Features
+- [**Deep-Judgment**](docs/advanced/deep-judgment.md) - Extract detailed feedback with excerpts
+- [**Few-Shot Prompting**](docs/advanced/few-shot.md) - Guide responses with examples
+- [**Abstention Detection**](docs/advanced/abstention-detection.md) - Handle model refusals
+- [**Embedding Check**](docs/advanced/embedding-check.md) - Semantic similarity fallback
+- [**Presets**](docs/advanced/presets.md) - Save and reuse verification configurations
+
+### Reference
+- [**API Reference**](docs/api-reference.md) - Complete API documentation
+- [**Configuration**](docs/configuration.md) - Environment variables and defaults
+- [**Troubleshooting**](docs/troubleshooting.md) - Common issues and solutions
 
 ## 🤝 Contributing
 

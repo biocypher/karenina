@@ -2,6 +2,16 @@
 
 This guide covers different methods for adding questions to your benchmark, including manual creation and automatic extraction from files.
 
+**Quick Navigation:**
+
+- [Manual Question Creation](#manual-question-creation) - Add questions directly with code
+- [Automatic Question Extraction](#automatic-question-extraction-from-files) - Extract from Excel, CSV, TSV files
+- [Working with Questions](#working-with-questions) - Access, list, and inspect questions
+- [Question Organization](#question-organization) - Keywords, tags, and batch addition
+- [Complete Example](#complete-example) - End-to-end workflow with manual and file-based addition
+
+---
+
 ## Manual Question Creation
 
 ### Basic Question Addition
@@ -11,67 +21,73 @@ Add questions directly using the `add_question` method:
 ```python
 from karenina import Benchmark
 
-benchmark = Benchmark(name="sample-benchmark")
+benchmark = Benchmark.create(name="Genomics Knowledge Benchmark")
 
 # Add a simple question
-benchmark.add_question(
-    content="What is the capital of France?",
-    expected_answer="Paris"
+question_id = benchmark.add_question(
+    question="How many chromosomes are in a human somatic cell?",
+    raw_answer="46"
 )
 ```
 
-### Questions with Metadata
+The `add_question` method returns a unique question ID that you can use to reference the question later.
 
-Enhance questions with rich metadata for better organization:
+### Questions with Author Information
+
+Add author metadata to track question provenance:
 
 ```python
-benchmark.add_question(
-    content="Explain the concept of photosynthesis",
-    expected_answer="Photosynthesis is the process by which plants convert light energy into chemical energy",
-    metadata={
-        "category": "biology",
-        "difficulty": "intermediate",
-        "topic": "plant-biology",
-        "estimated_time": "5-minutes",
-        "source": "biology-textbook-ch3"
+# Add question with author information
+question_id = benchmark.add_question(
+    question="What is the approved drug target of Venetoclax?",
+    raw_answer="BCL2",
+    author={
+        "name": "Dr. Sarah Chen",
+        "email": "schen@research.edu"
     }
 )
 ```
 
 ## Automatic Question Extraction from Files
 
-Karenina provides utilities to extract questions from various file formats automatically.
+Karenina provides utilities to extract questions from various file formats automatically. This is useful when you have existing question sets in spreadsheets or structured files.
 
 ### Supported File Types
 
+- **Excel** (.xlsx, .xls)
 - **CSV** (Comma-separated values)
 - **TSV** (Tab-separated values)
-- **Excel** (.xlsx, .xls)
-- **JSON** (structured question data)
 
 ### Basic File Extraction
 
-```python
-from karenina.questions import extract_questions_from_file
+Extract questions from a file and add them to your benchmark:
 
-# Extract questions from a CSV file
-questions = extract_questions_from_file("questions.csv")
+```python
+from karenina.questions.extractor import extract_questions_from_file
+
+# Extract questions from an Excel file
+questions = extract_questions_from_file(
+    file_path="genomics_questions.xlsx",
+    question_column="Question",
+    answer_column="Answer"
+)
 
 # Add all extracted questions to benchmark
-for question in questions:
-    benchmark.add_question(**question)
+for q in questions:
+    benchmark.add_question(**q)
+
+print(f"Added {len(questions)} questions from file")
 ```
 
-### Example CSV Format
+### Example Excel/CSV Format
 
-Here's a sample CSV structure that works well with the extraction utility:
+Here's a sample spreadsheet structure that works well with the extraction utility:
 
-```csv
-question,expected_answer,category,difficulty,topic
-"What is 2 + 2?","4","mathematics","easy","arithmetic"
-"Explain Newton's first law","An object at rest stays at rest unless acted upon by a force","physics","medium","mechanics"
-"What is the chemical formula for water?","H2O","chemistry","easy","basic-compounds"
-```
+| Question | Answer | Author | Keywords |
+|----------|--------|--------|----------|
+| How many chromosomes are in a human somatic cell? | 46 | Dr. Smith | genetics, chromosomes |
+| What is the approved drug target of Venetoclax? | BCL2 | Dr. Chen | pharmacology, cancer |
+| How many protein subunits does hemoglobin A have? | 4 | Dr. Smith | proteins, hemoglobin |
 
 ### Automatic Data Cleaning
 
@@ -84,108 +100,194 @@ The extraction process automatically performs several data cleaning steps:
 5. **Null value handling** - Replaces various null indicators (`null`, `None`, `N/A`, empty strings) with proper null values
 6. **Column name normalization** - Standardizes column headers to consistent naming conventions
 
-### Advanced Extraction Options
+### Advanced Extraction with Optional Columns
+
+You can extract additional metadata by specifying optional column names:
 
 ```python
-# Extract with custom column mapping
+from karenina.questions.extractor import extract_questions_from_file
+
+# Extract with author and keyword metadata
 questions = extract_questions_from_file(
-    "custom_format.csv",
-    column_mapping={
-        "prompt": "content",
-        "solution": "expected_answer",
-        "subject": "category"
-    }
+    file_path="comprehensive_questions.xlsx",
+    question_column="Question",
+    answer_column="Answer",
+    author_name_column="Author",      # Optional: author name
+    keywords_column="Keywords"         # Optional: comma-separated keywords
 )
 
-# Extract with filtering
-questions = extract_questions_from_file(
-    "large_dataset.csv",
-    filter_criteria={"difficulty": ["easy", "medium"]}
-)
+# Each extracted question will include author and keywords if available
+for q in questions:
+    benchmark.add_question(**q)
 ```
 
-## Question Metadata Attributes
+## Working with Questions
 
-### Standard Metadata Attributes
+### Accessing Questions
+
+Once you've added questions, you can access them using their question IDs:
+
+```python
+# Get a specific question by ID
+question = benchmark.get_question(question_id)
+
+# Access question attributes
+print(f"Question text: {question.question}")
+print(f"Expected answer: {question.raw_answer}")
+print(f"Author: {question.author}")
+print(f"Keywords: {question.keywords}")
+```
+
+### Listing All Questions
+
+```python
+# Get all question IDs
+question_ids = list(benchmark.questions.keys())
+
+# Iterate through all questions
+for qid in question_ids:
+    question = benchmark.get_question(qid)
+    print(f"{qid}: {question.question}")
+```
+
+### Question Attributes
+
+Each question in Karenina has the following key attributes:
 
 | Attribute | Type | Description |
 |-----------|------|-------------|
-| `content` | `str` | The question text or prompt |
-| `expected_answer` | `str` | The correct/expected response |
-| `category` | `str` | Subject area or domain |
-| `difficulty` | `str` | Difficulty level (easy, medium, hard) |
-| `topic` | `str` | Specific topic within the category |
-| `source` | `str` | Origin of the question |
-| `tags` | `List[str]` | Searchable tags |
+| `question` | `str` | The question text or prompt |
+| `raw_answer` | `str` | The expected answer |
+| `author` | `dict` | Author information (name, email) |
+| `keywords` | `list[str]` | Searchable keywords or tags |
+| `question_id` | `str` | Unique identifier (MD5 hash) |
 
-### Accessing Question Metadata
+## Question Organization
 
-```python
-# Get a specific question
-question = benchmark.questions[0]
+### Using Keywords
 
-# Access metadata
-print(f"Category: {question.metadata.get('category')}")
-print(f"Difficulty: {question.metadata.get('difficulty')}")
-print(f"Topic: {question.metadata.get('topic')}")
-```
-
-## Custom Metadata
-
-### Adding Custom Fields
-
-You can extend questions with any custom metadata:
+Keywords help organize and filter questions:
 
 ```python
+# Add questions with keywords
 benchmark.add_question(
-    content="Design a RESTful API for a library management system",
-    metadata={
-        "category": "software-engineering",
-        "skill_type": "system-design",
-        "estimated_duration": "30-minutes",
-        "prerequisites": ["REST-concepts", "database-design"],
-        "evaluation_criteria": ["scalability", "security", "clarity"],
-        "industry_relevance": "high"
-    }
+    question="What is the role of telomerase in cell division?",
+    raw_answer="Telomerase adds telomeric sequences to chromosome ends",
+    author={"name": "Dr. Lee"},
+    keywords=["cell-biology", "telomeres", "aging"]
+)
+
+benchmark.add_question(
+    question="Describe the structure of a nucleosome",
+    raw_answer="DNA wrapped around histone octamer",
+    author={"name": "Dr. Lee"},
+    keywords=["chromatin", "epigenetics", "dna-structure"]
 )
 ```
 
-### Batch Metadata Updates
+### Batch Addition
 
-Update metadata for multiple questions:
-
-```python
-# Add industry tag to all software engineering questions
-for question in benchmark.questions:
-    if question.metadata.get("category") == "software-engineering":
-        question.metadata["industry_focus"] = "technology"
-```
-
-## Validation and Quality Control
-
-### Question Content Validation
+Add multiple questions efficiently:
 
 ```python
-# Validate questions meet minimum requirements
-for question in benchmark.questions:
-    assert len(question.content) > 10, "Question too short"
-    assert question.metadata.get("category"), "Category required"
+# Prepare question data
+genomics_questions = [
+    {
+        "question": "How many chromosomes are in a human somatic cell?",
+        "raw_answer": "46",
+        "author": {"name": "Bio Curator"},
+        "keywords": ["genetics", "chromosomes"]
+    },
+    {
+        "question": "What is the approved drug target of Venetoclax?",
+        "raw_answer": "BCL2",
+        "author": {"name": "Bio Curator"},
+        "keywords": ["pharmacology", "cancer"]
+    },
+    {
+        "question": "How many protein subunits does hemoglobin A have?",
+        "raw_answer": "4",
+        "author": {"name": "Bio Curator"},
+        "keywords": ["proteins", "hemoglobin"]
+    }
+]
+
+# Add all questions
+for q in genomics_questions:
+    benchmark.add_question(**q)
 ```
 
-### Metadata Consistency
+## Complete Example
+
+Here's a complete workflow showing both manual and file-based question addition:
 
 ```python
-# Ensure consistent category values
-valid_categories = ["math", "science", "literature", "history"]
-for question in benchmark.questions:
-    category = question.metadata.get("category")
-    assert category in valid_categories, f"Invalid category: {category}"
+from karenina import Benchmark
+from karenina.questions.extractor import extract_questions_from_file
+
+# 1. Create benchmark
+benchmark = Benchmark.create(
+    name="Genomics Knowledge Benchmark",
+    description="Testing LLM knowledge of genomics and molecular biology",
+    version="1.0.0"
+)
+
+# 2. Add questions manually
+question_ids = []
+
+qid1 = benchmark.add_question(
+    question="How many chromosomes are in a human somatic cell?",
+    raw_answer="46",
+    author={"name": "Dr. Smith", "email": "smith@example.com"},
+    keywords=["genetics", "chromosomes"]
+)
+question_ids.append(qid1)
+
+qid2 = benchmark.add_question(
+    question="What is the approved drug target of Venetoclax?",
+    raw_answer="BCL2",
+    author={"name": "Dr. Chen", "email": "chen@example.com"},
+    keywords=["pharmacology", "cancer"]
+)
+question_ids.append(qid2)
+
+# 3. Extract additional questions from file
+file_questions = extract_questions_from_file(
+    file_path="additional_questions.xlsx",
+    question_column="Question",
+    answer_column="Answer",
+    author_name_column="Author",
+    keywords_column="Keywords"
+)
+
+for q in file_questions:
+    qid = benchmark.add_question(**q)
+    question_ids.append(qid)
+
+print(f"Total questions: {len(question_ids)}")
+
+# 4. Verify questions were added
+for qid in question_ids:
+    question = benchmark.get_question(qid)
+    print(f"✓ {question.question[:50]}...")
 ```
+
+---
 
 ## Next Steps
 
-Once you have questions in your benchmark:
+Once you have questions in your benchmark, you can:
 
-- [Access and filter](accessing-filtering.md) questions for analysis
-- [Add templates](templates.md) to define evaluation structure
-- [Set up rubrics](rubrics.md) for scoring criteria
+- [Generate templates](templates.md) to define evaluation structure
+- [Set up rubrics](rubrics.md) for qualitative assessment
+- [Run verification](verification.md) to evaluate LLM responses
+- [Save your benchmark](saving-loading.md) using checkpoints or database
+
+---
+
+## Related Documentation
+
+- [Defining Benchmarks](defining-benchmark.md) - Creating and configuring benchmarks
+- [Templates](templates.md) - Structured answer evaluation
+- [Rubrics](rubrics.md) - Qualitative assessment criteria
+- [Quick Start](../quickstart.md) - End-to-end workflow example
