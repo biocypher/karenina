@@ -108,16 +108,17 @@ nav:
     - Running Verification: using-karenina/verification.md
     - Saving and Loading: using-karenina/saving-loading.md
 
-  - Features: features.md
-  - Advanced Features:
-    - Deep-Judgment: advanced/deep-judgment.md
-    - Abstention Detection: advanced/abstention-detection.md
-    - Embedding Check: advanced/embedding-check.md
-    - Configuration Presets: advanced/presets.md
-    - Few-Shot Prompting: advanced/few-shot.md
-    - Manual Traces: advanced/manual-traces.md
-    - MCP Integration: advanced/mcp-integration.md
-    - System Integration: advanced/integration.md
+  - Features:
+    - Overview: features.md
+    - Advanced Features:
+      - Deep-Judgment: advanced/deep-judgment.md
+      - Abstention Detection: advanced/abstention-detection.md
+      - Embedding Check: advanced/embedding-check.md
+      - Configuration Presets: advanced/presets.md
+      - Few-Shot Prompting: advanced/few-shot.md
+      - Manual Traces: advanced/manual-traces.md
+      - MCP Integration: advanced/mcp-integration.md
+      - System Integration: advanced/integration.md
   - Configuration: configuration.md
   - API Reference: api-reference.md
   - Troubleshooting: troubleshooting.md
