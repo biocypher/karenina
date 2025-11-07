@@ -2,6 +2,18 @@
 
 This guide covers how to access, filter, and search through questions in your benchmark for analysis and management.
 
+**Quick Navigation:**
+
+- [Accessing Questions](#accessing-questions) - Basic access patterns and iteration
+- [Filtering by Status](#filtering-by-status) - Finished vs unfinished, template status
+- [Searching Questions by Content](#searching-questions-by-content) - Text search, regex, advanced search
+- [Filtering by Metadata](#filtering-by-metadata) - Category, difficulty, multi-criteria filtering
+- [Sorting Questions](#sorting-questions) - Sort by metadata, content length
+- [Advanced Query Patterns](#advanced-query-patterns) - Complex filtering and statistics
+- [Bulk Operations](#bulk-operations-on-filtered-questions) - Update metadata, generate templates
+
+---
+
 ## Accessing Questions
 
 ### Basic Access Patterns

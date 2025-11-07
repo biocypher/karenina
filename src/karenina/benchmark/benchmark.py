@@ -394,7 +394,6 @@ class Benchmark:
             model: The model to use for generation (default: gemini-2.0-flash)
             model_provider: The provider of the model (default: google_genai)
             temperature: The temperature for generation (default: 0)
-            custom_system_prompt: Optional custom system prompt
             interface: The interface to use (default: langchain)
             force_regenerate: If True, regenerate even if template exists (default: False)
 
@@ -485,7 +484,6 @@ class Benchmark:
             model: The model to use for generation
             model_provider: The provider of the model
             temperature: The temperature for generation
-            custom_system_prompt: Optional custom system prompt
             interface: The interface to use
             force_regenerate: If True, regenerate even if templates exist
             progress_callback: Optional callback for progress updates (percentage, message)
@@ -546,7 +544,6 @@ class Benchmark:
             model: The model to use for generation
             model_provider: The provider of the model
             temperature: The temperature for generation
-            custom_system_prompt: Optional custom system prompt
             interface: The interface to use
             force_regenerate: If True, regenerate even if templates exist
             progress_callback: Optional callback for progress updates
