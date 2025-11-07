@@ -2,6 +2,17 @@
 
 Templates define how to evaluate LLM responses programmatically. This guide covers what templates are, why they're useful, and how to create them automatically or manually.
 
+**Quick Navigation:**
+
+- [What Are Templates?](#what-are-templates) - Core concepts and structure
+- [Why Use Templates?](#why-use-templates) - Benefits and use cases
+- [Automatic Template Generation](#automatic-template-generation-recommended) - Recommended LLM-based approach
+- [Manual Template Creation](#manual-template-creation-advanced) - Advanced custom templates
+- [When to Use Which Approach](#when-to-use-which-approach) - Decision guide for automatic vs manual
+- [Complete Example](#complete-example) - End-to-end workflow
+
+---
+
 ## What Are Templates?
 
 **Answer templates** are Pydantic classes that specify:

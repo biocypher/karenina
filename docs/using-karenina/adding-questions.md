@@ -2,6 +2,16 @@
 
 This guide covers different methods for adding questions to your benchmark, including manual creation and automatic extraction from files.
 
+**Quick Navigation:**
+
+- [Manual Question Creation](#manual-question-creation) - Add questions directly with code
+- [Automatic Question Extraction](#automatic-question-extraction-from-files) - Extract from Excel, CSV, TSV files
+- [Working with Questions](#working-with-questions) - Access, list, and inspect questions
+- [Question Organization](#question-organization) - Keywords, tags, and batch addition
+- [Complete Example](#complete-example) - End-to-end workflow with manual and file-based addition
+
+---
+
 ## Manual Question Creation
 
 ### Basic Question Addition

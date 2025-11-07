@@ -2,6 +2,21 @@
 
 This guide covers how to configure LLM models in Karenina using `ModelConfig`. You'll learn about model providers, interfaces, advanced parameters, and how to pass vendor-specific options.
 
+**Quick Navigation:**
+
+- [What is ModelConfig?](#what-is-modelconfig) - Core concepts and use cases
+- [Basic ModelConfig](#basic-modelconfig) - Minimal configuration example
+- [ModelConfig Parameters](#modelconfig-parameters) - Required and optional parameters
+- [Interfaces](#interfaces) - LangChain, OpenAI endpoint, OpenRouter, manual
+- [Model Providers](#model-providers) - OpenAI, Google, Anthropic configuration
+- [Temperature Parameter](#temperature-parameter) - Controlling randomness and determinism
+- [Extra Keyword Arguments](#extra-keyword-arguments) - Vendor-specific options and API keys
+- [System Prompts](#system-prompts) - Custom system prompt configuration
+- [MCP Tool Integration](#mcp-tool-integration) - Enable tool use during answer generation
+- [Common Configuration Patterns](#common-configuration-patterns) - Typical setup examples
+- [Best Practices](#best-practices) - Recommendations for benchmarking and API keys
+- [Troubleshooting](#troubleshooting) - Common errors and solutions
+
 ---
 
 ## What is ModelConfig?

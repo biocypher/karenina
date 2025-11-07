@@ -2,6 +2,17 @@
 
 The `Benchmark` class is the core component of Karenina. This page explains what it is, how to create benchmarks, what metadata can be associated with them, and how to persist them.
 
+**Quick Navigation:**
+
+- [The Benchmark Class](#the-benchmark-class) - Core orchestrator for benchmarking activities
+- [How to Create a Benchmark](#how-to-create-a-benchmark) - Basic creation and creation with metadata
+- [Benchmark Metadata Attributes](#benchmark-metadata-attributes) - Standard metadata and access patterns
+- [Benchmark Organization Patterns](#benchmark-organization-patterns) - Domain-specific and multi-version benchmarks
+- [Database Persistence](#database-persistence) - Save, load, and manage benchmarks in SQLite
+- [Checkpoint Files](#checkpoint-files) - JSON-LD format for portable benchmark storage
+
+---
+
 ## The Benchmark Class
 
 The `Benchmark` class is the central orchestrator for all benchmarking activities in Karenina. It:

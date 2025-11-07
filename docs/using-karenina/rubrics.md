@@ -2,6 +2,22 @@
 
 Rubrics provide qualitative evaluation criteria beyond the basic template verification. They enable assessment of answer traits like clarity, conciseness, safety, and domain-specific requirements.
 
+**Quick Navigation:**
+
+- [What Are Rubrics?](#what-are-rubrics) - Core concepts and capabilities
+- [Why Use Rubrics?](#why-use-rubrics) - Quality assessment, domain validation, compliance
+- [Rubric Scope](#rubric-scope-global-vs-question-specific) - Global vs question-specific rubrics
+- [Three Types of Rubric Traits](#three-types-of-rubric-traits) - LLM-based, regex-based, metric-based
+- [Understanding Metric Traits](#understanding-metric-traits-two-evaluation-modes) - TP-only vs full-matrix evaluation
+- [Creating a Global Rubric](#creating-a-global-rubric) - Apply traits to all questions
+- [Creating Question-Specific Rubrics](#creating-question-specific-rubrics) - Apply traits to specific questions
+- [Combining Global and Question-Specific](#combining-global-and-question-specific-rubrics) - Use both in one benchmark
+- [Working with Rubric Results](#working-with-rubric-results) - Access and analyze evaluation results
+- [Rubric Best Practices](#rubric-best-practices) - Effective rubric design guidelines
+- [Complete Example](#complete-example) - End-to-end workflow with all trait types
+
+---
+
 ## What Are Rubrics?
 
 **Rubrics** are collections of evaluation traits that assess qualitative aspects of LLM responses:
