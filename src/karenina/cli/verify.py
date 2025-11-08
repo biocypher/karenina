@@ -10,11 +10,12 @@ from typing import Annotated
 
 import typer
 from rich.console import Console
+from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn, TimeRemainingColumn
 
 from karenina.benchmark import Benchmark
 from karenina.benchmark.exporter import export_verification_results_csv, export_verification_results_json
 from karenina.benchmark.verification.batch_runner import run_verification_batch
-from karenina.schemas import VerificationConfig
+from karenina.schemas import VerificationConfig, VerificationResult
 
 from .utils import (
     create_export_job,
@@ -127,18 +128,46 @@ def verify(
 
         start_time = time.time()
 
-        # TODO: Add progress bar in Phase 5
-        progress_callback = None
+        # Run verification with optional progress bar
         if verbose:
-            console.print("[dim](Progress bar will be added in Phase 5)[/dim]")
+            # Calculate total verifications
+            total_verifications = (
+                len(templates) * len(config.answering_models) * len(config.parsing_models) * config.replicate_count
+            )
 
-        results = run_verification_batch(
-            templates=templates,
-            config=config,
-            run_name="cli-verification",
-            global_rubric=benchmark.get_global_rubric(),
-            progress_callback=progress_callback,
-        )
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TaskProgressColumn(),
+                TimeRemainingColumn(),
+                console=console,
+            ) as progress:
+                task = progress.add_task("Verifying questions...", total=total_verifications)
+
+                def progress_callback(current: int, _total: int, result: VerificationResult | None = None) -> None:
+                    """Update progress bar on each verification completion."""
+                    progress.update(task, completed=current)
+                    if result and result.verify_result is not None:
+                        # Add pass/fail indicator to description
+                        status = "✓" if result.verify_result else "✗"
+                        progress.update(task, description=f"Verifying questions... {status}")
+
+                results = run_verification_batch(
+                    templates=templates,
+                    config=config,
+                    run_name="cli-verification",
+                    global_rubric=benchmark.get_global_rubric(),
+                    progress_callback=progress_callback,
+                )
+        else:
+            results = run_verification_batch(
+                templates=templates,
+                config=config,
+                run_name="cli-verification",
+                global_rubric=benchmark.get_global_rubric(),
+                progress_callback=None,
+            )
 
         end_time = time.time()
         duration = end_time - start_time
