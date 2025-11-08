@@ -74,23 +74,24 @@ def verify(
         console.print(f"  Total questions: {len(benchmark.get_all_questions())}")
 
         # Step 3: Load or build config
+        selected_question_indices = None
         if interactive:
-            console.print("[yellow]Interactive mode not yet implemented - coming in Phase 6[/yellow]")
+            from .interactive import build_config_interactively
+
+            config, selected_question_indices = build_config_interactively(benchmark, mode=_mode)
+        elif preset:
+            console.print("[cyan]Loading preset...[/cyan]")
+            try:
+                preset_path = get_preset_path(str(preset))
+                config = VerificationConfig.from_preset(preset_path)
+            except Exception as e:
+                console.print(f"[red]Error loading preset: {e}[/red]")
+                raise typer.Exit(code=1) from e
+
+            console.print(f"[green]✓ Loaded preset from: {preset_path}[/green]")
+        else:
+            console.print("[red]Error: Either --preset or --interactive is required[/red]")
             raise typer.Exit(code=1)
-
-        if not preset:
-            console.print("[red]Error: --preset is required (interactive mode coming in Phase 6)[/red]")
-            raise typer.Exit(code=1)
-
-        console.print("[cyan]Loading preset...[/cyan]")
-        try:
-            preset_path = get_preset_path(str(preset))
-            config = VerificationConfig.from_preset(preset_path)
-        except Exception as e:
-            console.print(f"[red]Error loading preset: {e}[/red]")
-            raise typer.Exit(code=1) from e
-
-        console.print(f"[green]✓ Loaded preset from: {preset_path}[/green]")
 
         # Step 4: Get and filter templates
         all_templates = benchmark.get_finished_templates()
@@ -101,7 +102,11 @@ def verify(
 
         # Filter templates
         templates = all_templates
-        if questions:
+        if selected_question_indices is not None:
+            # Use indices from interactive mode
+            templates = filter_templates_by_indices(all_templates, selected_question_indices)
+            console.print(f"[dim]Using {len(templates)} question(s) from interactive selection[/dim]")
+        elif questions:
             try:
                 indices = parse_question_indices(questions, len(all_templates))
                 templates = filter_templates_by_indices(all_templates, indices)
