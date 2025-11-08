@@ -6,7 +6,7 @@ This module implements the interactive configuration builder with two modes:
 - Advanced mode: All available parameters
 """
 
-from typing import Any
+from typing import Any, Literal, cast
 
 import typer
 from pydantic import SecretStr
@@ -119,12 +119,108 @@ def build_config_interactively(benchmark: Benchmark, mode: str = "basic") -> tup
 
     console.print("[green]✓ Features configured[/green]\n")
 
+    # Advanced mode: Additional configuration
+    evaluation_mode = "template_only"
+    rubric_trait_names = None
+    deep_judgment_max_excerpts = 3
+    deep_judgment_fuzzy_threshold = 0.80
+    deep_judgment_retry_attempts = 2
+    deep_judgment_search_enabled = False
+    deep_judgment_search_tool = "tavily"
+    few_shot_config = None
+    async_enabled = True
+    async_max_workers = 2
+
+    if mode == "advanced":
+        console.print("[bold]Advanced Configuration[/bold]")
+
+        # Evaluation mode (if rubric enabled)
+        if rubric_enabled:
+            evaluation_mode = Prompt.ask(
+                "Evaluation mode",
+                choices=["template_only", "template_and_rubric", "rubric_only"],
+                default="template_only",
+            )
+
+            # Rubric trait names filter
+            if Confirm.ask("Filter specific rubric traits?", default=False):
+                traits_str = Prompt.ask("Rubric trait names (comma-separated)")
+                rubric_trait_names = [t.strip() for t in traits_str.split(",")]
+
+        # Deep judgment settings (if enabled)
+        if deep_judgment_enabled:
+            console.print("\n[cyan]Deep Judgment Settings:[/cyan]")
+            max_excerpts_str = Prompt.ask("Max excerpts per attribute", default="3")
+            try:
+                deep_judgment_max_excerpts = int(max_excerpts_str)
+                if deep_judgment_max_excerpts < 1:
+                    raise ValueError("Max excerpts must be at least 1")
+            except ValueError as e:
+                console.print(f"[red]Error: {e}[/red]")
+                raise typer.Exit(code=1) from e
+
+            fuzzy_threshold_str = Prompt.ask("Fuzzy match threshold (0.0-1.0)", default="0.80")
+            try:
+                deep_judgment_fuzzy_threshold = float(fuzzy_threshold_str)
+                if not 0.0 <= deep_judgment_fuzzy_threshold <= 1.0:
+                    raise ValueError("Threshold must be between 0.0 and 1.0")
+            except ValueError as e:
+                console.print(f"[red]Error: {e}[/red]")
+                raise typer.Exit(code=1) from e
+
+            retry_attempts_str = Prompt.ask("Excerpt retry attempts", default="2")
+            try:
+                deep_judgment_retry_attempts = int(retry_attempts_str)
+                if deep_judgment_retry_attempts < 0:
+                    raise ValueError("Retry attempts must be non-negative")
+            except ValueError as e:
+                console.print(f"[red]Error: {e}[/red]")
+                raise typer.Exit(code=1) from e
+
+            deep_judgment_search_enabled = Confirm.ask("Enable search validation?", default=False)
+            if deep_judgment_search_enabled:
+                deep_judgment_search_tool = Prompt.ask("Search tool", default="tavily")
+
+        # Few-shot configuration
+        console.print("\n[cyan]Few-Shot Configuration:[/cyan]")
+        if Confirm.ask("Enable few-shot prompting?", default=False):
+            from karenina.schemas.workflow.models import FewShotConfig
+
+            few_shot_mode_str = Prompt.ask("Few-shot mode", choices=["all", "k-shot", "custom", "none"], default="all")
+            few_shot_mode = cast(Literal["all", "k-shot", "custom", "none"], few_shot_mode_str)
+
+            few_shot_k_str = Prompt.ask("Few-shot k (number of examples)", default="3")
+            try:
+                few_shot_k = int(few_shot_k_str)
+                if few_shot_k < 1:
+                    raise ValueError("k must be at least 1")
+            except ValueError as e:
+                console.print(f"[red]Error: {e}[/red]")
+                raise typer.Exit(code=1) from e
+
+            few_shot_config = FewShotConfig(enabled=True, global_mode=few_shot_mode, global_k=few_shot_k)
+
+        # Async settings
+        console.print("\n[cyan]Async Execution Settings:[/cyan]")
+        async_enabled = Confirm.ask("Enable async execution?", default=True)
+        if async_enabled:
+            max_workers_str = Prompt.ask("Max parallel workers", default="2")
+            try:
+                async_max_workers = int(max_workers_str)
+                if async_max_workers < 1:
+                    raise ValueError("Max workers must be at least 1")
+            except ValueError as e:
+                console.print(f"[red]Error: {e}[/red]")
+                raise typer.Exit(code=1) from e
+
+        console.print("[green]✓ Advanced configuration complete[/green]\n")
+
     # Step 4: Collect answering models
     console.print("[bold]Step 4: Answering Models[/bold]")
     answering_models = []
 
     while True:
-        model = _prompt_for_model("answering")
+        model = _prompt_for_model("answering", mode=mode)
         answering_models.append(model)
         console.print(f"[green]✓ Added answering model: {model.model_name}[/green]\n")
 
@@ -136,7 +232,7 @@ def build_config_interactively(benchmark: Benchmark, mode: str = "basic") -> tup
     parsing_models = []
 
     while True:
-        model = _prompt_for_model("parsing")
+        model = _prompt_for_model("parsing", mode=mode)
         parsing_models.append(model)
         console.print(f"[green]✓ Added parsing model: {model.model_name}[/green]\n")
 
@@ -149,11 +245,21 @@ def build_config_interactively(benchmark: Benchmark, mode: str = "basic") -> tup
         parsing_models=parsing_models,
         replicate_count=replicate_count,
         rubric_enabled=rubric_enabled,
+        rubric_trait_names=rubric_trait_names,
+        evaluation_mode=evaluation_mode,
         abstention_enabled=abstention_enabled,
         embedding_check_enabled=embedding_check_enabled,
         embedding_check_model=embedding_check_model,
         embedding_check_threshold=embedding_check_threshold,
         deep_judgment_enabled=deep_judgment_enabled,
+        deep_judgment_max_excerpts_per_attribute=deep_judgment_max_excerpts,
+        deep_judgment_fuzzy_match_threshold=deep_judgment_fuzzy_threshold,
+        deep_judgment_excerpt_retry_attempts=deep_judgment_retry_attempts,
+        deep_judgment_search_enabled=deep_judgment_search_enabled,
+        deep_judgment_search_tool=deep_judgment_search_tool,
+        few_shot_config=few_shot_config,
+        async_enabled=async_enabled,
+        async_max_workers=async_max_workers,
     )
 
     # Display summary
@@ -209,12 +315,13 @@ def _display_questions_table(templates: list[Any]) -> None:
     console.print(f"\n[dim]Total: {len(templates)} question(s)[/dim]\n")
 
 
-def _prompt_for_model(model_type: str) -> ModelConfig:
+def _prompt_for_model(model_type: str, mode: str = "basic") -> ModelConfig:
     """
     Prompt user for model configuration details.
 
     Args:
         model_type: Type of model ("answering" or "parsing")
+        mode: Configuration mode ("basic" or "advanced")
 
     Returns:
         Configured ModelConfig instance
@@ -285,6 +392,30 @@ def _prompt_for_model(model_type: str) -> ModelConfig:
         console.print("[yellow]Note: Manual interface requires manual_traces to be set programmatically[/yellow]")
         console.print("[yellow]This will be configured later in the code[/yellow]")
 
+    # MCP tools configuration (advanced mode only)
+    mcp_urls_dict = None
+    mcp_tool_filter = None
+
+    if mode == "advanced" and interface != INTERFACE_MANUAL:
+        console.print("\n[cyan]MCP Tools Configuration (optional):[/cyan]")
+        if Confirm.ask("Configure MCP tools?", default=False):
+            # MCP URLs dict - JSON input
+            urls_json_str = Prompt.ask('MCP URLs dict (JSON format, e.g., {"server1": "url1"})', default="{}")
+            try:
+                import json
+
+                mcp_urls_dict = json.loads(urls_json_str)
+                if not isinstance(mcp_urls_dict, dict):
+                    raise ValueError("MCP URLs must be a dictionary")
+            except (json.JSONDecodeError, ValueError) as e:
+                console.print(f"[red]Invalid JSON: {e}. Skipping MCP configuration.[/red]")
+                mcp_urls_dict = None
+
+            # MCP tool filter
+            if mcp_urls_dict and Confirm.ask("Filter specific MCP tools?", default=False):  # type: ignore[arg-type]
+                tools_str = Prompt.ask("MCP tool names (comma-separated)")
+                mcp_tool_filter = [t.strip() for t in tools_str.split(",")]
+
     # Build ModelConfig
     config_dict: dict[str, Any] = {
         "id": model_id,
@@ -303,6 +434,12 @@ def _prompt_for_model(model_type: str) -> ModelConfig:
 
     if endpoint_api_key:
         config_dict["endpoint_api_key"] = endpoint_api_key
+
+    if mcp_urls_dict:
+        config_dict["mcp_urls_dict"] = mcp_urls_dict
+
+    if mcp_tool_filter:
+        config_dict["mcp_tool_filter"] = mcp_tool_filter
 
     # Skip validation for manual interface as it requires manual_traces
     if interface == INTERFACE_MANUAL:
