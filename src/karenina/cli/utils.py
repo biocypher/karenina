@@ -47,9 +47,9 @@ def list_presets(presets_dir: Path | None = None) -> list[dict[str, Any]]:
         presets_dir: Directory containing presets. If None, uses default location.
 
     Returns:
-        List of preset metadata dictionaries, sorted by name.
+        List of preset info dictionaries with name and filepath, sorted by name.
     """
-    import json
+    import os
 
     preset_dir = _get_presets_directory(presets_dir)
 
@@ -59,24 +59,27 @@ def list_presets(presets_dir: Path | None = None) -> list[dict[str, Any]]:
     presets = []
     for preset_file in preset_dir.glob("*.json"):
         try:
-            with open(preset_file) as f:
-                data = json.load(f)
-                # Extract metadata
-                preset_info = {
-                    "id": data.get("id"),
-                    "name": data.get("name"),
-                    "description": data.get("description"),
-                    "filepath": str(preset_file),
-                    "created_at": data.get("created_at"),
-                    "updated_at": data.get("updated_at"),
-                }
-                presets.append(preset_info)
-        except (json.JSONDecodeError, KeyError):
-            # Skip invalid preset files
+            # Use filename (without .json extension) as the preset name
+            name = preset_file.stem
+
+            # Get file modification time for display
+            mtime = os.path.getmtime(preset_file)
+            from datetime import datetime
+
+            modified = datetime.fromtimestamp(mtime).isoformat()
+
+            preset_info = {
+                "name": name,
+                "filepath": str(preset_file),
+                "modified": modified,
+            }
+            presets.append(preset_info)
+        except Exception:
+            # Skip invalid files
             continue
 
     # Sort by name
-    presets.sort(key=lambda p: p["name"] or "")
+    presets.sort(key=lambda p: p["name"])
     return presets
 
 
@@ -85,7 +88,7 @@ def get_preset_path(name_or_path: str, presets_dir: Path | None = None) -> Path:
     Resolve preset name to filepath.
 
     Args:
-        name_or_path: Preset name or path
+        name_or_path: Preset name (e.g., "gpt-oss-tools") or direct file path
         presets_dir: Directory to search for presets
 
     Returns:
@@ -93,11 +96,15 @@ def get_preset_path(name_or_path: str, presets_dir: Path | None = None) -> Path:
 
     Raises:
         FileNotFoundError: If preset not found
+
+    Examples:
+        >>> get_preset_path("gpt-oss-tools")  # Finds presets/gpt-oss-tools.json
+        >>> get_preset_path("/path/to/config.json")  # Uses direct path
     """
     # First, check if it's already a valid path
     path = Path(name_or_path)
     if path.exists() and path.is_file():
-        return path
+        return path.resolve()
 
     # Try to find by name in presets directory
     preset_dir = _get_presets_directory(presets_dir)
@@ -105,19 +112,11 @@ def get_preset_path(name_or_path: str, presets_dir: Path | None = None) -> Path:
     if not preset_dir.exists():
         raise FileNotFoundError(f"Presets directory not found: {preset_dir}")
 
-    # Try exact match (e.g., "gpt-oss.json" or "gpt-oss")
-    candidate = preset_dir / f"{name_or_path}.json" if not name_or_path.endswith(".json") else preset_dir / name_or_path
+    # Try exact match (e.g., "gpt-oss-tools.json" or "gpt-oss-tools")
+    candidate = preset_dir / name_or_path if name_or_path.endswith(".json") else preset_dir / f"{name_or_path}.json"
 
     if candidate.exists():
-        return candidate
-
-    # Try sanitized name match
-    from karenina.schemas import VerificationConfig
-
-    sanitized = VerificationConfig.sanitize_preset_name(name_or_path)
-    candidate = preset_dir / f"{sanitized}.json"
-    if candidate.exists():
-        return candidate
+        return candidate.resolve()
 
     raise FileNotFoundError(
         f"Preset '{name_or_path}' not found in {preset_dir}. Use 'karenina preset list' to see available presets."
