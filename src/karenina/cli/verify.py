@@ -252,10 +252,13 @@ def verify(
         # Step 3: Load or build config
         # Priority: interactive > preset+CLI > CLI only
         selected_question_indices = None
+        show_progress_bar_interactive = None
         if interactive:
             from .interactive import build_config_interactively
 
-            config, selected_question_indices = build_config_interactively(benchmark, mode=_mode)
+            config, selected_question_indices, show_progress_bar_interactive = build_config_interactively(
+                benchmark, mode=_mode
+            )
         else:
             # Load preset if provided, otherwise use None (will build from CLI args/defaults)
             preset_config = None
@@ -430,8 +433,12 @@ def verify(
 
         start_time = time.time()
 
+        # Determine whether to show progress bar
+        # Priority: interactive preference > CLI verbose flag
+        show_progress = show_progress_bar_interactive if show_progress_bar_interactive is not None else verbose
+
         # Run verification with optional progress bar
-        if verbose:
+        if show_progress:
             # Calculate total verifications
             total_verifications = (
                 len(templates) * len(config.answering_models) * len(config.parsing_models) * config.replicate_count

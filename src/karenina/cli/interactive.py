@@ -32,7 +32,7 @@ from .utils import parse_question_indices
 console = Console()
 
 
-def build_config_interactively(benchmark: Benchmark, mode: str = "basic") -> tuple[VerificationConfig, list[int]]:
+def build_config_interactively(benchmark: Benchmark, mode: str = "basic") -> tuple[VerificationConfig, list[int], bool]:
     """
     Build VerificationConfig interactively through prompts.
 
@@ -41,7 +41,7 @@ def build_config_interactively(benchmark: Benchmark, mode: str = "basic") -> tup
         mode: "basic" or "advanced"
 
     Returns:
-        Tuple of (VerificationConfig object, list of selected question indices)
+        Tuple of (VerificationConfig object, list of selected question indices, show_progress_bar)
 
     Raises:
         ValueError: If mode is invalid or user provides invalid input
@@ -291,9 +291,17 @@ def build_config_interactively(benchmark: Benchmark, mode: str = "basic") -> tup
         except Exception as e:
             console.print(f"[red]Error saving preset: {e}[/red]")
 
+    # Step 7: Ask about progress bar
+    console.print("\n[bold]Step 7: Progress Display[/bold]")
+    show_progress_bar = Confirm.ask("Show progress bar during verification?", default=True)
+    if show_progress_bar:
+        console.print("[green]✓ Progress bar will be displayed during verification[/green]")
+    else:
+        console.print("[dim]Progress bar will be hidden[/dim]")
+
     console.print("\n[green]✓ Configuration complete![/green]\n")
 
-    return config, selected_indices
+    return config, selected_indices, show_progress_bar
 
 
 def _display_questions_table(templates: list[Any]) -> None:
@@ -417,10 +425,58 @@ def _prompt_for_model(model_type: str, mode: str = "basic") -> ModelConfig:
                 console.print(f"[red]Invalid JSON: {e}. Skipping MCP configuration.[/red]")
                 mcp_urls_dict = None
 
+            # Validate MCP servers
+            if mcp_urls_dict:
+                console.print("\n[cyan]Validating MCP servers...[/cyan]")
+                try:
+                    from karenina.infrastructure.llm.mcp_utils import sync_create_mcp_client_and_tools
+
+                    _, tools = sync_create_mcp_client_and_tools(mcp_urls_dict, tool_filter=None)
+
+                    if tools:
+                        console.print("[green]✓ Successfully connected to MCP server(s)[/green]")
+                        console.print(f"[dim]Found {len(tools)} available tool(s):[/dim]")
+                        for tool in tools[:10]:  # Show first 10 tools
+                            tool_name = getattr(tool, "name", "Unknown")
+                            tool_desc = getattr(tool, "description", "")
+                            desc_preview = (tool_desc[:60] + "...") if len(tool_desc) > 60 else tool_desc
+                            console.print(f"  [dim]• {tool_name}: {desc_preview}[/dim]")
+                        if len(tools) > 10:
+                            console.print(f"  [dim]... and {len(tools) - 10} more[/dim]")
+                    else:
+                        console.print("[yellow]Warning: No tools found from MCP server(s)[/yellow]")
+
+                except Exception as e:
+                    console.print(f"[red]Failed to validate MCP servers: {e}[/red]")
+                    if not Confirm.ask("Continue with this MCP configuration anyway?", default=False):
+                        console.print("[yellow]Skipping MCP configuration.[/yellow]")
+                        mcp_urls_dict = None
+
             # MCP tool filter
-            if mcp_urls_dict and Confirm.ask("Filter specific MCP tools?", default=False):  # type: ignore[arg-type]
+            if mcp_urls_dict and Confirm.ask("\nFilter specific MCP tools?", default=False):  # type: ignore[arg-type]
                 tools_str = Prompt.ask("MCP tool names (comma-separated)")
                 mcp_tool_filter = [t.strip() for t in tools_str.split(",")]
+
+                # Validate tool filter if we have tools
+                try:
+                    from karenina.infrastructure.llm.mcp_utils import sync_create_mcp_client_and_tools
+
+                    _, filtered_tools = sync_create_mcp_client_and_tools(mcp_urls_dict, tool_filter=mcp_tool_filter)
+                    available_tool_names = [getattr(t, "name", "") for t in filtered_tools]
+
+                    if not filtered_tools:
+                        console.print("[yellow]Warning: No tools match the specified filter[/yellow]")
+                        console.print(f"[dim]Requested: {', '.join(mcp_tool_filter)}[/dim]")
+                        if not Confirm.ask("Continue with this tool filter anyway?", default=False):
+                            mcp_tool_filter = None
+                    else:
+                        console.print(
+                            f"[green]✓ Tool filter validated ({len(filtered_tools)} tool(s) selected)[/green]"
+                        )
+                        console.print(f"[dim]Selected tools: {', '.join(available_tool_names)}[/dim]")
+
+                except Exception as e:
+                    console.print(f"[yellow]Warning: Could not validate tool filter: {e}[/yellow]")
 
     # Build ModelConfig
     config_dict: dict[str, Any] = {
