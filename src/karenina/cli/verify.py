@@ -23,6 +23,8 @@ from .utils import (
     filter_templates_by_ids,
     filter_templates_by_indices,
     get_preset_path,
+    get_traces_path,
+    load_manual_traces_from_file,
     parse_question_indices,
     validate_output_path,
 )
@@ -49,6 +51,7 @@ def _build_config_from_cli_args(
     async_execution: bool,
     async_workers: int,
     preset_config: VerificationConfig | None = None,
+    manual_traces_obj: object | None = None,
 ) -> VerificationConfig:
     """
     Build VerificationConfig respecting hierarchy: CLI > preset > env > defaults.
@@ -106,14 +109,21 @@ def _build_config_from_cli_args(
             base_model = preset_config.answering_models[0].model_dump()
         else:
             # No preset - start with minimal required fields
-            # Validation ensures model_name and provider are provided when no preset
-            base_model = {
-                "model_name": answering_model or "gpt-4.1-mini",
-                "model_provider": answering_provider or "openai",
-                "interface": interface or "langchain",
-                "temperature": temperature,
-                "id": answering_id,
-            }
+            # For manual interface, only interface and manual_traces are required
+            if interface == "manual":
+                base_model = {
+                    "interface": "manual",
+                    # id, model_name, model_provider will be set by ModelConfig defaults
+                }
+            else:
+                # Validation ensures model_name and provider are provided when no preset
+                base_model = {
+                    "model_name": answering_model or "gpt-4.1-mini",
+                    "model_provider": answering_provider or "openai",
+                    "interface": interface or "langchain",
+                    "temperature": temperature,
+                    "id": answering_id,
+                }
 
         # Apply CLI overrides if preset was used
         if preset_config:
@@ -126,7 +136,15 @@ def _build_config_from_cli_args(
             if interface is not None:
                 base_model["interface"] = interface
 
-        config_dict["answering_models"] = [ModelConfig(**base_model)]
+        # Create ModelConfig
+        if base_model.get("interface") == "manual":
+            if manual_traces_obj is None:
+                raise ValueError("manual_traces_obj is None but interface is manual")
+            # Create ModelConfig directly with required parameters for manual interface
+            model_config = ModelConfig(interface="manual", manual_traces=manual_traces_obj)
+            config_dict["answering_models"] = [model_config]
+        else:
+            config_dict["answering_models"] = [ModelConfig(**base_model)]
 
     if parsing_has_cli_args:
         # Build parsing model from CLI args
@@ -135,10 +153,12 @@ def _build_config_from_cli_args(
         else:
             # No preset - start with minimal required fields
             # Validation ensures model_name and provider are provided when no preset
+            # Note: Parsing model should NOT use manual interface (only answering model can)
+            parsing_interface = interface if interface != "manual" else "langchain"
             base_model = {
                 "model_name": parsing_model or "gpt-4.1-mini",
                 "model_provider": parsing_provider or "openai",
-                "interface": interface or "langchain",
+                "interface": parsing_interface,
                 "temperature": temperature,
                 "id": parsing_id,
             }
@@ -151,7 +171,7 @@ def _build_config_from_cli_args(
                 base_model["model_provider"] = parsing_provider
             base_model["id"] = parsing_id
             base_model["temperature"] = temperature
-            if interface is not None:
+            if interface is not None and interface != "manual":
                 base_model["interface"] = interface
 
         config_dict["parsing_models"] = [ModelConfig(**base_model)]
@@ -199,6 +219,14 @@ def verify(
     embedding_model: Annotated[str, typer.Option(help="Embedding model name")] = "all-MiniLM-L6-v2",
     no_async: Annotated[bool, typer.Option("--no-async", help="Disable async execution")] = False,
     async_workers: Annotated[int, typer.Option(help="Number of async workers")] = 2,
+    # Manual trace support
+    manual_traces: Annotated[
+        Path | None,
+        typer.Option(
+            "--manual-traces",
+            help="JSON file with manual traces (question_hash: trace_string mapping). Required when --interface manual.",
+        ),
+    ] = None,
 ) -> None:
     """
     Run verification on a benchmark.
@@ -224,6 +252,9 @@ def verify(
 
         # With output and progress
         karenina verify checkpoint.jsonld --preset default.json --output results.csv --verbose
+
+        # With manual traces
+        karenina verify checkpoint.jsonld --interface manual --manual-traces traces/my_traces.json --parsing-model gpt-4.1-mini --parsing-provider openai
     """
     try:
         # Convert no_async to async_execution
@@ -306,6 +337,16 @@ def verify(
                     validation_errors.append(
                         "OpenAI Endpoint interface is not supported via CLI args alone. Use --interactive or --preset."
                     )
+                elif interface == "manual":
+                    if not manual_traces:
+                        validation_errors.append(
+                            "--manual-traces is required when --interface manual. "
+                            "Provide a JSON file mapping question hashes to answer traces."
+                        )
+
+                # Additional validation for manual traces
+                if manual_traces and not manual_traces.exists():
+                    validation_errors.append(f"Manual traces file not found: {manual_traces}")
 
                 if validation_errors:
                     console.print("[red]Configuration errors:[/red]")
@@ -313,6 +354,30 @@ def verify(
                         console.print(f"  [red]• {error}[/red]")
                     console.print("\n[dim]Run with --interactive for guided configuration[/dim]")
                     raise typer.Exit(code=1)
+
+            # Step 3.5: Load manual traces BEFORE building config (if provided)
+            manual_traces_obj = None
+            if manual_traces:
+                console.print(f"[cyan]Loading manual traces from {manual_traces}...[/cyan]")
+                try:
+                    # Resolve trace file path
+                    trace_file = get_traces_path(manual_traces)
+
+                    # Load traces and create ManualTraces object
+                    manual_traces_obj = load_manual_traces_from_file(trace_file, benchmark)
+
+                    # Verify traces loaded and report to user
+                    from karenina.infrastructure.llm.manual_traces import get_manual_trace_count
+
+                    trace_count = get_manual_trace_count()
+                    console.print(f"[green]✓ Loaded {trace_count} manual trace(s)[/green]")
+
+                except FileNotFoundError as e:
+                    console.print(f"[red]Error: {e}[/red]")
+                    raise typer.Exit(code=1) from e
+                except Exception as e:
+                    console.print(f"[red]Error loading manual traces: {e}[/red]")
+                    raise typer.Exit(code=1) from e
 
             # Build config with CLI overrides (or from scratch if no preset)
             try:
@@ -335,6 +400,7 @@ def verify(
                     async_execution=async_execution,
                     async_workers=async_workers,
                     preset_config=preset_config,
+                    manual_traces_obj=manual_traces_obj,
                 )
 
                 # Show what we're using
