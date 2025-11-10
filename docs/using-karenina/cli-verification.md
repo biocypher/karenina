@@ -215,14 +215,38 @@ karenina verify checkpoint.jsonld \
 
 #### 3. CLI Arguments Only (No Preset)
 
-```bash
-# Build configuration entirely from CLI args
-karenina verify checkpoint.jsonld \
-  --answering-model gpt-4.1-mini \
-  --parsing-model gpt-4.1-mini \
-  --replicate-count 2 \
-  --output results.csv
-```
+!!! warning "Required Parameters Without Preset"
+    When running without a preset, you **must** specify:
+
+    - **Interface**: `--interface` (langchain, openrouter, or openai_endpoint)
+    - **Model names**: `--answering-model` and `--parsing-model`
+    - **Provider** (for langchain): `--answering-provider` and `--parsing-provider`
+
+    **Example for langchain interface:**
+    ```bash
+    karenina verify checkpoint.jsonld \
+      --interface langchain \
+      --answering-model gpt-4.1-mini \
+      --answering-provider openai \
+      --parsing-model gpt-4.1-mini \
+      --parsing-provider openai \
+      --output results.csv
+    ```
+
+    **Example for openrouter interface:**
+    ```bash
+    karenina verify checkpoint.jsonld \
+      --interface openrouter \
+      --answering-model openai/gpt-4.1-mini \
+      --parsing-model openai/gpt-4.1-mini \
+      --output results.csv
+    ```
+
+**Optional parameters** (use defaults if not specified):
+- Temperature: 0.1 (deterministic evaluation)
+- Replicate count: 1
+- Advanced features: All disabled
+- Evaluation mode: template_only
 
 #### 4. Enable Advanced Features
 
