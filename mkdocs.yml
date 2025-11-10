@@ -106,6 +106,7 @@ nav:
     - Rubrics: using-karenina/rubrics.md
     - Model Configuration: using-karenina/model-configuration.md
     - Running Verification: using-karenina/verification.md
+    - CLI Verification: using-karenina/cli-verification.md
     - Saving and Loading: using-karenina/saving-loading.md
 
   - Features:

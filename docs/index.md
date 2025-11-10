@@ -34,6 +34,7 @@ Karenina is a framework for defining benchmarks in a rigorous and reproducible w
 - **[Templates](using-karenina/templates.md)** - Creating and customizing answer templates
 - **[Rubrics](using-karenina/rubrics.md)** - Evaluation criteria and trait types
 - **[Verification](using-karenina/verification.md)** - Running evaluations and analyzing results
+- **[CLI Verification](using-karenina/cli-verification.md)** - Command-line interface for automation
 - **[Saving & Loading](using-karenina/saving-loading.md)** - Checkpoints, database, and export
 
 ### 🔬 Advanced Features

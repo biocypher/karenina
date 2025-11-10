@@ -77,7 +77,7 @@ Evaluate LLM responses against your templates and rubrics.
 - Cache answers automatically for efficiency
 - Save results to database
 
-**Learn more:** [Verification](using-karenina/verification.md)
+**Learn more:** [Verification](using-karenina/verification.md) | [CLI Verification](using-karenina/cli-verification.md)
 
 ---
 
