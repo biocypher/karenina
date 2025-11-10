@@ -6,7 +6,7 @@ This module implements the main 'karenina verify' command.
 
 import time
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated
 
 import typer
 from rich.console import Console
@@ -32,22 +32,21 @@ console = Console()
 def _build_config_from_cli_args(
     answering_model: str | None,
     answering_provider: str | None,
-    answering_id: str | None,
+    answering_id: str,
     parsing_model: str | None,
     parsing_provider: str | None,
-    parsing_id: str | None,
-    temperature: float | None,
+    parsing_id: str,
+    temperature: float,
     interface: str | None,
-    replicate_count: int | None,
-    rubric: bool | None,
-    abstention: bool | None,
-    embedding_check: bool | None,
-    deep_judgment: bool | None,
-    evaluation_mode: str | None,
-    embedding_threshold: float | None,
-    embedding_model: str | None,
-    async_execution: bool | None,
-    async_workers: int | None,
+    replicate_count: int,
+    abstention: bool,
+    embedding_check: bool,
+    deep_judgment: bool,
+    evaluation_mode: str,
+    embedding_threshold: float,
+    embedding_model: str,
+    async_execution: bool,
+    async_workers: int,
     preset_config: VerificationConfig | None = None,
 ) -> VerificationConfig:
     """
@@ -65,44 +64,28 @@ def _build_config_from_cli_args(
     # Start with preset if provided, otherwise create new config
     config_dict = preset_config.model_dump() if preset_config else {}
 
-    # Helper to check if CLI arg should override
-    def should_override(cli_value: Any) -> bool:
-        return cli_value is not None
+    # Override general settings (always override since they have defaults)
+    config_dict["replicate_count"] = replicate_count
 
-    # Override general settings
-    if should_override(replicate_count):
-        config_dict["replicate_count"] = replicate_count
+    # Override feature flags (always override since they have defaults)
+    config_dict["abstention_enabled"] = abstention
+    config_dict["embedding_check_enabled"] = embedding_check
+    config_dict["deep_judgment_enabled"] = deep_judgment
 
-    # Override feature flags
-    if should_override(rubric):
-        config_dict["rubric_enabled"] = rubric
-    if should_override(abstention):
-        config_dict["abstention_enabled"] = abstention
-    if should_override(embedding_check):
-        config_dict["embedding_check_enabled"] = embedding_check
-    if should_override(deep_judgment):
-        config_dict["deep_judgment_enabled"] = deep_judgment
-
-    # Override advanced settings
-    if should_override(evaluation_mode):
-        config_dict["evaluation_mode"] = evaluation_mode
-    if should_override(embedding_threshold):
-        config_dict["embedding_similarity_threshold"] = embedding_threshold
-    if should_override(embedding_model):
-        config_dict["embedding_model_name"] = embedding_model
-    if should_override(async_execution):
-        config_dict["async_execution_enabled"] = async_execution
-    if should_override(async_workers):
-        config_dict["async_max_workers"] = async_workers
+    # Override advanced settings (always override since they have defaults)
+    config_dict["evaluation_mode"] = evaluation_mode
+    config_dict["embedding_similarity_threshold"] = embedding_threshold
+    config_dict["embedding_model_name"] = embedding_model
+    config_dict["async_enabled"] = async_execution
+    config_dict["async_max_workers"] = async_workers
 
     # Handle model configuration
-    # If ANY model CLI arg is provided, we override that model completely
+    # If ANY optional model CLI arg is provided, we override that model completely
+    # Note: answering_id, parsing_id, and temperature now have defaults so always count as provided
     answering_has_cli_args = any(
         [
             answering_model is not None,
             answering_provider is not None,
-            answering_id is not None,
-            temperature is not None,
             interface is not None,
         ]
     )
@@ -111,8 +94,6 @@ def _build_config_from_cli_args(
         [
             parsing_model is not None,
             parsing_provider is not None,
-            parsing_id is not None,
-            temperature is not None,
             interface is not None,
         ]
     )
@@ -124,13 +105,13 @@ def _build_config_from_cli_args(
             base_model = preset_config.answering_models[0].model_dump()
         else:
             # No preset - start with minimal required fields
-            # Validation ensures these are provided when no preset
+            # Validation ensures model_name and provider are provided when no preset
             base_model = {
                 "model_name": answering_model or "gpt-4.1-mini",
                 "model_provider": answering_provider or "openai",
                 "interface": interface or "langchain",
-                "temperature": temperature if temperature is not None else 0.1,
-                "id": answering_id or "answering-1",
+                "temperature": temperature,
+                "id": answering_id,
             }
 
         # Apply CLI overrides if preset was used
@@ -139,10 +120,8 @@ def _build_config_from_cli_args(
                 base_model["model_name"] = answering_model
             if answering_provider is not None:
                 base_model["model_provider"] = answering_provider
-            if answering_id is not None:
-                base_model["id"] = answering_id
-            if temperature is not None:
-                base_model["temperature"] = temperature
+            base_model["id"] = answering_id
+            base_model["temperature"] = temperature
             if interface is not None:
                 base_model["interface"] = interface
 
@@ -154,13 +133,13 @@ def _build_config_from_cli_args(
             base_model = preset_config.parsing_models[0].model_dump()
         else:
             # No preset - start with minimal required fields
-            # Validation ensures these are provided when no preset
+            # Validation ensures model_name and provider are provided when no preset
             base_model = {
                 "model_name": parsing_model or "gpt-4.1-mini",
                 "model_provider": parsing_provider or "openai",
                 "interface": interface or "langchain",
-                "temperature": temperature if temperature is not None else 0.1,
-                "id": parsing_id or "parsing-1",
+                "temperature": temperature,
+                "id": parsing_id,
             }
 
         # Apply CLI overrides if preset was used
@@ -169,18 +148,12 @@ def _build_config_from_cli_args(
                 base_model["model_name"] = parsing_model
             if parsing_provider is not None:
                 base_model["model_provider"] = parsing_provider
-            if parsing_id is not None:
-                base_model["id"] = parsing_id
-            if temperature is not None:
-                base_model["temperature"] = temperature
+            base_model["id"] = parsing_id
+            base_model["temperature"] = temperature
             if interface is not None:
                 base_model["interface"] = interface
 
         config_dict["parsing_models"] = [ModelConfig(**base_model)]
-
-    # Ensure minimum required fields
-    if "replicate_count" not in config_dict:
-        config_dict["replicate_count"] = 1
 
     return VerificationConfig(**config_dict)
 
@@ -197,37 +170,34 @@ def verify(
     question_ids: Annotated[str | None, typer.Option(help="Comma-separated question IDs")] = None,
     verbose: Annotated[bool, typer.Option("--verbose", help="Show progress bar")] = False,
     # Model configuration (single answering + single parsing model)
-    answering_model: Annotated[str | None, typer.Option(help="Answering model name")] = None,
-    answering_provider: Annotated[str | None, typer.Option(help="Answering model provider (for langchain)")] = None,
-    answering_id: Annotated[str | None, typer.Option(help="Answering model ID")] = None,
-    parsing_model: Annotated[str | None, typer.Option(help="Parsing model name")] = None,
-    parsing_provider: Annotated[str | None, typer.Option(help="Parsing model provider (for langchain)")] = None,
-    parsing_id: Annotated[str | None, typer.Option(help="Parsing model ID")] = None,
-    temperature: Annotated[float | None, typer.Option(help="Model temperature (0.0-2.0)")] = None,
+    answering_model: Annotated[str | None, typer.Option(help="Answering model name (required without preset)")] = None,
+    answering_provider: Annotated[
+        str | None, typer.Option(help="Answering model provider for langchain (required without preset)")
+    ] = None,
+    answering_id: Annotated[str, typer.Option(help="Answering model ID")] = "answering-1",
+    parsing_model: Annotated[str | None, typer.Option(help="Parsing model name (required without preset)")] = None,
+    parsing_provider: Annotated[
+        str | None, typer.Option(help="Parsing model provider for langchain (required without preset)")
+    ] = None,
+    parsing_id: Annotated[str, typer.Option(help="Parsing model ID")] = "parsing-1",
+    temperature: Annotated[float, typer.Option(help="Model temperature (0.0-2.0)")] = 0.1,
     interface: Annotated[
-        str | None, typer.Option(help="Model interface (langchain/openrouter/openai_endpoint)")
+        str | None, typer.Option(help="Model interface: langchain/openrouter/openai_endpoint (required without preset)")
     ] = None,
     # General settings
-    replicate_count: Annotated[int | None, typer.Option(help="Number of replicates per verification")] = None,
+    replicate_count: Annotated[int, typer.Option(help="Number of replicates per verification")] = 1,
     # Feature flags
-    rubric: Annotated[bool | None, typer.Option("--rubric/--no-rubric", help="Enable rubric evaluation")] = None,
-    abstention: Annotated[
-        bool | None, typer.Option("--abstention/--no-abstention", help="Enable abstention detection")
-    ] = None,
-    embedding_check: Annotated[
-        bool | None, typer.Option("--embedding-check/--no-embedding-check", help="Enable embedding check")
-    ] = None,
-    deep_judgment: Annotated[
-        bool | None, typer.Option("--deep-judgment/--no-deep-judgment", help="Enable deep judgment")
-    ] = None,
+    abstention: Annotated[bool, typer.Option("--abstention", help="Enable abstention detection")] = False,
+    embedding_check: Annotated[bool, typer.Option("--embedding-check", help="Enable embedding check")] = False,
+    deep_judgment: Annotated[bool, typer.Option("--deep-judgment", help="Enable deep judgment")] = False,
     # Advanced settings
     evaluation_mode: Annotated[
-        str | None, typer.Option(help="Evaluation mode (template_only/template_and_rubric/rubric_only)")
-    ] = None,
-    embedding_threshold: Annotated[float | None, typer.Option(help="Embedding similarity threshold (0.0-1.0)")] = None,
-    embedding_model: Annotated[str | None, typer.Option(help="Embedding model name")] = None,
-    async_execution: Annotated[bool | None, typer.Option("--async/--no-async", help="Enable async execution")] = None,
-    async_workers: Annotated[int | None, typer.Option(help="Number of async workers")] = None,
+        str, typer.Option(help="Evaluation mode (template_only/template_and_rubric/rubric_only)")
+    ] = "template_only",
+    embedding_threshold: Annotated[float, typer.Option(help="Embedding similarity threshold (0.0-1.0)")] = 0.85,
+    embedding_model: Annotated[str, typer.Option(help="Embedding model name")] = "all-MiniLM-L6-v2",
+    no_async: Annotated[bool, typer.Option("--no-async", help="Disable async execution")] = False,
+    async_workers: Annotated[int, typer.Option(help="Number of async workers")] = 2,
 ) -> None:
     """
     Run verification on a benchmark.
@@ -240,10 +210,13 @@ def verify(
         karenina verify checkpoint.jsonld --preset default.json --answering-model gpt-4o
 
         # CLI arguments only (no preset)
-        karenina verify checkpoint.jsonld --answering-model gpt-4.1-mini --parsing-model gpt-4.1-mini
+        karenina verify checkpoint.jsonld --answering-model gpt-4.1-mini --parsing-model gpt-4.1-mini --interface langchain --answering-provider openai --parsing-provider openai
 
         # With feature flags
-        karenina verify checkpoint.jsonld --answering-model gpt-4o --rubric --deep-judgment
+        karenina verify checkpoint.jsonld --preset default.json --abstention --deep-judgment
+
+        # With rubric evaluation
+        karenina verify checkpoint.jsonld --preset default.json --evaluation-mode template_and_rubric
 
         # Interactive mode
         karenina verify checkpoint.jsonld --interactive --mode basic
@@ -252,6 +225,9 @@ def verify(
         karenina verify checkpoint.jsonld --preset default.json --output results.csv --verbose
     """
     try:
+        # Convert no_async to async_execution
+        async_execution = not no_async
+
         # Step 1: Validate output path upfront (fail fast)
         output_format = None
         if output:
@@ -346,7 +322,6 @@ def verify(
                     temperature=temperature,
                     interface=interface,
                     replicate_count=replicate_count,
-                    rubric=rubric,
                     abstention=abstention,
                     embedding_check=embedding_check,
                     deep_judgment=deep_judgment,
@@ -369,14 +344,13 @@ def verify(
                             temperature,
                             interface,
                             replicate_count,
-                            rubric is not None,
-                            abstention is not None,
-                            embedding_check is not None,
-                            deep_judgment is not None,
+                            abstention,
+                            embedding_check,
+                            deep_judgment,
                             evaluation_mode,
                             embedding_threshold,
                             embedding_model,
-                            async_execution is not None,
+                            async_execution,
                             async_workers,
                         ]
                     )

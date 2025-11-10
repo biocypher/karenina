@@ -70,6 +70,7 @@ karenina verify BENCHMARK_PATH [OPTIONS]
 ```
 
 **Required Arguments:**
+
 - `BENCHMARK_PATH`: Path to benchmark JSON-LD file
 
 **Configuration Hierarchy:**
@@ -81,58 +82,52 @@ See [Usage Examples](#usage-examples) below for detailed workflows.
 
 #### Configuration Sources
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `--preset PATH` | Path | Path to preset configuration file |
-| `--interactive` | Flag | Enable interactive configuration builder |
-| `--mode MODE` | Choice | Interactive mode: `basic` or `advanced` (default: `basic`) |
+| Option | Type | Description | Default | Required? |
+|--------|------|-------------|---------|-----------|
+| `--preset PATH` | Path | Path to preset configuration file | - | No |
+| `--interactive` | Flag | Enable interactive configuration builder | false | No |
+| `--mode MODE` | Choice | Interactive mode: `basic` or `advanced` | basic | No |
 
 #### Output and Filtering
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `--output PATH` | Path | Output file path (`.json` or `.csv`) |
-| `--questions SPEC` | String | Question indices: `0,1,2` or `0-5` or `0-2,5` |
-| `--question-ids IDS` | String | Comma-separated question IDs |
-| `--verbose` | Flag | Show progress bar with real-time updates |
+| Option | Type | Description | Default | Required? |
+|--------|------|-------------|---------|-----------|
+| `--output PATH` | Path | Output file path (`.json` or `.csv`) | - | No |
+| `--questions SPEC` | String | Question indices: `0,1,2` or `0-5` or `0-2,5` | - | No |
+| `--question-ids IDS` | String | Comma-separated question IDs | - | No |
+| `--verbose` | Flag | Show progress bar with real-time updates | false | No |
 
 #### Model Configuration
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `--answering-model NAME` | String | Answering model name (e.g., `gpt-4o-mini`) |
-| `--answering-provider PROVIDER` | String | Provider for langchain interface (e.g., `openai`) |
-| `--answering-id ID` | String | Model ID for tracking |
-| `--parsing-model NAME` | String | Parsing model name |
-| `--parsing-provider PROVIDER` | String | Provider for langchain interface |
-| `--parsing-id ID` | String | Model ID for tracking |
-| `--temperature FLOAT` | Float | Model temperature (0.0-2.0, default: 0.1) |
-| `--interface TYPE` | Choice | Interface type: `langchain`, `openrouter`, `openai_endpoint` |
+| Option | Type | Description | Default | Required? |
+|--------|------|-------------|---------|-----------|
+| `--interface TYPE` | Choice | Interface type: `langchain`, `openrouter`, `openai_endpoint` | - | Yes (without preset) |
+| `--answering-model NAME` | String | Answering model name (e.g., `gpt-4o-mini`) | - | Yes (without preset) |
+| `--answering-provider PROVIDER` | String | Provider for langchain interface (e.g., `openai`) | - | Yes (without preset, langchain only) |
+| `--answering-id ID` | String | Model ID for tracking | answering-1 | No |
+| `--parsing-model NAME` | String | Parsing model name | - | Yes (without preset) |
+| `--parsing-provider PROVIDER` | String | Provider for langchain interface | - | Yes (without preset, langchain only) |
+| `--parsing-id ID` | String | Model ID for tracking | parsing-1 | No |
+| `--temperature FLOAT` | Float | Model temperature (0.0-2.0) | 0.1 | No |
 
 #### General Settings
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `--replicate-count N` | Integer | Number of replicates per verification (default: 1) |
+| Option | Type | Description | Default | Required? |
+|--------|------|-------------|---------|-----------|
+| `--evaluation-mode MODE` | Choice | `template_only`, `template_and_rubric`, `rubric_only` | template_only | No |
+| `--replicate-count N` | Integer | Number of replicates per verification | 1 | No |
+| `--no-async` | Flag | Disable async execution (enabled by default) | false | No |
+| `--async-workers N` | Integer | Number of parallel workers | 2 | No |
 
 #### Feature Flags
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `--rubric / --no-rubric` | Boolean | Enable/disable rubric evaluation |
-| `--abstention / --no-abstention` | Boolean | Enable/disable abstention detection |
-| `--embedding-check / --no-embedding-check` | Boolean | Enable/disable embedding similarity check |
-| `--deep-judgment / --no-deep-judgment` | Boolean | Enable/disable deep judgment analysis |
-
-#### Advanced Settings
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `--evaluation-mode MODE` | Choice | `template_only`, `template_and_rubric`, `rubric_only` |
-| `--embedding-threshold FLOAT` | Float | Embedding similarity threshold (0.0-1.0) |
-| `--embedding-model NAME` | String | Embedding model name |
-| `--async / --no-async` | Boolean | Enable/disable async execution |
-| `--async-workers N` | Integer | Number of parallel workers |
+| Option | Type | Description | Default | Required? |
+|--------|------|-------------|---------|-----------|
+| `--abstention` | Flag | Enable abstention detection | false | No |
+| `--deep-judgment` | Flag | Enable deep judgment analysis | false | No |
+| `--embedding-check` | Flag | Enable embedding similarity check | false | No |
+| `--embedding-threshold FLOAT` | Float | Embedding similarity threshold (0.0-1.0) | 0.85 | No |
+| `--embedding-model NAME` | String | Embedding model name | all-MiniLM-L6-v2 | No |
 
 ## Usage Examples
 
@@ -227,10 +222,10 @@ karenina verify checkpoint.jsonld \
 ```bash
 karenina verify checkpoint.jsonld \
   --preset default.json \
-  --rubric \
   --evaluation-mode template_and_rubric \
   --deep-judgment \
   --embedding-check \
+  --abstention \
   --questions 0-5
 ```
 
@@ -264,9 +259,9 @@ karenina verify checkpoint.jsonld --interactive --mode advanced
 
 1. **Question Selection**: Display table of available questions, select subset
 2. **Replicate Count**: Number of verification replicates
-3. **Feature Flags**: Enable rubric, abstention, embedding check, deep judgment
+3. **Feature Flags**: Enable abstention, embedding check, deep judgment
 4. **Models**: Configure answering and parsing models
-5. **Advanced Settings** (advanced mode only): Evaluation mode, deep judgment settings, few-shot config
+5. **Advanced Settings** (advanced mode only): Evaluation mode (for rubric evaluation), deep judgment settings, few-shot config
 6. **Save Preset**: Optionally save configuration as preset
 
 ## Preset Management
