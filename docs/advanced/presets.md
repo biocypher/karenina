@@ -161,6 +161,16 @@ Each preset file contains:
 
 ## Loading a Preset
 
+!!! tip "CLI Preset Management"
+    You can also manage presets from the command line:
+
+    - `karenina preset list` - List all available presets
+    - `karenina preset show NAME` - Display preset configuration
+    - `karenina preset delete NAME` - Delete a preset
+    - `karenina verify checkpoint.jsonld --preset NAME` - Run verification with preset
+
+    See **[CLI Verification](../using-karenina/cli-verification.md#preset-management)** for complete CLI preset documentation.
+
 ### Basic Usage
 
 Load a saved preset and use it for verification:

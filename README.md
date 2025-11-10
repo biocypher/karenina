@@ -24,6 +24,7 @@
   - [Approach 2: LLM as Judge](#2-use-an-llm-as-a-judge-free-text-evaluation)
   - [The Karenina Strategy](#-the-karenina-strategy)
 - [Quick Start](#-quick-start)
+- [Command-Line Interface](#-command-line-interface)
 - [Why Templates](#-why-templates)
 - [Templates vs Rubrics](#-templates-vs-rubrics)
 - [Features](#-features)
@@ -307,6 +308,64 @@ Congratulations! You've created your first Karenina benchmark with automatic tem
 - Few-shot prompting
 - Result analysis and visualization
 
+## 💻 Command-Line Interface
+
+For users who prefer working from the terminal, Karenina provides a comprehensive CLI for running verifications without writing Python code. The CLI is ideal for automation, CI/CD pipelines, and quick testing.
+
+### Basic Usage
+
+```bash
+# Run verification with a preset configuration
+karenina verify checkpoint.jsonld --preset default.json --verbose
+
+# Run with CLI arguments only (no preset required)
+karenina verify checkpoint.jsonld \
+  --answering-model gpt-4.1-mini \
+  --parsing-model gpt-4.1-mini \
+  --output results.csv
+
+# Override preset values with CLI flags
+karenina verify checkpoint.jsonld \
+  --preset default.json \
+  --answering-model gpt-4o \
+  --questions 0-5
+
+# Interactive configuration builder
+karenina verify checkpoint.jsonld --interactive --mode basic
+```
+
+### Preset Management
+
+```bash
+# List available presets
+karenina preset list
+
+# Show preset configuration
+karenina preset show gpt-oss
+
+# Delete a preset
+karenina preset delete old-config
+```
+
+### Key Features
+
+- **Flexible Configuration**: Use presets, CLI arguments, or interactive mode
+- **Question Filtering**: Select specific questions by index or ID (e.g., `0-5`, `0,2,4`)
+- **Multiple Output Formats**: Export results to JSON or CSV with comprehensive metadata
+- **Progress Monitoring**: Real-time progress bars with pass/fail indicators
+- **Fail-Fast Validation**: Validates inputs before running to avoid wasted API calls
+- **CI/CD Ready**: Easy integration with GitHub Actions and other automation tools
+
+### Configuration Hierarchy
+
+The CLI supports flexible configuration with clear precedence:
+
+**CLI flags > Preset values > Environment variables > Defaults**
+
+This means you can use presets for base configuration and override specific values with CLI arguments as needed.
+
+For complete CLI documentation, including all options, examples, and CI/CD integration guides, see [CLI Verification](docs/using-karenina/cli-verification.md).
+
 ## 🎯 Why Templates
 
 Templates play a central role in Karenina by standardizing how answers are parsed, verified, and evaluated. Their use provides several key benefits:
@@ -540,6 +599,7 @@ Then open your browser to `http://127.0.0.1:8000` to browse the documentation wi
 - [**Templates**](docs/using-karenina/templates.md) - Creating and customizing answer templates
 - [**Rubrics**](docs/using-karenina/rubrics.md) - Evaluation criteria and trait types
 - [**Verification**](docs/using-karenina/verification.md) - Running evaluations and analyzing results
+- [**CLI Verification**](docs/using-karenina/cli-verification.md) - Command-line interface for automation
 - [**Saving & Loading**](docs/using-karenina/saving-loading.md) - Checkpoints, database, and export
 
 ### Advanced Features

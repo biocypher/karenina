@@ -2,6 +2,9 @@
 
 This guide covers how to configure and execute verification to evaluate LLM responses using your benchmark questions, templates, and rubrics.
 
+!!! tip "Command-Line Interface Available"
+    Prefer working from the terminal? Karenina provides a comprehensive CLI for running verifications without writing Python code. See **[CLI Verification](cli-verification.md)** for details on command-line usage, presets, and automation.
+
 **Quick Navigation:**
 
 - [Understanding Verification](#understanding-verification) - Core concepts and workflow

@@ -1,0 +1,591 @@
+"""
+Verify command for running benchmark verifications.
+
+This module implements the main 'karenina verify' command.
+"""
+
+import time
+from pathlib import Path
+from typing import Annotated
+
+import typer
+from rich.console import Console
+from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn, TimeRemainingColumn
+from rich.prompt import Confirm, Prompt
+
+from karenina.benchmark import Benchmark
+from karenina.benchmark.exporter import export_verification_results_csv, export_verification_results_json
+from karenina.benchmark.verification.batch_runner import run_verification_batch
+from karenina.schemas import VerificationConfig, VerificationResult
+
+from .utils import (
+    create_export_job,
+    filter_templates_by_ids,
+    filter_templates_by_indices,
+    get_preset_path,
+    get_traces_path,
+    load_manual_traces_from_file,
+    parse_question_indices,
+    validate_output_path,
+)
+
+console = Console()
+
+
+def _build_config_from_cli_args(
+    answering_model: str | None,
+    answering_provider: str | None,
+    answering_id: str,
+    parsing_model: str | None,
+    parsing_provider: str | None,
+    parsing_id: str,
+    temperature: float,
+    interface: str | None,
+    replicate_count: int,
+    abstention: bool,
+    embedding_check: bool,
+    deep_judgment: bool,
+    evaluation_mode: str,
+    embedding_threshold: float,
+    embedding_model: str,
+    async_execution: bool,
+    async_workers: int,
+    preset_config: VerificationConfig | None = None,
+    manual_traces_obj: object | None = None,
+) -> VerificationConfig:
+    """
+    Build VerificationConfig respecting hierarchy: CLI > preset > env > defaults.
+
+    Args:
+        CLI argument values (all optional)
+        preset_config: Optional preset configuration to use as base
+
+    Returns:
+        VerificationConfig with CLI overrides applied
+    """
+    from karenina.schemas.workflow.models import ModelConfig
+
+    # Start with preset if provided, otherwise create new config
+    config_dict = preset_config.model_dump() if preset_config else {}
+
+    # Override general settings (always override since they have defaults)
+    config_dict["replicate_count"] = replicate_count
+
+    # Override feature flags (always override since they have defaults)
+    config_dict["abstention_enabled"] = abstention
+    config_dict["embedding_check_enabled"] = embedding_check
+    config_dict["deep_judgment_enabled"] = deep_judgment
+
+    # Override advanced settings (always override since they have defaults)
+    config_dict["evaluation_mode"] = evaluation_mode
+    config_dict["embedding_similarity_threshold"] = embedding_threshold
+    config_dict["embedding_model_name"] = embedding_model
+    config_dict["async_enabled"] = async_execution
+    config_dict["async_max_workers"] = async_workers
+
+    # Handle model configuration
+    # If ANY optional model CLI arg is provided, we override that model completely
+    # Note: answering_id, parsing_id, and temperature now have defaults so always count as provided
+    answering_has_cli_args = any(
+        [
+            answering_model is not None,
+            answering_provider is not None,
+            interface is not None,
+        ]
+    )
+
+    parsing_has_cli_args = any(
+        [
+            parsing_model is not None,
+            parsing_provider is not None,
+            interface is not None,
+        ]
+    )
+
+    if answering_has_cli_args:
+        # Build answering model from CLI args
+        # Use preset values as defaults if available
+        if preset_config and preset_config.answering_models:
+            base_model = preset_config.answering_models[0].model_dump()
+        else:
+            # No preset - start with minimal required fields
+            # For manual interface, only interface and manual_traces are required
+            if interface == "manual":
+                base_model = {
+                    "interface": "manual",
+                    # id, model_name, model_provider will be set by ModelConfig defaults
+                }
+            else:
+                # Validation ensures model_name and provider are provided when no preset
+                base_model = {
+                    "model_name": answering_model or "gpt-4.1-mini",
+                    "model_provider": answering_provider or "openai",
+                    "interface": interface or "langchain",
+                    "temperature": temperature,
+                    "id": answering_id,
+                }
+
+        # Apply CLI overrides if preset was used
+        if preset_config:
+            if answering_model is not None:
+                base_model["model_name"] = answering_model
+            if answering_provider is not None:
+                base_model["model_provider"] = answering_provider
+            base_model["id"] = answering_id
+            base_model["temperature"] = temperature
+            if interface is not None:
+                base_model["interface"] = interface
+
+        # Create ModelConfig
+        if base_model.get("interface") == "manual":
+            if manual_traces_obj is None:
+                raise ValueError("manual_traces_obj is None but interface is manual")
+            # Create ModelConfig directly with required parameters for manual interface
+            model_config = ModelConfig(interface="manual", manual_traces=manual_traces_obj)
+            config_dict["answering_models"] = [model_config]
+        else:
+            config_dict["answering_models"] = [ModelConfig(**base_model)]
+
+    if parsing_has_cli_args:
+        # Build parsing model from CLI args
+        if preset_config and preset_config.parsing_models:
+            base_model = preset_config.parsing_models[0].model_dump()
+        else:
+            # No preset - start with minimal required fields
+            # Validation ensures model_name and provider are provided when no preset
+            # Note: Parsing model should NOT use manual interface (only answering model can)
+            parsing_interface = interface if interface != "manual" else "langchain"
+            base_model = {
+                "model_name": parsing_model or "gpt-4.1-mini",
+                "model_provider": parsing_provider or "openai",
+                "interface": parsing_interface,
+                "temperature": temperature,
+                "id": parsing_id,
+            }
+
+        # Apply CLI overrides if preset was used
+        if preset_config:
+            if parsing_model is not None:
+                base_model["model_name"] = parsing_model
+            if parsing_provider is not None:
+                base_model["model_provider"] = parsing_provider
+            base_model["id"] = parsing_id
+            base_model["temperature"] = temperature
+            if interface is not None and interface != "manual":
+                base_model["interface"] = interface
+
+        config_dict["parsing_models"] = [ModelConfig(**base_model)]
+
+    return VerificationConfig(**config_dict)
+
+
+def verify(
+    benchmark_path: Annotated[str, typer.Argument(help="Path to benchmark JSON-LD file")],
+    # Configuration sources (priority: interactive > CLI+preset > preset > defaults)
+    preset: Annotated[Path | None, typer.Option(help="Path to preset configuration")] = None,
+    interactive: Annotated[bool, typer.Option("--interactive", help="Interactive configuration mode")] = False,
+    _mode: Annotated[str, typer.Option("--mode", help="Interactive mode (basic or advanced)")] = "basic",
+    # Output and filtering
+    output: Annotated[Path | None, typer.Option(help="Output file (.json or .csv)")] = None,
+    questions: Annotated[str | None, typer.Option(help="Question indices (e.g., '0,1,2' or '5-10')")] = None,
+    question_ids: Annotated[str | None, typer.Option(help="Comma-separated question IDs")] = None,
+    verbose: Annotated[bool, typer.Option("--verbose", help="Show progress bar")] = False,
+    # Model configuration (single answering + single parsing model)
+    answering_model: Annotated[str | None, typer.Option(help="Answering model name (required without preset)")] = None,
+    answering_provider: Annotated[
+        str | None, typer.Option(help="Answering model provider for langchain (required without preset)")
+    ] = None,
+    answering_id: Annotated[str, typer.Option(help="Answering model ID")] = "answering-1",
+    parsing_model: Annotated[str | None, typer.Option(help="Parsing model name (required without preset)")] = None,
+    parsing_provider: Annotated[
+        str | None, typer.Option(help="Parsing model provider for langchain (required without preset)")
+    ] = None,
+    parsing_id: Annotated[str, typer.Option(help="Parsing model ID")] = "parsing-1",
+    temperature: Annotated[float, typer.Option(help="Model temperature (0.0-2.0)")] = 0.1,
+    interface: Annotated[
+        str | None, typer.Option(help="Model interface: langchain/openrouter/openai_endpoint (required without preset)")
+    ] = None,
+    # General settings
+    replicate_count: Annotated[int, typer.Option(help="Number of replicates per verification")] = 1,
+    # Feature flags
+    abstention: Annotated[bool, typer.Option("--abstention", help="Enable abstention detection")] = False,
+    embedding_check: Annotated[bool, typer.Option("--embedding-check", help="Enable embedding check")] = False,
+    deep_judgment: Annotated[bool, typer.Option("--deep-judgment", help="Enable deep judgment")] = False,
+    # Advanced settings
+    evaluation_mode: Annotated[
+        str, typer.Option(help="Evaluation mode (template_only/template_and_rubric/rubric_only)")
+    ] = "template_only",
+    embedding_threshold: Annotated[float, typer.Option(help="Embedding similarity threshold (0.0-1.0)")] = 0.85,
+    embedding_model: Annotated[str, typer.Option(help="Embedding model name")] = "all-MiniLM-L6-v2",
+    no_async: Annotated[bool, typer.Option("--no-async", help="Disable async execution")] = False,
+    async_workers: Annotated[int, typer.Option(help="Number of async workers")] = 2,
+    # Manual trace support
+    manual_traces: Annotated[
+        Path | None,
+        typer.Option(
+            "--manual-traces",
+            help="JSON file with manual traces (question_hash: trace_string mapping). Required when --interface manual.",
+        ),
+    ] = None,
+) -> None:
+    """
+    Run verification on a benchmark.
+
+    Examples:
+        # With preset only
+        karenina verify checkpoint.jsonld --preset default.json --questions 0,1
+
+        # Override preset model
+        karenina verify checkpoint.jsonld --preset default.json --answering-model gpt-4o
+
+        # CLI arguments only (no preset)
+        karenina verify checkpoint.jsonld --answering-model gpt-4.1-mini --parsing-model gpt-4.1-mini --interface langchain --answering-provider openai --parsing-provider openai
+
+        # With feature flags
+        karenina verify checkpoint.jsonld --preset default.json --abstention --deep-judgment
+
+        # With rubric evaluation
+        karenina verify checkpoint.jsonld --preset default.json --evaluation-mode template_and_rubric
+
+        # Interactive mode
+        karenina verify checkpoint.jsonld --interactive --mode basic
+
+        # With output and progress
+        karenina verify checkpoint.jsonld --preset default.json --output results.csv --verbose
+
+        # With manual traces
+        karenina verify checkpoint.jsonld --interface manual --manual-traces traces/my_traces.json --parsing-model gpt-4.1-mini --parsing-provider openai
+    """
+    try:
+        # Convert no_async to async_execution
+        async_execution = not no_async
+
+        # Step 1: Validate output path upfront (fail fast)
+        output_format = None
+        if output:
+            try:
+                output_format = validate_output_path(output)
+            except ValueError as e:
+                console.print(f"[red]Error: {e}[/red]")
+                raise typer.Exit(code=1) from e
+
+        # Step 2: Load benchmark
+        console.print("[cyan]Loading benchmark...[/cyan]")
+        try:
+            benchmark = Benchmark.load(Path(benchmark_path))
+        except Exception as e:
+            console.print(f"[red]Error loading benchmark: {e}[/red]")
+            raise typer.Exit(code=1) from e
+
+        console.print(f"[green]✓ Loaded benchmark: {benchmark.name or 'Unnamed'}[/green]")
+        console.print(f"  Total questions: {len(benchmark.get_all_questions())}")
+
+        # Step 3: Load or build config
+        # Priority: interactive > preset+CLI > CLI only
+        selected_question_indices = None
+        show_progress_bar_interactive = None
+        if interactive:
+            from .interactive import build_config_interactively
+
+            config, selected_question_indices, show_progress_bar_interactive = build_config_interactively(
+                benchmark, mode=_mode
+            )
+        else:
+            # Load preset if provided, otherwise use None (will build from CLI args/defaults)
+            preset_config = None
+            if preset:
+                console.print("[cyan]Loading preset...[/cyan]")
+                try:
+                    preset_path = get_preset_path(str(preset))
+                    preset_config = VerificationConfig.from_preset(preset_path)
+                    console.print(f"[green]✓ Loaded preset from: {preset_path}[/green]")
+                except Exception as e:
+                    console.print(f"[red]Error loading preset: {e}[/red]")
+                    raise typer.Exit(code=1) from e
+
+            # Validate required parameters when no preset is used
+            if not preset_config:
+                # When building from CLI args only, interface and model names are mandatory
+                validation_errors = []
+
+                if not interface:
+                    validation_errors.append(
+                        "--interface is required when not using a preset (langchain/openrouter/openai_endpoint)"
+                    )
+
+                if not answering_model:
+                    validation_errors.append("--answering-model is required when not using a preset")
+
+                if not parsing_model:
+                    validation_errors.append("--parsing-model is required when not using a preset")
+
+                # Validate interface-specific requirements
+                if interface == "langchain":
+                    if not answering_provider:
+                        validation_errors.append(
+                            "--answering-provider is required for langchain interface (e.g., openai, anthropic, google)"
+                        )
+                    if not parsing_provider:
+                        validation_errors.append("--parsing-provider is required for langchain interface")
+                elif interface == "openai_endpoint":
+                    # OpenAI Endpoint requires endpoint_base_url but we can't pass that via CLI currently
+                    # It needs to be configured via environment variables or in the interactive mode
+                    console.print(
+                        "[yellow]Note: OpenAI Endpoint interface requires endpoint_base_url. "
+                        "Use interactive mode or a preset for this interface.[/yellow]"
+                    )
+                    validation_errors.append(
+                        "OpenAI Endpoint interface is not supported via CLI args alone. Use --interactive or --preset."
+                    )
+                elif interface == "manual":
+                    if not manual_traces:
+                        validation_errors.append(
+                            "--manual-traces is required when --interface manual. "
+                            "Provide a JSON file mapping question hashes to answer traces."
+                        )
+
+                # Additional validation for manual traces
+                if manual_traces and not manual_traces.exists():
+                    validation_errors.append(f"Manual traces file not found: {manual_traces}")
+
+                if validation_errors:
+                    console.print("[red]Configuration errors:[/red]")
+                    for error in validation_errors:
+                        console.print(f"  [red]• {error}[/red]")
+                    console.print("\n[dim]Run with --interactive for guided configuration[/dim]")
+                    raise typer.Exit(code=1)
+
+            # Step 3.5: Load manual traces BEFORE building config (if provided)
+            manual_traces_obj = None
+            if manual_traces:
+                console.print(f"[cyan]Loading manual traces from {manual_traces}...[/cyan]")
+                try:
+                    # Resolve trace file path
+                    trace_file = get_traces_path(manual_traces)
+
+                    # Load traces and create ManualTraces object
+                    manual_traces_obj = load_manual_traces_from_file(trace_file, benchmark)
+
+                    # Verify traces loaded and report to user
+                    from karenina.infrastructure.llm.manual_traces import get_manual_trace_count
+
+                    trace_count = get_manual_trace_count()
+                    console.print(f"[green]✓ Loaded {trace_count} manual trace(s)[/green]")
+
+                except FileNotFoundError as e:
+                    console.print(f"[red]Error: {e}[/red]")
+                    raise typer.Exit(code=1) from e
+                except Exception as e:
+                    console.print(f"[red]Error loading manual traces: {e}[/red]")
+                    raise typer.Exit(code=1) from e
+
+            # Build config with CLI overrides (or from scratch if no preset)
+            try:
+                config = _build_config_from_cli_args(
+                    answering_model=answering_model,
+                    answering_provider=answering_provider,
+                    answering_id=answering_id,
+                    parsing_model=parsing_model,
+                    parsing_provider=parsing_provider,
+                    parsing_id=parsing_id,
+                    temperature=temperature,
+                    interface=interface,
+                    replicate_count=replicate_count,
+                    abstention=abstention,
+                    embedding_check=embedding_check,
+                    deep_judgment=deep_judgment,
+                    evaluation_mode=evaluation_mode,
+                    embedding_threshold=embedding_threshold,
+                    embedding_model=embedding_model,
+                    async_execution=async_execution,
+                    async_workers=async_workers,
+                    preset_config=preset_config,
+                    manual_traces_obj=manual_traces_obj,
+                )
+
+                # Show what we're using
+                if preset_config:
+                    has_cli_overrides = any(
+                        [
+                            answering_model,
+                            answering_provider,
+                            parsing_model,
+                            parsing_provider,
+                            temperature,
+                            interface,
+                            replicate_count,
+                            abstention,
+                            embedding_check,
+                            deep_judgment,
+                            evaluation_mode,
+                            embedding_threshold,
+                            embedding_model,
+                            async_execution,
+                            async_workers,
+                        ]
+                    )
+                    if has_cli_overrides:
+                        console.print("[dim]CLI arguments will override preset values[/dim]")
+                else:
+                    # No preset - using CLI args
+                    console.print("[dim]Building configuration from CLI arguments[/dim]")
+
+            except Exception as e:
+                console.print(f"[red]Error building configuration: {e}[/red]")
+                raise typer.Exit(code=1) from e
+
+        # Step 4: Get and filter templates
+        all_templates = benchmark.get_finished_templates()
+
+        if not all_templates:
+            console.print("[yellow]Warning: No finished templates found in benchmark[/yellow]")
+            raise typer.Exit(code=1)
+
+        # Filter templates
+        templates = all_templates
+        if selected_question_indices is not None:
+            # Use indices from interactive mode
+            templates = filter_templates_by_indices(all_templates, selected_question_indices)
+            console.print(f"[dim]Using {len(templates)} question(s) from interactive selection[/dim]")
+        elif questions:
+            try:
+                indices = parse_question_indices(questions, len(all_templates))
+                templates = filter_templates_by_indices(all_templates, indices)
+                console.print(f"[dim]Filtered to {len(templates)} question(s) by indices[/dim]")
+            except ValueError as e:
+                console.print(f"[red]Error parsing question indices: {e}[/red]")
+                raise typer.Exit(code=1) from e
+        elif question_ids:
+            ids = [id.strip() for id in question_ids.split(",")]
+            templates = filter_templates_by_ids(all_templates, ids)
+            console.print(f"[dim]Filtered to {len(templates)} question(s) by IDs[/dim]")
+
+        if not templates:
+            console.print("[red]Error: No templates to verify after filtering[/red]")
+            raise typer.Exit(code=1)
+
+        # Step 5: Prompt for output file (if interactive and not already specified)
+        if (
+            not output
+            and interactive
+            and Confirm.ask("\nWould you like to save the verification results to a file?", default=True)
+        ):
+            # Prompt for output format
+            format_choice = Prompt.ask("Output format", choices=["json", "csv"], default="json")
+
+            # Prompt for filename
+            default_filename = f"verification_results.{format_choice}"
+            output_filename = Prompt.ask("Output filename", default=default_filename)
+
+            # Set output and format
+            output = Path(output_filename)
+            output_format = format_choice
+
+            # Validate the path
+            try:
+                output_format = validate_output_path(output)
+                console.print(f"[green]✓ Results will be saved to: {output}[/green]")
+            except ValueError as e:
+                console.print(f"[yellow]Warning: {e}. Results will not be saved to file.[/yellow]")
+                output = None
+
+        # Step 6: Run verification
+        console.print("\n[bold cyan]Starting verification...[/bold cyan]")
+        console.print(f"  Questions: {len(templates)}")
+        console.print(f"  Answering models: {len(config.answering_models)}")
+        console.print(f"  Parsing models: {len(config.parsing_models)}")
+        console.print(f"  Replicates: {config.replicate_count}")
+        console.print()
+
+        start_time = time.time()
+
+        # Determine whether to show progress bar
+        # Priority: interactive preference > CLI verbose flag
+        show_progress = show_progress_bar_interactive if show_progress_bar_interactive is not None else verbose
+
+        # Run verification with optional progress bar
+        if show_progress:
+            # Calculate total verifications
+            total_verifications = (
+                len(templates) * len(config.answering_models) * len(config.parsing_models) * config.replicate_count
+            )
+
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TaskProgressColumn(),
+                TimeRemainingColumn(),
+                console=console,
+            ) as progress:
+                task = progress.add_task("Verifying questions...", total=total_verifications)
+
+                def progress_callback(current: int, _total: int, result: VerificationResult | None = None) -> None:
+                    """Update progress bar on each verification completion."""
+                    progress.update(task, completed=current)
+                    if result and result.verify_result is not None:
+                        # Add pass/fail indicator to description
+                        status = "✓" if result.verify_result else "✗"
+                        progress.update(task, description=f"Verifying questions... {status}")
+
+                results = run_verification_batch(
+                    templates=templates,
+                    config=config,
+                    run_name="cli-verification",
+                    global_rubric=benchmark.get_global_rubric(),
+                    progress_callback=progress_callback,
+                )
+        else:
+            results = run_verification_batch(
+                templates=templates,
+                config=config,
+                run_name="cli-verification",
+                global_rubric=benchmark.get_global_rubric(),
+                progress_callback=None,
+            )
+
+        end_time = time.time()
+        duration = end_time - start_time
+
+        # Step 7: Export results (if output was configured)
+        if output:
+            console.print(f"\n[cyan]Exporting results to {output}...[/cyan]")
+
+            # Create job for export (comprehensive backend format)
+            job = create_export_job(results, config, "cli-verification", start_time, end_time)
+
+            # Export using backend exporter (includes all fields)
+            if output_format == "json":
+                export_data = export_verification_results_json(job, results)
+            else:  # csv
+                export_data = export_verification_results_csv(job, results, benchmark.get_global_rubric())
+
+            # Write to file
+            output.write_text(export_data)
+            console.print(f"[green]✓ Results exported to {output}[/green]")
+
+        # Display summary
+        total = len(results)
+        passed = sum(1 for r in results.values() if r.verify_result)
+        failed = total - passed
+        errors = sum(1 for r in results.values() if not r.completed_without_errors)
+
+        console.print("\n[bold]Verification Summary:[/bold]")
+        console.print(f"  Total: {total}")
+        console.print(f"  Passed: [green]{passed}[/green]")
+        console.print(f"  Failed: [red]{failed}[/red]")
+        if errors > 0:
+            console.print(f"  Errors: [yellow]{errors}[/yellow]")
+        console.print(f"  Duration: {duration:.2f}s")
+
+        console.print("\n[green]✓ Verification complete![/green]")
+
+    except typer.Exit:
+        raise
+    except Exception as e:
+        console.print(f"\n[red]Unexpected error: {e}[/red]")
+        if verbose:
+            import traceback
+
+            console.print(traceback.format_exc())
+        raise typer.Exit(code=1) from e

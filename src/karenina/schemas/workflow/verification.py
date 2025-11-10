@@ -625,7 +625,7 @@ class VerificationConfig(BaseModel):
             ValueError: If the config is invalid
 
         Example:
-            >>> config = VerificationConfig.from_preset(Path("benchmark_presets/quick-test.json"))
+            >>> config = VerificationConfig.from_preset(Path("presets/gpt-oss.json"))
             >>> results = verify_questions(checkpoint, config)
         """
         filepath = filepath.resolve()
@@ -645,7 +645,7 @@ class VerificationConfig(BaseModel):
                 e.pos,
             ) from e
 
-        # Extract config
+        # Extract config from preset wrapper
         config_data = preset.get("config")
         if not config_data:
             raise ValueError(f"Preset file '{filepath}' has no configuration data")
