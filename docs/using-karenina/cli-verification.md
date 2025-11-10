@@ -259,10 +259,17 @@ karenina verify checkpoint.jsonld --interactive --mode advanced
 
 1. **Question Selection**: Display table of available questions, select subset
 2. **Replicate Count**: Number of verification replicates
-3. **Feature Flags**: Enable abstention, embedding check, deep judgment
+3. **Feature Configuration**:
+   - **Evaluation Mode**: Choose how to evaluate answers
+     - `template_only`: Verify structured output only (fastest)
+     - `template_and_rubric`: Verify structure + evaluate quality criteria
+     - `rubric_only`: Evaluate quality criteria only (no structure required)
+   - Enable abstention detection, embedding check, deep judgment
 4. **Models**: Configure answering and parsing models
-5. **Advanced Settings** (advanced mode only): Evaluation mode (for rubric evaluation), deep judgment settings, few-shot config
+5. **Advanced Settings** (advanced mode only): Rubric trait filtering, deep judgment settings, few-shot config
 6. **Save Preset**: Optionally save configuration as preset
+7. **Output Configuration**: Prompt to configure result export (file format and filename)
+8. **Run Verification**: Execute verification with progress display and save results
 
 ## Preset Management
 
@@ -634,15 +641,3 @@ The CLI is optimized for automation but has some limitations compared to the GUI
 - [Export Formats](./saving-loading.md#exporting-verification-results) - Understanding output formats
 - [Configuration](../configuration.md) - VerificationConfig details
 - [API Reference](../api-reference.md) - Programmatic API usage
-
-## Implementation Notes
-
-**Location**: `karenina/src/karenina/cli/`
-
-**Key Modules:**
-- [verify.py](../../karenina/src/karenina/cli/verify.py) - Main verify command with config builder
-- [preset.py](../../karenina/src/karenina/cli/preset.py) - Preset management commands
-- [interactive.py](../../karenina/src/karenina/cli/interactive.py) - Interactive configuration builder
-- [utils.py](../../karenina/src/karenina/cli/utils.py) - Helper functions and utilities
-
-**Testing**: [test_cli_utils.py](../../karenina/tests/test_cli_utils.py) - 34 unit tests covering all utilities

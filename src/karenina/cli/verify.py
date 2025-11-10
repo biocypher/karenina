@@ -11,6 +11,7 @@ from typing import Annotated
 import typer
 from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn, TimeRemainingColumn
+from rich.prompt import Confirm, Prompt
 
 from karenina.benchmark import Benchmark
 from karenina.benchmark.exporter import export_verification_results_csv, export_verification_results_json
@@ -394,7 +395,32 @@ def verify(
             console.print("[red]Error: No templates to verify after filtering[/red]")
             raise typer.Exit(code=1)
 
-        # Step 5: Run verification
+        # Step 5: Prompt for output file (if interactive and not already specified)
+        if (
+            not output
+            and interactive
+            and Confirm.ask("\nWould you like to save the verification results to a file?", default=True)
+        ):
+            # Prompt for output format
+            format_choice = Prompt.ask("Output format", choices=["json", "csv"], default="json")
+
+            # Prompt for filename
+            default_filename = f"verification_results.{format_choice}"
+            output_filename = Prompt.ask("Output filename", default=default_filename)
+
+            # Set output and format
+            output = Path(output_filename)
+            output_format = format_choice
+
+            # Validate the path
+            try:
+                output_format = validate_output_path(output)
+                console.print(f"[green]✓ Results will be saved to: {output}[/green]")
+            except ValueError as e:
+                console.print(f"[yellow]Warning: {e}. Results will not be saved to file.[/yellow]")
+                output = None
+
+        # Step 6: Run verification
         console.print("\n[bold cyan]Starting verification...[/bold cyan]")
         console.print(f"  Questions: {len(templates)}")
         console.print(f"  Answering models: {len(config.answering_models)}")
@@ -448,7 +474,7 @@ def verify(
         end_time = time.time()
         duration = end_time - start_time
 
-        # Step 6: Export or display results
+        # Step 7: Export results (if output was configured)
         if output:
             console.print(f"\n[cyan]Exporting results to {output}...[/cyan]")
 

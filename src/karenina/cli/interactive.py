@@ -96,7 +96,21 @@ def build_config_interactively(benchmark: Benchmark, mode: str = "basic") -> tup
     # Step 3: Feature flags
     console.print("[bold]Step 3: Feature Configuration[/bold]")
 
-    rubric_enabled = Confirm.ask("Enable rubric evaluation?", default=False)
+    # Evaluation mode - determines if/how rubrics are used
+    console.print("\n[dim]Evaluation modes:[/dim]")
+    console.print("[dim]  • template_only: Verify structured output only (fastest)[/dim]")
+    console.print("[dim]  • template_and_rubric: Verify structure + evaluate quality criteria[/dim]")
+    console.print("[dim]  • rubric_only: Evaluate quality criteria only (no structure required)[/dim]\n")
+
+    evaluation_mode = Prompt.ask(
+        "Evaluation mode",
+        choices=["template_only", "template_and_rubric", "rubric_only"],
+        default="template_only",
+    )
+
+    # Derive rubric_enabled from evaluation_mode
+    rubric_enabled = evaluation_mode in ["template_and_rubric", "rubric_only"]
+
     abstention_enabled = Confirm.ask("Enable abstention detection?", default=False)
 
     # Embedding check
@@ -120,7 +134,6 @@ def build_config_interactively(benchmark: Benchmark, mode: str = "basic") -> tup
     console.print("[green]✓ Features configured[/green]\n")
 
     # Advanced mode: Additional configuration
-    evaluation_mode = "template_only"
     rubric_trait_names = None
     deep_judgment_max_excerpts = 3
     deep_judgment_fuzzy_threshold = 0.80
@@ -134,18 +147,10 @@ def build_config_interactively(benchmark: Benchmark, mode: str = "basic") -> tup
     if mode == "advanced":
         console.print("[bold]Advanced Configuration[/bold]")
 
-        # Evaluation mode (if rubric enabled)
-        if rubric_enabled:
-            evaluation_mode = Prompt.ask(
-                "Evaluation mode",
-                choices=["template_only", "template_and_rubric", "rubric_only"],
-                default="template_only",
-            )
-
-            # Rubric trait names filter
-            if Confirm.ask("Filter specific rubric traits?", default=False):
-                traits_str = Prompt.ask("Rubric trait names (comma-separated)")
-                rubric_trait_names = [t.strip() for t in traits_str.split(",")]
+        # Rubric trait names filter (if rubric enabled)
+        if rubric_enabled and Confirm.ask("Filter specific rubric traits?", default=False):
+            traits_str = Prompt.ask("Rubric trait names (comma-separated)")
+            rubric_trait_names = [t.strip() for t in traits_str.split(",")]
 
         # Deep judgment settings (if enabled)
         if deep_judgment_enabled:
@@ -267,7 +272,7 @@ def build_config_interactively(benchmark: Benchmark, mode: str = "basic") -> tup
     console.print(f"  Answering models: {len(answering_models)}")
     console.print(f"  Parsing models: {len(parsing_models)}")
     console.print(f"  Replicates: {replicate_count}")
-    console.print(f"  Rubric: {'enabled' if rubric_enabled else 'disabled'}")
+    console.print(f"  Evaluation mode: {evaluation_mode}")
     console.print(f"  Abstention: {'enabled' if abstention_enabled else 'disabled'}")
     console.print(f"  Embedding check: {'enabled' if embedding_check_enabled else 'disabled'}")
     console.print(f"  Deep judgment: {'enabled' if deep_judgment_enabled else 'disabled'}")
