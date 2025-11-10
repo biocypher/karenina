@@ -69,6 +69,10 @@ search = [
     "langchain-community>=0.3.0",
     "tavily-python>=0.3.0",
 ]
+examples = [
+    "jupyter>=1.0.0",  # For running example notebooks
+    "ipykernel>=6.0.0",  # Jupyter kernel support
+]
 
 [project.scripts]
 karenina = "karenina.cli:app"

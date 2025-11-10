@@ -7,7 +7,7 @@ verification runs, and results to/from the database.
 import hashlib
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from ...schemas.workflow import VerificationResult
@@ -103,7 +103,7 @@ def save_benchmark(
             benchmark_id = benchmark_model.id
 
         # Save questions and benchmark-question associations
-        questions_data = benchmark._question_manager.get_all_questions()
+        questions_data = cast(list[dict[str, Any]], benchmark._question_manager.get_all_questions())
 
         # Track which questions we've added in this session to avoid duplicates
         added_questions_this_session: set[str] = set()

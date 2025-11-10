@@ -467,10 +467,10 @@ def test_filtering_and_search() -> None:
     assert len(without_template) == 2
 
     # Test helper methods
-    missing_templates = benchmark.get_missing_templates()
+    missing_templates = benchmark.get_missing_templates(ids_only=True)
     assert len(missing_templates) == 2
 
-    unfinished_questions = benchmark.get_unfinished_questions()
+    unfinished_questions = benchmark.get_unfinished_questions(ids_only=True)
     assert len(unfinished_questions) == 2
 
 

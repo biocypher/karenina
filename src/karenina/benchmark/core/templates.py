@@ -144,9 +144,20 @@ class TemplateManager:
                 templates.append(template)
         return templates
 
-    def get_missing_templates(self) -> list[str]:
-        """Get list of question IDs that don't have non-default templates."""
-        return [q_id for q_id in self.base._questions_cache if not self.has_template(q_id)]
+    def get_missing_templates(self, ids_only: bool = False) -> list[str] | list[dict[str, Any]]:
+        """
+        Get questions that don't have non-default templates.
+
+        Args:
+            ids_only: If True, return only question IDs. If False (default), return full question objects.
+
+        Returns:
+            List of question IDs (if ids_only=True) or list of question dictionaries (if ids_only=False)
+        """
+        if ids_only:
+            return [q_id for q_id in self.base._questions_cache if not self.has_template(q_id)]
+        else:
+            return [q_data for q_id, q_data in self.base._questions_cache.items() if not self.has_template(q_id)]
 
     def apply_global_template(self, template_code: str) -> list[str]:
         """
