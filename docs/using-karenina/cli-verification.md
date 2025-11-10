@@ -710,23 +710,6 @@ jobs:
           path: results.csv
 ```
 
-## Limitations
-
-### CLI vs GUI
-
-The CLI is optimized for automation but has some limitations compared to the GUI:
-
-| Feature | CLI | GUI |
-|---------|-----|-----|
-| Multiple answering models | Single model only | Multiple models |
-| Multiple parsing models | Single model only | Multiple models |
-| Few-shot configuration | Interactive mode only | Full UI editor |
-| MCP tools | Interactive mode only | Full UI configuration |
-| Result visualization | Export only | Live charts and tables |
-| Preset creation | Interactive mode | Full form editor |
-
-**Workaround**: Use interactive mode for complex configurations, then reuse saved presets.
-
 ## Related Documentation
 
 - [Verification](./verification.md) - Core verification concepts and workflow
