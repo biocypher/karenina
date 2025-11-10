@@ -397,12 +397,13 @@ def _prompt_for_model(model_type: str, mode: str = "basic") -> ModelConfig:
         console.print("[yellow]Note: Manual interface requires manual_traces to be set programmatically[/yellow]")
         console.print("[yellow]This will be configured later in the code[/yellow]")
 
-    # MCP tools configuration (advanced mode only)
+    # MCP tools configuration (advanced mode only, answering model only)
     mcp_urls_dict = None
     mcp_tool_filter = None
 
-    if mode == "advanced" and interface != INTERFACE_MANUAL:
+    if mode == "advanced" and interface != INTERFACE_MANUAL and model_type == "answering":
         console.print("\n[cyan]MCP Tools Configuration (optional):[/cyan]")
+        console.print("[dim]Note: MCP tools are only used by the answering model for generating responses[/dim]")
         if Confirm.ask("Configure MCP tools?", default=False):
             # MCP URLs dict - JSON input
             urls_json_str = Prompt.ask('MCP URLs dict (JSON format, e.g., {"server1": "url1"})', default="{}")
