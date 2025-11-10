@@ -11,6 +11,24 @@ The Karenina CLI provides a streamlined way to run verification workflows from t
 - **Remote execution**: Run verifications on servers without GUI access
 - **Quick testing**: Rapidly test configurations during development
 
+**Quick Navigation:**
+
+- [Quick Start](#quick-start) - Installation and basic examples
+- [Command Structure](#command-structure) - Main commands overview
+- [Verify Command](#verify-command) - Core verification command details
+- [CLI Options Reference](#cli-options-reference) - Complete option documentation
+- [Usage Examples](#usage-examples) - Common workflows and patterns
+- [Preset Management](#preset-management) - List, show, and delete presets
+- [Output Formats](#output-formats) - JSON and CSV export options
+- [Configuration Hierarchy](#configuration-hierarchy) - Understanding precedence rules
+- [Error Handling](#error-handling) - Common errors and solutions
+- [Progress Monitoring](#progress-monitoring) - Real-time verification tracking
+- [Best Practices](#best-practices) - Tips for effective CLI usage
+- [CI/CD Integration](#integration-with-cicd) - Automation and pipeline setup
+- [Limitations](#limitations) - Known constraints and workarounds
+
+---
+
 ## Quick Start
 
 ```bash
