@@ -20,11 +20,14 @@ pip install karenina
 # Run verification with a preset
 karenina verify checkpoint.jsonld --preset default.json --questions 0,1 --verbose
 
-# Run with CLI arguments only (no preset)
-karenina verify checkpoint.jsonld --answering-model gpt-4.1-mini --parsing-model gpt-4.1-mini
-
-# Interactive mode
+# Run with interactive mode (guided configuration)
 karenina verify checkpoint.jsonld --interactive --mode basic
+
+# Run with explicit configuration
+karenina verify checkpoint.jsonld \
+  --interface langchain \
+  --answering-model gpt-4.1-mini --answering-provider openai \
+  --parsing-model gpt-4.1-mini --parsing-provider openai
 ```
 
 ## Command Structure
