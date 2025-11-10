@@ -46,6 +46,12 @@ karenina verify checkpoint.jsonld \
   --interface langchain \
   --answering-model gpt-4.1-mini --answering-provider openai \
   --parsing-model gpt-4.1-mini --parsing-provider openai
+
+# Evaluate pre-generated traces
+karenina verify checkpoint.jsonld \
+  --interface manual \
+  --manual-traces traces/my_traces.json \
+  --parsing-model gpt-4.1-mini --parsing-provider openai
 ```
 
 ## Command Structure
@@ -101,14 +107,15 @@ See [Usage Examples](#usage-examples) below for detailed workflows.
 
 | Option | Type | Description | Default | Required? |
 |--------|------|-------------|---------|-----------|
-| `--interface TYPE` | Choice | Interface type: `langchain`, `openrouter`, `openai_endpoint` | - | Yes (without preset) |
-| `--answering-model NAME` | String | Answering model name (e.g., `gpt-4o-mini`) | - | Yes (without preset) |
+| `--interface TYPE` | Choice | Interface type: `langchain`, `openrouter`, `openai_endpoint`, `manual` | - | Yes (without preset) |
+| `--answering-model NAME` | String | Answering model name (e.g., `gpt-4o-mini`) | - | Yes (without preset, not needed for manual) |
 | `--answering-provider PROVIDER` | String | Provider for langchain interface (e.g., `openai`) | - | Yes (without preset, langchain only) |
 | `--answering-id ID` | String | Model ID for tracking | answering-1 | No |
 | `--parsing-model NAME` | String | Parsing model name | - | Yes (without preset) |
 | `--parsing-provider PROVIDER` | String | Provider for langchain interface | - | Yes (without preset, langchain only) |
 | `--parsing-id ID` | String | Model ID for tracking | parsing-1 | No |
 | `--temperature FLOAT` | Float | Model temperature (0.0-2.0) | 0.1 | No |
+| `--manual-traces PATH` | Path | JSON file with pre-generated traces | - | Yes (when `--interface manual`) |
 
 #### General Settings
 
@@ -270,6 +277,72 @@ karenina verify checkpoint.jsonld --interactive --mode advanced
 6. **Save Preset**: Optionally save configuration as preset
 7. **Output Configuration**: Prompt to configure result export (file format and filename)
 8. **Run Verification**: Execute verification with progress display and save results
+
+#### 7. Manual Trace Evaluation
+
+Evaluate pre-generated LLM responses without making live API calls:
+
+```bash
+# Evaluate pre-recorded traces
+karenina verify checkpoint.jsonld \
+  --interface manual \
+  --manual-traces traces/my_traces.json \
+  --parsing-model gpt-4.1-mini \
+  --parsing-provider openai \
+  --questions 0-5 \
+  --output results.csv
+```
+
+**Trace File Format** (`traces/my_traces.json`):
+
+```json
+{
+  "936dbc8755f623c951d96ea2b03e13bc": "Pre-generated answer for question 1",
+  "8f2e2b1e4d5c6a7b8c9d0e1f2a3b4c5d": "Pre-generated answer for question 2"
+}
+```
+
+**Use Cases:**
+
+- Evaluate answers from external systems
+- Compare different answer generation approaches
+- Test verification/rubric systems with controlled answers
+- Integrate pre-recorded experiment results
+
+**Important Notes:**
+
+- Question hashes are MD5 hashes of question text
+- Export CSV mapper from benchmark to get question hashes
+- Only answering model uses manual interface; parsing model still needs LLM
+- Traces bypass answer generation but verification still runs normally
+
+**Example Output:**
+
+```
+Loading benchmark...
+✓ Loaded benchmark: Karenina LLM Benchmark Checkpoint
+  Total questions: 12
+Loading manual traces from traces/my_traces.json...
+✓ Loaded 6 manual trace(s)
+Building configuration from CLI arguments
+Filtered to 6 question(s) by indices
+
+Starting verification...
+  Questions: 6
+  Answering models: 1 (manual)
+  Parsing models: 1
+  Replicates: 1
+
+Verification Summary:
+  Total: 6
+  Passed: 5
+  Failed: 1
+  Duration: 3.42s
+
+✓ Verification complete!
+```
+
+For complete documentation on the manual trace system, including trace formats and programmatic usage, see the [Manual Traces documentation](../advanced/manual-traces.md).
 
 ## Preset Management
 
@@ -489,6 +562,26 @@ Error: Index out of range: 15 (total questions: 12)
 Warning: No finished templates found in benchmark
 ```
 **Fix**: Ensure benchmark has finished template generation
+
+#### Manual Traces File Not Found
+```
+Error: Manual traces file not found: traces/my_traces.json
+```
+**Fix**: Verify trace file path is correct and file exists
+
+#### Missing --manual-traces with Manual Interface
+```
+Configuration errors:
+  • --manual-traces is required when --interface manual.
+    Provide a JSON file mapping question hashes to answer traces.
+```
+**Fix**: Add `--manual-traces PATH` flag when using `--interface manual`
+
+#### Invalid Trace File Format
+```
+Error: Invalid trace file format: expected JSON object (dict), got list
+```
+**Fix**: Ensure trace file is a JSON object with `{question_hash: trace_string}` format
 
 ## Progress Monitoring
 
