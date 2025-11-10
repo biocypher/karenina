@@ -412,29 +412,28 @@ def _prompt_for_model(model_type: str, mode: str = "basic") -> ModelConfig:
     if mode == "advanced" and interface != INTERFACE_MANUAL and model_type == "answering":
         console.print("\n[cyan]MCP Tools Configuration (optional):[/cyan]")
         console.print("[dim]Note: MCP tools are only used by the answering model for generating responses[/dim]")
+
         if Confirm.ask("Configure MCP tools?", default=False):
-            # MCP URLs dict - JSON input
-            urls_json_str = Prompt.ask('MCP URLs dict (JSON format, e.g., {"server1": "url1"})', default="{}")
-            try:
-                import json
+            temp_mcp_urls: dict[str, str] = {}
 
-                mcp_urls_dict = json.loads(urls_json_str)
-                if not isinstance(mcp_urls_dict, dict):
-                    raise ValueError("MCP URLs must be a dictionary")
-            except (json.JSONDecodeError, ValueError) as e:
-                console.print(f"[red]Invalid JSON: {e}. Skipping MCP configuration.[/red]")
-                mcp_urls_dict = None
+            # Loop to add MCP servers one at a time
+            while True:
+                console.print("\n[cyan]Add MCP Server:[/cyan]")
+                server_name = Prompt.ask("MCP server name")
+                server_url = Prompt.ask("MCP server URL")
 
-            # Validate MCP servers
-            if mcp_urls_dict:
-                console.print("\n[cyan]Validating MCP servers...[/cyan]")
+                # Add to dictionary
+                temp_mcp_urls[server_name] = server_url
+
+                # Validate this server immediately
+                console.print(f"\n[cyan]Validating MCP server '{server_name}'...[/cyan]")
                 try:
                     from karenina.infrastructure.llm.mcp_utils import sync_create_mcp_client_and_tools
 
-                    _, tools = sync_create_mcp_client_and_tools(mcp_urls_dict, tool_filter=None)
+                    _, tools = sync_create_mcp_client_and_tools({server_name: server_url}, tool_filter=None)
 
                     if tools:
-                        console.print("[green]✓ Successfully connected to MCP server(s)[/green]")
+                        console.print(f"[green]✓ Successfully connected to '{server_name}'[/green]")
                         console.print(f"[dim]Found {len(tools)} available tool(s):[/dim]")
                         for tool in tools[:10]:  # Show first 10 tools
                             tool_name = getattr(tool, "name", "Unknown")
@@ -444,13 +443,23 @@ def _prompt_for_model(model_type: str, mode: str = "basic") -> ModelConfig:
                         if len(tools) > 10:
                             console.print(f"  [dim]... and {len(tools) - 10} more[/dim]")
                     else:
-                        console.print("[yellow]Warning: No tools found from MCP server(s)[/yellow]")
+                        console.print(f"[yellow]Warning: No tools found from server '{server_name}'[/yellow]")
 
                 except Exception as e:
-                    console.print(f"[red]Failed to validate MCP servers: {e}[/red]")
-                    if not Confirm.ask("Continue with this MCP configuration anyway?", default=False):
-                        console.print("[yellow]Skipping MCP configuration.[/yellow]")
-                        mcp_urls_dict = None
+                    console.print(f"[red]Failed to validate MCP server '{server_name}': {e}[/red]")
+                    if not Confirm.ask("Continue with this MCP server anyway?", default=False):
+                        console.print(f"[yellow]Removing server '{server_name}' from configuration.[/yellow]")
+                        del temp_mcp_urls[server_name]
+
+                # Ask if user wants to add another server
+                if not Confirm.ask("\nAdd another MCP server?", default=False):
+                    break
+
+            # If servers were successfully added, assign to mcp_urls_dict
+            if temp_mcp_urls:
+                mcp_urls_dict = temp_mcp_urls
+            else:
+                console.print("[yellow]No MCP servers configured.[/yellow]")
 
             # MCP tool filter
             if mcp_urls_dict and Confirm.ask("\nFilter specific MCP tools?", default=False):  # type: ignore[arg-type]
