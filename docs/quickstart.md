@@ -286,6 +286,9 @@ print("This will compute precision, recall, and F1 score for this specific quest
 
 Configure models and run verification to evaluate LLM responses against your templates and rubrics.
 
+!!! tip "CLI Alternative"
+    You can also run verification from the command line without writing Python code: `karenina verify checkpoint.jsonld --preset config.json`. See **[CLI Verification](using-karenina/cli-verification.md)** for details.
+
 ```python
 from karenina.schemas import VerificationConfig, ModelConfig
 

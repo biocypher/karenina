@@ -5,6 +5,7 @@ Command-line interface for running benchmark verifications without the GUI.
 ## Overview
 
 The Karenina CLI provides a streamlined way to run verification workflows from the command line, ideal for:
+
 - **Automated testing**: Integrate verifications into CI/CD pipelines
 - **Batch processing**: Run verifications on multiple benchmarks
 - **Remote execution**: Run verifications on servers without GUI access
@@ -262,6 +263,7 @@ karenina verify checkpoint.jsonld --interactive --mode advanced
 ```
 
 **Interactive Flow:**
+
 1. **Question Selection**: Display table of available questions, select subset
 2. **Replicate Count**: Number of verification replicates
 3. **Feature Flags**: Enable rubric, abstention, embedding check, deep judgment
@@ -394,6 +396,7 @@ karenina verify checkpoint.jsonld \
 ```
 
 **CSV Columns Include:**
+
 - Core: `verification_id`, `question_id`, `question_text`, `verify_result`
 - Models: `answering_model`, `parsing_model`, `replicate_number`
 - Timing: `execution_time`, `timestamp`
@@ -415,6 +418,7 @@ karenina preset list
 ```
 
 **Default Locations:**
+
 1. `KARENINA_PRESETS_DIR` environment variable (if set)
 2. `benchmark_presets/` in current directory (default)
 
@@ -500,6 +504,7 @@ karenina verify checkpoint.jsonld \
 ```
 
 **Progress Bar Features:**
+
 - Spinner animation
 - Progress bar with percentage
 - Pass/fail indicators (✓/✗)
