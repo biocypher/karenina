@@ -51,57 +51,10 @@ karenina verify BENCHMARK_PATH [OPTIONS]
 **Required Arguments:**
 - `BENCHMARK_PATH`: Path to benchmark JSON-LD file
 
-### Configuration Modes
+**Configuration Hierarchy:**
+The CLI supports flexible configuration with clear precedence: **CLI flags > Preset values > Environment variables > Defaults**
 
-The CLI supports three configuration modes with a clear priority hierarchy:
-
-**Priority: Interactive > Preset + CLI Args > CLI Args Only**
-
-#### 1. Preset-Based Configuration
-
-Use a saved preset configuration file:
-
-```bash
-karenina verify checkpoint.jsonld --preset default.json --questions 0,1
-```
-
-#### 2. CLI Arguments with Preset Override
-
-Override specific preset values with CLI arguments:
-
-```bash
-# Use preset but override the answering model
-karenina verify checkpoint.jsonld \
-  --preset default.json \
-  --answering-model gpt-4o \
-  --temperature 0.2
-```
-
-**Hierarchy**: CLI flags > preset > env variables > defaults
-
-#### 3. CLI Arguments Only
-
-Build configuration entirely from CLI arguments:
-
-```bash
-karenina verify checkpoint.jsonld \
-  --answering-model gpt-4.1-mini \
-  --parsing-model gpt-4.1-mini \
-  --rubric \
-  --evaluation-mode template_and_rubric
-```
-
-#### 4. Interactive Mode
-
-Build configuration through guided prompts:
-
-```bash
-# Basic mode (essential parameters only)
-karenina verify checkpoint.jsonld --interactive --mode basic
-
-# Advanced mode (all parameters)
-karenina verify checkpoint.jsonld --interactive --mode advanced
-```
+See [Usage Examples](#usage-examples) below for detailed workflows.
 
 ### CLI Options Reference
 
