@@ -108,39 +108,268 @@ class StepEval(BaseModel):
         return "\n".join(lines).rstrip()
 
     def get_summary_stats(self) -> dict[str, Any]:
-        """Get summary statistics for this evaluation."""
-        total_questions = len(self.verification_results)
-        passed_questions = 0
-        total_results = 0
-        rubric_passed = 0
-        rubric_total = 0
+        """
+        Get summary statistics for this evaluation.
 
-        for _question_id, results in self.verification_results.items():
+        Distinguishes between template verification (structural validation)
+        and rubric evaluation (qualitative assessment).
+
+        Returns:
+            dict: Summary statistics with keys:
+                - traces_total: Number of traces evaluated
+                - traces_passed: Number of traces with at least one passing result
+                - results_total: Total number of verification results (across all replicates)
+                - template_verification_total: Number of results with template verification
+                - template_verification_passed: Number passing template verification
+                - rubric_traits_total: Total rubric traits evaluated
+                - rubric_traits_passed: Number of rubric traits passing
+                - success_rate: Percentage of traces passing (0-100)
+        """
+        total_traces = len(self.verification_results)
+        passed_traces = 0
+        total_results = 0
+
+        # Template verification stats
+        template_verification_total = 0
+        template_verification_passed = 0
+
+        # Rubric evaluation stats
+        rubric_traits_total = 0
+        rubric_traits_passed = 0
+
+        for _trace_id, results in self.verification_results.items():
             total_results += len(results)
             if any(result.verify_result for result in results):
-                passed_questions += 1
+                passed_traces += 1
 
-            # Count rubric traits from verification results
+            # Count template verification and rubric traits separately
             for result in results:
-                if result.verify_rubric:
-                    for score in result.verify_rubric.values():
-                        rubric_total += 1
-                        if score is True or (isinstance(score, int) and score > 0):
-                            rubric_passed += 1
+                # Template verification (structural validation)
+                if result.template_verification_performed:
+                    template_verification_total += 1
+                    if result.verify_result:
+                        template_verification_passed += 1
 
-                # Also count metric traits
-                if result.metric_trait_metrics:
-                    rubric_total += len(result.metric_trait_metrics)
-                    rubric_passed += len(result.metric_trait_metrics)  # All computed metrics count as "passed"
+                # Rubric evaluation (qualitative assessment)
+                if result.rubric_evaluation_performed:
+                    # Count LLM and manual rubric traits
+                    if result.verify_rubric:
+                        for score in result.verify_rubric.values():
+                            rubric_traits_total += 1
+                            if score is True or (isinstance(score, int) and score > 0):
+                                rubric_traits_passed += 1
+
+                    # Count metric traits
+                    if result.metric_trait_metrics:
+                        rubric_traits_total += len(result.metric_trait_metrics)
+                        rubric_traits_passed += len(
+                            result.metric_trait_metrics
+                        )  # All computed metrics count as "passed"
 
         return {
-            "questions_total": total_questions,
-            "questions_passed": passed_questions,
+            "traces_total": total_traces,
+            "traces_passed": passed_traces,
             "results_total": total_results,
-            "rubric_passed": rubric_passed,
-            "rubric_total": rubric_total,
-            "success_rate": (passed_questions / total_questions * 100) if total_questions > 0 else 0,
+            "template_verification_total": template_verification_total,
+            "template_verification_passed": template_verification_passed,
+            "rubric_traits_total": rubric_traits_total,
+            "rubric_traits_passed": rubric_traits_passed,
+            "success_rate": (passed_traces / total_traces * 100) if total_traces > 0 else 0,
         }
+
+    def aggregate_rubric_results(self) -> dict[str, Any]:
+        """
+        Aggregate rubric results across replicates for all traces.
+
+        Aggregation rules:
+        - LLM traits (scores): Averaged across successful replicates
+        - Manual traits (booleans): Pass rate (0.0 to 1.0)
+        - Metric traits: Metrics averaged, confusion matrices omitted
+        - Single replicate: Returned as-is without modification
+        - Failed replicates: Excluded from aggregation, count tracked
+
+        Returns:
+            dict: Mapping trace_id to aggregated results:
+                {
+                    "trace_id": {
+                        "llm": {"clarity": 4.5, "analysis_quality": 3.2},
+                        "manual": {"has_citation": 0.75},  # 75% pass rate
+                        "metric": {
+                            "entity_extraction": {
+                                "metrics": {"precision": 0.85, "recall": 0.92}
+                            }
+                        },
+                        "failed_replicate_count": 1  # Only if > 0
+                    },
+                    ...
+                }
+
+        Example:
+            >>> step_eval = StepEval()
+            >>> step_eval.verification_results = {
+            ...     "trace_1": [result1, result2, result3]
+            ... }
+            >>> aggregated = step_eval.aggregate_rubric_results()
+            >>> aggregated["trace_1"]["llm"]["clarity"]  # Averaged score
+            4.333
+        """
+        aggregated = {}
+
+        for trace_id, results in self.verification_results.items():
+            if not results:
+                continue
+
+            # Aggregate replicates for this trace
+            aggregated[trace_id] = self._aggregate_trace_replicates(results)
+
+        return aggregated
+
+    def _aggregate_trace_replicates(self, results: list[VerificationResult]) -> dict[str, Any]:
+        """
+        Aggregate replicates for a single trace.
+
+        Args:
+            results: List of VerificationResult objects (one per replicate)
+
+        Returns:
+            dict: Aggregated rubric results with failed replicate count
+        """
+        # Filter out failed replicates
+        successful_results = [r for r in results if r.completed_without_errors]
+        failed_count = len(results) - len(successful_results)
+
+        if not successful_results:
+            # All replicates failed - return empty result with failure count
+            return {"failed_replicate_count": failed_count} if failed_count > 0 else {}
+
+        # Single replicate: return as-is without modification
+        if len(successful_results) == 1 and failed_count == 0:
+            return successful_results[0].rubric_results
+
+        # Multiple replicates: aggregate by trait type
+        aggregated: dict[str, Any] = {}
+
+        llm_aggregated = self._aggregate_llm_traits(successful_results)
+        if llm_aggregated:
+            aggregated["llm"] = llm_aggregated
+
+        manual_aggregated = self._aggregate_manual_traits(successful_results)
+        if manual_aggregated:
+            aggregated["manual"] = manual_aggregated
+
+        metric_aggregated = self._aggregate_metric_traits(successful_results)
+        if metric_aggregated:
+            aggregated["metric"] = metric_aggregated
+
+        # Add failed replicate count if any failed
+        if failed_count > 0:
+            aggregated["failed_replicate_count"] = failed_count
+
+        return aggregated
+
+    def _aggregate_llm_traits(self, results: list[VerificationResult]) -> dict[str, float]:
+        """
+        Average LLM trait scores across replicates.
+
+        Args:
+            results: List of successful VerificationResult objects
+
+        Returns:
+            dict: Trait names mapped to averaged scores
+        """
+        trait_scores: dict[str, list[int]] = {}
+
+        for result in results:
+            rubric_data = result.rubric_results
+            if "llm" in rubric_data:
+                for trait_name, score in rubric_data["llm"].items():
+                    if trait_name not in trait_scores:
+                        trait_scores[trait_name] = []
+                    trait_scores[trait_name].append(score)
+
+        # Average each trait
+        return {trait_name: sum(scores) / len(scores) for trait_name, scores in trait_scores.items()}
+
+    def _aggregate_manual_traits(self, results: list[VerificationResult]) -> dict[str, float]:
+        """
+        Calculate pass rate for manual traits (booleans -> 0.0 to 1.0).
+
+        Args:
+            results: List of successful VerificationResult objects
+
+        Returns:
+            dict: Trait names mapped to pass rates (0.0 to 1.0)
+        """
+        trait_values: dict[str, list[bool]] = {}
+
+        for result in results:
+            rubric_data = result.rubric_results
+            if "manual" in rubric_data:
+                for trait_name, value in rubric_data["manual"].items():
+                    if trait_name not in trait_values:
+                        trait_values[trait_name] = []
+                    trait_values[trait_name].append(value)
+
+        # Calculate pass rate
+        return {trait_name: sum(values) / len(values) for trait_name, values in trait_values.items()}
+
+    def _aggregate_metric_traits(self, results: list[VerificationResult]) -> dict[str, dict[str, Any]]:
+        """
+        Average metric trait metrics across replicates.
+
+        Confusion matrices are omitted from aggregation as per design decision.
+
+        Args:
+            results: List of successful VerificationResult objects
+
+        Returns:
+            dict: Trait names mapped to aggregated metrics (confusion matrices omitted)
+        """
+        trait_metrics: dict[str, list[dict[str, float]]] = {}
+
+        for result in results:
+            rubric_data = result.rubric_results
+            if "metric" in rubric_data:
+                for trait_name, trait_data in rubric_data["metric"].items():
+                    # Collect metrics
+                    if "metrics" in trait_data:
+                        if trait_name not in trait_metrics:
+                            trait_metrics[trait_name] = []
+                        trait_metrics[trait_name].append(trait_data["metrics"])
+
+        # Average metrics for each trait
+        aggregated = {}
+        for trait_name, metrics_list in trait_metrics.items():
+            aggregated[trait_name] = {"metrics": self._average_metrics(metrics_list)}
+
+        return aggregated
+
+    def _average_metrics(self, metrics_list: list[dict[str, float]]) -> dict[str, float]:
+        """
+        Average metrics across replicates.
+
+        Args:
+            metrics_list: List of metric dictionaries from different replicates
+
+        Returns:
+            dict: Averaged metrics
+        """
+        if not metrics_list:
+            return {}
+
+        # Collect all metric names
+        all_metric_names: set[str] = set()
+        for metrics in metrics_list:
+            all_metric_names.update(metrics.keys())
+
+        # Average each metric
+        averaged = {}
+        for metric_name in all_metric_names:
+            values = [m[metric_name] for m in metrics_list if metric_name in m]
+            if values:
+                averaged[metric_name] = sum(values) / len(values)
+
+        return averaged
 
 
 class TaskEvalResult(BaseModel):
@@ -214,32 +443,42 @@ class TaskEvalResult(BaseModel):
 
     def summary(self) -> str:
         """Return a concise summary of the evaluation results."""
-        total_questions = 0
-        passed_questions = 0
-        total_rubric = 0
-        passed_rubric = 0
+        total_traces = 0
+        passed_traces = 0
+        total_template_verifications = 0
+        passed_template_verifications = 0
+        total_rubric_traits = 0
+        passed_rubric_traits = 0
 
         # Global stats
         if self.global_eval:
             stats = self.global_eval.get_summary_stats()
-            total_questions += stats["questions_total"]
-            passed_questions += stats["questions_passed"]
-            total_rubric += stats["rubric_total"]
-            passed_rubric += stats["rubric_passed"]
+            total_traces += stats["traces_total"]
+            passed_traces += stats["traces_passed"]
+            total_template_verifications += stats["template_verification_total"]
+            passed_template_verifications += stats["template_verification_passed"]
+            total_rubric_traits += stats["rubric_traits_total"]
+            passed_rubric_traits += stats["rubric_traits_passed"]
 
         # Step stats
         for step_eval in self.per_step.values():
             stats = step_eval.get_summary_stats()
-            total_questions += stats["questions_total"]
-            passed_questions += stats["questions_passed"]
-            total_rubric += stats["rubric_total"]
-            passed_rubric += stats["rubric_passed"]
+            total_traces += stats["traces_total"]
+            passed_traces += stats["traces_passed"]
+            total_template_verifications += stats["template_verification_total"]
+            passed_template_verifications += stats["template_verification_passed"]
+            total_rubric_traits += stats["rubric_traits_total"]
+            passed_rubric_traits += stats["rubric_traits_passed"]
 
         parts = []
-        if total_questions > 0:
-            parts.append(f"{passed_questions}/{total_questions} questions passed")
-        if total_rubric > 0:
-            parts.append(f"{passed_rubric}/{total_rubric} rubric traits passed")
+        if total_template_verifications > 0:
+            parts.append(
+                f"{passed_template_verifications}/{total_template_verifications} template verifications passed"
+            )
+        if total_rubric_traits > 0:
+            parts.append(f"{passed_rubric_traits}/{total_rubric_traits} rubric traits passed")
+        if not parts and total_traces > 0:
+            parts.append(f"{passed_traces}/{total_traces} traces passed")
 
         return " | ".join(parts) if parts else "No evaluations performed"
 
@@ -247,12 +486,17 @@ class TaskEvalResult(BaseModel):
         """Return a very compact one-line summary."""
         if self.global_eval:
             stats = self.global_eval.get_summary_stats()
-            return (
-                f"TaskEval [{self.task_id or 'Unknown'}]: "
-                f"{stats['questions_passed']}/{stats['questions_total']} questions, "
-                f"{stats['rubric_passed']}/{stats['rubric_total']} rubric traits "
-                f"({stats['success_rate']:.0f}% success)"
-            )
+            parts = []
+            if stats["template_verification_total"] > 0:
+                parts.append(
+                    f"{stats['template_verification_passed']}/{stats['template_verification_total']} template verifications"
+                )
+            if stats["rubric_traits_total"] > 0:
+                parts.append(f"{stats['rubric_traits_passed']}/{stats['rubric_traits_total']} rubric traits")
+            if not parts:
+                parts.append(f"{stats['traces_passed']}/{stats['traces_total']} traces")
+
+            return f"TaskEval [{self.task_id or 'Unknown'}]: {', '.join(parts)} ({stats['success_rate']:.0f}% success)"
         return f"TaskEval [{self.task_id or 'Unknown'}]: No evaluation data"
 
     def to_dict_clean(self) -> dict[str, Any]:
@@ -341,14 +585,21 @@ class TaskEvalResult(BaseModel):
             lines.append("")
 
             stats = self.global_eval.get_summary_stats()
-            lines.append(f"- **Questions Passed**: {stats['questions_passed']}/{stats['questions_total']}")
-            lines.append(f"- **Rubric Traits Passed**: {stats['rubric_passed']}/{stats['rubric_total']}")
+            lines.append(f"- **Traces Passed**: {stats['traces_passed']}/{stats['traces_total']}")
+            if stats["template_verification_total"] > 0:
+                lines.append(
+                    f"- **Template Verifications Passed**: {stats['template_verification_passed']}/{stats['template_verification_total']}"
+                )
+            if stats["rubric_traits_total"] > 0:
+                lines.append(
+                    f"- **Rubric Traits Passed**: {stats['rubric_traits_passed']}/{stats['rubric_traits_total']}"
+                )
             lines.append(f"- **Success Rate**: {stats['success_rate']:.1f}%")
             lines.append("")
 
-            # Show per-question results
-            for question_id, results in self.global_eval.verification_results.items():
-                lines.append(f"### Question: {question_id}")
+            # Show per-trace results
+            for trace_id, results in self.global_eval.verification_results.items():
+                lines.append(f"### Trace: {trace_id}")
                 for i, result in enumerate(results):
                     status_emoji = "✅" if result.verify_result else "❌"
                     lines.append(f"- {status_emoji} Result {i + 1}: {'PASSED' if result.verify_result else 'FAILED'}")

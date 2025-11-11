@@ -393,8 +393,8 @@ class Answer(BaseAnswer):
         stats = result.global_eval.get_summary_stats()
 
         # Metric traits should be counted in rubric totals
-        assert stats["rubric_total"] >= 1  # At least the metric trait
-        assert stats["rubric_passed"] >= 1  # Metric traits count as "passed"
+        assert stats["rubric_traits_total"] >= 1  # At least the metric trait
+        assert stats["rubric_traits_passed"] >= 1  # Metric traits count as "passed"
 
     def test_multiple_metric_traits(self) -> None:
         """Test evaluation with multiple metric traits."""
