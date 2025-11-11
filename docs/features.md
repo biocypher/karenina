@@ -12,7 +12,7 @@ This page provides an overview of all major features available in the karenina P
 
 **Core Features**: [Question Management](#question-management) | [Answer Templates](#answer-template-generation) | [Verification](#benchmark-verification) | [Rubrics](#rubric-evaluation)
 
-**Advanced Evaluation**: [Few-Shot Prompting](#few-shot-prompting) | [Deep-Judgment](#deep-judgment-parsing) | [Abstention Detection](#abstention-detection) | [Embedding Check](#embedding-check-semantic-fallback) | [Regex Validation](#regex-validation)
+**Advanced Evaluation**: [Few-Shot Prompting](#few-shot-prompting) | [Deep-Judgment](#deep-judgment-parsing) | [Abstention Detection](#abstention-detection) | [Embedding Check](#embedding-check-semantic-fallback) | [TaskEval](#taskeval-task-centric-trace-evaluation) | [Regex Validation](#regex-validation)
 
 **Data Management**: [Database](#database-persistence) | [Checkpoints](#checkpoint-management) | [Export & Reporting](#export--reporting)
 
@@ -182,6 +182,40 @@ When verification fails, embedding check uses semantic similarity (via SentenceT
 - Zero performance impact when disabled
 
 **Learn more:** [Advanced: Embedding Check](advanced/embedding-check.md)
+
+---
+
+### TaskEval (Task-Centric Trace Evaluation)
+
+Evaluate pre-logged agent workflow outputs by attaching verification criteria to existing traces. TaskEval inverts the typical benchmark workflow: start with traces, attach verification criteria.
+
+**What it does:**
+
+TaskEval enables **task-centric evaluation** where you start with existing agent execution traces and attach verification criteria (templates AND rubrics), rather than starting with questions and generating answers.
+
+**Paradigm shift:**
+- **Benchmark**: Questions → Templates/Rubrics → Generate Answers → Verify
+- **TaskEval**: Agent Traces → Attach Verification → Evaluate
+
+**What you can do:**
+
+- Evaluate multi-step agent workflows without re-execution
+- Attach both templates (correctness) and rubrics (quality) to traces
+- Use all three rubric types (LLM-based, regex-based, metric-based)
+- Log structured dict traces for per-key evaluation
+- Evaluate globally or per workflow step
+- Run multiple replicates for statistical reliability
+- Aggregate results across replicates
+
+**Key Use Cases:**
+
+- Agent workflow evaluation (planning → execution → reflection)
+- Post-hoc analysis of production agent logs
+- Debugging agent failures with verification criteria
+- Comparing agent versions using historical traces
+- Cost-effective evaluation (no re-execution costs)
+
+**Learn more:** [Advanced: TaskEval](advanced/task-eval.md)
 
 ---
 

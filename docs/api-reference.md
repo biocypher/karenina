@@ -147,6 +147,40 @@ Rubric evaluation result for a single trait.
       heading_level: 4
       show_root_heading: false
 
+## TaskEval
+
+Classes for evaluating pre-logged agent workflow traces.
+
+### TaskEval
+
+Main class for evaluating agent workflow traces against rubrics.
+
+::: karenina.benchmark.task_eval.TaskEval
+    options:
+      show_source: false
+      heading_level: 4
+      show_root_heading: false
+
+### TaskEvalResult
+
+Result container for TaskEval evaluations.
+
+::: karenina.benchmark.task_eval.TaskEvalResult
+    options:
+      show_source: false
+      heading_level: 4
+      show_root_heading: false
+
+### StepEval
+
+Step-specific evaluation result.
+
+::: karenina.benchmark.task_eval.StepEval
+    options:
+      show_source: false
+      heading_level: 4
+      show_root_heading: false
+
 ## Question Extraction
 
 Functions for extracting questions from files.
