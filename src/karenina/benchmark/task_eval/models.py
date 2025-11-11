@@ -5,6 +5,9 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+# Import VerificationResult for use in StepEval
+from ...schemas.workflow import VerificationResult
+
 
 class LogEvent(BaseModel):
     """Single log event in TaskEval."""
@@ -18,96 +21,84 @@ class LogEvent(BaseModel):
     question_id: str | None = Field(default=None, description="Question this log answers")
     is_agent_output: bool = Field(default=False, description="Whether this is agent output to be evaluated")
     output_type: str | None = Field(default=None, description="Type of output: answer, reasoning, analysis, etc.")
+    # Dict trace support
+    is_dict_structured: bool = Field(default=False, description="Whether this log is from a dict trace")
+    dict_keys: list[str] | None = Field(default=None, description="Keys from dict trace for quick access")
 
 
 class StepEval(BaseModel):
     """Evaluation results for a single step or global evaluation."""
 
-    rubric_scores: dict[str, int | bool | None] = Field(
-        default_factory=dict, description="Rubric trait evaluations with same structure as verification"
-    )
-    question_verification: dict[str, list[dict[str, Any]]] = Field(
+    verification_results: dict[str, list[VerificationResult]] = Field(
         default_factory=dict,
-        description="Question verification results: question_id -> list of results for multiple responses",
+        description="Full verification results per question: {question_id: [VerificationResult, ...]}",
     )
 
     def format_rubric_scores(self, indent: str = "  ") -> str:
-        """Format rubric scores as a readable table."""
-        if not self.rubric_scores:
-            return f"{indent}No rubric scores available"
+        """Format verification results including rubric scores."""
+        return self.format_verification_results(indent)
+
+    def format_verification_results(self, indent: str = "  ") -> str:
+        """Format verification results using VerificationResult data."""
+        if not self.verification_results:
+            return f"{indent}No verification results"
 
         lines = []
-        for trait_name, score in self.rubric_scores.items():
-            if isinstance(score, bool):
-                status = "✓" if score else "✗"
-                display_score = "PASS" if score else "FAIL"
-            elif isinstance(score, int):
-                status = "✓" if score > 0 else "✗"
-                display_score = str(score)
-            else:
-                status = "?"
-                display_score = str(score) if score is not None else "N/A"
-
-            lines.append(f"{indent}{status} {trait_name:<20}: {display_score}")
-
-        return "\n".join(lines)
-
-    def format_question_results(self, indent: str = "  ") -> str:
-        """Format question verification results clearly."""
-        if not self.question_verification:
-            return f"{indent}No question verification results"
-
-        lines = []
-        for question_id, results in self.question_verification.items():
+        for question_id, results in self.verification_results.items():
             lines.append(f"{indent}Question: {question_id}")
 
             for i, result in enumerate(results):
                 result_num = f"[{i + 1}]" if len(results) > 1 else ""
 
-                # Overall status
-                if result.get("correct"):
+                # Verification status
+                if result.verify_result:
                     status = "✓ PASSED"
-                elif result.get("success", True):
-                    status = "⚠ COMPLETED"
-                else:
+                elif result.verify_result is False:
                     status = "✗ FAILED"
-
+                else:
+                    status = "⚠ NO RESULT"
                 lines.append(f"{indent}  {result_num} Status: {status}")
 
-                # Agent output (truncated)
-                agent_output = result.get("agent_output", "N/A")
-                if len(agent_output) > 100:
-                    agent_output = agent_output[:100] + "..."
-                lines.append(f'{indent}  {result_num} Output: "{agent_output}"')
+                # Show full output (no truncation)
+                output = result.raw_llm_response
+                lines.append(f'{indent}  {result_num} Output: "{output}"')
 
-                # Ground truth and parsed responses
-                details = result.get("details", {})
-                if isinstance(details, dict):
-                    # Show ground truth (expected answer)
-                    if "parsed_gt_response" in details:
-                        gt_response = details["parsed_gt_response"]
-                        lines.append(f"{indent}  {result_num} Expected: {gt_response}")
+                # Show LLM and manual rubric traits
+                if result.verify_rubric:
+                    llm_manual_traits = []
+                    for k, v in result.verify_rubric.items():
+                        if isinstance(v, bool):
+                            llm_manual_traits.append(f"{k}={'✓' if v else '✗'}")
+                        else:
+                            llm_manual_traits.append(f"{k}={v}")
+                    lines.append(f"{indent}  {result_num} Rubric: {', '.join(llm_manual_traits)}")
 
-                    # Show LLM parsed response
-                    if "parsed_llm_response" in details:
-                        llm_response = details["parsed_llm_response"]
-                        lines.append(f"{indent}  {result_num} Parsed: {llm_response}")
+                # Show metric traits separately with confusion matrix and metrics
+                if result.metric_trait_confusion_lists:
+                    for trait_name, confusion in result.metric_trait_confusion_lists.items():
+                        counts = []
+                        for bucket in ["tp", "fp", "fn", "tn"]:
+                            if bucket in confusion:
+                                counts.append(f"{bucket.upper()}={len(confusion[bucket])}")
+                        lines.append(f"{indent}  {result_num} Metric [{trait_name}]: {', '.join(counts)}")
 
-                    # Execution time if available
-                    if "execution_time" in details:
-                        exec_time = details["execution_time"]
-                        lines.append(f"{indent}  {result_num} Time: {exec_time:.3f}s")
+                        # Show computed metrics
+                        if result.metric_trait_metrics and trait_name in result.metric_trait_metrics:
+                            metrics = result.metric_trait_metrics[trait_name]
+                            metric_strs = [f"{k}={v:.3f}" for k, v in metrics.items()]
+                            lines.append(f"{indent}      {result_num} Metrics: {', '.join(metric_strs)}")
 
-                # Error information
-                if result.get("error"):
-                    lines.append(f"{indent}  {result_num} Error: {result['error']}")
+                # Show special verification features
+                if result.abstention_detected:
+                    lines.append(f"{indent}  {result_num} ⚠ Abstention detected")
+                if result.embedding_override_applied:
+                    lines.append(
+                        f"{indent}  {result_num} ✓ Embedding check overrode failure (similarity: {result.embedding_similarity_score:.3f})"
+                    )
 
-                # Rubric scores for this question
-                question_rubric = result.get("rubric_scores", {})
-                if question_rubric:
-                    passed = sum(1 for v in question_rubric.values() if v is True or (isinstance(v, int) and v > 0))
-                    total = len(question_rubric)
-                    lines.append(f"{indent}  {result_num} Rubric: {passed}/{total} traits passed")
+                # Show error if present
+                if result.error:
+                    lines.append(f"{indent}  {result_num} Error: {result.error}")
 
                 if i < len(results) - 1:
                     lines.append("")  # Separator between multiple results
@@ -118,19 +109,29 @@ class StepEval(BaseModel):
 
     def get_summary_stats(self) -> dict[str, Any]:
         """Get summary statistics for this evaluation."""
-        total_questions = len(self.question_verification)
+        total_questions = len(self.verification_results)
         passed_questions = 0
         total_results = 0
+        rubric_passed = 0
+        rubric_total = 0
 
-        for _question_id, results in self.question_verification.items():
+        for _question_id, results in self.verification_results.items():
             total_results += len(results)
-            if any(result.get("correct", False) for result in results):
+            if any(result.verify_result for result in results):
                 passed_questions += 1
 
-        rubric_passed = sum(
-            1 for score in self.rubric_scores.values() if score is True or (isinstance(score, int) and score > 0)
-        )
-        rubric_total = len(self.rubric_scores)
+            # Count rubric traits from verification results
+            for result in results:
+                if result.verify_rubric:
+                    for score in result.verify_rubric.values():
+                        rubric_total += 1
+                        if score is True or (isinstance(score, int) and score > 0):
+                            rubric_passed += 1
+
+                # Also count metric traits
+                if result.metric_trait_metrics:
+                    rubric_total += len(result.metric_trait_metrics)
+                    rubric_passed += len(result.metric_trait_metrics)  # All computed metrics count as "passed"
 
         return {
             "questions_total": total_questions,
@@ -152,7 +153,7 @@ class TaskEvalResult(BaseModel):
     timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
     logs: dict[str, list[LogEvent]] = Field(default_factory=dict, description="Optional: include logs in results")
 
-    def display(self, show_details: bool = True) -> str:
+    def display(self) -> str:
         """Display a clean, formatted representation of the evaluation results."""
         lines = []
 
@@ -186,14 +187,9 @@ class TaskEvalResult(BaseModel):
             lines.append("GLOBAL EVALUATION")
             lines.append("─" * 60)
 
-            if self.global_eval.rubric_scores:
-                lines.append("Rubric Scores:")
-                lines.append(self.global_eval.format_rubric_scores())
-                lines.append("")
-
-            if show_details and self.global_eval.question_verification:
-                lines.append("Question Verification:")
-                lines.append(self.global_eval.format_question_results())
+            if self.global_eval.verification_results:
+                lines.append("Verification Results:")
+                lines.append(self.global_eval.format_verification_results())
                 lines.append("")
 
         # Step evaluations
@@ -203,14 +199,9 @@ class TaskEvalResult(BaseModel):
                 lines.append(f"STEP EVALUATION: {step_id}")
                 lines.append("─" * 60)
 
-                if step_eval.rubric_scores:
-                    lines.append(f"Rubric Scores ({step_id}):")
-                    lines.append(step_eval.format_rubric_scores())
-                    lines.append("")
-
-                if show_details and step_eval.question_verification:
-                    lines.append(f"Question Verification ({step_id}):")
-                    lines.append(step_eval.format_question_results())
+                if step_eval.verification_results:
+                    lines.append(f"Verification Results ({step_id}):")
+                    lines.append(step_eval.format_verification_results())
                     lines.append("")
 
         # Summary
@@ -301,8 +292,10 @@ class TaskEvalResult(BaseModel):
         # Add global evaluation details
         if self.global_eval:
             result_dict["global_evaluation"] = {
-                "rubric_scores": self.global_eval.rubric_scores,
-                "question_verification": self.global_eval.question_verification,
+                "verification_results": {
+                    qid: [vr.model_dump() for vr in results]
+                    for qid, results in self.global_eval.verification_results.items()
+                },
                 "summary_stats": self.global_eval.get_summary_stats(),
             }
 
@@ -311,8 +304,10 @@ class TaskEvalResult(BaseModel):
             step_evaluations = result_dict["step_evaluations"]
             if isinstance(step_evaluations, dict):
                 step_evaluations[step_id] = {
-                    "rubric_scores": step_eval.rubric_scores,
-                    "question_verification": step_eval.question_verification,
+                    "verification_results": {
+                        qid: [vr.model_dump() for vr in results]
+                        for qid, results in step_eval.verification_results.items()
+                    },
                     "summary_stats": step_eval.get_summary_stats(),
                 }
 
@@ -340,27 +335,34 @@ class TaskEvalResult(BaseModel):
         lines.append(f"**Status:** {self._get_status_emoji()}")
         lines.append("")
 
-        # Global evaluation
-        if self.global_eval and self.global_eval.rubric_scores:
-            lines.append("## Rubric Scores")
+        # Global evaluation - show summary stats
+        if self.global_eval and self.global_eval.verification_results:
+            lines.append("## Verification Results")
             lines.append("")
-            lines.append("| Trait | Result | Status |")
-            lines.append("|-------|--------|--------|")
 
-            for trait_name, score in self.global_eval.rubric_scores.items():
-                if isinstance(score, bool):
-                    result_str = "✅ Pass" if score else "❌ Fail"
-                    status = "PASS" if score else "FAIL"
-                elif isinstance(score, int):
-                    result_str = f"📊 {score}"
-                    status = "PASS" if score > 0 else "FAIL"
-                else:
-                    result_str = "❓ N/A"
-                    status = "N/A"
-
-                lines.append(f"| {trait_name} | {result_str} | {status} |")
-
+            stats = self.global_eval.get_summary_stats()
+            lines.append(f"- **Questions Passed**: {stats['questions_passed']}/{stats['questions_total']}")
+            lines.append(f"- **Rubric Traits Passed**: {stats['rubric_passed']}/{stats['rubric_total']}")
+            lines.append(f"- **Success Rate**: {stats['success_rate']:.1f}%")
             lines.append("")
+
+            # Show per-question results
+            for question_id, results in self.global_eval.verification_results.items():
+                lines.append(f"### Question: {question_id}")
+                for i, result in enumerate(results):
+                    status_emoji = "✅" if result.verify_result else "❌"
+                    lines.append(f"- {status_emoji} Result {i + 1}: {'PASSED' if result.verify_result else 'FAILED'}")
+
+                    # Show rubric traits
+                    if result.verify_rubric:
+                        lines.append(f"  - Rubric: {', '.join(f'{k}={v}' for k, v in result.verify_rubric.items())}")
+
+                    # Show metric traits
+                    if result.metric_trait_metrics:
+                        for trait_name, metrics in result.metric_trait_metrics.items():
+                            metrics_str = ", ".join(f"{k}={v:.3f}" for k, v in metrics.items())
+                            lines.append(f"  - Metric [{trait_name}]: {metrics_str}")
+                lines.append("")
 
         # Summary
         lines.append("## Summary")

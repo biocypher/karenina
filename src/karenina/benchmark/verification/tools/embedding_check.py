@@ -221,6 +221,12 @@ def check_semantic_equivalence(
             "interface": parsing_model.interface,
         }
 
+        # Add endpoint configuration if using openai_endpoint interface
+        if parsing_model.endpoint_base_url:
+            model_kwargs["endpoint_base_url"] = parsing_model.endpoint_base_url
+        if parsing_model.endpoint_api_key:
+            model_kwargs["endpoint_api_key"] = parsing_model.endpoint_api_key
+
         # Add any extra kwargs if provided (e.g., vendor-specific API keys)
         if parsing_model.extra_kwargs:
             model_kwargs.update(parsing_model.extra_kwargs)

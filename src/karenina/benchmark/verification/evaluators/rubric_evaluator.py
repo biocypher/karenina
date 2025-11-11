@@ -61,6 +61,12 @@ class RubricEvaluator:
                 "interface": model_config.interface,
             }
 
+            # Add endpoint configuration if using openai_endpoint interface
+            if model_config.endpoint_base_url:
+                model_kwargs["endpoint_base_url"] = model_config.endpoint_base_url
+            if model_config.endpoint_api_key:
+                model_kwargs["endpoint_api_key"] = model_config.endpoint_api_key
+
             # Add any extra kwargs if provided (e.g., vendor-specific API keys)
             if model_config.extra_kwargs:
                 model_kwargs.update(model_config.extra_kwargs)
