@@ -313,6 +313,36 @@ class TaskEval:
             # Process regular questions (works for all modes)
             concatenated_logs = "\n\n".join(relevant_logs) if relevant_logs else ""
 
+            # In rubric_only mode with no explicit questions and no dict logs,
+            # create a synthetic question for string logs
+            if evaluation_mode == "rubric_only" and not context.questions and not dict_logs and concatenated_logs:
+                synthetic_question = {
+                    "id": "rubric_only_eval",
+                    "question": "Evaluate the logged output",
+                    "raw_answer": "",  # No ground truth for rubric-only
+                    "answer_template": None,  # No template in rubric_only mode
+                }
+
+                try:
+                    # Evaluate concatenated logs against rubrics
+                    verification_result = self._evaluate(
+                        question_dict=synthetic_question,
+                        response_text=concatenated_logs,
+                        parsing_model=config.parsing_models[0],
+                        rubric=context.merged_rubric,
+                        evaluation_mode=evaluation_mode,
+                    )
+
+                    # Store VerificationResult
+                    question_id = synthetic_question["id"]
+                    assert isinstance(question_id, str), "Question ID must be a string"
+                    if question_id not in step_eval.verification_results:
+                        step_eval.verification_results[question_id] = []
+                    step_eval.verification_results[question_id].append(verification_result)
+
+                except Exception as e:
+                    print(f"Warning: Evaluation failed for rubric-only string logs: {e}")
+
             for question in context.questions:
                 question_dict = self._normalize_question(question)
                 question_id = question_dict.get("id", "unknown")
@@ -471,6 +501,36 @@ class TaskEval:
 
             # Process regular questions (works for all modes)
             concatenated_logs = "\n\n".join(relevant_logs) if relevant_logs else ""
+
+            # In rubric_only mode with no explicit questions and no dict logs,
+            # create a synthetic question for string logs
+            if evaluation_mode == "rubric_only" and not context.questions and not dict_logs and concatenated_logs:
+                synthetic_question = {
+                    "id": f"step_{step_id}_rubric_only_eval",
+                    "question": f"Evaluate the logged output for step {step_id}",
+                    "raw_answer": "",  # No ground truth for rubric-only
+                    "answer_template": None,  # No template in rubric_only mode
+                }
+
+                try:
+                    # Evaluate concatenated logs against rubrics
+                    verification_result = self._evaluate(
+                        question_dict=synthetic_question,
+                        response_text=concatenated_logs,
+                        parsing_model=config.parsing_models[0],
+                        rubric=context.merged_rubric,
+                        evaluation_mode=evaluation_mode,
+                    )
+
+                    # Store VerificationResult
+                    question_id = synthetic_question["id"]
+                    assert isinstance(question_id, str), "Question ID must be a string"
+                    if question_id not in step_eval.verification_results:
+                        step_eval.verification_results[question_id] = []
+                    step_eval.verification_results[question_id].append(verification_result)
+
+                except Exception as e:
+                    print(f"Warning: Evaluation failed for rubric-only string logs in step {step_id}: {e}")
 
             for question in context.questions:
                 question_dict = self._normalize_question(question)
