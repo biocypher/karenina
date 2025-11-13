@@ -842,11 +842,6 @@ class VerificationResult(BaseModel):
         return self.metadata.question_id
 
     @property
-    def template_id(self) -> str:
-        """Backward compatibility accessor for template_id."""
-        return self.metadata.template_id
-
-    @property
     def completed_without_errors(self) -> bool:
         """Backward compatibility accessor for completed_without_errors."""
         return self.metadata.completed_without_errors
@@ -877,39 +872,9 @@ class VerificationResult(BaseModel):
         return self.metadata.parsing_model
 
     @property
-    def answering_replicate(self) -> int | None:
-        """Backward compatibility accessor for answering_replicate."""
-        return self.metadata.answering_replicate
-
-    @property
-    def parsing_replicate(self) -> int | None:
-        """Backward compatibility accessor for parsing_replicate."""
-        return self.metadata.parsing_replicate
-
-    @property
-    def answering_system_prompt(self) -> str | None:
-        """Backward compatibility accessor for answering_system_prompt."""
-        return self.metadata.answering_system_prompt
-
-    @property
-    def parsing_system_prompt(self) -> str | None:
-        """Backward compatibility accessor for parsing_system_prompt."""
-        return self.metadata.parsing_system_prompt
-
-    @property
     def run_name(self) -> str | None:
         """Backward compatibility accessor for run_name."""
         return self.metadata.run_name
-
-    @property
-    def job_id(self) -> str | None:
-        """Backward compatibility accessor for job_id."""
-        return self.metadata.job_id
-
-    @property
-    def execution_time(self) -> float:
-        """Backward compatibility accessor for execution_time."""
-        return self.metadata.execution_time
 
     @property
     def timestamp(self) -> str:

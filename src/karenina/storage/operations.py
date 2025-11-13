@@ -454,11 +454,11 @@ def save_verification_results(
                 select(VerificationResultModel).where(
                     VerificationResultModel.run_id == run_id,
                     VerificationResultModel.question_id == result.question_id,
-                    VerificationResultModel.template_id == result.template_id,
+                    VerificationResultModel.template_id == result.metadata.template_id,
                     VerificationResultModel.answering_model == result.answering_model,
                     VerificationResultModel.parsing_model == result.parsing_model,
-                    VerificationResultModel.answering_replicate == result.answering_replicate,
-                    VerificationResultModel.parsing_replicate == result.parsing_replicate,
+                    VerificationResultModel.answering_replicate == result.metadata.answering_replicate,
+                    VerificationResultModel.parsing_replicate == result.metadata.parsing_replicate,
                 )
             ).scalar_one_or_none()
 

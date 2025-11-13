@@ -33,7 +33,7 @@ def compare_verification_results(
     """
     # Core verification fields
     assert new_result.question_id == legacy_result.question_id, "question_id mismatch"
-    assert new_result.template_id == legacy_result.template_id, "template_id mismatch"
+    assert new_result.metadata.template_id == legacy_result.metadata.template_id, "template_id mismatch"
     assert new_result.completed_without_errors == legacy_result.completed_without_errors, (
         "completed_without_errors mismatch"
     )
@@ -54,19 +54,21 @@ def compare_verification_results(
     # Model configuration
     assert new_result.answering_model == legacy_result.answering_model, "answering_model mismatch"
     assert new_result.parsing_model == legacy_result.parsing_model, "parsing_model mismatch"
-    assert new_result.answering_system_prompt == legacy_result.answering_system_prompt, (
+    assert new_result.metadata.answering_system_prompt == legacy_result.metadata.answering_system_prompt, (
         "answering_system_prompt mismatch"
     )
-    assert new_result.parsing_system_prompt == legacy_result.parsing_system_prompt, "parsing_system_prompt mismatch"
+    assert new_result.metadata.parsing_system_prompt == legacy_result.metadata.parsing_system_prompt, (
+        "parsing_system_prompt mismatch"
+    )
 
     # Metadata fields
     assert new_result.run_name == legacy_result.run_name, "run_name mismatch"
-    assert new_result.job_id == legacy_result.job_id, "job_id mismatch"
+    assert new_result.metadata.job_id == legacy_result.metadata.job_id, "job_id mismatch"
     assert new_result.keywords == legacy_result.keywords, "keywords mismatch"
 
     # Timing (execution_time can vary slightly, check it exists)
     if check_timestamps:
-        assert new_result.execution_time is not None, "execution_time missing"
+        assert new_result.metadata.execution_time is not None, "execution_time missing"
         assert new_result.timestamp is not None, "timestamp missing"
 
     # Embedding check fields
@@ -147,8 +149,12 @@ def compare_verification_results(
         "recursion_limit_reached mismatch"
     )
     assert new_result.answering_mcp_servers == legacy_result.answering_mcp_servers, "answering_mcp_servers mismatch"
-    assert new_result.answering_replicate == legacy_result.answering_replicate, "answering_replicate mismatch"
-    assert new_result.parsing_replicate == legacy_result.parsing_replicate, "parsing_replicate mismatch"
+    assert new_result.metadata.answering_replicate == legacy_result.metadata.answering_replicate, (
+        "answering_replicate mismatch"
+    )
+    assert new_result.metadata.parsing_replicate == legacy_result.metadata.parsing_replicate, (
+        "parsing_replicate mismatch"
+    )
 
 
 class TestBasicRegression:
