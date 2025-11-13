@@ -227,7 +227,7 @@ class ExportManager:
         Returns:
             Dictionary with readiness status and details
         """
-        missing_templates = self.templates_manager.get_missing_templates()
+        missing_templates = self.templates_manager.get_missing_templates(ids_only=True)
         unfinished = [q_id for q_id, q_data in self.base._questions_cache.items() if not q_data.get("finished", False)]
         template_valid, template_errors = self.templates_manager.validate_templates()
         rubric_valid, rubric_errors = self.rubrics_manager.validate_rubrics()

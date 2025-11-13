@@ -93,12 +93,12 @@ class TestTaskEvalFormatting:
         """Test summary statistics calculation."""
         stats = sample_step_eval.get_summary_stats()
 
-        assert stats["questions_total"] == 2
-        assert stats["questions_passed"] == 1  # Only q1 passed
+        assert stats["traces_total"] == 2
+        assert stats["traces_passed"] == 1  # Only q1 passed
         assert stats["results_total"] == 2
-        assert stats["rubric_passed"] == 2  # accuracy=True, clarity=3>0
-        assert stats["rubric_total"] == 4
-        assert stats["success_rate"] == 50.0  # 1/2 questions passed
+        assert stats["rubric_traits_passed"] == 2  # accuracy=True, clarity=3>0
+        assert stats["rubric_traits_total"] == 4
+        assert stats["success_rate"] == 50.0  # 1/2 traces passed
 
     def test_task_result_display(self, sample_task_result) -> None:
         """Test display method formatting."""
@@ -126,10 +126,8 @@ class TestTaskEvalFormatting:
         """Test summary method."""
         summary = sample_task_result.summary()
 
-        assert "questions passed" in summary
         assert "rubric traits passed" in summary
         # Should include both global and step stats
-        assert "2/4 questions passed" in summary  # 1 global + 1 step
         assert "4/8 rubric traits passed" in summary  # 2 global + 2 step
 
     def test_task_result_summary_compact(self, sample_task_result) -> None:
@@ -137,7 +135,6 @@ class TestTaskEvalFormatting:
         compact = sample_task_result.summary_compact()
 
         assert "TaskEval [test_task_123]:" in compact
-        assert "questions" in compact
         assert "rubric traits" in compact
         assert "success" in compact
 
@@ -150,8 +147,8 @@ class TestTaskEvalFormatting:
         assert "global" in clean_dict
         assert "steps" in clean_dict
         assert "summary" in clean_dict
-        assert clean_dict["global"]["questions_total"] == 2
-        assert clean_dict["steps"]["step1"]["questions_total"] == 2
+        assert clean_dict["global"]["traces_total"] == 2
+        assert clean_dict["steps"]["step1"]["traces_total"] == 2
 
     def test_task_result_export_json(self, sample_task_result) -> None:
         """Test JSON export functionality."""
@@ -256,7 +253,7 @@ class TestTaskEvalFormatting:
         assert "No question verification results" in question_formatted
 
         stats = empty_step.get_summary_stats()
-        assert stats["questions_total"] == 0
+        assert stats["traces_total"] == 0
         assert stats["success_rate"] == 0
 
     def test_formatting_with_special_characters(self) -> None:

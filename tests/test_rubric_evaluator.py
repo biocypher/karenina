@@ -63,9 +63,10 @@ class TestRubricEvaluator:
         evaluator = RubricEvaluator(mock_model_config)
 
         empty_rubric = Rubric(traits=[])
-        result = evaluator.evaluate_rubric("Test question?", "Test answer.", empty_rubric)
+        result, usage_metadata_list = evaluator.evaluate_rubric("Test question?", "Test answer.", empty_rubric)
 
         assert result == {}
+        assert usage_metadata_list == []
 
     @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
     def test_evaluate_rubric_success(self, mock_init_model, mock_model_config, sample_rubric) -> None:

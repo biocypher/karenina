@@ -67,7 +67,7 @@ class TaskEval:
 
     def log(
         self,
-        text: str,
+        text: str | dict[str, str],
         step_id: str | None = None,
         target: Literal["global", "step", "both"] = "both",
         level: Literal["debug", "info", "warn", "error"] = "info",
@@ -80,7 +80,8 @@ class TaskEval:
         All logged text is considered as potential answers for evaluation.
 
         Args:
-            text: Log message text (the output to evaluate)
+            text: Log message text (str) or structured dict trace (dict[str, str])
+                  When dict is provided, each key-value pair can be evaluated separately
             step_id: Optional step ID for step-specific logs
             target: Where to log ("global", "step", or "both")
             level: Log level (debug, info, warn, error)
@@ -90,12 +91,28 @@ class TaskEval:
         Example:
             task.log("The answer is 42")
             task.log("Step 1 complete", step_id="calculation", level="info")
+            task.log({"reasoning": "...", "action": "...", "result": "..."})
+            task.log({"plan": "Create API"}, step_id="planning")
         """
+        import json
+
+        # Handle dict traces
+        if isinstance(text, dict):
+            log_text = json.dumps(text, ensure_ascii=False)
+            is_dict = True
+            dict_keys_list = list(text.keys())
+        else:
+            log_text = text
+            is_dict = False
+            dict_keys_list = None
+
         log_event = LogEvent(
             level=level,
-            text=text,
+            text=log_text,
             tags=tags,
             payload=payload,
+            is_dict_structured=is_dict,
+            dict_keys=dict_keys_list,
         )
 
         if target in ("global", "both"):
@@ -217,66 +234,146 @@ class TaskEval:
         # Get global evaluation context
         context = self._get_evaluation_context(step_id=None)
 
+        # Detect evaluation mode based on what's attached
+        evaluation_mode = self._detect_evaluation_mode(context)
+
         # Initialize result tracking
         step_eval = StepEval()
 
         # Collect all global logs for evaluation (do this once)
         relevant_logs = self._collect_logs_for_evaluation(context.logs)
 
-        if not relevant_logs:
-            # No logs to evaluate - handle all questions as having no logs
+        # Check for dict-structured logs for per-key evaluation in rubric_only mode
+        dict_logs = [log for log in context.logs if log.is_dict_structured]
+
+        # Determine how many replicates to run
+        replicate_count = getattr(config, "replicate_count", 1)
+        if replicate_count < 1:
+            replicate_count = 1
+
+        # Replicate loop: run entire evaluation N times
+        for _replicate_idx in range(replicate_count):
+            # In rubric_only mode with dict logs, create synthetic questions per key
+            if evaluation_mode == "rubric_only" and dict_logs:
+                # Extract unique keys from all dict logs
+                import json
+
+                all_dict_keys = set()
+                for log in dict_logs:
+                    if log.dict_keys:
+                        all_dict_keys.update(log.dict_keys)
+
+                # Create synthetic questions for each key
+                for key in sorted(all_dict_keys):  # Sort for deterministic order
+                    # Collect values for this key across all dict logs
+                    key_values = []
+                    for log in dict_logs:
+                        try:
+                            log_dict = json.loads(log.text)
+                            if key in log_dict:
+                                key_values.append(log_dict[key])
+                        except json.JSONDecodeError:
+                            continue
+
+                    # Concatenate values for this key
+                    key_response = "\n\n".join(key_values) if key_values else ""
+
+                    if not key_response:
+                        continue
+
+                    # Create synthetic question for this key
+                    synthetic_question = {
+                        "id": f"dict_key_{key}",
+                        "question": f"Evaluate the '{key}' output",
+                        "raw_answer": "",  # No ground truth for rubric-only
+                        "answer_template": None,  # No template in rubric_only mode
+                    }
+
+                    try:
+                        # Evaluate this key's values against rubrics
+                        verification_result = self._evaluate(
+                            question_dict=synthetic_question,
+                            response_text=key_response,
+                            parsing_model=config.parsing_models[0],
+                            rubric=context.merged_rubric,
+                            evaluation_mode=evaluation_mode,
+                        )
+
+                        # Store VerificationResult
+                        question_id = synthetic_question["id"]
+                        assert isinstance(question_id, str), "Question ID must be a string"
+                        if question_id not in step_eval.verification_results:
+                            step_eval.verification_results[question_id] = []
+                        step_eval.verification_results[question_id].append(verification_result)
+
+                    except Exception as e:
+                        print(f"Warning: Evaluation failed for dict key {key}: {e}")
+                        continue
+
+            # Process regular questions (works for all modes)
+            concatenated_logs = "\n\n".join(relevant_logs) if relevant_logs else ""
+
+            # In rubric_only mode with no explicit questions and no dict logs,
+            # create a synthetic question for string logs
+            if evaluation_mode == "rubric_only" and not context.questions and not dict_logs and concatenated_logs:
+                synthetic_question = {
+                    "id": "rubric_only_eval",
+                    "question": "Evaluate the logged output",
+                    "raw_answer": "",  # No ground truth for rubric-only
+                    "answer_template": None,  # No template in rubric_only mode
+                }
+
+                try:
+                    # Evaluate concatenated logs against rubrics
+                    verification_result = self._evaluate(
+                        question_dict=synthetic_question,
+                        response_text=concatenated_logs,
+                        parsing_model=config.parsing_models[0],
+                        rubric=context.merged_rubric,
+                        evaluation_mode=evaluation_mode,
+                    )
+
+                    # Store VerificationResult
+                    question_id = synthetic_question["id"]
+                    assert isinstance(question_id, str), "Question ID must be a string"
+                    if question_id not in step_eval.verification_results:
+                        step_eval.verification_results[question_id] = []
+                    step_eval.verification_results[question_id].append(verification_result)
+
+                except Exception as e:
+                    print(f"Warning: Evaluation failed for rubric-only string logs: {e}")
+
             for question in context.questions:
                 question_dict = self._normalize_question(question)
                 question_id = question_dict.get("id", "unknown")
-                step_eval.question_verification[question_id] = [
-                    {
-                        "correct": False,
-                        "details": "No logged outputs found for evaluation",
-                        "success": False,
-                        "error": f"No logs available for question {question_id}",
-                    }
-                ]
-            # No rubric evaluation needed if no logs
-            step_eval.rubric_scores = {}
-        else:
-            # Concatenate all logs into a single response for global evaluation
-            concatenated_logs = "\n\n".join(relevant_logs)
 
-            # Check for conflicts between standalone and question rubrics
-            from ..verification.utils.parsing import extract_rubric_traits_from_template
-            from .helpers import check_rubric_conflicts
+                # Check if question has answer template
+                answer_template = question_dict.get("answer_template")
 
-            standalone_traits, question_traits = check_rubric_conflicts(
-                standalone_rubric=context.merged_rubric,
-                questions=context.questions,
-                extract_traits_func=extract_rubric_traits_from_template,
-            )
+                # In rubric_only mode, templates are optional
+                if evaluation_mode != "rubric_only" and not answer_template:
+                    # Skip questions without templates in template modes
+                    continue
 
-            # Evaluate standalone rubrics once for all questions
-            from .helpers import evaluate_standalone_rubrics
+                try:
+                    # Use main verification pipeline
+                    verification_result = self._evaluate(
+                        question_dict=question_dict,
+                        response_text=concatenated_logs,
+                        parsing_model=config.parsing_models[0],
+                        rubric=context.merged_rubric,  # Includes all three rubric trait types!
+                        evaluation_mode=evaluation_mode,
+                    )
 
-            global_rubric_scores = evaluate_standalone_rubrics(
-                parsing_model=config.parsing_models[0],
-                merged_rubric=context.merged_rubric,
-                concatenated_logs=concatenated_logs,
-                context="global",
-                callable_registry=self.callable_registry,
-            )
+                    # Store VerificationResult
+                    if question_id not in step_eval.verification_results:
+                        step_eval.verification_results[question_id] = []
+                    step_eval.verification_results[question_id].append(verification_result)
 
-            # Process all questions against concatenated logs
-            from .helpers import process_questions_with_concatenated_logs
-
-            step_eval.question_verification = process_questions_with_concatenated_logs(
-                questions=context.questions,
-                concatenated_logs=concatenated_logs,
-                parsing_model=config.parsing_models[0],
-                normalize_question_func=self._normalize_question,
-                extract_traits_func=extract_rubric_traits_from_template,
-                evaluate_response_func=self._evaluate_response,
-            )
-
-            # Store the global rubric scores at the step level
-            step_eval.rubric_scores.update(global_rubric_scores)
+                except Exception as e:
+                    # Handle evaluation errors gracefully
+                    print(f"Warning: Evaluation failed for question {question_id}: {e}")
+                    continue
 
         # Build result with global evaluation
         task_result = TaskEvalResult(
@@ -326,66 +423,146 @@ class TaskEval:
         # Get step-specific evaluation context
         context = self._get_evaluation_context(step_id=step_id)
 
+        # Detect evaluation mode based on what's attached
+        evaluation_mode = self._detect_evaluation_mode(context)
+
         # Initialize result tracking
         step_eval = StepEval()
 
         # Collect step-specific logs for evaluation (do this once)
         relevant_logs = self._collect_logs_for_evaluation(context.logs)
 
-        if not relevant_logs:
-            # No logs to evaluate - handle all questions as having no logs
+        # Check for dict-structured logs for per-key evaluation in rubric_only mode
+        dict_logs = [log for log in context.logs if log.is_dict_structured]
+
+        # Determine how many replicates to run
+        replicate_count = getattr(config, "replicate_count", 1)
+        if replicate_count < 1:
+            replicate_count = 1
+
+        # Replicate loop: run entire evaluation N times
+        for _ in range(replicate_count):
+            # In rubric_only mode with dict logs, create synthetic questions per key
+            if evaluation_mode == "rubric_only" and dict_logs:
+                # Extract unique keys from all dict logs
+                import json
+
+                all_dict_keys = set()
+                for log in dict_logs:
+                    if log.dict_keys:
+                        all_dict_keys.update(log.dict_keys)
+
+                # Create synthetic questions for each key
+                for key in sorted(all_dict_keys):  # Sort for deterministic order
+                    # Collect values for this key across all dict logs
+                    key_values = []
+                    for log in dict_logs:
+                        try:
+                            log_dict = json.loads(log.text)
+                            if key in log_dict:
+                                key_values.append(log_dict[key])
+                        except json.JSONDecodeError:
+                            continue
+
+                    # Concatenate values for this key
+                    key_response = "\n\n".join(key_values) if key_values else ""
+
+                    if not key_response:
+                        continue
+
+                    # Create synthetic question for this key
+                    synthetic_question = {
+                        "id": f"step_{step_id}_dict_key_{key}",
+                        "question": f"Evaluate the '{key}' output for step {step_id}",
+                        "raw_answer": "",  # No ground truth for rubric-only
+                        "answer_template": None,  # No template in rubric_only mode
+                    }
+
+                    try:
+                        # Evaluate this key's values against rubrics
+                        verification_result = self._evaluate(
+                            question_dict=synthetic_question,
+                            response_text=key_response,
+                            parsing_model=config.parsing_models[0],
+                            rubric=context.merged_rubric,
+                            evaluation_mode=evaluation_mode,
+                        )
+
+                        # Store VerificationResult
+                        question_id = synthetic_question["id"]
+                        assert isinstance(question_id, str), "Question ID must be a string"
+                        if question_id not in step_eval.verification_results:
+                            step_eval.verification_results[question_id] = []
+                        step_eval.verification_results[question_id].append(verification_result)
+
+                    except Exception as e:
+                        print(f"Warning: Evaluation failed for dict key {key} in step {step_id}: {e}")
+                        continue
+
+            # Process regular questions (works for all modes)
+            concatenated_logs = "\n\n".join(relevant_logs) if relevant_logs else ""
+
+            # In rubric_only mode with no explicit questions and no dict logs,
+            # create a synthetic question for string logs
+            if evaluation_mode == "rubric_only" and not context.questions and not dict_logs and concatenated_logs:
+                synthetic_question = {
+                    "id": f"step_{step_id}_rubric_only_eval",
+                    "question": f"Evaluate the logged output for step {step_id}",
+                    "raw_answer": "",  # No ground truth for rubric-only
+                    "answer_template": None,  # No template in rubric_only mode
+                }
+
+                try:
+                    # Evaluate concatenated logs against rubrics
+                    verification_result = self._evaluate(
+                        question_dict=synthetic_question,
+                        response_text=concatenated_logs,
+                        parsing_model=config.parsing_models[0],
+                        rubric=context.merged_rubric,
+                        evaluation_mode=evaluation_mode,
+                    )
+
+                    # Store VerificationResult
+                    question_id = synthetic_question["id"]
+                    assert isinstance(question_id, str), "Question ID must be a string"
+                    if question_id not in step_eval.verification_results:
+                        step_eval.verification_results[question_id] = []
+                    step_eval.verification_results[question_id].append(verification_result)
+
+                except Exception as e:
+                    print(f"Warning: Evaluation failed for rubric-only string logs in step {step_id}: {e}")
+
             for question in context.questions:
                 question_dict = self._normalize_question(question)
                 question_id = question_dict.get("id", "unknown")
-                step_eval.question_verification[question_id] = [
-                    {
-                        "correct": False,
-                        "details": f"No logged outputs found for step {step_id}",
-                        "success": False,
-                        "error": f"No logs available for question {question_id} in step {step_id}",
-                    }
-                ]
-            # No rubric evaluation needed if no logs
-            step_eval.rubric_scores = {}
-        else:
-            # Concatenate all step logs into a single response for evaluation
-            concatenated_logs = "\n\n".join(relevant_logs)
 
-            # Check for conflicts between standalone and question rubrics
-            from ..verification.utils.parsing import extract_rubric_traits_from_template
-            from .helpers import check_rubric_conflicts
+                # Check if question has answer template
+                answer_template = question_dict.get("answer_template")
 
-            standalone_traits, question_traits = check_rubric_conflicts(
-                standalone_rubric=context.merged_rubric,
-                questions=context.questions,
-                extract_traits_func=extract_rubric_traits_from_template,
-            )
+                # In rubric_only mode, templates are optional
+                if evaluation_mode != "rubric_only" and not answer_template:
+                    # Skip questions without templates in template modes
+                    continue
 
-            # Evaluate standalone rubrics once for all questions in this step
-            from .helpers import evaluate_standalone_rubrics
+                try:
+                    # Use main verification pipeline
+                    verification_result = self._evaluate(
+                        question_dict=question_dict,
+                        response_text=concatenated_logs,
+                        parsing_model=config.parsing_models[0],
+                        rubric=context.merged_rubric,  # Includes all three rubric trait types!
+                        evaluation_mode=evaluation_mode,
+                    )
 
-            step_rubric_scores = evaluate_standalone_rubrics(
-                parsing_model=config.parsing_models[0],
-                merged_rubric=context.merged_rubric,
-                concatenated_logs=concatenated_logs,
-                context=f"step '{step_id}'",
-                callable_registry=self.callable_registry,
-            )
+                    # Store VerificationResult
+                    if question_id not in step_eval.verification_results:
+                        step_eval.verification_results[question_id] = []
+                    step_eval.verification_results[question_id].append(verification_result)
 
-            # Process all questions against concatenated logs
-            from .helpers import process_questions_with_concatenated_logs
-
-            step_eval.question_verification = process_questions_with_concatenated_logs(
-                questions=context.questions,
-                concatenated_logs=concatenated_logs,
-                parsing_model=config.parsing_models[0],
-                normalize_question_func=self._normalize_question,
-                extract_traits_func=extract_rubric_traits_from_template,
-                evaluate_response_func=self._evaluate_response,
-            )
-
-            # Store the step rubric scores at the step level
-            step_eval.rubric_scores.update(step_rubric_scores)
+                except Exception as e:
+                    # Handle evaluation errors gracefully
+                    print(f"Warning: Evaluation failed for question {question_id} in step {step_id}: {e}")
+                    continue
 
         return step_eval
 
@@ -448,6 +625,43 @@ class TaskEval:
                 outputs.append(log.text)
         return outputs
 
+    def _detect_evaluation_mode(self, context: "EvaluationContext") -> str:
+        """Auto-detect evaluation mode based on attached questions and rubrics.
+
+        Args:
+            context: The evaluation context containing questions and rubrics
+
+        Returns:
+            One of: "template_only", "rubric_only", "template_and_rubric"
+
+        Raises:
+            ValueError: If neither templates nor rubrics are provided
+        """
+        # Check if questions have answer templates
+        has_templates = any(self._normalize_question(q).get("answer_template") for q in context.questions)
+
+        # Check if rubrics are provided
+        has_rubrics = bool(
+            context.merged_rubric
+            and (
+                context.merged_rubric.traits
+                or context.merged_rubric.manual_traits
+                or context.merged_rubric.metric_traits
+            )
+        )
+
+        if has_templates and has_rubrics:
+            return "template_and_rubric"
+        elif has_templates:
+            return "template_only"
+        elif has_rubrics:
+            return "rubric_only"
+        else:
+            raise ValueError(
+                "Must provide either answer templates, rubrics, or both for evaluation. "
+                "Add questions with templates via add_question() or add rubrics via add_rubric()."
+            )
+
     # =============================================================================
     # EVALUATION METHODS
     # =============================================================================
@@ -477,7 +691,8 @@ class TaskEval:
                 return self._evaluate_response_fallback(question_dict, response_text, parsing_model, rubric)
 
             # Use the existing verification pipeline
-            return self._evaluate(question_dict, response_text, parsing_model, rubric)
+            result = self._evaluate(question_dict, response_text, parsing_model, rubric)
+            return dict(result)  # Ensure we return dict[str, Any]
 
         except Exception as e:
             return {
@@ -489,88 +704,89 @@ class TaskEval:
             }
 
     def _evaluate(
-        self, question_dict: dict[str, Any], response_text: str, parsing_model: ModelConfig, rubric: "Rubric | None"
-    ) -> dict[str, Any]:
-        """Evaluate response using existing verification pipeline with manual interface."""
+        self,
+        question_dict: dict[str, Any],
+        response_text: str,
+        parsing_model: ModelConfig,
+        rubric: "Rubric | None",
+        evaluation_mode: str = "template_only",
+    ) -> Any:
+        """Evaluate response using main verification pipeline with cached answer data.
+
+        Args:
+            question_dict: Question dictionary with metadata
+            response_text: The logged text to evaluate
+            parsing_model: Model to use for parsing/evaluation
+            rubric: Rubric with evaluation traits (optional)
+            evaluation_mode: One of "template_only", "rubric_only", "template_and_rubric"
+
+        Returns:
+            VerificationResult from the main verification pipeline
+        """
         from ..verification.runner import run_single_model_verification
 
         question_id = question_dict.get("id", "unknown")
         question_text = question_dict.get("question", "")
-        answer_template = question_dict["answer_template"]
+        answer_template = question_dict.get("answer_template")
 
-        # Manual interface requires valid MD5 hash, generate one if needed
+        # In rubric_only mode, template is optional
+        if evaluation_mode == "rubric_only" and not answer_template:
+            # Create a minimal template that just captures the raw response
+            answer_template = '''
+from karenina.schemas.domain import BaseAnswer
+from pydantic import Field
+
+class Answer(BaseAnswer):
+    """Minimal answer template for rubric-only evaluation."""
+
+    raw_response: str = Field(description="The raw response text")
+
+    def verify(self) -> bool:
+        # In rubric_only mode, verification always passes (rubrics determine quality)
+        return True
+'''
+
+        # Ensure valid MD5 hash for question ID
         import hashlib
 
         if not self._is_valid_md5_hash(question_id):
             question_id = hashlib.md5(question_id.encode()).hexdigest()
 
-        # Create a mock answering model using manual interface
+        # Ensure answer_template is a string at this point
+        assert isinstance(answer_template, str), "answer_template must be a string"
+
+        # Create mock answering model (won't be invoked due to cached_answer_data)
         mock_answering_model = ModelConfig(
             id="taskeval_mock",
             model_provider="mock",
             model_name="mock",
-            interface="manual",
+            interface="langchain",  # Any interface, won't be called
             system_prompt="Mock model for TaskEval",
         )
 
-        # Temporarily add the response to manual traces
-        import time
+        # Prepare cached answer data to inject logged output
+        cached_answer_data = {
+            "raw_llm_response": response_text,
+            "recursion_limit_reached": False,
+            "answering_mcp_servers": None,
+            "usage_metadata": None,
+            "agent_metrics": None,
+        }
 
-        from ...infrastructure.llm.manual_traces import get_trace_manager
+        # Call main verification pipeline with cached answer
+        verification_result = run_single_model_verification(
+            question_id=question_id,
+            question_text=question_text,
+            template_code=answer_template,
+            answering_model=mock_answering_model,
+            parsing_model=parsing_model,
+            rubric=rubric,  # Pass rubric - will be evaluated in RubricEvaluationStage (all 3 types!)
+            cached_answer_data=cached_answer_data,  # Skip generation, use our logged output
+            abstention_enabled=True,  # Enable abstention detection
+            evaluation_mode=evaluation_mode,  # Pass detected evaluation mode
+        )
 
-        trace_manager = get_trace_manager()
-
-        try:
-            # Add our response to the manual trace system temporarily
-            with trace_manager._lock:
-                trace_manager._traces[question_id] = response_text
-                trace_manager._trace_timestamps[question_id] = time.time()
-
-            # Call the existing verification function (without rubric to avoid double evaluation)
-            verification_result = run_single_model_verification(
-                question_id=question_id,
-                question_text=question_text,
-                template_code=answer_template,
-                answering_model=mock_answering_model,
-                parsing_model=parsing_model,
-                rubric=None,  # Don't pass rubric to avoid double evaluation
-            )
-
-            # Evaluate rubric separately using RubricEvaluator for standalone evaluation
-            rubric_scores: dict[str, int | bool] = {}
-            if rubric and (rubric.traits or rubric.manual_traits):
-                try:
-                    evaluator = RubricEvaluator(parsing_model, self.callable_registry)
-                    rubric_scores, _ = evaluator.evaluate_rubric(
-                        question=question_text, answer=response_text, rubric=rubric
-                    )
-                except Exception as e:
-                    # Don't fail verification if rubric evaluation fails
-                    print(f"Warning: Standalone rubric evaluation failed: {e}")
-                    rubric_scores = {}
-
-            # Convert VerificationResult to our expected format
-            return {
-                "verify_result": verification_result.verify_result
-                if verification_result.verify_result is not None
-                else False,
-                "verify_granular_result": {
-                    "agent_output": response_text,
-                    "parsed_gt_response": verification_result.parsed_gt_response,
-                    "parsed_llm_response": verification_result.parsed_llm_response,
-                    "evaluation_method": "taskeval_existing_pipeline_with_standalone_rubric",
-                    "execution_time": verification_result.execution_time,
-                },
-                "verify_rubric": rubric_scores,
-                "completed_without_errors": verification_result.completed_without_errors,
-                "error": verification_result.error,
-            }
-
-        finally:
-            # Clean up the temporary trace
-            with trace_manager._lock:
-                trace_manager._traces.pop(question_id, None)
-                trace_manager._trace_timestamps.pop(question_id, None)
+        return verification_result  # Return VerificationResult directly
 
     def _evaluate_response_fallback(
         self, question_dict: dict[str, Any], response_text: str, parsing_model: ModelConfig, rubric: "Rubric | None"
@@ -625,8 +841,6 @@ class TaskEval:
         """Check if a string is a valid MD5 hash format."""
         import re
 
-        if not isinstance(hash_string, str):
-            return False
         md5_pattern = re.compile(r"^[a-fA-F0-9]{32}$")
         return bool(md5_pattern.match(hash_string))
 
@@ -635,7 +849,7 @@ class TaskEval:
         if not rubrics:
             return None
 
-        from ...schemas.domain import ManualRubricTrait, Rubric, RubricTrait
+        from ...schemas.domain import ManualRubricTrait, MetricRubricTrait, Rubric, RubricTrait
 
         # Check for trait name conflicts first (across all trait types)
         all_trait_names = []
@@ -646,6 +860,9 @@ class TaskEval:
             # Add manual trait names
             for manual_trait in rubric.manual_traits:
                 all_trait_names.append(manual_trait.name)
+            # Add metric trait names
+            for metric_trait in rubric.metric_traits:
+                all_trait_names.append(metric_trait.name)
 
         # Find duplicates
         seen = set()
@@ -664,6 +881,7 @@ class TaskEval:
         # Combine all traits (now guaranteed to be unique)
         unique_llm_traits: dict[str, RubricTrait] = {}
         unique_manual_traits: dict[str, ManualRubricTrait] = {}
+        unique_metric_traits: dict[str, MetricRubricTrait] = {}
         for rubric in rubrics:
             # Combine LLM traits
             for trait in rubric.traits:
@@ -671,8 +889,15 @@ class TaskEval:
             # Combine manual traits
             for manual_trait in rubric.manual_traits:
                 unique_manual_traits[manual_trait.name] = manual_trait
+            # Combine metric traits
+            for metric_trait in rubric.metric_traits:
+                unique_metric_traits[metric_trait.name] = metric_trait
 
-        return Rubric(traits=list(unique_llm_traits.values()), manual_traits=list(unique_manual_traits.values()))
+        return Rubric(
+            traits=list(unique_llm_traits.values()),
+            manual_traits=list(unique_manual_traits.values()),
+            metric_traits=list(unique_metric_traits.values()),
+        )
 
     def _build_result(self, step_eval: StepEval, step_id: str | None) -> TaskEvalResult:
         """Build the final TaskEvalResult."""

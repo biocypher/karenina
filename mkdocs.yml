@@ -115,6 +115,7 @@ nav:
       - Deep-Judgment: advanced/deep-judgment.md
       - Abstention Detection: advanced/abstention-detection.md
       - Embedding Check: advanced/embedding-check.md
+      - TaskEval: advanced/task-eval.md
       - Configuration Presets: advanced/presets.md
       - Few-Shot Prompting: advanced/few-shot.md
       - Manual Traces: advanced/manual-traces.md
