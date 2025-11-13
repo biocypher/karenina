@@ -377,12 +377,12 @@ def create_failed_verifications_view(engine: Engine) -> None:
         FROM verification_results vr
         JOIN verification_runs vrun ON vr.run_id = vrun.id
         JOIN benchmarks b ON vrun.benchmark_id = b.id
-        WHERE vr.success = 0
+        WHERE vr.completed_without_errors = 0
         ORDER BY vr.created_at DESC
     """
 
     # SQLite uses 0/1 for boolean, PostgreSQL uses FALSE
-    view_sql_postgres = view_sql.replace("vr.success = 0", "vr.success = FALSE")
+    view_sql_postgres = view_sql.replace("vr.completed_without_errors = 0", "vr.completed_without_errors = FALSE")
 
     with engine.begin() as conn:
         if engine.dialect.name == "sqlite":

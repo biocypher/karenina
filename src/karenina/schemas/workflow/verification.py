@@ -877,11 +877,6 @@ class VerificationResult(BaseModel):
         return self.metadata.parsing_model
 
     @property
-    def success(self) -> bool:
-        """Backward compatibility accessor for success (old name for completed_without_errors)."""
-        return self.metadata.completed_without_errors
-
-    @property
     def answering_replicate(self) -> int | None:
         """Backward compatibility accessor for answering_replicate."""
         return self.metadata.answering_replicate

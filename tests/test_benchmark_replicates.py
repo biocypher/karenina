@@ -113,7 +113,7 @@ class Answer(BaseAnswer):
         for key in expected_keys:
             assert key in results
             result = results[key]
-            assert result.success is True
+            assert result.completed_without_errors is True
             assert result.question_id == "test_id"
 
             # Extract replicate number from key
@@ -195,7 +195,7 @@ class Answer(BaseAnswer):
         assert expected_key in results
 
         result = results[expected_key]
-        assert result.success is True
+        assert result.completed_without_errors is True
         assert result.question_id == "test_id"
 
         # Replicate fields should be None for single replicate

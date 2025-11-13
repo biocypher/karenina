@@ -137,7 +137,7 @@ class TestResultsSeparation:
 
             # Verify result details
             result = list(retrieved_results.values())[0]
-            assert result.success is True
+            assert result.completed_without_errors is True
             assert result.answering_model == "gpt-4.1-mini"
 
         finally:
@@ -265,7 +265,7 @@ class TestResultsSeparation:
 
             # Verify result details - get first result
             first_result = list(loaded_results.values())[0]
-            assert first_result.success is True
+            assert first_result.completed_without_errors is True
             assert first_result.question_text in ["What is 2+2?", "What is the capital of France?"]
 
         finally:
@@ -307,7 +307,7 @@ class TestResultsSeparation:
             result = list(retrieved_results.values())[0]
             original_result = list(sample_verification_results.values())[0]
             assert result.question_text == original_result.question_text
-            assert result.success == original_result.success
+            assert result.completed_without_errors == original_result.completed_without_errors
 
         finally:
             for path in [checkpoint_path, results_path]:
