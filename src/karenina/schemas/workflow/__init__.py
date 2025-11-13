@@ -1,5 +1,14 @@
 """Workflow models for verification execution."""
 
+from .aggregation import (
+    AggregatorRegistry,
+    GroupByRegistry,
+    GroupByStrategy,
+    ResultAggregator,
+    create_default_groupby_registry,
+    create_default_registry,
+)
+from .judgment_results import JudgmentResults
 from .models import (
     INTERFACE_LANGCHAIN,
     INTERFACE_MANUAL,
@@ -9,6 +18,8 @@ from .models import (
     ModelConfig,
     QuestionFewShotConfig,
 )
+from .rubric_results import RubricResults
+from .template_results import TemplateResults
 from .verification import (
     DEFAULT_ANSWERING_SYSTEM_PROMPT,
     DEFAULT_PARSING_SYSTEM_PROMPT,
@@ -24,6 +35,7 @@ from .verification import (
     VerificationStartResponse,
     VerificationStatusResponse,
 )
+from .verification_result_set import VerificationResultSet
 
 __all__ = [
     # Model configuration
@@ -50,4 +62,16 @@ __all__ = [
     "VerificationRequest",
     "VerificationStatusResponse",
     "VerificationStartResponse",
+    # Result set and specialized results
+    "VerificationResultSet",
+    "RubricResults",
+    "TemplateResults",
+    "JudgmentResults",
+    # Aggregation framework
+    "ResultAggregator",
+    "AggregatorRegistry",
+    "GroupByStrategy",
+    "GroupByRegistry",
+    "create_default_registry",
+    "create_default_groupby_registry",
 ]
