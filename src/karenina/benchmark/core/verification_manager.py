@@ -9,7 +9,12 @@ if TYPE_CHECKING:
     from .results import ResultsManager
     from .rubrics import RubricManager
 
-from ...schemas.workflow import FinishedTemplate, VerificationConfig, VerificationResult
+from ...schemas.workflow import (
+    FinishedTemplate,
+    VerificationConfig,
+    VerificationResult,
+    VerificationResultMetadata,
+)
 from ...utils.checkpoint import generate_template_id
 from ..verification import run_verification_batch
 from ..verification.utils.validation import validate_answer_template
@@ -389,16 +394,17 @@ class VerificationManager:
                 template_code = q_data.get("answer_template", "")
                 template_id = generate_template_id(template_code)
                 error_result = VerificationResult(
-                    question_id=question_id,
-                    template_id=template_id,
-                    completed_without_errors=False,
-                    error=f"Mixed config verification failed: {str(e)}",
-                    question_text=self.base._questions_cache.get(question_id, {}).get("question", ""),
-                    raw_llm_response="",
-                    answering_model="unknown",
-                    parsing_model="unknown",
-                    execution_time=0.0,
-                    timestamp=datetime.now().isoformat(),
+                    metadata=VerificationResultMetadata(
+                        question_id=question_id,
+                        template_id=template_id,
+                        completed_without_errors=False,
+                        error=f"Mixed config verification failed: {str(e)}",
+                        question_text=self.base._questions_cache.get(question_id, {}).get("question", ""),
+                        answering_model="unknown",
+                        parsing_model="unknown",
+                        execution_time=0.0,
+                        timestamp=datetime.now().isoformat(),
+                    )
                 )
                 all_results[question_id] = {f"{question_id}_error": error_result}
 
@@ -454,17 +460,18 @@ class VerificationManager:
                     template_code = q_data.get("answer_template", "")
                     template_id = generate_template_id(template_code)
                     error_result = VerificationResult(
-                        question_id=q_id,
-                        template_id=template_id,
-                        completed_without_errors=False,
-                        error=f"Comparative verification failed: {str(e)}",
-                        question_text=self.base._questions_cache.get(q_id, {}).get("question", ""),
-                        raw_llm_response="",
-                        answering_model="unknown",
-                        parsing_model="unknown",
-                        execution_time=0.0,
-                        timestamp=datetime.now().isoformat(),
-                        run_name=run_name,
+                        metadata=VerificationResultMetadata(
+                            question_id=q_id,
+                            template_id=template_id,
+                            completed_without_errors=False,
+                            error=f"Comparative verification failed: {str(e)}",
+                            question_text=self.base._questions_cache.get(q_id, {}).get("question", ""),
+                            answering_model="unknown",
+                            parsing_model="unknown",
+                            execution_time=0.0,
+                            timestamp=datetime.now().isoformat(),
+                            run_name=run_name,
+                        )
                     )
                     error_results[f"{q_id}_error"] = error_result
                 all_results[run_name] = error_results

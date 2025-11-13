@@ -669,6 +669,8 @@ class VerificationResultMetadata(BaseModel):
     keywords: list[str] | None = None  # Keywords associated with the question
     answering_model: str
     parsing_model: str
+    answering_system_prompt: str | None = None  # System prompt used for answering model
+    parsing_system_prompt: str | None = None  # System prompt used for parsing model
     execution_time: float
     timestamp: str
     run_name: str | None = None
@@ -688,9 +690,6 @@ class VerificationResultTemplate(BaseModel):
     template_verification_performed: bool = False  # Whether template verification was executed
     verify_result: Any | None = None  # Template verification result (None if template verification skipped)
     verify_granular_result: Any | None = None
-
-    answering_system_prompt: str | None = None
-    parsing_system_prompt: str | None = None
 
     # Embeddings
     embedding_check_performed: bool = False  # Whether embedding check was attempted
@@ -861,6 +860,268 @@ class VerificationResult(BaseModel):
     def question_text(self) -> str:
         """Backward compatibility accessor for question_text."""
         return self.metadata.question_text
+
+    @property
+    def keywords(self) -> list[str] | None:
+        """Backward compatibility accessor for keywords."""
+        return self.metadata.keywords
+
+    @property
+    def answering_model(self) -> str:
+        """Backward compatibility accessor for answering_model."""
+        return self.metadata.answering_model
+
+    @property
+    def parsing_model(self) -> str:
+        """Backward compatibility accessor for parsing_model."""
+        return self.metadata.parsing_model
+
+    @property
+    def success(self) -> bool:
+        """Backward compatibility accessor for success (old name for completed_without_errors)."""
+        return self.metadata.completed_without_errors
+
+    @property
+    def answering_replicate(self) -> int | None:
+        """Backward compatibility accessor for answering_replicate."""
+        return self.metadata.answering_replicate
+
+    @property
+    def parsing_replicate(self) -> int | None:
+        """Backward compatibility accessor for parsing_replicate."""
+        return self.metadata.parsing_replicate
+
+    @property
+    def answering_system_prompt(self) -> str | None:
+        """Backward compatibility accessor for answering_system_prompt."""
+        return self.metadata.answering_system_prompt
+
+    @property
+    def parsing_system_prompt(self) -> str | None:
+        """Backward compatibility accessor for parsing_system_prompt."""
+        return self.metadata.parsing_system_prompt
+
+    @property
+    def run_name(self) -> str | None:
+        """Backward compatibility accessor for run_name."""
+        return self.metadata.run_name
+
+    @property
+    def job_id(self) -> str | None:
+        """Backward compatibility accessor for job_id."""
+        return self.metadata.job_id
+
+    @property
+    def execution_time(self) -> float:
+        """Backward compatibility accessor for execution_time."""
+        return self.metadata.execution_time
+
+    @property
+    def timestamp(self) -> str:
+        """Backward compatibility accessor for timestamp."""
+        return self.metadata.timestamp
+
+    # Template field backward compatibility
+    @property
+    def raw_llm_response(self) -> str | None:
+        """Backward compatibility accessor for raw_llm_response."""
+        return self.template.raw_llm_response if self.template else None
+
+    @property
+    def usage_metadata(self) -> dict[str, Any] | None:
+        """Backward compatibility accessor for usage_metadata."""
+        return self.template.usage_metadata if self.template else None
+
+    @property
+    def agent_metrics(self) -> dict[str, Any] | None:
+        """Backward compatibility accessor for agent_metrics."""
+        return self.template.agent_metrics if self.template else None
+
+    @property
+    def recursion_limit_reached(self) -> bool | None:
+        """Backward compatibility accessor for recursion_limit_reached."""
+        return self.template.recursion_limit_reached if self.template else None
+
+    @property
+    def answering_mcp_servers(self) -> list[str] | None:
+        """Backward compatibility accessor for answering_mcp_servers."""
+        return self.template.answering_mcp_servers if self.template else None
+
+    @property
+    def abstention_detected(self) -> bool | None:
+        """Backward compatibility accessor for abstention_detected."""
+        return self.template.abstention_detected if self.template else None
+
+    @property
+    def abstention_override_applied(self) -> bool:
+        """Backward compatibility accessor for abstention_override_applied."""
+        return self.template.abstention_override_applied if self.template else False
+
+    @property
+    def abstention_check_performed(self) -> bool:
+        """Backward compatibility accessor for abstention_check_performed."""
+        return self.template.abstention_check_performed if self.template else False
+
+    @property
+    def parsed_gt_response(self) -> dict[str, Any] | None:
+        """Backward compatibility accessor for parsed_gt_response."""
+        return self.template.parsed_gt_response if self.template else None
+
+    @property
+    def parsed_llm_response(self) -> dict[str, Any] | None:
+        """Backward compatibility accessor for parsed_llm_response."""
+        return self.template.parsed_llm_response if self.template else None
+
+    @property
+    def verify_result(self) -> bool | None:
+        """Backward compatibility accessor for verify_result."""
+        return self.template.verify_result if self.template else None
+
+    @property
+    def verify_granular_result(self) -> Any | None:
+        """Backward compatibility accessor for verify_granular_result."""
+        return self.template.verify_granular_result if self.template else None
+
+    @property
+    def embedding_check_performed(self) -> bool:
+        """Backward compatibility accessor for embedding_check_performed."""
+        return self.template.embedding_check_performed if self.template else False
+
+    @property
+    def embedding_similarity_score(self) -> float | None:
+        """Backward compatibility accessor for embedding_similarity_score."""
+        return self.template.embedding_similarity_score if self.template else None
+
+    @property
+    def embedding_override_applied(self) -> bool:
+        """Backward compatibility accessor for embedding_override_applied."""
+        return self.template.embedding_override_applied if self.template else False
+
+    @property
+    def embedding_model_used(self) -> str | None:
+        """Backward compatibility accessor for embedding_model_used."""
+        return self.template.embedding_model_used if self.template else None
+
+    @property
+    def template_verification_performed(self) -> bool:
+        """Backward compatibility accessor for template_verification_performed."""
+        return self.template.template_verification_performed if self.template else False
+
+    @property
+    def abstention_reasoning(self) -> str | None:
+        """Backward compatibility accessor for abstention_reasoning."""
+        return self.template.abstention_reasoning if self.template else None
+
+    @property
+    def regex_validations_performed(self) -> bool:
+        """Backward compatibility accessor for regex_validations_performed."""
+        return self.template.regex_validations_performed if self.template else False
+
+    @property
+    def regex_validation_results(self) -> dict[str, bool] | None:
+        """Backward compatibility accessor for regex_validation_results."""
+        return self.template.regex_validation_results if self.template else None
+
+    @property
+    def regex_validation_details(self) -> dict[str, dict[str, Any]] | None:
+        """Backward compatibility accessor for regex_validation_details."""
+        return self.template.regex_validation_details if self.template else None
+
+    @property
+    def regex_overall_success(self) -> bool | None:
+        """Backward compatibility accessor for regex_overall_success."""
+        return self.template.regex_overall_success if self.template else None
+
+    @property
+    def regex_extraction_results(self) -> dict[str, Any] | None:
+        """Backward compatibility accessor for regex_extraction_results."""
+        return self.template.regex_extraction_results if self.template else None
+
+    # Deep judgment backward compatibility
+    @property
+    def deep_judgment_performed(self) -> bool:
+        """Backward compatibility accessor for deep_judgment_performed."""
+        return self.deep_judgment.deep_judgment_performed if self.deep_judgment else False
+
+    @property
+    def deep_judgment_enabled(self) -> bool:
+        """Backward compatibility accessor for deep_judgment_enabled."""
+        return self.deep_judgment.deep_judgment_enabled if self.deep_judgment else False
+
+    @property
+    def extracted_excerpts(self) -> dict[str, list[dict[str, Any]]] | None:
+        """Backward compatibility accessor for extracted_excerpts."""
+        return self.deep_judgment.extracted_excerpts if self.deep_judgment else None
+
+    @property
+    def attribute_reasoning(self) -> dict[str, str] | None:
+        """Backward compatibility accessor for attribute_reasoning."""
+        return self.deep_judgment.attribute_reasoning if self.deep_judgment else None
+
+    @property
+    def deep_judgment_stages_completed(self) -> list[str] | None:
+        """Backward compatibility accessor for deep_judgment_stages_completed."""
+        return self.deep_judgment.deep_judgment_stages_completed if self.deep_judgment else None
+
+    @property
+    def deep_judgment_model_calls(self) -> int:
+        """Backward compatibility accessor for deep_judgment_model_calls."""
+        return self.deep_judgment.deep_judgment_model_calls if self.deep_judgment else 0
+
+    @property
+    def deep_judgment_excerpt_retry_count(self) -> int:
+        """Backward compatibility accessor for deep_judgment_excerpt_retry_count."""
+        return self.deep_judgment.deep_judgment_excerpt_retry_count if self.deep_judgment else 0
+
+    @property
+    def attributes_without_excerpts(self) -> list[str] | None:
+        """Backward compatibility accessor for attributes_without_excerpts."""
+        return self.deep_judgment.attributes_without_excerpts if self.deep_judgment else None
+
+    @property
+    def deep_judgment_search_enabled(self) -> bool:
+        """Backward compatibility accessor for deep_judgment_search_enabled."""
+        return self.deep_judgment.deep_judgment_search_enabled if self.deep_judgment else False
+
+    @property
+    def hallucination_risk_assessment(self) -> dict[str, str] | None:
+        """Backward compatibility accessor for hallucination_risk_assessment."""
+        return self.deep_judgment.hallucination_risk_assessment if self.deep_judgment else None
+
+    # Rubric field backward compatibility
+    @property
+    def rubric_evaluation_performed(self) -> bool:
+        """Backward compatibility accessor for rubric_evaluation_performed."""
+        return self.rubric.rubric_evaluation_performed if self.rubric else False
+
+    @property
+    def verify_rubric(self) -> dict[str, Any] | None:
+        """Backward compatibility accessor for verify_rubric (combines llm and manual traits)."""
+        if not self.rubric:
+            return None
+
+        result: dict[str, Any] = {}
+        if self.rubric.llm_trait_scores:
+            result.update(self.rubric.llm_trait_scores)
+        if self.rubric.manual_trait_scores:
+            result.update(self.rubric.manual_trait_scores)
+
+        return result if result else None
+
+    @property
+    def metric_trait_metrics(self) -> dict[str, dict[str, float]] | None:
+        """Backward compatibility accessor for metric_trait_metrics."""
+        return self.rubric.metric_trait_scores if self.rubric else None
+
+    @property
+    def metric_trait_confusion_lists(self) -> dict[str, dict[str, list[str]]] | None:
+        """Backward compatibility accessor for metric_trait_confusion_lists."""
+        return self.rubric.metric_trait_confusion_lists if self.rubric else None
+
+    @property
+    def evaluation_rubric(self) -> dict[str, Any] | None:
+        """Backward compatibility accessor for evaluation_rubric."""
+        return self.rubric.evaluation_rubric if self.rubric else None
 
 
 class VerificationJob(BaseModel):

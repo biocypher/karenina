@@ -633,8 +633,8 @@ class TestAdvancedRegression:
         mock_runner_legacy_llm.side_effect = mock_llm_side_effect
 
         # Mock abstention detection (required by DeepJudgmentAutoFail stage)
-        # Returns: (abstention_detected, check_performed, reasoning)
-        mock_abstention_result = (False, True, None)
+        # Returns: (abstention_detected, check_performed, reasoning, usage_metadata)
+        mock_abstention_result = (False, True, None, {})
         mock_abstention_stage.return_value = mock_abstention_result
         mock_abstention_runner.return_value = mock_abstention_result
 
@@ -769,8 +769,8 @@ class TestAdvancedRegression:
         mock_runner_legacy_llm.side_effect = mock_llm_side_effect
 
         # Mock abstention detection to return detected
-        # Returns: (abstention_detected, check_performed, reasoning)
-        mock_abstention_result = (True, True, "Response contains explicit refusal pattern")
+        # Returns: (abstention_detected, check_performed, reasoning, usage_metadata)
+        mock_abstention_result = (True, True, "Response contains explicit refusal pattern", {})
         mock_abstention_stage.return_value = mock_abstention_result
         mock_abstention_runner.return_value = mock_abstention_result
 

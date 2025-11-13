@@ -414,8 +414,8 @@ def export_verification_results_csv(
             "verify_granular_result": _serialize_verification_result(
                 template.verify_granular_result if template else None
             ),
-            "answering_system_prompt": template.answering_system_prompt or "" if template else "",
-            "parsing_system_prompt": template.parsing_system_prompt or "" if template else "",
+            "answering_system_prompt": metadata.answering_system_prompt or "",
+            "parsing_system_prompt": metadata.parsing_system_prompt or "",
             "embedding_check_performed": template.embedding_check_performed if template else False,
             "embedding_similarity_score": template.embedding_similarity_score or "" if template else "",
             "embedding_override_applied": template.embedding_override_applied if template else False,

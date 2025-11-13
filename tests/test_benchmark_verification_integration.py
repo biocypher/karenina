@@ -10,6 +10,12 @@ import pytest
 from karenina.benchmark.benchmark import Benchmark
 from karenina.schemas import ModelConfig, VerificationConfig, VerificationResult
 from karenina.schemas.domain import RubricTrait
+from karenina.schemas.workflow.verification import (
+    VerificationResultDeepJudgment,
+    VerificationResultMetadata,
+    VerificationResultRubric,
+    VerificationResultTemplate,
+)
 
 
 @pytest.fixture
@@ -128,16 +134,21 @@ class TestBenchmarkVerificationIntegration:
 
         # Mock the verification results
         mock_verification_result = VerificationResult(
-            question_id=q1_id,
-            template_id="no_template",
-            success=True,
-            question_text="What is 2 + 2?",
-            raw_llm_response="The answer is 4",
-            answering_model="openai/gpt-4.1-mini",
-            parsing_model="openai/gpt-4.1-mini",
-            execution_time=1.5,
-            timestamp="2023-01-01T00:00:00",
-            completed_without_errors=True,
+            metadata=VerificationResultMetadata(
+                question_id=q1_id,
+                template_id="no_template",
+                completed_without_errors=True,
+                question_text="What is 2 + 2?",
+                answering_model="openai/gpt-4.1-mini",
+                parsing_model="openai/gpt-4.1-mini",
+                execution_time=1.5,
+                timestamp="2023-01-01T00:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="The answer is 4",
+            ),
+            rubric=VerificationResultRubric(rubric_evaluation_performed=False),
+            deep_judgment=VerificationResultDeepJudgment(),
         )
 
         mock_run_batch.return_value = {f"{q1_id}_test": mock_verification_result}
@@ -167,16 +178,21 @@ class TestBenchmarkVerificationIntegration:
 
         with patch("karenina.benchmark.core.verification_manager.run_verification_batch") as mock_verify:
             mock_result = VerificationResult(
-                question_id=q1_id,
-                template_id="no_template",
-                success=True,
-                question_text="What is 2 + 2?",
-                raw_llm_response="4",
-                answering_model="test",
-                parsing_model="test",
-                execution_time=1.0,
-                timestamp="2023-01-01T00:00:00",
-                completed_without_errors=True,
+                metadata=VerificationResultMetadata(
+                    question_id=q1_id,
+                    template_id="no_template",
+                    completed_without_errors=True,
+                    question_text="What is 2 + 2?",
+                    answering_model="test",
+                    parsing_model="test",
+                    execution_time=1.0,
+                    timestamp="2023-01-01T00:00:00",
+                ),
+                template=VerificationResultTemplate(
+                    raw_llm_response="4",
+                ),
+                rubric=VerificationResultRubric(rubric_evaluation_performed=False),
+                deep_judgment=VerificationResultDeepJudgment(),
             )
             mock_verify.return_value = {f"{q1_id}_result": mock_result}
 
@@ -266,30 +282,40 @@ class TestBenchmarkVerificationIntegration:
 
         # Create some mock results
         result1 = VerificationResult(
-            question_id=q1_id,
-            template_id="no_template",
-            success=True,
-            question_text="What is 2 + 2?",
-            raw_llm_response="4",
-            answering_model="test",
-            parsing_model="test",
-            execution_time=1.0,
-            timestamp="2023-01-01T00:00:00",
-            completed_without_errors=True,
+            metadata=VerificationResultMetadata(
+                question_id=q1_id,
+                template_id="no_template",
+                completed_without_errors=True,
+                question_text="What is 2 + 2?",
+                answering_model="test",
+                parsing_model="test",
+                execution_time=1.0,
+                timestamp="2023-01-01T00:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="4",
+            ),
+            rubric=VerificationResultRubric(rubric_evaluation_performed=False),
+            deep_judgment=VerificationResultDeepJudgment(),
         )
 
         result2 = VerificationResult(
-            question_id=q2_id,
-            template_id="no_template",
-            success=False,
-            error="Some error",
-            question_text="What is the capital of France?",
-            raw_llm_response="",
-            answering_model="test",
-            parsing_model="test",
-            execution_time=0.5,
-            timestamp="2023-01-01T00:01:00",
-            completed_without_errors=False,
+            metadata=VerificationResultMetadata(
+                question_id=q2_id,
+                template_id="no_template",
+                completed_without_errors=False,
+                error="Some error",
+                question_text="What is the capital of France?",
+                answering_model="test",
+                parsing_model="test",
+                execution_time=0.5,
+                timestamp="2023-01-01T00:01:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="",
+            ),
+            rubric=VerificationResultRubric(rubric_evaluation_performed=False),
+            deep_judgment=VerificationResultDeepJudgment(),
         )
 
         results = {
@@ -319,30 +345,40 @@ class TestBenchmarkVerificationIntegration:
 
         # Store results for multiple runs
         result1 = VerificationResult(
-            question_id=q1_id,
-            template_id="no_template",
-            success=True,
-            question_text="What is 2 + 2?",
-            raw_llm_response="4",
-            answering_model="test",
-            parsing_model="test",
-            execution_time=1.0,
-            timestamp="2023-01-01T00:00:00",
-            completed_without_errors=True,
+            metadata=VerificationResultMetadata(
+                question_id=q1_id,
+                template_id="no_template",
+                completed_without_errors=True,
+                question_text="What is 2 + 2?",
+                answering_model="test",
+                parsing_model="test",
+                execution_time=1.0,
+                timestamp="2023-01-01T00:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="4",
+            ),
+            rubric=VerificationResultRubric(rubric_evaluation_performed=False),
+            deep_judgment=VerificationResultDeepJudgment(),
         )
 
         result2 = VerificationResult(
-            question_id=q1_id,
-            template_id="no_template",
-            success=False,
-            error="Different error",
-            question_text="What is 2 + 2?",
-            raw_llm_response="",
-            answering_model="test",
-            parsing_model="test",
-            execution_time=0.8,
-            timestamp="2023-01-01T00:02:00",
-            completed_without_errors=False,
+            metadata=VerificationResultMetadata(
+                question_id=q1_id,
+                template_id="no_template",
+                completed_without_errors=False,
+                error="Different error",
+                question_text="What is 2 + 2?",
+                answering_model="test",
+                parsing_model="test",
+                execution_time=0.8,
+                timestamp="2023-01-01T00:02:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="",
+            ),
+            rubric=VerificationResultRubric(rubric_evaluation_performed=False),
+            deep_judgment=VerificationResultDeepJudgment(),
         )
 
         benchmark.store_verification_results({f"{q1_id}_run1": result1}, "run1")
@@ -364,29 +400,39 @@ class TestBenchmarkVerificationIntegration:
 
         # Store some results
         result1 = VerificationResult(
-            question_id=q1_id,
-            template_id="no_template",
-            success=True,
-            question_text="What is 2 + 2?",
-            raw_llm_response="4",
-            answering_model="test",
-            parsing_model="test",
-            execution_time=1.0,
-            timestamp="2023-01-01T00:00:00",
-            completed_without_errors=True,
+            metadata=VerificationResultMetadata(
+                question_id=q1_id,
+                template_id="no_template",
+                completed_without_errors=True,
+                question_text="What is 2 + 2?",
+                answering_model="test",
+                parsing_model="test",
+                execution_time=1.0,
+                timestamp="2023-01-01T00:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="4",
+            ),
+            rubric=VerificationResultRubric(rubric_evaluation_performed=False),
+            deep_judgment=VerificationResultDeepJudgment(),
         )
 
         result2 = VerificationResult(
-            question_id=q2_id,
-            template_id="no_template",
-            success=True,
-            question_text="What is the capital of France?",
-            raw_llm_response="Paris",
-            answering_model="test",
-            parsing_model="test",
-            execution_time=1.2,
-            timestamp="2023-01-01T00:01:00",
-            completed_without_errors=True,
+            metadata=VerificationResultMetadata(
+                question_id=q2_id,
+                template_id="no_template",
+                completed_without_errors=True,
+                question_text="What is the capital of France?",
+                answering_model="test",
+                parsing_model="test",
+                execution_time=1.2,
+                timestamp="2023-01-01T00:01:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="Paris",
+            ),
+            rubric=VerificationResultRubric(rubric_evaluation_performed=False),
+            deep_judgment=VerificationResultDeepJudgment(),
         )
 
         benchmark.store_verification_results(
@@ -412,16 +458,21 @@ class TestBenchmarkVerificationIntegration:
 
         # Store some results
         result = VerificationResult(
-            question_id=q1_id,
-            template_id="no_template",
-            success=True,
-            question_text="What is 2 + 2?",
-            raw_llm_response="4",
-            answering_model="test",
-            parsing_model="test",
-            execution_time=1.0,
-            timestamp="2023-01-01T00:00:00",
-            completed_without_errors=True,
+            metadata=VerificationResultMetadata(
+                question_id=q1_id,
+                template_id="no_template",
+                completed_without_errors=True,
+                question_text="What is 2 + 2?",
+                answering_model="test",
+                parsing_model="test",
+                execution_time=1.0,
+                timestamp="2023-01-01T00:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="4",
+            ),
+            rubric=VerificationResultRubric(rubric_evaluation_performed=False),
+            deep_judgment=VerificationResultDeepJudgment(),
         )
 
         benchmark.store_verification_results({f"{q1_id}_test": result}, "test_run")
@@ -443,30 +494,40 @@ class TestBenchmarkVerificationIntegration:
 
         # Store mixed results
         success_result = VerificationResult(
-            question_id=q1_id,
-            template_id="no_template",
-            success=True,
-            question_text="What is 2 + 2?",
-            raw_llm_response="4",
-            answering_model="test1",
-            parsing_model="test1",
-            execution_time=1.0,
-            timestamp="2023-01-01T00:00:00",
-            completed_without_errors=True,
+            metadata=VerificationResultMetadata(
+                question_id=q1_id,
+                template_id="no_template",
+                completed_without_errors=True,
+                question_text="What is 2 + 2?",
+                answering_model="test1",
+                parsing_model="test1",
+                execution_time=1.0,
+                timestamp="2023-01-01T00:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="4",
+            ),
+            rubric=VerificationResultRubric(rubric_evaluation_performed=False),
+            deep_judgment=VerificationResultDeepJudgment(),
         )
 
         failure_result = VerificationResult(
-            question_id=q2_id,
-            template_id="no_template",
-            success=False,
-            error="Failed",
-            question_text="What is the capital of France?",
-            raw_llm_response="",
-            answering_model="test2",
-            parsing_model="test2",
-            execution_time=0.5,
-            timestamp="2023-01-01T00:01:00",
-            completed_without_errors=False,
+            metadata=VerificationResultMetadata(
+                question_id=q2_id,
+                template_id="no_template",
+                completed_without_errors=False,
+                error="Failed",
+                question_text="What is the capital of France?",
+                answering_model="test2",
+                parsing_model="test2",
+                execution_time=0.5,
+                timestamp="2023-01-01T00:01:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="",
+            ),
+            rubric=VerificationResultRubric(rubric_evaluation_performed=False),
+            deep_judgment=VerificationResultDeepJudgment(),
         )
 
         benchmark.store_verification_results(
@@ -523,19 +584,24 @@ class TestBenchmarkVerificationIntegration:
         benchmark, (q1_id, q2_id, q3_id) = sample_benchmark
 
         mock_result = VerificationResult(
-            question_id=q1_id,
-            template_id="no_template",
-            success=True,
-            question_text="What is 2 + 2?",
-            raw_llm_response="4",
-            answering_model="test",
-            parsing_model="test",
-            execution_time=1.0,
-            timestamp="2023-01-01T00:00:00",
-            completed_without_errors=True,
-            embedding_check_performed=False,
-            regex_validations_performed=False,
-            recursion_limit_reached=False,
+            metadata=VerificationResultMetadata(
+                question_id=q1_id,
+                template_id="no_template",
+                completed_without_errors=True,
+                question_text="What is 2 + 2?",
+                answering_model="test",
+                parsing_model="test",
+                execution_time=1.0,
+                timestamp="2023-01-01T00:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="4",
+                embedding_check_performed=False,
+                regex_validations_performed=False,
+                recursion_limit_reached=False,
+            ),
+            rubric=VerificationResultRubric(rubric_evaluation_performed=False),
+            deep_judgment=VerificationResultDeepJudgment(),
         )
 
         expected_key = f"{q1_id}_test-answering_test-parsing"
@@ -562,19 +628,24 @@ class TestBenchmarkVerificationIntegration:
 
         # Store some verification results
         result = VerificationResult(
-            question_id=q1_id,
-            template_id="no_template",
-            success=True,
-            question_text="What is 2 + 2?",
-            raw_llm_response="4",
-            answering_model="test",
-            parsing_model="test",
-            execution_time=1.0,
-            timestamp="2023-01-01T00:00:00",
-            completed_without_errors=True,
-            embedding_check_performed=False,
-            regex_validations_performed=False,
-            recursion_limit_reached=False,
+            metadata=VerificationResultMetadata(
+                question_id=q1_id,
+                template_id="no_template",
+                completed_without_errors=True,
+                question_text="What is 2 + 2?",
+                answering_model="test",
+                parsing_model="test",
+                execution_time=1.0,
+                timestamp="2023-01-01T00:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="4",
+                embedding_check_performed=False,
+                regex_validations_performed=False,
+                recursion_limit_reached=False,
+            ),
+            rubric=VerificationResultRubric(rubric_evaluation_performed=False),
+            deep_judgment=VerificationResultDeepJudgment(),
         )
 
         result_key = f"{q1_id}_test"
@@ -623,16 +694,21 @@ class TestBenchmarkVerificationIntegration:
             batch_callback = kwargs.get("progress_callback")
 
             mock_result = VerificationResult(
-                question_id=q1_id,
-                template_id="no_template",
-                success=True,
-                question_text="What is 2 + 2?",
-                raw_llm_response="4",
-                answering_model="test",
-                parsing_model="test",
-                execution_time=1.0,
-                timestamp="2023-01-01T00:00:00",
-                completed_without_errors=True,
+                metadata=VerificationResultMetadata(
+                    question_id=q1_id,
+                    template_id="no_template",
+                    completed_without_errors=True,
+                    question_text="What is 2 + 2?",
+                    answering_model="test",
+                    parsing_model="test",
+                    execution_time=1.0,
+                    timestamp="2023-01-01T00:00:00",
+                ),
+                template=VerificationResultTemplate(
+                    raw_llm_response="4",
+                ),
+                rubric=VerificationResultRubric(rubric_evaluation_performed=False),
+                deep_judgment=VerificationResultDeepJudgment(),
             )
 
             # Simulate calling the batch progress callback BEFORE each task

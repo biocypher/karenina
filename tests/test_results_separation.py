@@ -9,6 +9,11 @@ import pytest
 
 from karenina.benchmark import Benchmark
 from karenina.schemas import VerificationResult
+from karenina.schemas.workflow.verification import (
+    VerificationResultMetadata,
+    VerificationResultRubric,
+    VerificationResultTemplate,
+)
 
 
 class TestResultsSeparation:
@@ -42,28 +47,42 @@ class TestResultsSeparation:
         """Create sample verification results."""
         return {
             "q1_result1": VerificationResult(
-                question_id="test_q1",
-                template_id="no_template",
-                success=True,
-                question_text="What is 2+2?",
-                raw_llm_response="4",
-                answering_model="gpt-4.1-mini",
-                parsing_model="gpt-4.1-mini",
-                execution_time=1.5,
-                timestamp=datetime.now().isoformat(),
-                run_name="test_run",
+                metadata=VerificationResultMetadata(
+                    question_id="test_q1",
+                    template_id="no_template",
+                    completed_without_errors=True,
+                    question_text="What is 2+2?",
+                    answering_model="gpt-4.1-mini",
+                    parsing_model="gpt-4.1-mini",
+                    execution_time=1.5,
+                    timestamp=datetime.now().isoformat(),
+                    run_name="test_run",
+                ),
+                template=VerificationResultTemplate(
+                    raw_llm_response="4",
+                ),
+                rubric=VerificationResultRubric(
+                    rubric_evaluation_performed=False,
+                ),
             ),
             "q2_result1": VerificationResult(
-                question_id="test_q2",
-                template_id="no_template",
-                success=True,
-                question_text="What is the capital of France?",
-                raw_llm_response="Paris",
-                answering_model="gpt-4.1-mini",
-                parsing_model="gpt-4.1-mini",
-                execution_time=2.0,
-                timestamp=datetime.now().isoformat(),
-                run_name="test_run",
+                metadata=VerificationResultMetadata(
+                    question_id="test_q2",
+                    template_id="no_template",
+                    completed_without_errors=True,
+                    question_text="What is the capital of France?",
+                    answering_model="gpt-4.1-mini",
+                    parsing_model="gpt-4.1-mini",
+                    execution_time=2.0,
+                    timestamp=datetime.now().isoformat(),
+                    run_name="test_run",
+                ),
+                template=VerificationResultTemplate(
+                    raw_llm_response="Paris",
+                ),
+                rubric=VerificationResultRubric(
+                    rubric_evaluation_performed=False,
+                ),
             ),
         }
 
@@ -175,9 +194,9 @@ class TestResultsSeparation:
             result = exported_data[0]  # First item in array
             assert "row_index" in result
             assert result["row_index"] == 1
-            assert result["success"] is True
-            assert result["question_text"] == "What is 2+2?"
-            assert result["answering_model"] == "gpt-4.1-mini"
+            assert result["metadata"]["completed_without_errors"] is True
+            assert result["metadata"]["question_text"] == "What is 2+2?"
+            assert result["metadata"]["answering_model"] == "gpt-4.1-mini"
 
         finally:
             if results_path.exists():

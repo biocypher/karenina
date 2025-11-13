@@ -1,7 +1,12 @@
 """Tests for StepEval rubric results aggregation across replicates."""
 
 from karenina.benchmark.task_eval.models import StepEval
-from karenina.schemas.workflow.verification import VerificationResult
+from karenina.schemas.workflow.verification import (
+    VerificationResult,
+    VerificationResultMetadata,
+    VerificationResultRubric,
+    VerificationResultTemplate,
+)
 
 
 def test_aggregate_rubric_results_all_trait_types() -> None:
@@ -11,115 +16,139 @@ def test_aggregate_rubric_results_all_trait_types() -> None:
     # Create 3 replicates with all trait types
     step_eval.verification_results["trace_1"] = [
         VerificationResult(
-            question_id="trace_1",
-            template_id="test_template",
-            completed_without_errors=True,
-            question_text="Test question",
-            raw_llm_response="Test response 1",
-            answering_model="gpt-4.1-mini",
-            parsing_model="gpt-4.1-mini",
-            execution_time=1.0,
-            timestamp="2025-11-11T00:00:00",
-            verify_rubric={"clarity": 4, "analysis_quality": 3, "has_citation": True},
-            evaluation_rubric={
-                "traits": [
-                    {"name": "clarity", "description": "Clarity", "kind": "score", "min_score": 1, "max_score": 5},
-                    {
-                        "name": "analysis_quality",
-                        "description": "Quality",
-                        "kind": "score",
-                        "min_score": 1,
-                        "max_score": 5,
-                    },
-                ],
-                "manual_traits": [
-                    {
-                        "name": "has_citation",
-                        "description": "Has citation",
-                        "pattern": r"\[\d+\]",
-                        "callable_name": None,
-                        "case_sensitive": True,
-                        "invert_result": False,
-                    }
-                ],
-                "metric_traits": [],
-            },
-            metric_trait_metrics={"entity_extraction": {"precision": 0.8, "recall": 0.9, "f1": 0.85}},
-            metric_trait_confusion_lists={"entity_extraction": {"tp": ["Alice"], "tn": [], "fp": [], "fn": []}},
+            metadata=VerificationResultMetadata(
+                question_id="trace_1",
+                template_id="test_template",
+                completed_without_errors=True,
+                question_text="Test question",
+                answering_model="gpt-4.1-mini",
+                parsing_model="gpt-4.1-mini",
+                execution_time=1.0,
+                timestamp="2025-11-11T00:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="Test response 1",
+            ),
+            rubric=VerificationResultRubric(
+                rubric_evaluation_performed=True,
+                llm_trait_scores={"clarity": 4, "analysis_quality": 3},
+                manual_trait_scores={"has_citation": True},
+                metric_trait_scores={"entity_extraction": {"precision": 0.8, "recall": 0.9, "f1": 0.85}},
+                metric_trait_confusion_lists={"entity_extraction": {"tp": ["Alice"], "tn": [], "fp": [], "fn": []}},
+                evaluation_rubric={
+                    "traits": [
+                        {"name": "clarity", "description": "Clarity", "kind": "score", "min_score": 1, "max_score": 5},
+                        {
+                            "name": "analysis_quality",
+                            "description": "Quality",
+                            "kind": "score",
+                            "min_score": 1,
+                            "max_score": 5,
+                        },
+                    ],
+                    "manual_traits": [
+                        {
+                            "name": "has_citation",
+                            "description": "Has citation",
+                            "pattern": r"\[\d+\]",
+                            "callable_name": None,
+                            "case_sensitive": True,
+                            "invert_result": False,
+                        }
+                    ],
+                    "metric_traits": [],
+                },
+            ),
         ),
         VerificationResult(
-            question_id="trace_1",
-            template_id="test_template",
-            completed_without_errors=True,
-            question_text="Test question",
-            raw_llm_response="Test response 2",
-            answering_model="gpt-4.1-mini",
-            parsing_model="gpt-4.1-mini",
-            execution_time=1.0,
-            timestamp="2025-11-11T00:00:00",
-            verify_rubric={"clarity": 5, "analysis_quality": 4, "has_citation": True},
-            evaluation_rubric={
-                "traits": [
-                    {"name": "clarity", "description": "Clarity", "kind": "score", "min_score": 1, "max_score": 5},
-                    {
-                        "name": "analysis_quality",
-                        "description": "Quality",
-                        "kind": "score",
-                        "min_score": 1,
-                        "max_score": 5,
-                    },
-                ],
-                "manual_traits": [
-                    {
-                        "name": "has_citation",
-                        "description": "Has citation",
-                        "pattern": r"\[\d+\]",
-                        "callable_name": None,
-                        "case_sensitive": True,
-                        "invert_result": False,
-                    }
-                ],
-                "metric_traits": [],
-            },
-            metric_trait_metrics={"entity_extraction": {"precision": 0.9, "recall": 0.95, "f1": 0.925}},
-            metric_trait_confusion_lists={"entity_extraction": {"tp": ["Bob"], "tn": [], "fp": [], "fn": []}},
+            metadata=VerificationResultMetadata(
+                question_id="trace_1",
+                template_id="test_template",
+                completed_without_errors=True,
+                question_text="Test question",
+                answering_model="gpt-4.1-mini",
+                parsing_model="gpt-4.1-mini",
+                execution_time=1.0,
+                timestamp="2025-11-11T00:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="Test response 2",
+            ),
+            rubric=VerificationResultRubric(
+                rubric_evaluation_performed=True,
+                llm_trait_scores={"clarity": 5, "analysis_quality": 4},
+                manual_trait_scores={"has_citation": True},
+                metric_trait_scores={"entity_extraction": {"precision": 0.9, "recall": 0.95, "f1": 0.925}},
+                metric_trait_confusion_lists={"entity_extraction": {"tp": ["Bob"], "tn": [], "fp": [], "fn": []}},
+                evaluation_rubric={
+                    "traits": [
+                        {"name": "clarity", "description": "Clarity", "kind": "score", "min_score": 1, "max_score": 5},
+                        {
+                            "name": "analysis_quality",
+                            "description": "Quality",
+                            "kind": "score",
+                            "min_score": 1,
+                            "max_score": 5,
+                        },
+                    ],
+                    "manual_traits": [
+                        {
+                            "name": "has_citation",
+                            "description": "Has citation",
+                            "pattern": r"\[\d+\]",
+                            "callable_name": None,
+                            "case_sensitive": True,
+                            "invert_result": False,
+                        }
+                    ],
+                    "metric_traits": [],
+                },
+            ),
         ),
         VerificationResult(
-            question_id="trace_1",
-            template_id="test_template",
-            completed_without_errors=True,
-            question_text="Test question",
-            raw_llm_response="Test response 3",
-            answering_model="gpt-4.1-mini",
-            parsing_model="gpt-4.1-mini",
-            execution_time=1.0,
-            timestamp="2025-11-11T00:00:00",
-            verify_rubric={"clarity": 4, "analysis_quality": 2, "has_citation": False},
-            evaluation_rubric={
-                "traits": [
-                    {"name": "clarity", "description": "Clarity", "kind": "score", "min_score": 1, "max_score": 5},
-                    {
-                        "name": "analysis_quality",
-                        "description": "Quality",
-                        "kind": "score",
-                        "min_score": 1,
-                        "max_score": 5,
-                    },
-                ],
-                "manual_traits": [
-                    {
-                        "name": "has_citation",
-                        "description": "Has citation",
-                        "pattern": r"\[\d+\]",
-                        "callable_name": None,
-                        "case_sensitive": True,
-                        "invert_result": False,
-                    }
-                ],
-                "metric_traits": [],
-            },
-            metric_trait_metrics={"entity_extraction": {"precision": 0.85, "recall": 0.92, "f1": 0.88}},
-            metric_trait_confusion_lists={"entity_extraction": {"tp": ["Charlie"], "tn": [], "fp": [], "fn": []}},
+            metadata=VerificationResultMetadata(
+                question_id="trace_1",
+                template_id="test_template",
+                completed_without_errors=True,
+                question_text="Test question",
+                answering_model="gpt-4.1-mini",
+                parsing_model="gpt-4.1-mini",
+                execution_time=1.0,
+                timestamp="2025-11-11T00:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="Test response 3",
+            ),
+            rubric=VerificationResultRubric(
+                rubric_evaluation_performed=True,
+                llm_trait_scores={"clarity": 4, "analysis_quality": 2},
+                manual_trait_scores={"has_citation": False},
+                metric_trait_scores={"entity_extraction": {"precision": 0.85, "recall": 0.92, "f1": 0.88}},
+                metric_trait_confusion_lists={"entity_extraction": {"tp": ["Charlie"], "tn": [], "fp": [], "fn": []}},
+                evaluation_rubric={
+                    "traits": [
+                        {"name": "clarity", "description": "Clarity", "kind": "score", "min_score": 1, "max_score": 5},
+                        {
+                            "name": "analysis_quality",
+                            "description": "Quality",
+                            "kind": "score",
+                            "min_score": 1,
+                            "max_score": 5,
+                        },
+                    ],
+                    "manual_traits": [
+                        {
+                            "name": "has_citation",
+                            "description": "Has citation",
+                            "pattern": r"\[\d+\]",
+                            "callable_name": None,
+                            "case_sensitive": True,
+                            "invert_result": False,
+                        }
+                    ],
+                    "metric_traits": [],
+                },
+            ),
         ),
     ]
 
@@ -156,32 +185,40 @@ def test_aggregate_rubric_results_single_replicate() -> None:
 
     step_eval.verification_results["trace_1"] = [
         VerificationResult(
-            question_id="trace_1",
-            template_id="test_template",
-            completed_without_errors=True,
-            question_text="Test question",
-            raw_llm_response="Test response",
-            answering_model="gpt-4.1-mini",
-            parsing_model="gpt-4.1-mini",
-            execution_time=1.0,
-            timestamp="2025-11-11T00:00:00",
-            verify_rubric={"clarity": 4, "has_citation": True},
-            evaluation_rubric={
-                "traits": [
-                    {"name": "clarity", "description": "Clarity", "kind": "score", "min_score": 1, "max_score": 5}
-                ],
-                "manual_traits": [
-                    {
-                        "name": "has_citation",
-                        "description": "Has citation",
-                        "pattern": r"\[\d+\]",
-                        "callable_name": None,
-                        "case_sensitive": True,
-                        "invert_result": False,
-                    }
-                ],
-                "metric_traits": [],
-            },
+            metadata=VerificationResultMetadata(
+                question_id="trace_1",
+                template_id="test_template",
+                completed_without_errors=True,
+                question_text="Test question",
+                answering_model="gpt-4.1-mini",
+                parsing_model="gpt-4.1-mini",
+                execution_time=1.0,
+                timestamp="2025-11-11T00:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="Test response",
+            ),
+            rubric=VerificationResultRubric(
+                rubric_evaluation_performed=True,
+                llm_trait_scores={"clarity": 4},
+                manual_trait_scores={"has_citation": True},
+                evaluation_rubric={
+                    "traits": [
+                        {"name": "clarity", "description": "Clarity", "kind": "score", "min_score": 1, "max_score": 5}
+                    ],
+                    "manual_traits": [
+                        {
+                            "name": "has_citation",
+                            "description": "Has citation",
+                            "pattern": r"\[\d+\]",
+                            "callable_name": None,
+                            "case_sensitive": True,
+                            "invert_result": False,
+                        }
+                    ],
+                    "metric_traits": [],
+                },
+            ),
         )
     ]
 
@@ -199,54 +236,75 @@ def test_aggregate_rubric_results_with_failures() -> None:
 
     step_eval.verification_results["trace_1"] = [
         VerificationResult(
-            question_id="trace_1",
-            template_id="test_template",
-            completed_without_errors=True,
-            question_text="Test question",
-            raw_llm_response="Test response 1",
-            answering_model="gpt-4.1-mini",
-            parsing_model="gpt-4.1-mini",
-            execution_time=1.0,
-            timestamp="2025-11-11T00:00:00",
-            verify_rubric={"clarity": 4},
-            evaluation_rubric={
-                "traits": [
-                    {"name": "clarity", "description": "Clarity", "kind": "score", "min_score": 1, "max_score": 5}
-                ],
-                "manual_traits": [],
-                "metric_traits": [],
-            },
+            metadata=VerificationResultMetadata(
+                question_id="trace_1",
+                template_id="test_template",
+                completed_without_errors=True,
+                question_text="Test question",
+                answering_model="gpt-4.1-mini",
+                parsing_model="gpt-4.1-mini",
+                execution_time=1.0,
+                timestamp="2025-11-11T00:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="Test response 1",
+            ),
+            rubric=VerificationResultRubric(
+                rubric_evaluation_performed=True,
+                llm_trait_scores={"clarity": 4},
+                evaluation_rubric={
+                    "traits": [
+                        {"name": "clarity", "description": "Clarity", "kind": "score", "min_score": 1, "max_score": 5}
+                    ],
+                    "manual_traits": [],
+                    "metric_traits": [],
+                },
+            ),
         ),
         VerificationResult(
-            question_id="trace_1",
-            template_id="test_template",
-            completed_without_errors=False,  # FAILED
-            error="Test error",
-            question_text="Test question",
-            raw_llm_response="",
-            answering_model="gpt-4.1-mini",
-            parsing_model="gpt-4.1-mini",
-            execution_time=1.0,
-            timestamp="2025-11-11T00:00:00",
+            metadata=VerificationResultMetadata(
+                question_id="trace_1",
+                template_id="test_template",
+                completed_without_errors=False,  # FAILED
+                error="Test error",
+                question_text="Test question",
+                answering_model="gpt-4.1-mini",
+                parsing_model="gpt-4.1-mini",
+                execution_time=1.0,
+                timestamp="2025-11-11T00:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="",
+            ),
+            rubric=VerificationResultRubric(
+                rubric_evaluation_performed=False,
+            ),
         ),
         VerificationResult(
-            question_id="trace_1",
-            template_id="test_template",
-            completed_without_errors=True,
-            question_text="Test question",
-            raw_llm_response="Test response 3",
-            answering_model="gpt-4.1-mini",
-            parsing_model="gpt-4.1-mini",
-            execution_time=1.0,
-            timestamp="2025-11-11T00:00:00",
-            verify_rubric={"clarity": 5},
-            evaluation_rubric={
-                "traits": [
-                    {"name": "clarity", "description": "Clarity", "kind": "score", "min_score": 1, "max_score": 5}
-                ],
-                "manual_traits": [],
-                "metric_traits": [],
-            },
+            metadata=VerificationResultMetadata(
+                question_id="trace_1",
+                template_id="test_template",
+                completed_without_errors=True,
+                question_text="Test question",
+                answering_model="gpt-4.1-mini",
+                parsing_model="gpt-4.1-mini",
+                execution_time=1.0,
+                timestamp="2025-11-11T00:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="Test response 3",
+            ),
+            rubric=VerificationResultRubric(
+                rubric_evaluation_performed=True,
+                llm_trait_scores={"clarity": 5},
+                evaluation_rubric={
+                    "traits": [
+                        {"name": "clarity", "description": "Clarity", "kind": "score", "min_score": 1, "max_score": 5}
+                    ],
+                    "manual_traits": [],
+                    "metric_traits": [],
+                },
+            ),
         ),
     ]
 
@@ -266,28 +324,42 @@ def test_aggregate_rubric_results_all_failures() -> None:
 
     step_eval.verification_results["trace_1"] = [
         VerificationResult(
-            question_id="trace_1",
-            template_id="test_template",
-            completed_without_errors=False,
-            error="Error 1",
-            question_text="Test question",
-            raw_llm_response="",
-            answering_model="gpt-4.1-mini",
-            parsing_model="gpt-4.1-mini",
-            execution_time=1.0,
-            timestamp="2025-11-11T00:00:00",
+            metadata=VerificationResultMetadata(
+                question_id="trace_1",
+                template_id="test_template",
+                completed_without_errors=False,
+                error="Error 1",
+                question_text="Test question",
+                answering_model="gpt-4.1-mini",
+                parsing_model="gpt-4.1-mini",
+                execution_time=1.0,
+                timestamp="2025-11-11T00:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="",
+            ),
+            rubric=VerificationResultRubric(
+                rubric_evaluation_performed=False,
+            ),
         ),
         VerificationResult(
-            question_id="trace_1",
-            template_id="test_template",
-            completed_without_errors=False,
-            error="Error 2",
-            question_text="Test question",
-            raw_llm_response="",
-            answering_model="gpt-4.1-mini",
-            parsing_model="gpt-4.1-mini",
-            execution_time=1.0,
-            timestamp="2025-11-11T00:00:00",
+            metadata=VerificationResultMetadata(
+                question_id="trace_1",
+                template_id="test_template",
+                completed_without_errors=False,
+                error="Error 2",
+                question_text="Test question",
+                answering_model="gpt-4.1-mini",
+                parsing_model="gpt-4.1-mini",
+                execution_time=1.0,
+                timestamp="2025-11-11T00:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="",
+            ),
+            rubric=VerificationResultRubric(
+                rubric_evaluation_performed=False,
+            ),
         ),
     ]
 
@@ -313,34 +385,45 @@ def test_aggregate_rubric_results_missing_traits() -> None:
 
     step_eval.verification_results["trace_1"] = [
         VerificationResult(
-            question_id="trace_1",
-            template_id="test_template",
-            completed_without_errors=True,
-            question_text="Test question",
-            raw_llm_response="Test response 1",
-            answering_model="gpt-4.1-mini",
-            parsing_model="gpt-4.1-mini",
-            execution_time=1.0,
-            timestamp="2025-11-11T00:00:00",
-            verify_rubric={"clarity": 4},
-            evaluation_rubric={
-                "traits": [
-                    {"name": "clarity", "description": "Clarity", "kind": "score", "min_score": 1, "max_score": 5}
-                ],
-                "manual_traits": [],
-                "metric_traits": [],
-            },
+            metadata=VerificationResultMetadata(
+                question_id="trace_1",
+                template_id="test_template",
+                completed_without_errors=True,
+                question_text="Test question",
+                answering_model="gpt-4.1-mini",
+                parsing_model="gpt-4.1-mini",
+                execution_time=1.0,
+                timestamp="2025-11-11T00:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="Test response 1",
+            ),
+            rubric=VerificationResultRubric(
+                rubric_evaluation_performed=True,
+                llm_trait_scores={"clarity": 4},
+                evaluation_rubric={
+                    "traits": [
+                        {"name": "clarity", "description": "Clarity", "kind": "score", "min_score": 1, "max_score": 5}
+                    ],
+                    "manual_traits": [],
+                    "metric_traits": [],
+                },
+            ),
         ),
         VerificationResult(
-            question_id="trace_1",
-            template_id="test_template",
-            completed_without_errors=True,
-            question_text="Test question",
-            raw_llm_response="Test response 2",
-            answering_model="gpt-4.1-mini",
-            parsing_model="gpt-4.1-mini",
-            execution_time=1.0,
-            timestamp="2025-11-11T00:00:00",
+            metadata=VerificationResultMetadata(
+                question_id="trace_1",
+                template_id="test_template",
+                completed_without_errors=True,
+                question_text="Test question",
+                answering_model="gpt-4.1-mini",
+                parsing_model="gpt-4.1-mini",
+                execution_time=1.0,
+                timestamp="2025-11-11T00:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="Test response 2",
+            ),
             # No rubric data at all
         ),
     ]
@@ -359,34 +442,48 @@ def test_aggregate_metric_confusion_omitted() -> None:
 
     step_eval.verification_results["trace_1"] = [
         VerificationResult(
-            question_id="trace_1",
-            template_id="test_template",
-            completed_without_errors=True,
-            question_text="Test question",
-            raw_llm_response="Test response 1",
-            answering_model="gpt-4.1-mini",
-            parsing_model="gpt-4.1-mini",
-            execution_time=1.0,
-            timestamp="2025-11-11T00:00:00",
-            metric_trait_metrics={"entity_extraction": {"precision": 0.8, "recall": 0.9}},
-            metric_trait_confusion_lists={
-                "entity_extraction": {"tp": ["Alice", "Bob"], "tn": [], "fp": ["Charlie"], "fn": ["Dave"]}
-            },
+            metadata=VerificationResultMetadata(
+                question_id="trace_1",
+                template_id="test_template",
+                completed_without_errors=True,
+                question_text="Test question",
+                answering_model="gpt-4.1-mini",
+                parsing_model="gpt-4.1-mini",
+                execution_time=1.0,
+                timestamp="2025-11-11T00:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="Test response 1",
+            ),
+            rubric=VerificationResultRubric(
+                rubric_evaluation_performed=True,
+                metric_trait_scores={"entity_extraction": {"precision": 0.8, "recall": 0.9}},
+                metric_trait_confusion_lists={
+                    "entity_extraction": {"tp": ["Alice", "Bob"], "tn": [], "fp": ["Charlie"], "fn": ["Dave"]}
+                },
+            ),
         ),
         VerificationResult(
-            question_id="trace_1",
-            template_id="test_template",
-            completed_without_errors=True,
-            question_text="Test question",
-            raw_llm_response="Test response 2",
-            answering_model="gpt-4.1-mini",
-            parsing_model="gpt-4.1-mini",
-            execution_time=1.0,
-            timestamp="2025-11-11T00:00:00",
-            metric_trait_metrics={"entity_extraction": {"precision": 0.9, "recall": 0.95}},
-            metric_trait_confusion_lists={
-                "entity_extraction": {"tp": ["Eve", "Frank"], "tn": [], "fp": [], "fn": ["Grace"]}
-            },
+            metadata=VerificationResultMetadata(
+                question_id="trace_1",
+                template_id="test_template",
+                completed_without_errors=True,
+                question_text="Test question",
+                answering_model="gpt-4.1-mini",
+                parsing_model="gpt-4.1-mini",
+                execution_time=1.0,
+                timestamp="2025-11-11T00:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="Test response 2",
+            ),
+            rubric=VerificationResultRubric(
+                rubric_evaluation_performed=True,
+                metric_trait_scores={"entity_extraction": {"precision": 0.9, "recall": 0.95}},
+                metric_trait_confusion_lists={
+                    "entity_extraction": {"tp": ["Eve", "Frank"], "tn": [], "fp": [], "fn": ["Grace"]}
+                },
+            ),
         ),
     ]
 
@@ -409,30 +506,44 @@ def test_aggregate_multiple_metric_names() -> None:
 
     step_eval.verification_results["trace_1"] = [
         VerificationResult(
-            question_id="trace_1",
-            template_id="test_template",
-            completed_without_errors=True,
-            question_text="Test question",
-            raw_llm_response="Test response 1",
-            answering_model="gpt-4.1-mini",
-            parsing_model="gpt-4.1-mini",
-            execution_time=1.0,
-            timestamp="2025-11-11T00:00:00",
-            metric_trait_metrics={"entity_extraction": {"precision": 0.8, "recall": 0.9, "f1": 0.85}},
+            metadata=VerificationResultMetadata(
+                question_id="trace_1",
+                template_id="test_template",
+                completed_without_errors=True,
+                question_text="Test question",
+                answering_model="gpt-4.1-mini",
+                parsing_model="gpt-4.1-mini",
+                execution_time=1.0,
+                timestamp="2025-11-11T00:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="Test response 1",
+            ),
+            rubric=VerificationResultRubric(
+                rubric_evaluation_performed=True,
+                metric_trait_scores={"entity_extraction": {"precision": 0.8, "recall": 0.9, "f1": 0.85}},
+            ),
         ),
         VerificationResult(
-            question_id="trace_1",
-            template_id="test_template",
-            completed_without_errors=True,
-            question_text="Test question",
-            raw_llm_response="Test response 2",
-            answering_model="gpt-4.1-mini",
-            parsing_model="gpt-4.1-mini",
-            execution_time=1.0,
-            timestamp="2025-11-11T00:00:00",
-            metric_trait_metrics={
-                "entity_extraction": {"precision": 0.9, "recall": 0.95}  # Missing f1
-            },
+            metadata=VerificationResultMetadata(
+                question_id="trace_1",
+                template_id="test_template",
+                completed_without_errors=True,
+                question_text="Test question",
+                answering_model="gpt-4.1-mini",
+                parsing_model="gpt-4.1-mini",
+                execution_time=1.0,
+                timestamp="2025-11-11T00:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="Test response 2",
+            ),
+            rubric=VerificationResultRubric(
+                rubric_evaluation_performed=True,
+                metric_trait_scores={
+                    "entity_extraction": {"precision": 0.9, "recall": 0.95}  # Missing f1
+                },
+            ),
         ),
     ]
 

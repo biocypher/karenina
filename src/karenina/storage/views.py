@@ -225,8 +225,8 @@ def create_model_performance_view(engine: Engine) -> None:
                 answering_model as model_name,
                 'answering' as model_role,
                 COUNT(*) as total_runs,
-                SUM(CASE WHEN success THEN 1 ELSE 0 END) as successful_runs,
-                SUM(CASE WHEN NOT success THEN 1 ELSE 0 END) as failed_runs,
+                SUM(CASE WHEN completed_without_errors THEN 1 ELSE 0 END) as successful_runs,
+                SUM(CASE WHEN NOT completed_without_errors THEN 1 ELSE 0 END) as failed_runs,
                 AVG(execution_time) as avg_execution_time
             FROM verification_results
             GROUP BY answering_model
@@ -237,8 +237,8 @@ def create_model_performance_view(engine: Engine) -> None:
                 parsing_model as model_name,
                 'parsing' as model_role,
                 COUNT(*) as total_runs,
-                SUM(CASE WHEN success THEN 1 ELSE 0 END) as successful_runs,
-                SUM(CASE WHEN NOT success THEN 1 ELSE 0 END) as failed_runs,
+                SUM(CASE WHEN completed_without_errors THEN 1 ELSE 0 END) as successful_runs,
+                SUM(CASE WHEN NOT completed_without_errors THEN 1 ELSE 0 END) as failed_runs,
                 AVG(execution_time) as avg_execution_time
             FROM verification_results
             GROUP BY parsing_model

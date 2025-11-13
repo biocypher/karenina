@@ -9,7 +9,12 @@ from karenina.benchmark.verification.evaluators.abstention_checker import (
     is_retryable_error,
 )
 from karenina.benchmark.verification.utils.parsing import _strip_markdown_fences
-from karenina.schemas import ModelConfig, VerificationResult
+from karenina.schemas import ModelConfig
+from karenina.schemas.workflow.verification import (
+    VerificationResult,
+    VerificationResultMetadata,
+    VerificationResultTemplate,
+)
 
 
 class TestStripMarkdownFences:
@@ -109,7 +114,9 @@ class TestDetectAbstention:
             response = "I cannot answer this question as I don't have access to that information."
             question = "What is the secret password?"
 
-            abstention_detected, check_performed, reasoning = detect_abstention(response, parsing_model, question)
+            abstention_detected, check_performed, reasoning, usage_metadata = detect_abstention(
+                response, parsing_model, question
+            )
 
             assert check_performed is True
             assert abstention_detected is True
@@ -129,7 +136,9 @@ class TestDetectAbstention:
             response = "The capital of France is Paris."
             question = "What is the capital of France?"
 
-            abstention_detected, check_performed, reasoning = detect_abstention(response, parsing_model, question)
+            abstention_detected, check_performed, reasoning, usage_metadata = detect_abstention(
+                response, parsing_model, question
+            )
 
             assert check_performed is True
             assert abstention_detected is False
@@ -149,7 +158,9 @@ class TestDetectAbstention:
             response = "I'm not able to provide that information."
             question = "What is X?"
 
-            abstention_detected, check_performed, reasoning = detect_abstention(response, parsing_model, question)
+            abstention_detected, check_performed, reasoning, usage_metadata = detect_abstention(
+                response, parsing_model, question
+            )
 
             assert check_performed is True
             assert abstention_detected is True
@@ -169,7 +180,9 @@ class TestDetectAbstention:
             response = "Some answer"
             question = "Some question?"
 
-            abstention_detected, check_performed, reasoning = detect_abstention(response, parsing_model, question)
+            abstention_detected, check_performed, reasoning, usage_metadata = detect_abstention(
+                response, parsing_model, question
+            )
 
             # When JSON parsing fails, check_performed should be False
             assert check_performed is False
@@ -193,7 +206,9 @@ class TestDetectAbstention:
             question = "Question text?"
 
             # Should retry and succeed on second attempt
-            abstention_detected, check_performed, reasoning = detect_abstention(response, parsing_model, question)
+            abstention_detected, check_performed, reasoning, usage_metadata = detect_abstention(
+                response, parsing_model, question
+            )
 
             assert check_performed is True
             assert abstention_detected is False
@@ -213,7 +228,9 @@ class TestDetectAbstention:
             question = "Question text?"
 
             # Should not retry, return False
-            abstention_detected, check_performed, reasoning = detect_abstention(response, parsing_model, question)
+            abstention_detected, check_performed, reasoning, usage_metadata = detect_abstention(
+                response, parsing_model, question
+            )
 
             assert check_performed is False
             assert abstention_detected is False
@@ -348,58 +365,70 @@ class TestVerificationResultAbstention:
         """Test that VerificationResult has abstention metadata fields."""
 
         result = VerificationResult(
-            question_id="test-id",
-            template_id="test-template-id",
-            completed_without_errors=True,
-            question_text="Test question?",
-            raw_llm_response="Test response",
-            answering_model="openai/gpt-4o-mini",
-            parsing_model="openai/gpt-4o-mini",
-            execution_time=1.0,
-            timestamp="2025-01-01T00:00:00",
+            metadata=VerificationResultMetadata(
+                question_id="test-id",
+                template_id="test-template-id",
+                completed_without_errors=True,
+                question_text="Test question?",
+                answering_model="openai/gpt-4o-mini",
+                parsing_model="openai/gpt-4o-mini",
+                execution_time=1.0,
+                timestamp="2025-01-01T00:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="Test response",
+            ),
         )
 
-        assert hasattr(result, "abstention_check_performed")
-        assert hasattr(result, "abstention_detected")
-        assert hasattr(result, "abstention_override_applied")
+        assert hasattr(result.template, "abstention_check_performed")
+        assert hasattr(result.template, "abstention_detected")
+        assert hasattr(result.template, "abstention_override_applied")
 
     def test_verification_result_abstention_defaults(self):
         """Test default values for abstention fields."""
 
         result = VerificationResult(
-            question_id="test-id",
-            template_id="test-template-id",
-            completed_without_errors=True,
-            question_text="Test question?",
-            raw_llm_response="Test response",
-            answering_model="openai/gpt-4o-mini",
-            parsing_model="openai/gpt-4o-mini",
-            execution_time=1.0,
-            timestamp="2025-01-01T00:00:00",
+            metadata=VerificationResultMetadata(
+                question_id="test-id",
+                template_id="test-template-id",
+                completed_without_errors=True,
+                question_text="Test question?",
+                answering_model="openai/gpt-4o-mini",
+                parsing_model="openai/gpt-4o-mini",
+                execution_time=1.0,
+                timestamp="2025-01-01T00:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="Test response",
+            ),
         )
 
-        assert result.abstention_check_performed is False
-        assert result.abstention_detected is None
-        assert result.abstention_override_applied is False
+        assert result.template.abstention_check_performed is False
+        assert result.template.abstention_detected is None
+        assert result.template.abstention_override_applied is False
 
     def test_verification_result_abstention_custom_values(self):
         """Test setting custom values for abstention fields."""
 
         result = VerificationResult(
-            question_id="test-id",
-            template_id="test-template-id",
-            completed_without_errors=True,
-            question_text="Test question?",
-            raw_llm_response="Test response",
-            answering_model="openai/gpt-4o-mini",
-            parsing_model="openai/gpt-4o-mini",
-            execution_time=1.0,
-            timestamp="2025-01-01T00:00:00",
-            abstention_check_performed=True,
-            abstention_detected=True,
-            abstention_override_applied=True,
+            metadata=VerificationResultMetadata(
+                question_id="test-id",
+                template_id="test-template-id",
+                completed_without_errors=True,
+                question_text="Test question?",
+                answering_model="openai/gpt-4o-mini",
+                parsing_model="openai/gpt-4o-mini",
+                execution_time=1.0,
+                timestamp="2025-01-01T00:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="Test response",
+                abstention_check_performed=True,
+                abstention_detected=True,
+                abstention_override_applied=True,
+            ),
         )
 
-        assert result.abstention_check_performed is True
-        assert result.abstention_detected is True
-        assert result.abstention_override_applied is True
+        assert result.template.abstention_check_performed is True
+        assert result.template.abstention_detected is True
+        assert result.template.abstention_override_applied is True

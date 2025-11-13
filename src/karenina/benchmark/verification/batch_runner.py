@@ -11,7 +11,12 @@ from collections.abc import Callable
 from typing import Any
 
 from ...schemas.domain import Rubric
-from ...schemas.workflow import FinishedTemplate, VerificationConfig, VerificationResult
+from ...schemas.workflow import (
+    FinishedTemplate,
+    VerificationConfig,
+    VerificationResult,
+    VerificationResultMetadata,
+)
 from ...utils.answer_cache import AnswerTraceCache
 
 logger = logging.getLogger(__name__)
@@ -344,18 +349,17 @@ def execute_sequential(
         # Call progress callback BEFORE starting task (with preview result)
         if progress_callback:
             # Create a minimal result-like object for progress tracking
-            from ...schemas.workflow import VerificationResult
-
             preview_result = VerificationResult(
-                question_id=task["question_id"],
-                template_id="no_template",
-                completed_without_errors=False,
-                question_text=task["question_text"],
-                raw_llm_response="",
-                answering_model=task["answering_model"].id,
-                parsing_model=task["parsing_model"].id,
-                execution_time=0.0,
-                timestamp="",  # Empty timestamp indicates "starting" event
+                metadata=VerificationResultMetadata(
+                    question_id=task["question_id"],
+                    template_id="no_template",
+                    completed_without_errors=False,
+                    question_text=task["question_text"],
+                    answering_model=task["answering_model"].id,
+                    parsing_model=task["parsing_model"].id,
+                    execution_time=0.0,
+                    timestamp="",  # Empty timestamp indicates "starting" event
+                )
             )
             progress_callback(idx, total, preview_result)
 
@@ -481,15 +485,16 @@ def execute_parallel(
                 # Call preview progress callback
                 if progress_callback:
                     preview_result = VerificationResult(
-                        question_id=task["question_id"],
-                        template_id="no_template",
-                        completed_without_errors=False,
-                        question_text=task["question_text"],
-                        raw_llm_response="",
-                        answering_model=task["answering_model"].id,
-                        parsing_model=task["parsing_model"].id,
-                        execution_time=0.0,
-                        timestamp="",  # Empty timestamp indicates "starting" event
+                        metadata=VerificationResultMetadata(
+                            question_id=task["question_id"],
+                            template_id="no_template",
+                            completed_without_errors=False,
+                            question_text=task["question_text"],
+                            answering_model=task["answering_model"].id,
+                            parsing_model=task["parsing_model"].id,
+                            execution_time=0.0,
+                            timestamp="",  # Empty timestamp indicates "starting" event
+                        )
                     )
                     with progress_lock:
                         progress_callback(completed_count[0] + 1, total, preview_result)
