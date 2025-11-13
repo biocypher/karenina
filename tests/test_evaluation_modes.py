@@ -139,7 +139,7 @@ class TestTemplateAndRubricMode:
 
         # Mock RubricEvaluator class
         mock_evaluator = MagicMock()
-        mock_evaluator.evaluate_rubric.return_value = {"Clarity": 5, "Completeness": 4}
+        mock_evaluator.evaluate_rubric.return_value = ({"Clarity": 5, "Completeness": 4}, [])
         mock_rubric_class.return_value = mock_evaluator
 
         template_code = """
@@ -194,7 +194,7 @@ class TestRubricOnlyMode:
 
         # Mock RubricEvaluator class
         mock_evaluator = MagicMock()
-        mock_evaluator.evaluate_rubric.return_value = {"Clarity": 5, "Completeness": 4}
+        mock_evaluator.evaluate_rubric.return_value = ({"Clarity": 5, "Completeness": 4}, [])
         mock_rubric_class.return_value = mock_evaluator
 
         # Note: Template code still required but won't be validated in rubric_only mode

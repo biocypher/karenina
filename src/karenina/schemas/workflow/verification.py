@@ -1096,17 +1096,12 @@ class VerificationResult(BaseModel):
 
     @property
     def verify_rubric(self) -> dict[str, Any] | None:
-        """Backward compatibility accessor for verify_rubric (combines llm and manual traits)."""
+        """Backward compatibility accessor for verify_rubric (combines all trait types)."""
         if not self.rubric:
             return None
 
-        result: dict[str, Any] = {}
-        if self.rubric.llm_trait_scores:
-            result.update(self.rubric.llm_trait_scores)
-        if self.rubric.manual_trait_scores:
-            result.update(self.rubric.manual_trait_scores)
-
-        return result if result else None
+        scores = self.rubric.get_all_trait_scores()
+        return scores if scores else None
 
     @property
     def metric_trait_metrics(self) -> dict[str, dict[str, float]] | None:

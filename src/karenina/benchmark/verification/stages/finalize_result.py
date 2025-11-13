@@ -182,7 +182,7 @@ class FinalizeResultStage(BaseVerificationStage):
             manual_trait_scores: dict[str, bool] | None = None
             metric_trait_scores_dict: dict[str, dict[str, float]] | None = None
 
-            if verify_rubric and evaluation_rubric:
+            if verify_rubric and evaluation_rubric and isinstance(verify_rubric, dict):
                 # Get trait names from evaluation_rubric
                 llm_trait_names = {trait["name"] for trait in evaluation_rubric.get("traits", [])}
                 manual_trait_names = {trait["name"] for trait in evaluation_rubric.get("manual_traits", [])}
