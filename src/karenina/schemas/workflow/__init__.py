@@ -17,6 +17,10 @@ from .verification import (
     VerificationJob,
     VerificationRequest,
     VerificationResult,
+    VerificationResultDeepJudgment,
+    VerificationResultMetadata,
+    VerificationResultRubric,
+    VerificationResultTemplate,
     VerificationStartResponse,
     VerificationStatusResponse,
 )
@@ -37,6 +41,10 @@ __all__ = [
     # Verification
     "VerificationConfig",
     "VerificationResult",
+    "VerificationResultMetadata",
+    "VerificationResultTemplate",
+    "VerificationResultRubric",
+    "VerificationResultDeepJudgment",
     "VerificationJob",
     "FinishedTemplate",
     "VerificationRequest",

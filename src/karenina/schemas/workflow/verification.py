@@ -658,16 +658,28 @@ class VerificationConfig(BaseModel):
             raise ValueError(f"Failed to load preset '{preset_name}' from {filepath}: {e}") from e
 
 
-class VerificationResult(BaseModel):
-    """Result of verifying a single question."""
+class VerificationResultMetadata(BaseModel):
+    """Core metadata and identification fields for a verification result."""
 
     question_id: str
     template_id: str  # MD5 of template or "no_template" (composite key component)
     completed_without_errors: bool
     error: str | None = None
-
-    # Raw data
     question_text: str
+    keywords: list[str] | None = None  # Keywords associated with the question
+    answering_model: str
+    parsing_model: str
+    execution_time: float
+    timestamp: str
+    run_name: str | None = None
+    job_id: str | None = None
+    answering_replicate: int | None = None  # Replicate number for answering model (1, 2, 3, ...)
+    parsing_replicate: int | None = None  # Replicate number for parsing model (1, 2, 3, ...)
+
+
+class VerificationResultTemplate(BaseModel):
+    """Template verification and answer generation fields."""
+
     raw_llm_response: str
     parsed_gt_response: dict[str, Any] | None = None  # Ground truth from 'correct' field
     parsed_llm_response: dict[str, Any] | None = None  # LLM extracted fields (excluding 'id' and 'correct')
@@ -676,54 +688,120 @@ class VerificationResult(BaseModel):
     template_verification_performed: bool = False  # Whether template verification was executed
     verify_result: Any | None = None  # Template verification result (None if template verification skipped)
     verify_granular_result: Any | None = None
-    rubric_evaluation_performed: bool = False  # Whether rubric evaluation was executed
-    verify_rubric: dict[str, int | bool] | None = None  # Rubric trait scores (LLM and manual)
-    evaluation_rubric: dict[str, Any] | None = None  # The merged rubric used for evaluation
 
-    # Question metadata
-    keywords: list[str] | None = None  # Keywords associated with the question
-
-    # Metadata
-    answering_model: str
-    parsing_model: str
-    execution_time: float
-    timestamp: str
     answering_system_prompt: str | None = None
     parsing_system_prompt: str | None = None
 
-    # Run identification
-    run_name: str | None = None
-    job_id: str | None = None
-
-    # Replicate tracking
-    answering_replicate: int | None = None  # Replicate number for answering model (1, 2, 3, ...)
-    parsing_replicate: int | None = None  # Replicate number for parsing model (1, 2, 3, ...)
-
-    # Embedding check metadata
+    # Embeddings
     embedding_check_performed: bool = False  # Whether embedding check was attempted
     embedding_similarity_score: float | None = None  # Similarity score (0.0 to 1.0)
     embedding_override_applied: bool = False  # Whether embedding check overrode the result
     embedding_model_used: str | None = None  # Name of the embedding model used
 
-    # Regex validation metadata
+    # Regex checks
     regex_validations_performed: bool = False  # Whether regex validation was attempted
     regex_validation_results: dict[str, bool] | None = None  # Individual regex pattern results
     regex_validation_details: dict[str, dict[str, Any]] | None = None  # Detailed regex match information
     regex_overall_success: bool | None = None  # Overall regex validation result
     regex_extraction_results: dict[str, Any] | None = None  # What the regex patterns actually extracted
+
     # Recursion limit metadata
     recursion_limit_reached: bool = False  # Whether agent hit recursion limit
 
-    # Abstention detection metadata
+    # Abstention
     abstention_check_performed: bool = False  # Whether abstention check was attempted
     abstention_detected: bool | None = None  # Whether model refused/abstained from answering
     abstention_override_applied: bool = False  # Whether abstention check overrode the result
     abstention_reasoning: str | None = None  # LLM's reasoning for abstention determination
 
-    # MCP server metadata
+    # MCP
     answering_mcp_servers: list[str] | None = None  # Names of MCP servers attached to answering model
 
-    # Deep-judgment metadata (multi-stage parsing with excerpts and reasoning)
+    # Usage
+    usage_metadata: dict[str, dict[str, Any]] | None = None  # Token usage breakdown by verification stage
+    # Structure: {
+    #   "answer_generation": {
+    #     "input_tokens": 150, "output_tokens": 200, "total_tokens": 350,
+    #     "model": "gpt-4.1-mini-2025-04-14",
+    #     "input_token_details": {"audio": 0, "cache_read": 0},
+    #     "output_token_details": {"audio": 0, "reasoning": 0}
+    #   },
+    #   "parsing": {...}, "rubric_evaluation": {...}, "abstention_check": {...},
+    #   "total": {"input_tokens": 600, "output_tokens": 360, "total_tokens": 960}
+    # }
+    agent_metrics: dict[str, Any] | None = None  # MCP agent execution metrics (only if agent used)
+    # Structure: {
+    #   "iterations": 3,  # Number of agent think-act cycles
+    #   "tool_calls": 5,  # Total tool invocations
+    #   "tools_used": ["mcp__brave_search", "mcp__read_resource"],  # Unique tool names used
+    #   "suspect_failed_tool_calls": 2,  # Count of tool calls with error-like output patterns
+    #   "suspect_failed_tools": ["mcp__brave_search"]  # List of tools with suspected failures
+    # }
+
+
+class VerificationResultRubric(BaseModel):
+    """Rubric evaluation fields with split trait types."""
+
+    rubric_evaluation_performed: bool = False  # Whether rubric evaluation was executed
+
+    # Split trait scores by type (replaces old verify_rubric dict)
+    llm_trait_scores: dict[str, int] | None = None  # LLM-evaluated traits (1-5 scale)
+    manual_trait_scores: dict[str, bool] | None = None  # Manual/regex traits (boolean)
+    metric_trait_scores: dict[str, dict[str, float]] | None = None  # Metric traits with nested metrics dict
+
+    evaluation_rubric: dict[str, Any] | None = None  # The merged rubric used for evaluation
+
+    # Metric trait evaluation metadata (confusion-matrix analysis)
+    metric_trait_confusion_lists: dict[str, dict[str, list[str]]] | None = None  # Confusion lists per metric trait
+    # Structure: {"trait_name": {"tp": ["excerpt1", ...], "tn": [...], "fp": [...], "fn": [...]}}
+    # Each trait has four lists (TP/TN/FP/FN) containing extracted excerpts from the answer
+
+    def get_all_trait_scores(self) -> dict[str, int | bool | dict[str, float]]:
+        """
+        Get all trait scores across all trait types in a flat dictionary.
+
+        Returns:
+            dict: All trait scores, e.g.:
+                {
+                    "clarity": 4,
+                    "mentions_regulatory_elements": True,
+                    "feature_identification": {"precision": 1.0, "recall": 1.0, "f1": 1.0}
+                }
+        """
+        scores: dict[str, int | bool | dict[str, float]] = {}
+
+        if self.llm_trait_scores:
+            scores.update(self.llm_trait_scores)
+        if self.manual_trait_scores:
+            scores.update(self.manual_trait_scores)
+        if self.metric_trait_scores:
+            scores.update(self.metric_trait_scores)
+
+        return scores
+
+    def get_trait_by_name(self, name: str) -> tuple[Any, str] | None:
+        """
+        Look up a trait by name across all trait types.
+
+        Args:
+            name: The trait name to search for
+
+        Returns:
+            tuple: (value, trait_type) where trait_type is "llm", "manual", or "metric"
+            None: If the trait is not found
+        """
+        if self.llm_trait_scores and name in self.llm_trait_scores:
+            return (self.llm_trait_scores[name], "llm")
+        if self.manual_trait_scores and name in self.manual_trait_scores:
+            return (self.manual_trait_scores[name], "manual")
+        if self.metric_trait_scores and name in self.metric_trait_scores:
+            return (self.metric_trait_scores[name], "metric")
+        return None
+
+
+class VerificationResultDeepJudgment(BaseModel):
+    """Deep-judgment metadata (multi-stage parsing with excerpts and reasoning)."""
+
     deep_judgment_enabled: bool = False  # Whether deep-judgment was configured
     deep_judgment_performed: bool = False  # Whether deep-judgment was successfully executed
     extracted_excerpts: dict[str, list[dict[str, Any]]] | None = None  # Extracted excerpts per attribute
@@ -749,192 +827,40 @@ class VerificationResult(BaseModel):
     # Scale: "none" = lowest risk (strong external evidence), "high" = highest risk (weak/no evidence)
     # Only populated when deep_judgment_search_enabled=True
 
-    # LLM usage tracking metadata
-    usage_metadata: dict[str, dict[str, Any]] | None = None  # Token usage breakdown by verification stage
-    # Structure: {
-    #   "answer_generation": {
-    #     "input_tokens": 150, "output_tokens": 200, "total_tokens": 350,
-    #     "model": "gpt-4.1-mini-2025-04-14",
-    #     "input_token_details": {"audio": 0, "cache_read": 0},
-    #     "output_token_details": {"audio": 0, "reasoning": 0}
-    #   },
-    #   "parsing": {...}, "rubric_evaluation": {...}, "abstention_check": {...},
-    #   "total": {"input_tokens": 600, "output_tokens": 360, "total_tokens": 960}
-    # }
-    agent_metrics: dict[str, Any] | None = None  # MCP agent execution metrics (only if agent used)
-    # Structure: {
-    #   "iterations": 3,  # Number of agent think-act cycles
-    #   "tool_calls": 5,  # Total tool invocations
-    #   "tools_used": ["mcp__brave_search", "mcp__read_resource"],  # Unique tool names used
-    #   "suspect_failed_tool_calls": 2,  # Count of tool calls with error-like output patterns
-    #   "suspect_failed_tools": ["mcp__brave_search"]  # List of tools with suspected failures
-    # }
 
-    # Metric trait evaluation metadata (confusion-matrix analysis)
-    metric_trait_confusion_lists: dict[str, dict[str, list[str]]] | None = None  # Confusion lists per metric trait
-    # Structure: {"trait_name": {"tp": ["excerpt1", ...], "tn": [...], "fp": [...], "fn": [...]}}
-    # Each trait has four lists (TP/TN/FP/FN) containing extracted excerpts from the answer
-    metric_trait_metrics: dict[str, dict[str, float]] | None = None  # Computed metrics per metric trait
-    # Structure: {"trait_name": {"precision": 0.85, "recall": 0.92, "f1": 0.88, ...}}
-    # Only metrics requested by the trait are included in the inner dictionary
+class VerificationResult(BaseModel):
+    """Result of verifying a single question."""
+
+    metadata: VerificationResultMetadata
+    template: VerificationResultTemplate | None = None
+    rubric: VerificationResultRubric | None = None
+    deep_judgment: VerificationResultDeepJudgment | None = None
+
+    # Backward compatibility properties for common field access
+    @property
+    def question_id(self) -> str:
+        """Backward compatibility accessor for question_id."""
+        return self.metadata.question_id
 
     @property
-    def rubric_results(self) -> dict[str, Any]:
-        """
-        Unified interface for all rubric evaluation results.
+    def template_id(self) -> str:
+        """Backward compatibility accessor for template_id."""
+        return self.metadata.template_id
 
-        Returns a nested dictionary organizing rubric results by evaluation method:
-        - "llm": LLM-evaluated trait scores (integers 1-5)
-        - "manual": Manual/regex trait results (booleans)
-        - "metric": Metric trait results with both metrics and confusion data
+    @property
+    def completed_without_errors(self) -> bool:
+        """Backward compatibility accessor for completed_without_errors."""
+        return self.metadata.completed_without_errors
 
-        Returns:
-            dict: Nested structure with all rubric results, e.g.:
-                {
-                    "llm": {"clarity": 4, "analysis_quality": 2},
-                    "manual": {"mentions_regulatory_elements": True},
-                    "metric": {
-                        "feature_identification": {
-                            "metrics": {"precision": 1.0, "recall": 1.0, "f1": 1.0},
-                            "confusion": {"tp": [...], "tn": [], "fp": [], "fn": []}
-                        }
-                    }
-                }
+    @property
+    def error(self) -> str | None:
+        """Backward compatibility accessor for error."""
+        return self.metadata.error
 
-        Example:
-            >>> result = VerificationResult(...)
-            >>> all_results = result.rubric_results
-            >>> llm_scores = all_results.get("llm", {})
-            >>> metric_results = all_results.get("metric", {})
-        """
-        result: dict[str, Any] = {}
-
-        # Split verify_rubric into llm and manual traits using evaluation_rubric
-        if self.verify_rubric and self.evaluation_rubric:
-            llm_results: dict[str, Any] = {}
-            manual_results: dict[str, Any] = {}
-
-            # Get trait names from evaluation_rubric
-            llm_trait_names = {trait["name"] for trait in self.evaluation_rubric.get("traits", [])}
-            manual_trait_names = {trait["name"] for trait in self.evaluation_rubric.get("manual_traits", [])}
-
-            # Categorize verify_rubric entries
-            for trait_name, trait_value in self.verify_rubric.items():
-                if trait_name in llm_trait_names:
-                    llm_results[trait_name] = trait_value
-                elif trait_name in manual_trait_names:
-                    manual_results[trait_name] = trait_value
-
-            if llm_results:
-                result["llm"] = llm_results
-            if manual_results:
-                result["manual"] = manual_results
-
-        # Add metric trait results with confusion data
-        if self.metric_trait_metrics:
-            metric_results: dict[str, dict[str, Any]] = {}
-
-            for trait_name, metrics in self.metric_trait_metrics.items():
-                metric_results[trait_name] = {
-                    "metrics": metrics,
-                    "confusion": (
-                        self.metric_trait_confusion_lists.get(trait_name, {})
-                        if self.metric_trait_confusion_lists
-                        else {}
-                    ),
-                }
-
-            result["metric"] = metric_results
-
-        return result
-
-    def get_trait_by_name(self, name: str) -> tuple[Any, str] | None:
-        """
-        Look up a trait by name across all trait types.
-
-        Searches through LLM traits, manual traits, and metric traits to find
-        the specified trait name.
-
-        Args:
-            name: The trait name to search for
-
-        Returns:
-            tuple: (value, trait_type) where trait_type is "llm", "manual", or "metric"
-            None: If the trait is not found
-
-        Example:
-            >>> result = VerificationResult(...)
-            >>> value, trait_type = result.get_trait_by_name("clarity")
-            >>> print(f"Clarity score: {value} (type: {trait_type})")
-            Clarity score: 4 (type: llm)
-
-            >>> metric_value, metric_type = result.get_trait_by_name("feature_identification")
-            >>> print(f"Metrics: {metric_value['metrics']}")
-            Metrics: {"precision": 1.0, "recall": 1.0, "f1": 1.0}
-        """
-        rubric_data = self.rubric_results
-
-        # Check LLM traits
-        if "llm" in rubric_data and name in rubric_data["llm"]:
-            return (rubric_data["llm"][name], "llm")
-
-        # Check manual traits
-        if "manual" in rubric_data and name in rubric_data["manual"]:
-            return (rubric_data["manual"][name], "manual")
-
-        # Check metric traits
-        if "metric" in rubric_data and name in rubric_data["metric"]:
-            return (rubric_data["metric"][name], "metric")
-
-        return None
-
-    def get_all_scores(self) -> dict[str, int | bool | float]:
-        """
-        Get a flattened dictionary of all rubric scores.
-
-        Returns all LLM trait scores, manual trait booleans, and metric trait
-        final metrics (precision, recall, F1, etc.) in a single flat dictionary.
-        Excludes confusion matrix data.
-
-        For metric traits, includes all computed metrics with keys like:
-        "{trait_name}.{metric_name}" (e.g., "feature_identification.precision")
-
-        Returns:
-            dict: Flattened scores with all trait results, e.g.:
-                {
-                    "clarity": 4,
-                    "analysis_quality": 2,
-                    "mentions_regulatory_elements": True,
-                    "feature_identification.precision": 1.0,
-                    "feature_identification.recall": 1.0,
-                    "feature_identification.f1": 1.0
-                }
-
-        Example:
-            >>> result = VerificationResult(...)
-            >>> scores = result.get_all_scores()
-            >>> for trait_name, score in scores.items():
-            ...     print(f"{trait_name}: {score}")
-        """
-        scores: dict[str, int | bool | float] = {}
-        rubric_data = self.rubric_results
-
-        # Add LLM trait scores
-        if "llm" in rubric_data:
-            scores.update(rubric_data["llm"])
-
-        # Add manual trait booleans
-        if "manual" in rubric_data:
-            scores.update(rubric_data["manual"])
-
-        # Add metric trait metrics (flattened with dot notation)
-        if "metric" in rubric_data:
-            for trait_name, trait_data in rubric_data["metric"].items():
-                metrics = trait_data.get("metrics", {})
-                for metric_name, metric_value in metrics.items():
-                    scores[f"{trait_name}.{metric_name}"] = metric_value
-
-        return scores
+    @property
+    def question_text(self) -> str:
+        """Backward compatibility accessor for question_text."""
+        return self.metadata.question_text
 
 
 class VerificationJob(BaseModel):

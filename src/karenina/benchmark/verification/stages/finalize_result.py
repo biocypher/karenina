@@ -116,77 +116,121 @@ class FinalizeResultStage(BaseVerificationStage):
                     f"Tool calls: {agent_metrics.get('tool_calls', 0)}"
                 )
 
-        # Build VerificationResult from context
-        result = VerificationResult(
-            # Identity & Metadata
+        # Build VerificationResult from context with nested structure
+        from karenina.schemas.workflow import (
+            VerificationResultDeepJudgment,
+            VerificationResultMetadata,
+            VerificationResultRubric,
+            VerificationResultTemplate,
+        )
+
+        # Create metadata subclass
+        metadata = VerificationResultMetadata(
             question_id=context.question_id,
             template_id=context.template_id,
             completed_without_errors=context.completed_without_errors,
             error=context.error,
             keywords=context.keywords,
             question_text=context.question_text,
-            # Core Results
-            template_verification_performed=template_verification_performed,
-            verify_result=context.get_result_field("verify_result"),
-            verify_granular_result=context.get_result_field("verify_granular_result"),
-            rubric_evaluation_performed=rubric_evaluation_performed,
-            verify_rubric=context.get_result_field("verify_rubric"),
-            evaluation_rubric=context.get_result_field("evaluation_rubric"),
-            # Metric Traits
-            metric_trait_confusion_lists=context.get_result_field("metric_trait_confusion_lists"),
-            metric_trait_metrics=context.get_result_field("metric_trait_metrics"),
-            # Raw & Parsed Data
-            raw_llm_response=context.get_result_field("raw_llm_response", ""),
-            parsed_gt_response=parsed_gt_response,
-            parsed_llm_response=parsed_llm_response,
-            # Model Configuration
             answering_model=answering_model_str,
             parsing_model=parsing_model_str,
-            answering_system_prompt=context.answering_model.system_prompt,
-            parsing_system_prompt=context.parsing_model.system_prompt,
-            # Timing & Tracking
             execution_time=execution_time,
             timestamp=timestamp,
             run_name=context.run_name,
             job_id=context.job_id,
             answering_replicate=context.answering_replicate,
             parsing_replicate=context.parsing_replicate,
-            # Embedding Check Metadata
+        )
+
+        # Create template subclass
+        template = VerificationResultTemplate(
+            raw_llm_response=context.get_result_field("raw_llm_response", ""),
+            parsed_gt_response=parsed_gt_response,
+            parsed_llm_response=parsed_llm_response,
+            template_verification_performed=template_verification_performed,
+            verify_result=context.get_result_field("verify_result"),
+            verify_granular_result=context.get_result_field("verify_granular_result"),
+            answering_system_prompt=context.answering_model.system_prompt,
+            parsing_system_prompt=context.parsing_model.system_prompt,
             embedding_check_performed=context.get_result_field("embedding_check_performed", False),
             embedding_similarity_score=context.get_result_field("embedding_similarity_score"),
             embedding_override_applied=context.get_result_field("embedding_override_applied", False),
             embedding_model_used=context.get_result_field("embedding_model_used"),
-            # Regex Validation Metadata
             regex_validations_performed=context.get_result_field("regex_validations_performed", False),
             regex_validation_results=context.get_result_field("regex_validation_results"),
             regex_validation_details=context.get_result_field("regex_validation_details"),
             regex_overall_success=context.get_result_field("regex_overall_success"),
             regex_extraction_results=context.get_result_field("regex_extraction_results"),
-            # Recursion Limit Metadata
             recursion_limit_reached=context.get_result_field("recursion_limit_reached", False),
-            # Abstention Detection Metadata
             abstention_check_performed=context.get_result_field("abstention_check_performed", False),
             abstention_detected=context.get_result_field("abstention_detected"),
             abstention_override_applied=context.get_result_field("abstention_override_applied", False),
             abstention_reasoning=context.get_result_field("abstention_reasoning"),
-            # MCP Server Metadata
             answering_mcp_servers=context.get_result_field("answering_mcp_servers"),
-            # Deep-Judgment Metadata
-            deep_judgment_enabled=context.get_result_field("deep_judgment_enabled", False),
-            deep_judgment_performed=context.get_result_field("deep_judgment_performed", False),
-            extracted_excerpts=context.get_result_field("extracted_excerpts"),
-            attribute_reasoning=context.get_result_field("attribute_reasoning"),
-            deep_judgment_stages_completed=context.get_result_field("deep_judgment_stages_completed"),
-            deep_judgment_model_calls=context.get_result_field("deep_judgment_model_calls", 0),
-            deep_judgment_excerpt_retry_count=context.get_result_field("deep_judgment_excerpt_retry_count", 0),
-            attributes_without_excerpts=context.get_result_field("attributes_without_excerpts"),
-            # Search-Enhanced Deep-Judgment Metadata
-            deep_judgment_search_enabled=context.get_result_field("deep_judgment_search_enabled", False),
-            hallucination_risk_assessment=context.get_result_field("hallucination_risk_assessment"),
-            # LLM Usage Tracking Metadata
             usage_metadata=usage_metadata,
             agent_metrics=agent_metrics,
         )
+
+        # Create rubric subclass (if rubric evaluation was performed)
+        rubric = None
+        if rubric_evaluation_performed:
+            # Split verify_rubric into three separate trait score dicts
+            verify_rubric = context.get_result_field("verify_rubric")
+            evaluation_rubric = context.get_result_field("evaluation_rubric")
+
+            llm_trait_scores: dict[str, int] | None = None
+            manual_trait_scores: dict[str, bool] | None = None
+            metric_trait_scores_dict: dict[str, dict[str, float]] | None = None
+
+            if verify_rubric and evaluation_rubric:
+                # Get trait names from evaluation_rubric
+                llm_trait_names = {trait["name"] for trait in evaluation_rubric.get("traits", [])}
+                manual_trait_names = {trait["name"] for trait in evaluation_rubric.get("manual_traits", [])}
+
+                # Split verify_rubric by trait type
+                llm_results: dict[str, int] = {}
+                manual_results: dict[str, bool] = {}
+
+                for trait_name, trait_value in verify_rubric.items():
+                    if trait_name in llm_trait_names:
+                        llm_results[trait_name] = trait_value
+                    elif trait_name in manual_trait_names:
+                        manual_results[trait_name] = trait_value
+                    # Note: metric traits are stored separately in metric_trait_metrics
+
+                llm_trait_scores = llm_results if llm_results else None
+                manual_trait_scores = manual_results if manual_results else None
+
+            # Get metric trait scores from context (already in the right format)
+            metric_trait_scores_dict = context.get_result_field("metric_trait_metrics")
+
+            rubric = VerificationResultRubric(
+                rubric_evaluation_performed=rubric_evaluation_performed,
+                llm_trait_scores=llm_trait_scores,
+                manual_trait_scores=manual_trait_scores,
+                metric_trait_scores=metric_trait_scores_dict,
+                evaluation_rubric=evaluation_rubric,
+                metric_trait_confusion_lists=context.get_result_field("metric_trait_confusion_lists"),
+            )
+
+        # Create deep-judgment subclass (if enabled)
+        deep_judgment = None
+        if context.get_result_field("deep_judgment_enabled", False):
+            deep_judgment = VerificationResultDeepJudgment(
+                deep_judgment_enabled=context.get_result_field("deep_judgment_enabled", False),
+                deep_judgment_performed=context.get_result_field("deep_judgment_performed", False),
+                extracted_excerpts=context.get_result_field("extracted_excerpts"),
+                attribute_reasoning=context.get_result_field("attribute_reasoning"),
+                deep_judgment_stages_completed=context.get_result_field("deep_judgment_stages_completed"),
+                deep_judgment_model_calls=context.get_result_field("deep_judgment_model_calls", 0),
+                deep_judgment_excerpt_retry_count=context.get_result_field("deep_judgment_excerpt_retry_count", 0),
+                attributes_without_excerpts=context.get_result_field("attributes_without_excerpts"),
+                deep_judgment_search_enabled=context.get_result_field("deep_judgment_search_enabled", False),
+                hallucination_risk_assessment=context.get_result_field("hallucination_risk_assessment"),
+            )
+
+        # Create final VerificationResult with nested composition
+        result = VerificationResult(metadata=metadata, template=template, rubric=rubric, deep_judgment=deep_judgment)
 
         # Store final result
         context.set_artifact("final_result", result)

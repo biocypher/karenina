@@ -532,150 +532,180 @@ def load_verification_results(
 
 def _create_result_model(run_id: str, result: "VerificationResult") -> VerificationResultModel:
     """Convert VerificationResult to VerificationResultModel."""
+    # Extract fields from nested structure
+    metadata = result.metadata
+    template = result.template
+    rubric = result.rubric
+    deep_judgment = result.deep_judgment
+
     return VerificationResultModel(
         run_id=run_id,
-        question_id=result.question_id,
-        template_id=result.template_id,
-        completed_without_errors=result.completed_without_errors,
-        error=result.error,
-        question_text=result.question_text,
-        raw_llm_response=result.raw_llm_response,
-        parsed_gt_response=result.parsed_gt_response,
-        parsed_llm_response=result.parsed_llm_response,
-        template_verification_performed=result.template_verification_performed,
-        verify_result=result.verify_result,
-        verify_granular_result=result.verify_granular_result,
-        rubric_evaluation_performed=result.rubric_evaluation_performed,
-        verify_rubric=result.verify_rubric,
-        evaluation_rubric=result.evaluation_rubric,
-        keywords=result.keywords,
-        answering_model=result.answering_model,
-        parsing_model=result.parsing_model,
-        answering_system_prompt=result.answering_system_prompt,
-        parsing_system_prompt=result.parsing_system_prompt,
-        execution_time=result.execution_time,
-        timestamp=result.timestamp,
-        job_id=result.job_id,
-        answering_replicate=result.answering_replicate,
-        parsing_replicate=result.parsing_replicate,
-        embedding_check_performed=result.embedding_check_performed,
-        embedding_similarity_score=result.embedding_similarity_score,
-        embedding_override_applied=result.embedding_override_applied,
-        embedding_model_used=result.embedding_model_used,
-        regex_validations_performed=result.regex_validations_performed,
-        regex_validation_results=result.regex_validation_results,
-        regex_validation_details=result.regex_validation_details,
-        regex_overall_success=result.regex_overall_success,
-        regex_extraction_results=result.regex_extraction_results,
-        recursion_limit_reached=result.recursion_limit_reached,
-        answering_mcp_servers=result.answering_mcp_servers,
-        abstention_check_performed=result.abstention_check_performed,
-        abstention_detected=result.abstention_detected,
-        abstention_override_applied=result.abstention_override_applied,
-        abstention_reasoning=result.abstention_reasoning,
+        # Metadata fields
+        question_id=metadata.question_id,
+        template_id=metadata.template_id,
+        completed_without_errors=metadata.completed_without_errors,
+        error=metadata.error,
+        question_text=metadata.question_text,
+        keywords=metadata.keywords,
+        answering_model=metadata.answering_model,
+        parsing_model=metadata.parsing_model,
+        execution_time=metadata.execution_time,
+        timestamp=metadata.timestamp,
+        job_id=metadata.job_id,
+        answering_replicate=metadata.answering_replicate,
+        parsing_replicate=metadata.parsing_replicate,
+        # Template fields
+        raw_llm_response=template.raw_llm_response if template else "",
+        parsed_gt_response=template.parsed_gt_response if template else None,
+        parsed_llm_response=template.parsed_llm_response if template else None,
+        template_verification_performed=template.template_verification_performed if template else False,
+        verify_result=template.verify_result if template else None,
+        verify_granular_result=template.verify_granular_result if template else None,
+        answering_system_prompt=template.answering_system_prompt if template else None,
+        parsing_system_prompt=template.parsing_system_prompt if template else None,
+        embedding_check_performed=template.embedding_check_performed if template else False,
+        embedding_similarity_score=template.embedding_similarity_score if template else None,
+        embedding_override_applied=template.embedding_override_applied if template else False,
+        embedding_model_used=template.embedding_model_used if template else None,
+        regex_validations_performed=template.regex_validations_performed if template else False,
+        regex_validation_results=template.regex_validation_results if template else None,
+        regex_validation_details=template.regex_validation_details if template else None,
+        regex_overall_success=template.regex_overall_success if template else None,
+        regex_extraction_results=template.regex_extraction_results if template else None,
+        recursion_limit_reached=template.recursion_limit_reached if template else False,
+        abstention_check_performed=template.abstention_check_performed if template else False,
+        abstention_detected=template.abstention_detected if template else None,
+        abstention_override_applied=template.abstention_override_applied if template else False,
+        abstention_reasoning=template.abstention_reasoning if template else None,
+        answering_mcp_servers=template.answering_mcp_servers if template else None,
+        usage_metadata=template.usage_metadata if template else None,
+        agent_metrics=template.agent_metrics if template else None,
+        # Rubric fields (with split trait scores)
+        rubric_evaluation_performed=rubric.rubric_evaluation_performed if rubric else False,
+        llm_trait_scores=rubric.llm_trait_scores if rubric else None,
+        manual_trait_scores=rubric.manual_trait_scores if rubric else None,
+        metric_trait_scores=rubric.metric_trait_scores if rubric else None,
+        evaluation_rubric=rubric.evaluation_rubric if rubric else None,
+        metric_trait_confusion_lists=rubric.metric_trait_confusion_lists if rubric else None,
+        metric_trait_metrics=rubric.metric_trait_scores if rubric else None,  # DB uses old name metric_trait_metrics
         # Deep-judgment fields
-        deep_judgment_enabled=result.deep_judgment_enabled,
-        deep_judgment_performed=result.deep_judgment_performed,
-        extracted_excerpts=result.extracted_excerpts,
-        attribute_reasoning=result.attribute_reasoning,
-        deep_judgment_stages_completed=result.deep_judgment_stages_completed,
-        deep_judgment_model_calls=result.deep_judgment_model_calls,
-        deep_judgment_excerpt_retry_count=result.deep_judgment_excerpt_retry_count,
-        attributes_without_excerpts=result.attributes_without_excerpts,
-        # Search-enhanced deep-judgment fields
-        deep_judgment_search_enabled=result.deep_judgment_search_enabled,
-        hallucination_risk_assessment=result.hallucination_risk_assessment,
-        # Metric trait fields
-        metric_trait_confusion_lists=result.metric_trait_confusion_lists,
-        metric_trait_metrics=result.metric_trait_metrics,
-        # LLM usage tracking fields
-        usage_metadata=result.usage_metadata,
-        agent_metrics=result.agent_metrics,
+        deep_judgment_enabled=deep_judgment.deep_judgment_enabled if deep_judgment else False,
+        deep_judgment_performed=deep_judgment.deep_judgment_performed if deep_judgment else False,
+        extracted_excerpts=deep_judgment.extracted_excerpts if deep_judgment else None,
+        attribute_reasoning=deep_judgment.attribute_reasoning if deep_judgment else None,
+        deep_judgment_stages_completed=deep_judgment.deep_judgment_stages_completed if deep_judgment else None,
+        deep_judgment_model_calls=deep_judgment.deep_judgment_model_calls if deep_judgment else 0,
+        deep_judgment_excerpt_retry_count=deep_judgment.deep_judgment_excerpt_retry_count if deep_judgment else 0,
+        attributes_without_excerpts=deep_judgment.attributes_without_excerpts if deep_judgment else None,
+        deep_judgment_search_enabled=deep_judgment.deep_judgment_search_enabled if deep_judgment else False,
+        hallucination_risk_assessment=deep_judgment.hallucination_risk_assessment if deep_judgment else None,
     )
 
 
 def _update_result_model(model: VerificationResultModel, result: "VerificationResult") -> None:
     """Update an existing VerificationResultModel with new data."""
-    model.completed_without_errors = result.completed_without_errors
-    model.error = result.error
-    model.question_text = result.question_text
-    model.raw_llm_response = result.raw_llm_response
-    model.parsed_gt_response = result.parsed_gt_response
-    model.parsed_llm_response = result.parsed_llm_response
-    model.template_verification_performed = result.template_verification_performed
-    model.verify_result = result.verify_result
-    model.verify_granular_result = result.verify_granular_result
-    model.rubric_evaluation_performed = result.rubric_evaluation_performed
-    model.verify_rubric = result.verify_rubric
-    model.evaluation_rubric = result.evaluation_rubric
-    model.keywords = result.keywords
-    model.execution_time = result.execution_time
-    model.timestamp = result.timestamp
-    model.embedding_check_performed = result.embedding_check_performed
-    model.embedding_similarity_score = result.embedding_similarity_score
-    model.embedding_override_applied = result.embedding_override_applied
-    model.embedding_model_used = result.embedding_model_used
-    model.regex_validations_performed = result.regex_validations_performed
-    model.regex_validation_results = result.regex_validation_results
-    model.regex_validation_details = result.regex_validation_details
-    model.regex_overall_success = result.regex_overall_success
-    model.regex_extraction_results = result.regex_extraction_results
-    model.recursion_limit_reached = result.recursion_limit_reached
-    model.answering_mcp_servers = result.answering_mcp_servers
-    model.abstention_check_performed = result.abstention_check_performed
-    model.abstention_detected = result.abstention_detected
-    model.abstention_override_applied = result.abstention_override_applied
-    model.abstention_reasoning = result.abstention_reasoning
-    # Deep-judgment fields
-    model.deep_judgment_enabled = result.deep_judgment_enabled
-    model.deep_judgment_performed = result.deep_judgment_performed
-    model.extracted_excerpts = result.extracted_excerpts
-    model.attribute_reasoning = result.attribute_reasoning
-    model.deep_judgment_stages_completed = result.deep_judgment_stages_completed
-    model.deep_judgment_model_calls = result.deep_judgment_model_calls
-    model.deep_judgment_excerpt_retry_count = result.deep_judgment_excerpt_retry_count
-    model.attributes_without_excerpts = result.attributes_without_excerpts
-    # Search-enhanced deep-judgment fields
-    model.deep_judgment_search_enabled = result.deep_judgment_search_enabled
-    model.hallucination_risk_assessment = result.hallucination_risk_assessment
-    # Metric trait fields
-    model.metric_trait_confusion_lists = result.metric_trait_confusion_lists
-    model.metric_trait_metrics = result.metric_trait_metrics
-    # LLM usage tracking fields
-    model.usage_metadata = result.usage_metadata
-    model.agent_metrics = result.agent_metrics
+    # Extract fields from nested structure
+    metadata = result.metadata
+    template = result.template
+    rubric = result.rubric
+    deep_judgment = result.deep_judgment
+
+    # Update metadata fields
+    model.completed_without_errors = metadata.completed_without_errors
+    model.error = metadata.error
+    model.question_text = metadata.question_text
+    model.keywords = metadata.keywords
+    model.execution_time = metadata.execution_time
+    model.timestamp = metadata.timestamp
+
+    # Update template fields
+    if template:
+        model.raw_llm_response = template.raw_llm_response
+        model.parsed_gt_response = template.parsed_gt_response
+        model.parsed_llm_response = template.parsed_llm_response
+        model.template_verification_performed = template.template_verification_performed
+        model.verify_result = template.verify_result
+        model.verify_granular_result = template.verify_granular_result
+        model.embedding_check_performed = template.embedding_check_performed
+        model.embedding_similarity_score = template.embedding_similarity_score
+        model.embedding_override_applied = template.embedding_override_applied
+        model.embedding_model_used = template.embedding_model_used
+        model.regex_validations_performed = template.regex_validations_performed
+        model.regex_validation_results = template.regex_validation_results
+        model.regex_validation_details = template.regex_validation_details
+        model.regex_overall_success = template.regex_overall_success
+        model.regex_extraction_results = template.regex_extraction_results
+        model.recursion_limit_reached = template.recursion_limit_reached
+        model.answering_mcp_servers = template.answering_mcp_servers
+        model.abstention_check_performed = template.abstention_check_performed
+        model.abstention_detected = template.abstention_detected
+        model.abstention_override_applied = template.abstention_override_applied
+        model.abstention_reasoning = template.abstention_reasoning
+        model.usage_metadata = template.usage_metadata
+        model.agent_metrics = template.agent_metrics
+
+    # Update rubric fields (with split trait scores)
+    if rubric:
+        model.rubric_evaluation_performed = rubric.rubric_evaluation_performed
+        model.llm_trait_scores = rubric.llm_trait_scores
+        model.manual_trait_scores = rubric.manual_trait_scores
+        model.metric_trait_scores = rubric.metric_trait_scores
+        model.evaluation_rubric = rubric.evaluation_rubric
+        model.metric_trait_confusion_lists = rubric.metric_trait_confusion_lists
+        model.metric_trait_metrics = rubric.metric_trait_scores  # DB uses old name
+
+    # Update deep-judgment fields
+    if deep_judgment:
+        model.deep_judgment_enabled = deep_judgment.deep_judgment_enabled
+        model.deep_judgment_performed = deep_judgment.deep_judgment_performed
+        model.extracted_excerpts = deep_judgment.extracted_excerpts
+        model.attribute_reasoning = deep_judgment.attribute_reasoning
+        model.deep_judgment_stages_completed = deep_judgment.deep_judgment_stages_completed
+        model.deep_judgment_model_calls = deep_judgment.deep_judgment_model_calls
+        model.deep_judgment_excerpt_retry_count = deep_judgment.deep_judgment_excerpt_retry_count
+        model.attributes_without_excerpts = deep_judgment.attributes_without_excerpts
+        model.deep_judgment_search_enabled = deep_judgment.deep_judgment_search_enabled
+        model.hallucination_risk_assessment = deep_judgment.hallucination_risk_assessment
 
 
 def _model_to_verification_result(model: VerificationResultModel) -> "VerificationResult":
     """Convert VerificationResultModel to VerificationResult."""
-    from karenina.schemas.workflow import VerificationResult
+    from karenina.schemas.workflow import (
+        VerificationResult,
+        VerificationResultDeepJudgment,
+        VerificationResultMetadata,
+        VerificationResultRubric,
+        VerificationResultTemplate,
+    )
 
-    return VerificationResult(
+    # Create metadata subclass
+    metadata = VerificationResultMetadata(
         question_id=model.question_id,
         template_id=model.template_id,
         completed_without_errors=model.completed_without_errors,
         error=model.error,
         question_text=model.question_text,
-        raw_llm_response=model.raw_llm_response,
-        parsed_gt_response=model.parsed_gt_response,
-        parsed_llm_response=model.parsed_llm_response,
-        template_verification_performed=model.template_verification_performed,
-        verify_result=model.verify_result,
-        verify_granular_result=model.verify_granular_result,
-        rubric_evaluation_performed=model.rubric_evaluation_performed,
-        verify_rubric=model.verify_rubric,
-        evaluation_rubric=model.evaluation_rubric,
         keywords=model.keywords,
         answering_model=model.answering_model,
         parsing_model=model.parsing_model,
-        answering_system_prompt=model.answering_system_prompt,
-        parsing_system_prompt=model.parsing_system_prompt,
         execution_time=model.execution_time,
         timestamp=model.timestamp,
         run_name=model.run.run_name if model.run else None,
         job_id=model.job_id,
         answering_replicate=model.answering_replicate,
         parsing_replicate=model.parsing_replicate,
+    )
+
+    # Create template subclass
+    template = VerificationResultTemplate(
+        raw_llm_response=model.raw_llm_response,
+        parsed_gt_response=model.parsed_gt_response,
+        parsed_llm_response=model.parsed_llm_response,
+        template_verification_performed=model.template_verification_performed,
+        verify_result=model.verify_result,
+        verify_granular_result=model.verify_granular_result,
+        answering_system_prompt=model.answering_system_prompt,
+        parsing_system_prompt=model.parsing_system_prompt,
         embedding_check_performed=model.embedding_check_performed,
         embedding_similarity_score=model.embedding_similarity_score,
         embedding_override_applied=model.embedding_override_applied,
@@ -686,27 +716,42 @@ def _model_to_verification_result(model: VerificationResultModel) -> "Verificati
         regex_overall_success=model.regex_overall_success,
         regex_extraction_results=model.regex_extraction_results,
         recursion_limit_reached=model.recursion_limit_reached,
-        answering_mcp_servers=model.answering_mcp_servers,
         abstention_check_performed=model.abstention_check_performed,
         abstention_detected=model.abstention_detected,
         abstention_override_applied=model.abstention_override_applied,
         abstention_reasoning=model.abstention_reasoning,
-        # Deep-judgment fields
-        deep_judgment_enabled=model.deep_judgment_enabled,
-        deep_judgment_performed=model.deep_judgment_performed,
-        extracted_excerpts=model.extracted_excerpts,
-        attribute_reasoning=model.attribute_reasoning,
-        deep_judgment_stages_completed=model.deep_judgment_stages_completed,
-        deep_judgment_model_calls=model.deep_judgment_model_calls,
-        deep_judgment_excerpt_retry_count=model.deep_judgment_excerpt_retry_count,
-        attributes_without_excerpts=model.attributes_without_excerpts,
-        # Search-enhanced deep-judgment fields
-        deep_judgment_search_enabled=model.deep_judgment_search_enabled,
-        hallucination_risk_assessment=model.hallucination_risk_assessment,
-        # Metric trait fields
-        metric_trait_confusion_lists=model.metric_trait_confusion_lists,
-        metric_trait_metrics=model.metric_trait_metrics,
-        # LLM usage tracking fields
+        answering_mcp_servers=model.answering_mcp_servers,
         usage_metadata=model.usage_metadata,
         agent_metrics=model.agent_metrics,
     )
+
+    # Create rubric subclass (if rubric evaluation was performed)
+    rubric = None
+    if model.rubric_evaluation_performed:
+        rubric = VerificationResultRubric(
+            rubric_evaluation_performed=model.rubric_evaluation_performed,
+            llm_trait_scores=model.llm_trait_scores,
+            manual_trait_scores=model.manual_trait_scores,
+            metric_trait_scores=model.metric_trait_scores,  # Use metric_trait_metrics from DB
+            evaluation_rubric=model.evaluation_rubric,
+            metric_trait_confusion_lists=model.metric_trait_confusion_lists,
+        )
+
+    # Create deep-judgment subclass (if deep-judgment was performed)
+    deep_judgment = None
+    if model.deep_judgment_enabled:
+        deep_judgment = VerificationResultDeepJudgment(
+            deep_judgment_enabled=model.deep_judgment_enabled,
+            deep_judgment_performed=model.deep_judgment_performed,
+            extracted_excerpts=model.extracted_excerpts,
+            attribute_reasoning=model.attribute_reasoning,
+            deep_judgment_stages_completed=model.deep_judgment_stages_completed,
+            deep_judgment_model_calls=model.deep_judgment_model_calls,
+            deep_judgment_excerpt_retry_count=model.deep_judgment_excerpt_retry_count,
+            attributes_without_excerpts=model.attributes_without_excerpts,
+            deep_judgment_search_enabled=model.deep_judgment_search_enabled,
+            hallucination_risk_assessment=model.hallucination_risk_assessment,
+        )
+
+    # Create main VerificationResult with nested composition
+    return VerificationResult(metadata=metadata, template=template, rubric=rubric, deep_judgment=deep_judgment)
