@@ -225,9 +225,17 @@ class Benchmark:
         """Get a question by ID."""
         return self._question_manager.get_question(question_id)
 
-    def get_all_questions(self) -> list[dict[str, Any]]:
-        """Get all questions in the benchmark."""
-        return self._question_manager.get_all_questions()
+    def get_all_questions(self, ids_only: bool = False) -> list[str] | list[dict[str, Any]]:
+        """
+        Get all questions in the benchmark.
+
+        Args:
+            ids_only: If True, return only question IDs. If False (default), return full question objects.
+
+        Returns:
+            List of question IDs (if ids_only=True) or list of question dictionaries (if ids_only=False)
+        """
+        return self._question_manager.get_all_questions(ids_only)
 
     def get_question_as_object(self, question_id: str) -> "Question":
         """Get a question as a Question object."""
@@ -313,9 +321,29 @@ class Benchmark:
         """Toggle finished status of a question."""
         return self._question_manager.toggle_finished(question_id)
 
-    def get_unfinished_questions(self) -> list[str]:
-        """Get list of question IDs that are not marked as finished."""
-        return self._question_manager.get_unfinished_questions()
+    def get_unfinished_questions(self, ids_only: bool = False) -> list[str] | list[dict[str, Any]]:
+        """
+        Get questions that are not marked as finished.
+
+        Args:
+            ids_only: If True, return only question IDs. If False (default), return full question objects.
+
+        Returns:
+            List of question IDs (if ids_only=True) or list of question dictionaries (if ids_only=False)
+        """
+        return self._question_manager.get_unfinished_questions(ids_only)
+
+    def get_finished_questions(self, ids_only: bool = False) -> list[str] | list[dict[str, Any]]:
+        """
+        Get questions that are marked as finished.
+
+        Args:
+            ids_only: If True, return only question IDs. If False (default), return full question objects.
+
+        Returns:
+            List of question IDs (if ids_only=True) or list of question dictionaries (if ids_only=False)
+        """
+        return self._question_manager.get_finished_questions(ids_only)
 
     def filter_questions(
         self,
@@ -323,13 +351,38 @@ class Benchmark:
         has_template: bool | None = None,
         has_rubric: bool | None = None,
         author: str | None = None,
+        custom_filter: Any = None,
     ) -> list[dict[str, Any]]:
         """Filter questions based on criteria."""
-        return self._question_manager.filter_questions(finished, has_template, has_rubric, author)
+        return self._question_manager.filter_questions(finished, has_template, has_rubric, author, custom_filter)
 
-    def search_questions(self, query: str) -> list[dict[str, Any]]:
-        """Search for questions containing the query text."""
-        return self._question_manager.search_questions(query)
+    def filter_by_metadata(
+        self,
+        field_path: str,
+        value: Any,
+        match_mode: str = "exact",
+    ) -> list[dict[str, Any]]:
+        """Filter questions by a metadata field using dot notation."""
+        return self._question_manager.filter_by_metadata(field_path, value, match_mode)
+
+    def filter_by_custom_metadata(
+        self,
+        match_all: bool = True,
+        **criteria: Any,
+    ) -> list[dict[str, Any]]:
+        """Filter questions by custom metadata fields with AND/OR logic."""
+        return self._question_manager.filter_by_custom_metadata(match_all, **criteria)
+
+    def search_questions(
+        self,
+        query: str | list[str],
+        match_all: bool = True,
+        fields: list[str] | None = None,
+        case_sensitive: bool = False,
+        regex: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Search for questions containing the query text (unified search method)."""
+        return self._question_manager.search_questions(query, match_all, fields, case_sensitive, regex)
 
     def get_questions_by_author(self, author: str) -> list[dict[str, Any]]:
         """Get questions created by a specific author."""
@@ -338,6 +391,14 @@ class Benchmark:
     def get_questions_with_rubric(self) -> list[dict[str, Any]]:
         """Get questions that have question-specific rubrics."""
         return self._question_manager.get_questions_with_rubric()
+
+    def count_by_field(
+        self,
+        field_path: str,
+        questions: list[dict[str, Any]] | None = None,
+    ) -> dict[Any, int]:
+        """Count questions grouped by a field value using dot notation."""
+        return self._question_manager.count_by_field(field_path, questions)
 
     # Template management methods - delegate to TemplateManager
     def add_answer_template(self, question_id: str, template_code: str) -> None:
@@ -364,9 +425,17 @@ class Benchmark:
         """Get all finished templates for verification."""
         return self._template_manager.get_finished_templates()
 
-    def get_missing_templates(self) -> list[str]:
-        """Get list of question IDs that don't have non-default templates."""
-        return self._template_manager.get_missing_templates()
+    def get_missing_templates(self, ids_only: bool = False) -> list[str] | list[dict[str, Any]]:
+        """
+        Get questions that don't have non-default templates.
+
+        Args:
+            ids_only: If True, return only question IDs. If False (default), return full question objects.
+
+        Returns:
+            List of question IDs (if ids_only=True) or list of question dictionaries (if ids_only=False)
+        """
+        return self._template_manager.get_missing_templates(ids_only)
 
     def apply_global_template(self, template_code: str) -> list[str]:
         """Apply a template to all questions that don't have one."""
@@ -554,7 +623,9 @@ class Benchmark:
         """
         if only_missing and not force_regenerate:
             # Get questions that don't have templates
-            question_ids = self.get_missing_templates()
+            from typing import cast
+
+            question_ids = cast(list[str], self.get_missing_templates(ids_only=True))
         else:
             # Get all question IDs
             question_ids = self.get_question_ids()

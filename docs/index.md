@@ -42,6 +42,7 @@ Karenina is a framework for defining benchmarks in a rigorous and reproducible w
 - **[Few-Shot Prompting](advanced/few-shot.md)** - Guide responses with examples
 - **[Abstention Detection](advanced/abstention-detection.md)** - Handle model refusals
 - **[Embedding Check](advanced/embedding-check.md)** - Semantic similarity fallback
+- **[TaskEval](advanced/task-eval.md)** - Evaluate agent workflow traces
 - **[Presets](advanced/presets.md)** - Save and reuse verification configurations
 - **[System Integration](advanced/integration.md)** - Server and GUI integration
 

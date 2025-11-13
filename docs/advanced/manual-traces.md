@@ -882,6 +882,7 @@ def get_memory_usage_info() -> Dict[str, Any]:
 - **Verification**: Complete verification documentation
 - **Configuration**: Model and provider configuration
 - **Troubleshooting**: Common issues and solutions
+- **[TaskEval](task-eval.md)**: Evaluate agent workflow traces (similar concept for pre-existing outputs, focused on rubric-based quality assessment)
 
 ---
 

@@ -778,6 +778,164 @@ class VerificationResult(BaseModel):
     # Structure: {"trait_name": {"precision": 0.85, "recall": 0.92, "f1": 0.88, ...}}
     # Only metrics requested by the trait are included in the inner dictionary
 
+    @property
+    def rubric_results(self) -> dict[str, Any]:
+        """
+        Unified interface for all rubric evaluation results.
+
+        Returns a nested dictionary organizing rubric results by evaluation method:
+        - "llm": LLM-evaluated trait scores (integers 1-5)
+        - "manual": Manual/regex trait results (booleans)
+        - "metric": Metric trait results with both metrics and confusion data
+
+        Returns:
+            dict: Nested structure with all rubric results, e.g.:
+                {
+                    "llm": {"clarity": 4, "analysis_quality": 2},
+                    "manual": {"mentions_regulatory_elements": True},
+                    "metric": {
+                        "feature_identification": {
+                            "metrics": {"precision": 1.0, "recall": 1.0, "f1": 1.0},
+                            "confusion": {"tp": [...], "tn": [], "fp": [], "fn": []}
+                        }
+                    }
+                }
+
+        Example:
+            >>> result = VerificationResult(...)
+            >>> all_results = result.rubric_results
+            >>> llm_scores = all_results.get("llm", {})
+            >>> metric_results = all_results.get("metric", {})
+        """
+        result: dict[str, Any] = {}
+
+        # Split verify_rubric into llm and manual traits using evaluation_rubric
+        if self.verify_rubric and self.evaluation_rubric:
+            llm_results: dict[str, Any] = {}
+            manual_results: dict[str, Any] = {}
+
+            # Get trait names from evaluation_rubric
+            llm_trait_names = {trait["name"] for trait in self.evaluation_rubric.get("traits", [])}
+            manual_trait_names = {trait["name"] for trait in self.evaluation_rubric.get("manual_traits", [])}
+
+            # Categorize verify_rubric entries
+            for trait_name, trait_value in self.verify_rubric.items():
+                if trait_name in llm_trait_names:
+                    llm_results[trait_name] = trait_value
+                elif trait_name in manual_trait_names:
+                    manual_results[trait_name] = trait_value
+
+            if llm_results:
+                result["llm"] = llm_results
+            if manual_results:
+                result["manual"] = manual_results
+
+        # Add metric trait results with confusion data
+        if self.metric_trait_metrics:
+            metric_results: dict[str, dict[str, Any]] = {}
+
+            for trait_name, metrics in self.metric_trait_metrics.items():
+                metric_results[trait_name] = {
+                    "metrics": metrics,
+                    "confusion": (
+                        self.metric_trait_confusion_lists.get(trait_name, {})
+                        if self.metric_trait_confusion_lists
+                        else {}
+                    ),
+                }
+
+            result["metric"] = metric_results
+
+        return result
+
+    def get_trait_by_name(self, name: str) -> tuple[Any, str] | None:
+        """
+        Look up a trait by name across all trait types.
+
+        Searches through LLM traits, manual traits, and metric traits to find
+        the specified trait name.
+
+        Args:
+            name: The trait name to search for
+
+        Returns:
+            tuple: (value, trait_type) where trait_type is "llm", "manual", or "metric"
+            None: If the trait is not found
+
+        Example:
+            >>> result = VerificationResult(...)
+            >>> value, trait_type = result.get_trait_by_name("clarity")
+            >>> print(f"Clarity score: {value} (type: {trait_type})")
+            Clarity score: 4 (type: llm)
+
+            >>> metric_value, metric_type = result.get_trait_by_name("feature_identification")
+            >>> print(f"Metrics: {metric_value['metrics']}")
+            Metrics: {"precision": 1.0, "recall": 1.0, "f1": 1.0}
+        """
+        rubric_data = self.rubric_results
+
+        # Check LLM traits
+        if "llm" in rubric_data and name in rubric_data["llm"]:
+            return (rubric_data["llm"][name], "llm")
+
+        # Check manual traits
+        if "manual" in rubric_data and name in rubric_data["manual"]:
+            return (rubric_data["manual"][name], "manual")
+
+        # Check metric traits
+        if "metric" in rubric_data and name in rubric_data["metric"]:
+            return (rubric_data["metric"][name], "metric")
+
+        return None
+
+    def get_all_scores(self) -> dict[str, int | bool | float]:
+        """
+        Get a flattened dictionary of all rubric scores.
+
+        Returns all LLM trait scores, manual trait booleans, and metric trait
+        final metrics (precision, recall, F1, etc.) in a single flat dictionary.
+        Excludes confusion matrix data.
+
+        For metric traits, includes all computed metrics with keys like:
+        "{trait_name}.{metric_name}" (e.g., "feature_identification.precision")
+
+        Returns:
+            dict: Flattened scores with all trait results, e.g.:
+                {
+                    "clarity": 4,
+                    "analysis_quality": 2,
+                    "mentions_regulatory_elements": True,
+                    "feature_identification.precision": 1.0,
+                    "feature_identification.recall": 1.0,
+                    "feature_identification.f1": 1.0
+                }
+
+        Example:
+            >>> result = VerificationResult(...)
+            >>> scores = result.get_all_scores()
+            >>> for trait_name, score in scores.items():
+            ...     print(f"{trait_name}: {score}")
+        """
+        scores: dict[str, int | bool | float] = {}
+        rubric_data = self.rubric_results
+
+        # Add LLM trait scores
+        if "llm" in rubric_data:
+            scores.update(rubric_data["llm"])
+
+        # Add manual trait booleans
+        if "manual" in rubric_data:
+            scores.update(rubric_data["manual"])
+
+        # Add metric trait metrics (flattened with dot notation)
+        if "metric" in rubric_data:
+            for trait_name, trait_data in rubric_data["metric"].items():
+                metrics = trait_data.get("metrics", {})
+                for metric_name, metric_value in metrics.items():
+                    scores[f"{trait_name}.{metric_name}"] = metric_value
+
+        return scores
+
 
 class VerificationJob(BaseModel):
     """Represents a verification job."""

@@ -38,6 +38,7 @@ Rubrics are essential for comprehensive evaluation:
 3. **Safety and Compliance**: Ensure responses meet safety standards or avoid prohibited content
 4. **Quantitative Metrics**: Assessing the completeness of an answer by measuring precision, recall, and F1 scores with respect to a list of terms or concepts that we expect to be present/absent in the answer.
 5. **Consistent Standards**: Apply uniform evaluation criteria across question sets
+6. **Agent Workflow Evaluation**: Use rubrics with [TaskEval](../advanced/task-eval.md) to evaluate pre-logged agent workflow outputs across multiple quality dimensions
 
 ## Rubric Scope: Global vs Question-Specific
 
