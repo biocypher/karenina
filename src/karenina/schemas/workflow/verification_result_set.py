@@ -460,3 +460,67 @@ class VerificationResultSet(BaseModel):
             f"questions={summary['num_questions']}, "
             f"models={summary['num_models']})"
         )
+
+    # ========================================================================
+    # Legacy Compatibility
+    # ========================================================================
+
+    def to_legacy_dict(self) -> dict[str, VerificationResult]:
+        """
+        Convert to legacy dict format for backward compatibility.
+
+        This method recreates the dictionary format used by the old run_verification
+        API where keys were in the format:
+        {question_id}_{answering_model}_{parsing_model}_rep{N}_{timestamp}
+
+        Returns:
+            Dictionary mapping result keys to VerificationResult objects
+
+        Example:
+            ```python
+            result_set = benchmark.run_verification(config)
+
+            # Convert to old dict format for legacy code
+            legacy_dict = result_set.to_legacy_dict()
+
+            # Keys like: "q1_gpt-4_gpt-4_rep1_1699123456789"
+            for result_key, result in legacy_dict.items():
+                print(f"{result_key}: {result.metadata.question_id}")
+            ```
+        """
+        import time
+
+        result_dict = {}
+        for result in self.results:
+            # Generate key matching the old format:
+            # {question_id}_{answering}_{parsing}_rep{N}_{timestamp}
+            key_parts = [
+                result.metadata.question_id,
+                result.metadata.answering_model,
+                result.metadata.parsing_model,
+            ]
+
+            # Add replicate if present
+            if result.metadata.answering_replicate is not None:
+                key_parts.append(f"rep{result.metadata.answering_replicate}")
+
+            # Use the result's timestamp if available, otherwise current time
+            if result.metadata.timestamp:
+                # Try to parse ISO timestamp to milliseconds
+                try:
+                    from datetime import datetime
+
+                    dt = datetime.fromisoformat(result.metadata.timestamp.replace("Z", "+00:00"))
+                    timestamp_ms = str(int(dt.timestamp() * 1000))
+                except (ValueError, AttributeError):
+                    # Fallback to current time
+                    timestamp_ms = str(int(time.time() * 1000))
+            else:
+                timestamp_ms = str(int(time.time() * 1000))
+
+            key_parts.append(timestamp_ms)
+
+            result_key = "_".join(key_parts)
+            result_dict[result_key] = result
+
+        return result_dict

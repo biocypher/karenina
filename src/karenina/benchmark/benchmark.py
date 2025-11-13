@@ -18,7 +18,12 @@ if TYPE_CHECKING:
 
 from ..domain.answers.generator import generate_answer_template, load_answer_templates_from_json
 from ..schemas.domain import ManualRubricTrait, Rubric, RubricTrait
-from ..schemas.workflow import FinishedTemplate, VerificationConfig, VerificationResult
+from ..schemas.workflow import (
+    FinishedTemplate,
+    VerificationConfig,
+    VerificationResult,
+    VerificationResultSet,
+)
 from .core import (
     BenchmarkBase,
     ExportManager,
@@ -840,7 +845,7 @@ class Benchmark:
         job_id: str | None = None,
         async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
-    ) -> dict[str, VerificationResult]:
+    ) -> VerificationResultSet:
         """Run verification on the benchmark using existing execution system."""
         return self._verification_manager.run_verification(
             config, question_ids, run_name, job_id, async_enabled, progress_callback
@@ -880,11 +885,34 @@ class Benchmark:
     # Results management methods - delegate to ResultsManager
     def store_verification_results(
         self,
-        results: dict[str, VerificationResult],
+        results: VerificationResultSet | dict[str, VerificationResult],
         run_name: str | None = None,
     ) -> None:
-        """Store verification results in the benchmark metadata."""
-        self._results_manager.store_verification_results(results, run_name)
+        """
+        Store verification results in the benchmark metadata.
+
+        Args:
+            results: VerificationResultSet or dict mapping result keys to VerificationResult objects
+            run_name: Optional run name for tracking
+        """
+        # Convert VerificationResultSet to dict format for storage
+        if isinstance(results, VerificationResultSet):
+            # Generate keys for results (needed for storage)
+            results_dict = {}
+            for i, result in enumerate(results):
+                # Create a key similar to the old format
+                key = f"{result.metadata.question_id}_{result.metadata.answering_model}_{result.metadata.parsing_model}"
+                if result.metadata.answering_replicate is not None:
+                    key += f"_rep{result.metadata.answering_replicate}"
+                if result.metadata.timestamp:
+                    key += f"_{result.metadata.timestamp}"
+                # Handle potential duplicates by appending index
+                if key in results_dict:
+                    key += f"_{i}"
+                results_dict[key] = result
+            self._results_manager.store_verification_results(results_dict, run_name)
+        else:
+            self._results_manager.store_verification_results(results, run_name)
 
     def get_verification_results(
         self,

@@ -14,6 +14,7 @@ from ...schemas.workflow import (
     VerificationConfig,
     VerificationResult,
     VerificationResultMetadata,
+    VerificationResultSet,
 )
 from ...utils.checkpoint import generate_template_id
 from ..verification import run_verification_batch
@@ -54,13 +55,14 @@ class VerificationManager:
         Raises:
             ValueError: If question not found or not ready for verification
         """
-        return self.run_verification(
+        result_set = self.run_verification(
             config=config,
             question_ids=[question_id],
             run_name=run_name,
             job_id=job_id,
             async_enabled=async_enabled,
         )
+        return result_set.to_legacy_dict()
 
     def verify_questions(
         self,
@@ -85,7 +87,7 @@ class VerificationManager:
         Returns:
             Dictionary mapping result keys to VerificationResult objects
         """
-        return self.run_verification(
+        result_set = self.run_verification(
             config=config,
             question_ids=question_ids,
             run_name=run_name,
@@ -93,6 +95,7 @@ class VerificationManager:
             async_enabled=async_enabled,
             progress_callback=progress_callback,
         )
+        return result_set.to_legacy_dict()
 
     def verify_filtered(
         self,
@@ -137,7 +140,7 @@ class VerificationManager:
 
         question_ids = [q["id"] for q in filtered_questions]
 
-        return self.run_verification(
+        result_set = self.run_verification(
             config=config,
             question_ids=question_ids,
             run_name=run_name,
@@ -145,6 +148,7 @@ class VerificationManager:
             async_enabled=async_enabled,
             progress_callback=progress_callback,
         )
+        return result_set.to_legacy_dict()
 
     def verify_all_finished(
         self,
@@ -167,7 +171,7 @@ class VerificationManager:
         Returns:
             Dictionary mapping result keys to VerificationResult objects
         """
-        return self.run_verification(
+        result_set = self.run_verification(
             config=config,
             question_ids=None,  # This defaults to all finished questions
             run_name=run_name,
@@ -175,6 +179,7 @@ class VerificationManager:
             async_enabled=async_enabled,
             progress_callback=progress_callback,
         )
+        return result_set.to_legacy_dict()
 
     def verify_custom(
         self,
@@ -205,7 +210,7 @@ class VerificationManager:
             if question_selector(q_data):
                 selected_questions.append(q_data["id"])
 
-        return self.run_verification(
+        result_set = self.run_verification(
             config=config,
             question_ids=selected_questions,
             run_name=run_name,
@@ -213,6 +218,7 @@ class VerificationManager:
             async_enabled=async_enabled,
             progress_callback=progress_callback,
         )
+        return result_set.to_legacy_dict()
 
     def verify_dry_run(
         self,
@@ -267,7 +273,7 @@ class VerificationManager:
         job_id: str | None = None,
         async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
-    ) -> dict[str, VerificationResult]:
+    ) -> VerificationResultSet:
         """
         Run verification on the benchmark using existing execution system.
 
@@ -280,7 +286,7 @@ class VerificationManager:
             progress_callback: Optional callback for progress updates
 
         Returns:
-            Dictionary mapping result keys to VerificationResult objects
+            VerificationResultSet containing all verification results
         """
         # If no question IDs provided, verify all finished questions
         if question_ids is None:

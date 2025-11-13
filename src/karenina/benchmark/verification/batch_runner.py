@@ -16,6 +16,7 @@ from ...schemas.workflow import (
     VerificationConfig,
     VerificationResult,
     VerificationResultMetadata,
+    VerificationResultSet,
 )
 from ...utils.answer_cache import AnswerTraceCache
 
@@ -655,7 +656,7 @@ def run_verification_batch(
     storage_url: str | None = None,
     benchmark_name: str | None = None,
     progress_callback: Callable[[int, int, VerificationResult | None], None] | None = None,
-) -> dict[str, VerificationResult]:
+) -> VerificationResultSet:
     """
     Run batch verification with combinatorial expansion.
 
@@ -675,7 +676,7 @@ def run_verification_batch(
                           Called before starting each task with preview result
 
     Returns:
-        Dictionary mapping result keys to verification results
+        VerificationResultSet containing all verification results
     """
     # Generate run name if not provided
     if run_name is None:
@@ -719,5 +720,9 @@ def run_verification_batch(
             run_id=job_id if job_id else run_name,
         )
 
-    logger.info(f"Verification complete: {len(results)} results")
-    return results
+    # Convert dict to VerificationResultSet
+    result_list = list(results.values())
+    result_set = VerificationResultSet(results=result_list)
+
+    logger.info(f"Verification complete: {len(result_set)} results")
+    return result_set
