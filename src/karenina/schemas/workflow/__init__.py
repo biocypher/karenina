@@ -37,6 +37,12 @@ from .verification import (
 )
 from .verification_result_set import VerificationResultSet
 
+# Rebuild models to resolve forward references
+RubricResults.model_rebuild()
+TemplateResults.model_rebuild()
+JudgmentResults.model_rebuild()
+VerificationResultSet.model_rebuild()
+
 __all__ = [
     # Model configuration
     "ModelConfig",

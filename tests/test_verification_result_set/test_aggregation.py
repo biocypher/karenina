@@ -1,7 +1,5 @@
 """Tests for the aggregation framework."""
 
-import statistics
-
 import pytest
 
 from karenina.schemas.workflow import VerificationResult, VerificationResultMetadata
@@ -67,9 +65,9 @@ class TestAggregators:
         # Test with None values (should be filtered out)
         assert aggregator.aggregate([1, None, 2, 2, None]) == 2
 
-        # Test with no unique mode (should raise error)
-        with pytest.raises(statistics.StatisticsError):
-            aggregator.aggregate([1, 2])
+        # Test with no unique mode (returns first mode in Python 3.11+)
+        result = aggregator.aggregate([1, 2])
+        assert result in [1, 2]  # Either is valid as they're both modes
 
     def test_majority_vote_aggregator(self):
         """Test MajorityVoteAggregator."""
