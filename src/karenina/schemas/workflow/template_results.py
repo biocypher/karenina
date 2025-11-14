@@ -288,6 +288,224 @@ class TemplateResults(BaseModel):
             # If comparison fails (e.g., unhashable types), return False
             return False
 
+    def to_regex_dataframe(self) -> Any:
+        """
+        Convert regex validation results to pandas DataFrame.
+
+        Creates one row per regex pattern tested.
+        Provides detailed information about pattern matches, extraction, and positions.
+
+        Column ordering:
+            1. Status: completed_without_errors, error
+            2. Identification: question_id, template_id, replicate
+            3. Model Config: answering_model, parsing_model
+            4. Regex Details: pattern_name, pattern_regex, matched, extracted_value, match positions
+            5. Validation Context: raw_llm_response
+            6. Execution Metadata: timestamp, run_name, job_id
+
+        Returns:
+            pandas.DataFrame: Exploded DataFrame with one row per regex pattern
+
+        Example:
+            >>> template_results = result_set.get_templates()
+            >>> df = template_results.to_regex_dataframe()
+            >>> # Filter to failed patterns
+            >>> failed = df[~df['matched']]
+            >>> # Analyze pattern success rates
+            >>> success_rates = df.groupby('pattern_name')['matched'].mean()
+        """
+        import pandas as pd
+
+        rows = []
+
+        for result in self.results:
+            if result.template is None or not result.template.regex_validations_performed:
+                # No regex validation data - skip this result
+                continue
+
+            template = result.template
+            metadata = result.metadata
+
+            # Unified replicate
+            replicate = metadata.answering_replicate
+            if replicate is None:
+                replicate = metadata.parsing_replicate
+
+            # Get regex data
+            validation_results = template.regex_validation_results or {}
+            validation_details = template.regex_validation_details or {}
+            extraction_results = template.regex_extraction_results or {}
+
+            if not validation_results:
+                # No patterns tested - skip
+                continue
+
+            # Create one row per pattern
+            for pattern_name, matched in validation_results.items():
+                # Get detailed match info
+                details = validation_details.get(pattern_name, {})
+                extracted = extraction_results.get(pattern_name)
+
+                # Extract match details
+                match_start = details.get("match_start")
+                match_end = details.get("match_end")
+                full_match = details.get("full_match")
+                pattern_regex = details.get("pattern") or details.get("regex")
+
+                rows.append(
+                    {
+                        # === Status ===
+                        "completed_without_errors": metadata.completed_without_errors,
+                        "error": metadata.error,
+                        # === Identification ===
+                        "question_id": metadata.question_id,
+                        "template_id": metadata.template_id,
+                        "replicate": replicate,
+                        # === Model Configuration ===
+                        "answering_model": metadata.answering_model,
+                        "parsing_model": metadata.parsing_model,
+                        # === Regex Details ===
+                        "pattern_name": pattern_name,
+                        "pattern_regex": pattern_regex,
+                        "matched": matched,
+                        "extracted_value": extracted,
+                        "match_start": match_start,
+                        "match_end": match_end,
+                        "full_match": full_match,
+                        # === Validation Context ===
+                        "raw_llm_response": template.raw_llm_response,
+                        # === Execution Metadata ===
+                        "timestamp": metadata.timestamp,
+                        "run_name": metadata.run_name,
+                        "job_id": metadata.job_id,
+                    }
+                )
+
+        return pd.DataFrame(rows)
+
+    def to_usage_dataframe(self, totals_only: bool = False) -> Any:
+        """
+        Convert token usage data to pandas DataFrame.
+
+        By default, creates one row per usage stage (exploded).
+        With totals_only=True, creates one row per verification with aggregated totals.
+
+        Column ordering:
+            1. Status: completed_without_errors, error
+            2. Identification: question_id, template_id, replicate
+            3. Model Config: answering_model, parsing_model
+            4. Usage Stage: usage_stage (excluded if totals_only=True)
+            5. Token Counts: input_tokens, output_tokens, total_tokens
+            6. Model Used: model_used
+            7. Detailed Breakdowns: input_audio_tokens, cache_read_tokens, etc.
+            8. Agent Metrics: agent_iterations, agent_tool_calls, etc.
+            9. Execution Metadata: timestamp, run_name, job_id
+
+        Args:
+            totals_only: If True, only include "total" stage (one row per verification)
+                        If False (default), explode by stage (excluding "total")
+
+        Returns:
+            pandas.DataFrame: Usage data, exploded by stage or totals only
+
+        Example:
+            >>> template_results = result_set.get_templates()
+            >>> # Get per-stage breakdown
+            >>> df_stages = template_results.to_usage_dataframe()
+            >>> # Get totals only
+            >>> df_totals = template_results.to_usage_dataframe(totals_only=True)
+            >>> # Analyze token usage by stage
+            >>> by_stage = df_stages.groupby('usage_stage')['total_tokens'].sum()
+        """
+        import pandas as pd
+
+        rows = []
+
+        for result in self.results:
+            if result.template is None or result.template.usage_metadata is None:
+                # No usage data - skip this result
+                continue
+
+            template = result.template
+            metadata = result.metadata
+
+            # Unified replicate
+            replicate = metadata.answering_replicate
+            if replicate is None:
+                replicate = metadata.parsing_replicate
+
+            # Get agent metrics (apply to all stages)
+            agent_metrics = template.agent_metrics or {}
+
+            # Process usage data
+            usage_metadata = template.usage_metadata or {}
+            for stage, usage_data in usage_metadata.items():
+                # Apply filtering based on totals_only parameter
+                if totals_only and stage != "total":
+                    continue
+                if not totals_only and stage == "total":
+                    continue
+
+                # Extract token counts
+                input_tokens = usage_data.get("input_tokens")
+                output_tokens = usage_data.get("output_tokens")
+                total_tokens = usage_data.get("total_tokens")
+                model_used = usage_data.get("model")
+
+                # Extract detailed token breakdowns
+                input_details = usage_data.get("input_token_details", {}) or {}
+                output_details = usage_data.get("output_token_details", {}) or {}
+
+                input_audio = input_details.get("audio")
+                cache_read = input_details.get("cache_read")
+                output_audio = output_details.get("audio")
+                reasoning_tokens = output_details.get("reasoning")
+
+                # Agent metrics (only relevant for answer_generation stage typically)
+                iterations = agent_metrics.get("iterations")
+                tool_calls = agent_metrics.get("tool_calls")
+                tools_used = agent_metrics.get("tools_used")
+                suspected_failures = agent_metrics.get("suspect_failed_tool_calls")
+
+                rows.append(
+                    {
+                        # === Status ===
+                        "completed_without_errors": metadata.completed_without_errors,
+                        "error": metadata.error,
+                        # === Identification ===
+                        "question_id": metadata.question_id,
+                        "template_id": metadata.template_id,
+                        "replicate": replicate,
+                        # === Model Configuration ===
+                        "answering_model": metadata.answering_model,
+                        "parsing_model": metadata.parsing_model,
+                        # === Usage Stage ===
+                        "usage_stage": stage if not totals_only else None,
+                        # === Token Counts ===
+                        "input_tokens": input_tokens,
+                        "output_tokens": output_tokens,
+                        "total_tokens": total_tokens,
+                        # === Model Used ===
+                        "model_used": model_used,
+                        # === Detailed Breakdowns ===
+                        "input_audio_tokens": input_audio,
+                        "input_cache_read_tokens": cache_read,
+                        "output_audio_tokens": output_audio,
+                        "output_reasoning_tokens": reasoning_tokens,
+                        # === Agent Metrics ===
+                        "agent_iterations": iterations,
+                        "agent_tool_calls": tool_calls,
+                        "agent_tools_used": tools_used,
+                        "agent_suspected_failures": suspected_failures,
+                        # === Execution Metadata ===
+                        "timestamp": metadata.timestamp,
+                        "run_name": metadata.run_name,
+                        "job_id": metadata.job_id,
+                    }
+                )
+
+        return pd.DataFrame(rows)
+
     # ========================================================================
     # Core Data Access
     # ========================================================================
