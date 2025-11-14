@@ -523,7 +523,7 @@ def _retry_parse_with_null_feedback(
         Tuple of (parsed_answer, usage_metadata)
         parsed_answer is None if retry also fails
     """
-    from ..utils.parsing import _strip_markdown_fences
+    from .utils.parsing import _strip_markdown_fences
 
     # Try to extract JSON from error message
     failed_json = None
