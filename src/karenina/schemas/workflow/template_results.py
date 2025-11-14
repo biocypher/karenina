@@ -11,12 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
-from .aggregation import (
-    AggregatorRegistry,
-    GroupByRegistry,
-    create_default_groupby_registry,
-    create_default_registry,
-)
+from .aggregation import AggregatorRegistry, create_default_registry
 
 if TYPE_CHECKING:
     from .verification import VerificationResult
@@ -51,9 +46,8 @@ class TemplateResults(BaseModel):
             **data: Additional pydantic model data
         """
         super().__init__(results=results, **data)
-        # Create default aggregator and groupby registries
+        # Create default aggregator registry
         self._aggregator_registry: AggregatorRegistry = create_default_registry()
-        self._groupby_registry: GroupByRegistry = create_default_groupby_registry()
 
     # ========================================================================
     # DataFrame Conversion
@@ -708,189 +702,191 @@ class TemplateResults(BaseModel):
 
     def aggregate_pass_rate(
         self,
-        by: str = "question",
+        by: str = "question_id",
         **kwargs: Any,  # noqa: ARG002
     ) -> dict[str, float]:
         """
         Calculate template verification pass rate by group.
 
+        Uses pandas DataFrame groupby for efficient aggregation.
+
         Args:
-            by: Grouping axis ("question", "model", "replicate")
+            by: Column name to group by (e.g., "question_id", "answering_model", "replicate")
             **kwargs: Additional parameters
 
         Returns:
             Dictionary mapping group identifiers to pass rates (0.0 to 1.0)
             Format: {group_id: pass_rate}
+
+        Example:
+            >>> results.aggregate_pass_rate(by="question_id")
+            {'q1': 0.8, 'q2': 1.0}
         """
-        # Group results by specified axis
-        grouped = self._group_results(by)
 
-        # Calculate pass rate for each group
-        pass_rates = {}
-        for group_id, group_results in grouped.items():
-            verify_results = []
+        # Get DataFrame
+        df = self.to_dataframe()
 
-            for result in group_results:
-                if result.template and result.template.verify_result is not None:
-                    verify_results.append(result.template.verify_result)
+        if len(df) == 0:
+            return {}
 
-            if verify_results:
-                pass_count = sum(1 for v in verify_results if v)
-                pass_rates[group_id] = pass_count / len(verify_results)
-            else:
-                pass_rates[group_id] = 0.0
+        # Filter to only rows where verify_result is not None
+        df_filtered = df[df["verify_result"].notna()].copy()
 
-        return pass_rates
+        if len(df_filtered) == 0:
+            return {}
+
+        # Calculate pass rate per group
+        pass_rates = df_filtered.groupby(by)["verify_result"].mean()
+
+        return dict(pass_rates.to_dict())
 
     def aggregate_embedding_scores(
         self,
         strategy: str = "mean",
-        by: str = "question",
+        by: str = "question_id",
         **kwargs: Any,
     ) -> dict[str, float]:
         """
         Aggregate embedding similarity scores using specified strategy.
 
+        Uses pandas DataFrame groupby for efficient aggregation.
+
         Args:
             strategy: Aggregation strategy name (e.g., "mean", "median")
-            by: Grouping axis ("question", "model", "replicate")
+            by: Column name to group by (e.g., "question_id", "answering_model", "replicate")
             **kwargs: Additional parameters for the aggregator
 
         Returns:
             Dictionary mapping group identifiers to aggregated scores
             Format: {group_id: aggregated_score}
+
+        Example:
+            >>> results.aggregate_embedding_scores(strategy="mean", by="question_id")
+            {'q1': 0.92, 'q2': 0.85}
         """
+
         aggregator = self._aggregator_registry.get(strategy)
 
-        # Group results by specified axis
-        grouped = self._group_results(by)
+        # Get DataFrame
+        df = self.to_dataframe()
 
-        # Aggregate scores for each group
-        aggregated = {}
-        for group_id, group_results in grouped.items():
-            scores = []
+        if len(df) == 0:
+            return {}
 
-            for result in group_results:
-                if (
-                    result.template
-                    and result.template.embedding_check_performed
-                    and result.template.embedding_similarity_score is not None
-                ):
-                    scores.append(result.template.embedding_similarity_score)
+        # Filter to only rows where embedding check was performed and score exists
+        df_filtered = df[
+            (df["embedding_check_performed"] == True)  # noqa: E712
+            & (df["embedding_similarity_score"].notna())
+        ].copy()
 
-            aggregated[group_id] = aggregator.aggregate(scores, **kwargs)
+        if len(df_filtered) == 0:
+            return {}
 
-        return aggregated
+        # Aggregate scores per group
+        aggregated = df_filtered.groupby(by)["embedding_similarity_score"].agg(
+            lambda s: aggregator.aggregate(s, **kwargs)
+        )
+
+        return dict(aggregated.to_dict())
 
     def aggregate_regex_success_rate(
         self,
         pattern_name: str | None = None,
-        by: str = "question",
+        by: str = "question_id",
         **kwargs: Any,  # noqa: ARG002
     ) -> dict[str, dict[str, float]] | dict[str, float]:
         """
         Calculate regex validation success rate.
 
+        Uses pandas DataFrame groupby for efficient aggregation.
+
         Args:
             pattern_name: Optional specific pattern to analyze
-            by: Grouping axis ("question", "model", "replicate")
+            by: Column name to group by (e.g., "question_id", "answering_model", "replicate")
             **kwargs: Additional parameters
 
         Returns:
             If pattern_name specified: {group_id: success_rate}
             If pattern_name None: {group_id: {pattern_name: success_rate}}
+
+        Example:
+            >>> # Single pattern
+            >>> results.aggregate_regex_success_rate(pattern_name="email", by="question_id")
+            {'q1': 1.0, 'q2': 0.5}
+            >>> # All patterns
+            >>> results.aggregate_regex_success_rate(by="question_id")
+            {'q1': {'email': 1.0, 'url': 0.5}, 'q2': {'email': 0.8}}
         """
-        # Group results by specified axis
-        grouped = self._group_results(by)
+
+        # Get regex DataFrame
+        df = self.to_regex_dataframe()
+
+        if len(df) == 0:
+            return {} if pattern_name else {}
 
         if pattern_name:
             # Single pattern analysis
-            success_rates: dict[str, float] = {}
-            for group_id, group_results in grouped.items():
-                pattern_results = []
+            df_filtered = df[df["pattern_name"] == pattern_name].copy()
 
-                for result in group_results:
-                    if (
-                        result.template
-                        and result.template.regex_validations_performed
-                        and result.template.regex_validation_results
-                        and pattern_name in result.template.regex_validation_results
-                    ):
-                        pattern_results.append(result.template.regex_validation_results[pattern_name])
+            if len(df_filtered) == 0:
+                return {}
 
-                if pattern_results:
-                    success_count = sum(1 for v in pattern_results if v)
-                    success_rates[group_id] = success_count / len(pattern_results)
-                else:
-                    success_rates[group_id] = 0.0
-
-            return success_rates
+            # Calculate success rate per group
+            success_rates = df_filtered.groupby(by)["matched"].mean()
+            return dict(success_rates.to_dict())
         else:
             # All patterns analysis
-            all_success_rates: dict[str, dict[str, float]] = {}
-            for group_id, group_results in grouped.items():
-                pattern_results_by_name: dict[str, list[bool]] = {}
+            # Group by both by-column and pattern_name, then calculate mean
+            success_rates = df.groupby([by, "pattern_name"])["matched"].mean()
 
-                for result in group_results:
-                    if (
-                        result.template
-                        and result.template.regex_validations_performed
-                        and result.template.regex_validation_results
-                    ):
-                        for (
-                            pname,
-                            presult,
-                        ) in result.template.regex_validation_results.items():
-                            if pname not in pattern_results_by_name:
-                                pattern_results_by_name[pname] = []
-                            pattern_results_by_name[pname].append(presult)
+            # Convert to nested dictionary format
+            result: dict[str, dict[str, float]] = {}
+            for (group_id, pname), rate in success_rates.items():
+                if group_id not in result:
+                    result[group_id] = {}
+                result[group_id][pname] = float(rate)
 
-                # Calculate success rate for each pattern
-                all_success_rates[group_id] = {}
-                for pname, presults in pattern_results_by_name.items():
-                    if presults:
-                        success_count = sum(1 for v in presults if v)
-                        all_success_rates[group_id][pname] = success_count / len(presults)
-                    else:
-                        all_success_rates[group_id][pname] = 0.0
-
-            return all_success_rates
+            return result
 
     def aggregate_abstention_rate(
         self,
-        by: str = "question",
+        by: str = "question_id",
         **kwargs: Any,  # noqa: ARG002
     ) -> dict[str, float]:
         """
         Calculate abstention detection rate by group.
 
+        Uses pandas DataFrame groupby for efficient aggregation.
+
         Args:
-            by: Grouping axis ("question", "model", "replicate")
+            by: Column name to group by (e.g., "question_id", "answering_model", "replicate")
             **kwargs: Additional parameters
 
         Returns:
             Dictionary mapping group identifiers to abstention rates (0.0 to 1.0)
             Format: {group_id: abstention_rate}
+
+        Example:
+            >>> results.aggregate_abstention_rate(by="question_id")
+            {'q1': 0.0, 'q2': 0.25}
         """
-        # Group results by specified axis
-        grouped = self._group_results(by)
 
-        # Calculate abstention rate for each group
-        abstention_rates = {}
-        for group_id, group_results in grouped.items():
-            abstention_results = []
+        # Get DataFrame
+        df = self.to_dataframe()
 
-            for result in group_results:
-                if result.template and result.template.abstention_check_performed:
-                    abstention_results.append(result.template.abstention_detected)
+        if len(df) == 0:
+            return {}
 
-            if abstention_results:
-                abstention_count = sum(1 for v in abstention_results if v)
-                abstention_rates[group_id] = abstention_count / len(abstention_results)
-            else:
-                abstention_rates[group_id] = 0.0
+        # Filter to only rows where abstention check was performed
+        df_filtered = df[df["abstention_check_performed"] == True].copy()  # noqa: E712
 
-        return abstention_rates
+        if len(df_filtered) == 0:
+            return {}
+
+        # Calculate abstention rate per group
+        abstention_rates = df_filtered.groupby(by)["abstention_detected"].mean()
+
+        return dict(abstention_rates.to_dict())
 
     # ========================================================================
     # Aggregator Registry Management
@@ -914,25 +910,6 @@ class TemplateResults(BaseModel):
             List of registered aggregator names
         """
         return self._aggregator_registry.list_aggregators()
-
-    def register_groupby_strategy(self, name: str, strategy: Any) -> None:
-        """
-        Register a custom grouping strategy.
-
-        Args:
-            name: Unique name for the grouping strategy
-            strategy: Strategy instance implementing GroupByStrategy protocol
-        """
-        self._groupby_registry.register(name, strategy)
-
-    def list_groupby_strategies(self) -> list[str]:
-        """
-        List all available grouping strategies.
-
-        Returns:
-            List of registered groupby strategy names
-        """
-        return self._groupby_registry.list_strategies()
 
     # ========================================================================
     # Filtering and Grouping
@@ -1106,32 +1083,6 @@ class TemplateResults(BaseModel):
             parts.append(str(result.metadata.timestamp))
 
         return "_".join(parts)
-
-    def _group_results(self, by: str) -> dict[str, list[VerificationResult]]:
-        """
-        Group results by specified grouping strategy.
-
-        Args:
-            by: Grouping strategy name (must be registered in groupby registry)
-
-        Returns:
-            Dictionary mapping group keys to lists of results
-
-        Raises:
-            KeyError: If grouping strategy not found in registry
-        """
-        strategy = self._groupby_registry.get(by)
-        grouped: dict[str, list[VerificationResult]] = {}
-
-        for result in self.get_results_with_template():
-            # Get group key using the strategy
-            key = strategy.get_group_key(result)
-
-            if key not in grouped:
-                grouped[key] = []
-            grouped[key].append(result)
-
-        return grouped
 
     # ========================================================================
     # Special Methods

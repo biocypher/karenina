@@ -2,17 +2,16 @@
 Aggregation interface and registry for verification results.
 
 This module provides an extensible framework for aggregating verification results
-across different axes (question, model, replicate, trait, etc.) using various
-strategies (mean, median, mode, custom logic).
+using pandas-compatible aggregator functions. Aggregators work seamlessly with
+pandas Series and DataFrame groupby operations.
 """
 
-import statistics
-from typing import TYPE_CHECKING, Any, Protocol, TypeVar
+from typing import Any, Protocol
 
-if TYPE_CHECKING:
-    from .verification import VerificationResult
-
-T = TypeVar("T")
+try:
+    import pandas as pd
+except ImportError:
+    pd = None  # type: ignore[assignment,unused-ignore]
 
 
 class ResultAggregator(Protocol):
@@ -20,16 +19,16 @@ class ResultAggregator(Protocol):
     Protocol defining the interface for result aggregators.
 
     Aggregators implement specific strategies for combining multiple values
-    into a single aggregate value. They can handle different data types and
-    aggregation logic.
+    into a single aggregate value. They work with pandas Series for seamless
+    integration with DataFrame groupby operations.
     """
 
-    def aggregate(self, values: list[Any], **kwargs: Any) -> Any:
+    def aggregate(self, series: Any, **kwargs: Any) -> Any:
         """
-        Aggregate a list of values into a single result.
+        Aggregate a pandas Series into a single result.
 
         Args:
-            values: List of values to aggregate
+            series: pandas Series of values to aggregate
             **kwargs: Additional aggregator-specific parameters
 
         Returns:
@@ -97,144 +96,7 @@ class AggregatorRegistry:
 
 
 # ============================================================================
-# GroupBy Strategy Pattern
-# ============================================================================
-
-
-class GroupByStrategy(Protocol):
-    """
-    Protocol defining the interface for grouping strategies.
-
-    Grouping strategies determine how to organize results into groups
-    for aggregation. They take a result and return a group key.
-    """
-
-    def get_group_key(self, result: "VerificationResult") -> str:
-        """
-        Extract group key from a verification result.
-
-        Args:
-            result: VerificationResult to extract key from
-
-        Returns:
-            Group key as a string
-        """
-        ...
-
-
-class GroupByRegistry:
-    """
-    Registry for managing and accessing grouping strategies.
-
-    Provides a central place to register custom grouping strategies and
-    retrieve them by name.
-    """
-
-    def __init__(self) -> None:
-        """Initialize empty groupby registry."""
-        self._strategies: dict[str, GroupByStrategy] = {}
-
-    def register(self, name: str, strategy: GroupByStrategy) -> None:
-        """
-        Register a new grouping strategy.
-
-        Args:
-            name: Unique name for the strategy
-            strategy: Strategy instance implementing GroupByStrategy protocol
-
-        Raises:
-            ValueError: If strategy name already exists
-        """
-        if name in self._strategies:
-            raise ValueError(f"GroupBy strategy '{name}' is already registered")
-        self._strategies[name] = strategy
-
-    def get(self, name: str) -> GroupByStrategy:
-        """
-        Retrieve a grouping strategy by name.
-
-        Args:
-            name: Name of the strategy to retrieve
-
-        Returns:
-            The registered strategy
-
-        Raises:
-            KeyError: If strategy name not found
-        """
-        if name not in self._strategies:
-            raise KeyError(f"GroupBy strategy '{name}' not found. Available: {list(self._strategies.keys())}")
-        return self._strategies[name]
-
-    def list_strategies(self) -> list[str]:
-        """
-        List all registered strategy names.
-
-        Returns:
-            List of strategy names
-        """
-        return list(self._strategies.keys())
-
-    def __contains__(self, name: str) -> bool:
-        """Check if strategy is registered."""
-        return name in self._strategies
-
-
-# ============================================================================
-# Built-in GroupBy Strategies
-# ============================================================================
-
-
-class ByQuestionStrategy:
-    """Group results by question ID."""
-
-    def get_group_key(self, result: "VerificationResult") -> str:
-        """Return question ID as group key."""
-        return result.metadata.question_id
-
-
-class ByModelStrategy:
-    """Group results by answering model."""
-
-    def get_group_key(self, result: "VerificationResult") -> str:
-        """Return answering model name as group key."""
-        return result.metadata.answering_model
-
-
-class ByParsingModelStrategy:
-    """Group results by parsing model."""
-
-    def get_group_key(self, result: "VerificationResult") -> str:
-        """Return parsing model name as group key."""
-        return result.metadata.parsing_model
-
-
-class ByReplicateStrategy:
-    """Group results by replicate number."""
-
-    def get_group_key(self, result: "VerificationResult") -> str:
-        """Return replicate number as group key."""
-        return str(result.metadata.answering_replicate or 0)
-
-
-class ByRunNameStrategy:
-    """Group results by run name."""
-
-    def get_group_key(self, result: "VerificationResult") -> str:
-        """Return run name as group key."""
-        return result.metadata.run_name or "default"
-
-
-class ByModelPairStrategy:
-    """Group results by (answering_model, parsing_model) pair."""
-
-    def get_group_key(self, result: "VerificationResult") -> str:
-        """Return model pair as group key."""
-        return f"{result.metadata.answering_model}_{result.metadata.parsing_model}"
-
-
-# ============================================================================
-# Built-in Aggregators
+# Built-in Aggregators (Pandas-compatible)
 # ============================================================================
 
 
@@ -242,72 +104,74 @@ class MeanAggregator:
     """
     Aggregate numeric values using arithmetic mean.
 
-    Filters out None values before computing mean.
+    Works with pandas Series. Automatically handles NaN values.
     """
 
-    def aggregate(self, values: list[float | int | None], **_kwargs: Any) -> float | None:
+    def aggregate(self, series: Any, **_kwargs: Any) -> float | None:
         """
         Compute arithmetic mean of numeric values.
 
         Args:
-            values: List of numeric values (None values are filtered out)
+            series: pandas Series of numeric values
 
         Returns:
             Mean value, or None if no valid values
         """
-        valid_values = [v for v in values if v is not None]
-        if not valid_values:
-            return None
-        return statistics.mean(valid_values)
+        if pd is None:
+            raise ImportError("pandas is required for aggregation")
+
+        result = series.mean()
+        return None if pd.isna(result) else float(result)
 
 
 class MedianAggregator:
     """
     Aggregate numeric values using median.
 
-    Filters out None values before computing median.
+    Works with pandas Series. Automatically handles NaN values.
     """
 
-    def aggregate(self, values: list[float | int | None], **_kwargs: Any) -> float | None:
+    def aggregate(self, series: Any, **_kwargs: Any) -> float | None:
         """
         Compute median of numeric values.
 
         Args:
-            values: List of numeric values (None values are filtered out)
+            series: pandas Series of numeric values
 
         Returns:
             Median value, or None if no valid values
         """
-        valid_values = [v for v in values if v is not None]
-        if not valid_values:
-            return None
-        return statistics.median(valid_values)
+        if pd is None:
+            raise ImportError("pandas is required for aggregation")
+
+        result = series.median()
+        return None if pd.isna(result) else float(result)
 
 
 class ModeAggregator:
     """
     Aggregate values using mode (most common value).
 
-    Works with any hashable type. Filters out None values.
+    Works with pandas Series. Handles NaN values.
     """
 
-    def aggregate(self, values: list[Any], **_kwargs: Any) -> Any:
+    def aggregate(self, series: Any, **_kwargs: Any) -> Any:
         """
         Find most common value.
 
         Args:
-            values: List of hashable values (None values are filtered out)
+            series: pandas Series of values
 
         Returns:
             Most common value, or None if no valid values
-
-        Raises:
-            statistics.StatisticsError: If there's no unique mode
         """
-        valid_values = [v for v in values if v is not None]
-        if not valid_values:
+        if pd is None:
+            raise ImportError("pandas is required for aggregation")
+
+        mode_result = series.mode()
+        if len(mode_result) == 0:
             return None
-        return statistics.mode(valid_values)
+        return mode_result.iloc[0]
 
 
 class MajorityVoteAggregator:
@@ -315,106 +179,93 @@ class MajorityVoteAggregator:
     Aggregate boolean values using majority vote.
 
     Returns True if more than 50% of values are True.
-    Filters out None values before computing.
+    Works with pandas Series.
     """
 
-    def aggregate(self, values: list[bool | None], **kwargs: Any) -> bool | None:
+    def aggregate(self, series: Any, **kwargs: Any) -> bool | None:
         """
         Compute majority vote for boolean values.
 
         Args:
-            values: List of boolean values (None values are filtered out)
+            series: pandas Series of boolean values
             **kwargs: Optional parameters:
                 - threshold: Fraction of True votes needed (default: 0.5)
 
         Returns:
             True if majority voted True, False otherwise, or None if no valid values
         """
-        valid_values = [v for v in values if v is not None]
-        if not valid_values:
+        if pd is None:
+            raise ImportError("pandas is required for aggregation")
+
+        # Drop NaN values
+        clean_series = series.dropna()
+        if len(clean_series) == 0:
             return None
 
         threshold: float = kwargs.get("threshold", 0.5)
-        true_count = sum(1 for v in valid_values if v)
-        return (true_count / len(valid_values)) > threshold
-
-
-class ListAggregator:
-    """
-    Aggregate by collecting all values into a list.
-
-    This is useful for preserving individual values while still
-    providing an aggregated view. Filters out None values.
-    """
-
-    def aggregate(self, values: list[Any], **kwargs: Any) -> list[Any]:
-        """
-        Collect all values into a list.
-
-        Args:
-            values: List of values to collect
-            **kwargs: Optional parameters:
-                - include_none: Whether to include None values (default: False)
-
-        Returns:
-            List of all values
-        """
-        include_none: bool = kwargs.get("include_none", False)
-        if include_none:
-            return list(values)
-        return [v for v in values if v is not None]
+        true_fraction = clean_series.sum() / len(clean_series)
+        return bool(true_fraction > threshold)
 
 
 class FirstAggregator:
     """
-    Aggregate by returning the first non-None value.
+    Aggregate by returning the first non-null value.
 
     Useful for metadata fields that should be consistent across results.
+    Works with pandas Series.
     """
 
-    def aggregate(self, values: list[Any], **_kwargs: Any) -> Any:
+    def aggregate(self, series: Any, **_kwargs: Any) -> Any:
         """
-        Return first non-None value.
+        Return first non-null value.
 
         Args:
-            values: List of values
+            series: pandas Series of values
 
         Returns:
-            First non-None value, or None if all are None
+            First non-null value, or None if all are null
         """
-        for v in values:
-            if v is not None:
-                return v
-        return None
+        if pd is None:
+            raise ImportError("pandas is required for aggregation")
+
+        clean_series = series.dropna()
+        if len(clean_series) == 0:
+            return None
+        return clean_series.iloc[0]
 
 
 class CountAggregator:
     """
-    Aggregate by counting occurrences of each unique value.
+    Aggregate by counting value occurrences.
 
-    Returns a dictionary mapping values to their counts.
+    Works with pandas Series.
     """
 
-    def aggregate(self, values: list[Any], **kwargs: Any) -> dict[Any, int]:
+    def aggregate(self, series: Any, include_none: bool = False, **_kwargs: Any) -> dict[Any, int]:
         """
-        Count occurrences of each value.
+        Count occurrences of each unique value.
 
         Args:
-            values: List of hashable values
-            **kwargs: Optional parameters:
-                - include_none: Whether to count None values (default: False)
+            series: pandas Series of values
+            include_none: Whether to include None values in counts
 
         Returns:
-            Dictionary mapping values to counts
+            Dictionary mapping values to their occurrence counts
         """
-        include_none = kwargs.get("include_none", False)
-        if not include_none:
-            values = [v for v in values if v is not None]
+        if pd is None:
+            raise ImportError("pandas is required for aggregation")
 
-        counts: dict[Any, int] = {}
-        for v in values:
-            counts[v] = counts.get(v, 0) + 1
-        return counts
+        if not include_none:
+            series = series.dropna()
+
+        value_counts = series.value_counts(dropna=not include_none)
+        # Convert NaN keys to None and ensure consistent types
+        result = {}
+        for k, v in value_counts.items():
+            # Replace pandas NaN with None
+            key = None if pd.isna(k) else k
+            result[key] = int(v)
+        return result
 
 
 # ============================================================================
@@ -426,45 +277,23 @@ def create_default_registry() -> AggregatorRegistry:
     """
     Create a registry with all built-in aggregators registered.
 
+    All aggregators are pandas-compatible and work seamlessly with
+    DataFrame groupby operations.
+
     Returns:
         AggregatorRegistry with standard aggregators:
         - 'mean': Arithmetic mean for numeric values
         - 'median': Median for numeric values
         - 'mode': Most common value
         - 'majority_vote': Majority vote for boolean values
-        - 'list': Collect all values into a list
-        - 'first': First non-None value
-        - 'count': Count occurrences of each value
+        - 'first': First non-null value
+        - 'count': Count value occurrences
     """
     registry = AggregatorRegistry()
     registry.register("mean", MeanAggregator())
     registry.register("median", MedianAggregator())
     registry.register("mode", ModeAggregator())
     registry.register("majority_vote", MajorityVoteAggregator())
-    registry.register("list", ListAggregator())
     registry.register("first", FirstAggregator())
     registry.register("count", CountAggregator())
-    return registry
-
-
-def create_default_groupby_registry() -> GroupByRegistry:
-    """
-    Create a registry with all built-in grouping strategies registered.
-
-    Returns:
-        GroupByRegistry with standard strategies:
-        - 'question': Group by question ID
-        - 'model': Group by answering model
-        - 'parsing_model': Group by parsing model
-        - 'replicate': Group by replicate number
-        - 'run_name': Group by run name
-        - 'model_pair': Group by (answering_model, parsing_model) pair
-    """
-    registry = GroupByRegistry()
-    registry.register("question", ByQuestionStrategy())
-    registry.register("model", ByModelStrategy())
-    registry.register("parsing_model", ByParsingModelStrategy())
-    registry.register("replicate", ByReplicateStrategy())
-    registry.register("run_name", ByRunNameStrategy())
-    registry.register("model_pair", ByModelPairStrategy())
     return registry

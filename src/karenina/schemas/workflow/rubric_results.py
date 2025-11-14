@@ -11,12 +11,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
 
-from .aggregation import (
-    AggregatorRegistry,
-    GroupByRegistry,
-    create_default_groupby_registry,
-    create_default_registry,
-)
+from .aggregation import AggregatorRegistry, create_default_registry
 
 if TYPE_CHECKING:
     from .verification import VerificationResult
@@ -52,9 +47,8 @@ class RubricResults(BaseModel):
             **data: Additional pydantic model data
         """
         super().__init__(results=results, **data)
-        # Create default aggregator and groupby registries
+        # Create default aggregator registry
         self._aggregator_registry: AggregatorRegistry = create_default_registry()
-        self._groupby_registry: GroupByRegistry = create_default_groupby_registry()
 
     # ========================================================================
     # DataFrame Conversion
@@ -494,134 +488,147 @@ class RubricResults(BaseModel):
     def aggregate_llm_traits(
         self,
         strategy: str = "mean",
-        by: str = "question",
+        by: str = "question_id",
         **kwargs: Any,
     ) -> dict[str, dict[str, float]]:
         """
         Aggregate LLM trait scores using specified strategy.
 
+        Uses pandas DataFrame groupby for efficient aggregation.
+
         Args:
             strategy: Aggregation strategy name (e.g., "mean", "median", "mode")
-            by: Grouping strategy name (e.g., "question", "model", "replicate", "model_pair")
+            by: Column name to group by (e.g., "question_id", "answering_model", "replicate")
             **kwargs: Additional parameters for the aggregator
 
         Returns:
             Dictionary mapping group identifiers to aggregated trait scores
             Format: {group_id: {trait_name: aggregated_score}}
+
+        Example:
+            >>> results.aggregate_llm_traits(strategy="mean", by="question_id")
+            {'q1': {'clarity': 4.5, 'accuracy': 4.0}, 'q2': {...}}
         """
+
         aggregator = self._aggregator_registry.get(strategy)
 
-        # Group results by specified axis
-        grouped = self._group_results(by)
+        # Get DataFrame with only LLM traits (both score and binary)
+        df = self.to_dataframe(trait_type="llm")
 
-        # Aggregate trait scores for each group
-        aggregated: dict[str, dict[str, float]] = {}
-        for group_id, group_results in grouped.items():
-            trait_scores: dict[str, list[int]] = {}
+        if len(df) == 0:
+            return {}
 
-            # Collect all trait scores for this group
-            for result in group_results:
-                if result.rubric and result.rubric.llm_trait_scores:
-                    for trait_name, score in result.rubric.llm_trait_scores.items():
-                        if trait_name not in trait_scores:
-                            trait_scores[trait_name] = []
-                        trait_scores[trait_name].append(score)
+        # Group by specified column and trait_name, then aggregate scores
+        grouped = df.groupby([by, "trait_name"])["trait_score"].agg(lambda s: aggregator.aggregate(s, **kwargs))
 
-            # Aggregate each trait
-            aggregated[group_id] = {}
-            for trait_name, scores in trait_scores.items():
-                aggregated[group_id][trait_name] = aggregator.aggregate(scores, **kwargs)
+        # Convert to nested dictionary format
+        result: dict[str, dict[str, float]] = {}
+        for (group_id, trait_name), score in grouped.items():
+            if group_id not in result:
+                result[group_id] = {}
+            result[group_id][trait_name] = float(score)
 
-        return aggregated
+        return result
 
     def aggregate_manual_traits(
         self,
         strategy: str = "majority_vote",
-        by: str = "question",
+        by: str = "question_id",
         **kwargs: Any,
     ) -> dict[str, dict[str, bool]]:
         """
         Aggregate manual trait scores using specified strategy.
 
+        Uses pandas DataFrame groupby for efficient aggregation.
+
         Args:
             strategy: Aggregation strategy name (default: "majority_vote")
-            by: Grouping axis ("question", "model", "replicate")
+            by: Column name to group by (e.g., "question_id", "answering_model", "replicate")
             **kwargs: Additional parameters for the aggregator
 
         Returns:
             Dictionary mapping group identifiers to aggregated trait scores
             Format: {group_id: {trait_name: aggregated_bool}}
+
+        Example:
+            >>> results.aggregate_manual_traits(strategy="majority_vote", by="question_id")
+            {'q1': {'contains_url': True, 'has_code': False}, 'q2': {...}}
         """
+
         aggregator = self._aggregator_registry.get(strategy)
 
-        # Group results by specified axis
-        grouped = self._group_results(by)
+        # Get DataFrame with only manual traits
+        df = self.to_dataframe(trait_type="manual")
 
-        # Aggregate trait scores for each group
-        aggregated: dict[str, dict[str, bool]] = {}
-        for group_id, group_results in grouped.items():
-            trait_scores: dict[str, list[bool]] = {}
+        if len(df) == 0:
+            return {}
 
-            # Collect all trait scores for this group
-            for result in group_results:
-                if result.rubric and result.rubric.manual_trait_scores:
-                    for trait_name, score in result.rubric.manual_trait_scores.items():
-                        if trait_name not in trait_scores:
-                            trait_scores[trait_name] = []
-                        trait_scores[trait_name].append(score)
+        # Group by specified column and trait_name, then aggregate scores
+        grouped = df.groupby([by, "trait_name"])["trait_score"].agg(lambda s: aggregator.aggregate(s, **kwargs))
 
-            # Aggregate each trait
-            aggregated[group_id] = {}
-            for trait_name, scores in trait_scores.items():
-                aggregated[group_id][trait_name] = aggregator.aggregate(scores, **kwargs)
+        # Convert to nested dictionary format
+        result: dict[str, dict[str, bool]] = {}
+        for (group_id, trait_name), score in grouped.items():
+            if group_id not in result:
+                result[group_id] = {}
+            result[group_id][trait_name] = bool(score)
 
-        return aggregated
+        return result
 
     def aggregate_metric_traits(
         self,
         metric_name: str,
         strategy: str = "mean",
-        by: str = "question",
+        by: str = "question_id",
         **kwargs: Any,
     ) -> dict[str, dict[str, float]]:
         """
         Aggregate specific metric from metric trait scores.
 
+        Uses pandas DataFrame groupby for efficient aggregation.
+
         Args:
             metric_name: Name of metric to aggregate (e.g., "precision", "recall", "f1")
             strategy: Aggregation strategy name (default: "mean")
-            by: Grouping axis ("question", "model", "replicate")
+            by: Column name to group by (e.g., "question_id", "answering_model", "replicate")
             **kwargs: Additional parameters for the aggregator
 
         Returns:
             Dictionary mapping group identifiers to aggregated metric values
             Format: {group_id: {trait_name: aggregated_metric_value}}
+
+        Example:
+            >>> results.aggregate_metric_traits(metric_name="f1", strategy="mean", by="question_id")
+            {'q1': {'accuracy': 0.95, 'completeness': 0.88}, 'q2': {...}}
         """
+
         aggregator = self._aggregator_registry.get(strategy)
 
-        # Group results by specified axis
-        grouped = self._group_results(by)
+        # Get DataFrame with only metric traits (already exploded by metric)
+        df = self.to_dataframe(trait_type="metric")
 
-        # Aggregate metric values for each group
-        aggregated: dict[str, dict[str, float]] = {}
-        for group_id, group_results in grouped.items():
-            trait_metrics: dict[str, list[float]] = {}
+        if len(df) == 0:
+            return {}
 
-            # Collect metric values for this group
-            for result in group_results:
-                if result.rubric and result.rubric.metric_trait_scores:
-                    for trait_name, metrics in result.rubric.metric_trait_scores.items():
-                        if metric_name in metrics:
-                            if trait_name not in trait_metrics:
-                                trait_metrics[trait_name] = []
-                            trait_metrics[trait_name].append(metrics[metric_name])
+        # Filter to only the requested metric
+        df_filtered = df[df["metric_name"] == metric_name]
 
-            # Aggregate each trait's metric
-            aggregated[group_id] = {}
-            for trait_name, metric_values in trait_metrics.items():
-                aggregated[group_id][trait_name] = aggregator.aggregate(metric_values, **kwargs)
+        if len(df_filtered) == 0:
+            return {}
 
-        return aggregated
+        # Group by specified column and trait_name, then aggregate scores
+        grouped = df_filtered.groupby([by, "trait_name"])["metric_score"].agg(
+            lambda s: aggregator.aggregate(s, **kwargs)
+        )
+
+        # Convert to nested dictionary format
+        result: dict[str, dict[str, float]] = {}
+        for (group_id, trait_name), score in grouped.items():
+            if group_id not in result:
+                result[group_id] = {}
+            result[group_id][trait_name] = float(score)
+
+        return result
 
     # ========================================================================
     # Aggregator Registry Management
@@ -656,35 +663,6 @@ class RubricResults(BaseModel):
             List of registered aggregator names
         """
         return self._aggregator_registry.list_aggregators()
-
-    def register_groupby_strategy(self, name: str, strategy: Any) -> None:
-        """
-        Register a custom grouping strategy.
-
-        Args:
-            name: Unique name for the grouping strategy
-            strategy: Strategy instance implementing GroupByStrategy protocol
-
-        Example:
-            ```python
-            class ByTemplateStrategy:
-                def get_group_key(self, result):
-                    return result.metadata.template_id
-
-            rubric_results.register_groupby_strategy("template", ByTemplateStrategy())
-            rubric_results.aggregate_llm_traits(by="template")
-            ```
-        """
-        self._groupby_registry.register(name, strategy)
-
-    def list_groupby_strategies(self) -> list[str]:
-        """
-        List all available grouping strategies.
-
-        Returns:
-            List of registered groupby strategy names
-        """
-        return self._groupby_registry.list_strategies()
 
     # ========================================================================
     # Filtering and Grouping
@@ -830,32 +808,6 @@ class RubricResults(BaseModel):
             parts.append(str(result.metadata.timestamp))
 
         return "_".join(parts)
-
-    def _group_results(self, by: str) -> dict[str, list[VerificationResult]]:
-        """
-        Group results by specified grouping strategy.
-
-        Args:
-            by: Grouping strategy name (must be registered in groupby registry)
-
-        Returns:
-            Dictionary mapping group keys to lists of results
-
-        Raises:
-            KeyError: If grouping strategy not found in registry
-        """
-        strategy = self._groupby_registry.get(by)
-        grouped: dict[str, list[VerificationResult]] = {}
-
-        for result in self.get_results_with_rubric():
-            # Get group key using the strategy
-            key = strategy.get_group_key(result)
-
-            if key not in grouped:
-                grouped[key] = []
-            grouped[key].append(result)
-
-        return grouped
 
     # ========================================================================
     # Special Methods

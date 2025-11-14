@@ -11,12 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
-from .aggregation import (
-    AggregatorRegistry,
-    GroupByRegistry,
-    create_default_groupby_registry,
-    create_default_registry,
-)
+from .aggregation import AggregatorRegistry, create_default_registry
 
 if TYPE_CHECKING:
     from .verification import VerificationResult
@@ -51,9 +46,8 @@ class JudgmentResults(BaseModel):
             **data: Additional pydantic model data
         """
         super().__init__(results=results, **data)
-        # Create default aggregator and groupby registries
+        # Create default aggregator registry
         self._aggregator_registry: AggregatorRegistry = create_default_registry()
-        self._groupby_registry: GroupByRegistry = create_default_groupby_registry()
 
     # ========================================================================
     # DataFrame Conversion
@@ -523,197 +517,192 @@ class JudgmentResults(BaseModel):
     def aggregate_excerpt_counts(
         self,
         attribute_name: str | None = None,
-        by: str = "question",
+        by: str = "question_id",
         **kwargs: Any,  # noqa: ARG002
     ) -> dict[str, dict[str, float]] | dict[str, float]:
         """
         Aggregate excerpt counts per attribute.
 
+        Uses pandas DataFrame groupby for efficient aggregation.
+
         Args:
             attribute_name: Optional specific attribute to analyze
-            by: Grouping axis ("question", "model", "replicate")
+            by: Column name to group by (e.g., "question_id", "answering_model", "replicate")
             **kwargs: Additional parameters
 
         Returns:
             If attribute_name specified: {group_id: mean_excerpt_count}
             If attribute_name None: {group_id: {attribute_name: mean_count}}
+
+        Example:
+            >>> results.aggregate_excerpt_counts(attribute_name="location", by="question_id")
+            {'q1': 2.5, 'q2': 3.0}  # Mean excerpts per result
         """
-        # Group results by specified axis
-        grouped = self._group_results(by)
+
+        # Get DataFrame (one row per excerpt)
+        df = self.to_dataframe()
+
+        if len(df) == 0:
+            return {} if attribute_name else {}
+
+        # Filter to only rows with excerpts (exclude no-excerpt rows)
+        df_with_excerpts = df[df["attribute_has_excerpts"] == True].copy()  # noqa: E712
+
+        if len(df_with_excerpts) == 0:
+            return {} if attribute_name else {}
 
         if attribute_name:
             # Single attribute analysis
-            counts: dict[str, float] = {}
-            for group_id, group_results in grouped.items():
-                excerpt_counts = []
+            df_filtered = df_with_excerpts[df_with_excerpts["attribute_name"] == attribute_name].copy()
 
-                for result in group_results:
-                    if (
-                        result.deep_judgment
-                        and result.deep_judgment.extracted_excerpts
-                        and attribute_name in result.deep_judgment.extracted_excerpts
-                    ):
-                        excerpt_list = result.deep_judgment.extracted_excerpts[attribute_name]
-                        excerpt_counts.append(len(excerpt_list))
+            if len(df_filtered) == 0:
+                return {}
 
-                if excerpt_counts:
-                    counts[group_id] = sum(excerpt_counts) / len(excerpt_counts)
-                else:
-                    counts[group_id] = 0.0
+            # Count excerpts per result (group by question_id, replicate, by_column)
+            # Then calculate mean count per group
+            counts_per_result = df_filtered.groupby([by, "question_id", "replicate"]).size()
+            mean_counts = counts_per_result.groupby(level=0).mean()
 
-            return counts
+            return dict(mean_counts.to_dict())
         else:
             # All attributes analysis
-            all_counts: dict[str, dict[str, float]] = {}
-            for group_id, group_results in grouped.items():
-                attribute_counts: dict[str, list[int]] = {}
+            # Count excerpts per result and attribute
+            counts_per_result = df_with_excerpts.groupby([by, "attribute_name", "question_id", "replicate"]).size()
+            # Calculate mean count per group and attribute
+            mean_counts = counts_per_result.groupby(level=[0, 1]).mean()
 
-                for result in group_results:
-                    if result.deep_judgment and result.deep_judgment.extracted_excerpts:
-                        for (
-                            attr,
-                            excerpts,
-                        ) in result.deep_judgment.extracted_excerpts.items():
-                            if attr not in attribute_counts:
-                                attribute_counts[attr] = []
-                            attribute_counts[attr].append(len(excerpts))
+            # Convert to nested dictionary format
+            result: dict[str, dict[str, float]] = {}
+            for (group_id, attr), count in mean_counts.items():
+                if group_id not in result:
+                    result[group_id] = {}
+                result[group_id][attr] = float(count)
 
-                # Calculate mean count for each attribute
-                all_counts[group_id] = {}
-                for attr, counts_list in attribute_counts.items():
-                    if counts_list:
-                        all_counts[group_id][attr] = sum(counts_list) / len(counts_list)
-                    else:
-                        all_counts[group_id][attr] = 0.0
-
-            return all_counts
+            return result
 
     def aggregate_hallucination_risk_distribution(
         self,
         attribute_name: str | None = None,
-        by: str = "question",
+        by: str = "question_id",
         **kwargs: Any,  # noqa: ARG002
     ) -> dict[str, dict[str, dict[str, float]]] | dict[str, dict[str, float]]:
         """
         Calculate distribution of hallucination risk levels.
 
+        Uses pandas DataFrame groupby for efficient aggregation.
+
         Args:
             attribute_name: Optional specific attribute to analyze
-            by: Grouping axis ("question", "model", "replicate")
+            by: Column name to group by (e.g., "question_id", "answering_model", "replicate")
             **kwargs: Additional parameters
 
         Returns:
             If attribute_name specified: {group_id: {risk_level: proportion}}
             If attribute_name None: {group_id: {attribute: {risk_level: proportion}}}
+
+        Example:
+            >>> results.aggregate_hallucination_risk_distribution(attribute_name="location", by="question_id")
+            {'q1': {'none': 0.5, 'low': 0.3, 'medium': 0.2, 'high': 0.0}}
         """
-        # Group results by specified axis
-        grouped = self._group_results(by)
+
+        # Get DataFrame
+        df = self.to_dataframe()
+
+        if len(df) == 0:
+            return {} if attribute_name else {}
+
+        # Filter to rows with risk assessment
+        df_with_risk = df[df["attribute_overall_risk"].notna()].copy()
+
+        if len(df_with_risk) == 0:
+            return {} if attribute_name else {}
 
         if attribute_name:
             # Single attribute analysis
-            distributions: dict[str, dict[str, float]] = {}
-            for group_id, group_results in grouped.items():
-                risk_levels = []
+            df_filtered = df_with_risk[df_with_risk["attribute_name"] == attribute_name].copy()
 
-                for result in group_results:
-                    if (
-                        result.deep_judgment
-                        and result.deep_judgment.hallucination_risk_assessment
-                        and attribute_name in result.deep_judgment.hallucination_risk_assessment
-                    ):
-                        risk_level = result.deep_judgment.hallucination_risk_assessment[attribute_name]
-                        risk_levels.append(risk_level)
+            if len(df_filtered) == 0:
+                return {}
 
-                # Calculate proportions
-                if risk_levels:
-                    total = len(risk_levels)
-                    distributions[group_id] = {
-                        "none": risk_levels.count("none") / total,
-                        "low": risk_levels.count("low") / total,
-                        "medium": risk_levels.count("medium") / total,
-                        "high": risk_levels.count("high") / total,
-                    }
-                else:
-                    distributions[group_id] = {
-                        "none": 0.0,
-                        "low": 0.0,
-                        "medium": 0.0,
-                        "high": 0.0,
-                    }
+            # Calculate proportions of each risk level per group
+            risk_counts = df_filtered.groupby([by, "attribute_overall_risk"]).size()
+            totals = df_filtered.groupby(by).size()
 
-            return distributions
+            single_attr_result: dict[str, dict[str, float]] = {}
+            for group_id in totals.index:
+                total = totals[group_id]
+                single_attr_result[group_id] = {
+                    "none": float(risk_counts.get((group_id, "none"), 0) / total),
+                    "low": float(risk_counts.get((group_id, "low"), 0) / total),
+                    "medium": float(risk_counts.get((group_id, "medium"), 0) / total),
+                    "high": float(risk_counts.get((group_id, "high"), 0) / total),
+                }
+
+            return single_attr_result
         else:
             # All attributes analysis
-            all_distributions: dict[str, dict[str, dict[str, float]]] = {}
-            for group_id, group_results in grouped.items():
-                attribute_risks: dict[str, list[str]] = {}
+            risk_counts = df_with_risk.groupby([by, "attribute_name", "attribute_overall_risk"]).size()
+            totals = df_with_risk.groupby([by, "attribute_name"]).size()
 
-                for result in group_results:
-                    if result.deep_judgment and result.deep_judgment.hallucination_risk_assessment:
-                        for (
-                            attr,
-                            risk,
-                        ) in result.deep_judgment.hallucination_risk_assessment.items():
-                            if attr not in attribute_risks:
-                                attribute_risks[attr] = []
-                            attribute_risks[attr].append(risk)
+            all_attrs_result: dict[str, dict[str, dict[str, float]]] = {}
+            for group_id, attr in totals.index:
+                total = totals[(group_id, attr)]
+                if group_id not in all_attrs_result:
+                    all_attrs_result[group_id] = {}
+                all_attrs_result[group_id][attr] = {
+                    "none": float(risk_counts.get((group_id, attr, "none"), 0) / total),
+                    "low": float(risk_counts.get((group_id, attr, "low"), 0) / total),
+                    "medium": float(risk_counts.get((group_id, attr, "medium"), 0) / total),
+                    "high": float(risk_counts.get((group_id, attr, "high"), 0) / total),
+                }
 
-                # Calculate proportions for each attribute
-                all_distributions[group_id] = {}
-                for attr, risk_levels in attribute_risks.items():
-                    if risk_levels:
-                        total = len(risk_levels)
-                        all_distributions[group_id][attr] = {
-                            "none": risk_levels.count("none") / total,
-                            "low": risk_levels.count("low") / total,
-                            "medium": risk_levels.count("medium") / total,
-                            "high": risk_levels.count("high") / total,
-                        }
-                    else:
-                        all_distributions[group_id][attr] = {
-                            "none": 0.0,
-                            "low": 0.0,
-                            "medium": 0.0,
-                            "high": 0.0,
-                        }
-
-            return all_distributions
+            return all_attrs_result
 
     def aggregate_model_calls(
         self,
         strategy: str = "mean",
-        by: str = "question",
+        by: str = "question_id",
         **kwargs: Any,
     ) -> dict[str, float]:
         """
         Aggregate number of model calls using specified strategy.
 
+        Uses pandas DataFrame groupby for efficient aggregation.
+
         Args:
             strategy: Aggregation strategy name (e.g., "mean", "median", "mode")
-            by: Grouping axis ("question", "model", "replicate")
+            by: Column name to group by (e.g., "question_id", "answering_model", "replicate")
             **kwargs: Additional parameters for the aggregator
 
         Returns:
             Dictionary mapping group identifiers to aggregated model call counts
             Format: {group_id: aggregated_count}
+
+        Example:
+            >>> results.aggregate_model_calls(strategy="mean", by="question_id")
+            {'q1': 2.5, 'q2': 3.0}
         """
+
         aggregator = self._aggregator_registry.get(strategy)
 
-        # Group results by specified axis
-        grouped = self._group_results(by)
+        # Get DataFrame
+        df = self.to_dataframe()
 
-        # Aggregate model calls for each group
-        aggregated = {}
-        for group_id, group_results in grouped.items():
-            model_calls = []
+        if len(df) == 0:
+            return {}
 
-            for result in group_results:
-                if result.deep_judgment and result.deep_judgment.deep_judgment_model_calls:
-                    model_calls.append(result.deep_judgment.deep_judgment_model_calls)
+        # Filter to rows with model call data
+        df_with_calls = df[df["deep_judgment_model_calls"].notna()].copy()
 
-            aggregated[group_id] = aggregator.aggregate(model_calls, **kwargs)
+        if len(df_with_calls) == 0:
+            return {}
 
-        return aggregated
+        # Aggregate model calls per group
+        aggregated = df_with_calls.groupby(by)["deep_judgment_model_calls"].agg(
+            lambda s: aggregator.aggregate(s, **kwargs)
+        )
+
+        return dict(aggregated.to_dict())
 
     # ========================================================================
     # Aggregator Registry Management
@@ -737,25 +726,6 @@ class JudgmentResults(BaseModel):
             List of registered aggregator names
         """
         return self._aggregator_registry.list_aggregators()
-
-    def register_groupby_strategy(self, name: str, strategy: Any) -> None:
-        """
-        Register a custom grouping strategy.
-
-        Args:
-            name: Unique name for the grouping strategy
-            strategy: Strategy instance implementing GroupByStrategy protocol
-        """
-        self._groupby_registry.register(name, strategy)
-
-    def list_groupby_strategies(self) -> list[str]:
-        """
-        List all available grouping strategies.
-
-        Returns:
-            List of registered groupby strategy names
-        """
-        return self._groupby_registry.list_strategies()
 
     # ========================================================================
     # Filtering and Grouping
@@ -931,32 +901,6 @@ class JudgmentResults(BaseModel):
             parts.append(str(result.metadata.timestamp))
 
         return "_".join(parts)
-
-    def _group_results(self, by: str) -> dict[str, list[VerificationResult]]:
-        """
-        Group results by specified grouping strategy.
-
-        Args:
-            by: Grouping strategy name (must be registered in groupby registry)
-
-        Returns:
-            Dictionary mapping group keys to lists of results
-
-        Raises:
-            KeyError: If grouping strategy not found in registry
-        """
-        strategy = self._groupby_registry.get(by)
-        grouped: dict[str, list[VerificationResult]] = {}
-
-        for result in self.get_results_with_judgment():
-            # Get group key using the strategy
-            key = strategy.get_group_key(result)
-
-            if key not in grouped:
-                grouped[key] = []
-            grouped[key].append(result)
-
-        return grouped
 
     # ========================================================================
     # Special Methods

@@ -1,13 +1,6 @@
 """Workflow models for verification execution."""
 
-from .aggregation import (
-    AggregatorRegistry,
-    GroupByRegistry,
-    GroupByStrategy,
-    ResultAggregator,
-    create_default_groupby_registry,
-    create_default_registry,
-)
+from .aggregation import AggregatorRegistry, ResultAggregator, create_default_registry
 from .judgment_results import JudgmentResults
 from .models import (
     INTERFACE_LANGCHAIN,
@@ -76,8 +69,5 @@ __all__ = [
     # Aggregation framework
     "ResultAggregator",
     "AggregatorRegistry",
-    "GroupByStrategy",
-    "GroupByRegistry",
     "create_default_registry",
-    "create_default_groupby_registry",
 ]
