@@ -280,8 +280,10 @@ def _invoke_llm_with_retry(
                 with get_usage_metadata_callback() as cb:
                     response = llm.invoke(messages)
                 usage_metadata = dict(cb.usage_metadata) if cb.usage_metadata else {}
+                # Extract content from AIMessage for consistency with agent path
+                raw_response = response.content if hasattr(response, "content") else str(response)
                 # Non-agents don't have agent metrics
-                return response, recursion_limit_reached, usage_metadata, None
+                return raw_response, recursion_limit_reached, usage_metadata, None
 
         except Exception as e:
             # Check if this is a retryable error

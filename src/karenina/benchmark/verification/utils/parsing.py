@@ -387,7 +387,7 @@ def create_test_instance_from_answer_class(Answer: type) -> tuple[Any, dict[str,
                             else:
                                 required_fields[field_name] = ""
                         # Handle List types
-                        elif origin is list:
+                        elif getattr(origin, "__name__", None) == "list":
                             required_fields[field_name] = []
                         else:
                             # Default to empty string for unknown types
