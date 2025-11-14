@@ -12,7 +12,7 @@ import re
 from typing import Any
 
 from langchain_core.callbacks import get_usage_metadata_callback
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import BaseMessage, HumanMessage
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 # Set up logger
@@ -437,3 +437,152 @@ def _should_expose_ground_truth() -> bool:
         True if ground truth should be exposed, False otherwise
     """
     return os.getenv("KARENINA_EXPOSE_GROUND_TRUTH", "false").lower() in ("true", "1", "yes", "on")
+
+
+# ============================================================================
+# Null-Value Retry Logic
+# ============================================================================
+
+
+def _extract_null_fields_from_error(error_str: str, failed_json: str | None = None) -> list[str]:
+    """
+    Extract field names that had null values from parsing error.
+
+    Tries two approaches:
+    1. Parse the JSON from error message to find null fields
+    2. Parse field names from Pydantic validation error text
+
+    Args:
+        error_str: Error message string
+        failed_json: Optional JSON string that failed to parse
+
+    Returns:
+        List of field names that had null/None values
+    """
+    null_fields = []
+
+    # Approach 1: Try to extract JSON and find null fields
+    if failed_json:
+        try:
+            data = json.loads(failed_json)
+            null_fields = [k for k, v in data.items() if v is None]
+            if null_fields:
+                return null_fields
+        except json.JSONDecodeError:
+            pass
+
+    # Approach 2: Parse Pydantic validation error for None/null mentions
+    # Pattern: field name followed by line mentioning input_value=None or input_type=NoneType
+    lines = error_str.split("\n")
+
+    for i, line in enumerate(lines):
+        # Check if this line mentions None/null as input
+        if "input_value=None" in line or "input_type=NoneType" in line:
+            # Field name is usually 1-2 lines before the error message
+            for j in range(i - 1, max(i - 3, -1), -1):
+                potential_field = lines[j].strip()
+                # Field names are single words without spaces, excluding common error keywords
+                if (
+                    potential_field
+                    and " " not in potential_field
+                    and potential_field not in ["Answer", "Input", "For", "Got:", "validation", "error"]
+                ):
+                    null_fields.append(potential_field)
+                    break
+
+    return list(set(null_fields))  # Remove duplicates
+
+
+def _retry_parse_with_null_feedback(
+    parsing_llm: Any,
+    parser: Any,  # PydanticOutputParser
+    original_messages: list[BaseMessage],
+    failed_response: str,
+    error: Exception,
+    usage_tracker: Any | None = None,
+    model_str: str | None = None,
+) -> tuple[Any | None, dict[str, Any]]:
+    """
+    Retry parsing with feedback about null values in required fields.
+
+    When parsing fails due to null values, this function:
+    1. Extracts which fields had null values
+    2. Sends feedback to LLM asking for actual values instead of nulls
+    3. Retries parsing once
+
+    Args:
+        parsing_llm: The LLM to use for retry
+        parser: PydanticOutputParser instance
+        original_messages: Original messages that produced failed_response
+        failed_response: The response that failed to parse
+        error: The validation error from first parse attempt
+        usage_tracker: Optional usage tracker
+        model_str: Optional model string for tracking
+
+    Returns:
+        Tuple of (parsed_answer, usage_metadata)
+        parsed_answer is None if retry also fails
+    """
+    from ..utils.parsing import _strip_markdown_fences
+
+    # Try to extract JSON from error message
+    failed_json = None
+    error_str = str(error)
+    if "from completion" in error_str:
+        # Format: "Failed to parse X from completion {...}. Got: ..."
+        try:
+            json_start = error_str.index("{")
+            json_end = error_str.index("}.", json_start) + 1
+            failed_json = error_str[json_start:json_end]
+        except (ValueError, IndexError):
+            pass
+
+    # Extract null fields
+    null_fields = _extract_null_fields_from_error(error_str, failed_json)
+
+    if not null_fields:
+        # Not a null-related error, can't help
+        logger.debug("Parsing error is not null-related, skipping retry")
+        return None, {}
+
+    logger.info(f"Detected null values in required fields: {null_fields}. Retrying with feedback...")
+
+    # Build feedback message
+    field_list = ", ".join(null_fields)
+    feedback_prompt = f"""The previous response contained null values for required fields: [{field_list}].
+
+Required fields cannot be null. Please provide actual values instead:
+- If the information is not available in the source, provide an appropriate default value:
+  * 0.0 for numeric fields (float/int)
+  * Empty string "" for text fields
+  * false for boolean fields
+- If the field represents "unknown" or "not applicable", use a sensible placeholder
+- **Never use null/None for required fields**
+
+Previous response that failed:
+{failed_response}
+
+Please provide a corrected response with all required fields populated."""
+
+    # Create retry messages
+    retry_messages = list(original_messages)  # Copy original messages
+    retry_messages.append(HumanMessage(content=feedback_prompt))
+
+    # Invoke LLM with retry
+    try:
+        raw_response, _, usage_metadata, _ = _invoke_llm_with_retry(parsing_llm, retry_messages, is_agent=False)
+
+        # Track usage if tracker provided
+        if usage_tracker and usage_metadata and model_str:
+            usage_tracker.track_call("parsing_null_retry", model_str, usage_metadata)
+
+        # Try parsing again
+        cleaned = _strip_markdown_fences(raw_response)
+        parsed = parser.parse(cleaned)
+
+        logger.info(f"✓ Successfully parsed after null-value retry. Fixed fields: {field_list}")
+        return parsed, usage_metadata
+
+    except Exception as e:
+        logger.warning(f"✗ Retry parsing failed after null-value feedback: {e}")
+        return None, {}
