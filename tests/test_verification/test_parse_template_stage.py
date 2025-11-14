@@ -286,3 +286,141 @@ class TestParseTemplateStage:
         assert "parsed_answer" in stage.produces
         assert "parsing_model_str" in stage.produces
         assert "deep_judgment_performed" in stage.produces
+
+    @patch("karenina.benchmark.verification.stages.parse_template._retry_parse_with_null_feedback")
+    @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
+    @patch("karenina.benchmark.verification.stages.parse_template.PydanticOutputParser")
+    def test_null_value_retry_on_parsing_failure(
+        self,
+        mock_parser_class: Mock,
+        mock_init_llm: Mock,
+        mock_retry: Mock,
+        basic_context: VerificationContext,
+    ) -> None:
+        """Test that null-value retry is triggered when parsing fails with null values."""
+        # Set up context
+        basic_context.set_artifact("RawAnswer", MockAnswer)
+        basic_context.set_artifact("Answer", MockAnswer)
+        basic_context.set_artifact("raw_llm_response", "The answer is 4")
+
+        # Mock LLM and its invoke response with null values
+        mock_llm = Mock()
+        mock_llm_response = Mock()
+        mock_llm_response.content = '{"result": null, "correct": null, "question_id": "test_q123"}'
+        mock_llm.invoke.return_value = mock_llm_response
+        mock_init_llm.return_value = mock_llm
+
+        # Mock parser to fail on first attempt (null values)
+        mock_parser = Mock()
+        mock_parser_class.return_value = mock_parser
+        mock_parser.parse.side_effect = ValueError(
+            "1 validation error for Answer\nresult\n  Input should be a valid number [type=int_type, input_value=None, input_type=NoneType]"
+        )
+
+        # Mock successful retry
+        retried_answer = MockAnswer(
+            result=4,
+            correct={"value": 4},
+            question_id="test_q123",
+        )
+        mock_retry.return_value = (retried_answer, {"input_tokens": 100, "output_tokens": 50})
+
+        # Execute stage
+        stage = ParseTemplateStage()
+        stage.execute(basic_context)
+
+        # Verify retry was called
+        mock_retry.assert_called_once()
+
+        # Verify successful retry result
+        assert basic_context.error is None
+        assert basic_context.has_artifact("parsed_answer")
+        parsed = basic_context.get_artifact("parsed_answer")
+        assert parsed.result == 4
+
+    @patch("karenina.benchmark.verification.stages.parse_template._retry_parse_with_null_feedback")
+    @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
+    @patch("karenina.benchmark.verification.stages.parse_template.PydanticOutputParser")
+    def test_null_value_retry_fails_marks_error(
+        self,
+        mock_parser_class: Mock,
+        mock_init_llm: Mock,
+        mock_retry: Mock,
+        basic_context: VerificationContext,
+    ) -> None:
+        """Test that error is marked when null-value retry also fails."""
+        # Set up context
+        basic_context.set_artifact("RawAnswer", MockAnswer)
+        basic_context.set_artifact("Answer", MockAnswer)
+        basic_context.set_artifact("raw_llm_response", "The answer is 4")
+
+        # Mock LLM
+        mock_llm = Mock()
+        mock_llm_response = Mock()
+        mock_llm_response.content = '{"result": null, "correct": null, "question_id": "test_q123"}'
+        mock_llm.invoke.return_value = mock_llm_response
+        mock_init_llm.return_value = mock_llm
+
+        # Mock parser to fail
+        mock_parser = Mock()
+        mock_parser_class.return_value = mock_parser
+        original_error = ValueError(
+            "1 validation error for Answer\nresult\n  Input should be a valid number [type=int_type, input_value=None, input_type=NoneType]"
+        )
+        mock_parser.parse.side_effect = original_error
+
+        # Mock failed retry (returns None)
+        mock_retry.return_value = (None, {})
+
+        # Execute stage
+        stage = ParseTemplateStage()
+        stage.execute(basic_context)
+
+        # Verify retry was attempted
+        mock_retry.assert_called_once()
+
+        # Verify error was marked
+        assert basic_context.error is not None
+        assert "Parsing failed" in basic_context.error
+
+    @patch("karenina.benchmark.verification.stages.parse_template._retry_parse_with_null_feedback")
+    @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
+    @patch("karenina.benchmark.verification.stages.parse_template.PydanticOutputParser")
+    def test_no_retry_for_non_null_errors(
+        self,
+        mock_parser_class: Mock,
+        mock_init_llm: Mock,
+        mock_retry: Mock,
+        basic_context: VerificationContext,
+    ) -> None:
+        """Test that retry is NOT triggered for non-null parsing errors."""
+        # Set up context
+        basic_context.set_artifact("RawAnswer", MockAnswer)
+        basic_context.set_artifact("Answer", MockAnswer)
+        basic_context.set_artifact("raw_llm_response", "The answer is 4")
+
+        # Mock LLM
+        mock_llm = Mock()
+        mock_llm_response = Mock()
+        mock_llm_response.content = '{"result": "not a number", "correct": {}, "question_id": "test_q123"}'
+        mock_llm.invoke.return_value = mock_llm_response
+        mock_init_llm.return_value = mock_llm
+
+        # Mock parser to fail with non-null error
+        mock_parser = Mock()
+        mock_parser_class.return_value = mock_parser
+        mock_parser.parse.side_effect = ValueError("Invalid type: expected int, got str")
+
+        # Mock retry to return None (not triggered for non-null errors)
+        mock_retry.return_value = (None, {})
+
+        # Execute stage
+        stage = ParseTemplateStage()
+        stage.execute(basic_context)
+
+        # Verify retry was still called but returned None (non-null error)
+        mock_retry.assert_called_once()
+
+        # Verify error was marked
+        assert basic_context.error is not None
+        assert "Parsing failed" in basic_context.error
