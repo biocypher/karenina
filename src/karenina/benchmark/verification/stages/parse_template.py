@@ -16,7 +16,11 @@ from ..evaluators.deep_judgment import deep_judgment_parse
 from ..stage import BaseVerificationStage, VerificationContext
 from ..utils import UsageTracker
 from ..utils.parsing import _strip_markdown_fences
-from ..verification_utils import _should_expose_ground_truth, _system_prompt_compose
+from ..verification_utils import (
+    _retry_parse_with_null_feedback,
+    _should_expose_ground_truth,
+    _system_prompt_compose,
+)
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -258,7 +262,30 @@ Original Question: {context.question_text}
 
                 # Strip markdown fences and parse with PydanticOutputParser
                 cleaned_response = _strip_markdown_fences(raw_parsing_response)
-                parsed_answer = parser.parse(cleaned_response)
+                if cleaned_response is None:
+                    raise ValueError("Empty response from parsing model after markdown fence removal")
+
+                # Try parsing, with null-value retry on failure
+                try:
+                    parsed_answer = parser.parse(cleaned_response)
+                except Exception as parse_error:
+                    # Try to recover with null-value feedback
+                    logger.warning(f"Initial parsing failed: {parse_error}")
+                    retried_answer, retry_usage = _retry_parse_with_null_feedback(
+                        parsing_llm=parsing_llm,
+                        parser=parser,
+                        original_messages=parsing_messages,
+                        failed_response=cleaned_response,
+                        error=parse_error,
+                        usage_tracker=usage_tracker,
+                        model_str=parsing_model_str,
+                    )
+
+                    if retried_answer is not None:
+                        parsed_answer = retried_answer
+                    else:
+                        # Retry failed, re-raise original error
+                        raise parse_error
 
         except Exception as e:
             error_msg = f"Parsing failed: {e}"

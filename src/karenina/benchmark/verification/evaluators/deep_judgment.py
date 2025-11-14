@@ -677,10 +677,34 @@ Your task is to extract the final attribute values based on the reasoning traces
     # Parse with PydanticOutputParser (standard logic)
     from langchain_core.output_parsers import PydanticOutputParser
 
+    from ..verification_utils import _retry_parse_with_null_feedback
+
     parser = PydanticOutputParser(pydantic_object=RawAnswer)
     if cleaned_response is None:
         raise ValueError("Empty response from LLM for parameter extraction")
-    parsed_answer = parser.parse(cleaned_response)
+
+    # Try parsing, with null-value retry on failure
+    try:
+        parsed_answer = parser.parse(cleaned_response)
+    except Exception as parse_error:
+        # Try to recover with null-value feedback
+        logger.warning(f"Deep-judgment parameter parsing failed: {parse_error}")
+        retried_answer, retry_usage = _retry_parse_with_null_feedback(
+            parsing_llm=parsing_llm,
+            parser=parser,
+            original_messages=messages,
+            failed_response=cleaned_response,
+            error=parse_error,
+            usage_tracker=usage_tracker,
+            model_str=parsing_model_str,
+        )
+
+        if retried_answer is not None:
+            parsed_answer = retried_answer
+            model_calls += 1  # Count the retry call
+        else:
+            # Retry failed, re-raise original error
+            raise parse_error
 
     stages_completed.append("parameters")
     logger.info("Stage 3 completed: Parameter extraction finished")
