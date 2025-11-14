@@ -52,6 +52,8 @@ def deep_judgment_parse(
     config: VerificationConfig,
     format_instructions: str,
     combined_system_prompt: str,
+    usage_tracker: Any | None = None,
+    parsing_model_str: str | None = None,
 ) -> tuple[BaseAnswer, dict[str, list[dict[str, Any]]], dict[str, str], dict[str, Any]]:
     """Execute multi-stage deep-judgment parsing: excerpts → reasoning → parameters.
 
@@ -68,6 +70,8 @@ def deep_judgment_parse(
         config: Verification configuration with deep-judgment settings
         format_instructions: Parser format instructions from PydanticOutputParser
         combined_system_prompt: System prompt with format instructions
+        usage_tracker: Optional usage tracker to record token usage for each stage
+        parsing_model_str: Model string identifier for usage tracking
 
     Returns:
         Tuple of (parsed_answer, excerpts, reasoning, metadata):
@@ -185,7 +189,9 @@ Return JSON format:
         messages = [SystemMessage(content=excerpt_system_prompt), HumanMessage(content=excerpt_prompt)]
         raw_response, _, usage_metadata, _ = _invoke_llm_with_retry(parsing_llm, messages, is_agent=False)
         model_calls += 1
-        # TODO: Aggregate usage_metadata in Phase 4
+        # Track usage for excerpt extraction
+        if usage_tracker and usage_metadata and parsing_model_str:
+            usage_tracker.track_call("deep_judgment_excerpts", parsing_model_str, usage_metadata)
         cleaned_response = _strip_markdown_fences(raw_response)
 
         try:
@@ -438,7 +444,11 @@ Return JSON format with assessments for ALL excerpts:
             try:
                 raw_response, _, usage_metadata, _ = _invoke_llm_with_retry(parsing_llm, messages, is_agent=False)
                 model_calls += 1
-                # TODO: Aggregate usage_metadata in Phase 4
+                # Track usage for hallucination assessment
+                if usage_tracker and usage_metadata and parsing_model_str:
+                    usage_tracker.track_call(
+                        "deep_judgment_hallucination_assessment", parsing_model_str, usage_metadata
+                    )
                 cleaned_response = _strip_markdown_fences(raw_response)
                 assessment_data = {} if cleaned_response is None else json.loads(cleaned_response)
 
@@ -576,7 +586,9 @@ Return JSON format with ONLY the attributes listed above:
     messages = [SystemMessage(content=reasoning_system_prompt), HumanMessage(content=reasoning_prompt)]
     raw_response, _, usage_metadata, _ = _invoke_llm_with_retry(parsing_llm, messages, is_agent=False)
     model_calls += 1
-    # TODO: Aggregate usage_metadata in Phase 4
+    # Track usage for reasoning generation
+    if usage_tracker and usage_metadata and parsing_model_str:
+        usage_tracker.track_call("deep_judgment_reasoning", parsing_model_str, usage_metadata)
     cleaned_response = _strip_markdown_fences(raw_response)
 
     try:
@@ -657,7 +669,9 @@ Your task is to extract the final attribute values based on the reasoning traces
     messages = [SystemMessage(content=parsing_system_prompt), HumanMessage(content=parsing_prompt)]
     raw_response, _, usage_metadata, _ = _invoke_llm_with_retry(parsing_llm, messages, is_agent=False)
     model_calls += 1
-    # TODO: Aggregate usage_metadata in Phase 4
+    # Track usage for parameter extraction
+    if usage_tracker and usage_metadata and parsing_model_str:
+        usage_tracker.track_call("deep_judgment_parameters", parsing_model_str, usage_metadata)
     cleaned_response = _strip_markdown_fences(raw_response)
 
     # Parse with PydanticOutputParser (standard logic)

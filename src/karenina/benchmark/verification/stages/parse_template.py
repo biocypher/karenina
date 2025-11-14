@@ -233,6 +233,8 @@ Original Question: {context.question_text}
                     config=dj_config,
                     format_instructions=format_instructions,
                     combined_system_prompt=combined_system_prompt,
+                    usage_tracker=usage_tracker,
+                    parsing_model_str=parsing_model_str,
                 )
                 deep_judgment_performed = True
                 deep_judgment_stages_completed = dj_metadata.get("stages_completed", [])
