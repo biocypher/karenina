@@ -1,7 +1,5 @@
 """Tests for TemplateResults class."""
 
-import pytest
-
 from karenina.schemas.workflow import (
     VerificationResult,
     VerificationResultMetadata,
@@ -192,12 +190,14 @@ class TestTemplateResultsAggregation:
     ):
         """Helper to create a sample verification result."""
         # Always mark template_verification_performed if any check is done
-        template_performed = any([
-            verify_result is not None,
-            embedding_score is not None,
-            regex_results is not None,
-            abstention_detected is not None,
-        ])
+        template_performed = any(
+            [
+                verify_result is not None,
+                embedding_score is not None,
+                regex_results is not None,
+                abstention_detected is not None,
+            ]
+        )
 
         template_data = VerificationResultTemplate(
             raw_llm_response="test response",
@@ -400,9 +400,7 @@ class TestTemplateResultsExtensibility:
 class TestTemplateResultsFiltering:
     """Test suite for filtering and grouping methods."""
 
-    def create_sample_result(
-        self, question_id: str = "q1", model: str = "model1", verify_result: bool | None = None
-    ):
+    def create_sample_result(self, question_id: str = "q1", model: str = "model1", verify_result: bool | None = None):
         """Helper to create a sample verification result."""
         template_data = VerificationResultTemplate(
             raw_llm_response="test response",

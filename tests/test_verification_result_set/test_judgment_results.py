@@ -1,5 +1,7 @@
 """Tests for JudgmentResults class."""
 
+from typing import Any
+
 from karenina.schemas.workflow import (
     VerificationResult,
     VerificationResultDeepJudgment,
@@ -15,7 +17,7 @@ class TestJudgmentResultsDataAccess:
         self,
         question_id: str = "q1",
         model: str = "model1",
-        excerpts: dict[str, list[dict[str, any]]] | None = None,
+        excerpts: dict[str, list[dict[str, Any]]] | None = None,
         reasoning: dict[str, str] | None = None,
         hallucination_risks: dict[str, str] | None = None,
         attributes_without_excerpts: list[str] | None = None,
@@ -95,9 +97,7 @@ class TestJudgmentResultsDataAccess:
 
     def test_get_attribute_reasoning(self):
         """Test retrieving attribute reasoning traces."""
-        result1 = self.create_sample_result(
-            question_id="q1", reasoning={"attr1": "reasoning1", "attr2": "reasoning2"}
-        )
+        result1 = self.create_sample_result(question_id="q1", reasoning={"attr1": "reasoning1", "attr2": "reasoning2"})
         result2 = self.create_sample_result(question_id="q2", reasoning={"attr1": "reasoning3"})
 
         judgment_results = JudgmentResults(results=[result1, result2])
@@ -137,9 +137,7 @@ class TestJudgmentResultsDataAccess:
 
     def test_get_attributes_without_excerpts(self):
         """Test retrieving attributes without excerpts."""
-        result1 = self.create_sample_result(
-            question_id="q1", attributes_without_excerpts=["attr1", "attr2"]
-        )
+        result1 = self.create_sample_result(question_id="q1", attributes_without_excerpts=["attr1", "attr2"])
         result2 = self.create_sample_result(question_id="q2", attributes_without_excerpts=["attr3"])
 
         judgment_results = JudgmentResults(results=[result1, result2])
@@ -166,7 +164,7 @@ class TestJudgmentResultsAggregation:
         question_id: str = "q1",
         model: str = "model1",
         replicate: int = 1,
-        excerpts: dict[str, list[dict[str, any]]] | None = None,
+        excerpts: dict[str, list[dict[str, Any]]] | None = None,
         hallucination_risks: dict[str, str] | None = None,
         model_calls: int = 0,
     ):
@@ -223,9 +221,7 @@ class TestJudgmentResultsAggregation:
 
     def test_aggregate_excerpt_counts_by_model(self):
         """Test aggregating excerpt counts grouped by model."""
-        result1 = self.create_sample_result(
-            model="m1", excerpts={"attr1": [{"text": "e1"}, {"text": "e2"}]}
-        )
+        result1 = self.create_sample_result(model="m1", excerpts={"attr1": [{"text": "e1"}, {"text": "e2"}]})
         result2 = self.create_sample_result(model="m1", excerpts={"attr1": [{"text": "e3"}]})
         result3 = self.create_sample_result(
             model="m2", excerpts={"attr1": [{"text": "e4"}, {"text": "e5"}, {"text": "e6"}]}
@@ -282,9 +278,7 @@ class TestJudgmentResultsAggregation:
 class TestJudgmentResultsExtensibility:
     """Test suite for extensibility features."""
 
-    def create_sample_result(
-        self, question_id: str = "q1", excerpts: dict[str, list[dict[str, any]]] | None = None
-    ):
+    def create_sample_result(self, question_id: str = "q1", excerpts: dict[str, list[dict[str, Any]]] | None = None):
         """Helper to create a sample verification result."""
         judgment_data = VerificationResultDeepJudgment(
             deep_judgment_enabled=True,
@@ -361,7 +355,7 @@ class TestJudgmentResultsFiltering:
     """Test suite for filtering and grouping methods."""
 
     def create_sample_result(
-        self, question_id: str = "q1", model: str = "model1", excerpts: dict[str, list[dict[str, any]]] | None = None
+        self, question_id: str = "q1", model: str = "model1", excerpts: dict[str, list[dict[str, Any]]] | None = None
     ):
         """Helper to create a sample verification result."""
         judgment_data = VerificationResultDeepJudgment(
@@ -452,7 +446,7 @@ class TestJudgmentResultsSummary:
 
     def create_sample_result(
         self,
-        excerpts: dict[str, list[dict[str, any]]] | None = None,
+        excerpts: dict[str, list[dict[str, Any]]] | None = None,
         model_calls: int = 0,
         search_enabled: bool = False,
     ):
