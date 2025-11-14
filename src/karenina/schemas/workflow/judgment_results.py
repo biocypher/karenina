@@ -88,10 +88,12 @@ class JudgmentResults(BaseModel):
 
         rows = []
 
-        for result in self.results:
+        for result_idx, result in enumerate(self.results):
             if result.deep_judgment is None or not result.deep_judgment.deep_judgment_performed:
                 # No deep judgment data - create single row with minimal info
-                rows.append(self._create_empty_judgment_row(result))
+                row = self._create_empty_judgment_row(result)
+                row["result_index"] = result_idx
+                rows.append(row)
                 continue
 
             # Get template data for parsed responses
@@ -117,35 +119,61 @@ class JudgmentResults(BaseModel):
                     if excerpt_list:
                         # Create one row per excerpt
                         for idx, excerpt in enumerate(excerpt_list):
-                            rows.append(
-                                self._create_judgment_row(
-                                    result,
-                                    attribute_name,
-                                    gt_value,
-                                    llm_value,
-                                    idx,
-                                    excerpt,
-                                    attribute_reasoning,
-                                    attribute_risk,
-                                )
-                            )
-                    else:
-                        # No excerpts found for this attribute - create one row with None excerpt data
-                        rows.append(
-                            self._create_judgment_row(
+                            row = self._create_judgment_row(
                                 result,
                                 attribute_name,
                                 gt_value,
                                 llm_value,
-                                None,
-                                None,
+                                idx,
+                                excerpt,
                                 attribute_reasoning,
                                 attribute_risk,
                             )
+                            row["result_index"] = result_idx
+                            rows.append(row)
+                    else:
+                        # No excerpts found for this attribute - create one row with None excerpt data
+                        row = self._create_judgment_row(
+                            result,
+                            attribute_name,
+                            gt_value,
+                            llm_value,
+                            None,
+                            None,
+                            attribute_reasoning,
+                            attribute_risk,
                         )
+                        row["result_index"] = result_idx
+                        rows.append(row)
             else:
-                # No extracted_excerpts at all
-                rows.append(self._create_empty_judgment_row(result))
+                # No extracted_excerpts - but check if we have hallucination_risk_assessment
+                if result.deep_judgment.hallucination_risk_assessment:
+                    # Create rows for each attribute in hallucination_risk_assessment
+                    for attribute_name, attribute_risk in result.deep_judgment.hallucination_risk_assessment.items():
+                        gt_value = parsed_gt.get(attribute_name) if parsed_gt else None
+                        llm_value = parsed_llm.get(attribute_name) if parsed_llm else None
+
+                        attribute_reasoning = None
+                        if result.deep_judgment.attribute_reasoning:
+                            attribute_reasoning = result.deep_judgment.attribute_reasoning.get(attribute_name)
+
+                        row = self._create_judgment_row(
+                            result,
+                            attribute_name,
+                            gt_value,
+                            llm_value,
+                            None,  # No excerpt index
+                            None,  # No excerpt data
+                            attribute_reasoning,
+                            attribute_risk,
+                        )
+                        row["result_index"] = result_idx
+                        rows.append(row)
+                else:
+                    # No extracted_excerpts and no hallucination_risk_assessment - minimal row
+                    row = self._create_empty_judgment_row(result)
+                    row["result_index"] = result_idx
+                    rows.append(row)
 
         return pd.DataFrame(rows)
 
@@ -249,6 +277,7 @@ class JudgmentResults(BaseModel):
         """Create minimal DataFrame row when no judgment data exists."""
         metadata = result.metadata
         template = result.template
+        deep_judgment = result.deep_judgment
 
         # Unified replicate
         replicate = metadata.answering_replicate
@@ -277,9 +306,9 @@ class JudgmentResults(BaseModel):
             "parsed_gt_response": template.parsed_gt_response if template else None,
             "parsed_llm_response": template.parsed_llm_response if template else None,
             # === Deep Judgment Configuration ===
-            "deep_judgment_enabled": False,
-            "deep_judgment_performed": False,
-            "deep_judgment_search_enabled": False,
+            "deep_judgment_enabled": deep_judgment.deep_judgment_enabled if deep_judgment else False,
+            "deep_judgment_performed": deep_judgment.deep_judgment_performed if deep_judgment else False,
+            "deep_judgment_search_enabled": deep_judgment.deep_judgment_search_enabled if deep_judgment else False,
             # === Attribute Information ===
             "attribute_name": None,
             "gt_attribute_value": None,
@@ -299,9 +328,9 @@ class JudgmentResults(BaseModel):
             "attribute_overall_risk": None,
             "attribute_has_excerpts": False,
             # === Processing Metrics ===
-            "deep_judgment_model_calls": 0,
-            "deep_judgment_excerpt_retries": 0,
-            "stages_completed": None,
+            "deep_judgment_model_calls": deep_judgment.deep_judgment_model_calls if deep_judgment else 0,
+            "deep_judgment_excerpt_retries": deep_judgment.deep_judgment_excerpt_retry_count if deep_judgment else 0,
+            "stages_completed": deep_judgment.deep_judgment_stages_completed if deep_judgment else None,
             # === Execution Metadata ===
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
@@ -558,16 +587,16 @@ class JudgmentResults(BaseModel):
             if len(df_filtered) == 0:
                 return {}
 
-            # Count excerpts per result (group by question_id, replicate, by_column)
+            # Count excerpts per result (group by result_index and by_column)
             # Then calculate mean count per group
-            counts_per_result = df_filtered.groupby([by, "question_id", "replicate"]).size()
+            counts_per_result = df_filtered.groupby([by, "result_index"]).size()
             mean_counts = counts_per_result.groupby(level=0).mean()
 
             return dict(mean_counts.to_dict())
         else:
             # All attributes analysis
             # Count excerpts per result and attribute
-            counts_per_result = df_with_excerpts.groupby([by, "attribute_name", "question_id", "replicate"]).size()
+            counts_per_result = df_with_excerpts.groupby([by, "attribute_name", "result_index"]).size()
             # Calculate mean count per group and attribute
             mean_counts = counts_per_result.groupby(level=[0, 1]).mean()
 
@@ -691,8 +720,11 @@ class JudgmentResults(BaseModel):
         if len(df) == 0:
             return {}
 
+        # Deduplicate: Exploded DataFrame has multiple rows per result
+        df_dedup = df.drop_duplicates(subset=["result_index"]).copy()
+
         # Filter to rows with model call data
-        df_with_calls = df[df["deep_judgment_model_calls"].notna()].copy()
+        df_with_calls = df_dedup[df_dedup["deep_judgment_model_calls"].notna()].copy()
 
         if len(df_with_calls) == 0:
             return {}

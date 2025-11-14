@@ -235,7 +235,7 @@ class TestTemplateResultsAggregation:
 
         template_results = TemplateResults(results=[result1, result2, result3])
 
-        aggregated = template_results.aggregate_pass_rate(by="question")
+        aggregated = template_results.aggregate_pass_rate(by="question_id")
 
         assert "q1" in aggregated
         assert "q2" in aggregated
@@ -250,7 +250,7 @@ class TestTemplateResultsAggregation:
 
         template_results = TemplateResults(results=[result1, result2, result3])
 
-        aggregated = template_results.aggregate_pass_rate(by="model")
+        aggregated = template_results.aggregate_pass_rate(by="answering_model")
 
         assert "m1" in aggregated
         assert "m2" in aggregated
@@ -264,7 +264,7 @@ class TestTemplateResultsAggregation:
 
         template_results = TemplateResults(results=[result1, result2])
 
-        aggregated = template_results.aggregate_embedding_scores(strategy="mean", by="question")
+        aggregated = template_results.aggregate_embedding_scores(strategy="mean", by="question_id")
         assert abs(list(aggregated.values())[0] - 0.85) < 0.0001
 
     def test_aggregate_embedding_scores_median(self):
@@ -275,7 +275,7 @@ class TestTemplateResultsAggregation:
 
         template_results = TemplateResults(results=[result1, result2, result3])
 
-        aggregated = template_results.aggregate_embedding_scores(strategy="median", by="question")
+        aggregated = template_results.aggregate_embedding_scores(strategy="median", by="question_id")
         assert list(aggregated.values())[0] == 0.8
 
     def test_aggregate_regex_success_rate(self):
@@ -293,10 +293,10 @@ class TestTemplateResultsAggregation:
         template_results = TemplateResults(results=[result1, result2])
 
         # Aggregate specific pattern
-        pattern1_rate = template_results.aggregate_regex_success_rate(pattern_name="pattern1", by="question")
+        pattern1_rate = template_results.aggregate_regex_success_rate(pattern_name="pattern1", by="question_id")
         assert list(pattern1_rate.values())[0] == 1.0  # 2/2 pattern1 success
 
-        pattern2_rate = template_results.aggregate_regex_success_rate(pattern_name="pattern2", by="question")
+        pattern2_rate = template_results.aggregate_regex_success_rate(pattern_name="pattern2", by="question_id")
         assert list(pattern2_rate.values())[0] == 0.5  # 1/2 pattern2 success
 
     def test_aggregate_abstention_rate(self):
@@ -307,7 +307,7 @@ class TestTemplateResultsAggregation:
 
         template_results = TemplateResults(results=[result1, result2, result3])
 
-        aggregated = template_results.aggregate_abstention_rate(by="question")
+        aggregated = template_results.aggregate_abstention_rate(by="question_id")
         assert abs(list(aggregated.values())[0] - 0.333) < 0.01  # 1/3 abstained
 
 
@@ -358,7 +358,7 @@ class TestTemplateResultsExtensibility:
         template_results.register_aggregator("min", MinAggregator())
 
         # Use the custom aggregator
-        aggregated = template_results.aggregate_embedding_scores(strategy="min", by="question")
+        aggregated = template_results.aggregate_embedding_scores(strategy="min", by="question_id")
         assert list(aggregated.values())[0] == 0.7
 
     def test_list_aggregators(self):
@@ -368,33 +368,6 @@ class TestTemplateResultsExtensibility:
         aggregators = template_results.list_aggregators()
         assert "mean" in aggregators
         assert "median" in aggregators
-
-    def test_register_custom_groupby_strategy(self):
-        """Test registering a custom groupby strategy."""
-        result1 = self.create_sample_result(question_id="q1", verify_result=True)
-        result2 = self.create_sample_result(question_id="q2", verify_result=False)
-
-        template_results = TemplateResults(results=[result1, result2])
-
-        # Register a simple constant grouping strategy
-        class AllStrategy:
-            def get_group_key(self, _result):
-                return "all_questions"
-
-        template_results.register_groupby_strategy("all", AllStrategy())
-
-        # Use the custom strategy
-        aggregated = template_results.aggregate_pass_rate(by="all")
-        assert "all_questions" in aggregated
-        assert aggregated["all_questions"] == 0.5  # 1/2 passed
-
-    def test_list_groupby_strategies(self):
-        """Test listing available groupby strategies."""
-        template_results = TemplateResults(results=[])
-
-        strategies = template_results.list_groupby_strategies()
-        assert "question" in strategies
-        assert "model" in strategies
 
 
 class TestTemplateResultsFiltering:

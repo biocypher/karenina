@@ -209,7 +209,7 @@ class TestJudgmentResultsAggregation:
         judgment_results = JudgmentResults(results=[result1, result2, result3])
 
         # Aggregate by question using mean
-        aggregated = judgment_results.aggregate_excerpt_counts(strategy="mean", by="question")
+        aggregated = judgment_results.aggregate_excerpt_counts(strategy="mean", by="question_id")
 
         assert "q1" in aggregated
         assert "q2" in aggregated
@@ -229,7 +229,7 @@ class TestJudgmentResultsAggregation:
 
         judgment_results = JudgmentResults(results=[result1, result2, result3])
 
-        aggregated = judgment_results.aggregate_excerpt_counts(strategy="mean", by="model")
+        aggregated = judgment_results.aggregate_excerpt_counts(strategy="mean", by="answering_model")
 
         assert "m1" in aggregated
         assert "m2" in aggregated
@@ -252,7 +252,7 @@ class TestJudgmentResultsAggregation:
         judgment_results = JudgmentResults(results=[result1, result2])
 
         # Aggregate by question - should get distribution of risk levels
-        aggregated = judgment_results.aggregate_hallucination_risk_distribution(by="question")
+        aggregated = judgment_results.aggregate_hallucination_risk_distribution(by="question_id")
 
         assert "q1" in aggregated
         # For attr1: 1 low, 1 high -> {"low": 0.5, "high": 0.5}
@@ -269,7 +269,7 @@ class TestJudgmentResultsAggregation:
         judgment_results = JudgmentResults(results=[result1, result2, result3])
 
         # Aggregate by question using mean
-        aggregated = judgment_results.aggregate_model_calls(strategy="mean", by="question")
+        aggregated = judgment_results.aggregate_model_calls(strategy="mean", by="question_id")
 
         assert aggregated["q1"] == 4.0  # (5+3)/2
         assert aggregated["q2"] == 7.0  # 7/1
@@ -323,32 +323,6 @@ class TestJudgmentResultsExtensibility:
         aggregators = judgment_results.list_aggregators()
         assert "mean" in aggregators
         assert "median" in aggregators
-
-    def test_register_custom_groupby_strategy(self):
-        """Test registering a custom groupby strategy."""
-        result1 = self.create_sample_result(question_id="q1", excerpts={"attr1": [{"text": "e1"}]})
-        result2 = self.create_sample_result(question_id="q2", excerpts={"attr1": [{"text": "e2"}]})
-
-        judgment_results = JudgmentResults(results=[result1, result2])
-
-        # Register a constant grouping strategy
-        class AllStrategy:
-            def get_group_key(self, _result):
-                return "all"
-
-        judgment_results.register_groupby_strategy("all", AllStrategy())
-
-        # Use the custom strategy
-        aggregated = judgment_results.aggregate_excerpt_counts(strategy="mean", by="all")
-        assert "all" in aggregated
-
-    def test_list_groupby_strategies(self):
-        """Test listing available groupby strategies."""
-        judgment_results = JudgmentResults(results=[])
-
-        strategies = judgment_results.list_groupby_strategies()
-        assert "question" in strategies
-        assert "model" in strategies
 
 
 class TestJudgmentResultsFiltering:

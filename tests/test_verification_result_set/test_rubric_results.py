@@ -203,7 +203,7 @@ class TestRubricResultsAggregation:
         rubric_results = RubricResults(results=[result1, result2, result3])
 
         # Aggregate by question using mean
-        aggregated = rubric_results.aggregate_llm_traits(strategy="mean", by="question")
+        aggregated = rubric_results.aggregate_llm_traits(strategy="mean", by="question_id")
 
         assert "q1" in aggregated
         assert "q2" in aggregated
@@ -219,7 +219,7 @@ class TestRubricResultsAggregation:
         rubric_results = RubricResults(results=[result1, result2, result3])
 
         # Aggregate by model
-        aggregated = rubric_results.aggregate_llm_traits(strategy="mean", by="model")
+        aggregated = rubric_results.aggregate_llm_traits(strategy="mean", by="answering_model")
 
         assert "m1" in aggregated
         assert "m2" in aggregated
@@ -234,7 +234,7 @@ class TestRubricResultsAggregation:
 
         rubric_results = RubricResults(results=[result1, result2, result3])
 
-        aggregated = rubric_results.aggregate_llm_traits(strategy="median", by="question")
+        aggregated = rubric_results.aggregate_llm_traits(strategy="median", by="question_id")
         assert list(aggregated.values())[0]["clarity"] == 4
 
     def test_aggregate_manual_traits_majority_vote(self):
@@ -245,7 +245,7 @@ class TestRubricResultsAggregation:
 
         rubric_results = RubricResults(results=[result1, result2, result3])
 
-        aggregated = rubric_results.aggregate_manual_traits(strategy="majority_vote", by="question")
+        aggregated = rubric_results.aggregate_manual_traits(strategy="majority_vote", by="question_id")
         assert list(aggregated.values())[0]["correct"] is True
 
     def test_aggregate_metric_traits_mean(self):
@@ -256,7 +256,7 @@ class TestRubricResultsAggregation:
         rubric_results = RubricResults(results=[result1, result2])
 
         # Aggregate precision metric
-        aggregated = rubric_results.aggregate_metric_traits(metric_name="precision", strategy="mean", by="question")
+        aggregated = rubric_results.aggregate_metric_traits(metric_name="precision", strategy="mean", by="question_id")
         assert abs(list(aggregated.values())[0]["feature_detection"] - 0.85) < 0.0001
 
 
@@ -313,38 +313,6 @@ class TestRubricResultsExtensibility:
         assert "mean" in aggregators
         assert "median" in aggregators
         assert "majority_vote" in aggregators
-
-    def test_register_custom_groupby_strategy(self):
-        """Test registering a custom groupby strategy."""
-        result1 = self.create_sample_result(question_id="q1", llm_traits={"clarity": 4})
-        result2 = self.create_sample_result(question_id="q2", llm_traits={"clarity": 5})
-
-        # Modify metadata to add a custom field for testing
-        result1.metadata.run_name = "run_a"
-        result2.metadata.run_name = "run_b"
-
-        rubric_results = RubricResults(results=[result1, result2])
-
-        # Custom strategy already exists (ByRunNameStrategy), but let's register a simple one
-        class ConstantStrategy:
-            def get_group_key(self, _result):
-                return "all"
-
-        rubric_results.register_groupby_strategy("constant", ConstantStrategy())
-
-        # Use the custom strategy
-        aggregated = rubric_results.aggregate_llm_traits(strategy="mean", by="constant")
-        assert "all" in aggregated
-        assert aggregated["all"]["clarity"] == 4.5  # Average of both
-
-    def test_list_groupby_strategies(self):
-        """Test listing available groupby strategies."""
-        rubric_results = RubricResults(results=[])
-
-        strategies = rubric_results.list_groupby_strategies()
-        assert "question" in strategies
-        assert "model" in strategies
-        assert "replicate" in strategies
 
 
 class TestRubricResultsFiltering:

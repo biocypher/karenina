@@ -83,10 +83,12 @@ class TemplateResults(BaseModel):
 
         rows = []
 
-        for result in self.results:
+        for result_idx, result in enumerate(self.results):
             if result.template is None:
                 # No template data - create single row with error info
-                rows.append(self._create_empty_row(result))
+                row = self._create_empty_row(result)
+                row["result_index"] = result_idx
+                rows.append(row)
                 continue
 
             # Get parsed responses
@@ -98,7 +100,9 @@ class TemplateResults(BaseModel):
 
             if not all_fields:
                 # No fields to compare - create single row
-                rows.append(self._create_field_row(result, None, None, None, None, None))
+                row = self._create_field_row(result, None, None, None, None, None)
+                row["result_index"] = result_idx
+                rows.append(row)
             else:
                 # Create one row per field
                 for field_name in sorted(all_fields):
@@ -109,7 +113,9 @@ class TemplateResults(BaseModel):
                     gt_value = parsed_gt.get(field_name) if gt_exists else None
                     llm_value = parsed_llm.get(field_name) if llm_exists else None
 
-                    rows.append(self._create_field_row(result, field_name, gt_value, llm_value, gt_exists, llm_exists))
+                    row = self._create_field_row(result, field_name, gt_value, llm_value, gt_exists, llm_exists)
+                    row["result_index"] = result_idx
+                    rows.append(row)
 
         return pd.DataFrame(rows)
 
@@ -183,9 +189,12 @@ class TemplateResults(BaseModel):
             "field_match": field_match,
             "field_type": field_type,
             # === Verification Checks ===
+            "verify_result": template.verify_result if template else None,
+            "embedding_check_performed": template.embedding_check_performed if template else False,
             "embedding_similarity_score": template.embedding_similarity_score if template else None,
             "embedding_model_used": template.embedding_model_used if template else None,
             "embedding_override_applied": template.embedding_override_applied if template else False,
+            "abstention_check_performed": template.abstention_check_performed if template else False,
             "abstention_detected": template.abstention_detected if template else None,
             "abstention_reasoning": template.abstention_reasoning if template else None,
             "abstention_override_applied": template.abstention_override_applied if template else False,
@@ -243,9 +252,12 @@ class TemplateResults(BaseModel):
             "field_match": None,
             "field_type": None,
             # === Verification Checks ===
+            "verify_result": None,
+            "embedding_check_performed": False,
             "embedding_similarity_score": None,
             "embedding_model_used": None,
             "embedding_override_applied": False,
+            "abstention_check_performed": False,
             "abstention_detected": None,
             "abstention_reasoning": None,
             "abstention_override_applied": False,
@@ -729,8 +741,12 @@ class TemplateResults(BaseModel):
         if len(df) == 0:
             return {}
 
+        # Deduplicate: Field-exploded DataFrame has multiple rows per result
+        # Keep first occurrence of each unique result (by result_index)
+        df_dedup = df.drop_duplicates(subset=["result_index"]).copy()
+
         # Filter to only rows where verify_result is not None
-        df_filtered = df[df["verify_result"].notna()].copy()
+        df_filtered = df_dedup[df_dedup["verify_result"].notna()].copy()
 
         if len(df_filtered) == 0:
             return {}
@@ -773,10 +789,13 @@ class TemplateResults(BaseModel):
         if len(df) == 0:
             return {}
 
+        # Deduplicate: Field-exploded DataFrame has multiple rows per result
+        df_dedup = df.drop_duplicates(subset=["result_index"]).copy()
+
         # Filter to only rows where embedding check was performed and score exists
-        df_filtered = df[
-            (df["embedding_check_performed"] == True)  # noqa: E712
-            & (df["embedding_similarity_score"].notna())
+        df_filtered = df_dedup[
+            (df_dedup["embedding_check_performed"] == True)  # noqa: E712
+            & (df_dedup["embedding_similarity_score"].notna())
         ].copy()
 
         if len(df_filtered) == 0:
@@ -877,8 +896,11 @@ class TemplateResults(BaseModel):
         if len(df) == 0:
             return {}
 
+        # Deduplicate: Field-exploded DataFrame has multiple rows per result
+        df_dedup = df.drop_duplicates(subset=["result_index"]).copy()
+
         # Filter to only rows where abstention check was performed
-        df_filtered = df[df["abstention_check_performed"] == True].copy()  # noqa: E712
+        df_filtered = df_dedup[df_dedup["abstention_check_performed"] == True].copy()  # noqa: E712
 
         if len(df_filtered) == 0:
             return {}
