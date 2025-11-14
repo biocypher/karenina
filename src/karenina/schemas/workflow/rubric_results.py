@@ -57,6 +57,266 @@ class RubricResults(BaseModel):
         self._groupby_registry: GroupByRegistry = create_default_groupby_registry()
 
     # ========================================================================
+    # DataFrame Conversion
+    # ========================================================================
+
+    def to_dataframe(
+        self, trait_type: Literal["llm_score", "llm_binary", "llm", "manual", "metric", "all"] = "all"
+    ) -> Any:
+        """
+        Convert rubric evaluation results to pandas DataFrame.
+
+        Creates one row per trait (for llm/manual) or per metric (for metric traits).
+        Supports filtering by trait type or returning all traits combined.
+
+        Args:
+            trait_type: Type of traits to include
+                - "llm_score": LLM traits with 1-5 scale scores
+                - "llm_binary": LLM traits with boolean scores
+                - "llm": All LLM traits (both score and binary)
+                - "manual": Manual/regex traits (boolean)
+                - "metric": Metric traits (precision, recall, f1) - EXPLODED by metric
+                - "all": All trait types combined (default)
+
+        Column ordering:
+            1. Status: completed_without_errors, error
+            2. Identification: question_id, template_id, question_text, keywords, replicate
+            3. Model Config: answering_model, parsing_model, system_prompts
+            4. Rubric Data: trait_name, trait_score, trait_type (+ metric_name for metrics)
+            5. Rubric Metadata: evaluation_rubric
+            6. Execution Metadata: execution_time, timestamp, run_name, job_id
+
+        Returns:
+            pandas.DataFrame: Exploded DataFrame with one row per trait/metric
+
+        Example:
+            >>> rubric_results = result_set.get_rubrics_results()
+            >>> df = rubric_results.to_dataframe(trait_type="llm_score")
+            >>> # Filter and aggregate using pandas
+            >>> avg_scores = df[df['trait_name'] == 'clarity'].groupby('question_id')['trait_score'].mean()
+        """
+        import pandas as pd
+
+        rows = []
+
+        for result in self.results:
+            if result.rubric is None or not result.rubric.rubric_evaluation_performed:
+                # No rubric data - create single row with minimal info
+                rows.append(self._create_empty_rubric_row(result))
+                continue
+
+            # Process LLM traits
+            if trait_type in ("llm_score", "llm_binary", "llm", "all") and result.rubric.llm_trait_scores:
+                for trait_name, trait_score in result.rubric.llm_trait_scores.items():
+                    # Determine if score or binary based on value type
+                    is_binary = isinstance(trait_score, bool)
+                    score_type = "llm_binary" if is_binary else "llm_score"
+
+                    # Filter by requested type
+                    if trait_type == "llm_score" and is_binary:
+                        continue
+                    if trait_type == "llm_binary" and not is_binary:
+                        continue
+
+                    rows.append(self._create_llm_trait_row(result, trait_name, trait_score, score_type))
+
+            # Process manual traits
+            if trait_type in ("manual", "all") and result.rubric.manual_trait_scores:
+                for trait_name, trait_score in result.rubric.manual_trait_scores.items():
+                    rows.append(self._create_manual_trait_row(result, trait_name, trait_score))
+
+            # Process metric traits (EXPLODED by metric)
+            if trait_type in ("metric", "all") and result.rubric.metric_trait_scores:
+                for trait_name, metrics in result.rubric.metric_trait_scores.items():
+                    # Each metric gets its own row
+                    for metric_name, metric_score in metrics.items():
+                        # Get confusion matrix data for this trait
+                        confusion_data = None
+                        if result.rubric.metric_trait_confusion_lists:
+                            confusion_data = result.rubric.metric_trait_confusion_lists.get(trait_name)
+
+                        rows.append(
+                            self._create_metric_trait_row(result, trait_name, metric_name, metric_score, confusion_data)
+                        )
+
+        return pd.DataFrame(rows)
+
+    def _create_llm_trait_row(
+        self,
+        result: VerificationResult,
+        trait_name: str,
+        trait_score: int | bool,
+        score_type: str,
+    ) -> dict[str, Any]:
+        """Create DataFrame row for LLM trait."""
+        metadata = result.metadata
+        rubric = result.rubric
+
+        # Unified replicate
+        replicate = metadata.answering_replicate
+        if replicate is None:
+            replicate = metadata.parsing_replicate
+
+        return {
+            # === Status ===
+            "completed_without_errors": metadata.completed_without_errors,
+            "error": metadata.error,
+            # === Identification Metadata ===
+            "question_id": metadata.question_id,
+            "template_id": metadata.template_id,
+            "question_text": metadata.question_text,
+            "keywords": metadata.keywords,
+            "replicate": replicate,
+            # === Model Configuration ===
+            "answering_model": metadata.answering_model,
+            "parsing_model": metadata.parsing_model,
+            "answering_system_prompt": metadata.answering_system_prompt,
+            "parsing_system_prompt": metadata.parsing_system_prompt,
+            # === Rubric Data ===
+            "trait_name": trait_name,
+            "trait_score": trait_score,
+            "trait_type": score_type,
+            # === Rubric Metadata ===
+            "evaluation_rubric": rubric.evaluation_rubric if rubric else None,
+            # === Execution Metadata ===
+            "execution_time": metadata.execution_time,
+            "timestamp": metadata.timestamp,
+            "run_name": metadata.run_name,
+            "job_id": metadata.job_id,
+        }
+
+    def _create_manual_trait_row(
+        self,
+        result: VerificationResult,
+        trait_name: str,
+        trait_score: bool,
+    ) -> dict[str, Any]:
+        """Create DataFrame row for manual trait."""
+        metadata = result.metadata
+        rubric = result.rubric
+
+        # Unified replicate
+        replicate = metadata.answering_replicate
+        if replicate is None:
+            replicate = metadata.parsing_replicate
+
+        return {
+            # === Status ===
+            "completed_without_errors": metadata.completed_without_errors,
+            "error": metadata.error,
+            # === Identification Metadata ===
+            "question_id": metadata.question_id,
+            "template_id": metadata.template_id,
+            "question_text": metadata.question_text,
+            "keywords": metadata.keywords,
+            "replicate": replicate,
+            # === Model Configuration ===
+            "answering_model": metadata.answering_model,
+            "parsing_model": metadata.parsing_model,
+            "answering_system_prompt": metadata.answering_system_prompt,
+            "parsing_system_prompt": metadata.parsing_system_prompt,
+            # === Rubric Data ===
+            "trait_name": trait_name,
+            "trait_score": trait_score,
+            "trait_type": "manual",
+            # === Rubric Metadata ===
+            "evaluation_rubric": rubric.evaluation_rubric if rubric else None,
+            # === Execution Metadata ===
+            "execution_time": metadata.execution_time,
+            "timestamp": metadata.timestamp,
+            "run_name": metadata.run_name,
+            "job_id": metadata.job_id,
+        }
+
+    def _create_metric_trait_row(
+        self,
+        result: VerificationResult,
+        trait_name: str,
+        metric_name: str,
+        metric_score: float,
+        confusion_data: dict[str, list[str]] | None,
+    ) -> dict[str, Any]:
+        """Create DataFrame row for metric trait (EXPLODED by metric)."""
+        metadata = result.metadata
+        rubric = result.rubric
+
+        # Unified replicate
+        replicate = metadata.answering_replicate
+        if replicate is None:
+            replicate = metadata.parsing_replicate
+
+        return {
+            # === Status ===
+            "completed_without_errors": metadata.completed_without_errors,
+            "error": metadata.error,
+            # === Identification Metadata ===
+            "question_id": metadata.question_id,
+            "template_id": metadata.template_id,
+            "question_text": metadata.question_text,
+            "keywords": metadata.keywords,
+            "replicate": replicate,
+            # === Model Configuration ===
+            "answering_model": metadata.answering_model,
+            "parsing_model": metadata.parsing_model,
+            "answering_system_prompt": metadata.answering_system_prompt,
+            "parsing_system_prompt": metadata.parsing_system_prompt,
+            # === Metric Trait Data (EXPLODED) ===
+            "trait_name": trait_name,
+            "metric_name": metric_name,
+            "metric_score": metric_score,
+            "trait_type": "metric",
+            # === Confusion Matrix Metadata ===
+            "confusion_tp": confusion_data.get("tp") if confusion_data else None,
+            "confusion_fp": confusion_data.get("fp") if confusion_data else None,
+            "confusion_fn": confusion_data.get("fn") if confusion_data else None,
+            "confusion_tn": confusion_data.get("tn") if confusion_data else None,
+            # === Rubric Metadata ===
+            "evaluation_rubric": rubric.evaluation_rubric if rubric else None,
+            # === Execution Metadata ===
+            "execution_time": metadata.execution_time,
+            "timestamp": metadata.timestamp,
+            "run_name": metadata.run_name,
+            "job_id": metadata.job_id,
+        }
+
+    def _create_empty_rubric_row(self, result: VerificationResult) -> dict[str, Any]:
+        """Create empty DataFrame row for results without rubric data."""
+        metadata = result.metadata
+
+        # Unified replicate
+        replicate = metadata.answering_replicate
+        if replicate is None:
+            replicate = metadata.parsing_replicate
+
+        return {
+            # === Status ===
+            "completed_without_errors": metadata.completed_without_errors,
+            "error": metadata.error,
+            # === Identification Metadata ===
+            "question_id": metadata.question_id,
+            "template_id": metadata.template_id,
+            "question_text": metadata.question_text,
+            "keywords": metadata.keywords,
+            "replicate": replicate,
+            # === Model Configuration ===
+            "answering_model": metadata.answering_model,
+            "parsing_model": metadata.parsing_model,
+            "answering_system_prompt": metadata.answering_system_prompt,
+            "parsing_system_prompt": metadata.parsing_system_prompt,
+            # === Rubric Data (None) ===
+            "trait_name": None,
+            "trait_score": None,
+            "trait_type": None,
+            # === Rubric Metadata ===
+            "evaluation_rubric": None,
+            # === Execution Metadata ===
+            "execution_time": metadata.execution_time,
+            "timestamp": metadata.timestamp,
+            "run_name": metadata.run_name,
+            "job_id": metadata.job_id,
+        }
+
+    # ========================================================================
     # Core Data Access
     # ========================================================================
 

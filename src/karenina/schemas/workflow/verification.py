@@ -744,7 +744,7 @@ class VerificationResultRubric(BaseModel):
     rubric_evaluation_performed: bool = False  # Whether rubric evaluation was executed
 
     # Split trait scores by type (replaces old verify_rubric dict)
-    llm_trait_scores: dict[str, int] | None = None  # LLM-evaluated traits (1-5 scale)
+    llm_trait_scores: dict[str, int | bool] | None = None  # LLM-evaluated traits (1-5 scale or binary)
     manual_trait_scores: dict[str, bool] | None = None  # Manual/regex traits (boolean)
     metric_trait_scores: dict[str, dict[str, float]] | None = None  # Metric traits with nested metrics dict
 

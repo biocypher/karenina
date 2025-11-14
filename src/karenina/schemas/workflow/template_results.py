@@ -56,6 +56,239 @@ class TemplateResults(BaseModel):
         self._groupby_registry: GroupByRegistry = create_default_groupby_registry()
 
     # ========================================================================
+    # DataFrame Conversion
+    # ========================================================================
+
+    def to_dataframe(self) -> Any:
+        """
+        Convert template verification results to pandas DataFrame.
+
+        Creates one row per parsed field comparison (ground truth vs LLM response).
+        Each field in the parsed responses gets its own row with field-level matching.
+
+        Column ordering:
+            1. Status: completed_without_errors, error, recursion_limit_reached
+            2. Identification: question_id, template_id, question_text, keywords,
+               replicate, answering_mcp_servers
+            3. Model Config: answering_model, parsing_model, system_prompts
+            4. Template Response: raw_llm_response
+            5. Field Comparison: field_name, gt_value, llm_value, field_match, field_type
+            6. Verification Checks: embedding, abstention, regex
+            7. Execution Metadata: execution_time, timestamp, run_name, job_id
+
+        Returns:
+            pandas.DataFrame: Exploded DataFrame with one row per field comparison
+
+        Example:
+            >>> template_results = result_set.get_template_results()
+            >>> df = template_results.to_dataframe()
+            >>> # Filter and aggregate using pandas
+            >>> match_rate = df.groupby('question_id')['field_match'].mean()
+        """
+        import pandas as pd
+
+        rows = []
+
+        for result in self.results:
+            if result.template is None:
+                # No template data - create single row with error info
+                rows.append(self._create_empty_row(result))
+                continue
+
+            # Get parsed responses
+            parsed_gt = result.template.parsed_gt_response or {}
+            parsed_llm = result.template.parsed_llm_response or {}
+
+            # Get all unique field names from both responses
+            all_fields = set(parsed_gt.keys()) | set(parsed_llm.keys())
+
+            if not all_fields:
+                # No fields to compare - create single row
+                rows.append(self._create_field_row(result, None, None, None, None, None))
+            else:
+                # Create one row per field
+                for field_name in sorted(all_fields):
+                    # Check if key exists (not just getting value)
+                    gt_exists = field_name in parsed_gt
+                    llm_exists = field_name in parsed_llm
+
+                    gt_value = parsed_gt.get(field_name) if gt_exists else None
+                    llm_value = parsed_llm.get(field_name) if llm_exists else None
+
+                    rows.append(self._create_field_row(result, field_name, gt_value, llm_value, gt_exists, llm_exists))
+
+        return pd.DataFrame(rows)
+
+    def _create_field_row(
+        self,
+        result: VerificationResult,
+        field_name: str | None,
+        gt_value: Any | None,
+        llm_value: Any | None,
+        gt_exists: bool | None = None,
+        llm_exists: bool | None = None,
+    ) -> dict[str, Any]:
+        """
+        Create a single DataFrame row for a field comparison.
+
+        Args:
+            result: VerificationResult to extract data from
+            field_name: Name of the field being compared
+            gt_value: Ground truth value for this field
+            llm_value: LLM response value for this field
+            gt_exists: Whether the field exists in ground truth response
+            llm_exists: Whether the field exists in LLM response
+
+        Returns:
+            Dictionary representing one DataFrame row
+        """
+        template = result.template
+        metadata = result.metadata
+
+        # Determine field match status
+        field_match = None
+        if field_name is not None:
+            # If one exists but not the other, they don't match
+            field_match = False if gt_exists != llm_exists else self._compare_values(gt_value, llm_value)
+
+        # Determine field type
+        field_type = None
+        if gt_value is not None:
+            field_type = type(gt_value).__name__
+        elif llm_value is not None:
+            field_type = type(llm_value).__name__
+
+        # Unified replicate (prefer answering_replicate, fallback to parsing_replicate)
+        replicate = metadata.answering_replicate
+        if replicate is None:
+            replicate = metadata.parsing_replicate
+
+        row = {
+            # === Status (FIRST COLUMN) ===
+            "completed_without_errors": metadata.completed_without_errors,
+            "error": metadata.error,
+            "recursion_limit_reached": template.recursion_limit_reached if template else False,
+            # === Identification Metadata ===
+            "question_id": metadata.question_id,
+            "template_id": metadata.template_id,
+            "question_text": metadata.question_text,
+            "keywords": metadata.keywords,
+            "replicate": replicate,
+            "answering_mcp_servers": template.answering_mcp_servers if template else None,
+            # === Model Configuration ===
+            "answering_model": metadata.answering_model,
+            "parsing_model": metadata.parsing_model,
+            "answering_system_prompt": metadata.answering_system_prompt,
+            "parsing_system_prompt": metadata.parsing_system_prompt,
+            # === Template Response ===
+            "raw_llm_response": template.raw_llm_response if template else None,
+            # === Field Comparison (EXPLODED DIMENSION) ===
+            "field_name": field_name,
+            "gt_value": gt_value,
+            "llm_value": llm_value,
+            "field_match": field_match,
+            "field_type": field_type,
+            # === Verification Checks ===
+            "embedding_similarity_score": template.embedding_similarity_score if template else None,
+            "embedding_model_used": template.embedding_model_used if template else None,
+            "embedding_override_applied": template.embedding_override_applied if template else False,
+            "abstention_detected": template.abstention_detected if template else None,
+            "abstention_reasoning": template.abstention_reasoning if template else None,
+            "abstention_override_applied": template.abstention_override_applied if template else False,
+            "regex_validations_performed": template.regex_validations_performed if template else False,
+            "regex_overall_success": template.regex_overall_success if template else None,
+            # === Execution Metadata (AT END) ===
+            "execution_time": metadata.execution_time,
+            "timestamp": metadata.timestamp,
+            "run_name": metadata.run_name,
+            "job_id": metadata.job_id,
+        }
+
+        return row
+
+    def _create_empty_row(self, result: VerificationResult) -> dict[str, Any]:
+        """
+        Create an empty DataFrame row for results without template data.
+
+        Args:
+            result: VerificationResult with no template data
+
+        Returns:
+            Dictionary representing one DataFrame row with minimal data
+        """
+        metadata = result.metadata
+
+        # Unified replicate
+        replicate = metadata.answering_replicate
+        if replicate is None:
+            replicate = metadata.parsing_replicate
+
+        return {
+            # === Status ===
+            "completed_without_errors": metadata.completed_without_errors,
+            "error": metadata.error,
+            "recursion_limit_reached": False,
+            # === Identification Metadata ===
+            "question_id": metadata.question_id,
+            "template_id": metadata.template_id,
+            "question_text": metadata.question_text,
+            "keywords": metadata.keywords,
+            "replicate": replicate,
+            "answering_mcp_servers": None,
+            # === Model Configuration ===
+            "answering_model": metadata.answering_model,
+            "parsing_model": metadata.parsing_model,
+            "answering_system_prompt": metadata.answering_system_prompt,
+            "parsing_system_prompt": metadata.parsing_system_prompt,
+            # === Template Response ===
+            "raw_llm_response": None,
+            # === Field Comparison ===
+            "field_name": None,
+            "gt_value": None,
+            "llm_value": None,
+            "field_match": None,
+            "field_type": None,
+            # === Verification Checks ===
+            "embedding_similarity_score": None,
+            "embedding_model_used": None,
+            "embedding_override_applied": False,
+            "abstention_detected": None,
+            "abstention_reasoning": None,
+            "abstention_override_applied": False,
+            "regex_validations_performed": False,
+            "regex_overall_success": None,
+            # === Execution Metadata ===
+            "execution_time": metadata.execution_time,
+            "timestamp": metadata.timestamp,
+            "run_name": metadata.run_name,
+            "job_id": metadata.job_id,
+        }
+
+    def _compare_values(self, value1: Any, value2: Any) -> bool:
+        """
+        Compare two values for equality, handling various data types.
+
+        Args:
+            value1: First value to compare
+            value2: Second value to compare
+
+        Returns:
+            True if values are equal, False otherwise
+        """
+        # Handle None cases
+        if value1 is None and value2 is None:
+            return True
+        if value1 is None or value2 is None:
+            return False
+
+        # Direct equality check (works for primitives, lists, dicts)
+        try:
+            return bool(value1 == value2)
+        except Exception:  # noqa: BLE001
+            # If comparison fails (e.g., unhashable types), return False
+            return False
+
+    # ========================================================================
     # Core Data Access
     # ========================================================================
 
