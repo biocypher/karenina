@@ -572,6 +572,34 @@ See the **[Model Configuration Guide](model-configuration.md)**.
 
 ## Accessing Verification Results
 
+!!! tip "Recommended: Use DataFrames for Result Analysis"
+    For easier and more flexible result analysis, we recommend using the **DataFrame-first approach**:
+
+    - **[Analyzing Results with DataFrames](analyzing-results-dataframes.md)** - Comprehensive guide with 40+ examples
+    - **[DataFrame Quick Reference](dataframe-quick-reference.md)** - Cheat sheet for common operations
+
+    The DataFrame approach provides pandas-based analysis with:
+
+    - Standard pandas operations (groupby, filter, pivot)
+    - Helper methods for common aggregations
+    - Easy export to CSV, Excel, JSON
+    - Integration with visualization libraries
+
+    **Quick example:**
+    ```python
+    # After running verification
+    result_set = benchmark.run_verification(config)
+
+    # Convert to DataFrame for analysis
+    template_results = result_set.get_templates()
+    df = template_results.to_dataframe()
+
+    # Analyze with pandas
+    pass_rates = df.groupby('question_id')['field_match'].mean()
+    ```
+
+    The sections below show how to access raw VerificationResult objects if you need them.
+
 ### Result Structure
 
 Each verification result contains comprehensive data:
