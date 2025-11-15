@@ -94,6 +94,10 @@ filterwarnings = [
     "ignore::PendingDeprecationWarning",
 ]
 addopts = "-v --tb=short"
+markers = [
+    "integration: marks tests as integration tests (slow, requires real resources)",
+    "requires_api: marks tests that require API keys (OpenAI, etc.)",
+]
 
 [tool.coverage.run]
 source = ["src/karenina"]
