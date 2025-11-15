@@ -1,32 +1,36 @@
 # DataFrame Quick Reference
 
-Quick reference cheat sheet for common DataFrame operations in Karenina verification result analysis.
+Quick reference cheat sheet for common DataFrame operations when analyzing Karenina verification results.
+
+**Important**: This guide is for **analyzing verification results** after verification has been run. To run verification, see the [Verification Guide](verification.md) first.
 
 **See the full guide**: [Analyzing Results with DataFrames](analyzing-results-dataframes.md) for detailed explanations and examples.
 
 ---
 
-## Getting DataFrames
+## Getting DataFrames from Verification Results
 
 ```python
-# From verification results
+# PREREQUISITE: Run verification first (see verification.md)
 result_set = benchmark.run_verification(config)
+
+# ============================================================
+# Extract results from verification output
+# ============================================================
 
 # Get result type wrappers
 templates = result_set.get_templates()
 rubrics = result_set.get_rubrics()
 judgments = result_set.get_judgments()
 
-# Convert to DataFrames
+# Convert verification results to DataFrames for analysis
 template_df = templates.to_dataframe()
 rubric_df = rubrics.to_dataframe(trait_type="llm")
 judgment_df = judgments.to_dataframe()
 
-# Usage DataFrames
+# Additional DataFrames from verification results
 usage_detailed = templates.to_usage_dataframe(totals_only=False)
 usage_totals = templates.to_usage_dataframe(totals_only=True)
-
-# Regex DataFrame
 regex_df = templates.to_regex_dataframe()
 ```
 

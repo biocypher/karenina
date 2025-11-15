@@ -16,12 +16,36 @@ This guide covers how to analyze verification results using the DataFrame-first 
 
 ## Overview
 
-The DataFrame-first approach provides a modern, flexible way to analyze verification results using pandas DataFrames. This approach offers several advantages:
+### What This Guide Covers
+
+This guide focuses on **analyzing verification results** after you've run verification. The DataFrame-first approach provides a modern, flexible way to wrangle and analyze verification output using pandas DataFrames.
+
+**Important**: This guide is about **analyzing results**, not running verification. To learn how to run verification, see the [Verification Guide](verification.md).
+
+**Typical Workflow**:
+```python
+# 1. Run verification (see verification.md for details)
+result_set = benchmark.run_verification(config)
+
+# 2. Extract results (this guide starts here!)
+template_results = result_set.get_templates()
+
+# 3. Convert to DataFrame for analysis
+df = template_results.to_dataframe()
+
+# 4. Analyze with pandas
+pass_rates = df.groupby('question_id')['field_match'].mean()
+```
+
+### Why Use DataFrames for Result Analysis?
+
+The DataFrame-first approach offers several advantages over working with raw VerificationResult objects:
 
 - **Familiar API**: Use standard pandas operations for filtering, grouping, and aggregation
 - **Flexibility**: Combine multiple verification aspects in custom ways
-- **Performance**: Leverage pandas' optimized operations for large datasets
+- **Performance**: Leverage pandas' optimized operations for large result sets
 - **Interoperability**: Easy integration with visualization libraries and data science tools
+- **Exploratory Analysis**: Quick iteration on analysis without writing custom code
 
 ### Design Philosophy
 
@@ -30,32 +54,55 @@ The DataFrame-first approach provides a modern, flexible way to analyze verifica
 3. **Consistent schema**: All DataFrames share common Status, Identification, and Metadata columns
 4. **Helper methods**: Convenience methods for common operations, implemented using pandas
 
+### When to Use This Approach
+
+Use DataFrames when you need to:
+- ✅ Analyze verification results across multiple questions
+- ✅ Compare model performance
+- ✅ Calculate pass rates, trait scores, or other metrics
+- ✅ Find patterns or anomalies in verification outcomes
+- ✅ Generate reports or visualizations from results
+- ✅ Export results to CSV, Excel, or other formats for external analysis
+
+**Not covered in this guide**:
+- ❌ Running verification (see [Verification Guide](verification.md))
+- ❌ Defining benchmarks and questions (see [Defining Benchmarks](defining-benchmark.md))
+- ❌ Creating templates and rubrics (see [Templates](templates.md) and [Rubrics](rubrics.md))
+
 ---
 
 ## Quick Start
 
+### Prerequisites
+
+Before using this guide, you should have:
+1. **Run verification** and obtained a `VerificationResultSet` object
+2. Basic familiarity with pandas DataFrames
+
+**If you haven't run verification yet**, see the [Verification Guide](verification.md) first.
+
 ### Basic Workflow
 
 ```python
-from karenina.benchmark import Benchmark
-from karenina.schemas import VerificationConfig
-
-# 1. Load benchmark and run verification
-benchmark = Benchmark.load("checkpoint.jsonld")
-config = VerificationConfig.from_preset("config.json")
+# STEP 0: Run verification (see verification.md for details)
+# This guide assumes you already have results from verification:
 result_set = benchmark.run_verification(config)
 
-# 2. Get specific result types
+# ============================================================
+# This guide starts here - analyzing verification results
+# ============================================================
+
+# STEP 1: Extract result type wrappers from verification output
 template_results = result_set.get_templates()
 rubric_results = result_set.get_rubrics()
 judgment_results = result_set.get_judgments()
 
-# 3. Convert to DataFrames
+# STEP 2: Convert verification results to DataFrames
 template_df = template_results.to_dataframe()
 rubric_df = rubric_results.to_dataframe(trait_type="llm")
 judgment_df = judgment_results.to_dataframe()
 
-# 4. Analyze with pandas
+# STEP 3: Analyze with pandas
 pass_rate = template_df.groupby('question_id')['field_match'].mean()
 print(pass_rate)
 ```
