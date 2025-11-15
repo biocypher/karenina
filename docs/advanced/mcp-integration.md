@@ -250,7 +250,7 @@ config = VerificationConfig(
 results = benchmark.run_verification(config)
 
 # Step 5: Analyze results
-for question_id, result in results.items():
+for result in results.results:
     question = benchmark.questions[question_id]
     print(f"\nQuestion: {question.question}")
     print(f"Verification: {'✓ PASS' if result.verify_result else '✗ FAIL'}")

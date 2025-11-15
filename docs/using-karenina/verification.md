@@ -284,12 +284,27 @@ results = benchmark.run_verification(config)
 
 ### Analyze Replication Results
 
+**Recommended: Use DataFrames** (see [DataFrame Quick Reference](dataframe-quick-reference.md)):
+
+```python
+# Get DataFrame and group by question
+df = results.get_templates().to_dataframe()
+pass_rates = df.groupby('question_id')['field_match'].mean()
+
+for question_id in pass_rates.index:
+    question = benchmark.get_question(question_id)
+    print(f"{question.question[:50]}...")
+    print(f"  Pass Rate: {pass_rates[question_id]:.1%}")
+```
+
+**Alternative: Group raw results manually**:
+
 ```python
 from collections import defaultdict
 
 # Group results by question
 results_by_question = defaultdict(list)
-for result_id, result in results.items():
+for result in results.results:
     results_by_question[result.question_id].append(result)
 
 # Compute pass rate for each question
@@ -424,10 +439,10 @@ config = VerificationConfig(
 results = benchmark.run_verification(config)
 
 # Check abstention status
-for result_id, result in results.items():
+for result in results.results:
     if result.abstention_detected:
         print(f"Question {result.question_id}: Model refused to answer")
-        print(f"  Reasoning: {result.abstention_reasoning}")
+        print(f"  Reasoning: {result.abstention_explanation}")
 ```
 
 ### Enable Deep Judgment
@@ -446,11 +461,12 @@ config = VerificationConfig(
 results = benchmark.run_verification(config)
 
 # Access deep judgment data
-for result_id, result in results.items():
-    if result.parsed_response:
+for result in results.results:
+    if result.deep_judgment:
         print(f"Question: {result.question_id}")
-        print(f"Excerpts: {result.parsed_response.get('excerpts', [])}")
-        print(f"Reasoning: {result.parsed_response.get('reasoning', '')}")
+        print(f"Excerpts: {len(result.deep_judgment.extracted_excerpts)}")
+        for attr in result.deep_judgment.attribute_analysis:
+            print(f"  {attr.attribute_name}: {attr.reasoning}")
 ```
 
 See [Deep Judgment documentation](../advanced/deep-judgment.md) for comprehensive guide.
