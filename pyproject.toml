@@ -97,6 +97,7 @@ addopts = "-v --tb=short"
 markers = [
     "integration: marks tests as integration tests (slow, requires real resources)",
     "requires_api: marks tests that require API keys (OpenAI, etc.)",
+    "deep_judgment: marks tests that use deep judgment verification mode",
 ]
 
 [tool.coverage.run]
