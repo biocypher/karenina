@@ -602,35 +602,46 @@ See the **[Model Configuration Guide](model-configuration.md)**.
 
 ### Result Structure
 
-Each verification result contains comprehensive data:
+The `run_verification()` method returns a `VerificationResultSet` object that provides multiple ways to access results:
 
 ```python
-results = benchmark.run_verification(config)
+result_set = benchmark.run_verification(config)
 
-# Results is a dict: {result_id: VerificationResult}
-for result_id, result in results.items():
+# Method 1: Use DataFrame API (RECOMMENDED - see DataFrame guides above)
+template_results = result_set.get_templates()
+df = template_results.to_dataframe()
+
+# Method 2: Access typed result wrappers
+rubric_results = result_set.get_rubrics()      # For rubric data
+judgment_results = result_set.get_judgments()  # For deep judgment data
+
+# Method 3: Access raw VerificationResult list (backward compatibility)
+for result in result_set.results:
     # Identification
-    print(f"Result ID: {result_id}")
     print(f"Question ID: {result.question_id}")
-    print(f"Answering Model: {result.answering_model_id}")
-    print(f"Parsing Model: {result.parsing_model_id}")
+    print(f"Answering Model: {result.answering_model}")
+    print(f"Parsing Model: {result.parsing_model}")
     print(f"Replicate: {result.replicate}")
 
     # Raw response
-    print(f"Raw Answer: {result.raw_response}")
+    print(f"Raw Answer: {result.raw_llm_response}")
 
     # Template verification
     print(f"Template Passed: {result.verify_result}")
-    print(f"Parsed Response: {result.parsed_response}")
+    print(f"Parsed Response: {result.parsed_llm_response}")
 
     # Rubric evaluation (if enabled)
     if result.rubric_evaluation_performed:
-        print(f"Rubric Scores: {result.verify_rubric}")
+        print(f"Rubric Scores: {result.rubric_scores}")
+
+    # Deep judgment (if enabled)
+    if result.deep_judgment:
+        print(f"Extracted Excerpts: {len(result.deep_judgment.extracted_excerpts)}")
 
     # Abstention (if enabled)
     if result.abstention_detected:
         print(f"Abstention: Model refused to answer")
-        print(f"Reasoning: {result.abstention_reasoning}")
+        print(f"Reasoning: {result.abstention_explanation}")
 
     # Timestamps
     print(f"Timestamp: {result.timestamp}")
@@ -639,44 +650,72 @@ for result_id, result in results.items():
 
 ### Filter Results
 
+**Recommended: Use DataFrames for filtering** (see [DataFrame Quick Reference](dataframe-quick-reference.md#common-filters)):
+
+```python
+# Get DataFrame
+df = result_set.get_templates().to_dataframe()
+
+# Filter with pandas
+passing = df[df['field_match'] == True]
+gpt_results = df[df['answering_model'] == 'gpt-4.1-mini']
+question_results = df[df['question_id'] == specific_question_id]
+```
+
+**Alternative: Filter raw result list**:
+
 ```python
 # Get only passing results
-passing_results = {
-    rid: r for rid, r in results.items()
-    if r.verify_result
-}
+passing_results = [r for r in result_set.results if r.verify_result]
 
 # Get results for specific model
-gpt_results = {
-    rid: r for rid, r in results.items()
-    if r.answering_model_id == "gpt-4.1-mini"
-}
+gpt_results = [r for r in result_set.results if r.answering_model == "gpt-4.1-mini"]
 
 # Get results for specific question
-question_results = {
-    rid: r for rid, r in results.items()
-    if r.question_id == specific_question_id
-}
+question_results = [r for r in result_set.results if r.question_id == specific_question_id]
 ```
 
 ### Compute Aggregate Metrics
 
+**Recommended: Use DataFrame helper methods** (see [Analyzing Results with DataFrames](analyzing-results-dataframes.md)):
+
 ```python
-def compute_metrics(results):
+# Template metrics
+template_results = result_set.get_templates()
+pass_rates = template_results.aggregate_pass_rate(by="question_id")
+print(f"Pass Rates: {pass_rates}")
+
+# Rubric metrics
+rubric_results = result_set.get_rubrics()
+trait_scores = rubric_results.aggregate_llm_traits(by="question_id")
+print(f"Trait Averages: {trait_scores}")
+
+# Or use pandas directly
+df = template_results.to_dataframe()
+successful = df[df['completed_without_errors'] == True]
+overall_accuracy = successful['field_match'].mean()
+print(f"Overall Accuracy: {overall_accuracy:.1%}")
+```
+
+**Alternative: Compute manually from raw results**:
+
+```python
+def compute_metrics(result_set):
     """Compute aggregate metrics from verification results."""
+    results = result_set.results
     total = len(results)
     if total == 0:
         return None
 
     # Template metrics
-    template_passed = sum(1 for r in results.values() if r.verify_result)
+    template_passed = sum(1 for r in results if r.verify_result)
     template_accuracy = template_passed / total
 
     # Rubric metrics (if available)
     rubric_scores = {}
-    for result in results.values():
-        if result.rubric_evaluation_performed and result.verify_rubric:
-            for trait_name, score in result.verify_rubric.items():
+    for result in results:
+        if result.rubric_evaluation_performed and result.rubric_scores:
+            for trait_name, score in result.rubric_scores.items():
                 if trait_name not in rubric_scores:
                     rubric_scores[trait_name] = []
                 rubric_scores[trait_name].append(score)
@@ -687,7 +726,7 @@ def compute_metrics(results):
     }
 
     # Abstention rate (if enabled)
-    abstentions = sum(1 for r in results.values() if r.abstention_detected)
+    abstentions = sum(1 for r in results if r.abstention_detected)
     abstention_rate = abstentions / total
 
     return {
@@ -698,7 +737,7 @@ def compute_metrics(results):
     }
 
 # Compute metrics
-metrics = compute_metrics(results)
+metrics = compute_metrics(result_set)
 print(f"Template Accuracy: {metrics['template_accuracy']:.1%}")
 print(f"Rubric Averages: {metrics['rubric_averages']}")
 print(f"Abstention Rate: {metrics['abstention_rate']:.1%}")
