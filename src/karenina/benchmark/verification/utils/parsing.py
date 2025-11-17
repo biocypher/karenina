@@ -478,17 +478,20 @@ def extract_rubric_traits_from_template(answer_template: str) -> list[Any]:
         answer_template: The answer template code string
 
     Returns:
-        List of RubricTrait objects found in the template
+        List of trait objects found in the template (LLM, regex, callable, or metric)
     """
     try:
         # Prepare minimal execution environment similar to template validation
-        from ....schemas.domain import Rubric, RubricTrait
+        from ....schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
 
         global_ns = {
             "__builtins__": __builtins__,
             "BaseAnswer": BaseAnswer,
             "Rubric": Rubric,
-            "RubricTrait": RubricTrait,
+            "LLMRubricTrait": LLMRubricTrait,
+            "RegexTrait": RegexTrait,
+            "CallableTrait": CallableTrait,
+            "MetricRubricTrait": MetricRubricTrait,
         }
         try:
             from pydantic import Field
@@ -522,26 +525,48 @@ def extract_rubric_traits_from_template(answer_template: str) -> list[Any]:
             Answer._source_code = answer_template
 
         # Heuristics: check for rubric on Answer class or top-level var
-        extracted_traits: list[RubricTrait] = []
+        extracted_traits: list[Any] = []
 
-        def _coerce_traits(obj: Any) -> list[RubricTrait]:
-            traits_list: list[RubricTrait] = []
+        def _coerce_traits(obj: Any) -> list[Any]:
+            traits_list: list[Any] = []
             if not obj:
                 return traits_list
             # If wrapped in Rubric
             if isinstance(obj, Rubric):
-                for t in obj.traits:
-                    if isinstance(t, RubricTrait):
-                        traits_list.append(t)
+                # Collect all trait types
+                for llm_trait in obj.traits:
+                    if isinstance(llm_trait, LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait):
+                        traits_list.append(llm_trait)
+                for regex_trait in obj.regex_traits:
+                    if isinstance(regex_trait, RegexTrait):
+                        traits_list.append(regex_trait)
+                for callable_trait in obj.callable_traits:
+                    if isinstance(callable_trait, CallableTrait):
+                        traits_list.append(callable_trait)
+                for metric_trait in obj.metric_traits:
+                    if isinstance(metric_trait, MetricRubricTrait):
+                        traits_list.append(metric_trait)
                 return traits_list
-            # If already list of RubricTrait
+            # If already list of trait objects
             if isinstance(obj, list):
                 for item in obj:
-                    if isinstance(item, RubricTrait):
+                    if isinstance(item, LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait):
                         traits_list.append(item)
-                    elif isinstance(item, dict) and "name" in item and "kind" in item:
+                    elif isinstance(item, dict) and "name" in item:
+                        # Try to infer trait type and construct it
                         try:
-                            traits_list.append(RubricTrait(**item))
+                            if "kind" in item:
+                                # LLMRubricTrait
+                                traits_list.append(LLMRubricTrait(**item))
+                            elif "pattern" in item:
+                                # RegexTrait
+                                traits_list.append(RegexTrait(**item))
+                            elif "callable_code" in item:
+                                # CallableTrait
+                                traits_list.append(CallableTrait(**item))
+                            elif "metrics" in item:
+                                # MetricRubricTrait
+                                traits_list.append(MetricRubricTrait(**item))
                         except Exception:
                             continue
             return traits_list

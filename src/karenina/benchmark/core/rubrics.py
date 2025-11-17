@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from .base import BenchmarkBase
 
-from ...schemas.domain import ManualRubricTrait, MetricRubricTrait, Rubric, RubricTrait
+from ...schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
 from ...utils.checkpoint import (
     add_global_rubric_to_benchmark,
     extract_global_rubric_from_benchmark,
@@ -20,18 +20,20 @@ class RubricManager:
         """Initialize with reference to benchmark base."""
         self.base = base
 
-    def add_global_rubric_trait(self, trait: RubricTrait | ManualRubricTrait) -> None:
+    def add_global_rubric_trait(self, trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait) -> None:
         """
         Add a global rubric trait to the benchmark.
 
         Args:
-            trait: The rubric trait to add
+            trait: The rubric trait to add (LLM, regex, callable, or metric)
         """
         current_traits = extract_global_rubric_from_benchmark(self.base._checkpoint) or []
         current_traits.append(trait)
         add_global_rubric_to_benchmark(self.base._checkpoint, current_traits)
 
-    def add_question_rubric_trait(self, question_id: str, trait: RubricTrait | ManualRubricTrait) -> None:
+    def add_question_rubric_trait(
+        self, question_id: str, trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait
+    ) -> None:
         """
         Add a question-specific rubric trait.
 
@@ -72,12 +74,21 @@ class RubricManager:
         traits = extract_global_rubric_from_benchmark(self.base._checkpoint)
         if traits:
             # Separate traits by type
-            rubric_traits = [t for t in traits if isinstance(t, RubricTrait)]
-            manual_traits = [t for t in traits if isinstance(t, ManualRubricTrait)]
-            return Rubric(traits=rubric_traits, manual_traits=manual_traits)
+            llm_traits = [t for t in traits if isinstance(t, LLMRubricTrait)]
+            regex_traits = [t for t in traits if isinstance(t, RegexTrait)]
+            callable_traits = [t for t in traits if isinstance(t, CallableTrait)]
+            metric_traits = [t for t in traits if isinstance(t, MetricRubricTrait)]
+            return Rubric(
+                traits=llm_traits,
+                regex_traits=regex_traits,
+                callable_traits=callable_traits,
+                metric_traits=metric_traits,
+            )
         return None
 
-    def get_question_rubric(self, question_id: str) -> list[RubricTrait | ManualRubricTrait] | None:
+    def get_question_rubric(
+        self, question_id: str
+    ) -> list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait] | None:
         """
         Get question-specific rubric traits.
 
@@ -125,9 +136,16 @@ class RubricManager:
         # Return merged rubric if we have any traits
         if merged_traits:
             # Separate traits by type
-            rubric_traits = [t for t in merged_traits if isinstance(t, RubricTrait)]
-            manual_traits = [t for t in merged_traits if isinstance(t, ManualRubricTrait)]
-            return Rubric(traits=rubric_traits, manual_traits=manual_traits)
+            llm_traits = [t for t in merged_traits if isinstance(t, LLMRubricTrait)]
+            regex_traits = [t for t in merged_traits if isinstance(t, RegexTrait)]
+            callable_traits = [t for t in merged_traits if isinstance(t, CallableTrait)]
+            metric_traits = [t for t in merged_traits if isinstance(t, MetricRubricTrait)]
+            return Rubric(
+                traits=llm_traits,
+                regex_traits=regex_traits,
+                callable_traits=callable_traits,
+                metric_traits=metric_traits,
+            )
 
         return None
 
@@ -201,14 +219,28 @@ class RubricManager:
         # Check global rubric
         global_rubric = self.get_global_rubric()
         if global_rubric:
+            # Validate LLM traits
             for trait in global_rubric.traits:
                 if not trait.name or not trait.description:
-                    errors.append("Global rubric trait missing name or description")
+                    errors.append("Global LLM rubric trait missing name or description")
                 if trait.kind == "score" and (trait.min_score is None or trait.max_score is None):
                     errors.append(f"Score trait '{trait.name}' missing min/max scores")
-            for manual_trait in global_rubric.manual_traits:
-                if not manual_trait.name or not manual_trait.description:
-                    errors.append("Global manual rubric trait missing name or description")
+            # Validate regex traits
+            for regex_trait in global_rubric.regex_traits:
+                if not regex_trait.name or not regex_trait.description:
+                    errors.append("Global regex rubric trait missing name or description")
+                if not regex_trait.pattern:
+                    errors.append(f"Regex trait '{regex_trait.name}' missing pattern")
+            # Validate callable traits
+            for callable_trait in global_rubric.callable_traits:
+                if not callable_trait.name or not callable_trait.description:
+                    errors.append("Global callable rubric trait missing name or description")
+            # Validate metric traits
+            for metric_trait in global_rubric.metric_traits:
+                if not metric_trait.name or not metric_trait.description:
+                    errors.append("Global metric rubric trait missing name or description")
+                if not metric_trait.metrics:
+                    errors.append(f"Metric trait '{metric_trait.name}' has no metrics defined")
 
         # Check question-specific rubrics
         for q_id, q_data in self.base._questions_cache.items():
@@ -216,20 +248,35 @@ class RubricManager:
                 for trait in q_data["question_rubric"]:
                     if not trait.name or not trait.description:
                         errors.append(f"Question {q_id} rubric trait missing name or description")
-                    # Only check score fields for RubricTrait (not ManualRubricTrait)
+                    # Check score fields for LLM traits
                     if (
-                        isinstance(trait, RubricTrait)
+                        isinstance(trait, LLMRubricTrait)
                         and trait.kind == "score"
                         and (trait.min_score is None or trait.max_score is None)
                     ):
                         errors.append(f"Question {q_id} score trait '{trait.name}' missing min/max scores")
+                    # Check regex traits
+                    if isinstance(trait, RegexTrait) and not trait.pattern:
+                        errors.append(f"Question {q_id} regex trait '{trait.name}' missing pattern")
+                    # Check metric traits
+                    if isinstance(trait, MetricRubricTrait) and not trait.metrics:
+                        errors.append(f"Question {q_id} metric trait '{trait.name}' has no metrics defined")
 
         return len(errors) == 0, errors
 
     def get_rubric_statistics(self) -> dict[str, Any]:
         """Get statistics about rubrics in the benchmark."""
         global_rubric = self.get_global_rubric()
-        global_traits_count = (len(global_rubric.traits) + len(global_rubric.manual_traits)) if global_rubric else 0
+        global_traits_count = (
+            (
+                len(global_rubric.traits)
+                + len(global_rubric.regex_traits)
+                + len(global_rubric.callable_traits)
+                + len(global_rubric.metric_traits)
+            )
+            if global_rubric
+            else 0
+        )
 
         question_rubrics_count = sum(
             1 for q_data in self.base._questions_cache.values() if q_data.get("question_rubric")
@@ -253,16 +300,18 @@ class RubricManager:
         """Get list of question IDs that have question-specific rubrics."""
         return [q_id for q_id, q_data in self.base._questions_cache.items() if q_data.get("question_rubric")]
 
-    def set_global_rubric(self, traits: list[RubricTrait | ManualRubricTrait | MetricRubricTrait]) -> None:
+    def set_global_rubric(self, traits: list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait]) -> None:
         """
         Set the global rubric with a list of traits.
 
         Args:
-            traits: List of rubric traits (LLM, manual, or metric-based)
+            traits: List of rubric traits (LLM, regex, callable, or metric-based)
         """
         add_global_rubric_to_benchmark(self.base._checkpoint, traits)
 
-    def update_global_rubric_trait(self, trait_name: str, updated_trait: RubricTrait | ManualRubricTrait) -> bool:
+    def update_global_rubric_trait(
+        self, trait_name: str, updated_trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait
+    ) -> bool:
         """
         Update a specific trait in the global rubric.
 
@@ -319,7 +368,9 @@ class RubricManager:
             global_rubric = self.get_global_rubric()
             if global_rubric:
                 trait_names = [trait.name for trait in global_rubric.traits]
-                trait_names.extend([trait.name for trait in global_rubric.manual_traits])
+                trait_names.extend([trait.name for trait in global_rubric.regex_traits])
+                trait_names.extend([trait.name for trait in global_rubric.callable_traits])
+                trait_names.extend([trait.name for trait in global_rubric.metric_traits])
                 return trait_names
             return []
         else:
@@ -327,7 +378,9 @@ class RubricManager:
             merged_rubric = self.get_merged_rubric_for_question(question_id)
             if merged_rubric:
                 trait_names = [trait.name for trait in merged_rubric.traits]
-                trait_names.extend([trait.name for trait in merged_rubric.manual_traits])
+                trait_names.extend([trait.name for trait in merged_rubric.regex_traits])
+                trait_names.extend([trait.name for trait in merged_rubric.callable_traits])
+                trait_names.extend([trait.name for trait in merged_rubric.metric_traits])
                 return trait_names
             return []
 

@@ -75,7 +75,7 @@ class RubricEvaluationStage(BaseVerificationStage):
             return False
 
         # Check if any trait lists are non-empty
-        has_traits = any([rubric.traits, rubric.manual_traits, rubric.metric_traits])
+        has_traits = any([rubric.traits, rubric.regex_traits, rubric.callable_traits, rubric.metric_traits])
         return has_traits
 
     def execute(self, context: VerificationContext) -> None:

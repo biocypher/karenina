@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from ..schemas.domain import Question
 
 from ..domain.answers.generator import generate_answer_template, load_answer_templates_from_json
-from ..schemas.domain import ManualRubricTrait, Rubric, RubricTrait
+from ..schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
 from ..schemas.workflow import (
     FinishedTemplate,
     VerificationConfig,
@@ -711,11 +711,13 @@ class Benchmark:
         return results
 
     # Rubric management methods - delegate to RubricManager
-    def add_global_rubric_trait(self, trait: RubricTrait | ManualRubricTrait) -> None:
+    def add_global_rubric_trait(self, trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait) -> None:
         """Add a global rubric trait to the benchmark."""
         self._rubric_manager.add_global_rubric_trait(trait)
 
-    def add_question_rubric_trait(self, question_id: str, trait: RubricTrait | ManualRubricTrait) -> None:
+    def add_question_rubric_trait(
+        self, question_id: str, trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait
+    ) -> None:
         """Add a question-specific rubric trait."""
         self._rubric_manager.add_question_rubric_trait(question_id, trait)
 
@@ -726,8 +728,12 @@ class Benchmark:
         # Add all traits from the rubric
         for trait in rubric.traits:
             self.add_global_rubric_trait(trait)
-        for manual_trait in rubric.manual_traits:
-            self.add_global_rubric_trait(manual_trait)
+        for regex_trait in rubric.regex_traits:
+            self.add_global_rubric_trait(regex_trait)
+        for callable_trait in rubric.callable_traits:
+            self.add_global_rubric_trait(callable_trait)
+        for metric_trait in rubric.metric_traits:
+            self.add_global_rubric_trait(metric_trait)
 
     def set_question_rubric(self, question_id: str, rubric: Rubric) -> None:
         """Set the complete question-specific rubric (replaces existing)."""
@@ -736,8 +742,12 @@ class Benchmark:
         # Add all traits from the rubric
         for trait in rubric.traits:
             self.add_question_rubric_trait(question_id, trait)
-        for manual_trait in rubric.manual_traits:
-            self.add_question_rubric_trait(question_id, manual_trait)
+        for regex_trait in rubric.regex_traits:
+            self.add_question_rubric_trait(question_id, regex_trait)
+        for callable_trait in rubric.callable_traits:
+            self.add_question_rubric_trait(question_id, callable_trait)
+        for metric_trait in rubric.metric_traits:
+            self.add_question_rubric_trait(question_id, metric_trait)
 
     def get_global_rubric(self) -> Rubric | None:
         """Get the global rubric from the benchmark."""

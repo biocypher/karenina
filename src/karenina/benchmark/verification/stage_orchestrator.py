@@ -114,7 +114,7 @@ class StageOrchestrator:
                 stages.append(AbstentionCheckStage())
 
             # Rubric evaluation (required for rubric_only mode)
-            if rubric and (rubric.traits or rubric.manual_traits or rubric.metric_traits):
+            if rubric and (rubric.traits or rubric.regex_traits or rubric.callable_traits or rubric.metric_traits):
                 stages.append(RubricEvaluationStage())
 
             # Finalize result (always last)
@@ -147,7 +147,7 @@ class StageOrchestrator:
             if (
                 evaluation_mode == "template_and_rubric"
                 and rubric
-                and (rubric.traits or rubric.manual_traits or rubric.metric_traits)
+                and (rubric.traits or rubric.regex_traits or rubric.callable_traits or rubric.metric_traits)
             ):
                 stages.append(RubricEvaluationStage())
 

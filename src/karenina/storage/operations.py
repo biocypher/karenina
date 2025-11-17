@@ -144,22 +144,26 @@ def save_benchmark(
             template_id = generate_template_id(answer_template)
 
             # Serialize question rubric to dict format for database storage
-            # The benchmark cache stores rubrics as list of Pydantic RubricTrait/ManualRubricTrait objects,
-            # but the database expects a JSON dict format with separate 'traits' and 'manual_traits' lists
+            # The benchmark cache stores rubrics as list of trait objects,
+            # but the database expects a JSON dict format with separate lists by type
             question_rubric_dict = None
             if q_data.get("question_rubric"):
                 try:
-                    from ..schemas.domain import ManualRubricTrait, RubricTrait
+                    from ..schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
 
                     rubric_traits = q_data["question_rubric"]
                     if isinstance(rubric_traits, list) and len(rubric_traits) > 0:
                         # Separate traits by type
-                        llm_traits = [t for t in rubric_traits if isinstance(t, RubricTrait)]
-                        manual_traits = [t for t in rubric_traits if isinstance(t, ManualRubricTrait)]
+                        llm_traits = [t for t in rubric_traits if isinstance(t, LLMRubricTrait)]
+                        regex_traits = [t for t in rubric_traits if isinstance(t, RegexTrait)]
+                        callable_traits = [t for t in rubric_traits if isinstance(t, CallableTrait)]
+                        metric_traits = [t for t in rubric_traits if isinstance(t, MetricRubricTrait)]
 
                         question_rubric_dict = {
                             "traits": [trait.model_dump() for trait in llm_traits],
-                            "manual_traits": [trait.model_dump() for trait in manual_traits],
+                            "regex_traits": [trait.model_dump() for trait in regex_traits],
+                            "callable_traits": [trait.model_dump() for trait in callable_traits],
+                            "metric_traits": [trait.model_dump() for trait in metric_traits],
                         }
                 except Exception as e:
                     # Log warning but continue - rubric is optional
@@ -341,16 +345,18 @@ def load_benchmark(
             # Set question-specific rubric if present
             if bq.question_rubric:
                 # Convert JSON rubric back to Rubric object
-                from ..schemas.domain import ManualRubricTrait, Rubric, RubricTrait
+                from ..schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
 
                 traits = []
-                manual_traits = []
+                regex_traits = []
+                callable_traits = []
+                metric_traits = []
 
                 # Deserialize LLM-based traits
                 for trait_data in bq.question_rubric.get("traits", []):
                     # Determine kind from trait data
                     kind = trait_data.get("kind", "score")
-                    trait = RubricTrait(
+                    trait = LLMRubricTrait(
                         name=trait_data["name"],
                         description=trait_data.get("description"),
                         kind=kind,
@@ -359,20 +365,63 @@ def load_benchmark(
                     )
                     traits.append(trait)
 
-                # Deserialize manual (regex) traits
+                # Deserialize regex traits
+                for regex_trait_data in bq.question_rubric.get("regex_traits", []):
+                    regex_trait = RegexTrait(
+                        name=regex_trait_data["name"],
+                        description=regex_trait_data.get("description"),
+                        pattern=regex_trait_data.get("pattern", ".*"),
+                        case_sensitive=regex_trait_data.get("case_sensitive", True),
+                        invert_result=regex_trait_data.get("invert_result", False),
+                    )
+                    regex_traits.append(regex_trait)
+
+                # Deserialize callable traits
+                for callable_trait_data in bq.question_rubric.get("callable_traits", []):
+                    kind = callable_trait_data.get("kind", "boolean")  # Default for backward compatibility
+                    callable_trait = CallableTrait(
+                        name=callable_trait_data["name"],
+                        description=callable_trait_data.get("description"),
+                        kind=kind,
+                        callable_code=callable_trait_data["callable_code"],
+                        min_score=callable_trait_data.get("min_score") if kind == "score" else None,
+                        max_score=callable_trait_data.get("max_score") if kind == "score" else None,
+                        invert_result=callable_trait_data.get("invert_result", False),
+                    )
+                    callable_traits.append(callable_trait)
+
+                # Deserialize metric traits
+                for metric_trait_data in bq.question_rubric.get("metric_traits", []):
+                    metric_trait = MetricRubricTrait(
+                        name=metric_trait_data["name"],
+                        description=metric_trait_data.get("description"),
+                        evaluation_mode=metric_trait_data.get("evaluation_mode", "tp_only"),
+                        metrics=metric_trait_data.get("metrics", []),
+                        tp_instructions=metric_trait_data.get("tp_instructions", []),
+                        tn_instructions=metric_trait_data.get("tn_instructions", []),
+                        repeated_extraction=metric_trait_data.get("repeated_extraction", True),
+                    )
+                    metric_traits.append(metric_trait)
+
+                # For backward compatibility, also check for old 'manual_traits' key
                 for manual_trait_data in bq.question_rubric.get("manual_traits", []):
-                    manual_trait = ManualRubricTrait(
+                    # Convert old manual traits to regex traits
+                    regex_trait = RegexTrait(
                         name=manual_trait_data["name"],
                         description=manual_trait_data.get("description"),
-                        pattern=manual_trait_data.get("pattern"),
-                        callable_name=manual_trait_data.get("callable_name"),
+                        pattern=manual_trait_data.get("pattern", ".*"),
                         case_sensitive=manual_trait_data.get("case_sensitive", True),
                         invert_result=manual_trait_data.get("invert_result", False),
                     )
-                    manual_traits.append(manual_trait)
+                    regex_traits.append(regex_trait)
 
-                if traits or manual_traits:
-                    rubric = Rubric(traits=traits, manual_traits=manual_traits)
+                if traits or regex_traits or callable_traits or metric_traits:
+                    rubric = Rubric(
+                        traits=traits,
+                        regex_traits=regex_traits,
+                        callable_traits=callable_traits,
+                        metric_traits=metric_traits,
+                    )
                     benchmark.set_question_rubric(bq.question_id, rubric)
 
     if load_config:

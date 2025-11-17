@@ -10,8 +10,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from .domain import RubricTrait
-
 
 # Schema.org Person type
 class SchemaOrgPerson(BaseModel):
@@ -173,13 +171,6 @@ class JsonLdCheckpoint(BaseModel):
         json_encoders = {
             datetime: lambda v: v.isoformat() if v else None,
         }
-
-
-# Helper type for rubric conversion
-class Rubric(BaseModel):
-    """Internal rubric representation."""
-
-    traits: list[RubricTrait]
 
 
 # Standard JSON-LD context for schema.org

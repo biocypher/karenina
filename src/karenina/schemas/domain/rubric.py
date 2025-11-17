@@ -3,19 +3,22 @@ Rubric data models for qualitative evaluation traits.
 """
 
 import re
+import warnings
 from collections.abc import Callable
 from typing import Literal
 
+import cloudpickle
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 TraitKind = Literal["boolean", "score"]
 
 
-class RubricTrait(BaseModel):
+class LLMRubricTrait(BaseModel):
     """
-    Single, atomic evaluation trait for qualitative assessment.
+    LLM-evaluated trait for qualitative assessment.
 
     A trait can be either boolean (true/false) or score-based (1-5 scale).
+    Evaluated by prompting an LLM to assess the answer quality.
     """
 
     name: str = Field(..., min_length=1, description="Human readable identifier for the trait")
@@ -38,90 +41,218 @@ class RubricTrait(BaseModel):
             return min_val <= value <= max_val
 
 
-class ManualRubricTrait(BaseModel):
+class RegexTrait(BaseModel):
     """
-    Manual evaluation trait that uses callable functions for validation.
+    Regex-based evaluation trait for deterministic pattern matching.
 
-    This trait type allows for deterministic, non-LLM evaluation using:
-    - Regex patterns for simple text matching
-    - Custom callable functions for complex logic
+    This trait type uses regular expressions to perform simple text matching
+    against answers. It always returns a boolean result.
 
-    The trait always returns a boolean result.
+    Examples:
+        - Email format validation: r"\\S+@\\S+"
+        - Keyword presence: r"\\bmachine learning\\b"
+        - URL detection: r"https?://[^\\s]+"
     """
 
     name: str = Field(..., min_length=1, description="Human readable identifier for the trait")
     description: str | None = Field(None, description="Detailed description of what this trait evaluates")
-    pattern: str | None = Field(
-        None, description="Regex pattern to match against text (mutually exclusive with callable)"
-    )
-    callable_name: str | None = Field(
-        None, description="Name of registered callable function (mutually exclusive with pattern)"
-    )
+    pattern: str = Field(..., description="Regex pattern to match against text")
     case_sensitive: bool = Field(True, description="Whether pattern matching should be case sensitive")
     invert_result: bool = Field(False, description="Whether to invert the boolean result (for negative matching)")
 
     model_config = ConfigDict(extra="forbid")
 
-    @model_validator(mode="after")
-    def validate_mutually_exclusive(self) -> "ManualRubricTrait":
-        """Ensure only one of pattern or callable_name is specified."""
-        pattern = self.pattern
-        callable_name = self.callable_name
-
-        if pattern and callable_name:
-            raise ValueError("Only one of 'pattern' or 'callable_name' can be specified, not both")
-
-        if not pattern and not callable_name:
-            raise ValueError("Either 'pattern' or 'callable_name' must be specified")
-
-        return self
-
     @field_validator("pattern")
     @classmethod
-    def validate_regex_pattern(cls, v: str | None) -> str | None:
+    def validate_regex_pattern(cls, v: str) -> str:
         """Validate that pattern is a valid regex."""
-        if v is not None:
-            try:
-                re.compile(v)
-            except re.error as e:
-                raise ValueError(f"Invalid regex pattern: {e}") from e
+        try:
+            re.compile(v)
+        except re.error as e:
+            raise ValueError(f"Invalid regex pattern: {e}") from e
         return v
 
-    def evaluate(self, text: str, callable_registry: dict[str, Callable[[str], bool]] | None = None) -> bool:
+    def evaluate(self, text: str) -> bool:
         """
         Evaluate the trait against the provided text.
 
         Args:
             text: The text to evaluate
-            callable_registry: Registry of available callable functions
 
         Returns:
             Boolean evaluation result
 
         Raises:
-            ValueError: If callable_name is specified but not found in registry
             RuntimeError: If evaluation fails
         """
         try:
-            if self.pattern:
-                flags = 0 if self.case_sensitive else re.IGNORECASE
-                match = re.search(self.pattern, text, flags)
-                result = match is not None
-            elif self.callable_name:
-                if not callable_registry or self.callable_name not in callable_registry:
-                    raise ValueError(f"Callable '{self.callable_name}' not found in registry")
-
-                callable_func = callable_registry[self.callable_name]
-                result = callable_func(text)
-                if not isinstance(result, bool):
-                    raise ValueError(f"Callable '{self.callable_name}' must return boolean, got {type(result)}")
-            else:
-                raise ValueError("Neither pattern nor callable_name is specified")
-
+            flags = 0 if self.case_sensitive else re.IGNORECASE
+            match = re.search(self.pattern, text, flags)
+            result = match is not None
             return not result if self.invert_result else result
-
         except Exception as e:
-            raise RuntimeError(f"Failed to evaluate manual trait '{self.name}': {e}") from e
+            raise RuntimeError(f"Failed to evaluate regex trait '{self.name}': {e}") from e
+
+
+class CallableTrait(BaseModel):
+    """
+    Callable-based evaluation trait using custom Python functions.
+
+    This trait type serializes and stores custom Python functions using cloudpickle,
+    enabling complex, stateful, or domain-specific validation logic that cannot be
+    expressed as simple regex patterns.
+
+    **SECURITY WARNING**: Deserializing callable code can execute arbitrary Python code.
+    Only load CallableTrait instances from trusted sources. CallableTrait cannot be
+    created via the web API for security reasons.
+
+    The trait can return either boolean (pass/fail) or numeric score results, matching
+    LLMRubricTrait behavior.
+
+    Examples:
+        Boolean:
+        - Word count validation: lambda text: len(text.split()) >= 50
+        - Custom domain logic: checking medical terminology consistency
+
+        Score:
+        - Readability score: lambda text: calculate_flesch_kincaid(text)
+        - Custom metric: lambda text: compute_domain_score(text)
+    """
+
+    name: str = Field(..., min_length=1, description="Human readable identifier for the trait")
+    description: str | None = Field(None, description="Detailed description of what this trait evaluates")
+    kind: TraitKind = Field(..., description="Type of evaluation: 'boolean' for pass/fail, 'score' for numeric")
+    callable_code: bytes = Field(..., description="Serialized callable function (cloudpickle)")
+    min_score: int | None = Field(None, description="Minimum score value (required if kind='score')")
+    max_score: int | None = Field(None, description="Maximum score value (required if kind='score')")
+    invert_result: bool = Field(False, description="Whether to invert the boolean result (only for kind='boolean')")
+
+    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
+
+    @classmethod
+    def from_callable(
+        cls,
+        name: str,
+        func: Callable[[str], bool | int],
+        kind: TraitKind,
+        description: str | None = None,
+        min_score: int | None = None,
+        max_score: int | None = None,
+        invert_result: bool = False,
+    ) -> "CallableTrait":
+        """
+        Create a CallableTrait from a callable function.
+
+        Args:
+            name: Trait name
+            func: Function that takes a string (the verification trace/answer text) and returns bool or int
+            kind: Type of evaluation - 'boolean' or 'score'
+            description: Optional trait description
+            min_score: Minimum score (required if kind='score')
+            max_score: Maximum score (required if kind='score')
+            invert_result: Whether to invert boolean result (only for kind='boolean')
+
+        Returns:
+            CallableTrait instance with serialized function
+
+        Raises:
+            ValueError: If function signature is invalid or score parameters are missing
+        """
+        # Validate function signature
+        import inspect
+
+        sig = inspect.signature(func)
+        params = list(sig.parameters.keys())
+
+        if len(params) != 1:
+            raise ValueError(f"Callable must have exactly one parameter, got {len(params)}")
+
+        # Validate score parameters
+        if kind == "score":
+            if min_score is None or max_score is None:
+                raise ValueError("min_score and max_score are required when kind='score'")
+            if min_score >= max_score:
+                raise ValueError(f"min_score ({min_score}) must be less than max_score ({max_score})")
+        else:  # kind == "boolean"
+            if min_score is not None or max_score is not None:
+                raise ValueError("min_score and max_score should not be set when kind='boolean'")
+
+        # Serialize the function
+        callable_code = cloudpickle.dumps(func)
+
+        return cls(
+            name=name,
+            description=description,
+            kind=kind,
+            callable_code=callable_code,
+            min_score=min_score,
+            max_score=max_score,
+            invert_result=invert_result,
+        )
+
+    def deserialize_callable(self) -> Callable[[str], bool | int]:
+        """
+        Deserialize the callable function from stored bytes.
+
+        **SECURITY WARNING**: This executes code that was serialized and may contain
+        arbitrary Python code. Only deserialize callables from trusted sources.
+
+        Returns:
+            The deserialized callable function
+
+        Raises:
+            RuntimeError: If deserialization fails
+        """
+        try:
+            warnings.warn(
+                f"Deserializing callable for trait '{self.name}'. "
+                "This executes stored code. Only load from trusted sources.",
+                category=UserWarning,
+                stacklevel=2,
+            )
+            callable_func: Callable[[str], bool | int] = cloudpickle.loads(self.callable_code)
+            return callable_func
+        except Exception as e:
+            raise RuntimeError(f"Failed to deserialize callable for trait '{self.name}': {e}") from e
+
+    def evaluate(self, text: str) -> bool | int:
+        """
+        Evaluate the trait against the provided text.
+
+        Args:
+            text: The text to evaluate (verification trace or answer text)
+
+        Returns:
+            Boolean result for kind='boolean', numeric score for kind='score'
+
+        Raises:
+            RuntimeError: If evaluation fails
+            ValueError: If return type doesn't match kind or score is out of range
+        """
+        try:
+            func = self.deserialize_callable()
+            result = func(text)
+
+            if self.kind == "boolean":
+                if not isinstance(result, bool):
+                    raise ValueError(f"Callable with kind='boolean' must return bool, got {type(result)}")
+                return not result if self.invert_result else result
+            else:  # kind == "score"
+                if not isinstance(result, int | float):
+                    raise ValueError(f"Callable with kind='score' must return int or float, got {type(result)}")
+
+                # Convert to int if float
+                score = int(result) if isinstance(result, float) else result
+
+                # Validate score range
+                if self.min_score is not None and score < self.min_score:
+                    raise ValueError(f"Score {score} is below minimum {self.min_score} for trait '{self.name}'")
+                if self.max_score is not None and score > self.max_score:
+                    raise ValueError(f"Score {score} is above maximum {self.max_score} for trait '{self.name}'")
+
+                return score
+        except Exception as e:
+            raise RuntimeError(f"Failed to evaluate callable trait '{self.name}': {e}") from e
 
 
 # Valid metric names for each evaluation mode
@@ -275,11 +406,14 @@ class Rubric(BaseModel):
     Collection of evaluation traits applied to all question-answer pairs.
 
     A rubric defines the qualitative criteria used to evaluate LLM responses
-    beyond basic correctness checking. Supports LLM-based, manual, and metric traits.
+    beyond basic correctness checking. Supports LLM-based, regex, callable, and metric traits.
     """
 
-    traits: list[RubricTrait] = Field(default_factory=list, description="List of LLM-based evaluation traits")
-    manual_traits: list[ManualRubricTrait] = Field(default_factory=list, description="List of manual evaluation traits")
+    traits: list[LLMRubricTrait] = Field(default_factory=list, description="List of LLM-based evaluation traits")
+    regex_traits: list[RegexTrait] = Field(default_factory=list, description="List of regex-based evaluation traits")
+    callable_traits: list[CallableTrait] = Field(
+        default_factory=list, description="List of callable function-based evaluation traits"
+    )
     metric_traits: list[MetricRubricTrait] = Field(
         default_factory=list, description="List of metric-based evaluation traits (confusion-matrix analysis)"
     )
@@ -287,19 +421,24 @@ class Rubric(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     def get_trait_names(self) -> list[str]:
-        """Get list of all trait names in this rubric (LLM, manual, and metric)."""
+        """Get list of all trait names in this rubric (LLM, regex, callable, and metric)."""
         llm_names = [trait.name for trait in self.traits]
-        manual_names = [trait.name for trait in self.manual_traits]
+        regex_names = [trait.name for trait in self.regex_traits]
+        callable_names = [trait.name for trait in self.callable_traits]
         metric_names = [trait.name for trait in self.metric_traits]
-        return llm_names + manual_names + metric_names
+        return llm_names + regex_names + callable_names + metric_names
 
     def get_llm_trait_names(self) -> list[str]:
         """Get list of LLM trait names only."""
         return [trait.name for trait in self.traits]
 
-    def get_manual_trait_names(self) -> list[str]:
-        """Get list of manual trait names only."""
-        return [trait.name for trait in self.manual_traits]
+    def get_regex_trait_names(self) -> list[str]:
+        """Get list of regex trait names only."""
+        return [trait.name for trait in self.regex_traits]
+
+    def get_callable_trait_names(self) -> list[str]:
+        """Get list of callable trait names only."""
+        return [trait.name for trait in self.callable_traits]
 
     def get_metric_trait_names(self) -> list[str]:
         """Get list of metric trait names only."""
@@ -309,14 +448,15 @@ class Rubric(BaseModel):
         """
         Validate that an evaluation result matches this rubric structure.
 
-        Note: This validates LLM and manual trait scores only. Metric traits
+        Note: This validates LLM, regex, and callable trait scores only. Metric traits
         are stored separately in VerificationResult fields (metric_trait_confusion_lists
         and metric_trait_metrics) and don't participate in this validation.
         """
         # Get trait names excluding metric traits (they're validated separately)
         llm_names = set(self.get_llm_trait_names())
-        manual_names = set(self.get_manual_trait_names())
-        expected_names = llm_names | manual_names
+        regex_names = set(self.get_regex_trait_names())
+        callable_names = set(self.get_callable_trait_names())
+        expected_names = llm_names | regex_names | callable_names
 
         eval_names = set(evaluation.keys())
 
@@ -326,14 +466,15 @@ class Rubric(BaseModel):
 
         # Check that each score is valid for its trait
         llm_trait_map = {trait.name: trait for trait in self.traits}
-        manual_trait_map = {trait.name: trait for trait in self.manual_traits}
+        regex_trait_map = {trait.name: trait for trait in self.regex_traits}
+        callable_trait_map = {trait.name: trait for trait in self.callable_traits}
 
         for name, value in evaluation.items():
             if name in llm_trait_map:
                 if not llm_trait_map[name].validate_score(value):
                     return False
-            elif name in manual_trait_map:
-                # Manual traits always return boolean
+            elif name in regex_trait_map or name in callable_trait_map:
+                # Regex and callable traits always return boolean
                 if not isinstance(value, bool):
                     return False
             else:
@@ -386,7 +527,13 @@ def merge_rubrics(global_rubric: "Rubric | None", question_rubric: "Rubric | Non
 
     # Merge all trait types separately
     merged_traits = list(global_rubric.traits) + list(question_rubric.traits)
-    merged_manual_traits = list(global_rubric.manual_traits) + list(question_rubric.manual_traits)
+    merged_regex_traits = list(global_rubric.regex_traits) + list(question_rubric.regex_traits)
+    merged_callable_traits = list(global_rubric.callable_traits) + list(question_rubric.callable_traits)
     merged_metric_traits = list(global_rubric.metric_traits) + list(question_rubric.metric_traits)
 
-    return Rubric(traits=merged_traits, manual_traits=merged_manual_traits, metric_traits=merged_metric_traits)
+    return Rubric(
+        traits=merged_traits,
+        regex_traits=merged_regex_traits,
+        callable_traits=merged_callable_traits,
+        metric_traits=merged_metric_traits,
+    )
