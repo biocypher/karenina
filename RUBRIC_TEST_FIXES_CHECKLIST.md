@@ -3,8 +3,9 @@
 **Status**: Phase 9 complete, major rubric test fixes applied
 **Progress**:
 - Started: 1246/1430 passing (87.1%), 132 failures, ~42 rubric-related
-- Current: 1284/1430 passing (89.8%), 94 failures, 35 rubric-related
-- **Fixed: 38 failures total, 22 rubric-specific tests**
+- After Phase 9a: 1284/1430 passing (89.8%), 94 failures, 35 rubric-related
+- **Current: 1312/1430 passing (91.7%), 66 failures, ~20 rubric-related**
+- **Fixed: 66 failures total (132→66), 38 rubric-specific tests**
 
 **Goal**: Fix all rubric-related test failures
 
@@ -62,17 +63,17 @@ Tests using `manual_traits` parameter in `Rubric()`.
 
 **Fix Applied**: Replaced `manual_traits=` with `regex_traits=`
 
-### 5. Export/DataFrame Tests (4 tests) - REMAINING
+### 5. Export/DataFrame Tests (6 tests) ✅ FIXED
 Tests for exporting rubric data to CSV/JSON/DataFrame.
 
-- [ ] `test_exporter.py::TestExportVerificationResultsCSV::test_consolidate_question_specific_rubrics_with_global_rubric`
-- [ ] `test_exporter.py::TestExportVerificationResultsCSV::test_all_global_rubrics_when_no_question_specific_exist`
-- [ ] `test_exporter.py::TestExportVerificationResultsCSV::test_no_global_rubric_all_rubrics_become_question_specific`
-- [ ] `test_exporter.py::TestExportVerificationResultsJSON::test_json_export_preserves_all_rubric_data`
-- [ ] `test_rubric_results_dataframe.py::test_to_dataframe_manual_traits`
-- [ ] `test_rubric_results_dataframe.py::test_to_dataframe_all_trait_types`
+- [x] `test_exporter.py::TestExportVerificationResultsCSV::test_consolidate_question_specific_rubrics_with_global_rubric`
+- [x] `test_exporter.py::TestExportVerificationResultsCSV::test_all_global_rubrics_when_no_question_specific_exist`
+- [x] `test_exporter.py::TestExportVerificationResultsCSV::test_no_global_rubric_all_rubrics_become_question_specific`
+- [x] `test_exporter.py::TestExportVerificationResultsJSON::test_json_export_preserves_all_rubric_data`
+- [x] `test_rubric_results_dataframe.py::test_to_dataframe_manual_traits`
+- [x] `test_rubric_results_dataframe.py::test_to_dataframe_all_trait_types`
 
-**Root Cause**: Export code may reference old trait structure or manual_traits field names
+**Fix Applied**: Replaced `manual_trait_scores` with `regex_trait_scores` in all test fixtures
 
 ### 6. Evaluation Mode Tests (3 tests) - REMAINING
 Tests for different evaluation modes (template_and_rubric, rubric_only).
@@ -83,20 +84,24 @@ Tests for different evaluation modes (template_and_rubric, rubric_only).
 
 **Root Cause**: Tests may need verification result field updates
 
-### 7. TaskEval Tests (7 tests) - REMAINING
+### 7. TaskEval Tests (9 tests) ✅ FIXED
 TaskEval rubric-related tests.
 
-- [ ] `test_task_eval.py::TestTaskEvalRubrics::test_merge_rubrics_single`
-- [ ] `test_task_eval.py::TestTaskEvalRubrics::test_merge_rubrics_multiple`
-- [ ] `test_task_eval.py::TestTaskEvalRubricEvaluation::test_rubric_evaluation_with_answer_template`
-- [ ] `test_task_eval.py::TestTaskEvalRubricEvaluation::test_rubric_trait_extraction_from_template`
-- [ ] `test_task_eval.py::TestTaskEvalRubricEvaluation::test_multiple_questions_with_same_rubric`
-- [ ] `test_task_eval_aggregation.py::test_aggregate_rubric_results_all_trait_types`
-- [ ] `test_task_eval_aggregation.py::test_aggregate_rubric_results_single_replicate`
-- [ ] `test_task_eval_metric_traits.py::TestTaskEvalMetricTraits::test_metric_trait_with_other_rubric_types`
-- [ ] `test_taskeval_formatting.py::TestTaskEvalFormatting::test_step_eval_format_rubric_scores`
+- [x] `test_task_eval.py::TestTaskEvalRubrics::test_merge_rubrics_single`
+- [x] `test_task_eval.py::TestTaskEvalRubrics::test_merge_rubrics_multiple`
+- [x] `test_task_eval.py::TestTaskEvalRubricEvaluation::test_rubric_evaluation_with_answer_template`
+- [x] `test_task_eval.py::TestTaskEvalRubricEvaluation::test_rubric_trait_extraction_from_template`
+- [x] `test_task_eval.py::TestTaskEvalRubricEvaluation::test_multiple_questions_with_same_rubric`
+- [x] `test_task_eval_aggregation.py::test_aggregate_rubric_results_all_trait_types`
+- [x] `test_task_eval_aggregation.py::test_aggregate_rubric_results_single_replicate`
+- [x] `test_task_eval_metric_traits.py::TestTaskEvalMetricTraits::test_metric_trait_with_other_rubric_types`
+- [x] `test_taskeval_formatting.py::TestTaskEvalFormatting::test_step_eval_format_rubric_scores`
 
-**Root Cause**: Various TaskEval rubric handling issues
+**Fix Applied**:
+- Replaced `.traits` with `.llm_traits` in merge tests
+- Updated evaluation_rubric dicts (traits→llm_traits, manual_traits→regex_traits, added callable_traits)
+- Updated test_taskeval_formatting to use VerificationResult structure
+- Fixed manual_traits parameter to regex_traits in metric traits test
 
 ### 8. Verification Tests (5 tests) - REMAINING
 Verification stage and result tests.
