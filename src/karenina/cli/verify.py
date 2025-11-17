@@ -551,14 +551,17 @@ def verify(
         if output:
             console.print(f"\n[cyan]Exporting results to {output}...[/cyan]")
 
+            # Convert to legacy dict for export functions
+            results_dict = results.to_legacy_dict()
+
             # Create job for export (comprehensive backend format)
-            job = create_export_job(results, config, "cli-verification", start_time, end_time)
+            job = create_export_job(results_dict, config, "cli-verification", start_time, end_time)
 
             # Export using backend exporter (includes all fields)
             if output_format == "json":
-                export_data = export_verification_results_json(job, results)
+                export_data = export_verification_results_json(job, results_dict)
             else:  # csv
-                export_data = export_verification_results_csv(job, results, benchmark.get_global_rubric())
+                export_data = export_verification_results_csv(job, results_dict, benchmark.get_global_rubric())
 
             # Write to file
             output.write_text(export_data)
@@ -566,9 +569,9 @@ def verify(
 
         # Display summary
         total = len(results)
-        passed = sum(1 for r in results.values() if r.verify_result)
+        passed = sum(1 for r in results if r.template and r.template.verify_result)
         failed = total - passed
-        errors = sum(1 for r in results.values() if not r.completed_without_errors)
+        errors = sum(1 for r in results if not r.metadata.completed_without_errors)
 
         console.print("\n[bold]Verification Summary:[/bold]")
         console.print(f"  Total: {total}")

@@ -140,7 +140,7 @@ When abstention detection is enabled, verification results include additional me
 
 ```python
 # Access abstention results
-for question_id, result in results.items():
+for result in results.results:
     if result.abstention_check_performed:
         print(f"Question: {result.question_text}")
         print(f"Abstention Detected: {result.abstention_detected}")
@@ -239,8 +239,8 @@ results = benchmark.run_verification(config)
 print("\n=== Abstention Detection Results ===\n")
 
 total_abstentions = 0
-for question_id, result in results.items():
-    question = benchmark.get_question(question_id)
+for result in results.results:
+    question = benchmark.get_question(result.question_id)
 
     print(f"Question: {question.question[:60]}...")
     print(f"Verification: {'✓ PASS' if result.verify_result else '✗ FAIL'}")
@@ -338,7 +338,7 @@ config = VerificationConfig(
 results = benchmark.run_verification(config)
 
 # Expected: High abstention rate indicates good safety alignment
-abstention_count = sum(1 for r in results.values() if r.abstention_detected)
+abstention_count = sum(1 for r in results.results if r.abstention_detected)
 print(f"Safety refusal rate: {abstention_count / len(results) * 100:.1f}%")
 ```
 
@@ -370,8 +370,8 @@ config = VerificationConfig(
 results = benchmark.run_verification(config)
 
 # Analyze: factual questions answered, personal advice refused
-for question_id, result in results.items():
-    question = benchmark.get_question(question_id)
+for result in results.results:
+    question = benchmark.get_question(result.question_id)
     if "should I take" in question.question:
         assert result.abstention_detected, "Should refuse personal medical advice"
     else:
@@ -409,10 +409,10 @@ results = benchmark.run_verification(config)
 
 # Map capability boundaries
 capability_limitations = {}
-for question_id, result in results.items():
+for result in results.results:
     if result.abstention_detected:
-        question = benchmark.get_question(question_id)
-        capability_limitations[question_id] = {
+        question = benchmark.get_question(result.question_id)
+        capability_limitations[result.question_id] = {
             "question": question.question,
             "limitation": result.abstention_reasoning
         }
@@ -436,7 +436,7 @@ Use abstention metadata to understand model behavior:
 results = benchmark.run_verification(config)
 
 total = len(results)
-abstentions = sum(1 for r in results.values() if r.abstention_detected)
+abstentions = sum(1 for r in results.results if r.abstention_detected)
 abstention_rate = abstentions / total * 100
 
 print(f"Abstention Rate: {abstention_rate:.1f}%")
@@ -451,8 +451,8 @@ from collections import defaultdict
 # Abstention rates by topic
 abstentions_by_topic = defaultdict(lambda: {"total": 0, "abstained": 0})
 
-for question_id, result in results.items():
-    question = benchmark.get_question(question_id)
+for result in results.results:
+    question = benchmark.get_question(result.question_id)
 
     for keyword in question.keywords or ["untagged"]:
         abstentions_by_topic[keyword]["total"] += 1
@@ -472,7 +472,7 @@ from collections import Counter
 
 # Common abstention reasons
 reasons = []
-for result in results.values():
+for result in results.results:
     if result.abstention_detected and result.abstention_reasoning:
         # Extract key phrases from reasoning
         reasoning_lower = result.abstention_reasoning.lower()
@@ -607,7 +607,7 @@ Define what abstention means for your benchmark:
 Don't just count abstentions - understand WHY they occur:
 
 ```python
-for result in results.values():
+for result in results.results:
     if result.abstention_detected:
         print(f"Question: {result.question_text}")
         print(f"Reasoning: {result.abstention_reasoning}")

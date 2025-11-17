@@ -215,7 +215,7 @@ class ResultsManager:
         successful_count = sum(1 for r in results.values() if r.completed_without_errors)
         failed_count = len(results) - successful_count
         unique_questions = len({r.question_id for r in results.values()})
-        total_execution_time = sum(r.execution_time for r in results.values() if r.execution_time)
+        total_execution_time = sum(r.metadata.execution_time for r in results.values() if r.metadata.execution_time)
         average_execution_time = total_execution_time / len(results) if results else 0.0
 
         # Count unique model combinations
@@ -517,20 +517,20 @@ class ResultsManager:
                 self._escape_csv_field(rubric_summary),
                 self._escape_csv_field(result.answering_model),
                 self._escape_csv_field(result.parsing_model),
-                self._escape_csv_field(result.answering_replicate or ""),
-                self._escape_csv_field(result.parsing_replicate or ""),
-                self._escape_csv_field(result.answering_system_prompt or ""),
-                self._escape_csv_field(result.parsing_system_prompt or ""),
+                self._escape_csv_field(result.metadata.answering_replicate or ""),
+                self._escape_csv_field(result.metadata.parsing_replicate or ""),
+                self._escape_csv_field(result.metadata.answering_system_prompt or ""),
+                self._escape_csv_field(result.metadata.parsing_system_prompt or ""),
                 self._escape_csv_field(
                     "abstained"
                     if result.abstention_detected and result.abstention_override_applied
                     else result.completed_without_errors
                 ),
                 self._escape_csv_field(result.error or ""),
-                self._escape_csv_field(result.execution_time),
+                self._escape_csv_field(result.metadata.execution_time),
                 self._escape_csv_field(result.timestamp),
                 self._escape_csv_field(result.run_name or ""),
-                self._escape_csv_field(result.job_id or ""),
+                self._escape_csv_field(result.metadata.job_id or ""),
                 # Embedding check fields
                 self._escape_csv_field(result.embedding_check_performed),
                 self._escape_csv_field(result.embedding_similarity_score or ""),

@@ -316,7 +316,7 @@ class Answer(BaseModel):
         assert "Question: What is 2 + 2?" in human_message.content
 
         # Verify the result is successful
-        assert result.success is True
+        assert result.completed_without_errors is True
 
     @patch("karenina.benchmark.verification.runner.init_chat_model_unified")
     def test_few_shot_disabled_uses_original_question(self, mock_init_chat_model) -> None:
@@ -409,4 +409,4 @@ class Answer(BaseModel):
         assert "Answer: 2" not in human_message.content
 
         # Verify the result is successful
-        assert result.success is True
+        assert result.completed_without_errors is True

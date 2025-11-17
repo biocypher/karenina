@@ -244,7 +244,26 @@ class StepEval(BaseModel):
 
         # Single replicate: return as-is without modification
         if len(successful_results) == 1 and failed_count == 0:
-            return successful_results[0].rubric_results
+            result = successful_results[0]
+            rubric_data: dict[str, Any] = {}
+            if result.rubric:
+                if result.rubric.llm_trait_scores:
+                    rubric_data["llm"] = result.rubric.llm_trait_scores
+                if result.rubric.manual_trait_scores:
+                    rubric_data["manual"] = result.rubric.manual_trait_scores
+                if result.rubric.metric_trait_scores:
+                    metric_results: dict[str, dict[str, Any]] = {}
+                    for trait_name, metrics in result.rubric.metric_trait_scores.items():
+                        metric_results[trait_name] = {
+                            "metrics": metrics,
+                            "confusion": (
+                                result.rubric.metric_trait_confusion_lists.get(trait_name, {})
+                                if result.rubric.metric_trait_confusion_lists
+                                else {}
+                            ),
+                        }
+                    rubric_data["metric"] = metric_results
+            return rubric_data
 
         # Multiple replicates: aggregate by trait type
         aggregated: dict[str, Any] = {}
@@ -280,9 +299,8 @@ class StepEval(BaseModel):
         trait_scores: dict[str, list[int]] = {}
 
         for result in results:
-            rubric_data = result.rubric_results
-            if "llm" in rubric_data:
-                for trait_name, score in rubric_data["llm"].items():
+            if result.rubric and result.rubric.llm_trait_scores:
+                for trait_name, score in result.rubric.llm_trait_scores.items():
                     if trait_name not in trait_scores:
                         trait_scores[trait_name] = []
                     trait_scores[trait_name].append(score)
@@ -303,9 +321,8 @@ class StepEval(BaseModel):
         trait_values: dict[str, list[bool]] = {}
 
         for result in results:
-            rubric_data = result.rubric_results
-            if "manual" in rubric_data:
-                for trait_name, value in rubric_data["manual"].items():
+            if result.rubric and result.rubric.manual_trait_scores:
+                for trait_name, value in result.rubric.manual_trait_scores.items():
                     if trait_name not in trait_values:
                         trait_values[trait_name] = []
                     trait_values[trait_name].append(value)
@@ -328,14 +345,11 @@ class StepEval(BaseModel):
         trait_metrics: dict[str, list[dict[str, float]]] = {}
 
         for result in results:
-            rubric_data = result.rubric_results
-            if "metric" in rubric_data:
-                for trait_name, trait_data in rubric_data["metric"].items():
-                    # Collect metrics
-                    if "metrics" in trait_data:
-                        if trait_name not in trait_metrics:
-                            trait_metrics[trait_name] = []
-                        trait_metrics[trait_name].append(trait_data["metrics"])
+            if result.rubric and result.rubric.metric_trait_scores:
+                for trait_name, metrics in result.rubric.metric_trait_scores.items():
+                    if trait_name not in trait_metrics:
+                        trait_metrics[trait_name] = []
+                    trait_metrics[trait_name].append(metrics)
 
         # Average metrics for each trait
         aggregated = {}

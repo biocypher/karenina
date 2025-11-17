@@ -513,7 +513,7 @@ config = VerificationConfig.from_preset(
 results = benchmark.run_verification(config)
 
 # Analyze by model
-for question_id, result in results.items():
+for result in results.results:
     print(f"\nQuestion: {result.question_text}")
     print(f"  GPT-4 answer: {result.answers.get('gpt-4.1-mini', 'N/A')}")
     print(f"  Claude answer: {result.answers.get('claude-sonnet-4', 'N/A')}")

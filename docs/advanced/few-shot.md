@@ -164,7 +164,7 @@ benchmark = Benchmark.load("genomics_benchmark.jsonld")
 
 # Get question
 question_id = list(benchmark.questions.keys())[0]
-question = benchmark.get_question(question_id)
+question = benchmark.get_question(result.question_id)
 
 # Add few-shot examples
 question.few_shot_examples = [
@@ -289,12 +289,12 @@ print(f"✓ Verification complete: {len(results)} questions")
 # STEP 6: Analyze results
 # ============================================================
 
-passed = sum(1 for r in results.values() if r.verify_result)
+passed = sum(1 for r in results.results if r.verify_result)
 print(f"Pass rate: {passed}/{len(results)} ({passed/len(results)*100:.1f}%)")
 
 # Show individual results
-for question_id, result in results.items():
-    question = benchmark.get_question(question_id)
+for result in results.results:
+    question = benchmark.get_question(result.question_id)
     print(f"\nQuestion: {question.question}")
     print(f"  Expected: {question.raw_answer}")
     print(f"  Model answer: {result.raw_llm_response[:100]}...")

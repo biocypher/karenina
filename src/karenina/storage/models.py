@@ -226,7 +226,10 @@ class VerificationResultModel(Base):
     rubric_evaluation_performed: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, comment="Whether rubric evaluation was executed"
     )
-    verify_rubric: Mapped[dict[str, int | bool] | None] = mapped_column(JSON, nullable=True)
+    # Split rubric trait scores by type (replaces verify_rubric)
+    llm_trait_scores: Mapped[dict[str, int] | None] = mapped_column(JSON, nullable=True)
+    manual_trait_scores: Mapped[dict[str, bool] | None] = mapped_column(JSON, nullable=True)
+    metric_trait_scores: Mapped[dict[str, dict[str, float]] | None] = mapped_column(JSON, nullable=True)
     evaluation_rubric: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
     # Question metadata

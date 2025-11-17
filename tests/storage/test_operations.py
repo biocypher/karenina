@@ -425,7 +425,12 @@ class TestVerificationResultORMConversion:
         from sqlalchemy import create_engine
         from sqlalchemy.orm import Session
 
-        from karenina.schemas import VerificationResult
+        from karenina.schemas.workflow.verification import (
+            VerificationResult,
+            VerificationResultMetadata,
+            VerificationResultRubric,
+            VerificationResultTemplate,
+        )
         from karenina.storage.models import Base, BenchmarkModel, VerificationResultModel, VerificationRunModel
         from karenina.storage.operations import _create_result_model, _model_to_verification_result
 
@@ -435,20 +440,26 @@ class TestVerificationResultORMConversion:
 
         # Create a test VerificationResult with evaluation mode fields
         result = VerificationResult(
-            question_id="test_q123",
-            template_id="test_t456",
-            completed_without_errors=True,
-            error=None,
-            question_text="Test question?",
-            raw_llm_response="Test response",
-            template_verification_performed=True,  # NEW FIELD
-            verify_result=True,
-            rubric_evaluation_performed=True,  # NEW FIELD
-            verify_rubric={"Clarity": 5},
-            answering_model="test/model",
-            parsing_model="test/model",
-            execution_time=1.5,
-            timestamp="2025-10-29 12:00:00",
+            metadata=VerificationResultMetadata(
+                question_id="test_q123",
+                template_id="test_t456",
+                completed_without_errors=True,
+                error=None,
+                question_text="Test question?",
+                answering_model="test/model",
+                parsing_model="test/model",
+                execution_time=1.5,
+                timestamp="2025-10-29 12:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="Test response",
+                template_verification_performed=True,  # NEW FIELD
+                verify_result=True,
+            ),
+            rubric=VerificationResultRubric(
+                rubric_evaluation_performed=True,  # NEW FIELD
+                llm_trait_scores={"Clarity": 5},  # verify_rubric split into llm_trait_scores
+            ),
         )
 
         with Session(engine) as session:
@@ -484,17 +495,22 @@ class TestVerificationResultORMConversion:
             loaded_result = _model_to_verification_result(loaded_model)
 
             # Verify round-trip preserves evaluation mode fields
-            assert loaded_result.template_verification_performed is True
-            assert loaded_result.verify_result is True
-            assert loaded_result.rubric_evaluation_performed is True
-            assert loaded_result.verify_rubric == {"Clarity": 5}
+            assert loaded_result.template.template_verification_performed is True
+            assert loaded_result.template.verify_result is True
+            assert loaded_result.rubric.rubric_evaluation_performed is True
+            assert loaded_result.rubric.llm_trait_scores == {"Clarity": 5}
 
     def test_evaluation_mode_fields_rubric_only(self, temp_db):
         """Test round-trip for rubric_only mode (template not performed)."""
         from sqlalchemy import create_engine
         from sqlalchemy.orm import Session
 
-        from karenina.schemas import VerificationResult
+        from karenina.schemas.workflow.verification import (
+            VerificationResult,
+            VerificationResultMetadata,
+            VerificationResultRubric,
+            VerificationResultTemplate,
+        )
         from karenina.storage.models import Base, BenchmarkModel, VerificationResultModel, VerificationRunModel
         from karenina.storage.operations import _create_result_model, _model_to_verification_result
 
@@ -503,20 +519,26 @@ class TestVerificationResultORMConversion:
 
         # Rubric-only mode: template not performed, verify_result is None
         result = VerificationResult(
-            question_id="test_q_rubric_only",
-            template_id="no_template",
-            completed_without_errors=True,
-            error=None,
-            question_text="Test question?",
-            raw_llm_response="Test response",
-            template_verification_performed=False,  # Template skipped
-            verify_result=None,  # Should be None when template skipped
-            rubric_evaluation_performed=True,  # Rubric was done
-            verify_rubric={"Depth": 4, "Clarity": 5},
-            answering_model="test/model",
-            parsing_model="test/model",
-            execution_time=1.0,
-            timestamp="2025-10-29 12:00:00",
+            metadata=VerificationResultMetadata(
+                question_id="test_q_rubric_only",
+                template_id="no_template",
+                completed_without_errors=True,
+                error=None,
+                question_text="Test question?",
+                answering_model="test/model",
+                parsing_model="test/model",
+                execution_time=1.0,
+                timestamp="2025-10-29 12:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="Test response",
+                template_verification_performed=False,  # Template skipped
+                verify_result=None,  # Should be None when template skipped
+            ),
+            rubric=VerificationResultRubric(
+                rubric_evaluation_performed=True,  # Rubric was done
+                llm_trait_scores={"Depth": 4, "Clarity": 5},
+            ),
         )
 
         with Session(engine) as session:
@@ -544,10 +566,10 @@ class TestVerificationResultORMConversion:
             loaded_result = _model_to_verification_result(loaded_model)
 
             # Verify rubric-only mode fields
-            assert loaded_result.template_verification_performed is False
-            assert loaded_result.verify_result is None
-            assert loaded_result.rubric_evaluation_performed is True
-            assert loaded_result.verify_rubric == {"Depth": 4, "Clarity": 5}
+            assert loaded_result.template.template_verification_performed is False
+            assert loaded_result.template.verify_result is None
+            assert loaded_result.rubric.rubric_evaluation_performed is True
+            assert loaded_result.rubric.llm_trait_scores == {"Depth": 4, "Clarity": 5}
 
 
 class TestUsageTrackingPersistence:
@@ -558,7 +580,12 @@ class TestUsageTrackingPersistence:
         from sqlalchemy import create_engine
         from sqlalchemy.orm import Session
 
-        from karenina.schemas import VerificationResult
+        from karenina.schemas.workflow.verification import (
+            VerificationResult,
+            VerificationResultMetadata,
+            VerificationResultRubric,
+            VerificationResultTemplate,
+        )
         from karenina.storage.models import Base, BenchmarkModel, VerificationResultModel, VerificationRunModel
         from karenina.storage.operations import _create_result_model, _model_to_verification_result
 
@@ -584,19 +611,25 @@ class TestUsageTrackingPersistence:
         }
 
         result = VerificationResult(
-            question_id="test_q_usage",
-            template_id="test_tpl_usage",
-            completed_without_errors=True,
-            template_verification_performed=True,
-            verify_result=True,
-            rubric_evaluation_performed=False,
-            question_text="Test question?",
-            raw_llm_response="Test response",
-            answering_model="openai/gpt-4o-mini",
-            parsing_model="openai/gpt-4o-mini",
-            execution_time=1.5,
-            timestamp="2025-01-01 00:00:00",
-            usage_metadata=usage_metadata,  # CRITICAL FIELD
+            metadata=VerificationResultMetadata(
+                question_id="test_q_usage",
+                template_id="test_tpl_usage",
+                completed_without_errors=True,
+                question_text="Test question?",
+                answering_model="openai/gpt-4o-mini",
+                parsing_model="openai/gpt-4o-mini",
+                execution_time=1.5,
+                timestamp="2025-01-01 00:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="Test response",
+                template_verification_performed=True,
+                verify_result=True,
+                usage_metadata=usage_metadata,  # CRITICAL FIELD - nested under template
+            ),
+            rubric=VerificationResultRubric(
+                rubric_evaluation_performed=False,
+            ),
         )
 
         # Save to database
@@ -636,16 +669,21 @@ class TestUsageTrackingPersistence:
             # Convert back to VerificationResult
             loaded_result = _model_to_verification_result(loaded_model)
 
-            # CRITICAL: Verify usage_metadata persists through conversion
-            assert loaded_result.usage_metadata is not None, "usage_metadata was lost during conversion"
-            assert loaded_result.usage_metadata == usage_metadata, "usage_metadata changed during round-trip"
+            # CRITICAL: Verify usage_metadata persists through conversion (nested under template)
+            assert loaded_result.template.usage_metadata is not None, "usage_metadata was lost during conversion"
+            assert loaded_result.template.usage_metadata == usage_metadata, "usage_metadata changed during round-trip"
 
     def test_agent_metrics_round_trip(self, temp_db):
         """Test agent_metrics persists correctly through save/load cycle."""
         from sqlalchemy import create_engine
         from sqlalchemy.orm import Session
 
-        from karenina.schemas import VerificationResult
+        from karenina.schemas.workflow.verification import (
+            VerificationResult,
+            VerificationResultMetadata,
+            VerificationResultRubric,
+            VerificationResultTemplate,
+        )
         from karenina.storage.models import Base, BenchmarkModel, VerificationResultModel, VerificationRunModel
         from karenina.storage.operations import _create_result_model, _model_to_verification_result
 
@@ -657,19 +695,25 @@ class TestUsageTrackingPersistence:
         }
 
         result = VerificationResult(
-            question_id="test_q_agent",
-            template_id="test_tpl_agent",
-            completed_without_errors=True,
-            template_verification_performed=True,
-            verify_result=True,
-            rubric_evaluation_performed=False,
-            question_text="Test question?",
-            raw_llm_response="Test response",
-            answering_model="openai/gpt-4o-mini",
-            parsing_model="openai/gpt-4o-mini",
-            execution_time=2.5,
-            timestamp="2025-01-01 00:00:00",
-            agent_metrics=agent_metrics,  # CRITICAL FIELD
+            metadata=VerificationResultMetadata(
+                question_id="test_q_agent",
+                template_id="test_tpl_agent",
+                completed_without_errors=True,
+                question_text="Test question?",
+                answering_model="openai/gpt-4o-mini",
+                parsing_model="openai/gpt-4o-mini",
+                execution_time=2.5,
+                timestamp="2025-01-01 00:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="Test response",
+                template_verification_performed=True,
+                verify_result=True,
+                agent_metrics=agent_metrics,  # CRITICAL FIELD
+            ),
+            rubric=VerificationResultRubric(
+                rubric_evaluation_performed=False,
+            ),
         )
 
         # Save to database
@@ -710,34 +754,45 @@ class TestUsageTrackingPersistence:
             loaded_result = _model_to_verification_result(loaded_model)
 
             # CRITICAL: Verify agent_metrics persists through conversion
-            assert loaded_result.agent_metrics is not None, "agent_metrics was lost during conversion"
-            assert loaded_result.agent_metrics == agent_metrics, "agent_metrics changed during round-trip"
+            assert loaded_result.template.agent_metrics is not None, "agent_metrics was lost during conversion"
+            assert loaded_result.template.agent_metrics == agent_metrics, "agent_metrics changed during round-trip"
 
     def test_null_usage_fields_persist(self, temp_db):
         """Test that null usage_metadata and agent_metrics persist correctly."""
         from sqlalchemy import create_engine
         from sqlalchemy.orm import Session
 
-        from karenina.schemas import VerificationResult
+        from karenina.schemas.workflow.verification import (
+            VerificationResult,
+            VerificationResultMetadata,
+            VerificationResultRubric,
+            VerificationResultTemplate,
+        )
         from karenina.storage.models import Base, BenchmarkModel, VerificationResultModel, VerificationRunModel
         from karenina.storage.operations import _create_result_model, _model_to_verification_result
 
         # Create a result with null usage fields
         result = VerificationResult(
-            question_id="test_q_null",
-            template_id="test_tpl_null",
-            completed_without_errors=True,
-            template_verification_performed=True,
-            verify_result=True,
-            rubric_evaluation_performed=False,
-            question_text="Test question?",
-            raw_llm_response="Test response",
-            answering_model="openai/gpt-4o-mini",
-            parsing_model="openai/gpt-4o-mini",
-            execution_time=1.0,
-            timestamp="2025-01-01 00:00:00",
-            usage_metadata=None,  # Explicitly None
-            agent_metrics=None,  # Explicitly None
+            metadata=VerificationResultMetadata(
+                question_id="test_q_null",
+                template_id="test_tpl_null",
+                completed_without_errors=True,
+                question_text="Test question?",
+                answering_model="openai/gpt-4o-mini",
+                parsing_model="openai/gpt-4o-mini",
+                execution_time=1.0,
+                timestamp="2025-01-01 00:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="Test response",
+                template_verification_performed=True,
+                verify_result=True,
+                usage_metadata=None,  # Explicitly None
+                agent_metrics=None,  # Explicitly None
+            ),
+            rubric=VerificationResultRubric(
+                rubric_evaluation_performed=False,
+            ),
         )
 
         # Save to database
@@ -770,15 +825,20 @@ class TestUsageTrackingPersistence:
             loaded_result = _model_to_verification_result(loaded_model)
 
             # Verify nulls persist
-            assert loaded_result.usage_metadata is None, "usage_metadata should be None"
-            assert loaded_result.agent_metrics is None, "agent_metrics should be None"
+            assert loaded_result.template.usage_metadata is None, "usage_metadata should be None"
+            assert loaded_result.template.agent_metrics is None, "agent_metrics should be None"
 
     def test_update_result_with_usage_fields(self, temp_db):
         """Test _update_result_model() correctly updates usage fields."""
         from sqlalchemy import create_engine
         from sqlalchemy.orm import Session
 
-        from karenina.schemas import VerificationResult
+        from karenina.schemas.workflow.verification import (
+            VerificationResult,
+            VerificationResultMetadata,
+            VerificationResultRubric,
+            VerificationResultTemplate,
+        )
         from karenina.storage.models import Base, BenchmarkModel, VerificationResultModel, VerificationRunModel
         from karenina.storage.operations import (
             _create_result_model,
@@ -788,20 +848,26 @@ class TestUsageTrackingPersistence:
 
         # Create initial result without usage fields
         result_v1 = VerificationResult(
-            question_id="test_q_update",
-            template_id="test_tpl_update",
-            completed_without_errors=True,
-            template_verification_performed=True,
-            verify_result=True,
-            rubric_evaluation_performed=False,
-            question_text="Test question?",
-            raw_llm_response="Test response",
-            answering_model="openai/gpt-4o-mini",
-            parsing_model="openai/gpt-4o-mini",
-            execution_time=1.0,
-            timestamp="2025-01-01 00:00:00",
-            usage_metadata=None,
-            agent_metrics=None,
+            metadata=VerificationResultMetadata(
+                question_id="test_q_update",
+                template_id="test_tpl_update",
+                completed_without_errors=True,
+                question_text="Test question?",
+                answering_model="openai/gpt-4o-mini",
+                parsing_model="openai/gpt-4o-mini",
+                execution_time=1.0,
+                timestamp="2025-01-01 00:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="Test response",
+                template_verification_performed=True,
+                verify_result=True,
+                usage_metadata=None,
+                agent_metrics=None,
+            ),
+            rubric=VerificationResultRubric(
+                rubric_evaluation_performed=False,
+            ),
         )
 
         engine = create_engine(temp_db)
@@ -830,31 +896,37 @@ class TestUsageTrackingPersistence:
 
             # Now update with usage fields
             result_v2 = VerificationResult(
-                question_id="test_q_update",
-                template_id="test_tpl_update",
-                completed_without_errors=True,
-                template_verification_performed=True,
-                verify_result=True,
-                rubric_evaluation_performed=False,
-                question_text="Test question?",
-                raw_llm_response="Test response",
-                answering_model="openai/gpt-4o-mini",
-                parsing_model="openai/gpt-4o-mini",
-                execution_time=2.0,
-                timestamp="2025-01-01 00:00:00",
-                usage_metadata={
-                    "answer_generation": {
-                        "input_tokens": 100,
-                        "output_tokens": 50,
-                        "total_tokens": 150,
-                        "model": "gpt-4o-mini",
-                    }
-                },
-                agent_metrics={
-                    "iterations": 2,
-                    "tool_calls": 3,
-                    "tools_used": ["search"],
-                },
+                metadata=VerificationResultMetadata(
+                    question_id="test_q_update",
+                    template_id="test_tpl_update",
+                    completed_without_errors=True,
+                    question_text="Test question?",
+                    answering_model="openai/gpt-4o-mini",
+                    parsing_model="openai/gpt-4o-mini",
+                    execution_time=2.0,
+                    timestamp="2025-01-01 00:00:00",
+                ),
+                template=VerificationResultTemplate(
+                    raw_llm_response="Test response",
+                    template_verification_performed=True,
+                    verify_result=True,
+                    usage_metadata={
+                        "answer_generation": {
+                            "input_tokens": 100,
+                            "output_tokens": 50,
+                            "total_tokens": 150,
+                            "model": "gpt-4o-mini",
+                        }
+                    },
+                    agent_metrics={
+                        "iterations": 2,
+                        "tool_calls": 3,
+                        "tools_used": ["search"],
+                    },
+                ),
+                rubric=VerificationResultRubric(
+                    rubric_evaluation_performed=False,
+                ),
             )
 
             # Update the model
@@ -866,7 +938,7 @@ class TestUsageTrackingPersistence:
             loaded_result = _model_to_verification_result(loaded_model)
 
             # CRITICAL: Verify usage fields were updated
-            assert loaded_result.usage_metadata is not None, "usage_metadata not updated"
-            assert loaded_result.usage_metadata["answer_generation"]["input_tokens"] == 100
-            assert loaded_result.agent_metrics is not None, "agent_metrics not updated"
-            assert loaded_result.agent_metrics["iterations"] == 2
+            assert loaded_result.template.usage_metadata is not None, "usage_metadata not updated"
+            assert loaded_result.template.usage_metadata["answer_generation"]["input_tokens"] == 100
+            assert loaded_result.template.agent_metrics is not None, "agent_metrics not updated"
+            assert loaded_result.template.agent_metrics["iterations"] == 2

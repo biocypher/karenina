@@ -93,7 +93,13 @@ filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::PendingDeprecationWarning",
 ]
-addopts = "-v --tb=short"
+addopts = "-v --tb=short -m 'not integration'"
+markers = [
+    "integration: marks tests as integration tests (slow, requires real resources)",
+    "requires_api: marks tests that require API keys (OpenAI, etc.)",
+    "deep_judgment: marks tests that use deep judgment verification mode",
+    "rubric: marks tests that use rubric evaluation mode",
+]
 
 [tool.coverage.run]
 source = ["src/karenina"]

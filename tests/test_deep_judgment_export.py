@@ -11,35 +11,47 @@ from io import StringIO
 
 from karenina.benchmark.exporter import export_verification_results_csv, export_verification_results_json
 from karenina.schemas import ModelConfig, VerificationConfig, VerificationJob, VerificationResult
+from karenina.schemas.workflow.verification import (
+    VerificationResultDeepJudgment,
+    VerificationResultMetadata,
+    VerificationResultRubric,
+    VerificationResultTemplate,
+)
 
 
 def test_deep_judgment_in_json_export():
     """Test that deep-judgment fields are included in JSON export."""
     # Create a verification result with deep-judgment data
     result = VerificationResult(
-        question_id="a" * 32,
-        template_id="t" * 32,
-        success=True,
-        verify_result=True,
-        question_text="What is the drug target?",
-        raw_llm_response="The drug targets BCL-2 protein.",
-        answering_model="openai/gpt-4.1-mini",
-        parsing_model="openai/gpt-4.1-mini",
-        parsed_gt_response={"drug_target": "BCL-2"},
-        parsed_llm_response={"drug_target": "BCL-2"},
-        execution_time=1.5,
-        timestamp=datetime.now().isoformat(),
-        answering_system_prompt="You are helpful.",
-        parsing_system_prompt="Parse this.",
-        # Deep-judgment fields
-        deep_judgment_enabled=True,
-        deep_judgment_performed=True,
-        extracted_excerpts={"drug_target": [{"text": "targets BCL-2", "confidence": "high", "similarity_score": 0.95}]},
-        attribute_reasoning={"drug_target": "The excerpt clearly states BCL-2 as the target."},
-        deep_judgment_stages_completed=["excerpts", "reasoning", "parameters"],
-        deep_judgment_model_calls=3,
-        deep_judgment_excerpt_retry_count=0,
-        attributes_without_excerpts=[],
+        metadata=VerificationResultMetadata(
+            question_id="a" * 32,
+            template_id="t" * 32,
+            completed_without_errors=True,
+            question_text="What is the drug target?",
+            answering_model="openai/gpt-4.1-mini",
+            parsing_model="openai/gpt-4.1-mini",
+            execution_time=1.5,
+            timestamp=datetime.now().isoformat(),
+        ),
+        template=VerificationResultTemplate(
+            raw_llm_response="The drug targets BCL-2 protein.",
+            verify_result=True,
+            parsed_gt_response={"drug_target": "BCL-2"},
+            parsed_llm_response={"drug_target": "BCL-2"},
+        ),
+        rubric=VerificationResultRubric(rubric_evaluation_performed=False),
+        deep_judgment=VerificationResultDeepJudgment(
+            deep_judgment_enabled=True,
+            deep_judgment_performed=True,
+            extracted_excerpts={
+                "drug_target": [{"text": "targets BCL-2", "confidence": "high", "similarity_score": 0.95}]
+            },
+            attribute_reasoning={"drug_target": "The excerpt clearly states BCL-2 as the target."},
+            deep_judgment_stages_completed=["excerpts", "reasoning", "parameters"],
+            deep_judgment_model_calls=3,
+            deep_judgment_excerpt_retry_count=0,
+            attributes_without_excerpts=[],
+        ),
     )
 
     # Create a mock job with minimal config
@@ -71,48 +83,52 @@ def test_deep_judgment_in_json_export():
     json_output = export_verification_results_json(job, {"a" * 32: result})
     export_data = json.loads(json_output)
 
-    # Verify deep-judgment fields are present
+    # Verify deep-judgment fields are present in nested structure
     result_data = export_data["results"]["a" * 32]
-    assert "deep_judgment_enabled" in result_data
-    assert result_data["deep_judgment_enabled"] is True
-    assert result_data["deep_judgment_performed"] is True
-    assert result_data["extracted_excerpts"] == result.extracted_excerpts
-    assert result_data["attribute_reasoning"] == result.attribute_reasoning
-    assert result_data["deep_judgment_stages_completed"] == ["excerpts", "reasoning", "parameters"]
-    assert result_data["deep_judgment_model_calls"] == 3
-    assert result_data["deep_judgment_excerpt_retry_count"] == 0
-    assert result_data["attributes_without_excerpts"] == []
+    assert "deep_judgment" in result_data
+    assert result_data["deep_judgment"]["deep_judgment_enabled"] is True
+    assert result_data["deep_judgment"]["deep_judgment_performed"] is True
+    assert result_data["deep_judgment"]["extracted_excerpts"] == result.deep_judgment.extracted_excerpts
+    assert result_data["deep_judgment"]["attribute_reasoning"] == result.deep_judgment.attribute_reasoning
+    assert result_data["deep_judgment"]["deep_judgment_stages_completed"] == ["excerpts", "reasoning", "parameters"]
+    assert result_data["deep_judgment"]["deep_judgment_model_calls"] == 3
+    assert result_data["deep_judgment"]["deep_judgment_excerpt_retry_count"] == 0
+    assert result_data["deep_judgment"]["attributes_without_excerpts"] == []
 
 
 def test_deep_judgment_in_csv_export():
     """Test that deep-judgment fields are included in CSV export."""
     # Create a verification result with deep-judgment data
     result = VerificationResult(
-        question_id="b" * 32,
-        template_id="t" * 32,
-        success=True,
-        verify_result=True,
-        question_text="What is the mechanism?",
-        raw_llm_response="The mechanism is inhibition.",
-        answering_model="openai/gpt-4.1-mini",
-        parsing_model="openai/gpt-4.1-mini",
-        parsed_gt_response={"mechanism": "inhibition"},
-        parsed_llm_response={"mechanism": "inhibition"},
-        execution_time=1.2,
-        timestamp=datetime.now().isoformat(),
-        answering_system_prompt="You are helpful.",
-        parsing_system_prompt="Parse this.",
-        # Deep-judgment fields
-        deep_judgment_enabled=True,
-        deep_judgment_performed=True,
-        extracted_excerpts={
-            "mechanism": [{"text": "mechanism is inhibition", "confidence": "high", "similarity_score": 0.92}]
-        },
-        attribute_reasoning={"mechanism": "Direct statement about the mechanism."},
-        deep_judgment_stages_completed=["excerpts", "reasoning", "parameters"],
-        deep_judgment_model_calls=3,
-        deep_judgment_excerpt_retry_count=1,
-        attributes_without_excerpts=[],
+        metadata=VerificationResultMetadata(
+            question_id="b" * 32,
+            template_id="t" * 32,
+            completed_without_errors=True,
+            question_text="What is the mechanism?",
+            answering_model="openai/gpt-4.1-mini",
+            parsing_model="openai/gpt-4.1-mini",
+            execution_time=1.2,
+            timestamp=datetime.now().isoformat(),
+        ),
+        template=VerificationResultTemplate(
+            raw_llm_response="The mechanism is inhibition.",
+            verify_result=True,
+            parsed_gt_response={"mechanism": "inhibition"},
+            parsed_llm_response={"mechanism": "inhibition"},
+        ),
+        rubric=VerificationResultRubric(rubric_evaluation_performed=False),
+        deep_judgment=VerificationResultDeepJudgment(
+            deep_judgment_enabled=True,
+            deep_judgment_performed=True,
+            extracted_excerpts={
+                "mechanism": [{"text": "mechanism is inhibition", "confidence": "high", "similarity_score": 0.92}]
+            },
+            attribute_reasoning={"mechanism": "Direct statement about the mechanism."},
+            deep_judgment_stages_completed=["excerpts", "reasoning", "parameters"],
+            deep_judgment_model_calls=3,
+            deep_judgment_excerpt_retry_count=1,
+            attributes_without_excerpts=[],
+        ),
     )
 
     # Create a mock job with minimal config
@@ -166,29 +182,33 @@ def test_deep_judgment_with_empty_excerpts_export():
     """Test that empty excerpt lists (refusal scenarios) are properly exported."""
     # Create a result with empty excerpts
     result = VerificationResult(
-        question_id="c" * 32,
-        template_id="t" * 32,
-        success=True,
-        verify_result=False,
-        question_text="What is confidential?",
-        raw_llm_response="I cannot provide that information.",
-        answering_model="openai/gpt-4.1-mini",
-        parsing_model="openai/gpt-4.1-mini",
-        parsed_gt_response=None,
-        parsed_llm_response=None,
-        execution_time=0.8,
-        timestamp=datetime.now().isoformat(),
-        answering_system_prompt="You are helpful.",
-        parsing_system_prompt="Parse this.",
-        # Deep-judgment with empty excerpts
-        deep_judgment_enabled=True,
-        deep_judgment_performed=True,
-        extracted_excerpts={"confidential_data": []},  # Empty list
-        attribute_reasoning={"confidential_data": "No corroborating excerpts found."},
-        deep_judgment_stages_completed=["excerpts", "reasoning", "parameters"],
-        deep_judgment_model_calls=3,
-        deep_judgment_excerpt_retry_count=2,
-        attributes_without_excerpts=["confidential_data"],
+        metadata=VerificationResultMetadata(
+            question_id="c" * 32,
+            template_id="t" * 32,
+            completed_without_errors=True,
+            question_text="What is confidential?",
+            answering_model="openai/gpt-4.1-mini",
+            parsing_model="openai/gpt-4.1-mini",
+            execution_time=0.8,
+            timestamp=datetime.now().isoformat(),
+        ),
+        template=VerificationResultTemplate(
+            raw_llm_response="I cannot provide that information.",
+            verify_result=False,
+            parsed_gt_response=None,
+            parsed_llm_response=None,
+        ),
+        rubric=VerificationResultRubric(rubric_evaluation_performed=False),
+        deep_judgment=VerificationResultDeepJudgment(
+            deep_judgment_enabled=True,
+            deep_judgment_performed=True,
+            extracted_excerpts={"confidential_data": []},  # Empty list
+            attribute_reasoning={"confidential_data": "No corroborating excerpts found."},
+            deep_judgment_stages_completed=["excerpts", "reasoning", "parameters"],
+            deep_judgment_model_calls=3,
+            deep_judgment_excerpt_retry_count=2,
+            attributes_without_excerpts=["confidential_data"],
+        ),
     )
 
     # Create a mock job with minimal config
@@ -221,9 +241,9 @@ def test_deep_judgment_with_empty_excerpts_export():
     export_data = json.loads(json_output)
 
     result_data = export_data["results"]["c" * 32]
-    assert result_data["extracted_excerpts"] == {"confidential_data": []}
-    assert result_data["attributes_without_excerpts"] == ["confidential_data"]
-    assert result_data["deep_judgment_excerpt_retry_count"] == 2
+    assert result_data["deep_judgment"]["extracted_excerpts"] == {"confidential_data": []}
+    assert result_data["deep_judgment"]["attributes_without_excerpts"] == ["confidential_data"]
+    assert result_data["deep_judgment"]["deep_judgment_excerpt_retry_count"] == 2
 
     # Export to CSV
     csv_output = export_verification_results_csv(job, {"c" * 32: result})
@@ -239,41 +259,44 @@ def test_search_enhanced_deep_judgment_in_json_export():
     """Test that search-enhanced deep-judgment fields are included in JSON export."""
     # Create a verification result with search-enhanced deep-judgment data
     result = VerificationResult(
-        question_id="d" * 32,
-        template_id="t" * 32,
-        success=True,
-        verify_result=True,
-        question_text="What is the drug target?",
-        raw_llm_response="The drug targets BCL-2 protein.",
-        answering_model="openai/gpt-4.1-mini",
-        parsing_model="openai/gpt-4.1-mini",
-        parsed_gt_response={"drug_target": "BCL-2"},
-        parsed_llm_response={"drug_target": "BCL-2"},
-        execution_time=1.5,
-        timestamp=datetime.now().isoformat(),
-        answering_system_prompt="You are helpful.",
-        parsing_system_prompt="Parse this.",
-        # Deep-judgment fields
-        deep_judgment_enabled=True,
-        deep_judgment_performed=True,
-        extracted_excerpts={
-            "drug_target": [
-                {
-                    "text": "targets BCL-2",
-                    "confidence": "high",
-                    "similarity_score": 0.95,
-                    "search_results": "External validation confirms BCL-2 as a valid target protein.",
-                }
-            ]
-        },
-        attribute_reasoning={"drug_target": "The excerpt clearly states BCL-2 as the target."},
-        deep_judgment_stages_completed=["excerpts", "reasoning", "parameters"],
-        deep_judgment_model_calls=3,
-        deep_judgment_excerpt_retry_count=0,
-        attributes_without_excerpts=[],
-        # Search-enhanced fields
-        deep_judgment_search_enabled=True,
-        hallucination_risk_assessment={"drug_target": "none"},
+        metadata=VerificationResultMetadata(
+            question_id="d" * 32,
+            template_id="t" * 32,
+            completed_without_errors=True,
+            question_text="What is the drug target?",
+            answering_model="openai/gpt-4.1-mini",
+            parsing_model="openai/gpt-4.1-mini",
+            execution_time=1.5,
+            timestamp=datetime.now().isoformat(),
+        ),
+        template=VerificationResultTemplate(
+            raw_llm_response="The drug targets BCL-2 protein.",
+            verify_result=True,
+            parsed_gt_response={"drug_target": "BCL-2"},
+            parsed_llm_response={"drug_target": "BCL-2"},
+        ),
+        rubric=VerificationResultRubric(rubric_evaluation_performed=False),
+        deep_judgment=VerificationResultDeepJudgment(
+            deep_judgment_enabled=True,
+            deep_judgment_performed=True,
+            extracted_excerpts={
+                "drug_target": [
+                    {
+                        "text": "targets BCL-2",
+                        "confidence": "high",
+                        "similarity_score": 0.95,
+                        "search_results": "External validation confirms BCL-2 as a valid target protein.",
+                    }
+                ]
+            },
+            attribute_reasoning={"drug_target": "The excerpt clearly states BCL-2 as the target."},
+            deep_judgment_stages_completed=["excerpts", "reasoning", "parameters"],
+            deep_judgment_model_calls=3,
+            deep_judgment_excerpt_retry_count=0,
+            attributes_without_excerpts=[],
+            deep_judgment_search_enabled=True,
+            hallucination_risk_assessment={"drug_target": "none"},
+        ),
     )
 
     # Create a mock job with minimal config
@@ -305,56 +328,61 @@ def test_search_enhanced_deep_judgment_in_json_export():
     json_output = export_verification_results_json(job, {"d" * 32: result})
     export_data = json.loads(json_output)
 
-    # Verify search-enhanced fields are present
+    # Verify search-enhanced fields are present in nested structure
     result_data = export_data["results"]["d" * 32]
-    assert "deep_judgment_search_enabled" in result_data
-    assert result_data["deep_judgment_search_enabled"] is True
-    assert "hallucination_risk_assessment" in result_data
-    assert result_data["hallucination_risk_assessment"] == {"drug_target": "none"}
+    assert "deep_judgment" in result_data
+    assert result_data["deep_judgment"]["deep_judgment_search_enabled"] is True
+    assert "hallucination_risk_assessment" in result_data["deep_judgment"]
+    assert result_data["deep_judgment"]["hallucination_risk_assessment"] == {"drug_target": "none"}
     # Verify search_results embedded in excerpts
-    assert "search_results" in result_data["extracted_excerpts"]["drug_target"][0]
-    assert "External validation" in result_data["extracted_excerpts"]["drug_target"][0]["search_results"]
+    assert "search_results" in result_data["deep_judgment"]["extracted_excerpts"]["drug_target"][0]
+    assert (
+        "External validation" in result_data["deep_judgment"]["extracted_excerpts"]["drug_target"][0]["search_results"]
+    )
 
 
 def test_search_enhanced_deep_judgment_in_csv_export():
     """Test that search-enhanced deep-judgment fields are included in CSV export."""
     # Create a verification result with search-enhanced deep-judgment data
     result = VerificationResult(
-        question_id="e" * 32,
-        template_id="t" * 32,
-        success=True,
-        verify_result=True,
-        question_text="What is the mechanism?",
-        raw_llm_response="The mechanism is inhibition.",
-        answering_model="openai/gpt-4.1-mini",
-        parsing_model="openai/gpt-4.1-mini",
-        parsed_gt_response={"mechanism": "inhibition"},
-        parsed_llm_response={"mechanism": "inhibition"},
-        execution_time=1.2,
-        timestamp=datetime.now().isoformat(),
-        answering_system_prompt="You are helpful.",
-        parsing_system_prompt="Parse this.",
-        # Deep-judgment fields
-        deep_judgment_enabled=True,
-        deep_judgment_performed=True,
-        extracted_excerpts={
-            "mechanism": [
-                {
-                    "text": "mechanism is inhibition",
-                    "confidence": "high",
-                    "similarity_score": 0.92,
-                    "search_results": "Search confirms inhibition mechanism is correct.",
-                }
-            ]
-        },
-        attribute_reasoning={"mechanism": "Direct statement about the mechanism."},
-        deep_judgment_stages_completed=["excerpts", "reasoning", "parameters"],
-        deep_judgment_model_calls=3,
-        deep_judgment_excerpt_retry_count=0,
-        attributes_without_excerpts=[],
-        # Search-enhanced fields
-        deep_judgment_search_enabled=True,
-        hallucination_risk_assessment={"mechanism": "low"},
+        metadata=VerificationResultMetadata(
+            question_id="e" * 32,
+            template_id="t" * 32,
+            completed_without_errors=True,
+            question_text="What is the mechanism?",
+            answering_model="openai/gpt-4.1-mini",
+            parsing_model="openai/gpt-4.1-mini",
+            execution_time=1.2,
+            timestamp=datetime.now().isoformat(),
+        ),
+        template=VerificationResultTemplate(
+            raw_llm_response="The mechanism is inhibition.",
+            verify_result=True,
+            parsed_gt_response={"mechanism": "inhibition"},
+            parsed_llm_response={"mechanism": "inhibition"},
+        ),
+        rubric=VerificationResultRubric(rubric_evaluation_performed=False),
+        deep_judgment=VerificationResultDeepJudgment(
+            deep_judgment_enabled=True,
+            deep_judgment_performed=True,
+            extracted_excerpts={
+                "mechanism": [
+                    {
+                        "text": "mechanism is inhibition",
+                        "confidence": "high",
+                        "similarity_score": 0.92,
+                        "search_results": "Search confirms inhibition mechanism is correct.",
+                    }
+                ]
+            },
+            attribute_reasoning={"mechanism": "Direct statement about the mechanism."},
+            deep_judgment_stages_completed=["excerpts", "reasoning", "parameters"],
+            deep_judgment_model_calls=3,
+            deep_judgment_excerpt_retry_count=0,
+            attributes_without_excerpts=[],
+            deep_judgment_search_enabled=True,
+            hallucination_risk_assessment={"mechanism": "low"},
+        ),
     )
 
     # Create a mock job with minimal config

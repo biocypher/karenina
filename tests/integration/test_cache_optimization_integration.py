@@ -17,6 +17,11 @@ import pytest
 
 from karenina.benchmark.verification.batch_runner import execute_parallel, execute_sequential
 from karenina.schemas.workflow import ModelConfig, VerificationResult
+from karenina.schemas.workflow.verification import (
+    VerificationResultMetadata,
+    VerificationResultRubric,
+    VerificationResultTemplate,
+)
 
 
 @pytest.mark.skip(reason="Integration tests - optimize for CI/CD before enabling")
@@ -49,15 +54,20 @@ class TestCacheOptimizationIntegration:
                 time.sleep(0.2)
 
             return VerificationResult(
-                question_id=kwargs["question_id"],
-                template_id="test_template",
-                completed_without_errors=True,
-                question_text=kwargs["question_text"],
-                raw_llm_response=f"Answer for rep {kwargs.get('answering_replicate', 1)}",
-                answering_model=kwargs["answering_model"].id,
-                parsing_model=kwargs["parsing_model"].id,
-                execution_time=0.1,
-                timestamp="2025-01-01",
+                metadata=VerificationResultMetadata(
+                    question_id=kwargs["question_id"],
+                    template_id="test_template",
+                    completed_without_errors=True,
+                    question_text=kwargs["question_text"],
+                    answering_model=kwargs["answering_model"].id,
+                    parsing_model=kwargs["parsing_model"].id,
+                    execution_time=0.1,
+                    timestamp="2025-01-01",
+                ),
+                template=VerificationResultTemplate(
+                    raw_llm_response=f"Answer for rep {kwargs.get('answering_replicate', 1)}",
+                ),
+                rubric=VerificationResultRubric(rubric_evaluation_performed=False),
             )
 
         mock_verify.side_effect = mock_verify_with_logging
@@ -167,15 +177,20 @@ class TestCacheOptimizationIntegration:
                 generation_complete.set()
 
             return VerificationResult(
-                question_id=kwargs["question_id"],
-                template_id="test_template",
-                completed_without_errors=True,
-                question_text=kwargs["question_text"],
-                raw_llm_response="Answer",
-                answering_model=kwargs["answering_model"].id,
-                parsing_model=kwargs["parsing_model"].id,
-                execution_time=0.1,
-                timestamp="2025-01-01",
+                metadata=VerificationResultMetadata(
+                    question_id=kwargs["question_id"],
+                    template_id="test_template",
+                    completed_without_errors=True,
+                    question_text=kwargs["question_text"],
+                    answering_model=kwargs["answering_model"].id,
+                    parsing_model=kwargs["parsing_model"].id,
+                    execution_time=0.1,
+                    timestamp="2025-01-01",
+                ),
+                template=VerificationResultTemplate(
+                    raw_llm_response="Answer",
+                ),
+                rubric=VerificationResultRubric(rubric_evaluation_performed=False),
             )
 
         mock_verify.side_effect = mock_verify_slow
@@ -265,15 +280,20 @@ class TestCacheOptimizationIntegration:
                 }
             )
             return VerificationResult(
-                question_id=kwargs["question_id"],
-                template_id="test_template",
-                completed_without_errors=True,
-                question_text=kwargs["question_text"],
-                raw_llm_response="Answer",
-                answering_model=kwargs["answering_model"].id,
-                parsing_model=kwargs["parsing_model"].id,
-                execution_time=0.1,
-                timestamp="2025-01-01",
+                metadata=VerificationResultMetadata(
+                    question_id=kwargs["question_id"],
+                    template_id="test_template",
+                    completed_without_errors=True,
+                    question_text=kwargs["question_text"],
+                    answering_model=kwargs["answering_model"].id,
+                    parsing_model=kwargs["parsing_model"].id,
+                    execution_time=0.1,
+                    timestamp="2025-01-01",
+                ),
+                template=VerificationResultTemplate(
+                    raw_llm_response="Answer",
+                ),
+                rubric=VerificationResultRubric(rubric_evaluation_performed=False),
             )
 
         mock_verify.side_effect = mock_verify_track
@@ -346,15 +366,20 @@ class TestCacheOptimizationIntegration:
 
         def mock_verify_simple(**kwargs):
             return VerificationResult(
-                question_id=kwargs["question_id"],
-                template_id="test_template",
-                completed_without_errors=True,
-                question_text=kwargs["question_text"],
-                raw_llm_response="Answer",
-                answering_model=kwargs["answering_model"].id,
-                parsing_model=kwargs["parsing_model"].id,
-                execution_time=0.1,
-                timestamp="2025-01-01",
+                metadata=VerificationResultMetadata(
+                    question_id=kwargs["question_id"],
+                    template_id="test_template",
+                    completed_without_errors=True,
+                    question_text=kwargs["question_text"],
+                    answering_model=kwargs["answering_model"].id,
+                    parsing_model=kwargs["parsing_model"].id,
+                    execution_time=0.1,
+                    timestamp="2025-01-01",
+                ),
+                template=VerificationResultTemplate(
+                    raw_llm_response="Answer",
+                ),
+                rubric=VerificationResultRubric(rubric_evaluation_performed=False),
             )
 
         mock_verify.side_effect = mock_verify_simple
