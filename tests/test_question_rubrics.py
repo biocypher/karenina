@@ -26,7 +26,7 @@ class TestQuestionRubrics:
 
         result = merge_rubrics(global_rubric, None)
         assert result == global_rubric
-        assert len(result.traits) == 2
+        assert len(result.llm_traits) == 2
 
     def test_merge_rubrics_question_only(self) -> None:
         """Test merging when only question rubric exists."""
@@ -40,7 +40,7 @@ class TestQuestionRubrics:
 
         result = merge_rubrics(None, question_rubric)
         assert result == question_rubric
-        assert len(result.traits) == 1
+        assert len(result.llm_traits) == 1
 
     def test_merge_rubrics_both_present(self) -> None:
         """Test merging when both rubrics exist."""
@@ -66,10 +66,10 @@ class TestQuestionRubrics:
 
         result = merge_rubrics(global_rubric, question_rubric)
         assert result is not None
-        assert len(result.traits) == 4
+        assert len(result.llm_traits) == 4
 
         # Check that all traits are present
-        trait_names = {trait.name for trait in result.traits}
+        trait_names = {trait.name for trait in result.llm_traits}
         assert trait_names == {"clarity", "accuracy", "specificity", "depth"}
 
         # Verify trait order (global first, then question)
@@ -123,8 +123,8 @@ class TestQuestionRubrics:
         assert result is not None
 
         # Find the traits in the result
-        clarity_trait = next(t for t in result.traits if t.name == "clarity")
-        depth_trait = next(t for t in result.traits if t.name == "depth")
+        clarity_trait = next(t for t in result.llm_traits if t.name == "clarity")
+        depth_trait = next(t for t in result.llm_traits if t.name == "depth")
 
         # Verify properties are preserved
         assert clarity_trait.kind == "boolean"
@@ -145,7 +145,7 @@ class TestQuestionRubrics:
 
         result = merge_rubrics(empty_global, empty_question)
         assert result is not None
-        assert len(result.traits) == 0
+        assert len(result.llm_traits) == 0
 
     def test_merge_rubrics_mixed_empty(self) -> None:
         """Test merging when one rubric is empty."""
@@ -156,7 +156,7 @@ class TestQuestionRubrics:
 
         result = merge_rubrics(global_rubric, empty_question)
         assert result is not None
-        assert len(result.traits) == 1
+        assert len(result.llm_traits) == 1
         assert result.llm_traits[0].name == "clarity"
 
         # Test reverse
@@ -167,5 +167,5 @@ class TestQuestionRubrics:
 
         result = merge_rubrics(empty_global, question_rubric)
         assert result is not None
-        assert len(result.traits) == 1
+        assert len(result.llm_traits) == 1
         assert result.llm_traits[0].name == "specificity"

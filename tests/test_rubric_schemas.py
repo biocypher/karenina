@@ -208,14 +208,14 @@ class TestRubricIntegration:
         assert len(rubric.llm_traits) == 3
 
         # Verify trait types
-        boolean_traits = [t for t in rubric.traits if t.kind == "boolean"]
-        score_traits = [t for t in rubric.traits if t.kind == "score"]
+        boolean_traits = [t for t in rubric.llm_traits if t.kind == "boolean"]
+        score_traits = [t for t in rubric.llm_traits if t.kind == "score"]
 
         assert len(boolean_traits) == 2
         assert len(score_traits) == 1
 
         # Verify evaluation matches rubric structure
-        for trait in rubric.traits:
+        for trait in rubric.llm_traits:
             assert trait.name in evaluation.trait_scores
 
             if trait.kind == "boolean":
@@ -240,6 +240,6 @@ class TestRubricIntegration:
 
         # Verify round trip
         # No title field in current Rubric model
-        assert len(restored_rubric.traits) == len(original_rubric.traits)
+        assert len(restored_rubric.llm_traits) == len(original_rubric.llm_traits)
         assert restored_rubric.llm_traits[0].name == original_rubric.llm_traits[0].name
         assert restored_rubric.llm_traits[0].kind == original_rubric.llm_traits[0].kind

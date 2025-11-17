@@ -493,7 +493,7 @@ class TestMergeRubricsWithCallableTraits:
         merged = merge_rubrics(global_rubric, question_rubric)
 
         assert merged is not None
-        assert len(merged.traits) == 2  # accuracy + completeness
+        assert len(merged.llm_traits) == 2  # accuracy + completeness
         assert len(merged.callable_traits) == 2  # word_count + citation_count
         assert set(merged.get_trait_names()) == {"accuracy", "completeness", "word_count", "citation_count"}
 

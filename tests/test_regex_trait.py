@@ -219,7 +219,7 @@ class TestMergeRubricsWithRegexTraits:
         merged = merge_rubrics(global_rubric, question_rubric)
 
         assert merged is not None
-        assert len(merged.traits) == 2  # accuracy + completeness
+        assert len(merged.llm_traits) == 2  # accuracy + completeness
         assert len(merged.regex_traits) == 2  # has_number + has_date
         assert set(merged.get_trait_names()) == {"accuracy", "completeness", "has_number", "has_date"}
 
@@ -248,6 +248,6 @@ class TestMergeRubricsWithRegexTraits:
 
         merged = merge_rubrics(regex_only_rubric, empty_rubric)
         assert merged is not None
-        assert len(merged.traits) == 0
+        assert len(merged.llm_traits) == 0
         assert len(merged.regex_traits) == 1
         assert merged.get_regex_trait_names() == ["has_keyword"]

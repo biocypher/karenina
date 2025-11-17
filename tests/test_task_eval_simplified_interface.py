@@ -65,7 +65,7 @@ class TestTaskEvalSimplifiedInterface:
         # Add rubrics only (no templates)
         rubric = Rubric(
             llm_traits=[LLMRubricTrait(name="clarity", description="Is the response clear?", kind="boolean")],
-            manual_traits=[RegexTrait(name="has_action", description="Contains the word 'action'", pattern=r"action")],
+            regex_traits=[RegexTrait(name="has_action", description="Contains the word 'action'", pattern=r"action")],
         )
         task.add_rubric(rubric)
 
@@ -106,7 +106,7 @@ class TestTaskEvalSimplifiedInterface:
                     name="quality", description="Is the output high quality?", kind="score", min_score=1, max_score=5
                 )
             ],
-            manual_traits=[RegexTrait(name="has_success", description="Contains 'success'", pattern=r"success")],
+            regex_traits=[RegexTrait(name="has_success", description="Contains 'success'", pattern=r"success")],
         )
         task.add_rubric(rubric)
 
@@ -270,7 +270,7 @@ class Answer(BaseAnswer):
         task = TaskEval(task_id="step_dict_test")
 
         # Add step-specific rubric
-        rubric = Rubric(manual_traits=[RegexTrait(name="has_plan", description="Contains 'plan'", pattern=r"plan")])
+        rubric = Rubric(regex_traits=[RegexTrait(name="has_plan", description="Contains 'plan'", pattern=r"plan")])
         task.add_rubric(rubric, step_id="planning")
 
         # Log dict trace to specific step
