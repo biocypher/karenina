@@ -185,7 +185,7 @@ class FinalizeResultStage(BaseVerificationStage):
 
             if verify_rubric and evaluation_rubric and isinstance(verify_rubric, dict):
                 # Get trait names from evaluation_rubric
-                llm_trait_names = {trait["name"] for trait in evaluation_rubric.get("traits", [])}
+                llm_trait_names = {trait["name"] for trait in evaluation_rubric.get("llm_traits", [])}
                 regex_trait_names = {trait["name"] for trait in evaluation_rubric.get("regex_traits", [])}
                 callable_trait_names = {trait["name"] for trait in evaluation_rubric.get("callable_traits", [])}
 
