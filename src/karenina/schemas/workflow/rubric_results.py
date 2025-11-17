@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from .verification import VerificationResult
 
 
-TraitType = Literal["llm", "manual", "metric"]
+TraitType = Literal["llm", "regex", "callable", "metric"]
 
 
 class RubricResults(BaseModel):
@@ -55,12 +55,12 @@ class RubricResults(BaseModel):
     # ========================================================================
 
     def to_dataframe(
-        self, trait_type: Literal["llm_score", "llm_binary", "llm", "manual", "metric", "all"] = "all"
+        self, trait_type: Literal["llm_score", "llm_binary", "llm", "regex", "callable", "metric", "all"] = "all"
     ) -> Any:
         """
         Convert rubric evaluation results to pandas DataFrame.
 
-        Creates one row per trait (for llm/manual) or per metric (for metric traits).
+        Creates one row per trait (for llm/regex/callable) or per metric (for metric traits).
         Supports filtering by trait type or returning all traits combined.
 
         Args:
@@ -68,7 +68,8 @@ class RubricResults(BaseModel):
                 - "llm_score": LLM traits with 1-5 scale scores
                 - "llm_binary": LLM traits with boolean scores
                 - "llm": All LLM traits (both score and binary)
-                - "manual": Manual/regex traits (boolean)
+                - "regex": Regex traits (boolean)
+                - "callable": Callable traits (boolean or score)
                 - "metric": Metric traits (precision, recall, f1) - EXPLODED by metric
                 - "all": All trait types combined (default)
 
@@ -114,10 +115,15 @@ class RubricResults(BaseModel):
 
                     rows.append(self._create_llm_trait_row(result, trait_name, trait_score, score_type))
 
-            # Process manual traits
-            if trait_type in ("manual", "all") and result.rubric.manual_trait_scores:
-                for trait_name, trait_score in result.rubric.manual_trait_scores.items():
-                    rows.append(self._create_manual_trait_row(result, trait_name, trait_score))
+            # Process regex traits
+            if trait_type in ("regex", "all") and result.rubric.regex_trait_scores:
+                for trait_name, trait_score in result.rubric.regex_trait_scores.items():
+                    rows.append(self._create_regex_trait_row(result, trait_name, trait_score))
+
+            # Process callable traits
+            if trait_type in ("callable", "all") and result.rubric.callable_trait_scores:
+                for trait_name, trait_score in result.rubric.callable_trait_scores.items():
+                    rows.append(self._create_callable_trait_row(result, trait_name, trait_score))
 
             # Process metric traits (EXPLODED by metric)
             if trait_type in ("metric", "all") and result.rubric.metric_trait_scores:
@@ -179,13 +185,13 @@ class RubricResults(BaseModel):
             "job_id": metadata.job_id,
         }
 
-    def _create_manual_trait_row(
+    def _create_regex_trait_row(
         self,
         result: VerificationResult,
         trait_name: str,
         trait_score: bool,
     ) -> dict[str, Any]:
-        """Create DataFrame row for manual trait."""
+        """Create DataFrame row for regex trait."""
         metadata = result.metadata
         rubric = result.rubric
 
@@ -212,7 +218,50 @@ class RubricResults(BaseModel):
             # === Rubric Data ===
             "trait_name": trait_name,
             "trait_score": trait_score,
-            "trait_type": "manual",
+            "trait_type": "regex",
+            # === Rubric Metadata ===
+            "evaluation_rubric": rubric.evaluation_rubric if rubric else None,
+            # === Execution Metadata ===
+            "execution_time": metadata.execution_time,
+            "timestamp": metadata.timestamp,
+            "run_name": metadata.run_name,
+            "job_id": metadata.job_id,
+        }
+
+    def _create_callable_trait_row(
+        self,
+        result: VerificationResult,
+        trait_name: str,
+        trait_score: bool | int,
+    ) -> dict[str, Any]:
+        """Create DataFrame row for callable trait."""
+        metadata = result.metadata
+        rubric = result.rubric
+
+        # Unified replicate
+        replicate = metadata.answering_replicate
+        if replicate is None:
+            replicate = metadata.parsing_replicate
+
+        return {
+            # === Status ===
+            "completed_without_errors": metadata.completed_without_errors,
+            "error": metadata.error,
+            # === Identification Metadata ===
+            "question_id": metadata.question_id,
+            "template_id": metadata.template_id,
+            "question_text": metadata.question_text,
+            "keywords": metadata.keywords,
+            "replicate": replicate,
+            # === Model Configuration ===
+            "answering_model": metadata.answering_model,
+            "parsing_model": metadata.parsing_model,
+            "answering_system_prompt": metadata.answering_system_prompt,
+            "parsing_system_prompt": metadata.parsing_system_prompt,
+            # === Rubric Data ===
+            "trait_name": trait_name,
+            "trait_score": trait_score,
+            "trait_type": "callable",
             # === Rubric Metadata ===
             "evaluation_rubric": rubric.evaluation_rubric if rubric else None,
             # === Execution Metadata ===
@@ -356,18 +405,18 @@ class RubricResults(BaseModel):
 
         return scores
 
-    def get_manual_trait_scores(
+    def get_regex_trait_scores(
         self, question_id: str | None = None, trait_name: str | None = None
     ) -> dict[str, dict[str, bool]]:
         """
-        Get manual trait scores from all results.
+        Get regex trait scores from all results.
 
         Args:
             question_id: Optional question ID to filter by
             trait_name: Optional trait name to filter by
 
         Returns:
-            Dictionary mapping result identifiers to manual trait scores
+            Dictionary mapping result identifiers to regex trait scores
             Format: {result_id: {trait_name: bool}}
         """
         scores = {}
@@ -376,9 +425,42 @@ class RubricResults(BaseModel):
             if question_id and result.metadata.question_id != question_id:
                 continue
 
-            if result.rubric and result.rubric.manual_trait_scores:
+            if result.rubric and result.rubric.regex_trait_scores:
                 result_id = self._get_result_id(result)
-                trait_scores = result.rubric.manual_trait_scores
+                trait_scores = result.rubric.regex_trait_scores
+
+                # Filter by trait name if specified
+                if trait_name:
+                    if trait_name in trait_scores:
+                        scores[result_id] = {trait_name: trait_scores[trait_name]}
+                else:
+                    scores[result_id] = trait_scores
+
+        return scores
+
+    def get_callable_trait_scores(
+        self, question_id: str | None = None, trait_name: str | None = None
+    ) -> dict[str, dict[str, bool | int]]:
+        """
+        Get callable trait scores from all results.
+
+        Args:
+            question_id: Optional question ID to filter by
+            trait_name: Optional trait name to filter by
+
+        Returns:
+            Dictionary mapping result identifiers to callable trait scores
+            Format: {result_id: {trait_name: bool | int}}
+        """
+        scores = {}
+        for result in self.get_results_with_rubric():
+            # Filter by question if specified
+            if question_id and result.metadata.question_id != question_id:
+                continue
+
+            if result.rubric and result.rubric.callable_trait_scores:
+                result_id = self._get_result_id(result)
+                trait_scores = result.rubric.callable_trait_scores
 
                 # Filter by trait name if specified
                 if trait_name:
@@ -530,14 +612,14 @@ class RubricResults(BaseModel):
 
         return result
 
-    def aggregate_manual_traits(
+    def aggregate_regex_traits(
         self,
         strategy: str = "majority_vote",
         by: str = "question_id",
         **kwargs: Any,
     ) -> dict[str, dict[str, bool]]:
         """
-        Aggregate manual trait scores using specified strategy.
+        Aggregate regex trait scores using specified strategy.
 
         Uses pandas DataFrame groupby for efficient aggregation.
 
@@ -551,14 +633,14 @@ class RubricResults(BaseModel):
             Format: {group_id: {trait_name: aggregated_bool}}
 
         Example:
-            >>> results.aggregate_manual_traits(strategy="majority_vote", by="question_id")
+            >>> results.aggregate_regex_traits(strategy="majority_vote", by="question_id")
             {'q1': {'contains_url': True, 'has_code': False}, 'q2': {...}}
         """
 
         aggregator = self._aggregator_registry.get(strategy)
 
-        # Get DataFrame with only manual traits
-        df = self.to_dataframe(trait_type="manual")
+        # Get DataFrame with only regex traits
+        df = self.to_dataframe(trait_type="regex")
 
         if len(df) == 0:
             return {}
@@ -572,6 +654,54 @@ class RubricResults(BaseModel):
             if group_id not in result:
                 result[group_id] = {}
             result[group_id][trait_name] = bool(score)
+
+        return result
+
+    def aggregate_callable_traits(
+        self,
+        strategy: str = "majority_vote",
+        by: str = "question_id",
+        **kwargs: Any,
+    ) -> dict[str, dict[str, bool | float]]:
+        """
+        Aggregate callable trait scores using specified strategy.
+
+        For boolean traits, uses majority vote. For score traits, uses mean.
+
+        Uses pandas DataFrame groupby for efficient aggregation.
+
+        Args:
+            strategy: Aggregation strategy name (default: "majority_vote" for bool, "mean" for scores)
+            by: Column name to group by (e.g., "question_id", "answering_model", "replicate")
+            **kwargs: Additional parameters for the aggregator
+
+        Returns:
+            Dictionary mapping group identifiers to aggregated trait scores
+            Format: {group_id: {trait_name: aggregated_value}}
+
+        Example:
+            >>> results.aggregate_callable_traits(strategy="majority_vote", by="question_id")
+            {'q1': {'passes_check': True, 'quality_score': 4.2}, 'q2': {...}}
+        """
+
+        aggregator = self._aggregator_registry.get(strategy)
+
+        # Get DataFrame with only callable traits
+        df = self.to_dataframe(trait_type="callable")
+
+        if len(df) == 0:
+            return {}
+
+        # Group by specified column and trait_name, then aggregate scores
+        grouped = df.groupby([by, "trait_name"])["trait_score"].agg(lambda s: aggregator.aggregate(s, **kwargs))
+
+        # Convert to nested dictionary format
+        result: dict[str, dict[str, bool | float]] = {}
+        for (group_id, trait_name), score in grouped.items():
+            if group_id not in result:
+                result[group_id] = {}
+            # Keep original type (bool or numeric)
+            result[group_id][trait_name] = score
 
         return result
 
@@ -751,14 +881,16 @@ class RubricResults(BaseModel):
             Dictionary with summary statistics:
             - num_results: Number of results with rubric data
             - llm_traits: List of LLM trait names
-            - manual_traits: List of manual trait names
+            - regex_traits: List of regex trait names
+            - callable_traits: List of callable trait names
             - metric_traits: List of metric trait names
             - num_questions: Number of unique questions
         """
         results_with_rubric = self.get_results_with_rubric()
 
         llm_traits: set[str] = set()
-        manual_traits: set[str] = set()
+        regex_traits: set[str] = set()
+        callable_traits: set[str] = set()
         metric_traits: set[str] = set()
         questions: set[str] = set()
 
@@ -768,15 +900,18 @@ class RubricResults(BaseModel):
             if result.rubric:
                 if result.rubric.llm_trait_scores:
                     llm_traits.update(result.rubric.llm_trait_scores.keys())
-                if result.rubric.manual_trait_scores:
-                    manual_traits.update(result.rubric.manual_trait_scores.keys())
+                if result.rubric.regex_trait_scores:
+                    regex_traits.update(result.rubric.regex_trait_scores.keys())
+                if result.rubric.callable_trait_scores:
+                    callable_traits.update(result.rubric.callable_trait_scores.keys())
                 if result.rubric.metric_trait_scores:
                     metric_traits.update(result.rubric.metric_trait_scores.keys())
 
         return {
             "num_results": len(results_with_rubric),
             "llm_traits": sorted(llm_traits),
-            "manual_traits": sorted(manual_traits),
+            "regex_traits": sorted(regex_traits),
+            "callable_traits": sorted(callable_traits),
             "metric_traits": sorted(metric_traits),
             "num_questions": len(questions),
         }

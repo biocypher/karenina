@@ -626,7 +626,8 @@ def _create_result_model(run_id: str, result: "VerificationResult") -> Verificat
         # Rubric fields (with split trait scores)
         rubric_evaluation_performed=rubric.rubric_evaluation_performed if rubric else False,
         llm_trait_scores=rubric.llm_trait_scores if rubric else None,
-        manual_trait_scores=rubric.manual_trait_scores if rubric else None,
+        regex_trait_scores=rubric.regex_trait_scores if rubric else None,
+        callable_trait_scores=rubric.callable_trait_scores if rubric else None,
         metric_trait_scores=rubric.metric_trait_scores if rubric else None,
         evaluation_rubric=rubric.evaluation_rubric if rubric else None,
         metric_trait_confusion_lists=rubric.metric_trait_confusion_lists if rubric else None,
@@ -691,7 +692,8 @@ def _update_result_model(model: VerificationResultModel, result: "VerificationRe
     if rubric:
         model.rubric_evaluation_performed = rubric.rubric_evaluation_performed
         model.llm_trait_scores = rubric.llm_trait_scores
-        model.manual_trait_scores = rubric.manual_trait_scores
+        model.regex_trait_scores = rubric.regex_trait_scores
+        model.callable_trait_scores = rubric.callable_trait_scores
         model.metric_trait_scores = rubric.metric_trait_scores
         model.evaluation_rubric = rubric.evaluation_rubric
         model.metric_trait_confusion_lists = rubric.metric_trait_confusion_lists
@@ -774,7 +776,8 @@ def _model_to_verification_result(model: VerificationResultModel) -> "Verificati
         rubric = VerificationResultRubric(
             rubric_evaluation_performed=model.rubric_evaluation_performed,
             llm_trait_scores=model.llm_trait_scores,
-            manual_trait_scores=model.manual_trait_scores,
+            regex_trait_scores=model.regex_trait_scores,
+            callable_trait_scores=model.callable_trait_scores,
             metric_trait_scores=model.metric_trait_scores,  # Use metric_trait_metrics from DB
             evaluation_rubric=model.evaluation_rubric,
             metric_trait_confusion_lists=model.metric_trait_confusion_lists,

@@ -174,32 +174,38 @@ class FinalizeResultStage(BaseVerificationStage):
         # Create rubric subclass (if rubric evaluation was performed)
         rubric = None
         if rubric_evaluation_performed:
-            # Split verify_rubric into three separate trait score dicts
+            # Split verify_rubric into separate trait score dicts
             verify_rubric = context.get_result_field("verify_rubric")
             evaluation_rubric = context.get_result_field("evaluation_rubric")
 
             llm_trait_scores: dict[str, int] | None = None
-            manual_trait_scores: dict[str, bool] | None = None
+            regex_trait_scores: dict[str, bool] | None = None
+            callable_trait_scores: dict[str, bool | int] | None = None
             metric_trait_scores_dict: dict[str, dict[str, float]] | None = None
 
             if verify_rubric and evaluation_rubric and isinstance(verify_rubric, dict):
                 # Get trait names from evaluation_rubric
                 llm_trait_names = {trait["name"] for trait in evaluation_rubric.get("traits", [])}
-                manual_trait_names = {trait["name"] for trait in evaluation_rubric.get("manual_traits", [])}
+                regex_trait_names = {trait["name"] for trait in evaluation_rubric.get("regex_traits", [])}
+                callable_trait_names = {trait["name"] for trait in evaluation_rubric.get("callable_traits", [])}
 
                 # Split verify_rubric by trait type
                 llm_results: dict[str, int] = {}
-                manual_results: dict[str, bool] = {}
+                regex_results: dict[str, bool] = {}
+                callable_results: dict[str, bool | int] = {}
 
                 for trait_name, trait_value in verify_rubric.items():
                     if trait_name in llm_trait_names:
                         llm_results[trait_name] = trait_value
-                    elif trait_name in manual_trait_names:
-                        manual_results[trait_name] = trait_value
+                    elif trait_name in regex_trait_names:
+                        regex_results[trait_name] = trait_value
+                    elif trait_name in callable_trait_names:
+                        callable_results[trait_name] = trait_value
                     # Note: metric traits are stored separately in metric_trait_metrics
 
                 llm_trait_scores = llm_results if llm_results else None
-                manual_trait_scores = manual_results if manual_results else None
+                regex_trait_scores = regex_results if regex_results else None
+                callable_trait_scores = callable_results if callable_results else None
 
             # Get metric trait scores from context (already in the right format)
             metric_trait_scores_dict = context.get_result_field("metric_trait_metrics")
@@ -207,7 +213,8 @@ class FinalizeResultStage(BaseVerificationStage):
             rubric = VerificationResultRubric(
                 rubric_evaluation_performed=rubric_evaluation_performed,
                 llm_trait_scores=llm_trait_scores,
-                manual_trait_scores=manual_trait_scores,
+                regex_trait_scores=regex_trait_scores,
+                callable_trait_scores=callable_trait_scores,
                 metric_trait_scores=metric_trait_scores_dict,
                 evaluation_rubric=evaluation_rubric,
                 metric_trait_confusion_lists=context.get_result_field("metric_trait_confusion_lists"),

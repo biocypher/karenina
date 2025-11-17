@@ -228,10 +228,11 @@ def export_verification_results_csv(
     invalid_trait_count = 0
     for result in results.values():
         if result.rubric:
-            # Collect from all three trait score dicts (llm, manual, metric)
+            # Collect from all trait score dicts (llm, regex, callable, metric)
             for trait_dict in [
                 result.rubric.llm_trait_scores,
-                result.rubric.manual_trait_scores,
+                result.rubric.regex_trait_scores,
+                result.rubric.callable_trait_scores,
                 result.rubric.metric_trait_scores,
             ]:
                 if trait_dict:
@@ -480,14 +481,16 @@ def export_verification_results_csv(
             "job_id": job.job_id,
         }
 
-        # Add global rubric trait values from all three trait score dicts
+        # Add global rubric trait values from all trait score dicts
         if rubric:
             # Merge all trait scores into a unified dict for CSV export
             merged_traits: dict[str, Any] = {}
             if rubric.llm_trait_scores:
                 merged_traits.update(rubric.llm_trait_scores)
-            if rubric.manual_trait_scores:
-                merged_traits.update(rubric.manual_trait_scores)
+            if rubric.regex_trait_scores:
+                merged_traits.update(rubric.regex_trait_scores)
+            if rubric.callable_trait_scores:
+                merged_traits.update(rubric.callable_trait_scores)
             if rubric.metric_trait_scores:
                 merged_traits.update(rubric.metric_trait_scores)
 

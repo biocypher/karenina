@@ -745,7 +745,8 @@ class VerificationResultRubric(BaseModel):
 
     # Split trait scores by type (replaces old verify_rubric dict)
     llm_trait_scores: dict[str, int | bool] | None = None  # LLM-evaluated traits (1-5 scale or binary)
-    manual_trait_scores: dict[str, bool] | None = None  # Manual/regex traits (boolean)
+    regex_trait_scores: dict[str, bool] | None = None  # Regex-based traits (boolean)
+    callable_trait_scores: dict[str, bool | int] | None = None  # Callable-based traits (boolean or score)
     metric_trait_scores: dict[str, dict[str, float]] | None = None  # Metric traits with nested metrics dict
 
     evaluation_rubric: dict[str, Any] | None = None  # The merged rubric used for evaluation
@@ -771,8 +772,10 @@ class VerificationResultRubric(BaseModel):
 
         if self.llm_trait_scores:
             scores.update(self.llm_trait_scores)
-        if self.manual_trait_scores:
-            scores.update(self.manual_trait_scores)
+        if self.regex_trait_scores:
+            scores.update(self.regex_trait_scores)
+        if self.callable_trait_scores:
+            scores.update(self.callable_trait_scores)
         if self.metric_trait_scores:
             scores.update(self.metric_trait_scores)
 
@@ -786,13 +789,15 @@ class VerificationResultRubric(BaseModel):
             name: The trait name to search for
 
         Returns:
-            tuple: (value, trait_type) where trait_type is "llm", "manual", or "metric"
+            tuple: (value, trait_type) where trait_type is "llm", "regex", "callable", or "metric"
             None: If the trait is not found
         """
         if self.llm_trait_scores and name in self.llm_trait_scores:
             return (self.llm_trait_scores[name], "llm")
-        if self.manual_trait_scores and name in self.manual_trait_scores:
-            return (self.manual_trait_scores[name], "manual")
+        if self.regex_trait_scores and name in self.regex_trait_scores:
+            return (self.regex_trait_scores[name], "regex")
+        if self.callable_trait_scores and name in self.callable_trait_scores:
+            return (self.callable_trait_scores[name], "callable")
         if self.metric_trait_scores and name in self.metric_trait_scores:
             return (self.metric_trait_scores[name], "metric")
         return None

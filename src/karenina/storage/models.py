@@ -228,7 +228,8 @@ class VerificationResultModel(Base):
     )
     # Split rubric trait scores by type (replaces verify_rubric)
     llm_trait_scores: Mapped[dict[str, int] | None] = mapped_column(JSON, nullable=True)
-    manual_trait_scores: Mapped[dict[str, bool] | None] = mapped_column(JSON, nullable=True)
+    regex_trait_scores: Mapped[dict[str, bool] | None] = mapped_column(JSON, nullable=True)
+    callable_trait_scores: Mapped[dict[str, bool | int] | None] = mapped_column(JSON, nullable=True)
     metric_trait_scores: Mapped[dict[str, dict[str, float]] | None] = mapped_column(JSON, nullable=True)
     evaluation_rubric: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
