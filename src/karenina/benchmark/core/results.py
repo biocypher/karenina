@@ -424,7 +424,7 @@ class ResultsManager:
         # Determine global vs question-specific rubrics
         global_trait_names = set()
         if global_rubric and hasattr(global_rubric, "traits"):
-            for trait in global_rubric.traits:
+            for trait in global_rubric.llm_traits:
                 global_trait_names.add(trait.name)
 
         # Separate traits into global and question-specific

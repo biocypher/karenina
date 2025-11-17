@@ -25,7 +25,7 @@ from karenina.benchmark.verification.stages import (
     VerifyTemplateStage,
 )
 from karenina.schemas import ModelConfig, VerificationResult
-from karenina.schemas.domain import Rubric, RubricTrait
+from karenina.schemas.domain import LLMRubricTrait, Rubric
 
 
 class TestStageOrchestratorConfiguration:
@@ -55,7 +55,9 @@ class TestStageOrchestratorConfiguration:
     def test_template_with_rubric_mode(self, answering_model: ModelConfig, parsing_model: ModelConfig) -> None:
         """Test template + rubric mode (requires evaluation_mode='template_and_rubric')."""
         rubric = Rubric(
-            traits=[RubricTrait(name="Clarity", description="Response clarity", kind="score", min_score=1, max_score=5)]
+            llm_traits=[
+                LLMRubricTrait(name="Clarity", description="Response clarity", kind="score", min_score=1, max_score=5)
+            ]
         )
 
         orchestrator = StageOrchestrator.from_config(
@@ -101,7 +103,9 @@ class TestStageOrchestratorConfiguration:
     def test_all_features_enabled(self, answering_model: ModelConfig, parsing_model: ModelConfig) -> None:
         """Test all features enabled together (requires evaluation_mode='template_and_rubric')."""
         rubric = Rubric(
-            traits=[RubricTrait(name="Clarity", description="Response clarity", kind="score", min_score=1, max_score=5)]
+            llm_traits=[
+                LLMRubricTrait(name="Clarity", description="Response clarity", kind="score", min_score=1, max_score=5)
+            ]
         )
 
         orchestrator = StageOrchestrator.from_config(
@@ -121,7 +125,7 @@ class TestStageOrchestratorConfiguration:
 
     def test_empty_rubric_not_included(self, answering_model: ModelConfig, parsing_model: ModelConfig) -> None:
         """Test that rubric stage is not included if rubric has no traits."""
-        empty_rubric = Rubric(traits=[], manual_traits=[], metric_traits=[])
+        empty_rubric = Rubric(llm_traits=[], manual_traits=[], metric_traits=[])
 
         orchestrator = StageOrchestrator.from_config(
             answering_model=answering_model,
@@ -141,7 +145,9 @@ class TestEvaluationModeStageSelection:
     def test_template_only_mode_excludes_rubric(self, answering_model: ModelConfig, parsing_model: ModelConfig) -> None:
         """Test that template_only mode excludes rubric stage even if rubric provided."""
         rubric = Rubric(
-            traits=[RubricTrait(name="Clarity", description="Response clarity", kind="score", min_score=1, max_score=5)]
+            llm_traits=[
+                LLMRubricTrait(name="Clarity", description="Response clarity", kind="score", min_score=1, max_score=5)
+            ]
         )
 
         orchestrator = StageOrchestrator.from_config(
@@ -165,7 +171,9 @@ class TestEvaluationModeStageSelection:
     ) -> None:
         """Test that template_and_rubric mode includes both template and rubric stages."""
         rubric = Rubric(
-            traits=[RubricTrait(name="Clarity", description="Response clarity", kind="score", min_score=1, max_score=5)]
+            llm_traits=[
+                LLMRubricTrait(name="Clarity", description="Response clarity", kind="score", min_score=1, max_score=5)
+            ]
         )
 
         orchestrator = StageOrchestrator.from_config(
@@ -190,7 +198,9 @@ class TestEvaluationModeStageSelection:
     ) -> None:
         """Test that rubric_only mode skips template verification stages."""
         rubric = Rubric(
-            traits=[RubricTrait(name="Clarity", description="Response clarity", kind="score", min_score=1, max_score=5)]
+            llm_traits=[
+                LLMRubricTrait(name="Clarity", description="Response clarity", kind="score", min_score=1, max_score=5)
+            ]
         )
 
         orchestrator = StageOrchestrator.from_config(
@@ -217,7 +227,9 @@ class TestEvaluationModeStageSelection:
     def test_rubric_only_mode_with_abstention(self, answering_model: ModelConfig, parsing_model: ModelConfig) -> None:
         """Test that rubric_only mode can include abstention check."""
         rubric = Rubric(
-            traits=[RubricTrait(name="Clarity", description="Response clarity", kind="score", min_score=1, max_score=5)]
+            llm_traits=[
+                LLMRubricTrait(name="Clarity", description="Response clarity", kind="score", min_score=1, max_score=5)
+            ]
         )
 
         orchestrator = StageOrchestrator.from_config(
@@ -243,7 +255,9 @@ class TestEvaluationModeStageSelection:
     def test_rubric_only_mode_stage_order(self, answering_model: ModelConfig, parsing_model: ModelConfig) -> None:
         """Test that rubric_only mode stages are in correct order."""
         rubric = Rubric(
-            traits=[RubricTrait(name="Clarity", description="Response clarity", kind="score", min_score=1, max_score=5)]
+            llm_traits=[
+                LLMRubricTrait(name="Clarity", description="Response clarity", kind="score", min_score=1, max_score=5)
+            ]
         )
 
         orchestrator = StageOrchestrator.from_config(
@@ -293,7 +307,9 @@ class TestStageOrdering:
     def test_finalize_always_last(self, answering_model: ModelConfig, parsing_model: ModelConfig) -> None:
         """Test that FinalizeResultStage is always last."""
         rubric = Rubric(
-            traits=[RubricTrait(name="Clarity", description="Response clarity", kind="score", min_score=1, max_score=5)]
+            llm_traits=[
+                LLMRubricTrait(name="Clarity", description="Response clarity", kind="score", min_score=1, max_score=5)
+            ]
         )
 
         orchestrator = StageOrchestrator.from_config(

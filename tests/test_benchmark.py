@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from karenina.benchmark.benchmark import Benchmark
-from karenina.schemas.domain import RubricTrait
+from karenina.schemas.domain import LLMRubricTrait
 
 
 def test_create_benchmark() -> None:
@@ -88,20 +88,20 @@ def test_rubric_management() -> None:
     benchmark = Benchmark.create("Test")
 
     # Add global rubric trait
-    global_trait = RubricTrait(name="clarity", description="Is the response clear?", kind="boolean")
+    global_trait = LLMRubricTrait(name="clarity", description="Is the response clear?", kind="boolean")
     benchmark.add_global_rubric_trait(global_trait)
 
     rubric = benchmark.get_global_rubric()
     assert rubric is not None
-    assert len(rubric.traits) == 1
-    assert rubric.traits[0].name == "clarity"
+    assert len(rubric.llm_traits) == 1
+    assert rubric.llm_traits[0].name == "clarity"
 
     # Add question with question-specific rubric
     q_id = benchmark.add_question(
         question="Explain quicksort", raw_answer="Quicksort is a divide-and-conquer algorithm..."
     )
 
-    question_trait = RubricTrait(
+    question_trait = LLMRubricTrait(
         name="complexity_analysis", description="Does it mention time complexity?", kind="boolean"
     )
     benchmark.add_question_rubric_trait(q_id, question_trait)
@@ -120,7 +120,7 @@ def test_save_and_load() -> None:
 
     q_id = benchmark.add_question(question="What is AI?", raw_answer="Artificial Intelligence", finished=True)
 
-    benchmark.add_global_rubric_trait(RubricTrait(name="accuracy", description="Is it accurate?", kind="boolean"))
+    benchmark.add_global_rubric_trait(LLMRubricTrait(name="accuracy", description="Is it accurate?", kind="boolean"))
 
     # Save to temp file
     with tempfile.NamedTemporaryFile(suffix=".jsonld", delete=False) as f:
@@ -145,7 +145,7 @@ def test_save_and_load() -> None:
         loaded_rubric = loaded.get_global_rubric()
         assert loaded_rubric is not None
         assert len(loaded_rubric.traits) == 1
-        assert loaded_rubric.traits[0].name == "accuracy"
+        assert loaded_rubric.llm_traits[0].name == "accuracy"
 
     finally:
         temp_path.unlink()
@@ -591,14 +591,14 @@ def test_status_management() -> None:
 
 def test_clear_and_remove_operations() -> None:
     """Test clear and remove operations."""
-    from karenina.schemas.domain import RubricTrait
+    from karenina.schemas.domain import LLMRubricTrait
 
     benchmark = Benchmark.create("Clear Test")
 
     # Add content
     q1_id = benchmark.add_question("Q1", "A1")
     _ = benchmark.add_question("Q2", "A2")
-    benchmark.add_global_rubric_trait(RubricTrait(name="test", description="test", kind="boolean"))
+    benchmark.add_global_rubric_trait(LLMRubricTrait(name="test", description="test", kind="boolean"))
 
     assert len(benchmark) == 2
 
@@ -1291,7 +1291,7 @@ def test_benchmark_getitem_with_rubric_traits() -> None:
     q_id = benchmark.add_question("Question with Rubric", "Answer with Rubric")
 
     # Add question-specific rubric trait
-    rubric_trait = RubricTrait(
+    rubric_trait = LLMRubricTrait(
         name="accuracy", description="How accurate is the answer?", kind="score", min_score=1, max_score=5
     )
     benchmark.add_question_rubric_trait(q_id, rubric_trait)

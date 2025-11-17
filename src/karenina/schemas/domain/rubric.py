@@ -409,7 +409,7 @@ class Rubric(BaseModel):
     beyond basic correctness checking. Supports LLM-based, regex, callable, and metric traits.
     """
 
-    traits: list[LLMRubricTrait] = Field(default_factory=list, description="List of LLM-based evaluation traits")
+    llm_traits: list[LLMRubricTrait] = Field(default_factory=list, description="List of LLM-based evaluation traits")
     regex_traits: list[RegexTrait] = Field(default_factory=list, description="List of regex-based evaluation traits")
     callable_traits: list[CallableTrait] = Field(
         default_factory=list, description="List of callable function-based evaluation traits"
@@ -422,7 +422,7 @@ class Rubric(BaseModel):
 
     def get_trait_names(self) -> list[str]:
         """Get list of all trait names in this rubric (LLM, regex, callable, and metric)."""
-        llm_names = [trait.name for trait in self.traits]
+        llm_names = [trait.name for trait in self.llm_traits]
         regex_names = [trait.name for trait in self.regex_traits]
         callable_names = [trait.name for trait in self.callable_traits]
         metric_names = [trait.name for trait in self.metric_traits]
@@ -430,7 +430,7 @@ class Rubric(BaseModel):
 
     def get_llm_trait_names(self) -> list[str]:
         """Get list of LLM trait names only."""
-        return [trait.name for trait in self.traits]
+        return [trait.name for trait in self.llm_traits]
 
     def get_regex_trait_names(self) -> list[str]:
         """Get list of regex trait names only."""
@@ -465,7 +465,7 @@ class Rubric(BaseModel):
             return False
 
         # Check that each score is valid for its trait
-        llm_trait_map = {trait.name: trait for trait in self.traits}
+        llm_trait_map = {trait.name: trait for trait in self.llm_traits}
         regex_trait_map = {trait.name: trait for trait in self.regex_traits}
         callable_trait_map = {trait.name: trait for trait in self.callable_traits}
 
@@ -526,13 +526,13 @@ def merge_rubrics(global_rubric: "Rubric | None", question_rubric: "Rubric | Non
         raise ValueError(f"Trait name conflicts between global and question rubrics: {conflicts}")
 
     # Merge all trait types separately
-    merged_traits = list(global_rubric.traits) + list(question_rubric.traits)
+    merged_traits = list(global_rubric.llm_traits) + list(question_rubric.llm_traits)
     merged_regex_traits = list(global_rubric.regex_traits) + list(question_rubric.regex_traits)
     merged_callable_traits = list(global_rubric.callable_traits) + list(question_rubric.callable_traits)
     merged_metric_traits = list(global_rubric.metric_traits) + list(question_rubric.metric_traits)
 
     return Rubric(
-        traits=merged_traits,
+        llm_traits=merged_traits,
         regex_traits=merged_regex_traits,
         callable_traits=merged_callable_traits,
         metric_traits=merged_metric_traits,

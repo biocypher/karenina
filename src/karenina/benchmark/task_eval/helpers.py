@@ -32,8 +32,8 @@ def check_rubric_conflicts(
     question_traits: set[str] = set()
 
     # Collect standalone rubric traits
-    if standalone_rubric and standalone_rubric.traits:
-        for trait in standalone_rubric.traits:
+    if standalone_rubric and standalone_rubric.llm_traits:
+        for trait in standalone_rubric.llm_traits:
             standalone_traits.add(trait.name)
 
     # Collect question-specific rubric traits
@@ -81,7 +81,7 @@ def evaluate_standalone_rubrics(
     """
     rubric_scores: dict[str, int | bool] = {}
 
-    if merged_rubric and (merged_rubric.traits or merged_rubric.regex_traits or merged_rubric.callable_traits):
+    if merged_rubric and (merged_rubric.llm_traits or merged_rubric.regex_traits or merged_rubric.callable_traits):
         try:
             evaluator = RubricEvaluator(parsing_model)
             question = f"Evaluate the overall quality of the {context} outputs."
@@ -122,7 +122,7 @@ def evaluate_question_with_rubric(
         if question_rubric_traits:
             from ...schemas.domain import Rubric
 
-            question_rubric = Rubric(traits=question_rubric_traits)
+            question_rubric = Rubric(llm_traits=question_rubric_traits)
 
     # Evaluate the response with question-specific rubric
     return evaluate_response_func(

@@ -403,11 +403,11 @@ class TestRubricWithCallableTraits:
         )
 
         rubric = Rubric(
-            traits=[llm_trait],
+            llm_traits=[llm_trait],
             callable_traits=[callable_trait],
         )
 
-        assert len(rubric.traits) == 1
+        assert len(rubric.llm_traits) == 1
         assert len(rubric.callable_traits) == 1
         assert set(rubric.get_trait_names()) == {"accuracy", "word_count"}
         assert rubric.get_llm_trait_names() == ["accuracy"]
@@ -425,7 +425,7 @@ class TestRubricWithCallableTraits:
         )
 
         rubric = Rubric(
-            traits=[llm_trait],
+            llm_traits=[llm_trait],
             callable_traits=[callable_trait],
         )
 
@@ -453,11 +453,11 @@ class TestRubricWithCallableTraits:
         )
 
         rubric = Rubric(
-            traits=[llm_trait],
+            llm_traits=[llm_trait],
             callable_traits=[callable_trait],
         )
 
-        assert len(rubric.traits) == 1
+        assert len(rubric.llm_traits) == 1
         assert len(rubric.callable_traits) == 1
         assert rubric.get_callable_trait_names() == ["readability"]
 
@@ -476,7 +476,7 @@ class TestMergeRubricsWithCallableTraits:
             func=lambda text: len(text.split()) > 50,
             kind="boolean",
         )
-        global_rubric = Rubric(traits=[global_llm], callable_traits=[global_callable])
+        global_rubric = Rubric(llm_traits=[global_llm], callable_traits=[global_callable])
 
         # Question rubric with both types
         question_llm = LLMRubricTrait(name="completeness", kind="score", min_score=1, max_score=5)
@@ -487,7 +487,7 @@ class TestMergeRubricsWithCallableTraits:
             min_score=1,
             max_score=5,
         )
-        question_rubric = Rubric(traits=[question_llm], callable_traits=[question_callable])
+        question_rubric = Rubric(llm_traits=[question_llm], callable_traits=[question_callable])
 
         # Merge rubrics
         merged = merge_rubrics(global_rubric, question_rubric)
@@ -503,7 +503,7 @@ class TestMergeRubricsWithCallableTraits:
 
         # Create conflict: same name in LLM and callable traits
         global_llm = LLMRubricTrait(name="quality", kind="boolean")
-        global_rubric = Rubric(traits=[global_llm])
+        global_rubric = Rubric(llm_traits=[global_llm])
 
         question_callable = CallableTrait.from_callable(
             name="quality",

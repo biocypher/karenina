@@ -79,7 +79,7 @@ class RubricManager:
             callable_traits = [t for t in traits if isinstance(t, CallableTrait)]
             metric_traits = [t for t in traits if isinstance(t, MetricRubricTrait)]
             return Rubric(
-                traits=llm_traits,
+                llm_traits=llm_traits,
                 regex_traits=regex_traits,
                 callable_traits=callable_traits,
                 metric_traits=metric_traits,
@@ -141,7 +141,7 @@ class RubricManager:
             callable_traits = [t for t in merged_traits if isinstance(t, CallableTrait)]
             metric_traits = [t for t in merged_traits if isinstance(t, MetricRubricTrait)]
             return Rubric(
-                traits=llm_traits,
+                llm_traits=llm_traits,
                 regex_traits=regex_traits,
                 callable_traits=callable_traits,
                 metric_traits=metric_traits,
@@ -220,7 +220,7 @@ class RubricManager:
         global_rubric = self.get_global_rubric()
         if global_rubric:
             # Validate LLM traits
-            for trait in global_rubric.traits:
+            for trait in global_rubric.llm_traits:
                 if not trait.name or not trait.description:
                     errors.append("Global LLM rubric trait missing name or description")
                 if trait.kind == "score" and (trait.min_score is None or trait.max_score is None):
@@ -269,7 +269,7 @@ class RubricManager:
         global_rubric = self.get_global_rubric()
         global_traits_count = (
             (
-                len(global_rubric.traits)
+                len(global_rubric.llm_traits)
                 + len(global_rubric.regex_traits)
                 + len(global_rubric.callable_traits)
                 + len(global_rubric.metric_traits)
@@ -367,7 +367,7 @@ class RubricManager:
             # Get global trait names
             global_rubric = self.get_global_rubric()
             if global_rubric:
-                trait_names = [trait.name for trait in global_rubric.traits]
+                trait_names = [trait.name for trait in global_rubric.llm_traits]
                 trait_names.extend([trait.name for trait in global_rubric.regex_traits])
                 trait_names.extend([trait.name for trait in global_rubric.callable_traits])
                 trait_names.extend([trait.name for trait in global_rubric.metric_traits])
@@ -377,7 +377,7 @@ class RubricManager:
             # Get merged trait names for the question
             merged_rubric = self.get_merged_rubric_for_question(question_id)
             if merged_rubric:
-                trait_names = [trait.name for trait in merged_rubric.traits]
+                trait_names = [trait.name for trait in merged_rubric.llm_traits]
                 trait_names.extend([trait.name for trait in merged_rubric.regex_traits])
                 trait_names.extend([trait.name for trait in merged_rubric.callable_traits])
                 trait_names.extend([trait.name for trait in merged_rubric.metric_traits])

@@ -338,7 +338,7 @@ class VerificationManager:
 
                     # Create Rubric and convert to dict
                     rubric = Rubric(
-                        traits=llm_traits,
+                        llm_traits=llm_traits,
                         regex_traits=regex_traits,
                         callable_traits=callable_traits,
                         metric_traits=metric_traits,

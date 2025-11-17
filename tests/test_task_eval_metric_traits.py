@@ -218,14 +218,14 @@ class Answer(BaseAnswer):
         task.add_question(question)
 
         # Combine all three rubric trait types
-        from karenina.schemas.domain import ManualRubricTrait, RubricTrait
+        from karenina.schemas.domain import LLMRubricTrait, RegexTrait
 
         combined_rubric = Rubric(
-            traits=[
-                RubricTrait(name="completeness", description="Is answer complete?", kind="boolean"),
+            llm_traits=[
+                LLMRubricTrait(name="completeness", description="Is answer complete?", kind="boolean"),
             ],
             manual_traits=[
-                ManualRubricTrait(
+                RegexTrait(
                     name="has_alice",
                     description="Contains Alice",
                     pattern=r"Alice",

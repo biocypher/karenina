@@ -159,11 +159,11 @@ class TestRubricWithRegexTraits:
         regex_trait = RegexTrait(name="has_number", pattern=r"\d+")
 
         rubric = Rubric(
-            traits=[llm_trait],
+            llm_traits=[llm_trait],
             regex_traits=[regex_trait],
         )
 
-        assert len(rubric.traits) == 1
+        assert len(rubric.llm_traits) == 1
         assert len(rubric.regex_traits) == 1
         assert set(rubric.get_trait_names()) == {"accuracy", "has_number"}
         assert rubric.get_llm_trait_names() == ["accuracy"]
@@ -177,7 +177,7 @@ class TestRubricWithRegexTraits:
         regex_trait = RegexTrait(name="has_keyword", pattern=r"keyword")
 
         rubric = Rubric(
-            traits=[llm_trait],
+            llm_traits=[llm_trait],
             regex_traits=[regex_trait],
         )
 
@@ -208,12 +208,12 @@ class TestMergeRubricsWithRegexTraits:
         # Global rubric with both types
         global_llm = LLMRubricTrait(name="accuracy", kind="boolean")
         global_regex = RegexTrait(name="has_number", pattern=r"\d+")
-        global_rubric = Rubric(traits=[global_llm], regex_traits=[global_regex])
+        global_rubric = Rubric(llm_traits=[global_llm], regex_traits=[global_regex])
 
         # Question rubric with both types
         question_llm = LLMRubricTrait(name="completeness", kind="score", min_score=1, max_score=5)
         question_regex = RegexTrait(name="has_date", pattern=r"\d{4}-\d{2}-\d{2}")
-        question_rubric = Rubric(traits=[question_llm], regex_traits=[question_regex])
+        question_rubric = Rubric(llm_traits=[question_llm], regex_traits=[question_regex])
 
         # Merge rubrics
         merged = merge_rubrics(global_rubric, question_rubric)
@@ -229,7 +229,7 @@ class TestMergeRubricsWithRegexTraits:
 
         # Create conflict: same name in LLM and regex traits
         global_llm = LLMRubricTrait(name="quality", kind="boolean")
-        global_rubric = Rubric(traits=[global_llm])
+        global_rubric = Rubric(llm_traits=[global_llm])
 
         question_regex = RegexTrait(name="quality", pattern=r"good")
         question_rubric = Rubric(regex_traits=[question_regex])

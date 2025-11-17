@@ -6,7 +6,7 @@ import pytest
 
 from karenina.benchmark.exporter import export_verification_results_csv, export_verification_results_json
 from karenina.schemas import ModelConfig, VerificationConfig, VerificationJob
-from karenina.schemas.domain import Rubric, RubricTrait
+from karenina.schemas.domain import LLMRubricTrait, Rubric
 from karenina.schemas.workflow.verification import (
     VerificationResult,
     VerificationResultMetadata,
@@ -19,15 +19,15 @@ from karenina.schemas.workflow.verification import (
 def mock_global_rubric() -> Rubric:
     """Create a mock global rubric with common traits."""
     return Rubric(
-        traits=[
-            RubricTrait(
+        llm_traits=[
+            LLMRubricTrait(
                 name="Conciseness",
                 description="Is the response concise?",
                 kind="boolean",
                 min_score=None,
                 max_score=None,
             ),
-            RubricTrait(
+            LLMRubricTrait(
                 name="Directness", description="Is the response direct?", kind="score", min_score=1, max_score=5
             ),
         ]
@@ -279,18 +279,18 @@ class TestExportVerificationResultsCSV:
         """Test handling empty question-specific rubrics with proper JSON."""
         # Mock global rubric that includes some traits not in all results
         extended_global_rubric = Rubric(
-            traits=[
-                RubricTrait(
+            llm_traits=[
+                LLMRubricTrait(
                     name="Conciseness",
                     description="Is the response concise?",
                     kind="boolean",
                     min_score=None,
                     max_score=None,
                 ),
-                RubricTrait(
+                LLMRubricTrait(
                     name="Directness", description="Is the response direct?", kind="score", min_score=1, max_score=5
                 ),
-                RubricTrait(
+                LLMRubricTrait(
                     name="extra_trait", description="Extra trait", kind="boolean", min_score=None, max_score=None
                 ),
             ]

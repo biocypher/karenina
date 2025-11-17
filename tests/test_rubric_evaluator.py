@@ -6,7 +6,7 @@ import pytest
 
 from karenina.benchmark.verification.evaluators.rubric_evaluator import RubricEvaluator
 from karenina.schemas import INTERFACE_LANGCHAIN, INTERFACE_MANUAL, INTERFACE_OPENROUTER, ModelConfig
-from karenina.schemas.domain import Rubric, RubricTrait
+from karenina.schemas.domain import LLMRubricTrait, Rubric
 
 
 class TestRubricEvaluator:
@@ -16,9 +16,9 @@ class TestRubricEvaluator:
     def sample_rubric(self) -> None:
         """Create a sample rubric for testing."""
         return Rubric(
-            traits=[
-                RubricTrait(name="accuracy", description="Is the response factually accurate?", kind="boolean"),
-                RubricTrait(
+            llm_traits=[
+                LLMRubricTrait(name="accuracy", description="Is the response factually accurate?", kind="boolean"),
+                LLMRubricTrait(
                     name="completeness",
                     description="How complete is the response (1-5)?",
                     kind="score",
@@ -62,7 +62,7 @@ class TestRubricEvaluator:
 
         evaluator = RubricEvaluator(mock_model_config)
 
-        empty_rubric = Rubric(traits=[])
+        empty_rubric = Rubric(llm_traits=[])
         result, usage_metadata_list = evaluator.evaluate_rubric("Test question?", "Test answer.", empty_rubric)
 
         assert result == {}
@@ -120,9 +120,9 @@ class TestRubricEvaluator:
 
         # Create rubric with mixed trait types
         mixed_rubric = Rubric(
-            traits=[
-                RubricTrait(name="bool_trait", description="Boolean trait", kind="boolean"),
-                RubricTrait(name="score_trait", description="Score trait", kind="score", min_score=1, max_score=3),
+            llm_traits=[
+                LLMRubricTrait(name="bool_trait", description="Boolean trait", kind="boolean"),
+                LLMRubricTrait(name="score_trait", description="Score trait", kind="score", min_score=1, max_score=3),
             ]
         )
 
@@ -177,13 +177,13 @@ class TestRubricEvaluator:
 
         # Create comprehensive rubric
         comprehensive_rubric = Rubric(
-            traits=[
-                RubricTrait(name="factual_accuracy", description="Factually correct", kind="boolean"),
-                RubricTrait(
+            llm_traits=[
+                LLMRubricTrait(name="factual_accuracy", description="Factually correct", kind="boolean"),
+                LLMRubricTrait(
                     name="completeness", description="Complete response", kind="score", min_score=1, max_score=5
                 ),
-                RubricTrait(name="clarity", description="Clear writing", kind="boolean"),
-                RubricTrait(
+                LLMRubricTrait(name="clarity", description="Clear writing", kind="boolean"),
+                LLMRubricTrait(
                     name="relevance", description="Relevant to question", kind="score", min_score=1, max_score=3
                 ),
             ]

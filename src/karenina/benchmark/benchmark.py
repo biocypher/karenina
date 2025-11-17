@@ -726,7 +726,7 @@ class Benchmark:
         # Clear existing global rubric
         self.clear_global_rubric()
         # Add all traits from the rubric
-        for trait in rubric.traits:
+        for trait in rubric.llm_traits:
             self.add_global_rubric_trait(trait)
         for regex_trait in rubric.regex_traits:
             self.add_global_rubric_trait(regex_trait)
@@ -740,7 +740,7 @@ class Benchmark:
         # Clear existing question rubric
         self.remove_question_rubric(question_id)
         # Add all traits from the rubric
-        for trait in rubric.traits:
+        for trait in rubric.llm_traits:
             self.add_question_rubric_trait(question_id, trait)
         for regex_trait in rubric.regex_traits:
             self.add_question_rubric_trait(question_id, regex_trait)

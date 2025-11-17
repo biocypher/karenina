@@ -411,7 +411,7 @@ def load_benchmark(
 
                 if traits or regex_traits or callable_traits or metric_traits:
                     rubric = Rubric(
-                        traits=traits,
+                        llm_traits=traits,
                         regex_traits=regex_traits,
                         callable_traits=callable_traits,
                         metric_traits=metric_traits,

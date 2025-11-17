@@ -105,7 +105,7 @@ class RubricEvaluator:
             results.update(callable_results)
 
         # Evaluate LLM traits if present
-        if rubric.traits:
+        if rubric.llm_traits:
             try:
                 # Try batch evaluation first (more efficient)
                 llm_results, usage_metadata = self._evaluate_batch(question, answer, rubric)
@@ -190,7 +190,7 @@ class RubricEvaluator:
             Tuple of (results_dict, usage_metadata)
         """
         system_prompt = self._build_batch_system_prompt()
-        user_prompt = self._build_batch_user_prompt(question, answer, rubric.traits)
+        user_prompt = self._build_batch_user_prompt(question, answer, rubric.llm_traits)
 
         messages: list[BaseMessage] = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
 
@@ -201,7 +201,7 @@ class RubricEvaluator:
 
         raw_response = response.content if hasattr(response, "content") else str(response)
 
-        results = self._parse_batch_response(raw_response, rubric.traits)
+        results = self._parse_batch_response(raw_response, rubric.llm_traits)
         return results, usage_metadata
 
     def _evaluate_sequential(
@@ -216,7 +216,7 @@ class RubricEvaluator:
         results = {}
         usage_metadata_list = []
 
-        for trait in rubric.traits:
+        for trait in rubric.llm_traits:
             try:
                 score, usage_metadata = self._evaluate_single_trait(question, answer, trait)
                 results[trait.name] = score

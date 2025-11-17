@@ -17,7 +17,7 @@ from karenina.benchmark.verification.stages.generate_answer import GenerateAnswe
 from karenina.benchmark.verification.stages.parse_template import ParseTemplateStage
 from karenina.benchmark.verification.stages.rubric_evaluation import RubricEvaluationStage
 from karenina.benchmark.verification.utils import UsageTracker
-from karenina.schemas.domain import BaseAnswer, Rubric, RubricTrait
+from karenina.schemas.domain import BaseAnswer, LLMRubricTrait, Rubric
 
 
 class TestGenerateAnswerStageUsageTracking:
@@ -227,8 +227,8 @@ class TestRubricEvaluationStageUsageTracking:
 
         # Create rubric with traits
         rubric = Rubric(
-            traits=[
-                RubricTrait(
+            llm_traits=[
+                LLMRubricTrait(
                     name="Accuracy",
                     description="Is the answer accurate?",
                     kind="score",
@@ -364,8 +364,8 @@ class TestEndToEndUsageTracking:
         # Enable all features
         basic_context.abstention_enabled = True
         rubric = Rubric(
-            traits=[
-                RubricTrait(
+            llm_traits=[
+                LLMRubricTrait(
                     name="Accuracy",
                     description="Is the answer accurate?",
                     kind="score",

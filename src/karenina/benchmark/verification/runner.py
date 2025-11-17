@@ -136,7 +136,7 @@ def run_single_model_verification(
     # If rubric is provided and mode is template_only, upgrade to template_and_rubric
     if (
         rubric
-        and (rubric.traits or rubric.regex_traits or rubric.callable_traits or rubric.metric_traits)
+        and (rubric.llm_traits or rubric.regex_traits or rubric.callable_traits or rubric.metric_traits)
         and evaluation_mode == "template_only"
     ):
         evaluation_mode = "template_and_rubric"

@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from karenina.schemas.domain import Rubric, RubricEvaluation, RubricTrait
+from karenina.schemas.domain import LLMRubricTrait, Rubric, RubricEvaluation
 
 
 class TestRubricTrait:
@@ -11,7 +11,7 @@ class TestRubricTrait:
 
     def test_boolean_trait_creation(self) -> None:
         """Test creating a boolean trait."""
-        trait = RubricTrait(name="clarity", description="Is the response clear and understandable?", kind="boolean")
+        trait = LLMRubricTrait(name="clarity", description="Is the response clear and understandable?", kind="boolean")
 
         assert trait.name == "clarity"
         assert trait.description == "Is the response clear and understandable?"
@@ -21,7 +21,7 @@ class TestRubricTrait:
 
     def test_score_trait_creation(self) -> None:
         """Test creating a score-based trait."""
-        trait = RubricTrait(
+        trait = LLMRubricTrait(
             name="completeness", description="How complete is the response?", kind="score", min_score=1, max_score=5
         )
 
@@ -33,7 +33,7 @@ class TestRubricTrait:
 
     def test_score_trait_default_range(self) -> None:
         """Test that score traits get default min/max values."""
-        trait = RubricTrait(name="relevance", description="How relevant is the response?", kind="score")
+        trait = LLMRubricTrait(name="relevance", description="How relevant is the response?", kind="score")
 
         assert trait.min_score == 1
         assert trait.max_score == 5
@@ -45,7 +45,7 @@ class TestRubricTrait:
 
         # Empty names should be rejected by the schema
         with pytest.raises(ValidationError):
-            RubricTrait(
+            LLMRubricTrait(
                 name="",  # Empty name should be rejected
                 description="Valid description",
                 kind="boolean",
@@ -53,7 +53,7 @@ class TestRubricTrait:
 
     def test_missing_description(self) -> None:
         """Test trait creation without description."""
-        trait = RubricTrait(name="accuracy", kind="boolean")
+        trait = LLMRubricTrait(name="accuracy", kind="boolean")
 
         assert trait.name == "accuracy"
         assert trait.description is None
@@ -63,7 +63,7 @@ class TestRubricTrait:
         """Test validation of score ranges."""
         # min_score > max_score should be allowed at creation
         # (validation logic would be in business logic, not schema)
-        trait = RubricTrait(name="test", description="Test trait", kind="score", min_score=5, max_score=1)
+        trait = LLMRubricTrait(name="test", description="Test trait", kind="score", min_score=5, max_score=1)
 
         assert trait.min_score == 5
         assert trait.max_score == 1
@@ -75,50 +75,52 @@ class TestRubric:
     def test_rubric_creation(self) -> None:
         """Test creating a complete rubric."""
         traits = [
-            RubricTrait(name="clarity", description="Clear response", kind="boolean"),
-            RubricTrait(name="completeness", description="Complete response", kind="score", min_score=1, max_score=5),
+            LLMRubricTrait(name="clarity", description="Clear response", kind="boolean"),
+            LLMRubricTrait(
+                name="completeness", description="Complete response", kind="score", min_score=1, max_score=5
+            ),
         ]
 
-        rubric = Rubric(traits=traits)
+        rubric = Rubric(llm_traits=traits)
 
-        assert len(rubric.traits) == 2
-        assert rubric.traits[0].name == "clarity"
-        assert rubric.traits[1].name == "completeness"
+        assert len(rubric.llm_traits) == 2
+        assert rubric.llm_traits[0].name == "clarity"
+        assert rubric.llm_traits[1].name == "completeness"
 
     def test_rubric_without_description(self) -> None:
         """Test creating a rubric without description."""
-        traits = [RubricTrait(name="accuracy", description="Accurate response", kind="boolean")]
+        traits = [LLMRubricTrait(name="accuracy", description="Accurate response", kind="boolean")]
 
-        rubric = Rubric(traits=traits)
+        rubric = Rubric(llm_traits=traits)
 
         # No description field in Rubric model
-        assert len(rubric.traits) == 1
+        assert len(rubric.llm_traits) == 1
 
     def test_empty_rubric_title(self) -> None:
         """Test that empty titles are allowed by Pydantic."""
-        traits = [RubricTrait(name="test", description="Test trait", kind="boolean")]
+        traits = [LLMRubricTrait(name="test", description="Test trait", kind="boolean")]
 
         # Empty traits list is allowed
-        Rubric(traits=traits)
+        Rubric(llm_traits=traits)
 
     def test_empty_traits_list(self) -> None:
         """Test rubric with empty traits list."""
-        rubric = Rubric(traits=[])
+        rubric = Rubric(llm_traits=[])
 
-        assert len(rubric.traits) == 0
+        assert len(rubric.llm_traits) == 0
 
     def test_rubric_serialization(self) -> None:
         """Test that rubric can be serialized to dict."""
-        traits = [RubricTrait(name="clarity", description="Clear response", kind="boolean")]
+        traits = [LLMRubricTrait(name="clarity", description="Clear response", kind="boolean")]
 
-        rubric = Rubric(traits=traits)
+        rubric = Rubric(llm_traits=traits)
 
         rubric_dict = rubric.model_dump()
 
         # No title field in current Rubric model
-        assert len(rubric_dict["traits"]) == 1
-        assert rubric_dict["traits"][0]["name"] == "clarity"
-        assert rubric_dict["traits"][0]["kind"] == "boolean"
+        assert len(rubric_dict["llm_traits"]) == 1
+        assert rubric_dict["llm_traits"][0]["name"] == "clarity"
+        assert rubric_dict["llm_traits"][0]["kind"] == "boolean"
 
 
 class TestRubricEvaluation:
@@ -161,9 +163,9 @@ class TestTraitKind:
 
     def test_valid_trait_kinds(self) -> None:
         """Test that valid trait kinds work."""
-        boolean_trait = RubricTrait(name="test_bool", description="Test boolean trait", kind="boolean")
+        boolean_trait = LLMRubricTrait(name="test_bool", description="Test boolean trait", kind="boolean")
 
-        score_trait = RubricTrait(name="test_score", description="Test score trait", kind="score")
+        score_trait = LLMRubricTrait(name="test_score", description="Test score trait", kind="score")
 
         assert boolean_trait.kind == "boolean"
         assert score_trait.kind == "score"
@@ -171,7 +173,7 @@ class TestTraitKind:
     def test_invalid_trait_kind(self) -> None:
         """Test validation error for invalid trait kind."""
         with pytest.raises(ValidationError):
-            RubricTrait(
+            LLMRubricTrait(
                 name="invalid_trait",
                 description="Invalid trait",
                 kind="invalid_kind",  # Not a valid TraitKind
@@ -185,25 +187,25 @@ class TestRubricIntegration:
         """Test a complete workflow with all rubric schemas."""
         # Create traits
         traits = [
-            RubricTrait(name="accuracy", description="Is the information factually correct?", kind="boolean"),
-            RubricTrait(
+            LLMRubricTrait(name="accuracy", description="Is the information factually correct?", kind="boolean"),
+            LLMRubricTrait(
                 name="completeness",
                 description="How complete is the response (1-5)?",
                 kind="score",
                 min_score=1,
                 max_score=5,
             ),
-            RubricTrait(name="clarity", description="Is the response clear and well-written?", kind="boolean"),
+            LLMRubricTrait(name="clarity", description="Is the response clear and well-written?", kind="boolean"),
         ]
 
         # Create rubric
-        rubric = Rubric(traits=traits)
+        rubric = Rubric(llm_traits=traits)
 
         # Create evaluation
         evaluation = RubricEvaluation(trait_scores={"accuracy": True, "completeness": 4, "clarity": True})
 
         # Verify the complete workflow
-        assert len(rubric.traits) == 3
+        assert len(rubric.llm_traits) == 3
 
         # Verify trait types
         boolean_traits = [t for t in rubric.traits if t.kind == "boolean"]
@@ -225,9 +227,9 @@ class TestRubricIntegration:
         """Test that rubric can be serialized to JSON and back."""
         import json
 
-        traits = [RubricTrait(name="test_trait", description="Test", kind="boolean")]
+        traits = [LLMRubricTrait(name="test_trait", description="Test", kind="boolean")]
 
-        original_rubric = Rubric(traits=traits)
+        original_rubric = Rubric(llm_traits=traits)
 
         # Serialize to JSON
         json_str = json.dumps(original_rubric.model_dump())
@@ -239,5 +241,5 @@ class TestRubricIntegration:
         # Verify round trip
         # No title field in current Rubric model
         assert len(restored_rubric.traits) == len(original_rubric.traits)
-        assert restored_rubric.traits[0].name == original_rubric.traits[0].name
-        assert restored_rubric.traits[0].kind == original_rubric.traits[0].kind
+        assert restored_rubric.llm_traits[0].name == original_rubric.llm_traits[0].name
+        assert restored_rubric.llm_traits[0].kind == original_rubric.llm_traits[0].kind

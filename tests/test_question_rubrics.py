@@ -2,7 +2,7 @@
 
 import pytest
 
-from karenina.schemas.domain import Rubric, RubricTrait, merge_rubrics
+from karenina.schemas.domain import LLMRubricTrait, Rubric, merge_rubrics
 
 
 class TestQuestionRubrics:
@@ -16,9 +16,9 @@ class TestQuestionRubrics:
     def test_merge_rubrics_global_only(self) -> None:
         """Test merging when only global rubric exists."""
         global_rubric = Rubric(
-            traits=[
-                RubricTrait(name="clarity", description="Is the answer clear?", kind="boolean"),
-                RubricTrait(
+            llm_traits=[
+                LLMRubricTrait(name="clarity", description="Is the answer clear?", kind="boolean"),
+                LLMRubricTrait(
                     name="accuracy", description="Is the answer accurate?", kind="score", min_score=1, max_score=5
                 ),
             ]
@@ -31,8 +31,10 @@ class TestQuestionRubrics:
     def test_merge_rubrics_question_only(self) -> None:
         """Test merging when only question rubric exists."""
         question_rubric = Rubric(
-            traits=[
-                RubricTrait(name="specificity", description="Is the answer specific to this question?", kind="boolean")
+            llm_traits=[
+                LLMRubricTrait(
+                    name="specificity", description="Is the answer specific to this question?", kind="boolean"
+                )
             ]
         )
 
@@ -43,18 +45,20 @@ class TestQuestionRubrics:
     def test_merge_rubrics_both_present(self) -> None:
         """Test merging when both rubrics exist."""
         global_rubric = Rubric(
-            traits=[
-                RubricTrait(name="clarity", description="Is the answer clear?", kind="boolean"),
-                RubricTrait(
+            llm_traits=[
+                LLMRubricTrait(name="clarity", description="Is the answer clear?", kind="boolean"),
+                LLMRubricTrait(
                     name="accuracy", description="Is the answer accurate?", kind="score", min_score=1, max_score=5
                 ),
             ]
         )
 
         question_rubric = Rubric(
-            traits=[
-                RubricTrait(name="specificity", description="Is the answer specific to this question?", kind="boolean"),
-                RubricTrait(
+            llm_traits=[
+                LLMRubricTrait(
+                    name="specificity", description="Is the answer specific to this question?", kind="boolean"
+                ),
+                LLMRubricTrait(
                     name="depth", description="How deep is the analysis?", kind="score", min_score=1, max_score=3
                 ),
             ]
@@ -69,32 +73,32 @@ class TestQuestionRubrics:
         assert trait_names == {"clarity", "accuracy", "specificity", "depth"}
 
         # Verify trait order (global first, then question)
-        assert result.traits[0].name == "clarity"
-        assert result.traits[1].name == "accuracy"
-        assert result.traits[2].name == "specificity"
-        assert result.traits[3].name == "depth"
+        assert result.llm_traits[0].name == "clarity"
+        assert result.llm_traits[1].name == "accuracy"
+        assert result.llm_traits[2].name == "specificity"
+        assert result.llm_traits[3].name == "depth"
 
     def test_merge_rubrics_name_conflicts(self) -> None:
         """Test that merging fails when trait names conflict."""
         global_rubric = Rubric(
-            traits=[
-                RubricTrait(name="clarity", description="Is the answer clear?", kind="boolean"),
-                RubricTrait(
+            llm_traits=[
+                LLMRubricTrait(name="clarity", description="Is the answer clear?", kind="boolean"),
+                LLMRubricTrait(
                     name="accuracy", description="Is the answer accurate?", kind="score", min_score=1, max_score=5
                 ),
             ]
         )
 
         question_rubric = Rubric(
-            traits=[
-                RubricTrait(
+            llm_traits=[
+                LLMRubricTrait(
                     name="clarity",
                     description="Different definition of clarity",
                     kind="score",
                     min_score=1,
                     max_score=3,
                 ),
-                RubricTrait(name="specificity", description="Is the answer specific?", kind="boolean"),
+                LLMRubricTrait(name="specificity", description="Is the answer specific?", kind="boolean"),
             ]
         )
 
@@ -103,11 +107,13 @@ class TestQuestionRubrics:
 
     def test_merge_rubrics_preserves_trait_properties(self) -> None:
         """Test that trait properties are preserved during merging."""
-        global_rubric = Rubric(traits=[RubricTrait(name="clarity", description="Is the answer clear?", kind="boolean")])
+        global_rubric = Rubric(
+            llm_traits=[LLMRubricTrait(name="clarity", description="Is the answer clear?", kind="boolean")]
+        )
 
         question_rubric = Rubric(
-            traits=[
-                RubricTrait(
+            llm_traits=[
+                LLMRubricTrait(
                     name="depth", description="How deep is the analysis?", kind="score", min_score=2, max_score=10
                 )
             ]
@@ -134,8 +140,8 @@ class TestQuestionRubrics:
 
     def test_merge_rubrics_empty_rubrics(self) -> None:
         """Test merging rubrics with no traits."""
-        empty_global = Rubric(traits=[])
-        empty_question = Rubric(traits=[])
+        empty_global = Rubric(llm_traits=[])
+        empty_question = Rubric(llm_traits=[])
 
         result = merge_rubrics(empty_global, empty_question)
         assert result is not None
@@ -143,21 +149,23 @@ class TestQuestionRubrics:
 
     def test_merge_rubrics_mixed_empty(self) -> None:
         """Test merging when one rubric is empty."""
-        global_rubric = Rubric(traits=[RubricTrait(name="clarity", description="Is the answer clear?", kind="boolean")])
-        empty_question = Rubric(traits=[])
+        global_rubric = Rubric(
+            llm_traits=[LLMRubricTrait(name="clarity", description="Is the answer clear?", kind="boolean")]
+        )
+        empty_question = Rubric(llm_traits=[])
 
         result = merge_rubrics(global_rubric, empty_question)
         assert result is not None
         assert len(result.traits) == 1
-        assert result.traits[0].name == "clarity"
+        assert result.llm_traits[0].name == "clarity"
 
         # Test reverse
-        empty_global = Rubric(traits=[])
+        empty_global = Rubric(llm_traits=[])
         question_rubric = Rubric(
-            traits=[RubricTrait(name="specificity", description="Is the answer specific?", kind="boolean")]
+            llm_traits=[LLMRubricTrait(name="specificity", description="Is the answer specific?", kind="boolean")]
         )
 
         result = merge_rubrics(empty_global, question_rubric)
         assert result is not None
         assert len(result.traits) == 1
-        assert result.traits[0].name == "specificity"
+        assert result.llm_traits[0].name == "specificity"

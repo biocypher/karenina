@@ -534,7 +534,7 @@ def extract_rubric_traits_from_template(answer_template: str) -> list[Any]:
             # If wrapped in Rubric
             if isinstance(obj, Rubric):
                 # Collect all trait types
-                for llm_trait in obj.traits:
+                for llm_trait in obj.llm_traits:
                     if isinstance(llm_trait, LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait):
                         traits_list.append(llm_trait)
                 for regex_trait in obj.regex_traits:

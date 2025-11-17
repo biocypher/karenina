@@ -157,7 +157,7 @@ class TaskEval:
             step_id: Optional step ID for step-specific rubrics
 
         Example:
-            rubric = Rubric(traits=[
+            rubric = Rubric(llm_traits=[
                 LLMRubricTrait(name="accuracy", description="Is answer correct?", kind="boolean")
             ])
             task.add_rubric(rubric)
@@ -644,7 +644,7 @@ class TaskEval:
         has_rubrics = bool(
             context.merged_rubric
             and (
-                context.merged_rubric.traits
+                context.merged_rubric.llm_traits
                 or context.merged_rubric.regex_traits
                 or context.merged_rubric.callable_traits
                 or context.merged_rubric.metric_traits
@@ -799,7 +799,7 @@ class Answer(BaseAnswer):
 
         # Rubric evaluation: use RubricEvaluator
         rubric_scores: dict[str, int | bool] = {}
-        if rubric and (rubric.traits or rubric.regex_traits or rubric.callable_traits):
+        if rubric and (rubric.llm_traits or rubric.regex_traits or rubric.callable_traits):
             try:
                 evaluator = RubricEvaluator(parsing_model)
                 question_text = question_dict.get("question", "")
@@ -856,7 +856,7 @@ class Answer(BaseAnswer):
         all_trait_names = []
         for rubric in rubrics:
             # Add LLM trait names
-            for trait in rubric.traits:
+            for trait in rubric.llm_traits:
                 all_trait_names.append(trait.name)
             # Add regex trait names
             for regex_trait in rubric.regex_traits:
@@ -889,7 +889,7 @@ class Answer(BaseAnswer):
         unique_metric_traits: dict[str, MetricRubricTrait] = {}
         for rubric in rubrics:
             # Combine LLM traits
-            for trait in rubric.traits:
+            for trait in rubric.llm_traits:
                 unique_llm_traits[trait.name] = trait
             # Combine regex traits
             for regex_trait in rubric.regex_traits:
@@ -902,7 +902,7 @@ class Answer(BaseAnswer):
                 unique_metric_traits[metric_trait.name] = metric_trait
 
         return Rubric(
-            traits=list(unique_llm_traits.values()),
+            llm_traits=list(unique_llm_traits.values()),
             regex_traits=list(unique_regex_traits.values()),
             callable_traits=list(unique_callable_traits.values()),
             metric_traits=list(unique_metric_traits.values()),
