@@ -56,8 +56,10 @@ class SchemaOrgRating(BaseModel):
     additionalType: Literal[
         "GlobalRubricTrait",
         "QuestionSpecificRubricTrait",
-        "GlobalManualRubricTrait",
-        "QuestionSpecificManualRubricTrait",
+        "GlobalRegexTrait",
+        "QuestionSpecificRegexTrait",
+        "GlobalCallableTrait",
+        "QuestionSpecificCallableTrait",
         "GlobalMetricRubricTrait",
         "QuestionSpecificMetricRubricTrait",
     ]

@@ -127,9 +127,7 @@ def convert_rubric_trait_to_rating(
             description=trait.description,
             bestRating=1,
             worstRating=0,
-            additionalType="GlobalManualRubricTrait"
-            if rubric_type == "global"
-            else "QuestionSpecificManualRubricTrait",
+            additionalType="GlobalRegexTrait" if rubric_type == "global" else "QuestionSpecificRegexTrait",
             additionalProperty=additional_props,
         )
 
@@ -164,9 +162,7 @@ def convert_rubric_trait_to_rating(
             description=trait.description,
             bestRating=best_rating,
             worstRating=worst_rating,
-            additionalType="GlobalManualRubricTrait"
-            if rubric_type == "global"
-            else "QuestionSpecificManualRubricTrait",
+            additionalType="GlobalCallableTrait" if rubric_type == "global" else "QuestionSpecificCallableTrait",
             additionalProperty=additional_props,
         )
 
@@ -246,6 +242,64 @@ def convert_rating_to_rubric_trait(
             tp_instructions=tp_instructions,
             tn_instructions=tn_instructions,
             repeated_extraction=repeated_extraction,
+        )
+
+    # Handle RegexTrait
+    if rating.additionalType in ["GlobalRegexTrait", "QuestionSpecificRegexTrait"]:
+        # Extract configuration from additionalProperty
+        pattern = ""
+        case_sensitive = True
+        invert_result = False
+
+        if rating.additionalProperty:
+            for prop in rating.additionalProperty:
+                if prop.name == "pattern":
+                    pattern = prop.value
+                elif prop.name == "case_sensitive":
+                    case_sensitive = prop.value
+                elif prop.name == "invert_result":
+                    invert_result = prop.value
+
+        return RegexTrait(
+            name=rating.name,
+            description=rating.description,
+            pattern=pattern,
+            case_sensitive=case_sensitive,
+            invert_result=invert_result,
+        )
+
+    # Handle CallableTrait
+    if rating.additionalType in ["GlobalCallableTrait", "QuestionSpecificCallableTrait"]:
+        # Extract configuration from additionalProperty
+        import base64
+
+        callable_code = b""
+        kind: Literal["boolean", "score"] = "boolean"
+        invert_result = False
+        min_score = None
+        max_score = None
+
+        if rating.additionalProperty:
+            for prop in rating.additionalProperty:
+                if prop.name == "callable_code":
+                    callable_code = base64.b64decode(prop.value)
+                elif prop.name == "kind":
+                    kind = cast(Literal["boolean", "score"], prop.value)
+                elif prop.name == "invert_result":
+                    invert_result = prop.value
+                elif prop.name == "min_score":
+                    min_score = prop.value
+                elif prop.name == "max_score":
+                    max_score = prop.value
+
+        return CallableTrait(
+            name=rating.name,
+            description=rating.description,
+            kind=kind,
+            callable_code=callable_code,
+            min_score=min_score,
+            max_score=max_score,
+            invert_result=invert_result,
         )
 
     # Unsupported trait type - raise error (no backward compatibility)
@@ -491,7 +545,8 @@ def extract_questions_from_benchmark(
                 if rating.additionalType
                 in [
                     "QuestionSpecificRubricTrait",
-                    "QuestionSpecificManualRubricTrait",
+                    "QuestionSpecificRegexTrait",
+                    "QuestionSpecificCallableTrait",
                     "QuestionSpecificMetricRubricTrait",
                 ]
             ]
@@ -534,7 +589,12 @@ def extract_global_rubric_from_benchmark(
 
     traits = []
     for rating in benchmark.rating:
-        if rating.additionalType in ["GlobalRubricTrait", "GlobalManualRubricTrait", "GlobalMetricRubricTrait"]:
+        if rating.additionalType in [
+            "GlobalRubricTrait",
+            "GlobalRegexTrait",
+            "GlobalCallableTrait",
+            "GlobalMetricRubricTrait",
+        ]:
             traits.append(convert_rating_to_rubric_trait(rating))
 
     return traits if traits else None
