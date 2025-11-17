@@ -198,7 +198,7 @@ class TestTaskEvalRubrics:
         result = task._merge_rubrics([rubric])
 
         assert result is not None
-        assert len(result.traits) == 1
+        assert len(result.llm_traits) == 1
         assert result.llm_traits[0].name == "clarity"
 
     def test_merge_rubrics_multiple(self) -> None:
@@ -210,8 +210,8 @@ class TestTaskEvalRubrics:
         result = task._merge_rubrics([rubric1, rubric2])
 
         assert result is not None
-        assert len(result.traits) == 2
-        trait_names = [trait.name for trait in result.traits]
+        assert len(result.llm_traits) == 2
+        trait_names = [trait.name for trait in result.llm_traits]
         assert "clarity" in trait_names
         assert "accuracy" in trait_names
 

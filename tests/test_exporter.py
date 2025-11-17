@@ -103,8 +103,7 @@ def mock_results_with_global_and_specific_rubrics() -> dict[str, VerificationRes
             ),
             rubric=VerificationResultRubric(
                 rubric_evaluation_performed=True,
-                manual_trait_scores={"Conciseness": True},
-                llm_trait_scores={"Directness": 4, "specific_trait": 3},
+                llm_trait_scores={"Conciseness": True, "Directness": 4, "specific_trait": 3},
             ),
         ),
         "q2_answering-test_parsing-test": VerificationResult(
@@ -128,8 +127,7 @@ def mock_results_with_global_and_specific_rubrics() -> dict[str, VerificationRes
             ),
             rubric=VerificationResultRubric(
                 rubric_evaluation_performed=True,
-                manual_trait_scores={"Conciseness": False, "another_specific": True},
-                llm_trait_scores={"Directness": 2},
+                llm_trait_scores={"Conciseness": False, "Directness": 2, "another_specific": True},
             ),
         ),
     }
@@ -160,8 +158,7 @@ def mock_results_global_only() -> dict[str, VerificationResult]:
             ),
             rubric=VerificationResultRubric(
                 rubric_evaluation_performed=True,
-                manual_trait_scores={"Conciseness": True},
-                llm_trait_scores={"Directness": 4},
+                llm_trait_scores={"Conciseness": True, "Directness": 4},
             ),
         ),
     }
@@ -350,8 +347,11 @@ class TestExportVerificationResultsCSV:
             ),
             rubric=VerificationResultRubric(
                 rubric_evaluation_performed=True,
-                manual_trait_scores={"Conciseness": False},
-                llm_trait_scores={"Directness": 3, "specific_trait": 2},  # This is question-specific
+                llm_trait_scores={
+                    "Conciseness": False,
+                    "Directness": 3,
+                    "specific_trait": 2,
+                },  # This is question-specific
             ),
         )
 
@@ -464,8 +464,9 @@ class TestExportVerificationResultsCSV:
                 rubric=VerificationResultRubric(
                     rubric_evaluation_performed=True,
                     # Traits split by type - special characters treated as LLM traits
-                    manual_trait_scores={"trait_with_underscore": True, "trait,with,commas": True},
                     llm_trait_scores={
+                        "trait_with_underscore": True,
+                        "trait,with,commas": True,
                         "trait-with-dash": 3,
                         "trait with spaces": 5,  # This might cause issues in CSV headers
                         'trait"with"quotes': 4,
@@ -518,11 +519,11 @@ class TestExportVerificationResultsCSV:
                 ),
                 rubric=VerificationResultRubric(
                     rubric_evaluation_performed=True,
-                    manual_trait_scores={
+                    llm_trait_scores={
                         "trait_a": i % 2 == 0,  # Alternating boolean values
                         f"specific_trait_{i}": True,  # Question-specific trait
+                        "trait_b": i % 5,  # Cycling numeric values 0-4
                     },
-                    llm_trait_scores={"trait_b": i % 5},  # Cycling numeric values 0-4
                 ),
             )
 
@@ -587,11 +588,9 @@ class TestExportVerificationResultsCSV:
                 ),
                 rubric=VerificationResultRubric(
                     rubric_evaluation_performed=True,
-                    manual_trait_scores={
+                    llm_trait_scores={
                         "good_trait": True,  # This should be kept
                         "trait_with_null\0": True,  # This should be filtered out
-                    },
-                    llm_trait_scores={
                         "trait_with_newline\n": 3,  # This should be filtered out
                         "trait_with_carriage_return\r": 4,  # This should be filtered out
                         "very_long_trait_name_" + "x" * 300: 2,  # This should be filtered out (>255 chars)
@@ -629,12 +628,14 @@ class TestExportVerificationResultsJSON:
 
         # Check that rubric data is preserved in full (nested structure)
         q1_result = data["results"]["q1_answering-test_parsing-test"]
-        assert q1_result["rubric"]["manual_trait_scores"] == {"Conciseness": True}
-        assert q1_result["rubric"]["llm_trait_scores"] == {"Directness": 4, "specific_trait": 3}
+        assert q1_result["rubric"]["llm_trait_scores"] == {"Conciseness": True, "Directness": 4, "specific_trait": 3}
 
         q2_result = data["results"]["q2_answering-test_parsing-test"]
-        assert q2_result["rubric"]["manual_trait_scores"] == {"Conciseness": False, "another_specific": True}
-        assert q2_result["rubric"]["llm_trait_scores"] == {"Directness": 2}
+        assert q2_result["rubric"]["llm_trait_scores"] == {
+            "Conciseness": False,
+            "Directness": 2,
+            "another_specific": True,
+        }
 
     def test_json_export_includes_metadata(
         self, mock_verification_job, mock_results_with_global_and_specific_rubrics

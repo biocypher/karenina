@@ -224,7 +224,7 @@ class Answer(BaseAnswer):
             llm_traits=[
                 LLMRubricTrait(name="completeness", description="Is answer complete?", kind="boolean"),
             ],
-            manual_traits=[
+            regex_traits=[
                 RegexTrait(
                     name="has_alice",
                     description="Contains Alice",

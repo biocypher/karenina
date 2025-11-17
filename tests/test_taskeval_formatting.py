@@ -6,6 +6,12 @@ from datetime import datetime
 import pytest
 
 from karenina.benchmark.task_eval.models import LogEvent, StepEval, TaskEvalResult
+from karenina.schemas.workflow.verification import (
+    VerificationResult,
+    VerificationResultMetadata,
+    VerificationResultRubric,
+    VerificationResultTemplate,
+)
 
 
 class TestTaskEvalFormatting:
@@ -15,37 +21,59 @@ class TestTaskEvalFormatting:
     def sample_step_eval(self) -> None:
         """Create a sample StepEval with various data."""
         return StepEval(
-            rubric_scores={"accuracy": True, "completeness": False, "clarity": 3, "formatting": None},
-            question_verification={
+            verification_results={
                 "q1": [
-                    {
-                        "agent_output": "The answer is 42 because 15 + 27 equals 42",
-                        "correct": True,
-                        "success": True,
-                        "error": None,
-                        "details": {
-                            "execution_time": 0.5,
-                            "parsed_gt_response": {"result": "42"},
-                            "parsed_llm_response": {"result": "42"},
-                        },
-                        "rubric_scores": {"accuracy": True, "clarity": 3},
-                    }
+                    VerificationResult(
+                        metadata=VerificationResultMetadata(
+                            question_id="q1",
+                            template_id="test_template",
+                            completed_without_errors=True,
+                            question_text="What is 15 + 27?",
+                            answering_model="gpt-4.1-mini",
+                            parsing_model="gpt-4.1-mini",
+                            execution_time=0.5,
+                            timestamp="2025-11-11T00:00:00",
+                        ),
+                        template=VerificationResultTemplate(
+                            raw_llm_response="The answer is 42 because 15 + 27 equals 42",
+                            parsed_gt_response={"result": "42"},
+                            parsed_llm_response={"result": "42"},
+                            template_verification_performed=True,
+                            verify_result=True,
+                        ),
+                        rubric=VerificationResultRubric(
+                            rubric_evaluation_performed=True,
+                            llm_trait_scores={"accuracy": True, "clarity": 3},
+                        ),
+                    )
                 ],
                 "q2": [
-                    {
-                        "agent_output": "Error in calculation",
-                        "correct": False,
-                        "success": False,
-                        "error": "Calculation failed",
-                        "details": {
-                            "execution_time": 0.2,
-                            "parsed_gt_response": {"result": "42"},
-                            "parsed_llm_response": {"result": "43"},
-                        },
-                        "rubric_scores": {"accuracy": False},
-                    }
+                    VerificationResult(
+                        metadata=VerificationResultMetadata(
+                            question_id="q2",
+                            template_id="test_template",
+                            completed_without_errors=False,
+                            error="Calculation failed",
+                            question_text="What is the error case?",
+                            answering_model="gpt-4.1-mini",
+                            parsing_model="gpt-4.1-mini",
+                            execution_time=0.2,
+                            timestamp="2025-11-11T00:00:00",
+                        ),
+                        template=VerificationResultTemplate(
+                            raw_llm_response="Error in calculation",
+                            parsed_gt_response={"result": "42"},
+                            parsed_llm_response={"result": "43"},
+                            template_verification_performed=True,
+                            verify_result=False,
+                        ),
+                        rubric=VerificationResultRubric(
+                            rubric_evaluation_performed=True,
+                            llm_trait_scores={"accuracy": False},
+                        ),
+                    )
                 ],
-            },
+            }
         )
 
     @pytest.fixture
@@ -63,14 +91,22 @@ class TestTaskEvalFormatting:
         """Test rubric scores formatting."""
         formatted = sample_step_eval.format_rubric_scores()
 
-        assert "✓ accuracy" in formatted
-        assert "PASS" in formatted
-        assert "✗ completeness" in formatted
-        assert "FAIL" in formatted
-        assert "✓ clarity" in formatted
-        assert ": 3" in formatted
-        assert "? formatting" in formatted
-        assert "N/A" in formatted
+        # Check that questions are formatted
+        assert "Question: q1" in formatted
+        assert "Question: q2" in formatted
+
+        # Check that verification status is shown
+        assert "✓ PASSED" in formatted
+        assert "✗ FAILED" in formatted
+
+        # Check that rubric scores are shown
+        assert "accuracy=✓" in formatted  # q1 has True
+        assert "accuracy=✗" in formatted  # q2 has False
+        assert "clarity=3" in formatted  # q1 has score 3
+
+        # Check that output text is shown
+        assert "The answer is 42" in formatted
+        assert "Error in calculation" in formatted
 
     def test_step_eval_format_question_results(self, sample_step_eval) -> None:
         """Test question verification results formatting."""
