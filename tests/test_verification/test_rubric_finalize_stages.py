@@ -177,7 +177,7 @@ class TestFinalizeResultStage:
         assert isinstance(result, VerificationResult)
         assert result.completed_without_errors is True
         assert result.question_id == "test_q123"
-        assert result.template_id == "test_t456"
+        assert result.metadata.template_id == "test_t456"
         assert result.answering_model == "openai/gpt-4.1-mini"
 
     def test_finalize_with_errors(self, basic_context: VerificationContext) -> None:

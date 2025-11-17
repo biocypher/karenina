@@ -342,7 +342,7 @@ class TestStageExecution:
         # Verify result was created
         assert isinstance(result, VerificationResult)
         assert result.question_id == basic_context.question_id
-        assert result.template_id == basic_context.template_id
+        assert result.metadata.template_id == basic_context.metadata.template_id
 
     def test_error_in_stage_continues_to_finalize(self, basic_context: VerificationContext) -> None:
         """Test that errors in stages don't prevent FinalizeResultStage from running."""
@@ -404,7 +404,7 @@ class TestStageExecution:
         result = orchestrator.execute(basic_context)
 
         # Verify timing was tracked
-        assert result.execution_time >= 0.0
+        assert result.metadata.execution_time >= 0.0
         assert result.timestamp != ""
 
 

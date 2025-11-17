@@ -154,58 +154,20 @@ def export_verification_results_json(job: VerificationJob, results: dict[str, Ve
         "results": {},
     }
 
-    # Convert results to serializable format
+    # Convert results to serializable format with nested structure
     for question_id, result in results.items():
-        export_data["results"][question_id] = {
-            "question_id": result.question_id,
-            "completed_without_errors": result.completed_without_errors,
-            "error": result.error,
-            "question_text": result.question_text,
-            "raw_llm_response": result.raw_llm_response,
-            "parsed_gt_response": result.parsed_gt_response,
-            "parsed_llm_response": result.parsed_llm_response,
-            "template_verification_performed": result.template_verification_performed,
-            "verify_result": _serialize_verification_result(result.verify_result),
-            "verify_granular_result": _serialize_verification_result(result.verify_granular_result),
-            "rubric_evaluation_performed": result.rubric_evaluation_performed,
-            "verify_rubric": result.verify_rubric,
-            "keywords": result.keywords,
-            "answering_model": result.answering_model,
-            "parsing_model": result.parsing_model,
-            "answering_replicate": result.answering_replicate,
-            "parsing_replicate": result.parsing_replicate,
-            "execution_time": result.execution_time,
-            "timestamp": result.timestamp,
-            "answering_system_prompt": result.answering_system_prompt,
-            "parsing_system_prompt": result.parsing_system_prompt,
-            "run_name": result.run_name,
-            "job_id": result.job_id,
-            # Embedding check fields
-            "embedding_check_performed": result.embedding_check_performed,
-            "embedding_similarity_score": result.embedding_similarity_score,
-            "embedding_override_applied": result.embedding_override_applied,
-            "embedding_model_used": result.embedding_model_used,
-            # MCP server fields
-            "answering_mcp_servers": result.answering_mcp_servers,
-            # Deep-judgment fields
-            "deep_judgment_enabled": result.deep_judgment_enabled,
-            "deep_judgment_performed": result.deep_judgment_performed,
-            "extracted_excerpts": result.extracted_excerpts,
-            "attribute_reasoning": result.attribute_reasoning,
-            "deep_judgment_stages_completed": result.deep_judgment_stages_completed,
-            "deep_judgment_model_calls": result.deep_judgment_model_calls,
-            "deep_judgment_excerpt_retry_count": result.deep_judgment_excerpt_retry_count,
-            "attributes_without_excerpts": result.attributes_without_excerpts,
-            # Search-enhanced deep-judgment fields
-            "deep_judgment_search_enabled": result.deep_judgment_search_enabled,
-            "hallucination_risk_assessment": result.hallucination_risk_assessment,
-            # Metric trait fields
-            "metric_trait_confusion_lists": result.metric_trait_confusion_lists,
-            "metric_trait_metrics": result.metric_trait_metrics,
-            # LLM usage tracking fields
-            "usage_metadata": result.usage_metadata,
-            "agent_metrics": result.agent_metrics,
-        }
+        # Use Pydantic's model_dump to serialize nested structure, then apply custom serialization to verify_result
+        result_dict = result.model_dump(mode="json")
+
+        # Apply custom serialization to verify_result fields if present
+        if result.template and result.template.verify_result is not None:
+            result_dict["template"]["verify_result"] = _serialize_verification_result(result.template.verify_result)
+        if result.template and result.template.verify_granular_result is not None:
+            result_dict["template"]["verify_granular_result"] = _serialize_verification_result(
+                result.template.verify_granular_result
+            )
+
+        export_data["results"][question_id] = result_dict
 
     return json.dumps(export_data, indent=2, ensure_ascii=False)
 
@@ -265,13 +227,24 @@ def export_verification_results_csv(
     all_rubric_traits: set[str] = set()
     invalid_trait_count = 0
     for result in results.values():
-        if result.verify_rubric:
-            for trait_name in result.verify_rubric:
-                if _validate_trait_name(trait_name):
-                    all_rubric_traits.add(trait_name)
-                else:
-                    invalid_trait_count += 1
-                    logger.warning("Skipping invalid trait name '%s' in question %s", trait_name, result.question_id)
+        if result.rubric:
+            # Collect from all three trait score dicts (llm, manual, metric)
+            for trait_dict in [
+                result.rubric.llm_trait_scores,
+                result.rubric.manual_trait_scores,
+                result.rubric.metric_trait_scores,
+            ]:
+                if trait_dict:
+                    for trait_name in trait_dict:
+                        if _validate_trait_name(trait_name):
+                            all_rubric_traits.add(trait_name)
+                        else:
+                            invalid_trait_count += 1
+                            logger.warning(
+                                "Skipping invalid trait name '%s' in question %s",
+                                trait_name,
+                                result.metadata.question_id,
+                            )
 
     if invalid_trait_count > 0:
         logger.info("Skipped %d invalid trait names during CSV export", invalid_trait_count)
@@ -408,87 +381,119 @@ def export_verification_results_csv(
 
     # Write data rows
     for _question_id, result in results.items():
+        # Access fields from nested structure
+        metadata = result.metadata
+        template = result.template
+        rubric = result.rubric
+        deep_judgment = result.deep_judgment
+
         row = {
-            "question_id": result.question_id,
-            "success": result.completed_without_errors,  # Header uses 'success', not 'completed_without_errors'
-            "error": result.error or "",
-            "question_text": result.question_text,
-            "raw_llm_response": result.raw_llm_response,
+            # Metadata fields
+            "question_id": metadata.question_id,
+            "success": metadata.completed_without_errors,  # Header uses 'success', not 'completed_without_errors'
+            "error": metadata.error or "",
+            "question_text": metadata.question_text,
+            "keywords": _safe_json_serialize(metadata.keywords, metadata.question_id, "keywords"),
+            "answering_model": metadata.answering_model,
+            "parsing_model": metadata.parsing_model,
+            "answering_replicate": metadata.answering_replicate or "",
+            "parsing_replicate": metadata.parsing_replicate or "",
+            "execution_time": metadata.execution_time,
+            "timestamp": metadata.timestamp,
+            "run_name": metadata.run_name or "",
+            # Template fields
+            "raw_llm_response": template.raw_llm_response if template else "",
             "parsed_gt_response": _safe_json_serialize(
-                result.parsed_gt_response, result.question_id, "parsed_gt_response"
+                template.parsed_gt_response if template else None, metadata.question_id, "parsed_gt_response"
             ),
             "parsed_llm_response": _safe_json_serialize(
-                result.parsed_llm_response, result.question_id, "parsed_llm_response"
+                template.parsed_llm_response if template else None, metadata.question_id, "parsed_llm_response"
             ),
-            "template_verification_performed": result.template_verification_performed,
-            "verify_result": _serialize_verification_result(result.verify_result),
-            "verify_granular_result": _serialize_verification_result(result.verify_granular_result),
-            "rubric_evaluation_performed": result.rubric_evaluation_performed,
-            "keywords": _safe_json_serialize(result.keywords, result.question_id, "keywords"),
-            "answering_model": result.answering_model,
-            "parsing_model": result.parsing_model,
-            "answering_replicate": result.answering_replicate or "",
-            "parsing_replicate": result.parsing_replicate or "",
-            "execution_time": result.execution_time,
-            "timestamp": result.timestamp,
-            "answering_system_prompt": result.answering_system_prompt or "",
-            "parsing_system_prompt": result.parsing_system_prompt or "",
-            "run_name": result.run_name or "",
+            "template_verification_performed": template.template_verification_performed if template else False,
+            "verify_result": _serialize_verification_result(template.verify_result if template else None),
+            "verify_granular_result": _serialize_verification_result(
+                template.verify_granular_result if template else None
+            ),
+            "answering_system_prompt": metadata.answering_system_prompt or "",
+            "parsing_system_prompt": metadata.parsing_system_prompt or "",
+            "embedding_check_performed": template.embedding_check_performed if template else False,
+            "embedding_similarity_score": template.embedding_similarity_score or "" if template else "",
+            "embedding_override_applied": template.embedding_override_applied if template else False,
+            "embedding_model_used": template.embedding_model_used or "" if template else "",
+            "answering_mcp_servers": _safe_json_serialize(
+                template.answering_mcp_servers if template else None, metadata.question_id, "answering_mcp_servers"
+            ),
+            "usage_metadata": _safe_json_serialize(
+                template.usage_metadata if template else None, metadata.question_id, "usage_metadata"
+            )
+            if template and template.usage_metadata
+            else "",
+            "agent_metrics": _safe_json_serialize(
+                template.agent_metrics if template else None, metadata.question_id, "agent_metrics"
+            )
+            if template and template.agent_metrics
+            else "",
+            # Rubric fields
+            "rubric_evaluation_performed": rubric.rubric_evaluation_performed if rubric else False,
+            "metric_trait_confusion_lists": _safe_json_serialize(
+                rubric.metric_trait_confusion_lists if rubric else None,
+                metadata.question_id,
+                "metric_trait_confusion_lists",
+            ),
+            "metric_trait_metrics": _safe_json_serialize(
+                rubric.metric_trait_scores if rubric else None, metadata.question_id, "metric_trait_metrics"
+            ),
+            # Deep-judgment fields
+            "deep_judgment_enabled": deep_judgment.deep_judgment_enabled if deep_judgment else False,
+            "deep_judgment_performed": deep_judgment.deep_judgment_performed if deep_judgment else False,
+            "extracted_excerpts": _safe_json_serialize(
+                deep_judgment.extracted_excerpts if deep_judgment else None, metadata.question_id, "extracted_excerpts"
+            ),
+            "attribute_reasoning": _safe_json_serialize(
+                deep_judgment.attribute_reasoning if deep_judgment else None,
+                metadata.question_id,
+                "attribute_reasoning",
+            ),
+            "deep_judgment_stages_completed": _safe_json_serialize(
+                deep_judgment.deep_judgment_stages_completed if deep_judgment else None,
+                metadata.question_id,
+                "deep_judgment_stages_completed",
+            ),
+            "deep_judgment_model_calls": deep_judgment.deep_judgment_model_calls if deep_judgment else 0,
+            "deep_judgment_excerpt_retry_count": deep_judgment.deep_judgment_excerpt_retry_count
+            if deep_judgment
+            else 0,
+            "attributes_without_excerpts": _safe_json_serialize(
+                deep_judgment.attributes_without_excerpts if deep_judgment else None,
+                metadata.question_id,
+                "attributes_without_excerpts",
+            ),
+            "deep_judgment_search_enabled": deep_judgment.deep_judgment_search_enabled if deep_judgment else False,
+            "hallucination_risk_assessment": _safe_json_serialize(
+                deep_judgment.hallucination_risk_assessment if deep_judgment else None,
+                metadata.question_id,
+                "hallucination_risk_assessment",
+            ),
+            # Export metadata
             "export_timestamp": export_timestamp,
             "karenina_version": karenina_version,
             "job_id": job.job_id,
-            # Embedding check fields
-            "embedding_check_performed": result.embedding_check_performed,
-            "embedding_similarity_score": result.embedding_similarity_score or "",
-            "embedding_override_applied": result.embedding_override_applied,
-            "embedding_model_used": result.embedding_model_used or "",
-            # MCP server fields
-            "answering_mcp_servers": _safe_json_serialize(
-                result.answering_mcp_servers, result.question_id, "answering_mcp_servers"
-            ),
-            # Deep-judgment fields
-            "deep_judgment_enabled": result.deep_judgment_enabled,
-            "deep_judgment_performed": result.deep_judgment_performed,
-            "extracted_excerpts": _safe_json_serialize(
-                result.extracted_excerpts, result.question_id, "extracted_excerpts"
-            ),
-            "attribute_reasoning": _safe_json_serialize(
-                result.attribute_reasoning, result.question_id, "attribute_reasoning"
-            ),
-            "deep_judgment_stages_completed": _safe_json_serialize(
-                result.deep_judgment_stages_completed, result.question_id, "deep_judgment_stages_completed"
-            ),
-            "deep_judgment_model_calls": result.deep_judgment_model_calls,
-            "deep_judgment_excerpt_retry_count": result.deep_judgment_excerpt_retry_count,
-            "attributes_without_excerpts": _safe_json_serialize(
-                result.attributes_without_excerpts, result.question_id, "attributes_without_excerpts"
-            ),
-            # Search-enhanced deep-judgment fields
-            "deep_judgment_search_enabled": result.deep_judgment_search_enabled,
-            "hallucination_risk_assessment": _safe_json_serialize(
-                result.hallucination_risk_assessment, result.question_id, "hallucination_risk_assessment"
-            ),
-            # Metric trait fields
-            "metric_trait_confusion_lists": _safe_json_serialize(
-                result.metric_trait_confusion_lists, result.question_id, "metric_trait_confusion_lists"
-            ),
-            "metric_trait_metrics": _safe_json_serialize(
-                result.metric_trait_metrics, result.question_id, "metric_trait_metrics"
-            ),
-            # LLM usage tracking fields
-            "usage_metadata": _safe_json_serialize(result.usage_metadata, result.question_id, "usage_metadata")
-            if result.usage_metadata
-            else "",
-            "agent_metrics": _safe_json_serialize(result.agent_metrics, result.question_id, "agent_metrics")
-            if result.agent_metrics
-            else "",
         }
 
-        # Add global rubric trait values (optimized with dictionary comprehension)
-        if result.verify_rubric:
+        # Add global rubric trait values from all three trait score dicts
+        if rubric:
+            # Merge all trait scores into a unified dict for CSV export
+            merged_traits: dict[str, Any] = {}
+            if rubric.llm_trait_scores:
+                merged_traits.update(rubric.llm_trait_scores)
+            if rubric.manual_trait_scores:
+                merged_traits.update(rubric.manual_trait_scores)
+            if rubric.metric_trait_scores:
+                merged_traits.update(rubric.metric_trait_scores)
+
             # Use pre-computed set for faster membership testing
             for trait in global_traits:
-                row[f"rubric_{trait}"] = str(result.verify_rubric.get(trait, ""))
+                row[f"rubric_{trait}"] = str(merged_traits.get(trait, ""))
         else:
             # Set all global traits to empty when no rubric data
             for trait in global_traits:
@@ -496,19 +501,17 @@ def export_verification_results_csv(
 
         # Add question-specific rubrics as JSON (optimized)
         if question_specific_traits_set:
-            if result.verify_rubric:
+            if rubric and merged_traits:
                 # Use dictionary comprehension for better performance
                 question_specific_rubrics = {
-                    trait: result.verify_rubric[trait]
-                    for trait in question_specific_traits_set
-                    if trait in result.verify_rubric
+                    trait: merged_traits[trait] for trait in question_specific_traits_set if trait in merged_traits
                 }
             else:
                 question_specific_rubrics = {}
 
             # Safe JSON serialization with error handling
             serialized = _safe_json_serialize(
-                question_specific_rubrics, result.question_id, "question_specific_rubrics"
+                question_specific_rubrics, metadata.question_id, "question_specific_rubrics"
             )
             row["question_specific_rubrics"] = serialized if serialized else "{}"
 

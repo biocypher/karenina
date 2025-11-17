@@ -14,6 +14,11 @@ from karenina.benchmark.verification.batch_runner import (
     execute_task,
 )
 from karenina.schemas.workflow import ModelConfig, VerificationResult
+from karenina.schemas.workflow.verification import (
+    VerificationResultMetadata,
+    VerificationResultRubric,
+    VerificationResultTemplate,
+)
 from karenina.utils.answer_cache import AnswerTraceCache, CacheEntry
 
 
@@ -251,19 +256,26 @@ class TestAnswerDataExtraction:
     def test_extract_answer_data(self):
         """Test extracting answer data from verification result."""
         result = VerificationResult(
-            question_id="q1",
-            template_id="t1",
-            completed_without_errors=True,
-            question_text="Test question",
-            raw_llm_response="Test answer",
-            answering_model="openai/gpt-4.1-mini",
-            parsing_model="openai/gpt-4.1-mini",
-            execution_time=1.0,
-            timestamp="2025-01-01T00:00:00",
-            recursion_limit_reached=False,
-            answering_mcp_servers=["server1"],
-            usage_metadata={"answer_generation": {"input_tokens": 100}},
-            agent_metrics={"iterations": 3},
+            metadata=VerificationResultMetadata(
+                question_id="q1",
+                template_id="t1",
+                completed_without_errors=True,
+                question_text="Test question",
+                answering_model="openai/gpt-4.1-mini",
+                parsing_model="openai/gpt-4.1-mini",
+                execution_time=1.0,
+                timestamp="2025-01-01T00:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="Test answer",
+                recursion_limit_reached=False,
+                answering_mcp_servers=["server1"],
+                usage_metadata={"answer_generation": {"input_tokens": 100}},
+                agent_metrics={"iterations": 3},
+            ),
+            rubric=VerificationResultRubric(
+                rubric_evaluation_performed=False,
+            ),
         )
 
         data = _extract_answer_data_from_result(result)
@@ -271,7 +283,16 @@ class TestAnswerDataExtraction:
         assert data["raw_llm_response"] == "Test answer"
         assert data["recursion_limit_reached"] is False
         assert data["answering_mcp_servers"] == ["server1"]
-        assert data["usage_metadata"] == {"input_tokens": 100}
+        # usage_metadata is transformed from stage summary to callback format
+        assert data["usage_metadata"] == {
+            "unknown": {
+                "input_tokens": 100,
+                "output_tokens": 0,
+                "total_tokens": 0,
+                "input_token_details": {},
+                "output_token_details": {},
+            }
+        }
         assert data["agent_metrics"] == {"iterations": 3}
 
 
@@ -283,15 +304,22 @@ class TestCacheIntegration:
         """Test that execute_task caches generated answers."""
         # Setup mock
         mock_result = VerificationResult(
-            question_id="q1",
-            template_id="t1",
-            completed_without_errors=True,
-            question_text="Test",
-            raw_llm_response="Answer",
-            answering_model="model1",
-            parsing_model="model2",
-            execution_time=1.0,
-            timestamp="2025-01-01",
+            metadata=VerificationResultMetadata(
+                question_id="q1",
+                template_id="t1",
+                completed_without_errors=True,
+                question_text="Test",
+                answering_model="model1",
+                parsing_model="model2",
+                execution_time=1.0,
+                timestamp="2025-01-01",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="Answer",
+            ),
+            rubric=VerificationResultRubric(
+                rubric_evaluation_performed=False,
+            ),
         )
         mock_verify.return_value = mock_result
 
@@ -343,15 +371,22 @@ class TestCacheIntegration:
     def test_different_replicates_not_cached(self, mock_verify):
         """Test that different replicates generate separate answers."""
         mock_result = VerificationResult(
-            question_id="q1",
-            template_id="t1",
-            completed_without_errors=True,
-            question_text="Test",
-            raw_llm_response="Answer",
-            answering_model="model1",
-            parsing_model="model2",
-            execution_time=1.0,
-            timestamp="2025-01-01",
+            metadata=VerificationResultMetadata(
+                question_id="q1",
+                template_id="t1",
+                completed_without_errors=True,
+                question_text="Test",
+                answering_model="model1",
+                parsing_model="model2",
+                execution_time=1.0,
+                timestamp="2025-01-01",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="Answer",
+            ),
+            rubric=VerificationResultRubric(
+                rubric_evaluation_performed=False,
+            ),
         )
         mock_verify.return_value = mock_result
 

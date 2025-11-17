@@ -225,8 +225,8 @@ def create_model_performance_view(engine: Engine) -> None:
                 answering_model as model_name,
                 'answering' as model_role,
                 COUNT(*) as total_runs,
-                SUM(CASE WHEN success THEN 1 ELSE 0 END) as successful_runs,
-                SUM(CASE WHEN NOT success THEN 1 ELSE 0 END) as failed_runs,
+                SUM(CASE WHEN completed_without_errors THEN 1 ELSE 0 END) as successful_runs,
+                SUM(CASE WHEN NOT completed_without_errors THEN 1 ELSE 0 END) as failed_runs,
                 AVG(execution_time) as avg_execution_time
             FROM verification_results
             GROUP BY answering_model
@@ -237,8 +237,8 @@ def create_model_performance_view(engine: Engine) -> None:
                 parsing_model as model_name,
                 'parsing' as model_role,
                 COUNT(*) as total_runs,
-                SUM(CASE WHEN success THEN 1 ELSE 0 END) as successful_runs,
-                SUM(CASE WHEN NOT success THEN 1 ELSE 0 END) as failed_runs,
+                SUM(CASE WHEN completed_without_errors THEN 1 ELSE 0 END) as successful_runs,
+                SUM(CASE WHEN NOT completed_without_errors THEN 1 ELSE 0 END) as failed_runs,
                 AVG(execution_time) as avg_execution_time
             FROM verification_results
             GROUP BY parsing_model
@@ -377,12 +377,12 @@ def create_failed_verifications_view(engine: Engine) -> None:
         FROM verification_results vr
         JOIN verification_runs vrun ON vr.run_id = vrun.id
         JOIN benchmarks b ON vrun.benchmark_id = b.id
-        WHERE vr.success = 0
+        WHERE vr.completed_without_errors = 0
         ORDER BY vr.created_at DESC
     """
 
     # SQLite uses 0/1 for boolean, PostgreSQL uses FALSE
-    view_sql_postgres = view_sql.replace("vr.success = 0", "vr.success = FALSE")
+    view_sql_postgres = view_sql.replace("vr.completed_without_errors = 0", "vr.completed_without_errors = FALSE")
 
     with engine.begin() as conn:
         if engine.dialect.name == "sqlite":

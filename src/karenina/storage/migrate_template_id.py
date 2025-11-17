@@ -105,7 +105,7 @@ def migrate_database(db_path: str) -> None:
                         """
                         UPDATE verification_results
                         SET template_id = (
-                            SELECT bq.template_id
+                            SELECT bq.metadata.template_id
                             FROM benchmark_questions bq
                             INNER JOIN verification_runs vr ON vr.benchmark_id = bq.benchmark_id
                             WHERE vr.id = verification_results.run_id

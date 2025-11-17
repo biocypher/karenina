@@ -362,14 +362,37 @@ ModelConfig(
 
 ### Step 6: Access and Analyze Results
 
-After verification, you can access detailed results for each question.
+After verification, you can analyze results using DataFrames (recommended) or access raw result objects.
+
+#### Option 1: Analyze with DataFrames (Recommended)
+
+```python
+# Get DataFrame for easy analysis
+template_results = results.get_templates()
+df = template_results.to_dataframe()
+
+# Calculate pass rates
+pass_rates = df.groupby('question_id')['field_match'].mean()
+print("Pass Rates by Question:")
+print(pass_rates)
+
+# If rubrics are enabled
+rubric_results = results.get_rubrics()
+rubric_df = rubric_results.to_dataframe(trait_type="llm")
+print("\nRubric Scores:")
+print(rubric_df.groupby('trait_name')['trait_score'].mean())
+```
+
+See **[Analyzing Results with DataFrames](using-karenina/analyzing-results-dataframes.md)** for comprehensive examples.
+
+#### Option 2: Access Raw Results
 
 ```python
 # Iterate through results
-for question_id, result in results.items():
+for result in results.results:
     print(f"\nQuestion: {result.question_text}")
     print(f"Verification: {'✓ PASS' if result.verify_result else '✗ FAIL'}")
-    print(f"Model Answer: {result.answering_response[:100]}...")  # First 100 chars
+    print(f"Model Answer: {result.raw_llm_response[:100]}...")  # First 100 chars
 
     # Access rubric scores (if rubric enabled)
     if result.rubric_scores:
@@ -385,14 +408,21 @@ for question_id, result in results.items():
 **Calculate aggregate metrics:**
 
 ```python
-# Calculate pass rate
-total = len(results)
-passed = sum(1 for r in results.values() if r.verify_result)
-pass_rate = (passed / total) * 100
+# Using DataFrames (recommended)
+df = results.get_templates().to_dataframe()
+successful = df[df['completed_without_errors'] == True]
+pass_rate = successful['field_match'].mean() * 100
+total = len(df.drop_duplicates(subset=['result_index']))
+passed = (total * pass_rate / 100)
 
 print(f"\n{'='*50}")
-print(f"Overall Pass Rate: {pass_rate:.1f}% ({passed}/{total})")
+print(f"Overall Pass Rate: {pass_rate:.1f}% ({passed:.0f}/{total})")
 print(f"{'='*50}")
+
+# Or using raw results
+total = len(results.results)
+passed = sum(1 for r in results.results if r.verify_result)
+pass_rate_raw = (passed / total) * 100
 ```
 
 ---

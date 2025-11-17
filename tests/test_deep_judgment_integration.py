@@ -112,7 +112,7 @@ class TestDeepJudgmentIntegration:
         )
 
         # Verify error result includes deep-judgment metadata
-        assert result.success is False
+        assert result.completed_without_errors is False
         assert result.deep_judgment_enabled is True
         assert result.deep_judgment_performed is False  # Failed before parsing
         assert result.extracted_excerpts is None

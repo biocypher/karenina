@@ -8,6 +8,12 @@ import pytest
 
 from karenina.benchmark.verification.exceptions import ExcerptNotFoundError
 from karenina.schemas import ModelConfig, VerificationConfig, VerificationResult
+from karenina.schemas.workflow.verification import (
+    VerificationResultDeepJudgment,
+    VerificationResultMetadata,
+    VerificationResultRubric,
+    VerificationResultTemplate,
+)
 
 
 # Helper to create a minimal parsing model for tests
@@ -101,26 +107,31 @@ class TestVerificationResultDeepJudgment:
     def test_default_deep_judgment_fields(self):
         """Test that deep-judgment fields have correct defaults."""
         result = VerificationResult(
-            question_id="test_q1",
-            template_id="test_t1",
-            success=True,
-            question_text="What is the drug target?",
-            raw_llm_response="The drug target is BCL-2.",
-            answering_model="gpt-4.1-mini",
-            parsing_model="gpt-4.1-mini",
-            execution_time=1.5,
-            timestamp="2025-01-13T12:00:00",
+            metadata=VerificationResultMetadata(
+                question_id="test_q1",
+                template_id="test_t1",
+                completed_without_errors=True,
+                question_text="What is the drug target?",
+                answering_model="gpt-4.1-mini",
+                parsing_model="gpt-4.1-mini",
+                execution_time=1.5,
+                timestamp="2025-01-13T12:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="The drug target is BCL-2.",
+            ),
+            rubric=VerificationResultRubric(rubric_evaluation_performed=False),
         )
 
-        # Deep-judgment disabled by default
-        assert result.deep_judgment_enabled is False
-        assert result.deep_judgment_performed is False
-        assert result.extracted_excerpts is None
-        assert result.attribute_reasoning is None
-        assert result.deep_judgment_stages_completed is None
-        assert result.deep_judgment_model_calls == 0
-        assert result.deep_judgment_excerpt_retry_count == 0
-        assert result.attributes_without_excerpts is None
+        # Deep-judgment disabled by default (deep_judgment is None when not enabled)
+        assert result.deep_judgment is None or result.deep_judgment.deep_judgment_enabled is False
+        assert result.deep_judgment is None or result.deep_judgment.deep_judgment_performed is False
+        assert result.deep_judgment is None or result.deep_judgment.extracted_excerpts is None
+        assert result.deep_judgment is None or result.deep_judgment.attribute_reasoning is None
+        assert result.deep_judgment is None or result.deep_judgment.deep_judgment_stages_completed is None
+        assert result.deep_judgment is None or result.deep_judgment.deep_judgment_model_calls == 0
+        assert result.deep_judgment is None or result.deep_judgment.deep_judgment_excerpt_retry_count == 0
+        assert result.deep_judgment is None or result.deep_judgment.attributes_without_excerpts is None
 
     def test_deep_judgment_with_excerpts(self):
         """Test VerificationResult with extracted excerpts."""
@@ -138,31 +149,38 @@ class TestVerificationResultDeepJudgment:
         }
 
         result = VerificationResult(
-            question_id="test_q1",
-            template_id="test_t1",
-            success=True,
-            question_text="What is the drug target?",
-            raw_llm_response="The drug targets BCL-2 and induces apoptosis.",
-            answering_model="gpt-4.1-mini",
-            parsing_model="gpt-4.1-mini",
-            execution_time=3.2,
-            timestamp="2025-01-13T12:00:00",
-            deep_judgment_enabled=True,
-            deep_judgment_performed=True,
-            extracted_excerpts=excerpts,
-            attribute_reasoning=reasoning,
-            deep_judgment_stages_completed=["excerpts", "reasoning", "parameters"],
-            deep_judgment_model_calls=3,
-            deep_judgment_excerpt_retry_count=0,
+            metadata=VerificationResultMetadata(
+                question_id="test_q1",
+                template_id="test_t1",
+                completed_without_errors=True,
+                question_text="What is the drug target?",
+                answering_model="gpt-4.1-mini",
+                parsing_model="gpt-4.1-mini",
+                execution_time=3.2,
+                timestamp="2025-01-13T12:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="The drug targets BCL-2 and induces apoptosis.",
+            ),
+            rubric=VerificationResultRubric(rubric_evaluation_performed=False),
+            deep_judgment=VerificationResultDeepJudgment(
+                deep_judgment_enabled=True,
+                deep_judgment_performed=True,
+                extracted_excerpts=excerpts,
+                attribute_reasoning=reasoning,
+                deep_judgment_stages_completed=["excerpts", "reasoning", "parameters"],
+                deep_judgment_model_calls=3,
+                deep_judgment_excerpt_retry_count=0,
+            ),
         )
 
-        assert result.deep_judgment_enabled is True
-        assert result.deep_judgment_performed is True
-        assert result.extracted_excerpts == excerpts
-        assert result.attribute_reasoning == reasoning
-        assert result.deep_judgment_stages_completed == ["excerpts", "reasoning", "parameters"]
-        assert result.deep_judgment_model_calls == 3
-        assert result.deep_judgment_excerpt_retry_count == 0
+        assert result.deep_judgment.deep_judgment_enabled is True
+        assert result.deep_judgment.deep_judgment_performed is True
+        assert result.deep_judgment.extracted_excerpts == excerpts
+        assert result.deep_judgment.attribute_reasoning == reasoning
+        assert result.deep_judgment.deep_judgment_stages_completed == ["excerpts", "reasoning", "parameters"]
+        assert result.deep_judgment.deep_judgment_model_calls == 3
+        assert result.deep_judgment.deep_judgment_excerpt_retry_count == 0
 
     def test_deep_judgment_with_missing_excerpts(self):
         """Test VerificationResult with missing excerpts (refusal scenario)."""
@@ -177,125 +195,160 @@ class TestVerificationResultDeepJudgment:
         }
 
         result = VerificationResult(
-            question_id="test_q1",
-            template_id="test_t1",
-            success=True,
-            question_text="What is the drug target?",
-            raw_llm_response="I cannot provide information about that drug.",
-            answering_model="gpt-4.1-mini",
-            parsing_model="gpt-4.1-mini",
-            execution_time=2.8,
-            timestamp="2025-01-13T12:00:00",
-            deep_judgment_enabled=True,
-            deep_judgment_performed=True,
-            extracted_excerpts=excerpts,
-            attribute_reasoning=reasoning,
-            deep_judgment_stages_completed=["excerpts", "reasoning", "parameters"],
-            deep_judgment_model_calls=3,
-            attributes_without_excerpts=["drug_target"],
+            metadata=VerificationResultMetadata(
+                question_id="test_q1",
+                template_id="test_t1",
+                completed_without_errors=True,
+                question_text="What is the drug target?",
+                answering_model="gpt-4.1-mini",
+                parsing_model="gpt-4.1-mini",
+                execution_time=2.8,
+                timestamp="2025-01-13T12:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="I cannot provide information about that drug.",
+            ),
+            rubric=VerificationResultRubric(rubric_evaluation_performed=False),
+            deep_judgment=VerificationResultDeepJudgment(
+                deep_judgment_enabled=True,
+                deep_judgment_performed=True,
+                extracted_excerpts=excerpts,
+                attribute_reasoning=reasoning,
+                deep_judgment_stages_completed=["excerpts", "reasoning", "parameters"],
+                deep_judgment_model_calls=3,
+                attributes_without_excerpts=["drug_target"],
+            ),
         )
 
-        assert result.deep_judgment_performed is True
-        assert result.extracted_excerpts["drug_target"] == []  # Empty list is valid
-        assert len(result.extracted_excerpts["mechanism"]) == 1
-        assert result.attributes_without_excerpts == ["drug_target"]
+        assert result.deep_judgment.deep_judgment_performed is True
+        assert result.deep_judgment.extracted_excerpts["drug_target"] == []  # Empty list is valid
+        assert len(result.deep_judgment.extracted_excerpts["mechanism"]) == 1
+        assert result.deep_judgment.attributes_without_excerpts == ["drug_target"]
 
     def test_deep_judgment_with_retries(self):
         """Test VerificationResult with excerpt validation retries."""
         result = VerificationResult(
-            question_id="test_q1",
-            template_id="test_t1",
-            success=True,
-            question_text="Test question",
-            raw_llm_response="Test response",
-            answering_model="gpt-4.1-mini",
-            parsing_model="gpt-4.1-mini",
-            execution_time=5.4,
-            timestamp="2025-01-13T12:00:00",
-            deep_judgment_enabled=True,
-            deep_judgment_performed=True,
-            deep_judgment_model_calls=5,  # 3 stages + 2 retries
-            deep_judgment_excerpt_retry_count=2,
+            metadata=VerificationResultMetadata(
+                question_id="test_q1",
+                template_id="test_t1",
+                completed_without_errors=True,
+                question_text="Test question",
+                answering_model="gpt-4.1-mini",
+                parsing_model="gpt-4.1-mini",
+                execution_time=5.4,
+                timestamp="2025-01-13T12:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="Test response",
+            ),
+            rubric=VerificationResultRubric(rubric_evaluation_performed=False),
+            deep_judgment=VerificationResultDeepJudgment(
+                deep_judgment_enabled=True,
+                deep_judgment_performed=True,
+                deep_judgment_model_calls=5,  # 3 stages + 2 retries
+                deep_judgment_excerpt_retry_count=2,
+            ),
         )
 
-        assert result.deep_judgment_model_calls == 5
-        assert result.deep_judgment_excerpt_retry_count == 2
+        assert result.deep_judgment.deep_judgment_model_calls == 5
+        assert result.deep_judgment.deep_judgment_excerpt_retry_count == 2
 
     def test_deep_judgment_enabled_but_not_performed(self):
         """Test scenario where deep-judgment is enabled but not performed (error case)."""
         result = VerificationResult(
-            question_id="test_q1",
-            template_id="test_t1",
-            success=False,
-            error="Deep-judgment parsing failed: JSON parsing error",
-            question_text="Test question",
-            raw_llm_response="Test response",
-            answering_model="gpt-4.1-mini",
-            parsing_model="gpt-4.1-mini",
-            execution_time=1.2,
-            timestamp="2025-01-13T12:00:00",
-            deep_judgment_enabled=True,
-            deep_judgment_performed=False,  # Failed to complete
+            metadata=VerificationResultMetadata(
+                question_id="test_q1",
+                template_id="test_t1",
+                completed_without_errors=False,
+                error="Deep-judgment parsing failed: JSON parsing error",
+                question_text="Test question",
+                answering_model="gpt-4.1-mini",
+                parsing_model="gpt-4.1-mini",
+                execution_time=1.2,
+                timestamp="2025-01-13T12:00:00",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="Test response",
+            ),
+            rubric=VerificationResultRubric(rubric_evaluation_performed=False),
+            deep_judgment=VerificationResultDeepJudgment(
+                deep_judgment_enabled=True,
+                deep_judgment_performed=False,  # Failed to complete
+            ),
         )
 
-        assert result.deep_judgment_enabled is True
-        assert result.deep_judgment_performed is False
-        assert result.success is False
+        assert result.deep_judgment.deep_judgment_enabled is True
+        assert result.deep_judgment.deep_judgment_performed is False
+        assert result.metadata.completed_without_errors is False
 
     def test_deep_judgment_fields_serialization(self):
         """Test that deep-judgment fields serialize correctly."""
         result = VerificationResult(
-            question_id="test_q1",
-            template_id="test_t1",
-            success=True,
-            question_text="Test",
-            raw_llm_response="Response",
-            answering_model="gpt-4.1-mini",
-            parsing_model="gpt-4.1-mini",
-            execution_time=1.0,
-            timestamp="2025-01-13",
-            deep_judgment_enabled=True,
-            deep_judgment_performed=True,
-            extracted_excerpts={"attr": [{"text": "test", "confidence": "high", "similarity_score": 0.9}]},
-            attribute_reasoning={"attr": "reasoning"},
-            deep_judgment_stages_completed=["excerpts", "reasoning"],
-            deep_judgment_model_calls=2,
-            attributes_without_excerpts=[],
+            metadata=VerificationResultMetadata(
+                question_id="test_q1",
+                template_id="test_t1",
+                completed_without_errors=True,
+                question_text="Test",
+                answering_model="gpt-4.1-mini",
+                parsing_model="gpt-4.1-mini",
+                execution_time=1.0,
+                timestamp="2025-01-13",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="Response",
+            ),
+            rubric=VerificationResultRubric(rubric_evaluation_performed=False),
+            deep_judgment=VerificationResultDeepJudgment(
+                deep_judgment_enabled=True,
+                deep_judgment_performed=True,
+                extracted_excerpts={"attr": [{"text": "test", "confidence": "high", "similarity_score": 0.9}]},
+                attribute_reasoning={"attr": "reasoning"},
+                deep_judgment_stages_completed=["excerpts", "reasoning"],
+                deep_judgment_model_calls=2,
+                attributes_without_excerpts=[],
+            ),
         )
 
         # Test model_dump serialization
         dumped = result.model_dump()
-        assert dumped["deep_judgment_enabled"] is True
-        assert dumped["extracted_excerpts"]["attr"][0]["text"] == "test"
-        assert dumped["attribute_reasoning"]["attr"] == "reasoning"
+        assert dumped["deep_judgment"]["deep_judgment_enabled"] is True
+        assert dumped["deep_judgment"]["extracted_excerpts"]["attr"][0]["text"] == "test"
+        assert dumped["deep_judgment"]["attribute_reasoning"]["attr"] == "reasoning"
 
     def test_empty_excerpts_list_is_valid(self):
         """Test that empty excerpt lists are valid and distinct from None."""
         result = VerificationResult(
-            question_id="test_q1",
-            template_id="test_t1",
-            success=True,
-            question_text="Test",
-            raw_llm_response="Response",
-            answering_model="gpt-4.1-mini",
-            parsing_model="gpt-4.1-mini",
-            execution_time=1.0,
-            timestamp="2025-01-13",
-            deep_judgment_enabled=True,
-            deep_judgment_performed=True,
-            extracted_excerpts={"attr1": [], "attr2": []},  # All empty - valid for refusals
-            attribute_reasoning={
-                "attr1": "No excerpts found - response contains refusal",
-                "attr2": "No corroborating evidence present",
-            },
-            attributes_without_excerpts=["attr1", "attr2"],
+            metadata=VerificationResultMetadata(
+                question_id="test_q1",
+                template_id="test_t1",
+                completed_without_errors=True,
+                question_text="Test",
+                answering_model="gpt-4.1-mini",
+                parsing_model="gpt-4.1-mini",
+                execution_time=1.0,
+                timestamp="2025-01-13",
+            ),
+            template=VerificationResultTemplate(
+                raw_llm_response="Response",
+            ),
+            rubric=VerificationResultRubric(rubric_evaluation_performed=False),
+            deep_judgment=VerificationResultDeepJudgment(
+                deep_judgment_enabled=True,
+                deep_judgment_performed=True,
+                extracted_excerpts={"attr1": [], "attr2": []},  # All empty - valid for refusals
+                attribute_reasoning={
+                    "attr1": "No excerpts found - response contains refusal",
+                    "attr2": "No corroborating evidence present",
+                },
+                attributes_without_excerpts=["attr1", "attr2"],
+            ),
         )
 
         # Empty lists are valid and different from None
-        assert result.extracted_excerpts is not None
-        assert result.extracted_excerpts["attr1"] == []
-        assert result.extracted_excerpts["attr2"] == []
-        assert len(result.attributes_without_excerpts) == 2
+        assert result.deep_judgment.extracted_excerpts is not None
+        assert result.deep_judgment.extracted_excerpts["attr1"] == []
+        assert result.deep_judgment.extracted_excerpts["attr2"] == []
+        assert len(result.deep_judgment.attributes_without_excerpts) == 2
 
 
 class TestVerificationConfigSearchEnhancedDeepJudgment:

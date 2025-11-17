@@ -1,5 +1,7 @@
 """Workflow models for verification execution."""
 
+from .aggregation import AggregatorRegistry, ResultAggregator, create_default_registry
+from .judgment_results import JudgmentResults
 from .models import (
     INTERFACE_LANGCHAIN,
     INTERFACE_MANUAL,
@@ -9,6 +11,8 @@ from .models import (
     ModelConfig,
     QuestionFewShotConfig,
 )
+from .rubric_results import RubricResults
+from .template_results import TemplateResults
 from .verification import (
     DEFAULT_ANSWERING_SYSTEM_PROMPT,
     DEFAULT_PARSING_SYSTEM_PROMPT,
@@ -17,9 +21,20 @@ from .verification import (
     VerificationJob,
     VerificationRequest,
     VerificationResult,
+    VerificationResultDeepJudgment,
+    VerificationResultMetadata,
+    VerificationResultRubric,
+    VerificationResultTemplate,
     VerificationStartResponse,
     VerificationStatusResponse,
 )
+from .verification_result_set import VerificationResultSet
+
+# Rebuild models to resolve forward references
+RubricResults.model_rebuild()
+TemplateResults.model_rebuild()
+JudgmentResults.model_rebuild()
+VerificationResultSet.model_rebuild()
 
 __all__ = [
     # Model configuration
@@ -37,9 +52,22 @@ __all__ = [
     # Verification
     "VerificationConfig",
     "VerificationResult",
+    "VerificationResultMetadata",
+    "VerificationResultTemplate",
+    "VerificationResultRubric",
+    "VerificationResultDeepJudgment",
     "VerificationJob",
     "FinishedTemplate",
     "VerificationRequest",
     "VerificationStatusResponse",
     "VerificationStartResponse",
+    # Result set and specialized results
+    "VerificationResultSet",
+    "RubricResults",
+    "TemplateResults",
+    "JudgmentResults",
+    # Aggregation framework
+    "ResultAggregator",
+    "AggregatorRegistry",
+    "create_default_registry",
 ]

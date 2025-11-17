@@ -303,7 +303,7 @@ class TestGroundTruthExposure:
         )
 
         # Verify that the verification completed successfully
-        assert result.success is True
+        assert result.completed_without_errors is True
         assert mock_parsing_llm.invoke.called
 
         # Check that ground truth was included in system prompt
@@ -387,7 +387,7 @@ class TestGroundTruthExposure:
         )
 
         # Verification should succeed
-        assert result.success is True
+        assert result.completed_without_errors is True
 
         # For this test, we're just verifying that ground truth extraction
         # doesn't break the verification process when it works correctly

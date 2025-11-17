@@ -81,11 +81,11 @@ class TestDeepJudgmentParseFullWorkflow:
         # Mock Stage 3: Parameter extraction (return JSON string)
         parameter_response = json.dumps({"drug_target": "BCL-2", "mechanism": "apoptosis", "confidence": "medium"})
 
-        # Set up mock to return string responses for each call
+        # Set up mock to return tuples (response, recursion_limit_reached, usage_metadata, agent_metrics) for each call
         mock_invoke.side_effect = [
-            excerpt_response,  # Stage 1
-            reasoning_response,  # Stage 2
-            parameter_response,  # Stage 3
+            (excerpt_response, False, {}, None),  # Stage 1
+            (reasoning_response, False, {}, None),  # Stage 2
+            (parameter_response, False, {}, None),  # Stage 3
         ]
 
         # Execute
@@ -148,9 +148,9 @@ class TestDeepJudgmentParseFullWorkflow:
         parameter_response = json.dumps({"drug_target": "unknown", "mechanism": "unclear", "confidence": "low"})
 
         mock_invoke.side_effect = [
-            excerpt_response,
-            reasoning_response,
-            parameter_response,
+            (excerpt_response, False, {}, None),
+            (reasoning_response, False, {}, None),
+            (parameter_response, False, {}, None),
         ]
 
         # Execute
@@ -210,10 +210,10 @@ class TestDeepJudgmentParseFullWorkflow:
         parameter_response = json.dumps({"drug_target": "test", "mechanism": "test", "confidence": "low"})
 
         mock_invoke.side_effect = [
-            excerpt_response_1,  # Stage 1 attempt 1 (will fail validation)
-            excerpt_response_2,  # Stage 1 attempt 2 (will succeed)
-            reasoning_response,  # Stage 2
-            parameter_response,  # Stage 3
+            (excerpt_response_1, False, {}, None),  # Stage 1 attempt 1 (will fail validation)
+            (excerpt_response_2, False, {}, None),  # Stage 1 attempt 2 (will succeed)
+            (reasoning_response, False, {}, None),  # Stage 2
+            (parameter_response, False, {}, None),  # Stage 3
         ]
 
         # Mock fuzzy matching: first excerpt fails, second succeeds
@@ -264,9 +264,9 @@ class TestDeepJudgmentParseFullWorkflow:
         parameter_response = json.dumps({"drug_target": "t", "mechanism": "t", "confidence": "low"})
 
         mock_invoke.side_effect = [
-            excerpt_response,
-            reasoning_response,
-            parameter_response,
+            (excerpt_response, False, {}, None),
+            (reasoning_response, False, {}, None),
+            (parameter_response, False, {}, None),
         ]
 
         # Execute
@@ -294,9 +294,9 @@ class TestDeepJudgmentParseFullWorkflow:
         invalid_response = "This is not valid JSON at all"
 
         mock_invoke.side_effect = [
-            invalid_response,  # Attempt 1
-            invalid_response,  # Attempt 2 (first retry)
-            invalid_response,  # Attempt 3 (second retry)
+            (invalid_response, False, {}, None),  # Attempt 1
+            (invalid_response, False, {}, None),  # Attempt 2 (first retry)
+            (invalid_response, False, {}, None),  # Attempt 3 (second retry)
         ]
 
         # Execute - should raise ValueError after exhausting retries
@@ -327,9 +327,9 @@ class TestDeepJudgmentParseFullWorkflow:
         parameter_response = json.dumps({"drug_target": "t", "mechanism": "m", "confidence": "c"})
 
         mock_invoke.side_effect = [
-            excerpt_response,
-            reasoning_response,
-            parameter_response,
+            (excerpt_response, False, {}, None),
+            (reasoning_response, False, {}, None),
+            (parameter_response, False, {}, None),
         ]
 
         # Execute - should not raise error
@@ -402,7 +402,11 @@ class TestDeepJudgmentParseIntegration:
             }
         )
 
-        mock_invoke.side_effect = [excerpt_response, reasoning_response, parameter_response]
+        mock_invoke.side_effect = [
+            (excerpt_response, False, {}, None),
+            (reasoning_response, False, {}, None),
+            (parameter_response, False, {}, None),
+        ]
 
         # Execute
         raw_trace = "venetoclax targets BCL-2 and induces apoptosis for CLL treatment with promising results"
@@ -485,7 +489,12 @@ class TestDeepJudgmentSearchEnhancement:
         )
         parameter_response = json.dumps({"drug_target": "BCL-2", "mechanism": "apoptosis", "confidence": "low"})
 
-        mock_invoke.side_effect = [excerpt_response, assessment_response, reasoning_response, parameter_response]
+        mock_invoke.side_effect = [
+            (excerpt_response, False, {}, None),
+            (assessment_response, False, {}, None),
+            (reasoning_response, False, {}, None),
+            (parameter_response, False, {}, None),
+        ]
 
         # Execute
         raw_trace = "The drug targets BCL-2 protein and induces apoptosis."
@@ -547,7 +556,11 @@ class TestDeepJudgmentSearchEnhancement:
         reasoning_response = json.dumps({"drug_target": "reasoning", "mechanism": "r", "confidence": "r"})
         parameter_response = json.dumps({"drug_target": "test", "mechanism": "m", "confidence": "c"})
 
-        mock_invoke.side_effect = [excerpt_response, reasoning_response, parameter_response]
+        mock_invoke.side_effect = [
+            (excerpt_response, False, {}, None),
+            (reasoning_response, False, {}, None),
+            (parameter_response, False, {}, None),
+        ]
 
         # Execute
         parsed, excerpts, reasoning, metadata = deep_judgment_parse(
@@ -605,7 +618,12 @@ class TestDeepJudgmentSearchEnhancement:
         )
         parameter_response = json.dumps({"drug_target": "t", "mechanism": "m", "confidence": "c"})
 
-        mock_invoke.side_effect = [excerpt_response, assessment_response, reasoning_response, parameter_response]
+        mock_invoke.side_effect = [
+            (excerpt_response, False, {}, None),
+            (assessment_response, False, {}, None),
+            (reasoning_response, False, {}, None),
+            (parameter_response, False, {}, None),
+        ]
 
         # Execute
         parsed, excerpts, reasoning, metadata = deep_judgment_parse(
@@ -648,7 +666,11 @@ class TestDeepJudgmentSearchEnhancement:
         reasoning_response = json.dumps({"drug_target": "r", "mechanism": "r", "confidence": "r"})
         parameter_response = json.dumps({"drug_target": "t", "mechanism": "m", "confidence": "c"})
 
-        mock_invoke.side_effect = [excerpt_response, reasoning_response, parameter_response]
+        mock_invoke.side_effect = [
+            (excerpt_response, False, {}, None),
+            (reasoning_response, False, {}, None),
+            (parameter_response, False, {}, None),
+        ]
 
         # Execute - should not raise exception
         parsed, excerpts, reasoning, metadata = deep_judgment_parse(
@@ -718,7 +740,12 @@ class TestDeepJudgmentSearchEnhancement:
         )
         parameter_response = json.dumps({"drug_target": "t", "mechanism": "m", "confidence": "c"})
 
-        mock_invoke.side_effect = [excerpt_response, assessment_response, reasoning_response, parameter_response]
+        mock_invoke.side_effect = [
+            (excerpt_response, False, {}, None),
+            (assessment_response, False, {}, None),
+            (reasoning_response, False, {}, None),
+            (parameter_response, False, {}, None),
+        ]
 
         # Execute
         parsed, excerpts, reasoning, metadata = deep_judgment_parse(
@@ -792,7 +819,12 @@ class TestDeepJudgmentSearchEnhancement:
         # Mock Stage 3: Parameters
         parameter_response = json.dumps({"drug_target": "BCL-2", "mechanism": "apoptosis", "confidence": "low"})
 
-        mock_invoke.side_effect = [excerpt_response, assessment_response, reasoning_response, parameter_response]
+        mock_invoke.side_effect = [
+            (excerpt_response, False, {}, None),
+            (assessment_response, False, {}, None),
+            (reasoning_response, False, {}, None),
+            (parameter_response, False, {}, None),
+        ]
 
         # Execute
         parsed, excerpts, reasoning, metadata = deep_judgment_parse(
@@ -840,7 +872,11 @@ class TestDeepJudgmentSearchEnhancement:
         # Mock Stage 3: Parameters
         parameter_response = json.dumps({"drug_target": "t", "mechanism": "m", "confidence": "c"})
 
-        mock_invoke.side_effect = [excerpt_response, reasoning_response, parameter_response]
+        mock_invoke.side_effect = [
+            (excerpt_response, False, {}, None),
+            (reasoning_response, False, {}, None),
+            (parameter_response, False, {}, None),
+        ]
 
         # Execute
         parsed, excerpts, reasoning, metadata = deep_judgment_parse(
@@ -901,7 +937,12 @@ class TestDeepJudgmentSearchEnhancement:
         # Mock Stage 3
         parameter_response = json.dumps({"drug_target": "t", "mechanism": "m", "confidence": "c"})
 
-        mock_invoke.side_effect = [excerpt_response, assessment_response, reasoning_response, parameter_response]
+        mock_invoke.side_effect = [
+            (excerpt_response, False, {}, None),
+            (assessment_response, False, {}, None),
+            (reasoning_response, False, {}, None),
+            (parameter_response, False, {}, None),
+        ]
 
         # Execute - should not crash
         parsed, excerpts, reasoning, metadata = deep_judgment_parse(
@@ -977,7 +1018,12 @@ class TestDeepJudgmentSearchEnhancement:
         # Mock Stage 3: Final parameter extraction
         parameter_response = json.dumps({"drug_target": "BCL-2", "mechanism": "apoptosis", "confidence": "unknown"})
 
-        mock_invoke.side_effect = [excerpt_response, assessment_response, reasoning_response, parameter_response]
+        mock_invoke.side_effect = [
+            (excerpt_response, False, {}, None),
+            (assessment_response, False, {}, None),
+            (reasoning_response, False, {}, None),
+            (parameter_response, False, {}, None),
+        ]
 
         # Execute full pipeline
         parsed, excerpts, reasoning, metadata = deep_judgment_parse(

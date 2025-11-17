@@ -202,7 +202,7 @@ results = benchmark.run_verification(config)
 print("\n=== Embedding Check Results ===")
 override_count = 0
 
-for question_id, result in results.items():
+for result in results.results:
     if result.embedding_check_performed:
         print(f"\nQuestion: {result.question_text}")
         print(f"  Expected: {benchmark.get_question(question_id).raw_answer}")
@@ -272,7 +272,7 @@ Find all cases where embedding check rescued a failed verification:
 # Get all overridden results
 overridden = [
     (qid, result)
-    for qid, result in results.items()
+    for result in results.results
     if result.embedding_override_applied
 ]
 
@@ -288,10 +288,10 @@ for qid, result in overridden:
 # Calculate embedding check statistics
 total_questions = len(results)
 embedding_checks_performed = sum(
-    1 for r in results.values() if r.embedding_check_performed
+    1 for r in results.results if r.embedding_check_performed
 )
 overrides_applied = sum(
-    1 for r in results.values() if r.embedding_override_applied
+    1 for r in results.results if r.embedding_override_applied
 )
 
 print(f"Total questions: {total_questions}")
@@ -425,7 +425,7 @@ Track how often embedding check overrides results:
 
 ```python
 override_rate = sum(
-    1 for r in results.values() if r.embedding_override_applied
+    1 for r in results.results if r.embedding_override_applied
 ) / len(results)
 
 if override_rate > 0.20:  # More than 20% overrides
@@ -441,9 +441,9 @@ Manually inspect overridden verifications to ensure quality:
 
 ```python
 # Review all overridden cases
-for qid, result in results.items():
+for result in results.results:
     if result.embedding_override_applied:
-        question = benchmark.get_question(qid)
+        question = benchmark.get_question(result.question_id)
         print(f"\n=== Overridden: {qid} ===")
         print(f"Question: {question.question}")
         print(f"Expected: {question.raw_answer}")
@@ -487,7 +487,7 @@ config = VerificationConfig(
 results = benchmark.run_verification(config)
 
 # Review cases where both features triggered
-for qid, result in results.items():
+for result in results.results:
     if result.embedding_override_applied and result.deep_judgment_used:
         print(f"\n{qid}: Both embedding check and deep-judgment used")
         print(f"  Deep-judgment excerpts: {result.deep_judgment_excerpts}")
@@ -525,7 +525,7 @@ config = VerificationConfig(
 )
 
 # Results may have both abstention and embedding metadata
-for qid, result in results.items():
+for result in results.results:
     if result.abstention_detected:
         print(f"{qid}: Model abstained")
     elif result.embedding_override_applied:

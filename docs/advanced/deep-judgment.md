@@ -261,7 +261,7 @@ results = benchmark.run_verification(config)
 When search enhancement is enabled, verification results include additional metadata:
 
 ```python
-for question_id, result in results.items():
+for result in results.results:
     if result.deep_judgment_search_enabled:
         # Access hallucination risk scores per attribute
         if result.hallucination_risk_assessment:
@@ -500,7 +500,7 @@ When deep-judgment is enabled, verification results include additional metadata 
 
 ```python
 # Access deep-judgment results
-for question_id, result in results.items():
+for result in results.results:
     if result.deep_judgment_performed:
         # Metadata
         print(f"Question: {result.question_text}")
@@ -635,8 +635,8 @@ results = benchmark.run_verification(config)
 # 5. Analyze deep-judgment results
 print("\n=== Deep-Judgment Results ===\n")
 
-for question_id, result in results.items():
-    question = benchmark.get_question(question_id)
+for result in results.results:
+    question = benchmark.get_question(result.question_id)
 
     print(f"Question: {question.question}")
     print(f"Verification: {'✓ PASS' if result.verify_result else '✗ FAIL'}")

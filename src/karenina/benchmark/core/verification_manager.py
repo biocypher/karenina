@@ -9,7 +9,13 @@ if TYPE_CHECKING:
     from .results import ResultsManager
     from .rubrics import RubricManager
 
-from ...schemas.workflow import FinishedTemplate, VerificationConfig, VerificationResult
+from ...schemas.workflow import (
+    FinishedTemplate,
+    VerificationConfig,
+    VerificationResult,
+    VerificationResultMetadata,
+    VerificationResultSet,
+)
 from ...utils.checkpoint import generate_template_id
 from ..verification import run_verification_batch
 from ..verification.utils.validation import validate_answer_template
@@ -49,13 +55,14 @@ class VerificationManager:
         Raises:
             ValueError: If question not found or not ready for verification
         """
-        return self.run_verification(
+        result_set = self.run_verification(
             config=config,
             question_ids=[question_id],
             run_name=run_name,
             job_id=job_id,
             async_enabled=async_enabled,
         )
+        return result_set.to_legacy_dict()
 
     def verify_questions(
         self,
@@ -80,7 +87,7 @@ class VerificationManager:
         Returns:
             Dictionary mapping result keys to VerificationResult objects
         """
-        return self.run_verification(
+        result_set = self.run_verification(
             config=config,
             question_ids=question_ids,
             run_name=run_name,
@@ -88,6 +95,7 @@ class VerificationManager:
             async_enabled=async_enabled,
             progress_callback=progress_callback,
         )
+        return result_set.to_legacy_dict()
 
     def verify_filtered(
         self,
@@ -132,7 +140,7 @@ class VerificationManager:
 
         question_ids = [q["id"] for q in filtered_questions]
 
-        return self.run_verification(
+        result_set = self.run_verification(
             config=config,
             question_ids=question_ids,
             run_name=run_name,
@@ -140,6 +148,7 @@ class VerificationManager:
             async_enabled=async_enabled,
             progress_callback=progress_callback,
         )
+        return result_set.to_legacy_dict()
 
     def verify_all_finished(
         self,
@@ -162,7 +171,7 @@ class VerificationManager:
         Returns:
             Dictionary mapping result keys to VerificationResult objects
         """
-        return self.run_verification(
+        result_set = self.run_verification(
             config=config,
             question_ids=None,  # This defaults to all finished questions
             run_name=run_name,
@@ -170,6 +179,7 @@ class VerificationManager:
             async_enabled=async_enabled,
             progress_callback=progress_callback,
         )
+        return result_set.to_legacy_dict()
 
     def verify_custom(
         self,
@@ -200,7 +210,7 @@ class VerificationManager:
             if question_selector(q_data):
                 selected_questions.append(q_data["id"])
 
-        return self.run_verification(
+        result_set = self.run_verification(
             config=config,
             question_ids=selected_questions,
             run_name=run_name,
@@ -208,6 +218,7 @@ class VerificationManager:
             async_enabled=async_enabled,
             progress_callback=progress_callback,
         )
+        return result_set.to_legacy_dict()
 
     def verify_dry_run(
         self,
@@ -262,7 +273,7 @@ class VerificationManager:
         job_id: str | None = None,
         async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
-    ) -> dict[str, VerificationResult]:
+    ) -> VerificationResultSet:
         """
         Run verification on the benchmark using existing execution system.
 
@@ -275,7 +286,7 @@ class VerificationManager:
             progress_callback: Optional callback for progress updates
 
         Returns:
-            Dictionary mapping result keys to VerificationResult objects
+            VerificationResultSet containing all verification results
         """
         # If no question IDs provided, verify all finished questions
         if question_ids is None:
@@ -389,16 +400,17 @@ class VerificationManager:
                 template_code = q_data.get("answer_template", "")
                 template_id = generate_template_id(template_code)
                 error_result = VerificationResult(
-                    question_id=question_id,
-                    template_id=template_id,
-                    completed_without_errors=False,
-                    error=f"Mixed config verification failed: {str(e)}",
-                    question_text=self.base._questions_cache.get(question_id, {}).get("question", ""),
-                    raw_llm_response="",
-                    answering_model="unknown",
-                    parsing_model="unknown",
-                    execution_time=0.0,
-                    timestamp=datetime.now().isoformat(),
+                    metadata=VerificationResultMetadata(
+                        question_id=question_id,
+                        template_id=template_id,
+                        completed_without_errors=False,
+                        error=f"Mixed config verification failed: {str(e)}",
+                        question_text=self.base._questions_cache.get(question_id, {}).get("question", ""),
+                        answering_model="unknown",
+                        parsing_model="unknown",
+                        execution_time=0.0,
+                        timestamp=datetime.now().isoformat(),
+                    )
                 )
                 all_results[question_id] = {f"{question_id}_error": error_result}
 
@@ -454,17 +466,18 @@ class VerificationManager:
                     template_code = q_data.get("answer_template", "")
                     template_id = generate_template_id(template_code)
                     error_result = VerificationResult(
-                        question_id=q_id,
-                        template_id=template_id,
-                        completed_without_errors=False,
-                        error=f"Comparative verification failed: {str(e)}",
-                        question_text=self.base._questions_cache.get(q_id, {}).get("question", ""),
-                        raw_llm_response="",
-                        answering_model="unknown",
-                        parsing_model="unknown",
-                        execution_time=0.0,
-                        timestamp=datetime.now().isoformat(),
-                        run_name=run_name,
+                        metadata=VerificationResultMetadata(
+                            question_id=q_id,
+                            template_id=template_id,
+                            completed_without_errors=False,
+                            error=f"Comparative verification failed: {str(e)}",
+                            question_text=self.base._questions_cache.get(q_id, {}).get("question", ""),
+                            answering_model="unknown",
+                            parsing_model="unknown",
+                            execution_time=0.0,
+                            timestamp=datetime.now().isoformat(),
+                            run_name=run_name,
+                        )
                     )
                     error_results[f"{q_id}_error"] = error_result
                 all_results[run_name] = error_results

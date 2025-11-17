@@ -204,8 +204,8 @@ class TestAbstentionCheckStage:
         basic_context.set_artifact("field_verification_result", False)
 
         # Mock abstention detection
-        # Returns: (abstention_detected, check_performed, reasoning)
-        mock_detect.return_value = (True, True, "Explicit refusal detected")
+        # Returns: (abstention_detected, check_performed, reasoning, usage_metadata)
+        mock_detect.return_value = (True, True, "Explicit refusal detected", {})
 
         stage = AbstentionCheckStage()
         stage.execute(basic_context)
@@ -226,8 +226,8 @@ class TestAbstentionCheckStage:
         basic_context.set_artifact("raw_llm_response", "The answer is 4")
 
         # Mock no abstention
-        # Returns: (abstention_detected, check_performed, reasoning)
-        mock_detect.return_value = (False, True, "")
+        # Returns: (abstention_detected, check_performed, reasoning, usage_metadata)
+        mock_detect.return_value = (False, True, "", {})
 
         stage = AbstentionCheckStage()
         stage.execute(basic_context)

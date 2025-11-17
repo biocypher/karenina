@@ -88,7 +88,7 @@ class Answer(BaseAnswer):
         )
         # Verify that the result includes our manual trace
         assert result.raw_answer == "Test manual trace response"
-        assert result.success
+        assert result.completed_without_errors
     except Exception as e:
         # If it fails for other reasons (like missing dependencies), that's okay
         # We're just testing that the hash validation doesn't raise ValueError
@@ -155,7 +155,7 @@ class Answer(BaseAnswer):
             parsing_model=parsing_model,
         )
         # Check that verification failed due to hash validation
-        assert not result.success
+        assert not result.completed_without_errors
         assert result.error is not None
         assert "Invalid question_id format for manual interface" in result.error
 
@@ -197,7 +197,11 @@ class Answer(BaseAnswer):
             parsing_model=langchain_model,
         )
         # Check that if it failed, it wasn't due to hash validation
-        if not result.success and result.error and "Invalid question_id format for manual interface" in result.error:
+        if (
+            not result.completed_without_errors
+            and result.error
+            and "Invalid question_id format for manual interface" in result.error
+        ):
             pytest.fail("Hash validation should not apply to non-manual interfaces")
     except Exception:
         # Other exceptions (like missing API keys, etc.) are fine for this test
@@ -245,7 +249,7 @@ class Answer(BaseAnswer):
     )
 
     # Check that verification failed due to hash validation
-    assert not result.success
+    assert not result.completed_without_errors
     assert result.error is not None
     error_message = result.error
     assert "Invalid question_id format for manual interface" in error_message
