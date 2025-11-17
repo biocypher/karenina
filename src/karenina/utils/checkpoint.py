@@ -248,57 +248,11 @@ def convert_rating_to_rubric_trait(
             repeated_extraction=repeated_extraction,
         )
 
-    # Check if it's a ManualRubricTrait (backward compatibility - convert to RegexTrait or CallableTrait)
+    # Unsupported trait type - raise error (no backward compatibility)
     if rating.additionalType in ["GlobalManualRubricTrait", "QuestionSpecificManualRubricTrait"]:
-        # Check if it has callable_code (CallableTrait) or pattern (RegexTrait)
-        has_callable = False
-        pattern = ".*"
-        case_sensitive = True
-        invert_result = False
-        callable_code = None
-        kind: Literal["boolean", "score"] = "boolean"  # Default for backward compatibility
-        min_score = None
-        max_score = None
-
-        if rating.additionalProperty:
-            for prop in rating.additionalProperty:
-                if prop.name == "callable_code":
-                    has_callable = True
-                    import base64
-
-                    callable_code = base64.b64decode(prop.value.encode("utf-8"))
-                elif prop.name == "kind":
-                    kind = cast(Literal["boolean", "score"], prop.value)
-                elif prop.name == "min_score":
-                    min_score = prop.value
-                elif prop.name == "max_score":
-                    max_score = prop.value
-                elif prop.name == "pattern":
-                    pattern = prop.value
-                elif prop.name == "case_sensitive":
-                    case_sensitive = prop.value
-                elif prop.name == "invert_result":
-                    invert_result = prop.value
-
-        # Return CallableTrait if callable_code is present
-        if has_callable and callable_code:
-            return CallableTrait(
-                name=rating.name,
-                description=rating.description or "",
-                kind=kind,
-                callable_code=callable_code,
-                min_score=min_score,
-                max_score=max_score,
-                invert_result=invert_result,
-            )
-
-        # Otherwise return RegexTrait (default for backward compatibility)
-        return RegexTrait(
-            name=rating.name,
-            description=rating.description or "",
-            pattern=pattern,
-            case_sensitive=case_sensitive,
-            invert_result=invert_result,
+        raise ValueError(
+            f"ManualRubricTrait is no longer supported. Found trait '{rating.name}' with type "
+            f"'{rating.additionalType}'. Please migrate your checkpoint using the migration script."
         )
 
     # Handle LLMRubricTrait

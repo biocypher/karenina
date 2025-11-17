@@ -378,14 +378,13 @@ def load_benchmark(
 
                 # Deserialize callable traits
                 for callable_trait_data in bq.question_rubric.get("callable_traits", []):
-                    kind = callable_trait_data.get("kind", "boolean")  # Default for backward compatibility
                     callable_trait = CallableTrait(
                         name=callable_trait_data["name"],
                         description=callable_trait_data.get("description"),
-                        kind=kind,
+                        kind=callable_trait_data["kind"],
                         callable_code=callable_trait_data["callable_code"],
-                        min_score=callable_trait_data.get("min_score") if kind == "score" else None,
-                        max_score=callable_trait_data.get("max_score") if kind == "score" else None,
+                        min_score=callable_trait_data.get("min_score"),
+                        max_score=callable_trait_data.get("max_score"),
                         invert_result=callable_trait_data.get("invert_result", False),
                     )
                     callable_traits.append(callable_trait)
@@ -403,17 +402,12 @@ def load_benchmark(
                     )
                     metric_traits.append(metric_trait)
 
-                # For backward compatibility, also check for old 'manual_traits' key
-                for manual_trait_data in bq.question_rubric.get("manual_traits", []):
-                    # Convert old manual traits to regex traits
-                    regex_trait = RegexTrait(
-                        name=manual_trait_data["name"],
-                        description=manual_trait_data.get("description"),
-                        pattern=manual_trait_data.get("pattern", ".*"),
-                        case_sensitive=manual_trait_data.get("case_sensitive", True),
-                        invert_result=manual_trait_data.get("invert_result", False),
+                # Check for unsupported old 'manual_traits' key
+                if "manual_traits" in bq.question_rubric:
+                    raise ValueError(
+                        f"Question {bq.question_id} contains unsupported 'manual_traits'. "
+                        "Please migrate your database using the migration script."
                     )
-                    regex_traits.append(regex_trait)
 
                 if traits or regex_traits or callable_traits or metric_traits:
                     rubric = Rubric(
