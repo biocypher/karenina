@@ -636,8 +636,10 @@ def validate_jsonld_benchmark(benchmark: JsonLdCheckpoint) -> tuple[bool, str]:
                         if rating.additionalType not in [
                             "GlobalRubricTrait",
                             "QuestionSpecificRubricTrait",
-                            "GlobalManualRubricTrait",
-                            "QuestionSpecificManualRubricTrait",
+                            "GlobalRegexTrait",
+                            "QuestionSpecificRegexTrait",
+                            "GlobalCallableTrait",
+                            "QuestionSpecificCallableTrait",
                             "GlobalMetricRubricTrait",
                             "QuestionSpecificMetricRubricTrait",
                         ]:
@@ -651,7 +653,8 @@ def validate_jsonld_benchmark(benchmark: JsonLdCheckpoint) -> tuple[bool, str]:
             for rating in benchmark.rating:
                 if rating.additionalType not in [
                     "GlobalRubricTrait",
-                    "GlobalManualRubricTrait",
+                    "GlobalRegexTrait",
+                    "GlobalCallableTrait",
                     "GlobalMetricRubricTrait",
                 ]:
                     return (
