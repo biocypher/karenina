@@ -84,7 +84,7 @@ class TestRubricEvaluator:
 
         evaluator = RubricEvaluator(mock_model_config)
 
-        result = evaluator.evaluate_rubric(
+        result, usage = evaluator.evaluate_rubric(
             "What is the capital of France?", "The capital of France is Paris.", sample_rubric
         )
 
@@ -106,7 +106,7 @@ class TestRubricEvaluator:
 
         evaluator = RubricEvaluator(mock_model_config)
 
-        result = evaluator.evaluate_rubric("Test question?", "Test answer.", sample_rubric)
+        result, usage = evaluator.evaluate_rubric("Test question?", "Test answer.", sample_rubric)
 
         assert result["accuracy"] is True
         # Should only include traits that were returned
@@ -136,7 +136,7 @@ class TestRubricEvaluator:
 
         evaluator = RubricEvaluator(mock_model_config)
 
-        result = evaluator.evaluate_rubric("Test question?", "Test answer.", mixed_rubric)
+        result, usage = evaluator.evaluate_rubric("Test question?", "Test answer.", mixed_rubric)
 
         assert result["bool_trait"] is False
         assert result["score_trait"] == 2
@@ -201,7 +201,7 @@ class TestRubricEvaluator:
 
         evaluator = RubricEvaluator(mock_model_config)
 
-        result = evaluator.evaluate_rubric(
+        result, usage = evaluator.evaluate_rubric(
             "Explain the process of photosynthesis.",
             "Photosynthesis is the process by which plants convert light energy into chemical energy...",
             comprehensive_rubric,
