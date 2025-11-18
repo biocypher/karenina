@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -12,6 +12,9 @@ from .models import (
     FewShotConfig,
     ModelConfig,
 )
+
+if TYPE_CHECKING:
+    from .verification_result_set import VerificationResultSet
 
 # Default system prompts for answering and parsing models
 DEFAULT_ANSWERING_SYSTEM_PROMPT = "You are an expert assistant. Answer the question accurately and concisely."
@@ -1116,7 +1119,7 @@ class VerificationJob(BaseModel):
     end_time: float | None = None
 
     # Results
-    results: dict[str, VerificationResult] = Field(default_factory=dict)
+    result_set: "VerificationResultSet | None" = None  # Unified verification result container
     error_message: str | None = None
 
     def task_started(self, question_id: str) -> None:

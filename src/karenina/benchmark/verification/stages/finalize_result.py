@@ -195,6 +195,9 @@ class FinalizeResultStage(BaseVerificationStage):
                 callable_results: dict[str, bool | int] = {}
 
                 for trait_name, trait_value in verify_rubric.items():
+                    # Skip failed trait evaluations (None values)
+                    if trait_value is None:
+                        continue
                     if trait_name in llm_trait_names:
                         llm_results[trait_name] = trait_value
                     elif trait_name in regex_trait_names:

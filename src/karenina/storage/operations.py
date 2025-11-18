@@ -471,10 +471,10 @@ def save_verification_results(
                 run_name=run_name or f"run_{run_id[:8]}",
                 status="completed",
                 config=config or {},
-                total_questions=len({r.question_id for r in results.values()}),
+                total_questions=len({r.metadata.question_id for r in results.values()}),
                 processed_count=len(results),
-                successful_count=sum(1 for r in results.values() if r.completed_without_errors),
-                failed_count=sum(1 for r in results.values() if not r.completed_without_errors),
+                successful_count=sum(1 for r in results.values() if r.metadata.completed_without_errors),
+                failed_count=sum(1 for r in results.values() if not r.metadata.completed_without_errors),
                 start_time=None,  # These would come from config
                 end_time=None,
             )
@@ -484,8 +484,8 @@ def save_verification_results(
         else:
             # Update existing run
             existing_run.processed_count = len(results)
-            existing_run.successful_count = sum(1 for r in results.values() if r.completed_without_errors)
-            existing_run.failed_count = sum(1 for r in results.values() if not r.completed_without_errors)
+            existing_run.successful_count = sum(1 for r in results.values() if r.metadata.completed_without_errors)
+            existing_run.failed_count = sum(1 for r in results.values() if not r.metadata.completed_without_errors)
             # Commit the updated run
             session.commit()
 
@@ -496,10 +496,10 @@ def save_verification_results(
             existing_result = session.execute(
                 select(VerificationResultModel).where(
                     VerificationResultModel.run_id == run_id,
-                    VerificationResultModel.question_id == result.question_id,
+                    VerificationResultModel.question_id == result.metadata.question_id,
                     VerificationResultModel.template_id == result.metadata.template_id,
-                    VerificationResultModel.answering_model == result.answering_model,
-                    VerificationResultModel.parsing_model == result.parsing_model,
+                    VerificationResultModel.answering_model == result.metadata.answering_model,
+                    VerificationResultModel.parsing_model == result.metadata.parsing_model,
                     VerificationResultModel.answering_replicate == result.metadata.answering_replicate,
                     VerificationResultModel.parsing_replicate == result.metadata.parsing_replicate,
                 )
