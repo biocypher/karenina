@@ -67,10 +67,14 @@ class LLMRubricTrait(BaseModel):
         if self.kind == "boolean":
             return isinstance(value, bool)
         else:  # self.kind == "score"
+            # Reject boolean values explicitly (bool is a subclass of int in Python)
+            if isinstance(value, bool):
+                return False
             if not isinstance(value, int):
                 return False
-            min_val = self.min_score or 1
-            max_val = self.max_score or 5
+            # Use explicit None checks to allow min_score=0
+            min_val = self.min_score if self.min_score is not None else 1
+            max_val = self.max_score if self.max_score is not None else 5
             return min_val <= value <= max_val
 
 

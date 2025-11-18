@@ -194,7 +194,7 @@ class RubricJudgmentResults(BaseModel):
 
                             # === Excerpt Data ===
                             row["excerpt_index"] = excerpt_index
-                            row["excerpt_text"] = excerpt.get("excerpt_text")
+                            row["excerpt_text"] = excerpt.get("text")  # Changed from "excerpt_text" to "text"
                             row["excerpt_confidence"] = excerpt.get("confidence")
                             row["excerpt_similarity_score"] = excerpt.get("similarity_score")
 

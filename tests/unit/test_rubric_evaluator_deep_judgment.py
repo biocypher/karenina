@@ -121,11 +121,10 @@ class TestDeepJudgmentRetryMechanism:
         result = evaluator._extract_excerpts_for_trait(sample_answer, dj_trait_with_excerpts, config)
 
         # Verify results
-        assert result["success"] is True
+        assert result["auto_fail"] is False  # Changed from success to auto_fail
         assert "excerpts" in result
         assert len(result["excerpts"]) == 2
         assert result["retry_count"] == 0
-        assert result["validation_passed"] is True
 
         # Verify LLM was called once for extraction
         assert mock_llm.invoke.call_count >= 1
@@ -188,9 +187,8 @@ class TestDeepJudgmentRetryMechanism:
         result = evaluator._extract_excerpts_for_trait(sample_answer, dj_trait_with_excerpts, config)
 
         # Verify retry occurred
-        assert result["success"] is True
+        assert result["auto_fail"] is False  # Changed from success to auto_fail
         assert result["retry_count"] == 1
-        assert result["validation_passed"] is True
         assert len(result["excerpts"]) >= 1
 
     @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
@@ -230,10 +228,8 @@ class TestDeepJudgmentRetryMechanism:
         result = evaluator._extract_excerpts_for_trait(sample_answer, dj_trait_with_excerpts, config)
 
         # Verify auto-fail
-        assert result["success"] is False
+        assert result["auto_fail"] is True
         assert result["retry_count"] == 2  # Max retries reached
-        assert result["validation_passed"] is False
-        assert result.get("auto_fail") is True
 
     @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
     def test_per_trait_retry_override(self, mock_init_model, mock_model_config, sample_answer):
@@ -631,7 +627,7 @@ class TestDeepJudgmentEdgeCases:
         result = evaluator._extract_excerpts_for_trait(sample_answer, trait, config)
 
         # Empty excerpts should be treated as validation failure
-        assert result["success"] is False or len(result.get("excerpts", [])) == 0
+        assert result["auto_fail"] is True or len(result.get("excerpts", [])) == 0
 
     @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
     def test_partial_validation_success(self, mock_init_model, mock_model_config, sample_answer):
@@ -675,7 +671,7 @@ class TestDeepJudgmentEdgeCases:
         result = evaluator._extract_excerpts_for_trait(sample_answer, trait, config)
 
         # Should proceed with valid excerpts
-        if result["success"]:
+        if not result["auto_fail"]:
             assert len(result["excerpts"]) >= 1
 
     @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")

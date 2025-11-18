@@ -314,7 +314,7 @@ class TestRubricJudgmentResultsExcerptExplosion:
         assert row["excerpt_similarity_score"] is None
 
         # trait_had_excerpts should be False
-        assert row["trait_had_excerpts"] is False
+        assert not row["trait_had_excerpts"]
 
 
 class TestRubricJudgmentResultsMetadata:
@@ -485,9 +485,10 @@ class TestJSONSerializationComplexFields:
         )
 
         result = VerificationResult(metadata=basic_metadata, rubric=rubric, deep_judgment_rubric=dj_rubric)
-        rubric_results = RubricResults(results=[result])
+        # include_deep_judgment is passed to RubricResults() init, not to_dataframe()
+        rubric_results = RubricResults(results=[result], include_deep_judgment=True)
 
-        df = rubric_results.to_dataframe(trait_type="llm_score", include_deep_judgment=True)
+        df = rubric_results.to_dataframe(trait_type="llm_score")
 
         # excerpts should be JSON serialized
         excerpts = df.iloc[0]["trait_excerpts"]
