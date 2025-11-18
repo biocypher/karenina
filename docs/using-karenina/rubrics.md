@@ -7,7 +7,7 @@ Rubrics provide qualitative evaluation criteria beyond the basic template verifi
 - [What Are Rubrics?](#what-are-rubrics) - Core concepts and capabilities
 - [Why Use Rubrics?](#why-use-rubrics) - Quality assessment, domain validation, compliance
 - [Rubric Scope](#rubric-scope-global-vs-question-specific) - Global vs question-specific rubrics
-- [Three Types of Rubric Traits](#three-types-of-rubric-traits) - LLM-based, regex-based, metric-based
+- [Four Types of Rubric Traits](#four-types-of-rubric-traits) - LLM-based, regex-based, callable-based, metric-based
 - [Understanding Metric Traits](#understanding-metric-traits-two-evaluation-modes) - TP-only vs full-matrix evaluation
 - [Creating a Global Rubric](#creating-a-global-rubric) - Apply traits to all questions
 - [Creating Question-Specific Rubrics](#creating-question-specific-rubrics) - Apply traits to specific questions
@@ -70,11 +70,11 @@ Rubrics can be applied at two different scopes:
 
 ---
 
-## Three Types of Rubric Traits
+## Four Types of Rubric Traits
 
-Karenina supports three types of evaluation traits:
+Karenina supports four types of evaluation traits:
 
-### 1. LLM-Based Traits (`RubricTrait`)
+### 1. LLM-Based Traits (`LLMRubricTrait`)
 
 **What they are:** AI-evaluated traits where the parsing model uses its judgment to assess subjective qualities of answers. The LLM reads your trait description and applies it to each answer, returning either a score or binary result.
 
@@ -94,17 +94,17 @@ Karenina supports three types of evaluation traits:
 - Best for: Qualities that exist on a spectrum (clarity, conciseness, thoroughness)
 
 ```python
-from karenina.schemas import RubricTrait
+from karenina.schemas import LLMRubricTrait
 
 # Score-based trait: Measures conciseness on a 1-5 scale
-RubricTrait(
+LLMRubricTrait(
     name="Conciseness",
     description="Rate the conciseness of the answer on a scale from 1 (very verbose) to 5 (extremely concise).",
     kind="score"
 )
 
 # Score-based trait: Measures clarity
-RubricTrait(
+LLMRubricTrait(
     name="Clarity",
     description="Rate how clear and understandable the answer is, from 1 (confusing) to 5 (crystal clear).",
     kind="score"
@@ -119,14 +119,14 @@ RubricTrait(
 
 ```python
 # Binary trait: Checks for safety concerns
-RubricTrait(
+LLMRubricTrait(
     name="Safety Concerns",
     description="Does the answer include any mention of safety concerns or warnings?",
     kind="binary"
 )
 
 # Binary trait: Conciseness of the first sentence
-RubricTrait(
+LLMRubricTrait(
     name="Conciseness of the first sentence",
     description="The first sentence of the answer should be a concise summary of the answer.",
     kind="binary"
@@ -198,7 +198,7 @@ Result: Score = 2 (verbose, includes unnecessary detail beyond the question)
 - Factual extraction (use templates instead)
 - Classification metrics (use metric traits instead)
 
-### 2. Regex-Based Traits (`ManualRubricTrait`)
+### 2. Regex-Based Traits (`RegexTrait`)
 
 **What they are:** Deterministic pattern-matching traits that check if answers match (or don't match) specific regex patterns. These provide **100% reproducible** validation without any LLM judgment.
 
@@ -212,14 +212,14 @@ Result: Score = 2 (verbose, includes unnecessary detail beyond the question)
 
 **Structure:**
 ```python
-from karenina.schemas import ManualRubricTrait
+from karenina.schemas import RegexTrait
 
-ManualRubricTrait(
+RegexTrait(
     name="Trait Name",
     description="What this pattern checks for",
     pattern=r"regex_pattern",        # Python regex pattern
     case_sensitive=False,              # Case-sensitive matching?
-    invert=False                       # Invert the result?
+    invert_result=False                # Invert the result?
 )
 ```
 
@@ -230,8 +230,8 @@ ManualRubricTrait(
 | `name` | `str` | Descriptive name for the trait |
 | `description` | `str` | Explains what the pattern validates |
 | `pattern` | `str` | Python regex pattern to match |
-| `case_sensitive` | `bool` | `True` for case-sensitive, `False` for case-insensitive (default: `False`) |
-| `invert` | `bool` | `True` to **fail** if pattern matches, `False` to **pass** if pattern matches (default: `False`) |
+| `case_sensitive` | `bool` | `True` for case-sensitive, `False` for case-insensitive (default: `True`) |
+| `invert_result` | `bool` | `True` to **fail** if pattern matches, `False` to **pass** if pattern matches (default: `False`) |
 
 **Common Use Cases:**
 
@@ -241,21 +241,21 @@ Check that an answer mentions specific required terms:
 
 ```python
 # Answer must mention "BH3 proteins"
-ManualRubricTrait(
+RegexTrait(
     name="Mentions BH3 Proteins",
     description="Answer must mention BH3 proteins (the mechanism of BCL2 inhibition)",
     pattern=r"\bBH3\b",
     case_sensitive=False,
-    invert=False  # Pass if pattern found
+    invert_result=False  # Pass if pattern found
 )
 
 # Answer must mention either "chromosome" or "chromosomes"
-ManualRubricTrait(
+RegexTrait(
     name="Mentions Chromosomes",
     description="Answer must use the term 'chromosome' or 'chromosomes'",
     pattern=r"\bchromosomes?\b",  # ? makes 's' optional
     case_sensitive=False,
-    invert=False
+    invert_result=False
 )
 ```
 
@@ -265,21 +265,21 @@ Ensure answers follow required formats:
 
 ```python
 # Answer must include a gene symbol (all caps, 3-6 letters)
-ManualRubricTrait(
+RegexTrait(
     name="Contains Gene Symbol Format",
     description="Answer must include a gene symbol in standard format (e.g., BCL2, TP53)",
     pattern=r"\b[A-Z]{3,6}\d?\b",  # 3-6 uppercase letters, optional digit
     case_sensitive=True,
-    invert=False
+    invert_result=False
 )
 
 # Answer must include a numeric value
-ManualRubricTrait(
+RegexTrait(
     name="Includes Numeric Answer",
     description="Answer must contain a number",
     pattern=r"\b\d+\b",
     case_sensitive=False,
-    invert=False
+    invert_result=False
 )
 ```
 
@@ -289,21 +289,21 @@ Check that answers DON'T contain unwanted patterns:
 
 ```python
 # Answer must NOT contain URLs
-ManualRubricTrait(
+RegexTrait(
     name="No URLs",
     description="Answer should not contain web URLs",
     pattern=r"https?://[^\s]+",
     case_sensitive=False,
-    invert=True  # FAIL if pattern is found
+    invert_result=True  # FAIL if pattern is found
 )
 
 # Answer must NOT use informal language
-ManualRubricTrait(
+RegexTrait(
     name="No Informal Language",
     description="Answer must avoid informal terms like 'basically', 'kinda', 'sorta'",
     pattern=r"\b(basically|kinda|sorta|like\s+um)\b",
     case_sensitive=False,
-    invert=True  # FAIL if pattern is found
+    invert_result=True  # FAIL if pattern is found
 )
 ```
 
@@ -313,20 +313,20 @@ Verify that answers include proper citations:
 
 ```python
 # Answer must include a citation in square brackets
-ManualRubricTrait(
+RegexTrait(
     name="Contains Citation",
     description="Answer must include at least one citation [reference]",
     pattern=r"\[[^\]]+\]",  # Matches [anything inside]
     case_sensitive=False,
-    invert=False
+    invert_result=False
 )
 ```
 
-**Using `invert` Parameter:**
+**Using `invert_result` Parameter:**
 
-The `invert` parameter changes the pass/fail logic:
+The `invert_result` parameter changes the pass/fail logic:
 
-| `invert` | Pattern Matches | Result |
+| `invert_result` | Pattern Matches | Result |
 |----------|----------------|--------|
 | `False` (default) | Pattern **found** in answer | ✅ Pass |
 | `False` (default) | Pattern **NOT found** in answer | ❌ Fail |
@@ -337,21 +337,21 @@ The `invert` parameter changes the pass/fail logic:
 
 ```python
 # Normal: Pass if "BCL2" is found
-ManualRubricTrait(
+RegexTrait(
     name="Mentions BCL2",
     description="Answer must mention BCL2",
     pattern=r"\bBCL2\b",
-    invert=False
+    invert_result=False
 )
 # "The drug targets BCL2" → ✅ Pass (pattern found)
 # "The drug targets TP53" → ❌ Fail (pattern not found)
 
 # Inverted: Pass if "BCL2" is NOT found
-ManualRubricTrait(
+RegexTrait(
     name="No Mention of BCL2",
     description="Answer must not mention BCL2",
     pattern=r"\bBCL2\b",
-    invert=True
+    invert_result=True
 )
 # "The drug targets BCL2" → ❌ Fail (pattern found)
 # "The drug targets TP53" → ✅ Pass (pattern not found)
@@ -440,20 +440,269 @@ pattern=r"\b(BCL2|BCL-2|BCL 2)\b"  # All three formats valid
 - Subjective quality assessment (use LLM traits instead)
 - Complex semantic matching (use embedding check instead)
 - Classification accuracy (use metric traits instead)
+- Complex validation logic (use callable traits instead)
+
+---
+
+### 3. Callable Traits (`CallableTrait`)
+
+**What they are:** Custom Python function-based traits for complex validation logic that can't be expressed with regex patterns. These provide **programmatic evaluation** using your own Python code.
+
+**When to use:**
+
+- Complex validation requiring **Python logic** (word counts, sentence structure analysis)
+- **Stateful checks** (tracking context across evaluations)
+- **Custom scoring algorithms** beyond simple pattern matching
+- Validation that requires **external data** or computation
+- When regex patterns are too limited but you want deterministic evaluation
+
+**⚠️ SECURITY WARNING**: CallableTrait uses cloudpickle serialization to store Python code. Only load callable traits from **trusted sources**. Malicious code can execute arbitrary commands during deserialization.
+
+**Creating Callable Traits:**
+
+Callable traits **must be created programmatically** using the `from_callable()` class method. They **cannot** be created via the GUI for security reasons.
+
+**Structure:**
+```python
+from karenina.schemas import CallableTrait
+
+# Create from a function
+trait = CallableTrait.from_callable(
+    name="Trait Name",
+    description="What this evaluates",
+    func=your_function,              # Python function
+    kind="boolean" | "score",        # Evaluation type
+    min_score=1,                     # For score kind only
+    max_score=5,                     # For score kind only
+    invert_result=False              # For boolean kind only
+)
+```
+
+**Key Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | `str` | Descriptive name for the trait |
+| `description` | `str \| None` | Explains what this evaluates |
+| `func` | `Callable[[str], bool \| int]` | Python function that takes answer text and returns result |
+| `kind` | `"boolean" \| "score"` | Type of evaluation |
+| `min_score` | `int \| None` | Minimum score (required for `kind="score"`) |
+| `max_score` | `int \| None` | Maximum score (required for `kind="score"`) |
+| `invert_result` | `bool` | Invert the boolean result (boolean kind only, default: `False`) |
+
+**Common Use Cases:**
+
+**1. Boolean Callable Trait (Pass/Fail):**
+
+```python
+from karenina.schemas import CallableTrait
+
+# Define evaluation function
+def check_word_count(text: str) -> bool:
+    """Check if answer has at least 50 words."""
+    return len(text.split()) >= 50
+
+# Create callable trait
+word_count_trait = CallableTrait.from_callable(
+    name="Minimum Word Count",
+    description="Answer must have at least 50 words",
+    func=check_word_count,
+    kind="boolean"
+)
+
+# Evaluate
+result = word_count_trait.evaluate("This is a short answer")  # False
+result = word_count_trait.evaluate("This is a much longer answer with many more words...")  # True
+```
+
+**2. Score Callable Trait (1-5 or Custom Range):**
+
+```python
+def score_response_quality(text: str) -> int:
+    """Score answer quality based on word count and sentence structure."""
+    word_count = len(text.split())
+    sentence_count = text.count('.') + text.count('!') + text.count('?')
+
+    if word_count < 10:
+        return 1  # Very poor
+    elif word_count < 30:
+        return 2  # Below average
+    elif word_count < 100:
+        return 3  # Average
+    elif word_count < 200 and sentence_count >= 3:
+        return 4  # Good
+    else:
+        return 5  # Excellent
+
+# Create score-based callable trait
+quality_trait = CallableTrait.from_callable(
+    name="Response Quality Score",
+    description="Comprehensive quality assessment based on length and structure",
+    func=score_response_quality,
+    kind="score",
+    min_score=1,
+    max_score=5
+)
+
+# Evaluate
+score = quality_trait.evaluate("Short")  # Returns 1
+score = quality_trait.evaluate("This is a medium length answer...")  # Returns 3
+```
+
+**3. Using Lambda Functions:**
+
+```python
+import re
+
+# Boolean lambda for citation check
+citation_check = CallableTrait.from_callable(
+    name="Contains Citations",
+    description="Check for citation patterns [1], (Author, Year)",
+    func=lambda text: bool(re.search(r'\[\d+\]|\([A-Z][a-z]+,\s*\d{4}\)', text)),
+    kind="boolean"
+)
+
+# Boolean lambda for sentence count
+sentence_check = CallableTrait.from_callable(
+    name="Multiple Sentences",
+    description="Answer must have at least 3 sentences",
+    func=lambda text: text.count('.') + text.count('!') + text.count('?') >= 3,
+    kind="boolean"
+)
+```
+
+**4. Complex Validation Example:**
+
+```python
+def check_code_quality(text: str) -> bool:
+    """Check if answer contains properly formatted code blocks."""
+    # Must contain code fence
+    has_code_fence = '```' in text
+
+    # Must have function definition
+    has_function = 'def ' in text or 'function ' in text
+
+    # Must have comments
+    has_comments = '#' in text or '//' in text
+
+    return has_code_fence and has_function and has_comments
+
+code_quality_trait = CallableTrait.from_callable(
+    name="Code Quality Check",
+    description="Answer must include well-documented code examples",
+    func=check_code_quality,
+    kind="boolean"
+)
+```
+
+**Evaluation Behavior:**
+
+- **Boolean traits** (`kind="boolean"`): Function must return `bool` (True/False)
+- **Score traits** (`kind="score"`): Function must return `int` within `[min_score, max_score]`
+- **Validation**: Karenina validates return types and score ranges automatically
+- **Inversion**: Only applies to boolean traits (inverts True/False result)
+
+**Using Callable Traits in Rubrics:**
+
+```python
+from karenina.schemas import Rubric, CallableTrait
+
+# Create callable traits
+word_count = CallableTrait.from_callable(
+    name="Min_50_Words",
+    func=lambda text: len(text.split()) >= 50,
+    kind="boolean"
+)
+
+# Add to rubric
+rubric = Rubric(
+    name="Quality Assessment",
+    callable_traits=[word_count]
+)
+
+# Use in question
+benchmark.add_question(
+    question="Explain the concept...",
+    raw_answer="...",
+    rubric=rubric
+)
+```
+
+**Best Practices for Callable Traits:**
+
+**Keep functions simple**:
+- ✅ Do: Focus on a single validation criterion
+- ❌ Don't: Combine multiple unrelated checks in one function
+
+**Add docstrings**:
+```python
+def check_length(text: str) -> bool:
+    """Check if answer is between 100-500 words."""
+    word_count = len(text.split())
+    return 100 <= word_count <= 500
+```
+
+**Test independently**:
+```python
+# Test your function before creating CallableTrait
+test_text = "This is a test answer with some words"
+assert check_length(test_text) == False  # Too short
+```
+
+**Avoid external dependencies**:
+- ✅ Do: Use built-in Python functions and standard library
+- ❌ Don't: Import uncommon packages (serialization issues)
+
+**Use regex traits for simple patterns**:
+- ✅ Do: Use CallableTrait for complex logic
+- ❌ Don't: Use CallableTrait when a simple regex pattern would work
+
+**Document scoring logic**:
+```python
+def score_detail_level(text: str) -> int:
+    """
+    Score detail level from 1-5 based on:
+    - Word count
+    - Number of examples
+    - Technical terms used
+    """
+    # Implementation...
+```
+
+**Security Considerations:**
+
+- Only create callable traits in **trusted, programmatic contexts**
+- Never accept callable trait code from untrusted users
+- Loading checkpoints with callable traits shows security warnings
+- Callable traits are **not available in the GUI** for security reasons
+- Serialization uses cloudpickle (supports lambdas and closures)
+
+**Avoid using callable traits for:**
+
+- Simple pattern matching (use regex traits instead)
+- Subjective quality assessment (use LLM traits instead)
+- Classification metrics (use metric traits instead)
+
+---
 
 ### When to Use Each Trait Type
 
 | Need | Use This Trait Type |
 |------|---------------------|
-| Subjective quality assessment | LLM-Based (`RubricTrait`) |
-| Exact keyword or format validation | Regex-Based (`ManualRubricTrait`) |
+| Subjective quality assessment | LLM-Based (`LLMRubricTrait`) |
+| Exact keyword or format validation | Regex-Based (`RegexTrait`) |
+| Complex validation logic | Callable-Based (`CallableTrait`) |
 | Classification accuracy metrics | Metric-Based (`MetricRubricTrait`) |
-| Nuanced scoring (1-5) | LLM-Based (`RubricTrait`, kind="score") |
-| Yes/no judgment | LLM-Based (`RubricTrait`, kind="binary") |
-| Deterministic pattern matching | Regex-Based (`ManualRubricTrait`) |
+| Nuanced scoring (1-5) | LLM-Based (`LLMRubricTrait`, kind="score") |
+| Yes/no judgment | LLM-Based (`LLMRubricTrait`, kind="binary") |
+| Deterministic pattern matching | Regex-Based (`RegexTrait`) |
+| Custom scoring algorithms | Callable-Based (`CallableTrait`, kind="score") |
+| Word counts, sentence structure | Callable-Based (`CallableTrait`) |
 | Precision/recall/F1 computation | Metric-Based (`MetricRubricTrait`) |
 
-### 3. Metric-Based Traits (`MetricRubricTrait`)
+---
+
+### 4. Metric-Based Traits (`MetricRubricTrait`)
 
 Confusion matrix-based traits for quantitative classification evaluation.
 
@@ -745,7 +994,7 @@ Global rubrics apply to **all questions** in your benchmark. They're perfect for
 
 ```python
 from karenina import Benchmark
-from karenina.schemas import Rubric, RubricTrait
+from karenina.schemas import Rubric, LLMRubricTrait
 
 # Create benchmark
 benchmark = Benchmark.create(name="Genomics Knowledge Benchmark")
@@ -771,12 +1020,12 @@ benchmark.add_question(
 global_rubric = Rubric(
     name="Answer Quality Assessment",
     traits=[
-        RubricTrait(
+        LLMRubricTrait(
             name="Conciseness",
             description="Rate the conciseness of the answer on a scale from 1 (very verbose) to 5 (extremely concise).",
             kind="score"
         ),
-        RubricTrait(
+        LLMRubricTrait(
             name="Clarity",
             description="Rate how clear and understandable the answer is, from 1 (confusing) to 5 (crystal clear).",
             kind="score"
@@ -805,13 +1054,13 @@ Question-specific rubrics apply to **a single question only**. They're perfect f
 Check that a specific answer mentions required terminology:
 
 ```python
-from karenina.schemas import Rubric, ManualRubricTrait
+from karenina.schemas import Rubric, RegexTrait
 
 # This rubric is ONLY for the Venetoclax question
 venetoclax_rubric = Rubric(
     name="Drug Mechanism Validation",
-    traits=[
-        ManualRubricTrait(
+    regex_traits=[
+        RegexTrait(
             name="Mentions BH3 Proteins",
             description="Answer must mention BH3 proteins (the mechanism of BCL2 inhibition)",
             pattern=r"\bBH3\b",
@@ -889,7 +1138,7 @@ You can use both global and question-specific rubrics in the same benchmark:
 
 ```python
 from karenina import Benchmark
-from karenina.schemas import Rubric, RubricTrait, ManualRubricTrait
+from karenina.schemas import Rubric, LLMRubricTrait, RegexTrait
 
 # Create benchmark
 benchmark = Benchmark.create(name="Genomics Knowledge Benchmark")
@@ -898,12 +1147,12 @@ benchmark = Benchmark.create(name="Genomics Knowledge Benchmark")
 global_rubric = Rubric(
     name="General Quality",
     traits=[
-        RubricTrait(
+        LLMRubricTrait(
             name="Conciseness",
             description="Rate the conciseness of the answer on a scale from 1 (very verbose) to 5 (extremely concise).",
             kind="score"
         ),
-        RubricTrait(
+        LLMRubricTrait(
             name="Clarity",
             description="Rate how clear and understandable the answer is, from 1 (confusing) to 5 (crystal clear).",
             kind="score"
@@ -922,8 +1171,8 @@ benchmark.add_question(
 # Question 2: Uses global rubric + question-specific rubric
 venetoclax_rubric = Rubric(
     name="Drug Mechanism Validation",
-    traits=[
-        ManualRubricTrait(
+    regex_traits=[
+        RegexTrait(
             name="Mentions BH3 Proteins",
             description="Answer must mention BH3 proteins",
             pattern=r"\bBH3\b",
@@ -1068,7 +1317,7 @@ Here's a complete workflow showing both global and question-specific rubrics wit
 ```python
 from karenina import Benchmark
 from karenina.schemas import (
-    Rubric, RubricTrait, ManualRubricTrait, MetricRubricTrait,
+    Rubric, LLMRubricTrait, RegexTrait, MetricRubricTrait,
     ModelConfig, VerificationConfig
 )
 
@@ -1083,12 +1332,12 @@ benchmark = Benchmark.create(
 global_rubric = Rubric(
     name="General Quality Assessment",
     traits=[
-        RubricTrait(
+        LLMRubricTrait(
             name="Conciseness",
             description="Rate the conciseness of the answer on a scale from 1 (very verbose) to 5 (extremely concise).",
             kind="score"
         ),
-        RubricTrait(
+        LLMRubricTrait(
             name="Clarity",
             description="Rate how clear and understandable the answer is, from 1 (confusing) to 5 (crystal clear).",
             kind="score"
@@ -1107,8 +1356,8 @@ benchmark.add_question(
 # 4. Add question with regex-based question-specific rubric
 venetoclax_rubric = Rubric(
     name="Drug Mechanism Validation",
-    traits=[
-        ManualRubricTrait(
+    regex_traits=[
+        RegexTrait(
             name="Mentions BH3 Proteins",
             description="Answer must mention BH3 proteins",
             pattern=r"\bBH3\b",
@@ -1126,7 +1375,7 @@ benchmark.add_question(
 # 5. Add question with metric-based question-specific rubric
 disease_rubric = Rubric(
     name="Inflammatory Disease Classification",
-    traits=[
+    metric_traits=[
         MetricRubricTrait(
             name="Inflammatory Disease Accuracy",
             description="Evaluate accuracy of identifying inflammatory lung diseases",
