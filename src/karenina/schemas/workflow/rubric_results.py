@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
 from .aggregation import AggregatorRegistry, create_default_registry
 
@@ -36,6 +36,8 @@ class RubricResults(BaseModel):
     """
 
     results: list[VerificationResult] = Field(description="List of verification results containing rubric data")
+    _include_deep_judgment: bool = PrivateAttr(default=False)
+    _aggregator_registry: AggregatorRegistry = PrivateAttr()
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -49,10 +51,10 @@ class RubricResults(BaseModel):
             **data: Additional pydantic model data
         """
         super().__init__(results=results, **data)
-        # Store configuration
-        self.include_deep_judgment = include_deep_judgment
+        # Store configuration in private attributes
+        self._include_deep_judgment = include_deep_judgment
         # Create default aggregator registry
-        self._aggregator_registry: AggregatorRegistry = create_default_registry()
+        self._aggregator_registry = create_default_registry()
 
     # ========================================================================
     # DataFrame Conversion
@@ -207,7 +209,7 @@ class RubricResults(BaseModel):
         }
 
         # Add deep judgment columns if requested
-        if self.include_deep_judgment:
+        if self._include_deep_judgment:
             # Get deep judgment rubric data
             rubric_dj = result.deep_judgment_rubric
 
