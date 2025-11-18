@@ -362,6 +362,12 @@ def load_benchmark(
                         kind=kind,
                         min_score=trait_data.get("min_score", 1) if kind == "score" else None,
                         max_score=trait_data.get("max_score", 5) if kind == "score" else None,
+                        deep_judgment_enabled=trait_data.get("deep_judgment_enabled", False),
+                        deep_judgment_excerpt_enabled=trait_data.get("deep_judgment_excerpt_enabled", False),
+                        deep_judgment_max_excerpts=trait_data.get("deep_judgment_max_excerpts"),
+                        deep_judgment_fuzzy_match_threshold=trait_data.get("deep_judgment_fuzzy_match_threshold"),
+                        deep_judgment_excerpt_retry_attempts=trait_data.get("deep_judgment_excerpt_retry_attempts"),
+                        deep_judgment_search_enabled=trait_data.get("deep_judgment_search_enabled", False),
                     )
                     traits.append(trait)
 

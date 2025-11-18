@@ -19,6 +19,13 @@ class LLMRubricTrait(BaseModel):
 
     A trait can be either boolean (true/false) or score-based (1-5 scale).
     Evaluated by prompting an LLM to assess the answer quality.
+
+    Deep Judgment Mode (optional):
+        When enabled, provides evidence-based evaluation with:
+        - Optional excerpt extraction from answer text
+        - Retry mechanism with validation feedback
+        - Reasoning generation explaining the score
+        - Optional search-enhanced hallucination detection
     """
 
     name: str = Field(..., min_length=1, description="Human readable identifier for the trait")
@@ -26,6 +33,32 @@ class LLMRubricTrait(BaseModel):
     kind: TraitKind = Field(..., description="Type of trait: 'boolean' or 'score'")
     min_score: int | None = Field(1, description="Lower bound for score traits (default: 1)")
     max_score: int | None = Field(5, description="Upper bound for score traits (default: 5)")
+
+    # Deep Judgment fields
+    deep_judgment_enabled: bool = Field(
+        False,
+        description="Enable deep judgment evaluation for this trait (multi-stage with reasoning)",
+    )
+    deep_judgment_excerpt_enabled: bool = Field(
+        True,
+        description="Extract verbatim excerpts from answer as evidence (only if deep_judgment_enabled=True)",
+    )
+    deep_judgment_max_excerpts: int | None = Field(
+        None,
+        description="Maximum number of excerpts to extract (overrides global default if set)",
+    )
+    deep_judgment_fuzzy_match_threshold: float | None = Field(
+        None,
+        description="Fuzzy matching threshold for excerpt validation 0.0-1.0 (overrides global default if set)",
+    )
+    deep_judgment_excerpt_retry_attempts: int | None = Field(
+        None,
+        description="Number of retry attempts for excerpt extraction (overrides global default if set)",
+    )
+    deep_judgment_search_enabled: bool = Field(
+        False,
+        description="Enable search-enhanced hallucination detection for excerpts (only if excerpt_enabled=True)",
+    )
 
     model_config = ConfigDict(extra="forbid")
 

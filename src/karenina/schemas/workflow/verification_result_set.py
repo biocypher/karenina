@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, Field
 
 from .judgment_results import JudgmentResults
+from .rubric_judgment_results import RubricJudgmentResults
 from .rubric_results import RubricResults
 from .template_results import TemplateResults
 
@@ -44,7 +45,7 @@ class VerificationResultSet(BaseModel):
     # Accessor Methods (Main Interface)
     # ========================================================================
 
-    def get_rubrics_results(self) -> RubricResults:
+    def get_rubrics_results(self, include_deep_judgment: bool = False) -> RubricResults:
         """
         Get rubric evaluation results.
 
@@ -54,6 +55,15 @@ class VerificationResultSet(BaseModel):
         - Metric trait scores (precision, recall, f1, etc.)
         - Confusion matrices for metric traits
         - Aggregation and grouping capabilities
+        - Deep judgment columns (optional, when include_deep_judgment=True)
+
+        Args:
+            include_deep_judgment: Whether to include deep judgment columns in DataFrame exports.
+                When True, LLM traits will have three additional columns:
+                - trait_reasoning: Reasoning text for the trait score
+                - trait_excerpts: JSON-serialized list of excerpts
+                - trait_hallucination_risk: Hallucination risk assessment
+                Default: False (backward compatible)
 
         Returns:
             RubricResults instance wrapping all verification results
@@ -61,10 +71,15 @@ class VerificationResultSet(BaseModel):
         Example:
             ```python
             result_set = benchmark.run_verification(config)
-            rubric_results = result_set.get_rubrics_results()
 
-            # Get all LLM trait scores
-            llm_scores = rubric_results.get_llm_trait_scores()
+            # Standard rubric results (backward compatible)
+            rubric_results = result_set.get_rubrics_results()
+            df = rubric_results.to_dataframe()
+
+            # With deep judgment columns
+            rubric_results = result_set.get_rubrics_results(include_deep_judgment=True)
+            df = rubric_results.to_dataframe()
+            # df now has trait_reasoning, trait_excerpts, trait_hallucination_risk columns
 
             # Aggregate by question
             aggregated = rubric_results.aggregate_llm_traits(
@@ -77,7 +92,7 @@ class VerificationResultSet(BaseModel):
             by_model = filtered.group_by_model()
             ```
         """
-        return RubricResults(results=self.results)
+        return RubricResults(results=self.results, include_deep_judgment=include_deep_judgment)
 
     def get_template_results(self) -> TemplateResults:
         """
@@ -154,6 +169,53 @@ class VerificationResultSet(BaseModel):
             ```
         """
         return JudgmentResults(results=self.results)
+
+    def get_rubric_judgments_detailed(self) -> RubricJudgmentResults:
+        """
+        Get detailed deep judgment rubric results with excerpt-level explosion.
+
+        Returns a RubricJudgmentResults object that provides fine-grained access to:
+        - Per-excerpt data (text, confidence, similarity scores)
+        - Per-trait metadata (model calls, retry counts, stages completed)
+        - Reasoning for each trait evaluation
+        - Hallucination risk assessments per excerpt
+        - Search validation results (if search enabled)
+
+        Unlike get_rubrics_results() which returns one row per trait, this method
+        explodes each trait into multiple rows (one per excerpt) for detailed analysis.
+
+        Key Differences:
+            - get_rubrics_results(): Standard export, one row per trait
+            - get_rubric_judgments_detailed(): Detailed export, one row per (trait × excerpt)
+
+        Returns:
+            RubricJudgmentResults instance with excerpt-exploded data
+
+        Example:
+            ```python
+            result_set = benchmark.run_verification(config)
+            rubric_judgments = result_set.get_rubric_judgments_detailed()
+
+            # Get detailed DataFrame with excerpt explosion
+            df = rubric_judgments.to_dataframe()
+
+            # Analyze per-excerpt confidence
+            avg_confidence = df.groupby("trait_name")["excerpt_confidence"].mean()
+
+            # Examine traits with validation failures
+            failed = df[df["trait_validation_failed"] == True]
+            print(failed[["trait_name", "trait_excerpt_retries", "excerpt_text"]])
+
+            # Study hallucination risks
+            risky = df[df["excerpt_hallucination_risk"].notna()]
+            print(risky[["excerpt_text", "excerpt_hallucination_risk", "excerpt_hallucination_justification"]])
+
+            # Get summary statistics
+            excerpt_summary = rubric_judgments.get_excerpt_count_summary()
+            retry_summary = rubric_judgments.get_retry_summary()
+            ```
+        """
+        return RubricJudgmentResults(results=self.results)
 
     # ========================================================================
     # Filtering

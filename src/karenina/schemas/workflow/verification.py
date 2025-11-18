@@ -71,6 +71,12 @@ class VerificationConfig(BaseModel):
     # Can also pass any callable: (str | list[str]) -> (str | list[str])
     # Examples: langchain tools, MCP tools, custom functions
 
+    # Deep-judgment rubric settings (global defaults for per-trait configuration)
+    deep_judgment_rubric_max_excerpts_default: int = 7  # Default max excerpts per trait (higher than templates)
+    deep_judgment_rubric_fuzzy_match_threshold_default: float = 0.80  # Default fuzzy match threshold for traits
+    deep_judgment_rubric_excerpt_retry_attempts_default: int = 2  # Default retry attempts for trait excerpts
+    deep_judgment_rubric_search_tool: str | Any = "tavily"  # Search tool for rubric hallucination detection
+
     # Few-shot prompting settings
     few_shot_config: FewShotConfig | None = None  # New flexible configuration
 
@@ -839,6 +845,62 @@ class VerificationResultDeepJudgment(BaseModel):
     # Only populated when deep_judgment_search_enabled=True
 
 
+class VerificationResultDeepJudgmentRubric(BaseModel):
+    """Deep-judgment metadata for rubric trait evaluation (multi-stage with excerpts and reasoning)."""
+
+    deep_judgment_rubric_performed: bool = False  # Whether deep-judgment rubric evaluation was executed
+
+    # Per-trait excerpts (only for traits with deep_judgment_excerpt_enabled=True)
+    extracted_rubric_excerpts: dict[str, list[dict[str, Any]]] | None = None
+    # Structure: {"trait_name": [{"text": str, "confidence": "low|medium|high", "similarity_score": float,
+    #   "search_results"?: list, "hallucination_risk"?: "none|low|medium|high",
+    #   "hallucination_justification"?: str}]}
+    # Empty list [] indicates no excerpts found for that trait after all retry attempts
+
+    # Per-trait reasoning (ALL deep-judgment-enabled traits, with or without excerpts)
+    rubric_trait_reasoning: dict[str, str] | None = None
+    # Structure: {"trait_name": "reasoning text explaining how the score was determined"}
+    # Reasoning exists for all deep-judgment traits regardless of excerpt extraction
+
+    # Per-trait scores from deep-judgment evaluation
+    deep_judgment_rubric_scores: dict[str, int | bool] | None = None
+    # Structure: {"trait_name": score/boolean}
+    # Scores for traits evaluated with deep-judgment
+
+    # Standard evaluation scores (for non-deep-judgment traits in the same rubric)
+    standard_rubric_scores: dict[str, int | bool] | None = None
+    # Structure: {"trait_name": score/boolean}
+    # Scores for traits evaluated without deep-judgment
+
+    # Per-trait metadata for detailed tracking
+    trait_metadata: dict[str, dict[str, Any]] | None = None
+    # Structure: {"trait_name": {
+    #   "stages_completed": ["excerpt_extraction", "reasoning_generation", "score_extraction"],
+    #   "model_calls": 3,
+    #   "had_excerpts": True,
+    #   "excerpt_retry_count": 1,
+    #   "excerpt_validation_failed": False
+    # }}
+
+    # Auto-fail tracking (only traits with excerpts enabled that exhausted retries)
+    traits_without_valid_excerpts: list[str] | None = None
+    # List of trait names that failed to extract valid excerpts after all retry attempts
+    # These traits trigger auto-fail unless abstention was detected
+
+    # Search-enhanced metadata (only traits with deep_judgment_search_enabled=True)
+    rubric_hallucination_risk_assessment: dict[str, dict[str, Any]] | None = None
+    # Structure: {"trait_name": {
+    #   "overall_risk": "none|low|medium|high",
+    #   "per_excerpt_risks": ["low", "medium", ...]
+    # }}
+    # Hallucination risk assessment per trait (overall risk = MAX of per-excerpt risks)
+
+    # Aggregated statistics
+    total_deep_judgment_model_calls: int = 0  # Total LLM calls across all deep-judgment traits
+    total_traits_evaluated: int = 0  # Number of traits evaluated with deep-judgment
+    total_excerpt_retries: int = 0  # Total retry attempts across all traits
+
+
 class VerificationResult(BaseModel):
     """Result of verifying a single question."""
 
@@ -846,6 +908,7 @@ class VerificationResult(BaseModel):
     template: VerificationResultTemplate | None = None
     rubric: VerificationResultRubric | None = None
     deep_judgment: VerificationResultDeepJudgment | None = None
+    deep_judgment_rubric: VerificationResultDeepJudgmentRubric | None = None
 
     # Backward compatibility properties for common field access
     @property

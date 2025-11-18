@@ -114,18 +114,87 @@ class RubricEvaluationStage(BaseVerificationStage):
             # Create rubric evaluator with parsing model and strategy from config
             evaluator = RubricEvaluator(context.parsing_model, evaluation_strategy=context.rubric_evaluation_strategy)
 
-            # Evaluate standard rubric traits
-            if rubric is not None:
-                rubric_result, usage_metadata_list = evaluator.evaluate_rubric(
-                    question=context.question_text,
-                    answer=raw_llm_response,
-                    rubric=rubric,
-                )
+            # Check if any LLM traits have deep judgment enabled
+            has_deep_judgment_traits = False
+            if rubric is not None and rubric.llm_traits:
+                has_deep_judgment_traits = any(t.deep_judgment_enabled for t in rubric.llm_traits)
 
-                # Track rubric evaluation calls
-                for usage_metadata in usage_metadata_list:
-                    if usage_metadata:
-                        usage_tracker.track_call("rubric_evaluation", parsing_model_str, usage_metadata)
+            # Evaluate rubric traits
+            if rubric is not None:
+                if has_deep_judgment_traits:
+                    # Route to deep judgment evaluation
+                    logger.info(f"Deep judgment enabled for rubric traits in question {context.question_id}")
+
+                    # Create a minimal VerificationConfig for deep judgment settings
+                    from ....schemas.workflow import VerificationConfig
+
+                    dj_config = VerificationConfig(
+                        answering_models=[context.answering_model],
+                        parsing_models=[context.parsing_model],
+                        deep_judgment_rubric_enabled=True,
+                        deep_judgment_rubric_max_excerpts_default=getattr(
+                            context, "deep_judgment_max_excerpts_per_attribute", 3
+                        ),
+                        deep_judgment_rubric_fuzzy_match_threshold_default=getattr(
+                            context, "deep_judgment_fuzzy_match_threshold", 0.80
+                        ),
+                        deep_judgment_rubric_excerpt_retry_attempts_default=getattr(
+                            context, "deep_judgment_excerpt_retry_attempts", 2
+                        ),
+                        deep_judgment_rubric_search_enabled=getattr(context, "deep_judgment_search_enabled", False),
+                        deep_judgment_rubric_search_tool=getattr(context, "deep_judgment_search_tool", "tavily"),
+                    )
+
+                    dj_result = evaluator.evaluate_rubric_with_deep_judgment(
+                        question=context.question_text,
+                        answer=raw_llm_response,
+                        rubric=rubric,
+                        config=dj_config,  # Pass config for deep judgment settings
+                    )
+
+                    # Combine scores for backward compatibility
+                    rubric_result = {}
+                    rubric_result.update(dj_result["deep_judgment_scores"])
+                    rubric_result.update(dj_result["standard_scores"])
+
+                    # Store deep judgment metadata in result fields
+                    context.set_result_field("deep_judgment_rubric_performed", True)
+                    context.set_result_field("extracted_rubric_excerpts", dj_result["excerpts"])
+                    context.set_result_field("rubric_trait_reasoning", dj_result["reasoning"])
+                    context.set_result_field("deep_judgment_rubric_scores", dj_result["deep_judgment_scores"])
+                    context.set_result_field("standard_rubric_scores", dj_result["standard_scores"])
+                    context.set_result_field("trait_metadata", dj_result["metadata"])
+                    context.set_result_field(
+                        "traits_without_valid_excerpts", dj_result["traits_without_valid_excerpts"]
+                    )
+                    if dj_result["hallucination_risks"]:
+                        context.set_result_field(
+                            "rubric_hallucination_risk_assessment", dj_result["hallucination_risks"]
+                        )
+
+                    # Calculate aggregated statistics
+                    total_model_calls = sum(m.get("model_calls", 0) for m in dj_result["metadata"].values())
+                    total_retries = sum(m.get("excerpt_retry_count", 0) for m in dj_result["metadata"].values())
+                    context.set_result_field("total_deep_judgment_model_calls", total_model_calls)
+                    context.set_result_field("total_traits_evaluated", len(dj_result["deep_judgment_scores"]))
+                    context.set_result_field("total_excerpt_retries", total_retries)
+
+                    # Note: Usage tracking for deep judgment is not yet implemented
+                    # TODO: Track deep judgment LLM calls properly
+                    logger.debug(f"Deep judgment used {total_model_calls} model calls with {total_retries} retries")
+
+                else:
+                    # Standard rubric evaluation (no deep judgment)
+                    rubric_result, usage_metadata_list = evaluator.evaluate_rubric(
+                        question=context.question_text,
+                        answer=raw_llm_response,
+                        rubric=rubric,
+                    )
+
+                    # Track rubric evaluation calls
+                    for usage_metadata in usage_metadata_list:
+                        if usage_metadata:
+                            usage_tracker.track_call("rubric_evaluation", parsing_model_str, usage_metadata)
 
             # Evaluate metric traits separately
             if rubric is not None and rubric.metric_traits:
@@ -158,11 +227,11 @@ class RubricEvaluationStage(BaseVerificationStage):
             logger.warning(
                 f"Rubric evaluator initialization/configuration failed for question {context.question_id}: {e}"
             )
-            rubric_result = None
+            rubric_result = None  # type: ignore[assignment]
         except Exception as e:
             # Don't fail the entire verification if rubric evaluation fails
             logger.warning(f"Rubric evaluation failed for question {context.question_id}: {e}")
-            rubric_result = None
+            rubric_result = None  # type: ignore[assignment]
 
         # Store results (even if None)
         context.set_artifact("rubric_result", rubric_result)

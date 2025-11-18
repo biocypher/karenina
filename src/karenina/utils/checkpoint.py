@@ -319,6 +319,12 @@ def convert_rating_to_rubric_trait(
         kind="boolean" if is_boolean else "score",
         min_score=None if is_boolean else int(rating.worstRating),
         max_score=None if is_boolean else int(rating.bestRating),
+        deep_judgment_enabled=False,
+        deep_judgment_excerpt_enabled=False,
+        deep_judgment_max_excerpts=None,
+        deep_judgment_fuzzy_match_threshold=None,
+        deep_judgment_excerpt_retry_attempts=None,
+        deep_judgment_search_enabled=False,
     )
 
 
