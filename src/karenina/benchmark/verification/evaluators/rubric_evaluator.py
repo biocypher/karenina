@@ -22,12 +22,15 @@ class RubricEvaluator:
     Evaluates LLM responses against a defined rubric using qualitative traits.
     """
 
-    def __init__(self, model_config: ModelConfig):
+    def __init__(self, model_config: ModelConfig, evaluation_strategy: str = "batch"):
         """
         Initialize the rubric evaluator with an LLM model.
 
         Args:
             model_config: Configuration for the evaluation model
+            evaluation_strategy: Strategy for evaluating LLM traits ("batch" or "sequential")
+                - "batch": Evaluate all traits in single LLM call (efficient)
+                - "sequential": Evaluate traits one-by-one (reliable)
 
         Raises:
             ValueError: If model configuration is invalid
@@ -48,6 +51,7 @@ class RubricEvaluator:
             )
 
         self.model_config = model_config
+        self.evaluation_strategy = evaluation_strategy
 
         try:
             # Build kwargs for model initialization
@@ -106,23 +110,25 @@ class RubricEvaluator:
 
         # Evaluate LLM traits if present
         if rubric.llm_traits:
-            try:
-                # Try batch evaluation first (more efficient)
-                llm_results, usage_metadata = self._evaluate_batch(question, answer, rubric)
-                results.update(llm_results)
-                if usage_metadata:
-                    usage_metadata_list.append(usage_metadata)
-            except Exception as batch_error:
-                # Fallback to sequential evaluation
+            if self.evaluation_strategy == "batch":
+                # Batch evaluation - evaluates all traits in single LLM call
+                try:
+                    llm_results, usage_metadata = self._evaluate_batch(question, answer, rubric)
+                    results.update(llm_results)
+                    if usage_metadata:
+                        usage_metadata_list.append(usage_metadata)
+                except Exception as e:
+                    logger.error(f"Batch evaluation failed: {e}")
+                    raise RuntimeError(f"Failed to evaluate rubric traits using batch strategy: {e}") from e
+            else:  # "sequential"
+                # Sequential evaluation - evaluates traits one by one
                 try:
                     llm_results, seq_usage_metadata_list = self._evaluate_sequential(question, answer, rubric)
                     results.update(llm_results)
                     usage_metadata_list.extend(seq_usage_metadata_list)
-                except Exception as seq_error:
-                    # Log both errors and raise the sequential one
-                    logger.error(f"Batch evaluation failed: {batch_error}")
-                    logger.error(f"Sequential evaluation failed: {seq_error}")
-                    raise seq_error
+                except Exception as e:
+                    logger.error(f"Sequential evaluation failed: {e}")
+                    raise RuntimeError(f"Failed to evaluate rubric traits using sequential strategy: {e}") from e
 
         return results, usage_metadata_list
 

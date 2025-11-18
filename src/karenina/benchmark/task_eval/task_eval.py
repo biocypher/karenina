@@ -784,6 +784,7 @@ class Answer(BaseAnswer):
             rubric=rubric,  # Pass rubric - will be evaluated in RubricEvaluationStage (all 3 types!)
             cached_answer_data=cached_answer_data,  # Skip generation, use our logged output
             abstention_enabled=True,  # Enable abstention detection
+            rubric_evaluation_strategy="batch",  # Use batch strategy by default
             evaluation_mode=evaluation_mode,  # Pass detected evaluation mode
         )
 
@@ -801,7 +802,7 @@ class Answer(BaseAnswer):
         rubric_scores: dict[str, int | bool] = {}
         if rubric and (rubric.llm_traits or rubric.regex_traits or rubric.callable_traits):
             try:
-                evaluator = RubricEvaluator(parsing_model)
+                evaluator = RubricEvaluator(parsing_model, evaluation_strategy="batch")
                 question_text = question_dict.get("question", "")
                 rubric_scores, _ = evaluator.evaluate_rubric(
                     question=question_text, answer=response_text, rubric=rubric

@@ -111,8 +111,8 @@ class RubricEvaluationStage(BaseVerificationStage):
             parsing_model_str = f"{parsing_model.model_provider}/{parsing_model.model_name}"
 
         try:
-            # Create rubric evaluator with parsing model
-            evaluator = RubricEvaluator(context.parsing_model)
+            # Create rubric evaluator with parsing model and strategy from config
+            evaluator = RubricEvaluator(context.parsing_model, evaluation_strategy=context.rubric_evaluation_strategy)
 
             # Evaluate standard rubric traits
             if rubric is not None:
@@ -177,3 +177,4 @@ class RubricEvaluationStage(BaseVerificationStage):
         context.set_result_field("metric_trait_confusion_lists", metric_confusion_lists)
         context.set_result_field("metric_trait_metrics", metric_results)
         context.set_result_field("evaluation_rubric", rubric.model_dump() if rubric else None)
+        context.set_result_field("rubric_evaluation_strategy", context.rubric_evaluation_strategy)

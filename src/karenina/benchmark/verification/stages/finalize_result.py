@@ -215,6 +215,7 @@ class FinalizeResultStage(BaseVerificationStage):
 
             rubric = VerificationResultRubric(
                 rubric_evaluation_performed=rubric_evaluation_performed,
+                rubric_evaluation_strategy=context.get_result_field("rubric_evaluation_strategy"),
                 llm_trait_scores=llm_trait_scores,
                 regex_trait_scores=regex_trait_scores,
                 callable_trait_scores=callable_trait_scores,

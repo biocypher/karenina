@@ -36,6 +36,9 @@ class VerificationConfig(BaseModel):
     # Rubric evaluation settings
     rubric_enabled: bool = False
     rubric_trait_names: list[str] | None = None  # Optional filter for specific traits
+    rubric_evaluation_strategy: Literal["batch", "sequential"] | None = "batch"
+    # - "batch": Evaluate all LLM traits in a single call (efficient, requires JSON output)
+    # - "sequential": Evaluate traits one-by-one (reliable, more expensive)
 
     # Evaluation mode: determines which stages run in the verification pipeline
     evaluation_mode: Literal["template_only", "template_and_rubric", "rubric_only"] = "template_only"
@@ -745,6 +748,7 @@ class VerificationResultRubric(BaseModel):
     """Rubric evaluation fields with split trait types."""
 
     rubric_evaluation_performed: bool = False  # Whether rubric evaluation was executed
+    rubric_evaluation_strategy: str | None = None  # Strategy used: "batch" or "sequential"
 
     # Split trait scores by type (replaces old verify_rubric dict)
     llm_trait_scores: dict[str, int | bool] | None = None  # LLM-evaluated traits (1-5 scale or binary)
