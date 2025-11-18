@@ -212,14 +212,15 @@ class ResultsManager:
                 "model_combinations": 0,
             }
 
-        successful_count = sum(1 for r in results.values() if r.completed_without_errors)
-        failed_count = len(results) - successful_count
-        unique_questions = len({r.question_id for r in results.values()})
+        successful_count = sum(1 for r in results.values() if r.metadata.completed_without_errors)
+        failed_count = sum(1 for r in results.values() if not r.metadata.completed_without_errors)
+        unique_questions = len({r.metadata.question_id for r in results.values()})
         total_execution_time = sum(r.metadata.execution_time for r in results.values() if r.metadata.execution_time)
-        average_execution_time = total_execution_time / len(results) if results else 0.0
+        total_result_count = len(results)
+        average_execution_time = total_execution_time / total_result_count if total_result_count else 0.0
 
         # Count unique model combinations
-        model_combinations = len({f"{r.answering_model}:{r.parsing_model}" for r in results.values()})
+        model_combinations = len({f"{r.metadata.answering_model}:{r.metadata.parsing_model}" for r in results.values()})
 
         return {
             "total_results": len(results),
@@ -424,7 +425,7 @@ class ResultsManager:
         # Determine global vs question-specific rubrics
         global_trait_names = set()
         if global_rubric and hasattr(global_rubric, "traits"):
-            for trait in global_rubric.traits:
+            for trait in global_rubric.llm_traits:
                 global_trait_names.add(trait.name)
 
         # Separate traits into global and question-specific
@@ -471,7 +472,7 @@ class ResultsManager:
         writer = csv.writer(output)
         writer.writerow(headers)
 
-        for index, result in enumerate(results.values(), 1):
+        for index, result in enumerate(results.values(), start=1):
             # Extract global rubric trait values
             global_rubric_values: list[str] = []
             for trait_name in global_traits:
@@ -503,39 +504,55 @@ class ResultsManager:
 
             row = [
                 index,  # row_index
-                self._escape_csv_field(result.question_id),
-                self._escape_csv_field(result.question_text),
-                self._escape_csv_field(result.raw_llm_response),
-                self._escape_csv_field(json.dumps(result.parsed_gt_response) if result.parsed_gt_response else ""),
-                self._escape_csv_field(json.dumps(result.parsed_llm_response) if result.parsed_llm_response else ""),
-                self._escape_csv_field(json.dumps(result.verify_result) if result.verify_result is not None else "N/A"),
+                self._escape_csv_field(result.metadata.question_id),
+                self._escape_csv_field(result.metadata.question_text),
+                self._escape_csv_field(result.template.raw_llm_response if result.template else ""),
                 self._escape_csv_field(
-                    json.dumps(result.verify_granular_result) if result.verify_granular_result is not None else "N/A"
+                    json.dumps(result.template.parsed_gt_response)
+                    if result.template and result.template.parsed_gt_response
+                    else ""
+                ),
+                self._escape_csv_field(
+                    json.dumps(result.template.parsed_llm_response)
+                    if result.template and result.template.parsed_llm_response
+                    else ""
+                ),
+                self._escape_csv_field(
+                    json.dumps(result.template.verify_result)
+                    if result.template and result.template.verify_result is not None
+                    else "N/A"
+                ),
+                self._escape_csv_field(
+                    json.dumps(result.template.verify_granular_result)
+                    if result.template and result.template.verify_granular_result is not None
+                    else "N/A"
                 ),
                 *[self._escape_csv_field(value) for value in global_rubric_values],
                 *([question_specific_rubrics_value] if question_specific_traits else []),
                 self._escape_csv_field(rubric_summary),
-                self._escape_csv_field(result.answering_model),
-                self._escape_csv_field(result.parsing_model),
+                self._escape_csv_field(result.metadata.answering_model),
+                self._escape_csv_field(result.metadata.parsing_model),
                 self._escape_csv_field(result.metadata.answering_replicate or ""),
                 self._escape_csv_field(result.metadata.parsing_replicate or ""),
                 self._escape_csv_field(result.metadata.answering_system_prompt or ""),
                 self._escape_csv_field(result.metadata.parsing_system_prompt or ""),
                 self._escape_csv_field(
                     "abstained"
-                    if result.abstention_detected and result.abstention_override_applied
-                    else result.completed_without_errors
+                    if result.template
+                    and result.template.abstention_detected
+                    and result.template.abstention_override_applied
+                    else result.metadata.completed_without_errors
                 ),
-                self._escape_csv_field(result.error or ""),
+                self._escape_csv_field(result.metadata.error or ""),
                 self._escape_csv_field(result.metadata.execution_time),
-                self._escape_csv_field(result.timestamp),
-                self._escape_csv_field(result.run_name or ""),
+                self._escape_csv_field(result.metadata.timestamp),
+                self._escape_csv_field(result.metadata.run_name or ""),
                 self._escape_csv_field(result.metadata.job_id or ""),
                 # Embedding check fields
-                self._escape_csv_field(result.embedding_check_performed),
-                self._escape_csv_field(result.embedding_similarity_score or ""),
-                self._escape_csv_field(result.embedding_override_applied),
-                self._escape_csv_field(result.embedding_model_used or ""),
+                self._escape_csv_field(result.template.embedding_check_performed if result.template else False),
+                self._escape_csv_field(result.template.embedding_similarity_score if result.template else ""),
+                self._escape_csv_field(result.template.embedding_override_applied if result.template else False),
+                self._escape_csv_field(result.template.embedding_model_used if result.template else ""),
             ]
             writer.writerow(row)
 

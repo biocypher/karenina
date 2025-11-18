@@ -312,6 +312,39 @@ class VerificationManager:
         templates = []
         for q_id in question_ids:
             q_data = self.base._questions_cache[q_id]
+
+            # Convert question_rubric from list of traits to dict if needed
+            question_rubric_dict = None
+            if q_data.get("question_rubric"):
+                question_rubric_raw = q_data["question_rubric"]
+                # If it's already a dict, use it as-is
+                if isinstance(question_rubric_raw, dict):
+                    question_rubric_dict = question_rubric_raw
+                # If it's a list of trait objects, convert to Rubric and dump
+                elif isinstance(question_rubric_raw, list):
+                    from ...schemas.domain.rubric import (
+                        CallableTrait,
+                        LLMRubricTrait,
+                        MetricRubricTrait,
+                        RegexTrait,
+                        Rubric,
+                    )
+
+                    # Separate traits by type
+                    llm_traits = [t for t in question_rubric_raw if isinstance(t, LLMRubricTrait)]
+                    regex_traits = [t for t in question_rubric_raw if isinstance(t, RegexTrait)]
+                    callable_traits = [t for t in question_rubric_raw if isinstance(t, CallableTrait)]
+                    metric_traits = [t for t in question_rubric_raw if isinstance(t, MetricRubricTrait)]
+
+                    # Create Rubric and convert to dict
+                    rubric = Rubric(
+                        llm_traits=llm_traits,
+                        regex_traits=regex_traits,
+                        callable_traits=callable_traits,
+                        metric_traits=metric_traits,
+                    )
+                    question_rubric_dict = rubric.model_dump()
+
             template = FinishedTemplate(
                 question_id=q_id,
                 question_text=q_data["question"],
@@ -319,7 +352,7 @@ class VerificationManager:
                 template_code=q_data["answer_template"],
                 last_modified=q_data.get("dateModified", datetime.now().isoformat()),
                 few_shot_examples=q_data.get("few_shot_examples"),
-                question_rubric=q_data.get("question_rubric"),
+                question_rubric=question_rubric_dict,
                 keywords=q_data.get("keywords"),
             )
             templates.append(template)

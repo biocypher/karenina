@@ -4,7 +4,7 @@ import pytest
 
 from karenina.benchmark.verification.stage import VerificationContext
 from karenina.schemas import ModelConfig
-from karenina.schemas.domain import Rubric, RubricTrait
+from karenina.schemas.domain import LLMRubricTrait, Rubric
 
 
 @pytest.fixture
@@ -82,15 +82,15 @@ def invalid_template_missing_verify() -> str:
 def sample_rubric() -> Rubric:
     """Create a sample rubric for testing."""
     return Rubric(
-        traits=[
-            RubricTrait(
+        llm_traits=[
+            LLMRubricTrait(
                 name="Accuracy",
                 description="Is the answer accurate?",
                 kind="score",
                 min_score=1,
                 max_score=10,
             ),
-            RubricTrait(
+            LLMRubricTrait(
                 name="Completeness",
                 description="Is the answer complete?",
                 kind="score",

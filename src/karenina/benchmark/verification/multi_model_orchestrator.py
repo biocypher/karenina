@@ -26,6 +26,7 @@ def _create_verification_task(
     few_shot_enabled: bool = False,
     abstention_enabled: bool = False,
     deep_judgment_enabled: bool = False,
+    rubric_evaluation_strategy: str = "batch",
     deep_judgment_max_excerpts_per_attribute: int = 3,
     deep_judgment_fuzzy_match_threshold: float = 0.80,
     deep_judgment_excerpt_retry_attempts: int = 2,
@@ -49,6 +50,7 @@ def _create_verification_task(
         "few_shot_enabled": few_shot_enabled,
         "abstention_enabled": abstention_enabled,
         "deep_judgment_enabled": deep_judgment_enabled,
+        "rubric_evaluation_strategy": rubric_evaluation_strategy,
         "deep_judgment_max_excerpts_per_attribute": deep_judgment_max_excerpts_per_attribute,
         "deep_judgment_fuzzy_match_threshold": deep_judgment_fuzzy_match_threshold,
         "deep_judgment_excerpt_retry_attempts": deep_judgment_excerpt_retry_attempts,
@@ -88,6 +90,7 @@ def _execute_verification_task(task: dict[str, Any]) -> tuple[str, VerificationR
         few_shot_enabled=task.get("few_shot_enabled", False),
         abstention_enabled=task.get("abstention_enabled", False),
         deep_judgment_enabled=task.get("deep_judgment_enabled", False),
+        rubric_evaluation_strategy=task.get("rubric_evaluation_strategy", "batch"),
         deep_judgment_max_excerpts_per_attribute=task.get("deep_judgment_max_excerpts_per_attribute", 3),
         deep_judgment_fuzzy_match_threshold=task.get("deep_judgment_fuzzy_match_threshold", 0.80),
         deep_judgment_excerpt_retry_attempts=task.get("deep_judgment_excerpt_retry_attempts", 2),
@@ -175,6 +178,7 @@ def run_question_verification(
                     few_shot_enabled=config.is_few_shot_enabled(),
                     abstention_enabled=getattr(config, "abstention_enabled", False),
                     deep_judgment_enabled=getattr(config, "deep_judgment_enabled", False),
+                    rubric_evaluation_strategy=getattr(config, "rubric_evaluation_strategy", "batch"),
                     deep_judgment_max_excerpts_per_attribute=getattr(
                         config, "deep_judgment_max_excerpts_per_attribute", 3
                     ),

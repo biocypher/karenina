@@ -5,14 +5,13 @@ Rubric evaluation for qualitative assessment of LLM responses.
 import json
 import logging
 import re
-from collections.abc import Callable
 from typing import Any
 
 from langchain_core.callbacks import get_usage_metadata_callback
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 from ....infrastructure.llm.interface import init_chat_model_unified
-from ....schemas.domain import ManualRubricTrait, MetricRubricTrait, Rubric, RubricTrait
+from ....schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
 from ....schemas.workflow import INTERFACES_NO_PROVIDER_REQUIRED, ModelConfig
 
 logger = logging.getLogger(__name__)
@@ -23,13 +22,15 @@ class RubricEvaluator:
     Evaluates LLM responses against a defined rubric using qualitative traits.
     """
 
-    def __init__(self, model_config: ModelConfig, callable_registry: dict[str, Callable[[str], bool]] | None = None):
+    def __init__(self, model_config: ModelConfig, evaluation_strategy: str = "batch"):
         """
         Initialize the rubric evaluator with an LLM model.
 
         Args:
             model_config: Configuration for the evaluation model
-            callable_registry: Registry of callable functions for manual trait evaluation
+            evaluation_strategy: Strategy for evaluating LLM traits ("batch" or "sequential")
+                - "batch": Evaluate all traits in single LLM call (efficient)
+                - "sequential": Evaluate traits one-by-one (reliable)
 
         Raises:
             ValueError: If model configuration is invalid
@@ -50,7 +51,7 @@ class RubricEvaluator:
             )
 
         self.model_config = model_config
-        self.callable_registry = callable_registry or {}
+        self.evaluation_strategy = evaluation_strategy
 
         try:
             # Build kwargs for model initialization
@@ -79,7 +80,7 @@ class RubricEvaluator:
         self, question: str, answer: str, rubric: Rubric
     ) -> tuple[dict[str, int | bool], list[dict[str, Any]]]:
         """
-        Evaluate an answer against a rubric's traits (both LLM and manual).
+        Evaluate an answer against a rubric's traits (LLM, regex, and callable).
 
         Args:
             question: The original question asked
@@ -97,63 +98,47 @@ class RubricEvaluator:
         results: dict[str, int | bool] = {}
         usage_metadata_list: list[dict[str, Any]] = []
 
-        # Evaluate manual traits first (these are faster and deterministic)
-        if rubric.manual_traits:
-            manual_results = self._evaluate_manual_traits(answer, rubric.manual_traits)
-            results.update(manual_results)
+        # Evaluate regex traits first (fast and deterministic)
+        if rubric.regex_traits:
+            regex_results = self._evaluate_regex_traits(answer, rubric.regex_traits)
+            results.update(regex_results)
+
+        # Evaluate callable traits (deterministic but potentially slower)
+        if rubric.callable_traits:
+            callable_results = self._evaluate_callable_traits(answer, rubric.callable_traits)
+            results.update(callable_results)
 
         # Evaluate LLM traits if present
-        if rubric.traits:
-            try:
-                # Try batch evaluation first (more efficient)
-                llm_results, usage_metadata = self._evaluate_batch(question, answer, rubric)
-                results.update(llm_results)
-                if usage_metadata:
-                    usage_metadata_list.append(usage_metadata)
-            except Exception as batch_error:
-                # Fallback to sequential evaluation
+        if rubric.llm_traits:
+            if self.evaluation_strategy == "batch":
+                # Batch evaluation - evaluates all traits in single LLM call
+                try:
+                    llm_results, usage_metadata = self._evaluate_batch(question, answer, rubric)
+                    results.update(llm_results)
+                    if usage_metadata:
+                        usage_metadata_list.append(usage_metadata)
+                except Exception as e:
+                    logger.error(f"Batch evaluation failed: {e}")
+                    raise RuntimeError(f"Failed to evaluate rubric traits using batch strategy: {e}") from e
+            else:  # "sequential"
+                # Sequential evaluation - evaluates traits one by one
                 try:
                     llm_results, seq_usage_metadata_list = self._evaluate_sequential(question, answer, rubric)
                     results.update(llm_results)
                     usage_metadata_list.extend(seq_usage_metadata_list)
-                except Exception as seq_error:
-                    # Log both errors and raise the sequential one
-                    logger.error(f"Batch evaluation failed: {batch_error}")
-                    logger.error(f"Sequential evaluation failed: {seq_error}")
-                    raise seq_error
+                except Exception as e:
+                    logger.error(f"Sequential evaluation failed: {e}")
+                    raise RuntimeError(f"Failed to evaluate rubric traits using sequential strategy: {e}") from e
 
         return results, usage_metadata_list
 
-    def register_callable(self, name: str, func: Callable[[str], bool]) -> None:
+    def _evaluate_regex_traits(self, answer: str, regex_traits: list[RegexTrait]) -> dict[str, bool]:
         """
-        Register a callable function for manual trait evaluation.
-
-        Args:
-            name: Name to register the function under
-            func: Function that takes a string and returns a boolean
-
-        Raises:
-            ValueError: If function doesn't have correct signature
-        """
-        # Basic validation of function signature
-        import inspect
-
-        sig = inspect.signature(func)
-        params = list(sig.parameters.keys())
-
-        if len(params) != 1:
-            raise ValueError(f"Callable '{name}' must have exactly one parameter, got {len(params)}")
-
-        # Store the function
-        self.callable_registry[name] = func
-
-    def _evaluate_manual_traits(self, answer: str, manual_traits: list[ManualRubricTrait]) -> dict[str, int | bool]:
-        """
-        Evaluate manual traits using regex patterns or callable functions.
+        Evaluate regex traits using pattern matching.
 
         Args:
             answer: The text to evaluate
-            manual_traits: List of manual traits to evaluate
+            regex_traits: List of regex traits to evaluate
 
         Returns:
             Dictionary mapping trait names to boolean results
@@ -161,14 +146,41 @@ class RubricEvaluator:
         Raises:
             RuntimeError: If evaluation of any trait fails
         """
-        results: dict[str, int | bool] = {}
+        results: dict[str, bool] = {}
 
-        for trait in manual_traits:
+        for trait in regex_traits:
             try:
-                result = trait.evaluate(answer, self.callable_registry)
+                result = trait.evaluate(answer)
                 results[trait.name] = result
             except Exception as e:
-                logger.warning(f"Failed to evaluate manual trait '{trait.name}': {e}")
+                logger.warning(f"Failed to evaluate regex trait '{trait.name}': {e}")
+                # Mark failed traits as None for consistency with LLM evaluation
+                results[trait.name] = None  # type: ignore[assignment]
+
+        return results
+
+    def _evaluate_callable_traits(self, answer: str, callable_traits: list[CallableTrait]) -> dict[str, bool | int]:
+        """
+        Evaluate callable traits using custom functions.
+
+        Args:
+            answer: The text to evaluate
+            callable_traits: List of callable traits to evaluate
+
+        Returns:
+            Dictionary mapping trait names to boolean or int results (depending on trait kind)
+
+        Raises:
+            RuntimeError: If evaluation of any trait fails
+        """
+        results: dict[str, bool | int] = {}
+
+        for trait in callable_traits:
+            try:
+                result = trait.evaluate(answer)
+                results[trait.name] = result
+            except Exception as e:
+                logger.warning(f"Failed to evaluate callable trait '{trait.name}': {e}")
                 # Mark failed traits as None for consistency with LLM evaluation
                 results[trait.name] = None  # type: ignore[assignment]
 
@@ -184,7 +196,7 @@ class RubricEvaluator:
             Tuple of (results_dict, usage_metadata)
         """
         system_prompt = self._build_batch_system_prompt()
-        user_prompt = self._build_batch_user_prompt(question, answer, rubric.traits)
+        user_prompt = self._build_batch_user_prompt(question, answer, rubric.llm_traits)
 
         messages: list[BaseMessage] = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
 
@@ -195,7 +207,7 @@ class RubricEvaluator:
 
         raw_response = response.content if hasattr(response, "content") else str(response)
 
-        results = self._parse_batch_response(raw_response, rubric.traits)
+        results = self._parse_batch_response(raw_response, rubric.llm_traits)
         return results, usage_metadata
 
     def _evaluate_sequential(
@@ -210,7 +222,7 @@ class RubricEvaluator:
         results = {}
         usage_metadata_list = []
 
-        for trait in rubric.traits:
+        for trait in rubric.llm_traits:
             try:
                 score, usage_metadata = self._evaluate_single_trait(question, answer, trait)
                 results[trait.name] = score
@@ -223,7 +235,7 @@ class RubricEvaluator:
         return results, usage_metadata_list
 
     def _evaluate_single_trait(
-        self, question: str, answer: str, trait: RubricTrait
+        self, question: str, answer: str, trait: LLMRubricTrait
     ) -> tuple[int | bool, dict[str, Any]]:
         """
         Evaluate a single trait.
@@ -265,7 +277,7 @@ Your evaluation should be:
 
 Return your evaluation as a JSON object where keys are trait names and values are the scores."""
 
-    def _build_batch_user_prompt(self, question: str, answer: str, traits: list[RubricTrait]) -> str:
+    def _build_batch_user_prompt(self, question: str, answer: str, traits: list[LLMRubricTrait]) -> str:
         """Build user prompt for batch evaluation."""
         traits_description = []
 
@@ -293,7 +305,7 @@ Return your evaluation as a JSON object with trait names as keys and scores as v
 
 JSON Response:"""
 
-    def _build_single_trait_system_prompt(self, trait: RubricTrait) -> str:
+    def _build_single_trait_system_prompt(self, trait: LLMRubricTrait) -> str:
         """Build system prompt for single trait evaluation."""
         if trait.kind == "boolean":
             return f"""You are evaluating responses for the trait: {trait.name}
@@ -314,7 +326,7 @@ Rate the answer on a scale from {min_score} to {max_score}, where:
 
 Respond with only the numeric score ({min_score}-{max_score})."""
 
-    def _build_single_trait_user_prompt(self, question: str, answer: str, trait: RubricTrait) -> str:
+    def _build_single_trait_user_prompt(self, question: str, answer: str, trait: LLMRubricTrait) -> str:
         """Build user prompt for single trait evaluation."""
         return f"""QUESTION:
 {question}
@@ -324,7 +336,7 @@ ANSWER TO EVALUATE:
 
 Please evaluate this answer for the trait "{trait.name}": {trait.description or "No description provided"}"""
 
-    def _parse_batch_response(self, response: str, traits: list[RubricTrait]) -> dict[str, int | bool]:
+    def _parse_batch_response(self, response: str, traits: list[LLMRubricTrait]) -> dict[str, int | bool]:
         """Parse the batch evaluation response."""
         # Try to extract JSON from the response
         json_match = re.search(r"\{.*\}", response, re.DOTALL)
@@ -353,7 +365,7 @@ Please evaluate this answer for the trait "{trait.name}": {trait.description or 
 
         return validated_results
 
-    def _parse_single_trait_response(self, response: str, trait: RubricTrait) -> int | bool:
+    def _parse_single_trait_response(self, response: str, trait: LLMRubricTrait) -> int | bool:
         """Parse a single trait evaluation response."""
         response = response.strip().lower()
 
@@ -379,7 +391,7 @@ Please evaluate this answer for the trait "{trait.name}": {trait.description or 
             score = int(numbers[0])
             return self._validate_score(score, trait)
 
-    def _validate_score(self, score: Any, trait: RubricTrait) -> int | bool:
+    def _validate_score(self, score: Any, trait: LLMRubricTrait) -> int | bool:
         """Validate and convert a score for a trait."""
         if trait.kind == "boolean":
             if isinstance(score, bool):

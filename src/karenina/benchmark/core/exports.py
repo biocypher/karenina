@@ -122,7 +122,7 @@ class ExportManager:
         global_rubric = self.rubrics_manager.get_global_rubric()
         if global_rubric:
             lines.append("## Global Rubric")
-            for trait in global_rubric.traits:
+            for trait in global_rubric.llm_traits:
                 lines.append(f"- **{trait.name}**: {trait.description}")
             lines.append("")
 
@@ -193,7 +193,7 @@ class ExportManager:
             "progress_percentage": self.base.get_progress(),
             "is_complete": self.base.is_complete,
             "has_global_rubric": global_rubric is not None,
-            "global_rubric_traits": len(global_rubric.traits) if global_rubric else 0,
+            "global_rubric_traits": len(global_rubric.llm_traits) if global_rubric else 0,
         }
 
     def get_statistics(self) -> dict[str, Any]:

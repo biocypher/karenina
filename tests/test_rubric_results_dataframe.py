@@ -94,13 +94,13 @@ def test_to_dataframe_llm_binary_traits():
 
 
 def test_to_dataframe_manual_traits():
-    """Test DataFrame creation for manual traits."""
+    """Test DataFrame creation for regex traits (formerly manual traits)."""
     metadata = VerificationResultMetadata(
         question_id="q3",
         template_id="template3",
         completed_without_errors=True,
         error=None,
-        question_text="Manual traits test",
+        question_text="Regex traits test",
         keywords=None,
         answering_model="gpt-4",
         parsing_model="gpt-4-mini",
@@ -111,7 +111,7 @@ def test_to_dataframe_manual_traits():
 
     rubric = VerificationResultRubric(
         rubric_evaluation_performed=True,
-        manual_trait_scores={
+        regex_trait_scores={
             "has_citation": True,
             "mentions_regulatory": False,
         },
@@ -120,11 +120,11 @@ def test_to_dataframe_manual_traits():
     result = VerificationResult(metadata=metadata, rubric=rubric)
     rubric_results = RubricResults(results=[result])
 
-    df = rubric_results.to_dataframe(trait_type="manual")
+    df = rubric_results.to_dataframe(trait_type="regex")
 
     assert len(df) == 2, "Should have 2 rows"
     assert set(df["trait_name"].values) == {"has_citation", "mentions_regulatory"}
-    assert all(df["trait_type"] == "manual")
+    assert all(df["trait_type"] == "regex")
 
     # Check values
     citation_row = df[df["trait_name"] == "has_citation"].iloc[0]
@@ -218,7 +218,7 @@ def test_to_dataframe_all_trait_types():
         llm_trait_scores={
             "clarity": 4,
         },
-        manual_trait_scores={
+        regex_trait_scores={
             "has_citation": True,
         },
         metric_trait_scores={
@@ -234,15 +234,15 @@ def test_to_dataframe_all_trait_types():
 
     df = rubric_results.to_dataframe(trait_type="all")
 
-    # Should have 4 rows: 1 LLM + 1 manual + 2 metrics
+    # Should have 4 rows: 1 LLM + 1 regex + 2 metrics
     assert len(df) == 4
 
     # Check trait types
-    assert set(df["trait_type"].values) == {"llm_score", "manual", "metric"}
+    assert set(df["trait_type"].values) == {"llm_score", "regex", "metric"}
 
     # Verify each type is present
     assert len(df[df["trait_type"] == "llm_score"]) == 1
-    assert len(df[df["trait_type"] == "manual"]) == 1
+    assert len(df[df["trait_type"] == "regex"]) == 1
     assert len(df[df["trait_type"] == "metric"]) == 2
 
 

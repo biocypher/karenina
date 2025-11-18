@@ -19,7 +19,7 @@ from ..schemas.checkpoint import (
     SchemaOrgRating,
     SchemaOrgSoftwareSourceCode,
 )
-from ..schemas.domain import ManualRubricTrait, MetricRubricTrait, RubricTrait
+from ..schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
 
 
 class BenchmarkConversionError(Exception):
@@ -71,13 +71,13 @@ def generate_template_id(template: str | None) -> str:
 
 
 def convert_rubric_trait_to_rating(
-    trait: RubricTrait | ManualRubricTrait | MetricRubricTrait, rubric_type: str = "global"
+    trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait, rubric_type: str = "global"
 ) -> SchemaOrgRating:
     """
-    Convert an internal RubricTrait, ManualRubricTrait, or MetricRubricTrait to a schema.org Rating.
+    Convert an internal trait to a schema.org Rating.
 
     Args:
-        trait: The trait to convert
+        trait: The trait to convert (LLM, regex, callable, or metric)
         rubric_type: Either 'global' or 'question-specific'
 
     Returns:
@@ -113,19 +113,60 @@ def convert_rubric_trait_to_rating(
             additionalProperty=additional_props,
         )
 
-    # Handle ManualRubricTrait (always boolean)
-    if isinstance(trait, ManualRubricTrait):
+    # Handle RegexTrait (always boolean)
+    if isinstance(trait, RegexTrait):
+        # Store regex configuration in additionalProperty
+        additional_props = [
+            SchemaOrgPropertyValue(name="pattern", value=trait.pattern),
+            SchemaOrgPropertyValue(name="case_sensitive", value=trait.case_sensitive),
+            SchemaOrgPropertyValue(name="invert_result", value=trait.invert_result),
+        ]
+
         return SchemaOrgRating(
             name=trait.name,
             description=trait.description,
             bestRating=1,
             worstRating=0,
-            additionalType="GlobalManualRubricTrait"
-            if rubric_type == "global"
-            else "QuestionSpecificManualRubricTrait",
+            additionalType="GlobalRegexTrait" if rubric_type == "global" else "QuestionSpecificRegexTrait",
+            additionalProperty=additional_props,
         )
 
-    # Handle RubricTrait
+    # Handle CallableTrait (can be boolean or score)
+    if isinstance(trait, CallableTrait):
+        # Store callable code and metadata in additionalProperty
+        import base64
+
+        additional_props = [
+            SchemaOrgPropertyValue(name="callable_code", value=base64.b64encode(trait.callable_code).decode("utf-8")),
+            SchemaOrgPropertyValue(name="kind", value=trait.kind),
+            SchemaOrgPropertyValue(name="invert_result", value=trait.invert_result),
+        ]
+
+        # Add score fields if score-based
+        if trait.kind == "score":
+            if trait.min_score is not None:
+                additional_props.append(SchemaOrgPropertyValue(name="min_score", value=trait.min_score))
+            if trait.max_score is not None:
+                additional_props.append(SchemaOrgPropertyValue(name="max_score", value=trait.max_score))
+
+        # Determine best/worst rating based on kind
+        if trait.kind == "boolean":
+            best_rating = 1.0
+            worst_rating = 0.0
+        else:  # score
+            best_rating = float(trait.max_score) if trait.max_score is not None else 5.0
+            worst_rating = float(trait.min_score) if trait.min_score is not None else 1.0
+
+        return SchemaOrgRating(
+            name=trait.name,
+            description=trait.description,
+            bestRating=best_rating,
+            worstRating=worst_rating,
+            additionalType="GlobalCallableTrait" if rubric_type == "global" else "QuestionSpecificCallableTrait",
+            additionalProperty=additional_props,
+        )
+
+    # Handle LLMRubricTrait
     if trait.kind == "boolean":
         return SchemaOrgRating(
             name=trait.name,
@@ -147,15 +188,17 @@ def convert_rubric_trait_to_rating(
         )
 
 
-def convert_rating_to_rubric_trait(rating: SchemaOrgRating) -> RubricTrait | ManualRubricTrait | MetricRubricTrait:
+def convert_rating_to_rubric_trait(
+    rating: SchemaOrgRating,
+) -> LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait:
     """
-    Convert a schema.org Rating back to a RubricTrait, ManualRubricTrait, or MetricRubricTrait.
+    Convert a schema.org Rating back to a rubric trait.
 
     Args:
         rating: The SchemaOrgRating to convert
 
     Returns:
-        A RubricTrait, ManualRubricTrait, or MetricRubricTrait object
+        A LLMRubricTrait, RegexTrait, CallableTrait, or MetricRubricTrait object
     """
     # Check if it's a MetricRubricTrait
     if rating.additionalType in ["GlobalMetricRubricTrait", "QuestionSpecificMetricRubricTrait"]:
@@ -201,22 +244,76 @@ def convert_rating_to_rubric_trait(rating: SchemaOrgRating) -> RubricTrait | Man
             repeated_extraction=repeated_extraction,
         )
 
-    # Check if it's a ManualRubricTrait
-    if rating.additionalType in ["GlobalManualRubricTrait", "QuestionSpecificManualRubricTrait"]:
-        return ManualRubricTrait(
+    # Handle RegexTrait
+    if rating.additionalType in ["GlobalRegexTrait", "QuestionSpecificRegexTrait"]:
+        # Extract configuration from additionalProperty
+        pattern = ""
+        case_sensitive = True
+        invert_result = False
+
+        if rating.additionalProperty:
+            for prop in rating.additionalProperty:
+                if prop.name == "pattern":
+                    pattern = prop.value
+                elif prop.name == "case_sensitive":
+                    case_sensitive = prop.value
+                elif prop.name == "invert_result":
+                    invert_result = prop.value
+
+        return RegexTrait(
             name=rating.name,
-            description=rating.description or "",
-            pattern=".*",  # Default pattern that matches everything
-            callable_name=None,
-            case_sensitive=True,
-            invert_result=False,
+            description=rating.description,
+            pattern=pattern,
+            case_sensitive=case_sensitive,
+            invert_result=invert_result,
         )
 
-    # Handle regular RubricTrait
+    # Handle CallableTrait
+    if rating.additionalType in ["GlobalCallableTrait", "QuestionSpecificCallableTrait"]:
+        # Extract configuration from additionalProperty
+        import base64
+
+        callable_code = b""
+        kind: Literal["boolean", "score"] = "boolean"
+        invert_result = False
+        min_score = None
+        max_score = None
+
+        if rating.additionalProperty:
+            for prop in rating.additionalProperty:
+                if prop.name == "callable_code":
+                    callable_code = base64.b64decode(prop.value)
+                elif prop.name == "kind":
+                    kind = cast(Literal["boolean", "score"], prop.value)
+                elif prop.name == "invert_result":
+                    invert_result = prop.value
+                elif prop.name == "min_score":
+                    min_score = prop.value
+                elif prop.name == "max_score":
+                    max_score = prop.value
+
+        return CallableTrait(
+            name=rating.name,
+            description=rating.description,
+            kind=kind,
+            callable_code=callable_code,
+            min_score=min_score,
+            max_score=max_score,
+            invert_result=invert_result,
+        )
+
+    # Unsupported trait type - raise error (no backward compatibility)
+    if rating.additionalType in ["GlobalManualRubricTrait", "QuestionSpecificManualRubricTrait"]:
+        raise ValueError(
+            f"ManualRubricTrait is no longer supported. Found trait '{rating.name}' with type "
+            f"'{rating.additionalType}'. Please migrate your checkpoint using the migration script."
+        )
+
+    # Handle LLMRubricTrait
     # Determine if it's a boolean trait (0-1 range)
     is_boolean = rating.bestRating == 1 and rating.worstRating == 0
 
-    return RubricTrait(
+    return LLMRubricTrait(
         name=rating.name,
         description=rating.description,
         kind="boolean" if is_boolean else "score",
@@ -273,7 +370,7 @@ def add_question_to_benchmark(
     raw_answer: str,
     answer_template: str,
     question_id: str | None = None,
-    question_rubric_traits: list[RubricTrait | ManualRubricTrait | MetricRubricTrait] | None = None,
+    question_rubric_traits: list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait] | None = None,
     finished: bool = False,
     author: dict[str, Any] | None = None,
     sources: list[dict[str, Any]] | None = None,
@@ -378,7 +475,7 @@ def add_question_to_benchmark(
 
 def add_global_rubric_to_benchmark(
     benchmark: JsonLdCheckpoint,
-    rubric_traits: list[RubricTrait | ManualRubricTrait | MetricRubricTrait],
+    rubric_traits: list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait],
 ) -> None:
     """
     Add global rubric traits to a benchmark.
@@ -448,7 +545,8 @@ def extract_questions_from_benchmark(
                 if rating.additionalType
                 in [
                     "QuestionSpecificRubricTrait",
-                    "QuestionSpecificManualRubricTrait",
+                    "QuestionSpecificRegexTrait",
+                    "QuestionSpecificCallableTrait",
                     "QuestionSpecificMetricRubricTrait",
                 ]
             ]
@@ -476,7 +574,7 @@ def extract_questions_from_benchmark(
 
 def extract_global_rubric_from_benchmark(
     benchmark: JsonLdCheckpoint,
-) -> list[RubricTrait | ManualRubricTrait | MetricRubricTrait] | None:
+) -> list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait] | None:
     """
     Extract global rubric traits from a benchmark.
 
@@ -484,14 +582,19 @@ def extract_global_rubric_from_benchmark(
         benchmark: The benchmark to extract from
 
     Returns:
-        List of RubricTrait, ManualRubricTrait, or MetricRubricTrait objects or None if no global rubric
+        List of trait objects or None if no global rubric
     """
     if not benchmark.rating:
         return None
 
     traits = []
     for rating in benchmark.rating:
-        if rating.additionalType in ["GlobalRubricTrait", "GlobalManualRubricTrait", "GlobalMetricRubricTrait"]:
+        if rating.additionalType in [
+            "GlobalRubricTrait",
+            "GlobalRegexTrait",
+            "GlobalCallableTrait",
+            "GlobalMetricRubricTrait",
+        ]:
             traits.append(convert_rating_to_rubric_trait(rating))
 
     return traits if traits else None
@@ -533,8 +636,10 @@ def validate_jsonld_benchmark(benchmark: JsonLdCheckpoint) -> tuple[bool, str]:
                         if rating.additionalType not in [
                             "GlobalRubricTrait",
                             "QuestionSpecificRubricTrait",
-                            "GlobalManualRubricTrait",
-                            "QuestionSpecificManualRubricTrait",
+                            "GlobalRegexTrait",
+                            "QuestionSpecificRegexTrait",
+                            "GlobalCallableTrait",
+                            "QuestionSpecificCallableTrait",
                             "GlobalMetricRubricTrait",
                             "QuestionSpecificMetricRubricTrait",
                         ]:
@@ -548,7 +653,8 @@ def validate_jsonld_benchmark(benchmark: JsonLdCheckpoint) -> tuple[bool, str]:
             for rating in benchmark.rating:
                 if rating.additionalType not in [
                     "GlobalRubricTrait",
-                    "GlobalManualRubricTrait",
+                    "GlobalRegexTrait",
+                    "GlobalCallableTrait",
                     "GlobalMetricRubricTrait",
                 ]:
                     return (

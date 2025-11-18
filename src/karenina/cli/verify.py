@@ -551,17 +551,17 @@ def verify(
         if output:
             console.print(f"\n[cyan]Exporting results to {output}...[/cyan]")
 
-            # Convert to legacy dict for export functions
+            # Convert to legacy dict for job creation
             results_dict = results.to_legacy_dict()
 
             # Create job for export (comprehensive backend format)
             job = create_export_job(results_dict, config, "cli-verification", start_time, end_time)
 
-            # Export using backend exporter (includes all fields)
+            # Export using backend exporter (uses VerificationResultSet directly)
             if output_format == "json":
-                export_data = export_verification_results_json(job, results_dict)
+                export_data = export_verification_results_json(job, results)
             else:  # csv
-                export_data = export_verification_results_csv(job, results_dict, benchmark.get_global_rubric())
+                export_data = export_verification_results_csv(job, results, benchmark.get_global_rubric())
 
             # Write to file
             output.write_text(export_data)

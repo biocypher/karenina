@@ -9,7 +9,7 @@ import pytest
 
 from karenina.benchmark.benchmark import Benchmark
 from karenina.schemas import ModelConfig, VerificationConfig, VerificationResult
-from karenina.schemas.domain import RubricTrait
+from karenina.schemas.domain import LLMRubricTrait
 from karenina.schemas.workflow.verification import (
     VerificationResultDeepJudgment,
     VerificationResultMetadata,
@@ -244,7 +244,7 @@ class TestBenchmarkVerificationIntegration:
         benchmark, (q1_id, q2_id, q3_id) = sample_benchmark
 
         # Add global rubric
-        global_trait = RubricTrait(
+        global_trait = LLMRubricTrait(
             name="clarity",
             description="Is the answer clear?",
             kind="boolean",
@@ -252,7 +252,7 @@ class TestBenchmarkVerificationIntegration:
         benchmark.add_global_rubric_trait(global_trait)
 
         # Add question-specific rubric
-        question_trait = RubricTrait(
+        question_trait = LLMRubricTrait(
             name="accuracy",
             description="Is the answer accurate?",
             kind="score",
@@ -274,7 +274,7 @@ class TestBenchmarkVerificationIntegration:
         merged_rubric_q2 = benchmark._get_merged_rubric_for_question(q2_id)
         assert merged_rubric_q2 is not None
         assert len(merged_rubric_q2.traits) == 1
-        assert merged_rubric_q2.traits[0].name == "clarity"
+        assert merged_rubric_q2.llm_traits[0].name == "clarity"
 
     def test_verification_result_storage(self, sample_benchmark, sample_config):  # noqa -> None: ARG002
         """Test verification result storage and retrieval."""

@@ -14,7 +14,7 @@ import os
 import pytest
 
 from karenina.benchmark.task_eval import TaskEval
-from karenina.schemas.domain import ManualRubricTrait, Rubric, RubricTrait
+from karenina.schemas.domain import LLMRubricTrait, RegexTrait, Rubric
 from karenina.schemas.workflow import ModelConfig, VerificationConfig
 
 
@@ -64,10 +64,8 @@ class TestTaskEvalSimplifiedInterface:
 
         # Add rubrics only (no templates)
         rubric = Rubric(
-            traits=[RubricTrait(name="clarity", description="Is the response clear?", kind="boolean")],
-            manual_traits=[
-                ManualRubricTrait(name="has_action", description="Contains the word 'action'", pattern=r"action")
-            ],
+            llm_traits=[LLMRubricTrait(name="clarity", description="Is the response clear?", kind="boolean")],
+            regex_traits=[RegexTrait(name="has_action", description="Contains the word 'action'", pattern=r"action")],
         )
         task.add_rubric(rubric)
 
@@ -103,12 +101,12 @@ class TestTaskEvalSimplifiedInterface:
 
         # Add rubrics only (no templates)
         rubric = Rubric(
-            traits=[
-                RubricTrait(
+            llm_traits=[
+                LLMRubricTrait(
                     name="quality", description="Is the output high quality?", kind="score", min_score=1, max_score=5
                 )
             ],
-            manual_traits=[ManualRubricTrait(name="has_success", description="Contains 'success'", pattern=r"success")],
+            regex_traits=[RegexTrait(name="has_success", description="Contains 'success'", pattern=r"success")],
         )
         task.add_rubric(rubric)
 
@@ -188,7 +186,9 @@ class Answer(BaseAnswer):
         )
 
         # Add rubric
-        rubric = Rubric(traits=[RubricTrait(name="detail", description="Is the response detailed?", kind="boolean")])
+        rubric = Rubric(
+            llm_traits=[LLMRubricTrait(name="detail", description="Is the response detailed?", kind="boolean")]
+        )
         task.add_rubric(rubric)
 
         # Log response
@@ -270,9 +270,7 @@ class Answer(BaseAnswer):
         task = TaskEval(task_id="step_dict_test")
 
         # Add step-specific rubric
-        rubric = Rubric(
-            manual_traits=[ManualRubricTrait(name="has_plan", description="Contains 'plan'", pattern=r"plan")]
-        )
+        rubric = Rubric(regex_traits=[RegexTrait(name="has_plan", description="Contains 'plan'", pattern=r"plan")])
         task.add_rubric(rubric, step_id="planning")
 
         # Log dict trace to specific step
@@ -317,7 +315,7 @@ class Answer(BaseAnswer):
 
         # Test 2: Only rubrics → rubric_only mode
         task2 = TaskEval(task_id="rubric_only")
-        task2.add_rubric(Rubric(traits=[RubricTrait(name="test", description="test", kind="boolean")]))
+        task2.add_rubric(Rubric(llm_traits=[LLMRubricTrait(name="test", description="test", kind="boolean")]))
         task2.log("test")
 
         context2 = task2._get_evaluation_context(step_id=None)
@@ -334,7 +332,7 @@ class Answer(BaseAnswer):
                 "answer_template": "from karenina.schemas.domain import BaseAnswer\nclass Answer(BaseAnswer):\n    def verify(self): return True",
             }
         )
-        task3.add_rubric(Rubric(traits=[RubricTrait(name="test", description="test", kind="boolean")]))
+        task3.add_rubric(Rubric(llm_traits=[LLMRubricTrait(name="test", description="test", kind="boolean")]))
         task3.log("test")
 
         context3 = task3._get_evaluation_context(step_id=None)

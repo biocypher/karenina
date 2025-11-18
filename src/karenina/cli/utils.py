@@ -269,8 +269,8 @@ def create_export_job(
 
     # Calculate counts
     total = len(results)
-    successful = sum(1 for r in results.values() if r.completed_without_errors)
-    failed = total - successful
+    successful = sum(1 for r in results.values() if r.metadata.completed_without_errors)
+    failed = sum(1 for r in results.values() if not r.metadata.completed_without_errors)
 
     # Create minimal job object
     job = VerificationJob(
