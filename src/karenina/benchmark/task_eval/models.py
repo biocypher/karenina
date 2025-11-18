@@ -249,8 +249,10 @@ class StepEval(BaseModel):
             if result.rubric:
                 if result.rubric.llm_trait_scores:
                     rubric_data["llm"] = result.rubric.llm_trait_scores
-                if result.rubric.manual_trait_scores:
-                    rubric_data["manual"] = result.rubric.manual_trait_scores
+                if result.rubric.regex_trait_scores:
+                    rubric_data["regex"] = result.rubric.regex_trait_scores
+                if result.rubric.callable_trait_scores:
+                    rubric_data["callable"] = result.rubric.callable_trait_scores
                 if result.rubric.metric_trait_scores:
                     metric_results: dict[str, dict[str, Any]] = {}
                     for trait_name, metrics in result.rubric.metric_trait_scores.items():
@@ -272,9 +274,13 @@ class StepEval(BaseModel):
         if llm_aggregated:
             aggregated["llm"] = llm_aggregated
 
-        manual_aggregated = self._aggregate_manual_traits(successful_results)
-        if manual_aggregated:
-            aggregated["manual"] = manual_aggregated
+        regex_aggregated = self._aggregate_regex_traits(successful_results)
+        if regex_aggregated:
+            aggregated["regex"] = regex_aggregated
+
+        callable_aggregated = self._aggregate_callable_traits(successful_results)
+        if callable_aggregated:
+            aggregated["callable"] = callable_aggregated
 
         metric_aggregated = self._aggregate_metric_traits(successful_results)
         if metric_aggregated:
@@ -308,9 +314,9 @@ class StepEval(BaseModel):
         # Average each trait
         return {trait_name: sum(scores) / len(scores) for trait_name, scores in trait_scores.items()}
 
-    def _aggregate_manual_traits(self, results: list[VerificationResult]) -> dict[str, float]:
+    def _aggregate_regex_traits(self, results: list[VerificationResult]) -> dict[str, float]:
         """
-        Calculate pass rate for manual traits (booleans -> 0.0 to 1.0).
+        Calculate pass rate for regex traits (booleans -> 0.0 to 1.0).
 
         Args:
             results: List of successful VerificationResult objects
@@ -321,14 +327,46 @@ class StepEval(BaseModel):
         trait_values: dict[str, list[bool]] = {}
 
         for result in results:
-            if result.rubric and result.rubric.manual_trait_scores:
-                for trait_name, value in result.rubric.manual_trait_scores.items():
+            if result.rubric and result.rubric.regex_trait_scores:
+                for trait_name, value in result.rubric.regex_trait_scores.items():
                     if trait_name not in trait_values:
                         trait_values[trait_name] = []
                     trait_values[trait_name].append(value)
 
         # Calculate pass rate
         return {trait_name: sum(values) / len(values) for trait_name, values in trait_values.items()}
+
+    def _aggregate_callable_traits(self, results: list[VerificationResult]) -> dict[str, float]:
+        """
+        Calculate aggregate for callable traits (booleans -> pass rate, scores -> average).
+
+        Args:
+            results: List of successful VerificationResult objects
+
+        Returns:
+            dict: Trait names mapped to aggregated values (pass rate or average score)
+        """
+        trait_values: dict[str, list[bool | int]] = {}
+
+        for result in results:
+            if result.rubric and result.rubric.callable_trait_scores:
+                for trait_name, value in result.rubric.callable_trait_scores.items():
+                    if trait_name not in trait_values:
+                        trait_values[trait_name] = []
+                    trait_values[trait_name].append(value)
+
+        # Calculate aggregates
+        aggregates: dict[str, float] = {}
+        for trait_name, values in trait_values.items():
+            if all(isinstance(v, bool) for v in values):
+                # Boolean traits: calculate pass rate
+                aggregates[trait_name] = sum(v for v in values if v) / len(values)
+            else:
+                # Score traits: calculate average
+                numeric_values = [v for v in values if isinstance(v, int | float)]
+                aggregates[trait_name] = sum(numeric_values) / len(numeric_values) if numeric_values else 0.0
+
+        return aggregates
 
     def _aggregate_metric_traits(self, results: list[VerificationResult]) -> dict[str, dict[str, Any]]:
         """

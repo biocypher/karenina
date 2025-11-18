@@ -28,6 +28,7 @@ def run_single_model_verification(
     few_shot_enabled: bool = False,
     abstention_enabled: bool = False,
     deep_judgment_enabled: bool = False,
+    rubric_evaluation_strategy: str = "batch",
     deep_judgment_max_excerpts_per_attribute: int = 3,
     deep_judgment_fuzzy_match_threshold: float = 0.80,
     deep_judgment_excerpt_retry_attempts: int = 2,
@@ -60,6 +61,9 @@ def run_single_model_verification(
         few_shot_enabled: Whether to use few-shot prompting (disabled by default)
         abstention_enabled: Whether to enable abstention detection
         deep_judgment_enabled: Whether to enable deep-judgment parsing
+        rubric_evaluation_strategy: Strategy for evaluating LLM rubric traits:
+            - "batch": All traits evaluated in single LLM call (default, efficient)
+            - "sequential": Traits evaluated one-by-one (reliable, more expensive)
         deep_judgment_max_excerpts_per_attribute: Max excerpts per attribute (deep-judgment)
         deep_judgment_fuzzy_match_threshold: Similarity threshold for excerpts (deep-judgment)
         deep_judgment_excerpt_retry_attempts: Retry attempts for excerpt validation (deep-judgment)
@@ -104,6 +108,8 @@ def run_single_model_verification(
         few_shot_enabled=few_shot_enabled,
         abstention_enabled=abstention_enabled,
         deep_judgment_enabled=deep_judgment_enabled,
+        # Rubric Configuration
+        rubric_evaluation_strategy=rubric_evaluation_strategy,
         # Deep-Judgment Configuration
         deep_judgment_max_excerpts_per_attribute=deep_judgment_max_excerpts_per_attribute,
         deep_judgment_fuzzy_match_threshold=deep_judgment_fuzzy_match_threshold,
@@ -136,7 +142,7 @@ def run_single_model_verification(
     # If rubric is provided and mode is template_only, upgrade to template_and_rubric
     if (
         rubric
-        and (rubric.traits or rubric.manual_traits or rubric.metric_traits)
+        and (rubric.llm_traits or rubric.regex_traits or rubric.callable_traits or rubric.metric_traits)
         and evaluation_mode == "template_only"
     ):
         evaluation_mode = "template_and_rubric"

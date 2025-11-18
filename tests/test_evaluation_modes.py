@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from karenina.benchmark.verification.runner import run_single_model_verification
-from karenina.schemas import ModelConfig, Rubric, RubricTrait, VerificationConfig
+from karenina.schemas import LLMRubricTrait, ModelConfig, Rubric, VerificationConfig
 
 
 @pytest.fixture
@@ -45,15 +45,15 @@ def parsing_model() -> ModelConfig:
 def test_rubric() -> Rubric:
     """Create test rubric."""
     return Rubric(
-        traits=[
-            RubricTrait(
+        llm_traits=[
+            LLMRubricTrait(
                 name="Clarity",
                 description="Response clarity",
                 kind="score",
                 min_score=1,
                 max_score=5,
             ),
-            RubricTrait(
+            LLMRubricTrait(
                 name="Completeness",
                 description="Response completeness",
                 kind="score",

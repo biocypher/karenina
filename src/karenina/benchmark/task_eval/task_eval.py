@@ -157,8 +157,8 @@ class TaskEval:
             step_id: Optional step ID for step-specific rubrics
 
         Example:
-            rubric = Rubric(traits=[
-                RubricTrait(name="accuracy", description="Is answer correct?", kind="boolean")
+            rubric = Rubric(llm_traits=[
+                LLMRubricTrait(name="accuracy", description="Is answer correct?", kind="boolean")
             ])
             task.add_rubric(rubric)
         """
@@ -644,8 +644,9 @@ class TaskEval:
         has_rubrics = bool(
             context.merged_rubric
             and (
-                context.merged_rubric.traits
-                or context.merged_rubric.manual_traits
+                context.merged_rubric.llm_traits
+                or context.merged_rubric.regex_traits
+                or context.merged_rubric.callable_traits
                 or context.merged_rubric.metric_traits
             )
         )
@@ -783,6 +784,7 @@ class Answer(BaseAnswer):
             rubric=rubric,  # Pass rubric - will be evaluated in RubricEvaluationStage (all 3 types!)
             cached_answer_data=cached_answer_data,  # Skip generation, use our logged output
             abstention_enabled=True,  # Enable abstention detection
+            rubric_evaluation_strategy="batch",  # Use batch strategy by default
             evaluation_mode=evaluation_mode,  # Pass detected evaluation mode
         )
 
@@ -798,9 +800,9 @@ class Answer(BaseAnswer):
 
         # Rubric evaluation: use RubricEvaluator
         rubric_scores: dict[str, int | bool] = {}
-        if rubric and (rubric.traits or rubric.manual_traits):
+        if rubric and (rubric.llm_traits or rubric.regex_traits or rubric.callable_traits):
             try:
-                evaluator = RubricEvaluator(parsing_model, self.callable_registry)
+                evaluator = RubricEvaluator(parsing_model, evaluation_strategy="batch")
                 question_text = question_dict.get("question", "")
                 rubric_scores, _ = evaluator.evaluate_rubric(
                     question=question_text, answer=response_text, rubric=rubric
@@ -849,17 +851,20 @@ class Answer(BaseAnswer):
         if not rubrics:
             return None
 
-        from ...schemas.domain import ManualRubricTrait, MetricRubricTrait, Rubric, RubricTrait
+        from ...schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
 
         # Check for trait name conflicts first (across all trait types)
         all_trait_names = []
         for rubric in rubrics:
             # Add LLM trait names
-            for trait in rubric.traits:
+            for trait in rubric.llm_traits:
                 all_trait_names.append(trait.name)
-            # Add manual trait names
-            for manual_trait in rubric.manual_traits:
-                all_trait_names.append(manual_trait.name)
+            # Add regex trait names
+            for regex_trait in rubric.regex_traits:
+                all_trait_names.append(regex_trait.name)
+            # Add callable trait names
+            for callable_trait in rubric.callable_traits:
+                all_trait_names.append(callable_trait.name)
             # Add metric trait names
             for metric_trait in rubric.metric_traits:
                 all_trait_names.append(metric_trait.name)
@@ -879,23 +884,28 @@ class Answer(BaseAnswer):
             )
 
         # Combine all traits (now guaranteed to be unique)
-        unique_llm_traits: dict[str, RubricTrait] = {}
-        unique_manual_traits: dict[str, ManualRubricTrait] = {}
+        unique_llm_traits: dict[str, LLMRubricTrait] = {}
+        unique_regex_traits: dict[str, RegexTrait] = {}
+        unique_callable_traits: dict[str, CallableTrait] = {}
         unique_metric_traits: dict[str, MetricRubricTrait] = {}
         for rubric in rubrics:
             # Combine LLM traits
-            for trait in rubric.traits:
+            for trait in rubric.llm_traits:
                 unique_llm_traits[trait.name] = trait
-            # Combine manual traits
-            for manual_trait in rubric.manual_traits:
-                unique_manual_traits[manual_trait.name] = manual_trait
+            # Combine regex traits
+            for regex_trait in rubric.regex_traits:
+                unique_regex_traits[regex_trait.name] = regex_trait
+            # Combine callable traits
+            for callable_trait in rubric.callable_traits:
+                unique_callable_traits[callable_trait.name] = callable_trait
             # Combine metric traits
             for metric_trait in rubric.metric_traits:
                 unique_metric_traits[metric_trait.name] = metric_trait
 
         return Rubric(
-            traits=list(unique_llm_traits.values()),
-            manual_traits=list(unique_manual_traits.values()),
+            llm_traits=list(unique_llm_traits.values()),
+            regex_traits=list(unique_regex_traits.values()),
+            callable_traits=list(unique_callable_traits.values()),
             metric_traits=list(unique_metric_traits.values()),
         )
 

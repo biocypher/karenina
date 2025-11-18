@@ -35,6 +35,7 @@ RubricResults.model_rebuild()
 TemplateResults.model_rebuild()
 JudgmentResults.model_rebuild()
 VerificationResultSet.model_rebuild()
+VerificationJob.model_rebuild()  # Rebuild after VerificationResultSet to resolve forward reference
 
 __all__ = [
     # Model configuration

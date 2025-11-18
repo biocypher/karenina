@@ -46,6 +46,9 @@ class VerificationContext:
         abstention_enabled: Whether abstention detection is enabled
         deep_judgment_enabled: Whether deep-judgment parsing is enabled
 
+        # Rubric Configuration
+        rubric_evaluation_strategy: Strategy for evaluating LLM rubric traits ("batch" or "sequential")
+
         # Deep-Judgment Configuration
         deep_judgment_max_excerpts_per_attribute: Max excerpts per attribute
         deep_judgment_fuzzy_match_threshold: Similarity threshold for excerpts
@@ -94,6 +97,9 @@ class VerificationContext:
     few_shot_enabled: bool = False
     abstention_enabled: bool = False
     deep_judgment_enabled: bool = False
+
+    # Rubric Configuration
+    rubric_evaluation_strategy: str = "batch"  # "batch" or "sequential"
 
     # Deep-Judgment Configuration
     deep_judgment_max_excerpts_per_attribute: int = 3

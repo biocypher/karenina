@@ -32,8 +32,8 @@ def check_rubric_conflicts(
     question_traits: set[str] = set()
 
     # Collect standalone rubric traits
-    if standalone_rubric and standalone_rubric.traits:
-        for trait in standalone_rubric.traits:
+    if standalone_rubric and standalone_rubric.llm_traits:
+        for trait in standalone_rubric.llm_traits:
             standalone_traits.add(trait.name)
 
     # Collect question-specific rubric traits
@@ -67,7 +67,6 @@ def evaluate_standalone_rubrics(
     merged_rubric: "Rubric | None",
     concatenated_logs: str,
     context: str = "global",
-    callable_registry: dict[str, Callable[[str], bool]] | None = None,
 ) -> dict[str, int | bool]:
     """Evaluate standalone rubrics for a given context.
 
@@ -76,16 +75,15 @@ def evaluate_standalone_rubrics(
         merged_rubric: The merged rubric to evaluate
         concatenated_logs: The concatenated logs to evaluate against
         context: Context string for the evaluation question
-        callable_registry: Registry of callable functions for manual trait evaluation
 
     Returns:
         Dictionary of rubric scores
     """
     rubric_scores: dict[str, int | bool] = {}
 
-    if merged_rubric and (merged_rubric.traits or merged_rubric.manual_traits):
+    if merged_rubric and (merged_rubric.llm_traits or merged_rubric.regex_traits or merged_rubric.callable_traits):
         try:
-            evaluator = RubricEvaluator(parsing_model, callable_registry)
+            evaluator = RubricEvaluator(parsing_model)
             question = f"Evaluate the overall quality of the {context} outputs."
             rubric_scores, _ = evaluator.evaluate_rubric(
                 question=question, answer=concatenated_logs, rubric=merged_rubric
@@ -124,7 +122,7 @@ def evaluate_question_with_rubric(
         if question_rubric_traits:
             from ...schemas.domain import Rubric
 
-            question_rubric = Rubric(traits=question_rubric_traits)
+            question_rubric = Rubric(llm_traits=question_rubric_traits)
 
     # Evaluate the response with question-specific rubric
     return evaluate_response_func(

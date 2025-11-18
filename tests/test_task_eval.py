@@ -4,7 +4,7 @@ import pytest
 
 from karenina.benchmark.task_eval import TaskEval
 from karenina.schemas import ModelConfig, VerificationConfig
-from karenina.schemas.domain import Question, Rubric, RubricTrait
+from karenina.schemas.domain import LLMRubricTrait, Question, Rubric
 
 
 class TestTaskEvalBasics:
@@ -163,7 +163,7 @@ class TestTaskEvalRubrics:
     def test_add_rubric_global(self) -> None:
         """Test adding rubric to global rubrics."""
         task = TaskEval()
-        rubric = Rubric(traits=[RubricTrait(name="clarity", description="Answer clarity", kind="score")])
+        rubric = Rubric(llm_traits=[LLMRubricTrait(name="clarity", description="Answer clarity", kind="score")])
 
         task.add_rubric(rubric)
 
@@ -173,7 +173,7 @@ class TestTaskEvalRubrics:
     def test_add_rubric_step(self) -> None:
         """Test adding rubric to step-specific rubrics."""
         task = TaskEval()
-        rubric = Rubric(traits=[RubricTrait(name="accuracy", description="Answer accuracy", kind="boolean")])
+        rubric = Rubric(llm_traits=[LLMRubricTrait(name="accuracy", description="Answer accuracy", kind="boolean")])
 
         task.add_rubric(rubric, step_id="step1")
 
@@ -193,33 +193,33 @@ class TestTaskEvalRubrics:
     def test_merge_rubrics_single(self) -> None:
         """Test merging single rubric."""
         task = TaskEval()
-        rubric = Rubric(traits=[RubricTrait(name="clarity", description="Answer clarity", kind="score")])
+        rubric = Rubric(llm_traits=[LLMRubricTrait(name="clarity", description="Answer clarity", kind="score")])
 
         result = task._merge_rubrics([rubric])
 
         assert result is not None
-        assert len(result.traits) == 1
-        assert result.traits[0].name == "clarity"
+        assert len(result.llm_traits) == 1
+        assert result.llm_traits[0].name == "clarity"
 
     def test_merge_rubrics_multiple(self) -> None:
         """Test merging multiple rubrics."""
         task = TaskEval()
-        rubric1 = Rubric(traits=[RubricTrait(name="clarity", description="Answer clarity", kind="score")])
-        rubric2 = Rubric(traits=[RubricTrait(name="accuracy", description="Answer accuracy", kind="boolean")])
+        rubric1 = Rubric(llm_traits=[LLMRubricTrait(name="clarity", description="Answer clarity", kind="score")])
+        rubric2 = Rubric(llm_traits=[LLMRubricTrait(name="accuracy", description="Answer accuracy", kind="boolean")])
 
         result = task._merge_rubrics([rubric1, rubric2])
 
         assert result is not None
-        assert len(result.traits) == 2
-        trait_names = [trait.name for trait in result.traits]
+        assert len(result.llm_traits) == 2
+        trait_names = [trait.name for trait in result.llm_traits]
         assert "clarity" in trait_names
         assert "accuracy" in trait_names
 
     def test_merge_rubrics_duplicate_names(self) -> None:
         """Test merging rubrics with duplicate trait names raises an error."""
         task = TaskEval()
-        rubric1 = Rubric(traits=[RubricTrait(name="clarity", description="First clarity", kind="score")])
-        rubric2 = Rubric(traits=[RubricTrait(name="clarity", description="Second clarity", kind="boolean")])
+        rubric1 = Rubric(llm_traits=[LLMRubricTrait(name="clarity", description="First clarity", kind="score")])
+        rubric2 = Rubric(llm_traits=[LLMRubricTrait(name="clarity", description="Second clarity", kind="boolean")])
 
         # Should raise ValueError due to duplicate trait names
         import pytest
@@ -364,9 +364,9 @@ class Answer(BaseAnswer):
         )
         task.add_rubric(
             Rubric(
-                traits=[
-                    RubricTrait(name="accuracy", description="Is answer accurate", kind="boolean"),
-                    RubricTrait(
+                llm_traits=[
+                    LLMRubricTrait(name="accuracy", description="Is answer accurate", kind="boolean"),
+                    LLMRubricTrait(
                         name="clarity", description="Answer clarity 1-5", kind="score", min_score=1, max_score=5
                     ),
                 ]
@@ -438,9 +438,11 @@ class Answer(BaseAnswer):
         )
         task.add_rubric(
             Rubric(
-                traits=[
-                    RubricTrait(name="accuracy", description="Answer accuracy", kind="boolean"),
-                    RubricTrait(name="clarity", description="Answer clarity", kind="score", min_score=1, max_score=5),
+                llm_traits=[
+                    LLMRubricTrait(name="accuracy", description="Answer accuracy", kind="boolean"),
+                    LLMRubricTrait(
+                        name="clarity", description="Answer clarity", kind="score", min_score=1, max_score=5
+                    ),
                 ]
             ),
             step_id="step1",
@@ -618,12 +620,12 @@ class Answer(BaseAnswer):
         task.add_question(question)
 
         # Add rubric
-        from karenina.schemas.domain import Rubric, RubricTrait
+        from karenina.schemas.domain import LLMRubricTrait, Rubric
 
         rubric = Rubric(
-            traits=[
-                RubricTrait(name="accuracy", description="Is the answer accurate?", kind="boolean"),
-                RubricTrait(name="clarity", description="Rate clarity 1-5", kind="score", min_score=1, max_score=5),
+            llm_traits=[
+                LLMRubricTrait(name="accuracy", description="Is the answer accurate?", kind="boolean"),
+                LLMRubricTrait(name="clarity", description="Rate clarity 1-5", kind="score", min_score=1, max_score=5),
             ]
         )
         task.add_rubric(rubric)
@@ -683,11 +685,11 @@ class Answer(BaseAnswer):
         task.add_question(question)
 
         # Add rubric
-        from karenina.schemas.domain import Rubric, RubricTrait
+        from karenina.schemas.domain import LLMRubricTrait, Rubric
 
         rubric = Rubric(
-            traits=[
-                RubricTrait(name="correctness", description="Is the math correct?", kind="boolean"),
+            llm_traits=[
+                LLMRubricTrait(name="correctness", description="Is the math correct?", kind="boolean"),
             ]
         )
         task.add_rubric(rubric)
@@ -729,16 +731,16 @@ class Answer(BaseAnswer):
         task = TaskEval(task_id="conflict_test")
 
         # Add two rubrics with the same trait name
-        from karenina.schemas.domain import Rubric, RubricTrait
+        from karenina.schemas.domain import LLMRubricTrait, Rubric
 
         rubric1 = Rubric(
-            traits=[
-                RubricTrait(name="accuracy", description="Is the answer accurate?", kind="boolean"),
+            llm_traits=[
+                LLMRubricTrait(name="accuracy", description="Is the answer accurate?", kind="boolean"),
             ]
         )
         rubric2 = Rubric(
-            traits=[
-                RubricTrait(
+            llm_traits=[
+                LLMRubricTrait(
                     name="accuracy", description="Different accuracy definition", kind="score", min_score=1, max_score=5
                 ),
             ]
@@ -777,12 +779,12 @@ class Answer(BaseAnswer):
         task = TaskEval(task_id="template_extraction_test")
 
         # Add standalone rubric traits
-        from karenina.schemas.domain import Rubric, RubricTrait
+        from karenina.schemas.domain import LLMRubricTrait, Rubric
 
         rubric = Rubric(
-            traits=[
-                RubricTrait(name="completeness", description="Is the answer complete?", kind="boolean"),
-                RubricTrait(name="quality", description="Quality score", kind="score", min_score=1, max_score=5),
+            llm_traits=[
+                LLMRubricTrait(name="completeness", description="Is the answer complete?", kind="boolean"),
+                LLMRubricTrait(name="quality", description="Quality score", kind="score", min_score=1, max_score=5),
             ]
         )
         task.add_rubric(rubric)
@@ -846,11 +848,11 @@ class Answer(BaseAnswer):
         task = TaskEval(task_id="multi_question_test")
 
         # Add a standalone rubric
-        from karenina.schemas.domain import Rubric, RubricTrait
+        from karenina.schemas.domain import LLMRubricTrait, Rubric
 
         rubric = Rubric(
-            traits=[
-                RubricTrait(name="completeness", description="Completeness check", kind="boolean"),
+            llm_traits=[
+                LLMRubricTrait(name="completeness", description="Completeness check", kind="boolean"),
             ]
         )
         task.add_rubric(rubric)

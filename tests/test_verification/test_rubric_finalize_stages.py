@@ -8,7 +8,7 @@ from karenina.benchmark.verification.stage import VerificationContext
 from karenina.benchmark.verification.stages.finalize_result import FinalizeResultStage
 from karenina.benchmark.verification.stages.rubric_evaluation import RubricEvaluationStage
 from karenina.schemas import VerificationResult
-from karenina.schemas.domain import BaseAnswer, MetricRubricTrait
+from karenina.schemas.domain import BaseAnswer
 
 
 class MockAnswer(BaseAnswer):
@@ -44,7 +44,7 @@ class TestRubricEvaluationStage:
         """Test that stage skips when rubric has no traits."""
         from karenina.schemas.domain import Rubric
 
-        basic_context.rubric = Rubric(traits=[])
+        basic_context.rubric = Rubric(llm_traits=[])
 
         stage = RubricEvaluationStage()
         assert stage.should_run(basic_context) is False
@@ -84,7 +84,7 @@ class TestRubricEvaluationStage:
         basic_context: VerificationContext,
     ) -> None:
         """Test evaluation of metric traits."""
-        from karenina.schemas.domain import Rubric
+        from karenina.schemas.domain import MetricRubricTrait, Rubric
 
         # Create rubric with metric traits
         metric_trait = MetricRubricTrait(
@@ -334,6 +334,18 @@ class TestFinalizeResultStage:
 
         # Set up rubric evaluation
         basic_context.set_result_field("verify_rubric", {"Clarity": 5, "Accuracy": 4})  # Rubric ran
+        basic_context.set_result_field(
+            "evaluation_rubric",
+            {
+                "llm_traits": [
+                    {"name": "Clarity", "kind": "score", "min_score": 1, "max_score": 5},
+                    {"name": "Accuracy", "kind": "score", "min_score": 1, "max_score": 5},
+                ],
+                "regex_traits": [],
+                "callable_traits": [],
+                "metric_traits": [],
+            },
+        )
 
         stage = FinalizeResultStage()
         stage.execute(basic_context)
@@ -353,6 +365,18 @@ class TestFinalizeResultStage:
         basic_context.set_artifact("parsing_model_str", "openai/gpt-4.1-mini")
         basic_context.set_result_field("raw_llm_response", "The answer is comprehensive...")
         basic_context.set_result_field("verify_rubric", {"Clarity": 5, "Depth": 4})  # Rubric ran
+        basic_context.set_result_field(
+            "evaluation_rubric",
+            {
+                "llm_traits": [
+                    {"name": "Clarity", "kind": "score", "min_score": 1, "max_score": 5},
+                    {"name": "Depth", "kind": "score", "min_score": 1, "max_score": 5},
+                ],
+                "regex_traits": [],
+                "callable_traits": [],
+                "metric_traits": [],
+            },
+        )
         # No field_verification_result artifact (template stages skipped)
         # No verify_result set (template verification not performed)
 

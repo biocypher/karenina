@@ -28,7 +28,7 @@ import time
 from io import StringIO
 from typing import Any, Protocol
 
-from ..schemas.workflow import VerificationJob, VerificationResult
+from ..schemas.workflow import VerificationJob, VerificationResultSet
 
 
 class HasTraitNames(Protocol):
@@ -112,18 +112,18 @@ def get_karenina_version() -> str:
         return "unknown"
 
 
-def export_verification_results_json(job: VerificationJob, results: dict[str, VerificationResult]) -> str:
+def export_verification_results_json(job: VerificationJob, results: VerificationResultSet) -> str:
     """
     Export verification results to JSON format with metadata.
 
     Args:
         job: The verification job
-        results: Dictionary of verification results
+        results: VerificationResultSet containing all verification results
 
     Returns:
         JSON string with results and metadata
     """
-    export_data = {
+    export_data: dict[str, Any] = {
         "metadata": {
             "export_timestamp": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
             "karenina_version": get_karenina_version(),
@@ -151,11 +151,11 @@ def export_verification_results_json(job: VerificationJob, results: dict[str, Ve
                 "total_duration": job.end_time - job.start_time if job.end_time and job.start_time else None,
             },
         },
-        "results": {},
+        "results": [],
     }
 
     # Convert results to serializable format with nested structure
-    for question_id, result in results.items():
+    for result in results:
         # Use Pydantic's model_dump to serialize nested structure, then apply custom serialization to verify_result
         result_dict = result.model_dump(mode="json")
 
@@ -167,20 +167,20 @@ def export_verification_results_json(job: VerificationJob, results: dict[str, Ve
                 result.template.verify_granular_result
             )
 
-        export_data["results"][question_id] = result_dict
+        export_data["results"].append(result_dict)
 
     return json.dumps(export_data, indent=2, ensure_ascii=False)
 
 
 def export_verification_results_csv(
-    job: VerificationJob, results: dict[str, VerificationResult], global_rubric: HasTraitNames | None = None
+    job: VerificationJob, results: VerificationResultSet, global_rubric: HasTraitNames | None = None
 ) -> str:
     """
     Export verification results to CSV format with rubric consolidation.
 
     Args:
         job: The verification job
-        results: Dictionary of verification results
+        results: VerificationResultSet containing all verification results
         global_rubric: Optional global rubric object that implements HasTraitNames protocol
                       for distinguishing global vs question-specific traits. If None,
                       all rubric traits will be consolidated into question_specific_rubrics.
@@ -195,7 +195,7 @@ def export_verification_results_csv(
         serialization, logging warnings and continuing with fallback values.
     """
     # Input validation
-    if not results:
+    if not results or len(results) == 0:
         logger.warning("No results provided for CSV export. Generating empty CSV.")
         # Return minimal CSV with headers only
         output = StringIO()
@@ -215,9 +215,6 @@ def export_verification_results_csv(
         )
         return output.getvalue()
 
-    if not isinstance(results, dict):
-        raise ValueError(f"Results must be a dictionary, got {type(results).__name__}")
-
     # Log export summary
     logger.info("Starting CSV export for %d results", len(results))
 
@@ -226,12 +223,13 @@ def export_verification_results_csv(
     # Collect all unique rubric trait names across all results with validation
     all_rubric_traits: set[str] = set()
     invalid_trait_count = 0
-    for result in results.values():
+    for result in results:
         if result.rubric:
-            # Collect from all three trait score dicts (llm, manual, metric)
+            # Collect from all trait score dicts (llm, regex, callable, metric)
             for trait_dict in [
                 result.rubric.llm_trait_scores,
-                result.rubric.manual_trait_scores,
+                result.rubric.regex_trait_scores,
+                result.rubric.callable_trait_scores,
                 result.rubric.metric_trait_scores,
             ]:
                 if trait_dict:
@@ -380,7 +378,7 @@ def export_verification_results_csv(
     karenina_version = get_karenina_version()
 
     # Write data rows
-    for _question_id, result in results.items():
+    for result in results:
         # Access fields from nested structure
         metadata = result.metadata
         template = result.template
@@ -480,14 +478,16 @@ def export_verification_results_csv(
             "job_id": job.job_id,
         }
 
-        # Add global rubric trait values from all three trait score dicts
+        # Add global rubric trait values from all trait score dicts
         if rubric:
             # Merge all trait scores into a unified dict for CSV export
             merged_traits: dict[str, Any] = {}
             if rubric.llm_trait_scores:
                 merged_traits.update(rubric.llm_trait_scores)
-            if rubric.manual_trait_scores:
-                merged_traits.update(rubric.manual_trait_scores)
+            if rubric.regex_trait_scores:
+                merged_traits.update(rubric.regex_trait_scores)
+            if rubric.callable_trait_scores:
+                merged_traits.update(rubric.callable_trait_scores)
             if rubric.metric_trait_scores:
                 merged_traits.update(rubric.metric_trait_scores)
 

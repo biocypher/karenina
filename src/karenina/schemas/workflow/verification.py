@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -12,6 +12,9 @@ from .models import (
     FewShotConfig,
     ModelConfig,
 )
+
+if TYPE_CHECKING:
+    from .verification_result_set import VerificationResultSet
 
 # Default system prompts for answering and parsing models
 DEFAULT_ANSWERING_SYSTEM_PROMPT = "You are an expert assistant. Answer the question accurately and concisely."
@@ -33,6 +36,9 @@ class VerificationConfig(BaseModel):
     # Rubric evaluation settings
     rubric_enabled: bool = False
     rubric_trait_names: list[str] | None = None  # Optional filter for specific traits
+    rubric_evaluation_strategy: Literal["batch", "sequential"] | None = "batch"
+    # - "batch": Evaluate all LLM traits in a single call (efficient, requires JSON output)
+    # - "sequential": Evaluate traits one-by-one (reliable, more expensive)
 
     # Evaluation mode: determines which stages run in the verification pipeline
     evaluation_mode: Literal["template_only", "template_and_rubric", "rubric_only"] = "template_only"
@@ -742,10 +748,12 @@ class VerificationResultRubric(BaseModel):
     """Rubric evaluation fields with split trait types."""
 
     rubric_evaluation_performed: bool = False  # Whether rubric evaluation was executed
+    rubric_evaluation_strategy: str | None = None  # Strategy used: "batch" or "sequential"
 
     # Split trait scores by type (replaces old verify_rubric dict)
     llm_trait_scores: dict[str, int | bool] | None = None  # LLM-evaluated traits (1-5 scale or binary)
-    manual_trait_scores: dict[str, bool] | None = None  # Manual/regex traits (boolean)
+    regex_trait_scores: dict[str, bool] | None = None  # Regex-based traits (boolean)
+    callable_trait_scores: dict[str, bool | int] | None = None  # Callable-based traits (boolean or score)
     metric_trait_scores: dict[str, dict[str, float]] | None = None  # Metric traits with nested metrics dict
 
     evaluation_rubric: dict[str, Any] | None = None  # The merged rubric used for evaluation
@@ -771,8 +779,10 @@ class VerificationResultRubric(BaseModel):
 
         if self.llm_trait_scores:
             scores.update(self.llm_trait_scores)
-        if self.manual_trait_scores:
-            scores.update(self.manual_trait_scores)
+        if self.regex_trait_scores:
+            scores.update(self.regex_trait_scores)
+        if self.callable_trait_scores:
+            scores.update(self.callable_trait_scores)
         if self.metric_trait_scores:
             scores.update(self.metric_trait_scores)
 
@@ -786,13 +796,15 @@ class VerificationResultRubric(BaseModel):
             name: The trait name to search for
 
         Returns:
-            tuple: (value, trait_type) where trait_type is "llm", "manual", or "metric"
+            tuple: (value, trait_type) where trait_type is "llm", "regex", "callable", or "metric"
             None: If the trait is not found
         """
         if self.llm_trait_scores and name in self.llm_trait_scores:
             return (self.llm_trait_scores[name], "llm")
-        if self.manual_trait_scores and name in self.manual_trait_scores:
-            return (self.manual_trait_scores[name], "manual")
+        if self.regex_trait_scores and name in self.regex_trait_scores:
+            return (self.regex_trait_scores[name], "regex")
+        if self.callable_trait_scores and name in self.callable_trait_scores:
+            return (self.callable_trait_scores[name], "callable")
         if self.metric_trait_scores and name in self.metric_trait_scores:
             return (self.metric_trait_scores[name], "metric")
         return None
@@ -1111,7 +1123,7 @@ class VerificationJob(BaseModel):
     end_time: float | None = None
 
     # Results
-    results: dict[str, VerificationResult] = Field(default_factory=dict)
+    result_set: "VerificationResultSet | None" = None  # Unified verification result container
     error_message: str | None = None
 
     def task_started(self, question_id: str) -> None:

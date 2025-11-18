@@ -107,21 +107,31 @@ Rubric container with multiple evaluation traits.
       heading_level: 4
       show_root_heading: false
 
-### RubricTrait
+### LLMRubricTrait
 
 LLM-based evaluation trait (score or binary).
 
-::: karenina.schemas.RubricTrait
+::: karenina.schemas.LLMRubricTrait
     options:
       show_source: false
       heading_level: 4
       show_root_heading: false
 
-### ManualRubricTrait
+### RegexTrait
 
-Regex-based evaluation trait.
+Regex pattern-matching evaluation trait.
 
-::: karenina.schemas.ManualRubricTrait
+::: karenina.schemas.RegexTrait
+    options:
+      show_source: false
+      heading_level: 4
+      show_root_heading: false
+
+### CallableTrait
+
+Custom Python function-based evaluation trait.
+
+::: karenina.schemas.CallableTrait
     options:
       show_source: false
       heading_level: 4

@@ -9,7 +9,7 @@ This module tests:
 import pytest
 from pydantic import ValidationError
 
-from karenina.schemas import MetricRubricTrait, Rubric, RubricTrait
+from karenina.schemas import LLMRubricTrait, MetricRubricTrait, Rubric
 
 
 class TestMetricRubricTraitTPOnlyMode:
@@ -271,8 +271,7 @@ class TestRubricIntegration:
         )
 
         rubric = Rubric(
-            traits=[],
-            manual_traits=[],
+            llm_traits=[],
             metric_traits=[trait1],
         )
 
@@ -291,8 +290,7 @@ class TestRubricIntegration:
         )
 
         rubric = Rubric(
-            traits=[],
-            manual_traits=[],
+            llm_traits=[],
             metric_traits=[trait1],
         )
 
@@ -344,7 +342,7 @@ class TestRubricIntegration:
 
     def test_get_trait_names_includes_metric_traits(self):
         """Test that get_trait_names() includes metric traits."""
-        llm_trait = RubricTrait(name="llm_trait", kind="boolean")
+        llm_trait = LLMRubricTrait(name="llm_trait", kind="boolean")
         metric_trait = MetricRubricTrait(
             name="metric_trait",
             evaluation_mode="tp_only",
@@ -352,7 +350,7 @@ class TestRubricIntegration:
             tp_instructions=["correct"],
         )
 
-        rubric = Rubric(traits=[llm_trait], metric_traits=[metric_trait])
+        rubric = Rubric(llm_traits=[llm_trait], metric_traits=[metric_trait])
         all_names = rubric.get_trait_names()
 
         assert "llm_trait" in all_names
@@ -362,7 +360,7 @@ class TestRubricIntegration:
     def test_rubric_validation_unique_trait_names_across_types(self):
         """Test that trait names must be unique across LLM, manual, and metric traits."""
         # This test documents expected behavior - the validation happens at the API level
-        llm_trait = RubricTrait(name="same_name", kind="boolean")
+        llm_trait = LLMRubricTrait(name="same_name", kind="boolean")
         metric_trait = MetricRubricTrait(
             name="same_name",  # Duplicate name
             evaluation_mode="tp_only",
@@ -371,7 +369,7 @@ class TestRubricIntegration:
         )
 
         # The Rubric model itself doesn't enforce uniqueness, but the API does
-        rubric = Rubric(traits=[llm_trait], metric_traits=[metric_trait])
+        rubric = Rubric(llm_traits=[llm_trait], metric_traits=[metric_trait])
 
         # Both traits are present - uniqueness is enforced at API level
         assert len(rubric.get_trait_names()) == 2  # Counts both, even with duplicate name

@@ -144,22 +144,26 @@ def save_benchmark(
             template_id = generate_template_id(answer_template)
 
             # Serialize question rubric to dict format for database storage
-            # The benchmark cache stores rubrics as list of Pydantic RubricTrait/ManualRubricTrait objects,
-            # but the database expects a JSON dict format with separate 'traits' and 'manual_traits' lists
+            # The benchmark cache stores rubrics as list of trait objects,
+            # but the database expects a JSON dict format with separate lists by type
             question_rubric_dict = None
             if q_data.get("question_rubric"):
                 try:
-                    from ..schemas.domain import ManualRubricTrait, RubricTrait
+                    from ..schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
 
                     rubric_traits = q_data["question_rubric"]
                     if isinstance(rubric_traits, list) and len(rubric_traits) > 0:
                         # Separate traits by type
-                        llm_traits = [t for t in rubric_traits if isinstance(t, RubricTrait)]
-                        manual_traits = [t for t in rubric_traits if isinstance(t, ManualRubricTrait)]
+                        llm_traits = [t for t in rubric_traits if isinstance(t, LLMRubricTrait)]
+                        regex_traits = [t for t in rubric_traits if isinstance(t, RegexTrait)]
+                        callable_traits = [t for t in rubric_traits if isinstance(t, CallableTrait)]
+                        metric_traits = [t for t in rubric_traits if isinstance(t, MetricRubricTrait)]
 
                         question_rubric_dict = {
                             "traits": [trait.model_dump() for trait in llm_traits],
-                            "manual_traits": [trait.model_dump() for trait in manual_traits],
+                            "regex_traits": [trait.model_dump() for trait in regex_traits],
+                            "callable_traits": [trait.model_dump() for trait in callable_traits],
+                            "metric_traits": [trait.model_dump() for trait in metric_traits],
                         }
                 except Exception as e:
                     # Log warning but continue - rubric is optional
@@ -341,16 +345,18 @@ def load_benchmark(
             # Set question-specific rubric if present
             if bq.question_rubric:
                 # Convert JSON rubric back to Rubric object
-                from ..schemas.domain import ManualRubricTrait, Rubric, RubricTrait
+                from ..schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
 
                 traits = []
-                manual_traits = []
+                regex_traits = []
+                callable_traits = []
+                metric_traits = []
 
                 # Deserialize LLM-based traits
                 for trait_data in bq.question_rubric.get("traits", []):
                     # Determine kind from trait data
                     kind = trait_data.get("kind", "score")
-                    trait = RubricTrait(
+                    trait = LLMRubricTrait(
                         name=trait_data["name"],
                         description=trait_data.get("description"),
                         kind=kind,
@@ -359,20 +365,57 @@ def load_benchmark(
                     )
                     traits.append(trait)
 
-                # Deserialize manual (regex) traits
-                for manual_trait_data in bq.question_rubric.get("manual_traits", []):
-                    manual_trait = ManualRubricTrait(
-                        name=manual_trait_data["name"],
-                        description=manual_trait_data.get("description"),
-                        pattern=manual_trait_data.get("pattern"),
-                        callable_name=manual_trait_data.get("callable_name"),
-                        case_sensitive=manual_trait_data.get("case_sensitive", True),
-                        invert_result=manual_trait_data.get("invert_result", False),
+                # Deserialize regex traits
+                for regex_trait_data in bq.question_rubric.get("regex_traits", []):
+                    regex_trait = RegexTrait(
+                        name=regex_trait_data["name"],
+                        description=regex_trait_data.get("description"),
+                        pattern=regex_trait_data.get("pattern", ".*"),
+                        case_sensitive=regex_trait_data.get("case_sensitive", True),
+                        invert_result=regex_trait_data.get("invert_result", False),
                     )
-                    manual_traits.append(manual_trait)
+                    regex_traits.append(regex_trait)
 
-                if traits or manual_traits:
-                    rubric = Rubric(traits=traits, manual_traits=manual_traits)
+                # Deserialize callable traits
+                for callable_trait_data in bq.question_rubric.get("callable_traits", []):
+                    callable_trait = CallableTrait(
+                        name=callable_trait_data["name"],
+                        description=callable_trait_data.get("description"),
+                        kind=callable_trait_data["kind"],
+                        callable_code=callable_trait_data["callable_code"],
+                        min_score=callable_trait_data.get("min_score"),
+                        max_score=callable_trait_data.get("max_score"),
+                        invert_result=callable_trait_data.get("invert_result", False),
+                    )
+                    callable_traits.append(callable_trait)
+
+                # Deserialize metric traits
+                for metric_trait_data in bq.question_rubric.get("metric_traits", []):
+                    metric_trait = MetricRubricTrait(
+                        name=metric_trait_data["name"],
+                        description=metric_trait_data.get("description"),
+                        evaluation_mode=metric_trait_data.get("evaluation_mode", "tp_only"),
+                        metrics=metric_trait_data.get("metrics", []),
+                        tp_instructions=metric_trait_data.get("tp_instructions", []),
+                        tn_instructions=metric_trait_data.get("tn_instructions", []),
+                        repeated_extraction=metric_trait_data.get("repeated_extraction", True),
+                    )
+                    metric_traits.append(metric_trait)
+
+                # Check for unsupported old 'manual_traits' key
+                if "manual_traits" in bq.question_rubric:
+                    raise ValueError(
+                        f"Question {bq.question_id} contains unsupported 'manual_traits'. "
+                        "Please migrate your database using the migration script."
+                    )
+
+                if traits or regex_traits or callable_traits or metric_traits:
+                    rubric = Rubric(
+                        llm_traits=traits,
+                        regex_traits=regex_traits,
+                        callable_traits=callable_traits,
+                        metric_traits=metric_traits,
+                    )
                     benchmark.set_question_rubric(bq.question_id, rubric)
 
     if load_config:
@@ -428,10 +471,10 @@ def save_verification_results(
                 run_name=run_name or f"run_{run_id[:8]}",
                 status="completed",
                 config=config or {},
-                total_questions=len({r.question_id for r in results.values()}),
+                total_questions=len({r.metadata.question_id for r in results.values()}),
                 processed_count=len(results),
-                successful_count=sum(1 for r in results.values() if r.completed_without_errors),
-                failed_count=sum(1 for r in results.values() if not r.completed_without_errors),
+                successful_count=sum(1 for r in results.values() if r.metadata.completed_without_errors),
+                failed_count=sum(1 for r in results.values() if not r.metadata.completed_without_errors),
                 start_time=None,  # These would come from config
                 end_time=None,
             )
@@ -441,8 +484,8 @@ def save_verification_results(
         else:
             # Update existing run
             existing_run.processed_count = len(results)
-            existing_run.successful_count = sum(1 for r in results.values() if r.completed_without_errors)
-            existing_run.failed_count = sum(1 for r in results.values() if not r.completed_without_errors)
+            existing_run.successful_count = sum(1 for r in results.values() if r.metadata.completed_without_errors)
+            existing_run.failed_count = sum(1 for r in results.values() if not r.metadata.completed_without_errors)
             # Commit the updated run
             session.commit()
 
@@ -453,10 +496,10 @@ def save_verification_results(
             existing_result = session.execute(
                 select(VerificationResultModel).where(
                     VerificationResultModel.run_id == run_id,
-                    VerificationResultModel.question_id == result.question_id,
+                    VerificationResultModel.question_id == result.metadata.question_id,
                     VerificationResultModel.template_id == result.metadata.template_id,
-                    VerificationResultModel.answering_model == result.answering_model,
-                    VerificationResultModel.parsing_model == result.parsing_model,
+                    VerificationResultModel.answering_model == result.metadata.answering_model,
+                    VerificationResultModel.parsing_model == result.metadata.parsing_model,
                     VerificationResultModel.answering_replicate == result.metadata.answering_replicate,
                     VerificationResultModel.parsing_replicate == result.metadata.parsing_replicate,
                 )
@@ -583,7 +626,8 @@ def _create_result_model(run_id: str, result: "VerificationResult") -> Verificat
         # Rubric fields (with split trait scores)
         rubric_evaluation_performed=rubric.rubric_evaluation_performed if rubric else False,
         llm_trait_scores=rubric.llm_trait_scores if rubric else None,
-        manual_trait_scores=rubric.manual_trait_scores if rubric else None,
+        regex_trait_scores=rubric.regex_trait_scores if rubric else None,
+        callable_trait_scores=rubric.callable_trait_scores if rubric else None,
         metric_trait_scores=rubric.metric_trait_scores if rubric else None,
         evaluation_rubric=rubric.evaluation_rubric if rubric else None,
         metric_trait_confusion_lists=rubric.metric_trait_confusion_lists if rubric else None,
@@ -648,7 +692,8 @@ def _update_result_model(model: VerificationResultModel, result: "VerificationRe
     if rubric:
         model.rubric_evaluation_performed = rubric.rubric_evaluation_performed
         model.llm_trait_scores = rubric.llm_trait_scores
-        model.manual_trait_scores = rubric.manual_trait_scores
+        model.regex_trait_scores = rubric.regex_trait_scores
+        model.callable_trait_scores = rubric.callable_trait_scores
         model.metric_trait_scores = rubric.metric_trait_scores
         model.evaluation_rubric = rubric.evaluation_rubric
         model.metric_trait_confusion_lists = rubric.metric_trait_confusion_lists
@@ -731,7 +776,8 @@ def _model_to_verification_result(model: VerificationResultModel) -> "Verificati
         rubric = VerificationResultRubric(
             rubric_evaluation_performed=model.rubric_evaluation_performed,
             llm_trait_scores=model.llm_trait_scores,
-            manual_trait_scores=model.manual_trait_scores,
+            regex_trait_scores=model.regex_trait_scores,
+            callable_trait_scores=model.callable_trait_scores,
             metric_trait_scores=model.metric_trait_scores,  # Use metric_trait_metrics from DB
             evaluation_rubric=model.evaluation_rubric,
             metric_trait_confusion_lists=model.metric_trait_confusion_lists,

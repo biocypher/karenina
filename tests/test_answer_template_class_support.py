@@ -6,7 +6,7 @@ import pytest
 from pydantic import Field
 
 from karenina.benchmark import Benchmark
-from karenina.schemas.domain import BaseAnswer, Question
+from karenina.schemas.domain import BaseAnswer, LLMRubricTrait, Question
 
 
 class TestAnswerClassSupport:
@@ -385,9 +385,8 @@ class TestAnswerClassIntegration:
         )
 
         # Add question-specific rubric
-        from karenina.schemas.domain import RubricTrait
 
-        rubric_trait = RubricTrait(
+        rubric_trait = LLMRubricTrait(
             name="Quality Assessment",
             description="Assess the quality of the answer",
             kind="score",

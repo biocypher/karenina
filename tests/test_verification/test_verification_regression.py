@@ -7,7 +7,7 @@ import pytest
 
 from karenina.benchmark.verification.runner import run_single_model_verification
 from karenina.schemas import ModelConfig, VerificationResult
-from karenina.schemas.domain import Rubric, RubricTrait
+from karenina.schemas.domain import LLMRubricTrait, Rubric
 
 # Import legacy runner from test fixtures - use sys.path manipulation for test-only code
 _legacy_path = Path(__file__).parent.parent / "fixtures"
@@ -307,8 +307,8 @@ class TestBasicRegression:
 
         # Setup rubric
         rubric = Rubric(
-            traits=[
-                RubricTrait(
+            llm_traits=[
+                LLMRubricTrait(
                     name="Clarity",
                     description="Is the answer clear?",
                     kind="score",
@@ -987,15 +987,15 @@ class TestAdvancedRegression:
         from karenina.schemas.domain import MetricRubricTrait
 
         rubric = Rubric(
-            traits=[
-                RubricTrait(
+            llm_traits=[
+                LLMRubricTrait(
                     name="Clarity",
                     description="Is the answer clear?",
                     kind="score",
                     min_score=1,
                     max_score=10,
                 ),
-                RubricTrait(
+                LLMRubricTrait(
                     name="Completeness",
                     description="Is the answer complete?",
                     kind="score",

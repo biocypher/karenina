@@ -3,11 +3,12 @@
 from .answer import BaseAnswer, capture_answer_source
 from .question import Question
 from .rubric import (
-    ManualRubricTrait,
+    CallableTrait,
+    LLMRubricTrait,
     MetricRubricTrait,
+    RegexTrait,
     Rubric,
     RubricEvaluation,
-    RubricTrait,
     TraitKind,
     merge_rubrics,
 )
@@ -17,8 +18,9 @@ __all__ = [
     "capture_answer_source",
     "Question",
     "Rubric",
-    "RubricTrait",
-    "ManualRubricTrait",
+    "LLMRubricTrait",
+    "RegexTrait",
+    "CallableTrait",
     "MetricRubricTrait",
     "RubricEvaluation",
     "TraitKind",

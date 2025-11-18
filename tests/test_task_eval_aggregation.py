@@ -32,11 +32,11 @@ def test_aggregate_rubric_results_all_trait_types() -> None:
             rubric=VerificationResultRubric(
                 rubric_evaluation_performed=True,
                 llm_trait_scores={"clarity": 4, "analysis_quality": 3},
-                manual_trait_scores={"has_citation": True},
+                regex_trait_scores={"has_citation": True},
                 metric_trait_scores={"entity_extraction": {"precision": 0.8, "recall": 0.9, "f1": 0.85}},
                 metric_trait_confusion_lists={"entity_extraction": {"tp": ["Alice"], "tn": [], "fp": [], "fn": []}},
                 evaluation_rubric={
-                    "traits": [
+                    "llm_traits": [
                         {"name": "clarity", "description": "Clarity", "kind": "score", "min_score": 1, "max_score": 5},
                         {
                             "name": "analysis_quality",
@@ -46,7 +46,7 @@ def test_aggregate_rubric_results_all_trait_types() -> None:
                             "max_score": 5,
                         },
                     ],
-                    "manual_traits": [
+                    "regex_traits": [
                         {
                             "name": "has_citation",
                             "description": "Has citation",
@@ -56,6 +56,7 @@ def test_aggregate_rubric_results_all_trait_types() -> None:
                             "invert_result": False,
                         }
                     ],
+                    "callable_traits": [],
                     "metric_traits": [],
                 },
             ),
@@ -77,11 +78,11 @@ def test_aggregate_rubric_results_all_trait_types() -> None:
             rubric=VerificationResultRubric(
                 rubric_evaluation_performed=True,
                 llm_trait_scores={"clarity": 5, "analysis_quality": 4},
-                manual_trait_scores={"has_citation": True},
+                regex_trait_scores={"has_citation": True},
                 metric_trait_scores={"entity_extraction": {"precision": 0.9, "recall": 0.95, "f1": 0.925}},
                 metric_trait_confusion_lists={"entity_extraction": {"tp": ["Bob"], "tn": [], "fp": [], "fn": []}},
                 evaluation_rubric={
-                    "traits": [
+                    "llm_traits": [
                         {"name": "clarity", "description": "Clarity", "kind": "score", "min_score": 1, "max_score": 5},
                         {
                             "name": "analysis_quality",
@@ -91,7 +92,7 @@ def test_aggregate_rubric_results_all_trait_types() -> None:
                             "max_score": 5,
                         },
                     ],
-                    "manual_traits": [
+                    "regex_traits": [
                         {
                             "name": "has_citation",
                             "description": "Has citation",
@@ -101,6 +102,7 @@ def test_aggregate_rubric_results_all_trait_types() -> None:
                             "invert_result": False,
                         }
                     ],
+                    "callable_traits": [],
                     "metric_traits": [],
                 },
             ),
@@ -122,11 +124,11 @@ def test_aggregate_rubric_results_all_trait_types() -> None:
             rubric=VerificationResultRubric(
                 rubric_evaluation_performed=True,
                 llm_trait_scores={"clarity": 4, "analysis_quality": 2},
-                manual_trait_scores={"has_citation": False},
+                regex_trait_scores={"has_citation": False},
                 metric_trait_scores={"entity_extraction": {"precision": 0.85, "recall": 0.92, "f1": 0.88}},
                 metric_trait_confusion_lists={"entity_extraction": {"tp": ["Charlie"], "tn": [], "fp": [], "fn": []}},
                 evaluation_rubric={
-                    "traits": [
+                    "llm_traits": [
                         {"name": "clarity", "description": "Clarity", "kind": "score", "min_score": 1, "max_score": 5},
                         {
                             "name": "analysis_quality",
@@ -136,7 +138,7 @@ def test_aggregate_rubric_results_all_trait_types() -> None:
                             "max_score": 5,
                         },
                     ],
-                    "manual_traits": [
+                    "regex_traits": [
                         {
                             "name": "has_citation",
                             "description": "Has citation",
@@ -146,6 +148,7 @@ def test_aggregate_rubric_results_all_trait_types() -> None:
                             "invert_result": False,
                         }
                     ],
+                    "callable_traits": [],
                     "metric_traits": [],
                 },
             ),
@@ -158,7 +161,7 @@ def test_aggregate_rubric_results_all_trait_types() -> None:
     # Verify structure
     assert "trace_1" in aggregated
     assert "llm" in aggregated["trace_1"]
-    assert "manual" in aggregated["trace_1"]
+    assert "regex" in aggregated["trace_1"]
     assert "metric" in aggregated["trace_1"]
 
     # Verify LLM scores (averaged)
@@ -166,7 +169,7 @@ def test_aggregate_rubric_results_all_trait_types() -> None:
     assert aggregated["trace_1"]["llm"]["analysis_quality"] == 3.0  # (3+4+2)/3
 
     # Verify manual traits (pass rate)
-    assert aggregated["trace_1"]["manual"]["has_citation"] == 0.6666666666666666  # 2/3
+    assert aggregated["trace_1"]["regex"]["has_citation"] == 0.6666666666666666  # 2/3
 
     # Verify metric traits (averaged, no confusion)
     assert "entity_extraction" in aggregated["trace_1"]["metric"]
@@ -201,12 +204,12 @@ def test_aggregate_rubric_results_single_replicate() -> None:
             rubric=VerificationResultRubric(
                 rubric_evaluation_performed=True,
                 llm_trait_scores={"clarity": 4},
-                manual_trait_scores={"has_citation": True},
+                regex_trait_scores={"has_citation": True},
                 evaluation_rubric={
-                    "traits": [
+                    "llm_traits": [
                         {"name": "clarity", "description": "Clarity", "kind": "score", "min_score": 1, "max_score": 5}
                     ],
-                    "manual_traits": [
+                    "regex_traits": [
                         {
                             "name": "has_citation",
                             "description": "Has citation",
@@ -216,6 +219,7 @@ def test_aggregate_rubric_results_single_replicate() -> None:
                             "invert_result": False,
                         }
                     ],
+                    "callable_traits": [],
                     "metric_traits": [],
                 },
             ),
@@ -227,7 +231,7 @@ def test_aggregate_rubric_results_single_replicate() -> None:
     # Single replicate should be returned as-is
     assert "trace_1" in aggregated
     assert aggregated["trace_1"]["llm"]["clarity"] == 4  # Not converted to float
-    assert aggregated["trace_1"]["manual"]["has_citation"] is True  # Still boolean, not pass rate
+    assert aggregated["trace_1"]["regex"]["has_citation"] is True  # Still boolean, not pass rate
 
 
 def test_aggregate_rubric_results_with_failures() -> None:
@@ -253,10 +257,11 @@ def test_aggregate_rubric_results_with_failures() -> None:
                 rubric_evaluation_performed=True,
                 llm_trait_scores={"clarity": 4},
                 evaluation_rubric={
-                    "traits": [
+                    "llm_traits": [
                         {"name": "clarity", "description": "Clarity", "kind": "score", "min_score": 1, "max_score": 5}
                     ],
-                    "manual_traits": [],
+                    "regex_traits": [],
+                    "callable_traits": [],
                     "metric_traits": [],
                 },
             ),
@@ -298,10 +303,11 @@ def test_aggregate_rubric_results_with_failures() -> None:
                 rubric_evaluation_performed=True,
                 llm_trait_scores={"clarity": 5},
                 evaluation_rubric={
-                    "traits": [
+                    "llm_traits": [
                         {"name": "clarity", "description": "Clarity", "kind": "score", "min_score": 1, "max_score": 5}
                     ],
-                    "manual_traits": [],
+                    "regex_traits": [],
+                    "callable_traits": [],
                     "metric_traits": [],
                 },
             ),
@@ -402,10 +408,11 @@ def test_aggregate_rubric_results_missing_traits() -> None:
                 rubric_evaluation_performed=True,
                 llm_trait_scores={"clarity": 4},
                 evaluation_rubric={
-                    "traits": [
+                    "llm_traits": [
                         {"name": "clarity", "description": "Clarity", "kind": "score", "min_score": 1, "max_score": 5}
                     ],
-                    "manual_traits": [],
+                    "regex_traits": [],
+                    "callable_traits": [],
                     "metric_traits": [],
                 },
             ),
