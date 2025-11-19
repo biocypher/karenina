@@ -86,21 +86,18 @@ def convert_rubric_trait_to_rating(
     # Handle MetricRubricTrait
     if isinstance(trait, MetricRubricTrait):
         # Store metric trait configuration in additionalProperty
+        # Note: Store arrays directly, not as JSON strings - Pydantic will serialize correctly
         additional_props = [
-            SchemaOrgPropertyValue(name="metrics", value=json.dumps(trait.metrics)),
+            SchemaOrgPropertyValue(name="metrics", value=trait.metrics),
             SchemaOrgPropertyValue(name="repeated_extraction", value=trait.repeated_extraction),
             SchemaOrgPropertyValue(name="evaluation_mode", value=trait.evaluation_mode),
         ]
 
         # Add instruction lists (only if non-empty)
         if trait.tp_instructions:
-            additional_props.append(
-                SchemaOrgPropertyValue(name="tp_instructions", value=json.dumps(trait.tp_instructions))
-            )
+            additional_props.append(SchemaOrgPropertyValue(name="tp_instructions", value=trait.tp_instructions))
         if trait.tn_instructions:
-            additional_props.append(
-                SchemaOrgPropertyValue(name="tn_instructions", value=json.dumps(trait.tn_instructions))
-            )
+            additional_props.append(SchemaOrgPropertyValue(name="tn_instructions", value=trait.tn_instructions))
 
         return SchemaOrgRating(
             name=trait.name,
