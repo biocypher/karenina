@@ -34,6 +34,15 @@ def run_single_model_verification(
     deep_judgment_excerpt_retry_attempts: int = 2,
     deep_judgment_search_enabled: bool = False,
     deep_judgment_search_tool: str | Any = "tavily",
+    # Deep-judgment rubric configuration (NEW)
+    deep_judgment_rubric_mode: str = "disabled",
+    deep_judgment_rubric_global_excerpts: bool = True,
+    deep_judgment_rubric_config: dict[str, Any] | None = None,
+    deep_judgment_rubric_max_excerpts_default: int = 7,
+    deep_judgment_rubric_fuzzy_match_threshold_default: float = 0.80,
+    deep_judgment_rubric_excerpt_retry_attempts_default: int = 2,
+    deep_judgment_rubric_search_enabled: bool = False,
+    deep_judgment_rubric_search_tool: str | Any = "tavily",
     evaluation_mode: str = "template_only",
     cached_answer_data: dict[str, Any] | None = None,
 ) -> VerificationResult:
@@ -116,6 +125,15 @@ def run_single_model_verification(
         deep_judgment_excerpt_retry_attempts=deep_judgment_excerpt_retry_attempts,
         deep_judgment_search_enabled=deep_judgment_search_enabled,
         deep_judgment_search_tool=deep_judgment_search_tool,
+        # Deep-Judgment Rubric Configuration (NEW)
+        deep_judgment_rubric_mode=deep_judgment_rubric_mode,
+        deep_judgment_rubric_global_excerpts=deep_judgment_rubric_global_excerpts,
+        deep_judgment_rubric_config=deep_judgment_rubric_config,
+        deep_judgment_rubric_max_excerpts_default=deep_judgment_rubric_max_excerpts_default,
+        deep_judgment_rubric_fuzzy_match_threshold_default=deep_judgment_rubric_fuzzy_match_threshold_default,
+        deep_judgment_rubric_excerpt_retry_attempts_default=deep_judgment_rubric_excerpt_retry_attempts_default,
+        deep_judgment_rubric_search_enabled=deep_judgment_rubric_search_enabled,
+        deep_judgment_rubric_search_tool=deep_judgment_rubric_search_tool,
         # Few-Shot Configuration
         few_shot_examples=few_shot_examples,
         # Answer Caching

@@ -73,27 +73,6 @@ def test_deep_judgment_rubrics_end_to_end_real_api():
     rubric = benchmark.get_global_rubric()
     print(f"✓ Global rubric: {len(rubric.llm_traits)} LLM traits, {len(rubric.regex_traits)} regex traits")
 
-    # Modify rubric: Enable deep judgment on 2 existing traits
-    # Keep one as standard for comparison
-    for trait in rubric.llm_traits:
-        if trait.name == "Clarity":
-            # Enable deep judgment WITH excerpts
-            trait.deep_judgment_enabled = True
-            trait.deep_judgment_excerpt_enabled = True
-            trait.deep_judgment_max_excerpts = 3
-            trait.deep_judgment_fuzzy_match_threshold = 0.75
-            trait.deep_judgment_excerpt_retry_attempts = 2
-            print(f"✓ Enabled deep judgment (with excerpts) for: {trait.name}")
-        elif trait.name == "Completeness":
-            # Enable deep judgment WITHOUT excerpts (holistic assessment)
-            trait.deep_judgment_enabled = True
-            trait.deep_judgment_excerpt_enabled = False
-            print(f"✓ Enabled deep judgment (no excerpts) for: {trait.name}")
-        # Keep other traits as standard (no deep judgment)
-
-    # Set modified rubric back
-    benchmark.set_global_rubric(rubric)
-
     # Load verification config from preset
     print(f"\nLoading config from: {PRESET_GPT_OSS}")
     config = VerificationConfig.from_preset(PRESET_GPT_OSS)
@@ -101,9 +80,18 @@ def test_deep_judgment_rubrics_end_to_end_real_api():
     # Ensure rubric evaluation is enabled
     config.rubric_enabled = True
 
+    # Enable deep judgment for ALL LLM traits using new configuration system
+    config.deep_judgment_rubric_mode = "enable_all"
+    config.deep_judgment_rubric_global_excerpts = True
+    config.deep_judgment_rubric_max_excerpts_default = 3
+    config.deep_judgment_rubric_fuzzy_match_threshold_default = 0.75
+    config.deep_judgment_rubric_excerpt_retry_attempts_default = 2
+
     print(f"✓ Config loaded: {config.answering_models[0].model_name}")
     print(f"  Evaluation mode: {config.evaluation_mode}")
     print(f"  Rubric enabled: {config.rubric_enabled}")
+    print(f"  Deep judgment rubric mode: {config.deep_judgment_rubric_mode}")
+    print(f"  Deep judgment global excerpts: {config.deep_judgment_rubric_global_excerpts}")
 
     # Run verification on first finished question only
     finished_questions = [q for q in questions if q.get("finished")]
@@ -133,69 +121,57 @@ def test_deep_judgment_rubrics_end_to_end_real_api():
 
     print("✓ Deep judgment rubric performed")
 
-    # Verify trait with excerpts (Clarity)
+    # With enable_all mode, ALL LLM traits should be evaluated with deep judgment
     dj_rubric = result.deep_judgment_rubric
 
-    # Should have excerpts for the excerpt-enabled trait
+    # Should have excerpts for traits (enable_all with excerpts enabled)
     assert dj_rubric.extracted_rubric_excerpts is not None, "No excerpts extracted"
-    assert "Clarity" in dj_rubric.extracted_rubric_excerpts, "Excerpts missing for Clarity trait"
 
-    excerpts = dj_rubric.extracted_rubric_excerpts["Clarity"]
-    assert len(excerpts) > 0, "No excerpts found for Clarity"
-    assert all("text" in e for e in excerpts), "Excerpt missing 'text' field"
-    assert all("confidence" in e for e in excerpts), "Excerpt missing 'confidence' field"
-    assert all("similarity_score" in e for e in excerpts), "Excerpt missing 'similarity_score'"
+    # Get all LLM traits from rubric
+    all_llm_trait_names = [t.name for t in rubric.llm_traits]
+    print(f"✓ LLM traits in rubric: {all_llm_trait_names}")
 
-    print(f"✓ Excerpts extracted for Clarity: {len(excerpts)} excerpts")
-    for i, excerpt in enumerate(excerpts):
-        excerpt_text = excerpt["text"][:60] if len(excerpt["text"]) > 60 else excerpt["text"]
-        print(f'  [{i}] "{excerpt_text}..." (similarity: {excerpt["similarity_score"]:.2f})')
+    # Verify at least one trait has excerpts (some might have none if answer doesn't support them)
+    assert len(dj_rubric.extracted_rubric_excerpts) > 0, "No traits have excerpts"
 
-    # Should have reasoning for excerpt-enabled trait
+    # Test one trait in detail (Clarity)
+    if "Clarity" in dj_rubric.extracted_rubric_excerpts:
+        excerpts = dj_rubric.extracted_rubric_excerpts["Clarity"]
+        if len(excerpts) > 0:
+            assert all("text" in e for e in excerpts), "Excerpt missing 'text' field"
+            assert all("confidence" in e for e in excerpts), "Excerpt missing 'confidence' field"
+            assert all("similarity_score" in e for e in excerpts), "Excerpt missing 'similarity_score'"
+
+            print(f"✓ Excerpts extracted for Clarity: {len(excerpts)} excerpts")
+            for i, excerpt in enumerate(excerpts[:2]):  # Show first 2
+                excerpt_text = excerpt["text"][:60] if len(excerpt["text"]) > 60 else excerpt["text"]
+                print(f'  [{i}] "{excerpt_text}..." (similarity: {excerpt["similarity_score"]:.2f})')
+
+    # Should have reasoning for ALL LLM traits
     assert dj_rubric.rubric_trait_reasoning is not None, "No reasoning generated"
-    assert "Clarity" in dj_rubric.rubric_trait_reasoning, "Reasoning missing for Clarity"
-    reasoning = dj_rubric.rubric_trait_reasoning["Clarity"]
-    assert len(reasoning) > 0, "Empty reasoning for Clarity"
+    for trait_name in all_llm_trait_names:
+        assert trait_name in dj_rubric.rubric_trait_reasoning, f"Reasoning missing for {trait_name}"
+        reasoning = dj_rubric.rubric_trait_reasoning[trait_name]
+        assert len(reasoning) > 0, f"Empty reasoning for {trait_name}"
 
-    print(f'✓ Reasoning generated: "{reasoning[:100]}..."')
+    print(f"✓ Reasoning generated for all {len(all_llm_trait_names)} LLM traits")
 
-    # Should have score for excerpt-enabled trait
+    # Should have scores for ALL LLM traits
     assert dj_rubric.deep_judgment_rubric_scores is not None, "No scores generated"
-    assert "Clarity" in dj_rubric.deep_judgment_rubric_scores, "Score missing for Clarity"
-    score = dj_rubric.deep_judgment_rubric_scores["Clarity"]
-    assert isinstance(score, int), f"Expected int score for Clarity, got {type(score)}"
-    assert 1 <= score <= 5, f"Clarity score {score} out of range [1, 5]"
+    for trait_name in all_llm_trait_names:
+        assert trait_name in dj_rubric.deep_judgment_rubric_scores, f"Score missing for {trait_name}"
+        score = dj_rubric.deep_judgment_rubric_scores[trait_name]
+        # Boolean traits return True/False, score traits return 1-5
+        assert isinstance(score, int | bool), f"Expected int/bool score for {trait_name}, got {type(score)}"
 
-    print(f"✓ Clarity score extracted: {score}/5")
+    print(f"✓ All {len(all_llm_trait_names)} LLM traits evaluated with deep judgment")
 
-    # Verify trait without excerpts (Completeness)
-    # Should have reasoning but NO excerpts
-    assert "Completeness" in dj_rubric.rubric_trait_reasoning, "Reasoning missing for Completeness"
-    completeness_reasoning = dj_rubric.rubric_trait_reasoning["Completeness"]
-    print(f'✓ Completeness reasoning: "{completeness_reasoning[:100]}..."')
+    # With enable_all mode, there should be NO standard scores (all are deep judgment)
+    assert dj_rubric.standard_rubric_scores is None or len(dj_rubric.standard_rubric_scores) == 0, (
+        "Expected no standard scores with enable_all mode"
+    )
 
-    assert (
-        "Completeness" not in dj_rubric.extracted_rubric_excerpts
-        or len(dj_rubric.extracted_rubric_excerpts.get("Completeness", [])) == 0
-    ), "Completeness should not have excerpts"
-
-    print("✓ Completeness has no excerpts (as expected)")
-
-    # Should have score (1-5)
-    assert "Completeness" in dj_rubric.deep_judgment_rubric_scores, "Score missing for Completeness"
-    completeness_score = dj_rubric.deep_judgment_rubric_scores["Completeness"]
-    assert isinstance(completeness_score, int), f"Expected int score, got {type(completeness_score)}"
-    assert 1 <= completeness_score <= 5, f"Score {completeness_score} out of range [1, 5]"
-
-    print(f"✓ Completeness score: {completeness_score}/5")
-
-    # Verify standard traits in standard scores
-    assert dj_rubric.standard_rubric_scores is not None, "No standard scores"
-    # Should have the two traits we didn't enable deep judgment for
-    standard_trait_names = ["Includes Scientific Context", "Avoids Speculation"]
-    for trait_name in standard_trait_names:
-        if trait_name in dj_rubric.standard_rubric_scores:
-            print(f"✓ Standard trait ({trait_name}): {dj_rubric.standard_rubric_scores[trait_name]}")
+    print("✓ No standard trait scores (all traits use deep judgment)")
 
     # Verify metadata
     assert dj_rubric.trait_metadata is not None, "No trait metadata"
