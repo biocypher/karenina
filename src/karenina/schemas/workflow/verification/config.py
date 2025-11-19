@@ -25,6 +25,21 @@ DEFAULT_PARSING_SYSTEM_PROMPT = (
 )
 
 
+class DeepJudgmentTraitConfig(BaseModel):
+    """
+    Configuration for deep judgment evaluation of a single rubric trait.
+
+    This model validates trait-level deep judgment settings used in custom mode.
+    """
+
+    enabled: bool = True
+    excerpt_enabled: bool = True
+    max_excerpts: int | None = None
+    fuzzy_match_threshold: float | None = None
+    excerpt_retry_attempts: int | None = None
+    search_enabled: bool = False
+
+
 class VerificationConfig(BaseModel):
     """Configuration for verification run with multiple models."""
 
@@ -78,6 +93,27 @@ class VerificationConfig(BaseModel):
     deep_judgment_rubric_fuzzy_match_threshold_default: float = 0.80  # Default fuzzy match threshold for traits
     deep_judgment_rubric_excerpt_retry_attempts_default: int = 2  # Default retry attempts for trait excerpts
     deep_judgment_rubric_search_tool: str | Any = "tavily"  # Search tool for rubric hallucination detection
+
+    # Deep-judgment rubric configuration modes (NEW - runtime control of deep judgment)
+    deep_judgment_rubric_mode: Literal["disabled", "enable_all", "use_checkpoint", "custom"] = "disabled"
+    # - "disabled": Deep judgment is OFF (default, explicit)
+    # - "enable_all": Apply deep judgment to all LLM traits (respects excerpt toggle)
+    # - "use_checkpoint": Use deep judgment settings saved in checkpoint (if available)
+    # - "custom": Use per-trait configuration from deep_judgment_rubric_config
+
+    deep_judgment_rubric_global_excerpts: bool = True  # For enable_all mode: enable/disable excerpts globally
+    deep_judgment_rubric_config: dict[str, Any] | None = None  # For custom mode: nested trait config
+    # Expected structure for custom mode:
+    # {
+    #   "global": {
+    #     "TraitName": {"enabled": True, "excerpt_enabled": True, ...}
+    #   },
+    #   "question_specific": {
+    #     "question-id": {
+    #       "TraitName": {"enabled": True, ...}
+    #     }
+    #   }
+    # }
 
     # Few-shot prompting settings
     few_shot_config: FewShotConfig | None = None  # New flexible configuration

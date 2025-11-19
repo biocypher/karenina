@@ -4,13 +4,137 @@ Evaluates LLM responses against qualitative rubric criteria.
 """
 
 import logging
+from copy import deepcopy
+from typing import Any
 
+from ....schemas.domain import LLMRubricTrait
+from ....schemas.workflow.verification.config import DeepJudgmentTraitConfig
 from ..evaluators.rubric_evaluator import RubricEvaluator
 from ..stage import BaseVerificationStage, VerificationContext
 from ..utils import UsageTracker
 
 # Set up logger
 logger = logging.getLogger(__name__)
+
+
+def resolve_deep_judgment_config_for_trait(
+    trait: LLMRubricTrait,
+    question_id: str | None,
+    config: Any,  # VerificationConfig
+) -> DeepJudgmentTraitConfig:
+    """
+    Resolve deep judgment configuration for a single trait based on mode hierarchy.
+
+    Resolution priority (first match wins):
+    1. disabled mode: Deep judgment OFF
+    2. enable_all mode: Deep judgment ON for all traits (respects global excerpt toggle)
+    3. use_checkpoint mode: Use settings from trait object (loaded from checkpoint)
+    4. custom mode: Look up trait in config dict (question-specific → global → disabled)
+
+    Args:
+        trait: The rubric trait to resolve configuration for
+        question_id: Optional question ID for question-specific config lookup
+        config: VerificationConfig with deep judgment mode and settings
+
+    Returns:
+        DeepJudgmentTraitConfig with resolved settings
+    """
+    mode = getattr(config, "deep_judgment_rubric_mode", "disabled")
+
+    if mode == "disabled":
+        # Explicit: Deep judgment OFF
+        return DeepJudgmentTraitConfig(enabled=False)
+
+    elif mode == "enable_all":
+        # Apply to all traits with global excerpt toggle
+        return DeepJudgmentTraitConfig(
+            enabled=True,
+            excerpt_enabled=getattr(config, "deep_judgment_rubric_global_excerpts", True),
+            max_excerpts=getattr(config, "deep_judgment_rubric_max_excerpts_default", 7),
+            fuzzy_match_threshold=getattr(config, "deep_judgment_rubric_fuzzy_match_threshold_default", 0.80),
+            excerpt_retry_attempts=getattr(config, "deep_judgment_rubric_excerpt_retry_attempts_default", 2),
+            search_enabled=getattr(config, "deep_judgment_rubric_search_enabled", False),
+        )
+
+    elif mode == "use_checkpoint":
+        # Use settings from trait (loaded from checkpoint)
+        return DeepJudgmentTraitConfig(
+            enabled=trait.deep_judgment_enabled,
+            excerpt_enabled=trait.deep_judgment_excerpt_enabled,
+            max_excerpts=trait.deep_judgment_max_excerpts,
+            fuzzy_match_threshold=trait.deep_judgment_fuzzy_match_threshold,
+            excerpt_retry_attempts=trait.deep_judgment_excerpt_retry_attempts,
+            search_enabled=trait.deep_judgment_search_enabled,
+        )
+
+    elif mode == "custom":
+        # Navigate nested config structure
+        config_dict = getattr(config, "deep_judgment_rubric_config", None) or {}
+
+        # Try question-specific first
+        if (
+            question_id
+            and "question_specific" in config_dict
+            and question_id in config_dict["question_specific"]
+            and trait.name in config_dict["question_specific"][question_id]
+        ):
+            trait_config = config_dict["question_specific"][question_id][trait.name]
+            # Validate dict against model
+            return DeepJudgmentTraitConfig(**trait_config)
+
+        # Fall back to global
+        if "global" in config_dict and trait.name in config_dict["global"]:
+            trait_config = config_dict["global"][trait.name]
+            # Validate dict against model
+            return DeepJudgmentTraitConfig(**trait_config)
+
+        # No config found, disabled
+        return DeepJudgmentTraitConfig(enabled=False)
+
+    else:
+        # Unknown mode, default to disabled
+        logger.warning(f"Unknown deep_judgment_rubric_mode: {mode}, defaulting to disabled")
+        return DeepJudgmentTraitConfig(enabled=False)
+
+
+def apply_deep_judgment_config_to_traits(
+    traits: list[LLMRubricTrait],
+    question_id: str | None,
+    config: Any,  # VerificationConfig
+) -> list[LLMRubricTrait]:
+    """
+    Apply resolved deep judgment configuration to a list of traits.
+
+    Creates deep copies of traits with resolved deep judgment settings.
+
+    Args:
+        traits: List of traits to configure
+        question_id: Optional question ID for question-specific config
+        config: VerificationConfig with deep judgment settings
+
+    Returns:
+        List of traits with resolved deep judgment configuration applied
+    """
+    configured_traits = []
+
+    for trait in traits:
+        # Deep copy to avoid modifying original
+        trait_copy = deepcopy(trait)
+
+        # Resolve configuration for this trait
+        dj_config = resolve_deep_judgment_config_for_trait(trait_copy, question_id, config)
+
+        # Apply resolved config to trait
+        trait_copy.deep_judgment_enabled = dj_config.enabled
+        trait_copy.deep_judgment_excerpt_enabled = dj_config.excerpt_enabled
+        trait_copy.deep_judgment_max_excerpts = dj_config.max_excerpts
+        trait_copy.deep_judgment_fuzzy_match_threshold = dj_config.fuzzy_match_threshold
+        trait_copy.deep_judgment_excerpt_retry_attempts = dj_config.excerpt_retry_attempts
+        trait_copy.deep_judgment_search_enabled = dj_config.search_enabled
+
+        configured_traits.append(trait_copy)
+
+    return configured_traits
 
 
 class RubricEvaluationStage(BaseVerificationStage):
@@ -114,13 +238,29 @@ class RubricEvaluationStage(BaseVerificationStage):
             # Create rubric evaluator with parsing model and strategy from config
             evaluator = RubricEvaluator(context.parsing_model, evaluation_strategy=context.rubric_evaluation_strategy)
 
-            # Check if any LLM traits have deep judgment enabled
-            has_deep_judgment_traits = False
+            # Apply deep judgment configuration resolution to LLM traits
+            configured_rubric = rubric
             if rubric is not None and rubric.llm_traits:
-                has_deep_judgment_traits = any(t.deep_judgment_enabled for t in rubric.llm_traits)
+                # Apply configuration resolution to get final trait settings
+                configured_llm_traits = apply_deep_judgment_config_to_traits(
+                    rubric.llm_traits,
+                    context.question_id,
+                    context,  # Pass context which has config fields
+                )
+
+                # Create modified rubric with configured traits
+                from copy import deepcopy
+
+                configured_rubric = deepcopy(rubric)
+                configured_rubric.llm_traits = configured_llm_traits
+
+            # Check if any LLM traits have deep judgment enabled (after configuration)
+            has_deep_judgment_traits = False
+            if configured_rubric is not None and configured_rubric.llm_traits:
+                has_deep_judgment_traits = any(t.deep_judgment_enabled for t in configured_rubric.llm_traits)
 
             # Evaluate rubric traits
-            if rubric is not None:
+            if configured_rubric is not None:
                 if has_deep_judgment_traits:
                     # Route to deep judgment evaluation
                     logger.info(f"Deep judgment enabled for rubric traits in question {context.question_id}")
@@ -148,7 +288,7 @@ class RubricEvaluationStage(BaseVerificationStage):
                     dj_result = evaluator.evaluate_rubric_with_deep_judgment(
                         question=context.question_text,
                         answer=raw_llm_response,
-                        rubric=rubric,
+                        rubric=configured_rubric,  # Use configured rubric with resolved settings
                         config=dj_config,  # Pass config for deep judgment settings
                     )
 
@@ -188,7 +328,7 @@ class RubricEvaluationStage(BaseVerificationStage):
                     rubric_result, usage_metadata_list = evaluator.evaluate_rubric(
                         question=context.question_text,
                         answer=raw_llm_response,
-                        rubric=rubric,
+                        rubric=configured_rubric,  # Use configured rubric
                     )
 
                     # Track rubric evaluation calls
