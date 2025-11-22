@@ -83,8 +83,8 @@ class RubricResults(BaseModel):
             1. Status: completed_without_errors, error
             2. Identification: question_id, template_id, question_text, keywords, replicate
             3. Model Config: answering_model, parsing_model, system_prompts
-            4. Rubric Data: trait_name, trait_score, trait_type (+ metric_name for metrics)
-            5. Rubric Metadata: evaluation_rubric
+            4. Rubric Data: trait_name, trait_score, trait_type, metric_name (for metrics only)
+            5. Confusion Matrix: confusion_tp, confusion_fp, confusion_fn, confusion_tn (for metrics only)
             6. Execution Metadata: execution_time, timestamp, run_name, job_id
             7. Deep Judgment (if include_deep_judgment=True):
                - trait_reasoning: Reasoning text for the trait score
@@ -162,7 +162,58 @@ class RubricResults(BaseModel):
                             self._create_metric_trait_row(result, trait_name, metric_name, metric_score, confusion_data)
                         )
 
-        return pd.DataFrame(rows)
+        df = pd.DataFrame(rows)
+
+        # Reorder columns for consistent structure
+        # Define desired column order
+        desired_order = [
+            # Status
+            "completed_without_errors",
+            "error",
+            # Identification
+            "question_id",
+            "template_id",
+            "question_text",
+            "keywords",
+            "replicate",
+            # Model Config
+            "answering_model",
+            "parsing_model",
+            "answering_system_prompt",
+            "parsing_system_prompt",
+            # Rubric Data
+            "trait_name",
+            "trait_score",
+            "trait_type",
+            "metric_name",
+            # Confusion Matrix (for metric traits)
+            "confusion_tp",
+            "confusion_fp",
+            "confusion_fn",
+            "confusion_tn",
+            # Execution Metadata
+            "execution_time",
+            "timestamp",
+            "run_name",
+            "job_id",
+            # Deep Judgment (if included)
+            "trait_reasoning",
+            "trait_excerpts",
+            "trait_hallucination_risk",
+        ]
+
+        # Only include columns that exist in the DataFrame
+        column_order = [col for col in desired_order if col in df.columns]
+
+        # Columns to explicitly exclude from output
+        excluded_columns = {"evaluation_rubric"}
+
+        # Add any columns that weren't in our desired order (shouldn't happen, but defensive)
+        for col in df.columns:
+            if col not in column_order and col not in excluded_columns:
+                column_order.append(col)
+
+        return df[column_order]
 
     def _create_llm_trait_row(
         self,
@@ -197,8 +248,8 @@ class RubricResults(BaseModel):
             "parsing_system_prompt": metadata.parsing_system_prompt,
             # === Rubric Data ===
             "trait_name": trait_name,
-            "trait_score": trait_score,
             "trait_type": score_type,
+            "trait_score": trait_score,
             # === Rubric Metadata ===
             "evaluation_rubric": rubric.evaluation_rubric if rubric else None,
             # === Execution Metadata ===
@@ -268,8 +319,8 @@ class RubricResults(BaseModel):
             "parsing_system_prompt": metadata.parsing_system_prompt,
             # === Rubric Data ===
             "trait_name": trait_name,
-            "trait_score": trait_score,
             "trait_type": "regex",
+            "trait_score": trait_score,
             # === Rubric Metadata ===
             "evaluation_rubric": rubric.evaluation_rubric if rubric else None,
             # === Execution Metadata ===
@@ -311,8 +362,8 @@ class RubricResults(BaseModel):
             "parsing_system_prompt": metadata.parsing_system_prompt,
             # === Rubric Data ===
             "trait_name": trait_name,
-            "trait_score": trait_score,
             "trait_type": "callable",
+            "trait_score": trait_score,
             # === Rubric Metadata ===
             "evaluation_rubric": rubric.evaluation_rubric if rubric else None,
             # === Execution Metadata ===
@@ -356,9 +407,9 @@ class RubricResults(BaseModel):
             "parsing_system_prompt": metadata.parsing_system_prompt,
             # === Metric Trait Data (EXPLODED) ===
             "trait_name": trait_name,
-            "metric_name": metric_name,
-            "metric_score": metric_score,
             "trait_type": "metric",
+            "metric_name": metric_name,
+            "trait_score": metric_score,
             # === Confusion Matrix Metadata ===
             "confusion_tp": confusion_data.get("tp") if confusion_data else None,
             "confusion_fp": confusion_data.get("fp") if confusion_data else None,
@@ -798,7 +849,7 @@ class RubricResults(BaseModel):
             return {}
 
         # Group by specified column and trait_name, then aggregate scores
-        grouped = df_filtered.groupby([by, "trait_name"])["metric_score"].agg(
+        grouped = df_filtered.groupby([by, "trait_name"])["trait_score"].agg(
             lambda s: aggregator.aggregate(s, **kwargs)
         )
 

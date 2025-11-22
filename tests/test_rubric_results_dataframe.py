@@ -185,7 +185,7 @@ def test_to_dataframe_metric_traits_explosion():
 
     # Check entity_extraction precision row
     entity_precision = df[(df["trait_name"] == "entity_extraction") & (df["metric_name"] == "precision")].iloc[0]
-    assert entity_precision["metric_score"] == 0.85
+    assert entity_precision["trait_score"] == 0.85
     assert entity_precision["confusion_tp"] == ["Paris", "France"]
     assert entity_precision["confusion_fp"] == ["approximately"]
     assert entity_precision["confusion_fn"] == ["Europe"]
@@ -193,7 +193,7 @@ def test_to_dataframe_metric_traits_explosion():
 
     # Check feature_identification has no confusion lists
     feature_recall = df[(df["trait_name"] == "feature_identification") & (df["metric_name"] == "recall")].iloc[0]
-    assert feature_recall["metric_score"] == 0.75
+    assert feature_recall["trait_score"] == 0.75
     assert feature_recall["confusion_tp"] is None
 
 
@@ -410,9 +410,6 @@ def test_to_dataframe_column_ordering():
     assert row["trait_name"] == "clarity"
     assert row["trait_score"] == 4
     assert row["trait_type"] == "llm_score"
-
-    # Verify Rubric Metadata
-    assert row["evaluation_rubric"] == {"test": "rubric"}
 
     # Verify Execution Metadata
     assert row["execution_time"] == 2.5
