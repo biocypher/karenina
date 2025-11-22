@@ -86,21 +86,18 @@ def convert_rubric_trait_to_rating(
     # Handle MetricRubricTrait
     if isinstance(trait, MetricRubricTrait):
         # Store metric trait configuration in additionalProperty
+        # Note: Store arrays directly, not as JSON strings - Pydantic will serialize correctly
         additional_props = [
-            SchemaOrgPropertyValue(name="metrics", value=json.dumps(trait.metrics)),
+            SchemaOrgPropertyValue(name="metrics", value=trait.metrics),
             SchemaOrgPropertyValue(name="repeated_extraction", value=trait.repeated_extraction),
             SchemaOrgPropertyValue(name="evaluation_mode", value=trait.evaluation_mode),
         ]
 
         # Add instruction lists (only if non-empty)
         if trait.tp_instructions:
-            additional_props.append(
-                SchemaOrgPropertyValue(name="tp_instructions", value=json.dumps(trait.tp_instructions))
-            )
+            additional_props.append(SchemaOrgPropertyValue(name="tp_instructions", value=trait.tp_instructions))
         if trait.tn_instructions:
-            additional_props.append(
-                SchemaOrgPropertyValue(name="tn_instructions", value=json.dumps(trait.tn_instructions))
-            )
+            additional_props.append(SchemaOrgPropertyValue(name="tn_instructions", value=trait.tn_instructions))
 
         return SchemaOrgRating(
             name=trait.name,
@@ -167,6 +164,32 @@ def convert_rubric_trait_to_rating(
         )
 
     # Handle LLMRubricTrait
+    # Always store deep judgment settings in additionalProperty (in-memory)
+    # Will be optionally stripped when saving to file based on save() toggle
+    additional_props = [
+        SchemaOrgPropertyValue(name="deep_judgment_enabled", value=trait.deep_judgment_enabled),
+        SchemaOrgPropertyValue(name="deep_judgment_excerpt_enabled", value=trait.deep_judgment_excerpt_enabled),
+        SchemaOrgPropertyValue(name="deep_judgment_search_enabled", value=trait.deep_judgment_search_enabled),
+    ]
+
+    # Add optional fields only if not None
+    if trait.deep_judgment_max_excerpts is not None:
+        additional_props.append(
+            SchemaOrgPropertyValue(name="deep_judgment_max_excerpts", value=trait.deep_judgment_max_excerpts)
+        )
+    if trait.deep_judgment_fuzzy_match_threshold is not None:
+        additional_props.append(
+            SchemaOrgPropertyValue(
+                name="deep_judgment_fuzzy_match_threshold", value=trait.deep_judgment_fuzzy_match_threshold
+            )
+        )
+    if trait.deep_judgment_excerpt_retry_attempts is not None:
+        additional_props.append(
+            SchemaOrgPropertyValue(
+                name="deep_judgment_excerpt_retry_attempts", value=trait.deep_judgment_excerpt_retry_attempts
+            )
+        )
+
     if trait.kind == "boolean":
         return SchemaOrgRating(
             name=trait.name,
@@ -174,6 +197,7 @@ def convert_rubric_trait_to_rating(
             bestRating=1,
             worstRating=0,
             additionalType="GlobalRubricTrait" if rubric_type == "global" else "QuestionSpecificRubricTrait",
+            additionalProperty=additional_props,
         )
     else:  # score
         min_score = trait.min_score if trait.min_score is not None else 1
@@ -185,6 +209,7 @@ def convert_rubric_trait_to_rating(
             bestRating=float(max_score),
             worstRating=float(min_score),
             additionalType="GlobalRubricTrait" if rubric_type == "global" else "QuestionSpecificRubricTrait",
+            additionalProperty=additional_props,
         )
 
 
@@ -313,13 +338,85 @@ def convert_rating_to_rubric_trait(
     # Determine if it's a boolean trait (0-1 range)
     is_boolean = rating.bestRating == 1 and rating.worstRating == 0
 
+    # Extract deep judgment configuration from additionalProperty
+    deep_judgment_enabled = False
+    deep_judgment_excerpt_enabled = False
+    deep_judgment_search_enabled = False
+    deep_judgment_max_excerpts = None
+    deep_judgment_fuzzy_match_threshold = None
+    deep_judgment_excerpt_retry_attempts = None
+
+    if rating.additionalProperty:
+        for prop in rating.additionalProperty:
+            if prop.name == "deep_judgment_enabled":
+                deep_judgment_enabled = prop.value
+            elif prop.name == "deep_judgment_excerpt_enabled":
+                deep_judgment_excerpt_enabled = prop.value
+            elif prop.name == "deep_judgment_search_enabled":
+                deep_judgment_search_enabled = prop.value
+            elif prop.name == "deep_judgment_max_excerpts":
+                deep_judgment_max_excerpts = prop.value
+            elif prop.name == "deep_judgment_fuzzy_match_threshold":
+                deep_judgment_fuzzy_match_threshold = prop.value
+            elif prop.name == "deep_judgment_excerpt_retry_attempts":
+                deep_judgment_excerpt_retry_attempts = prop.value
+
     return LLMRubricTrait(
         name=rating.name,
         description=rating.description,
         kind="boolean" if is_boolean else "score",
         min_score=None if is_boolean else int(rating.worstRating),
         max_score=None if is_boolean else int(rating.bestRating),
+        deep_judgment_enabled=deep_judgment_enabled,
+        deep_judgment_excerpt_enabled=deep_judgment_excerpt_enabled,
+        deep_judgment_max_excerpts=deep_judgment_max_excerpts,
+        deep_judgment_fuzzy_match_threshold=deep_judgment_fuzzy_match_threshold,
+        deep_judgment_excerpt_retry_attempts=deep_judgment_excerpt_retry_attempts,
+        deep_judgment_search_enabled=deep_judgment_search_enabled,
     )
+
+
+def strip_deep_judgment_config_from_checkpoint(checkpoint: JsonLdCheckpoint) -> None:
+    """
+    Strip deep judgment configuration from all LLM rubric traits in a checkpoint.
+
+    This modifies the checkpoint in-place, removing deep judgment fields from
+    additionalProperty arrays in Rating objects for LLM traits (both global and
+    question-specific).
+
+    Args:
+        checkpoint: The checkpoint to modify
+    """
+    # Strip from global rubrics
+    if checkpoint.rating:
+        for rating in checkpoint.rating:
+            if (
+                rating.additionalType in ["GlobalRubricTrait", "QuestionSpecificRubricTrait"]
+                and rating.additionalProperty
+            ):
+                # Filter out deep judgment properties
+                rating.additionalProperty = [
+                    prop for prop in rating.additionalProperty if not prop.name.startswith("deep_judgment_")
+                ]
+                # If no properties left, set to None
+                if not rating.additionalProperty:
+                    rating.additionalProperty = None
+
+    # Strip from question-specific rubrics
+    for item in checkpoint.dataFeedElement:
+        if item.item.rating:
+            for rating in item.item.rating:
+                if (
+                    rating.additionalType in ["QuestionSpecificRubricTrait", "GlobalRubricTrait"]
+                    and rating.additionalProperty
+                ):
+                    # Filter out deep judgment properties
+                    rating.additionalProperty = [
+                        prop for prop in rating.additionalProperty if not prop.name.startswith("deep_judgment_")
+                    ]
+                    # If no properties left, set to None
+                    if not rating.additionalProperty:
+                        rating.additionalProperty = None
 
 
 def create_jsonld_benchmark(

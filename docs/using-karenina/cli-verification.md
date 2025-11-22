@@ -131,7 +131,8 @@ See [Usage Examples](#usage-examples) below for detailed workflows.
 | Option | Type | Description | Default | Required? |
 |--------|------|-------------|---------|-----------|
 | `--abstention` | Flag | Enable abstention detection | false | No |
-| `--deep-judgment` | Flag | Enable deep judgment analysis | false | No |
+| `--deep-judgment` | Flag | Enable deep judgment analysis for templates | false | No |
+| `--deep-judgment-rubric-mode MODE` | Choice | Deep judgment mode for rubric traits: `disable_all`, `enable_all`, `use_trait_config` | use_trait_config | No |
 | `--embedding-check` | Flag | Enable embedding similarity check | false | No |
 | `--embedding-threshold FLOAT` | Float | Embedding similarity threshold (0.0-1.0) | 0.85 | No |
 | `--embedding-model NAME` | String | Embedding model name | all-MiniLM-L6-v2 | No |
@@ -236,7 +237,87 @@ karenina verify checkpoint.jsonld \
   --questions 0-5
 ```
 
-#### 5. Range and Mixed Question Selection
+#### 5. Enable Deep Judgment for Rubrics
+
+Deep judgment for rubrics provides evidence-based evaluation by extracting supporting excerpts for trait judgments.
+
+**Use Case 1: Enable for All Rubric Traits**
+
+Override individual trait settings and enable deep judgment globally:
+
+```bash
+karenina verify checkpoint.jsonld \
+  --preset default.json \
+  --evaluation-mode template_and_rubric \
+  --deep-judgment-rubric-mode enable_all \
+  --questions 0-5
+```
+
+**Use Case 2: Disable for All Rubric Traits**
+
+Disable deep judgment even for traits configured with `deep_judgment_enabled=True`:
+
+```bash
+karenina verify checkpoint.jsonld \
+  --preset default.json \
+  --evaluation-mode template_and_rubric \
+  --deep-judgment-rubric-mode disable_all \
+  --questions 0-5
+```
+
+**Use Case 3: Respect Individual Trait Configuration (Default)**
+
+Only use deep judgment for traits that have `deep_judgment_enabled=True`:
+
+```bash
+karenina verify checkpoint.jsonld \
+  --preset default.json \
+  --evaluation-mode template_and_rubric \
+  --deep-judgment-rubric-mode use_trait_config \
+  --questions 0-5
+```
+
+Or omit the flag entirely (defaults to `use_trait_config`):
+
+```bash
+karenina verify checkpoint.jsonld \
+  --preset default.json \
+  --evaluation-mode template_and_rubric \
+  --questions 0-5
+```
+
+**Deep Judgment Modes Explained:**
+
+| Mode | Behavior | When to Use |
+|------|----------|-------------|
+| `enable_all` | Forces deep judgment ON for ALL rubric traits | Testing, comprehensive evidence gathering, audit requirements |
+| `disable_all` | Forces deep judgment OFF for ALL rubric traits | Quick testing, cost optimization, speed priority |
+| `use_trait_config` | Respects individual trait `deep_judgment_enabled` settings | Normal operation, selective deep judgment on key traits |
+
+**Performance Impact:**
+
+- **enable_all**: Highest cost and latency, maximum transparency
+- **disable_all**: Lowest cost and latency, fastest evaluation
+- **use_trait_config**: Balanced approach, optimize per trait
+
+**Example with Multiple Advanced Features:**
+
+```bash
+# Full-featured verification with deep judgment for both templates and rubrics
+karenina verify checkpoint.jsonld \
+  --preset default.json \
+  --evaluation-mode template_and_rubric \
+  --deep-judgment \
+  --deep-judgment-rubric-mode enable_all \
+  --embedding-check \
+  --abstention \
+  --output results.json \
+  --verbose
+```
+
+For more details on deep judgment for rubrics, see the [Rubrics documentation](./rubrics.md#deep-judgment-for-llm-rubric-traits).
+
+#### 6. Range and Mixed Question Selection
 
 ```bash
 # Questions 0-2 and question 5
@@ -252,7 +333,7 @@ karenina verify checkpoint.jsonld \
   --output results.csv
 ```
 
-#### 6. Interactive Configuration
+#### 7. Interactive Configuration
 
 ```bash
 # Basic mode - essential parameters only
@@ -278,7 +359,7 @@ karenina verify checkpoint.jsonld --interactive --mode advanced
 7. **Output Configuration**: Prompt to configure result export (file format and filename)
 8. **Run Verification**: Execute verification with progress display and save results
 
-#### 7. Manual Trace Evaluation
+#### 8. Manual Trace Evaluation
 
 Evaluate pre-generated LLM responses without making live API calls:
 

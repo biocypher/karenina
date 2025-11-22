@@ -186,6 +186,84 @@ def build_config_interactively(benchmark: Benchmark, mode: str = "basic") -> tup
             if deep_judgment_search_enabled:
                 deep_judgment_search_tool = Prompt.ask("Search tool", default="tavily")
 
+        # Deep judgment rubric settings (if rubric enabled)
+        deep_judgment_rubric_mode = "disabled"
+        deep_judgment_rubric_global_excerpts = True
+        deep_judgment_rubric_max_excerpts_default = 7
+        deep_judgment_rubric_fuzzy_match_threshold_default = 0.80
+        deep_judgment_rubric_excerpt_retry_attempts_default = 2
+        deep_judgment_rubric_search_enabled = False
+        deep_judgment_rubric_search_tool = "tavily"
+        deep_judgment_rubric_config = None
+
+        if rubric_enabled:
+            console.print("\n[cyan]Deep Judgment Rubric Settings:[/cyan]")
+            console.print("[dim]Deep judgment modes:[/dim]")
+            console.print("[dim]  • disabled: No deep judgment for rubrics (default)[/dim]")
+            console.print("[dim]  • enable_all: Apply to all LLM traits with global settings[/dim]")
+            console.print("[dim]  • use_checkpoint: Use settings saved in checkpoint file[/dim]")
+            console.print("[dim]  • custom: Load per-trait config from JSON file[/dim]\n")
+
+            deep_judgment_rubric_mode = Prompt.ask(
+                "Deep judgment rubric mode",
+                choices=["disabled", "enable_all", "use_checkpoint", "custom"],
+                default="disabled",
+            )
+
+            if deep_judgment_rubric_mode == "enable_all":
+                deep_judgment_rubric_global_excerpts = Confirm.ask(
+                    "Enable excerpts for all rubric traits?", default=True
+                )
+
+                max_excerpts_str = Prompt.ask("Max excerpts per rubric trait", default="7")
+                try:
+                    deep_judgment_rubric_max_excerpts_default = int(max_excerpts_str)
+                    if deep_judgment_rubric_max_excerpts_default < 1:
+                        raise ValueError("Max excerpts must be at least 1")
+                except ValueError as e:
+                    console.print(f"[red]Error: {e}[/red]")
+                    raise typer.Exit(code=1) from e
+
+                fuzzy_threshold_str = Prompt.ask("Fuzzy match threshold (0.0-1.0)", default="0.80")
+                try:
+                    deep_judgment_rubric_fuzzy_match_threshold_default = float(fuzzy_threshold_str)
+                    if not 0.0 <= deep_judgment_rubric_fuzzy_match_threshold_default <= 1.0:
+                        raise ValueError("Threshold must be between 0.0 and 1.0")
+                except ValueError as e:
+                    console.print(f"[red]Error: {e}[/red]")
+                    raise typer.Exit(code=1) from e
+
+                retry_attempts_str = Prompt.ask("Excerpt retry attempts", default="2")
+                try:
+                    deep_judgment_rubric_excerpt_retry_attempts_default = int(retry_attempts_str)
+                    if deep_judgment_rubric_excerpt_retry_attempts_default < 0:
+                        raise ValueError("Retry attempts must be non-negative")
+                except ValueError as e:
+                    console.print(f"[red]Error: {e}[/red]")
+                    raise typer.Exit(code=1) from e
+
+                deep_judgment_rubric_search_enabled = Confirm.ask("Enable search validation?", default=False)
+                if deep_judgment_rubric_search_enabled:
+                    deep_judgment_rubric_search_tool = Prompt.ask("Search tool", default="tavily")
+
+            elif deep_judgment_rubric_mode == "custom":
+                console.print("[yellow]Custom mode requires a JSON config file[/yellow]")
+                config_path_str = Prompt.ask("Path to custom rubric config JSON")
+                import json
+                from pathlib import Path
+
+                try:
+                    config_path = Path(config_path_str)
+                    with open(config_path) as f:
+                        deep_judgment_rubric_config = json.load(f)
+                    console.print(f"[green]✓ Loaded custom config from {config_path}[/green]")
+                except Exception as e:
+                    console.print(f"[red]Error loading config: {e}[/red]")
+                    raise typer.Exit(code=1) from e
+
+            elif deep_judgment_rubric_mode == "use_checkpoint":
+                console.print("[dim]Using deep judgment settings from checkpoint file[/dim]")
+
         # Few-shot configuration
         console.print("\n[cyan]Few-Shot Configuration:[/cyan]")
         if Confirm.ask("Enable few-shot prompting?", default=False):
@@ -262,6 +340,14 @@ def build_config_interactively(benchmark: Benchmark, mode: str = "basic") -> tup
         deep_judgment_excerpt_retry_attempts=deep_judgment_retry_attempts,
         deep_judgment_search_enabled=deep_judgment_search_enabled,
         deep_judgment_search_tool=deep_judgment_search_tool,
+        deep_judgment_rubric_mode=deep_judgment_rubric_mode,
+        deep_judgment_rubric_global_excerpts=deep_judgment_rubric_global_excerpts,
+        deep_judgment_rubric_max_excerpts_default=deep_judgment_rubric_max_excerpts_default,
+        deep_judgment_rubric_fuzzy_match_threshold_default=deep_judgment_rubric_fuzzy_match_threshold_default,
+        deep_judgment_rubric_excerpt_retry_attempts_default=deep_judgment_rubric_excerpt_retry_attempts_default,
+        deep_judgment_rubric_search_enabled=deep_judgment_rubric_search_enabled,
+        deep_judgment_rubric_search_tool=deep_judgment_rubric_search_tool,
+        deep_judgment_rubric_config=deep_judgment_rubric_config,
         few_shot_config=few_shot_config,
         async_enabled=async_enabled,
         async_max_workers=async_max_workers,

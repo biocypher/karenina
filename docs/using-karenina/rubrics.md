@@ -8,6 +8,7 @@ Rubrics provide qualitative evaluation criteria beyond the basic template verifi
 - [Why Use Rubrics?](#why-use-rubrics) - Quality assessment, domain validation, compliance
 - [Rubric Scope](#rubric-scope-global-vs-question-specific) - Global vs question-specific rubrics
 - [Four Types of Rubric Traits](#four-types-of-rubric-traits) - LLM-based, regex-based, callable-based, metric-based
+  - [Deep Judgment for LLM Rubric Traits](#deep-judgment-for-llm-rubric-traits) - Evidence-based evaluation with excerpt extraction
 - [Understanding Metric Traits](#understanding-metric-traits-two-evaluation-modes) - TP-only vs full-matrix evaluation
 - [Creating a Global Rubric](#creating-a-global-rubric) - Apply traits to all questions
 - [Creating Question-Specific Rubrics](#creating-question-specific-rubrics) - Apply traits to specific questions
@@ -197,6 +198,277 @@ Result: Score = 2 (verbose, includes unnecessary detail beyond the question)
 - Exact keyword matching (use regex traits instead)
 - Factual extraction (use templates instead)
 - Classification metrics (use metric traits instead)
+
+---
+
+### Deep Judgment for LLM Rubric Traits
+
+**Deep judgment** is an advanced multi-stage evaluation technique for LLM rubric traits that provides evidence-based assessment with excerpt extraction and verification.
+
+**What is Deep Judgment?**
+
+Deep judgment enhances standard LLM trait evaluation by:
+
+1. **Multi-stage evaluation**: Breaks evaluation into separate judgment and evidence extraction phases
+2. **Excerpt extraction**: Identifies specific text passages that support the judgment
+3. **Fuzzy matching**: Validates that extracted excerpts actually appear in the answer
+4. **Search fallback**: Automatically searches for excerpts if direct extraction fails
+5. **Evidence tracking**: Provides transparency into how the LLM reached its judgment
+
+**When to Use Deep Judgment:**
+
+✅ **Use deep judgment when:**
+- You need evidence for why a trait passed or failed
+- Transparency and auditability are important
+- You want to verify that LLM judgments are grounded in actual text
+- You're evaluating subjective qualities that require supporting evidence
+
+❌ **Don't use deep judgment when:**
+- Simple pass/fail judgment is sufficient
+- Speed is more important than transparency
+- Trait evaluation is straightforward (use regex traits instead)
+- You're working with very short answers (1-2 sentences)
+
+**How Deep Judgment Works:**
+
+```
+Standard LLM Trait:
+Question + Answer → LLM → Score/Binary Result
+
+Deep Judgment LLM Trait:
+Question + Answer → Stage 1: Judgment LLM → Score/Binary Result
+                 → Stage 2: Excerpt Extraction LLM → Excerpts
+                 → Stage 3: Fuzzy Match Validation → Verified Excerpts
+                 → Stage 4: Search Fallback (if needed) → Additional Excerpts
+```
+
+**Configuration Options:**
+
+```python
+from karenina.schemas import LLMRubricTrait
+
+trait = LLMRubricTrait(
+    name="Includes Scientific Context",
+    description="Answer with True if the response provides scientific context, terminology, or references to scientific knowledge; otherwise answer False.",
+    kind="binary",
+
+    # Enable deep judgment
+    deep_judgment_enabled=True,
+
+    # Extract excerpts that support the judgment
+    deep_judgment_excerpt_enabled=True,
+
+    # Maximum excerpts to extract per attribute (default: 3)
+    deep_judgment_max_excerpts=3,
+
+    # Fuzzy match threshold for validating excerpts (0.0-1.0, default: 0.85)
+    deep_judgment_fuzzy_match_threshold=0.85,
+
+    # Retry attempts for excerpt extraction (default: 2)
+    deep_judgment_excerpt_retry_attempts=2,
+
+    # Enable search fallback if excerpts not found (default: True)
+    deep_judgment_search_enabled=True
+)
+```
+
+**Example 1: Binary Deep Judgment Trait**
+
+```python
+from karenina.schemas import LLMRubricTrait
+
+# Standard binary trait (no evidence)
+standard_trait = LLMRubricTrait(
+    name="Includes Scientific Context",
+    description="Answer with True if the response provides scientific context, terminology, or references to scientific knowledge; otherwise answer False.",
+    kind="binary"
+)
+
+# Deep judgment binary trait (with evidence)
+deep_trait = LLMRubricTrait(
+    name="Includes Scientific Context",
+    description="Answer with True if the response provides scientific context, terminology, or references to scientific knowledge; otherwise answer False.",
+    kind="binary",
+    deep_judgment_enabled=True,
+    deep_judgment_excerpt_enabled=True,
+    deep_judgment_max_excerpts=3
+)
+```
+
+**What happens during evaluation:**
+
+```
+Question: "What is the approved drug target of Venetoclax?"
+Answer: "Venetoclax is a BCL-2 inhibitor that works by binding to the BCL-2 protein,
+         which is an anti-apoptotic protein often overexpressed in certain cancers."
+
+Standard Trait Result:
+- includes_scientific_context: True
+
+Deep Judgment Trait Result:
+- includes_scientific_context: True
+- Excerpts:
+  1. "BCL-2 inhibitor"
+  2. "anti-apoptotic protein"
+  3. "overexpressed in certain cancers"
+- All excerpts verified with fuzzy matching
+```
+
+**Example 2: Score Deep Judgment Trait**
+
+```python
+clarity_trait = LLMRubricTrait(
+    name="Clarity",
+    description="Rate the clarity and readability of the answer on a scale from 1 (very unclear, confusing) to 5 (exceptionally clear and well-articulated).",
+    kind="score",
+    deep_judgment_enabled=True,
+    deep_judgment_excerpt_enabled=True,
+    deep_judgment_max_excerpts=5  # More excerpts for detailed analysis
+)
+```
+
+**Result with excerpts:**
+
+```
+clarity: 4/5
+Excerpts supporting the rating:
+1. "clearly explains the mechanism"
+2. "uses precise terminology"
+3. "follows logical structure"
+4. "defines technical terms"
+```
+
+**Controlling Deep Judgment Globally:**
+
+When running verification, you can control deep judgment for all rubric traits:
+
+```python
+from karenina.schemas import VerificationConfig
+
+config = VerificationConfig(
+    answering_models=[model_config],
+    parsing_models=[model_config],
+    evaluation_mode="template_and_rubric",
+
+    # Control deep judgment for rubric traits
+    deep_judgment_rubric_mode="enable_all"  # Options: "disable_all", "enable_all", "use_trait_config"
+)
+
+results = benchmark.run_verification(config)
+```
+
+**Deep Judgment Modes:**
+
+| Mode | Behavior |
+|------|----------|
+| `disable_all` | Disable deep judgment for ALL rubric traits, even if `deep_judgment_enabled=True` on individual traits |
+| `enable_all` | Enable deep judgment for ALL rubric traits, overriding individual trait settings |
+| `use_trait_config` (default) | Respect individual trait configuration (only traits with `deep_judgment_enabled=True` use deep judgment) |
+
+**Understanding the Fuzzy Match Threshold:**
+
+The fuzzy match threshold (0.0-1.0) determines how closely an extracted excerpt must match the actual answer text:
+
+- **0.85 (default)**: Moderate strictness, allows minor variations in spacing/punctuation
+- **0.90**: Stricter matching, requires closer text similarity
+- **0.80**: Lenient matching, allows more variation
+
+```python
+trait = LLMRubricTrait(
+    name="Contains Citations",
+    description="Answer includes proper citations",
+    kind="binary",
+    deep_judgment_enabled=True,
+    deep_judgment_excerpt_enabled=True,
+    deep_judgment_fuzzy_match_threshold=0.90  # Strict matching for citations
+)
+```
+
+**Search Fallback:**
+
+When excerpt extraction fails to find valid excerpts, deep judgment can automatically search for related text:
+
+```python
+trait = LLMRubricTrait(
+    name="Mentions Key Concepts",
+    description="Answer discusses key genomics concepts",
+    kind="binary",
+    deep_judgment_enabled=True,
+    deep_judgment_excerpt_enabled=True,
+    deep_judgment_search_enabled=True  # Enable search fallback
+)
+```
+
+**Search Process:**
+
+1. Primary excerpt extraction attempts fail to find matching text
+2. Deep judgment searches the answer for semantically similar passages
+3. Found passages are validated with fuzzy matching
+4. Search results are returned as excerpts
+
+**Accessing Deep Judgment Results:**
+
+```python
+# Run verification with deep judgment
+results = benchmark.run_verification(config)
+
+# Access deep judgment results
+for result in results:
+    if result.deep_judgment_rubric_results:
+        print(f"\nQuestion: {result.question_id}")
+        for trait_name, dj_result in result.deep_judgment_rubric_results.items():
+            print(f"  {trait_name}:")
+            print(f"    Judgment: {dj_result.judgment_result}")
+
+            if dj_result.excerpts:
+                print(f"    Excerpts ({len(dj_result.excerpts)}):")
+                for i, excerpt in enumerate(dj_result.excerpts, 1):
+                    print(f"      {i}. \"{excerpt}\"")
+
+            if dj_result.search_used:
+                print(f"    (Search fallback was used)")
+```
+
+**Best Practices for Deep Judgment:**
+
+**Enable selectively**:
+- ✅ Use deep judgment for subjective quality traits where evidence matters
+- ❌ Don't enable for all traits indiscriminately (increases cost and latency)
+
+**Adjust max_excerpts appropriately**:
+- Binary traits: 2-3 excerpts usually sufficient
+- Score traits: 3-5 excerpts for detailed evidence
+- Complex traits: 5-7 excerpts for comprehensive analysis
+
+**Tune fuzzy matching**:
+- Start with default (0.85) and adjust based on results
+- Increase for exact matching needs (citations, quotes)
+- Decrease for more lenient matching (paraphrased concepts)
+
+**Monitor search fallback usage**:
+- High search usage may indicate poorly worded trait descriptions
+- Adjust trait descriptions to make excerpt extraction clearer
+
+**Use appropriate descriptions**:
+```python
+# ❌ Bad: Too vague for deep judgment
+description="Is the answer good?"
+
+# ✅ Good: Clear criteria for judgment and excerpt extraction
+description="Answer with True if the response provides scientific context, terminology, or references to scientific knowledge; otherwise answer False."
+```
+
+**Performance Considerations:**
+
+Deep judgment adds:
+- **Latency**: ~2x longer per trait (additional LLM calls for excerpt extraction)
+- **Cost**: ~2x tokens per trait (judgment + excerpt extraction)
+- **Accuracy**: Higher confidence through evidence validation
+
+Balance these trade-offs based on your use case:
+- **Critical evaluations**: Enable deep judgment for transparency
+- **Quick testing**: Disable deep judgment for faster iteration
+- **Production benchmarks**: Enable selectively for key quality traits
 
 ### 2. Regex-Based Traits (`RegexTrait`)
 

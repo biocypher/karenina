@@ -361,6 +361,18 @@ def export_verification_results_csv(
             # Search-enhanced deep-judgment fields
             "deep_judgment_search_enabled",
             "hallucination_risk_assessment",
+            # Deep-judgment rubric fields
+            "deep_judgment_rubric_performed",
+            "extracted_rubric_excerpts",
+            "rubric_trait_reasoning",
+            "deep_judgment_rubric_scores",
+            "standard_rubric_scores",
+            "trait_metadata",
+            "traits_without_valid_excerpts",
+            "rubric_hallucination_risk_assessment",
+            "total_deep_judgment_model_calls",
+            "total_traits_evaluated",
+            "total_excerpt_retries",
             # Metric trait fields
             "metric_trait_confusion_lists",
             "metric_trait_metrics",
@@ -384,6 +396,7 @@ def export_verification_results_csv(
         template = result.template
         rubric = result.rubric
         deep_judgment = result.deep_judgment
+        deep_judgment_rubric = result.deep_judgment_rubric
 
         row = {
             # Metadata fields
@@ -472,6 +485,50 @@ def export_verification_results_csv(
                 metadata.question_id,
                 "hallucination_risk_assessment",
             ),
+            # Deep-judgment rubric fields
+            "deep_judgment_rubric_performed": deep_judgment_rubric.deep_judgment_rubric_performed
+            if deep_judgment_rubric
+            else False,
+            "extracted_rubric_excerpts": _safe_json_serialize(
+                deep_judgment_rubric.extracted_rubric_excerpts if deep_judgment_rubric else None,
+                metadata.question_id,
+                "extracted_rubric_excerpts",
+            ),
+            "rubric_trait_reasoning": _safe_json_serialize(
+                deep_judgment_rubric.rubric_trait_reasoning if deep_judgment_rubric else None,
+                metadata.question_id,
+                "rubric_trait_reasoning",
+            ),
+            "deep_judgment_rubric_scores": _safe_json_serialize(
+                deep_judgment_rubric.deep_judgment_rubric_scores if deep_judgment_rubric else None,
+                metadata.question_id,
+                "deep_judgment_rubric_scores",
+            ),
+            "standard_rubric_scores": _safe_json_serialize(
+                deep_judgment_rubric.standard_rubric_scores if deep_judgment_rubric else None,
+                metadata.question_id,
+                "standard_rubric_scores",
+            ),
+            "trait_metadata": _safe_json_serialize(
+                deep_judgment_rubric.trait_metadata if deep_judgment_rubric else None,
+                metadata.question_id,
+                "trait_metadata",
+            ),
+            "traits_without_valid_excerpts": _safe_json_serialize(
+                deep_judgment_rubric.traits_without_valid_excerpts if deep_judgment_rubric else None,
+                metadata.question_id,
+                "traits_without_valid_excerpts",
+            ),
+            "rubric_hallucination_risk_assessment": _safe_json_serialize(
+                deep_judgment_rubric.rubric_hallucination_risk_assessment if deep_judgment_rubric else None,
+                metadata.question_id,
+                "rubric_hallucination_risk_assessment",
+            ),
+            "total_deep_judgment_model_calls": deep_judgment_rubric.total_deep_judgment_model_calls
+            if deep_judgment_rubric
+            else 0,
+            "total_traits_evaluated": deep_judgment_rubric.total_traits_evaluated if deep_judgment_rubric else 0,
+            "total_excerpt_retries": deep_judgment_rubric.total_excerpt_retries if deep_judgment_rubric else 0,
             # Export metadata
             "export_timestamp": export_timestamp,
             "karenina_version": karenina_version,

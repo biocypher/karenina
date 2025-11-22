@@ -24,10 +24,12 @@ class DeepJudgmentAutoFailStage(BaseVerificationStage):
     Requires:
         - "deep_judgment_performed": Whether deep-judgment was used (bool)
         - "attributes_without_excerpts": List of attributes missing excerpts
-        - "abstention_detected": Whether abstention was detected (bool or None)
-        - "abstention_check_performed": Whether abstention check ran (bool)
         - "verification_result": Current verification result
         - "field_verification_result": Field verification result
+
+    Optional (used if available):
+        - "abstention_detected": Whether abstention was detected (bool or None)
+        - "abstention_check_performed": Whether abstention check ran (bool)
 
     Produces:
         - None (only modifies existing verification results)
@@ -37,10 +39,11 @@ class DeepJudgmentAutoFailStage(BaseVerificationStage):
         - Logs auto-fail reason
 
     Note:
-        This stage runs after abstention check. If abstention was detected,
+        This stage runs after abstention check (if enabled). If abstention was detected,
         the verification is already failed and we don't need to auto-fail again.
         The auto-fail is specifically for cases where the LLM generated an answer
-        but couldn't provide excerpts to support it.
+        but couldn't provide excerpts to support it. When abstention detection is disabled,
+        the stage proceeds with auto-fail logic without checking abstention artifacts.
     """
 
     @property
@@ -54,8 +57,6 @@ class DeepJudgmentAutoFailStage(BaseVerificationStage):
         return [
             "deep_judgment_performed",
             "attributes_without_excerpts",
-            "abstention_detected",
-            "abstention_check_performed",
             "verification_result",
             "field_verification_result",
         ]
