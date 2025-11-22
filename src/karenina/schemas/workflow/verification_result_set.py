@@ -515,6 +515,8 @@ class VerificationResultSet(BaseModel):
         template_output_tokens = 0
         rubric_input_tokens = 0
         rubric_output_tokens = 0
+        deep_judgment_input_tokens = 0
+        deep_judgment_output_tokens = 0
 
         for result in self.results:
             if result.template and hasattr(result.template, "usage_metadata") and result.template.usage_metadata:
@@ -539,6 +541,17 @@ class VerificationResultSet(BaseModel):
                     rubric_usage = usage_metadata["rubric_evaluation"]
                     rubric_input_tokens += rubric_usage.get("input_tokens", 0)
                     rubric_output_tokens += rubric_usage.get("output_tokens", 0)
+
+            if (
+                result.deep_judgment
+                and hasattr(result.deep_judgment, "usage_metadata")
+                and result.deep_judgment.usage_metadata
+            ):
+                dj_usage = result.deep_judgment.usage_metadata
+                if "total" in dj_usage:
+                    dj_total = dj_usage["total"]
+                    deep_judgment_input_tokens += dj_total.get("input_tokens", 0)
+                    deep_judgment_output_tokens += dj_total.get("output_tokens", 0)
 
         # Completion status by model combination
         combo_stats: dict[tuple[str, str, tuple[str, ...] | None], dict[str, int]] = defaultdict(
@@ -635,24 +648,18 @@ class VerificationResultSet(BaseModel):
                                 qs_metric += 1
 
             rubric_traits = {
-                "total": global_llm
-                + global_regex
-                + global_callable
-                + global_metric
-                + qs_llm
-                + qs_regex
-                + qs_callable
-                + qs_metric,
-                "global_total": global_llm + global_regex + global_callable + global_metric,
-                "global_llm": global_llm,
-                "global_regex": global_regex,
-                "global_callable": global_callable,
-                "global_metric": global_metric,
-                "qs_total": qs_llm + qs_regex + qs_callable + qs_metric,
-                "qs_llm": qs_llm,
-                "qs_regex": qs_regex,
-                "qs_callable": qs_callable,
-                "qs_metric": qs_metric,
+                "global_traits": {
+                    "llm": {"count": global_llm},
+                    "regex": {"count": global_regex},
+                    "callable": {"count": global_callable},
+                    "metric": {"count": global_metric},
+                },
+                "question_specific_traits": {
+                    "llm": {"count": qs_llm},
+                    "regex": {"count": qs_regex},
+                    "callable": {"count": qs_callable},
+                    "metric": {"count": qs_metric},
+                },
             }
 
         # Template pass rates
@@ -699,20 +706,20 @@ class VerificationResultSet(BaseModel):
         replicate_summary = None
 
         if len(replicates) > 1 and num_with_template > 0:
-            replicate_stats: dict[int, dict[str, int]] = defaultdict(lambda: {"total": 0, "passed": 0})
+            rep_stats_dict: dict[int, dict[str, int]] = defaultdict(lambda: {"total": 0, "passed": 0})
 
             for result in self.results:
                 if result.template and result.template.template_verification_performed:
                     rep_num = result.metadata.answering_replicate
                     if rep_num is not None:
-                        replicate_stats[rep_num]["total"] += 1
+                        rep_stats_dict[rep_num]["total"] += 1
                         if result.template.verify_result:
-                            replicate_stats[rep_num]["passed"] += 1
+                            rep_stats_dict[rep_num]["passed"] += 1
 
             replicate_pass_rates = {}
             pass_rates_list = []
 
-            for rep_num, stats in replicate_stats.items():
+            for rep_num, stats in rep_stats_dict.items():
                 passed = stats["passed"]
                 total = stats["total"]
                 pct = (passed / total * 100) if total > 0 else 0
@@ -733,6 +740,14 @@ class VerificationResultSet(BaseModel):
                 mean = statistics.mean(pass_rates_list)
                 std = statistics.stdev(pass_rates_list) if len(pass_rates_list) > 1 else 0.0
                 replicate_summary = {"mean": mean, "std": std}
+
+        # Build replicate_stats only if we have replicates
+        replicate_stats: dict[str, dict[int, dict[str, float | int]] | dict[str, float]] | None = None
+        if replicate_pass_rates is not None and replicate_summary is not None:
+            replicate_stats = {
+                "replicate_pass_rates": replicate_pass_rates,
+                "replicate_summary": replicate_summary,
+            }
 
         return {
             # Basic counts
@@ -755,6 +770,8 @@ class VerificationResultSet(BaseModel):
                 "template_output": template_output_tokens,
                 "rubric_input": rubric_input_tokens,
                 "rubric_output": rubric_output_tokens,
+                "deep_judgment_input": deep_judgment_input_tokens if num_with_judgment > 0 else None,
+                "deep_judgment_output": deep_judgment_output_tokens if num_with_judgment > 0 else None,
             },
             # Completion status
             "completion_by_combo": completion_by_combo,
@@ -764,8 +781,7 @@ class VerificationResultSet(BaseModel):
             "template_pass_by_combo": template_pass_by_combo,
             "template_pass_overall": template_pass_overall,
             # Replicate statistics
-            "replicate_pass_rates": replicate_pass_rates,
-            "replicate_summary": replicate_summary,
+            "replicate_stats": replicate_stats,
         }
 
     def get_question_ids(self) -> list[str]:
