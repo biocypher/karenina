@@ -11,6 +11,7 @@ from .models import (
     ModelConfig,
     QuestionFewShotConfig,
 )
+from .rubric_judgment_results import RubricJudgmentResults
 from .rubric_results import RubricResults
 from .template_results import TemplateResults
 from .verification import (
@@ -22,6 +23,7 @@ from .verification import (
     VerificationRequest,
     VerificationResult,
     VerificationResultDeepJudgment,
+    VerificationResultDeepJudgmentRubric,
     VerificationResultMetadata,
     VerificationResultRubric,
     VerificationResultTemplate,
@@ -32,6 +34,7 @@ from .verification_result_set import VerificationResultSet
 
 # Rebuild models to resolve forward references
 RubricResults.model_rebuild()
+RubricJudgmentResults.model_rebuild()
 TemplateResults.model_rebuild()
 JudgmentResults.model_rebuild()
 VerificationResultSet.model_rebuild()
@@ -57,6 +60,7 @@ __all__ = [
     "VerificationResultTemplate",
     "VerificationResultRubric",
     "VerificationResultDeepJudgment",
+    "VerificationResultDeepJudgmentRubric",
     "VerificationJob",
     "FinishedTemplate",
     "VerificationRequest",
@@ -65,6 +69,7 @@ __all__ = [
     # Result set and specialized results
     "VerificationResultSet",
     "RubricResults",
+    "RubricJudgmentResults",
     "TemplateResults",
     "JudgmentResults",
     # Aggregation framework

@@ -82,13 +82,20 @@ class BenchmarkBase:
 
         return instance
 
-    def save(self, path: Path) -> None:
+    def save(self, path: Path, save_deep_judgment_config: bool = False) -> None:
         """
         Save the benchmark to a JSON-LD file.
 
         Args:
             path: Path where to save the benchmark
+            save_deep_judgment_config: If True, include deep judgment configuration
+                in LLM rubric traits. If False (default), deep judgment settings
+                are stripped before saving. Default is False for backward compatibility.
         """
+        from copy import deepcopy
+
+        from ...utils.checkpoint import strip_deep_judgment_config_from_checkpoint
+
         path = Path(path)
 
         # Ensure .jsonld extension
@@ -98,8 +105,15 @@ class BenchmarkBase:
         # Update modified timestamp
         self._checkpoint.dateModified = datetime.now().isoformat()
 
+        # Make a deep copy to avoid modifying in-memory checkpoint
+        checkpoint_to_save = deepcopy(self._checkpoint)
+
+        # Strip deep judgment config if not requested
+        if not save_deep_judgment_config:
+            strip_deep_judgment_config_from_checkpoint(checkpoint_to_save)
+
         # Convert to dict for JSON serialization
-        benchmark_dict = self._checkpoint.model_dump(by_alias=True, exclude_none=True)
+        benchmark_dict = checkpoint_to_save.model_dump(by_alias=True, exclude_none=True)
 
         # Write to file
         with open(path, "w", encoding="utf-8") as f:

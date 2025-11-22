@@ -811,3 +811,722 @@ Your JSON response:"""
                 metrics[metric] = 0.0
 
         return metrics
+
+    # ========== Deep Judgment Rubric Methods ==========
+
+    def evaluate_rubric_with_deep_judgment(
+        self,
+        question: str,
+        answer: str,
+        rubric: Rubric,
+        config: Any,  # VerificationConfig
+    ) -> dict[str, Any]:
+        """
+        Evaluate rubric with deep judgment for enabled traits.
+
+        Args:
+            question: The original question
+            answer: The LLM response to evaluate
+            rubric: The rubric containing evaluation traits
+            config: VerificationConfig with deep judgment settings
+
+        Returns:
+            Dictionary containing:
+                - deep_judgment_scores: Scores for deep-judgment-enabled traits
+                - standard_scores: Scores for standard traits
+                - excerpts: Extracted excerpts per trait
+                - reasoning: Reasoning per trait
+                - metadata: Per-trait evaluation metadata
+                - hallucination_risks: Per-trait hallucination risk (if search enabled)
+                - traits_without_valid_excerpts: Traits that failed excerpt extraction
+        """
+        # Separate deep-judgment vs standard traits
+        dj_traits = [t for t in rubric.llm_traits if t.deep_judgment_enabled]
+        standard_traits = [t for t in rubric.llm_traits if not t.deep_judgment_enabled]
+
+        # Initialize result containers
+        dj_scores: dict[str, int | bool] = {}
+        excerpts: dict[str, list[dict[str, Any]]] = {}
+        reasoning: dict[str, str] = {}
+        metadata: dict[str, dict[str, Any]] = {}
+        hallucination_risks: dict[str, dict[str, Any]] = {}
+        auto_fail_traits: list[str] = []
+
+        logger.info(
+            f"Evaluating rubric with deep judgment: {len(dj_traits)} DJ traits, {len(standard_traits)} standard traits"
+        )
+
+        # Sequential evaluation for deep-judgment traits (one at a time)
+        for trait in dj_traits:
+            logger.debug(f"Evaluating deep judgment trait: {trait.name}")
+            try:
+                trait_result = self._evaluate_single_trait_with_deep_judgment(question, answer, trait, config)
+
+                # Check for auto-fail
+                if trait_result.get("auto_fail"):
+                    auto_fail_traits.append(trait.name)
+                    metadata[trait.name] = trait_result["metadata"]
+                    logger.warning(
+                        f"Trait '{trait.name}' auto-failed: no valid excerpts after {trait_result['metadata'].get('excerpt_retry_count', 0)} retries"
+                    )
+                    continue  # Skip to next trait
+
+                # Store successful evaluation
+                dj_scores[trait.name] = trait_result["score"]
+                reasoning[trait.name] = trait_result["reasoning"]
+                metadata[trait.name] = trait_result["metadata"]
+
+                # Store excerpts if extraction was enabled
+                if trait.deep_judgment_excerpt_enabled and "excerpts" in trait_result:
+                    excerpts[trait.name] = trait_result["excerpts"]
+
+                    # Store hallucination risk if search was enabled
+                    if trait.deep_judgment_search_enabled and "hallucination_risk" in trait_result:
+                        hallucination_risks[trait.name] = trait_result["hallucination_risk"]
+
+            except Exception as e:
+                logger.error(f"Failed to evaluate deep judgment trait '{trait.name}': {e}")
+                # Mark trait as failed
+                auto_fail_traits.append(trait.name)
+                metadata[trait.name] = {
+                    "stages_completed": [],
+                    "model_calls": 0,
+                    "error": str(e),
+                }
+
+        # Evaluate standard traits using existing batch/sequential logic
+        standard_scores: dict[str, int | bool] = {}
+        if standard_traits:
+            logger.debug(f"Evaluating {len(standard_traits)} standard traits")
+            standard_rubric = Rubric(llm_traits=standard_traits)
+            standard_scores, _ = self.evaluate_rubric(question, answer, standard_rubric)
+
+        return {
+            "deep_judgment_scores": dj_scores,
+            "standard_scores": standard_scores,
+            "excerpts": excerpts,
+            "reasoning": reasoning,
+            "metadata": metadata,
+            "hallucination_risks": hallucination_risks,
+            "traits_without_valid_excerpts": auto_fail_traits,
+        }
+
+    def _evaluate_single_trait_with_deep_judgment(
+        self, question: str, answer: str, trait: "LLMRubricTrait", config: Any
+    ) -> dict[str, Any]:
+        """
+        Evaluate a single trait using deep judgment (sequential multi-stage process).
+
+        Returns:
+            Dictionary with: score, reasoning, excerpts (optional), metadata, auto_fail flag
+        """
+        # Initialize metadata
+        metadata: dict[str, Any] = {
+            "stages_completed": [],
+            "model_calls": 0,
+            "had_excerpts": trait.deep_judgment_excerpt_enabled,
+            "excerpt_retry_count": 0,
+            "excerpt_validation_failed": False,
+        }
+
+        # Determine flow based on excerpt_enabled
+        if trait.deep_judgment_excerpt_enabled:
+            # Flow 1: With excerpts (3-4 stages)
+            return self._evaluate_trait_with_excerpts(question, answer, trait, config, metadata)
+        else:
+            # Flow 2: Without excerpts (2 stages)
+            return self._evaluate_trait_without_excerpts(question, answer, trait, config, metadata)
+
+    def _evaluate_trait_with_excerpts(
+        self, question: str, answer: str, trait: "LLMRubricTrait", config: Any, metadata: dict[str, Any]
+    ) -> dict[str, Any]:
+        """
+        Evaluate trait with excerpt extraction (Flow 1: 3-4 stages).
+
+        Stages:
+        1. Extract excerpts (with retry on validation failure)
+        1.5. Optional: Search-enhanced hallucination assessment
+        2. Generate reasoning based on excerpts
+        3. Extract final score
+        """
+        # Stage 1: Extract excerpts with retry
+        excerpt_result = self._extract_excerpts_for_trait(answer, trait, config)
+        metadata["model_calls"] += excerpt_result["model_calls"]
+        metadata["excerpt_retry_count"] = excerpt_result["retry_count"]
+
+        # Check for auto-fail
+        if excerpt_result.get("auto_fail"):
+            metadata["excerpt_validation_failed"] = True
+            return {
+                "auto_fail": True,
+                "metadata": metadata,
+            }
+
+        excerpts = excerpt_result["excerpts"]
+        metadata["stages_completed"].append("excerpt_extraction")
+
+        # Stage 1.5: Optional search-enhanced hallucination assessment
+        hallucination_risk = None
+        if trait.deep_judgment_search_enabled and excerpts:
+            hallucination_result = self._assess_trait_hallucination(excerpts, trait, config)
+            excerpts = hallucination_result["excerpts"]  # Updated with search results
+            hallucination_risk = hallucination_result["risk_assessment"]
+            metadata["model_calls"] += hallucination_result["model_calls"]
+            metadata["stages_completed"].append("hallucination_assessment")
+
+        # Stage 2: Generate reasoning based on excerpts
+        reasoning_result = self._generate_reasoning_for_trait(
+            question, answer, trait, excerpts=excerpts, hallucination_risk=hallucination_risk
+        )
+        reasoning = reasoning_result["reasoning"]
+        metadata["model_calls"] += 1
+        metadata["stages_completed"].append("reasoning_generation")
+
+        # Stage 3: Extract score
+        score_result = self._extract_score_for_trait(question, answer, trait, reasoning)
+        score = score_result["score"]
+        metadata["model_calls"] += 1
+        metadata["stages_completed"].append("score_extraction")
+
+        return {
+            "score": score,
+            "reasoning": reasoning,
+            "excerpts": excerpts,
+            "hallucination_risk": hallucination_risk,
+            "metadata": metadata,
+            "auto_fail": False,
+        }
+
+    def _evaluate_trait_without_excerpts(
+        self,
+        question: str,
+        answer: str,
+        trait: "LLMRubricTrait",
+        config: Any,  # noqa: ARG002
+        metadata: dict[str, Any],
+    ) -> dict[str, Any]:
+        """
+        Evaluate trait without excerpt extraction (Flow 2: 2 stages).
+
+        Stages:
+        1. Generate reasoning based on full answer
+        2. Extract final score
+        """
+        # Stage 1: Generate reasoning (no excerpts)
+        reasoning_result = self._generate_reasoning_for_trait(
+            question, answer, trait, excerpts=None, hallucination_risk=None
+        )
+        reasoning = reasoning_result["reasoning"]
+        metadata["model_calls"] += 1
+        metadata["stages_completed"].append("reasoning_generation")
+
+        # Stage 2: Extract score
+        score_result = self._extract_score_for_trait(question, answer, trait, reasoning)
+        score = score_result["score"]
+        metadata["model_calls"] += 1
+        metadata["stages_completed"].append("score_extraction")
+
+        return {
+            "score": score,
+            "reasoning": reasoning,
+            "metadata": metadata,
+            "auto_fail": False,
+        }
+
+    def _extract_excerpts_for_trait(self, answer: str, trait: "LLMRubricTrait", config: Any) -> dict[str, Any]:
+        """
+        Extract excerpts for a trait with retry on validation failure.
+
+        Returns:
+            Dictionary with: excerpts, retry_count, model_calls, auto_fail flag
+        """
+        # Get configuration values (per-trait overrides global defaults)
+        max_attempts = (
+            trait.deep_judgment_excerpt_retry_attempts
+            if trait.deep_judgment_excerpt_retry_attempts is not None
+            else config.deep_judgment_rubric_excerpt_retry_attempts_default
+        )
+        fuzzy_threshold = (
+            trait.deep_judgment_fuzzy_match_threshold
+            if trait.deep_judgment_fuzzy_match_threshold is not None
+            else config.deep_judgment_rubric_fuzzy_match_threshold_default
+        )
+        max_excerpts = (
+            trait.deep_judgment_max_excerpts
+            if trait.deep_judgment_max_excerpts is not None
+            else config.deep_judgment_rubric_max_excerpts_default
+        )
+
+        retry_count = 0
+        model_calls = 0
+        validation_feedback = None
+
+        # Retry loop
+        for attempt in range(max_attempts + 1):  # Initial + retries
+            # Build prompt (with feedback if retry)
+            prompt = self._build_trait_excerpt_prompt(trait, max_excerpts, answer, validation_feedback)
+
+            # Call LLM
+            messages = [
+                SystemMessage(
+                    content="You are an expert at extracting verbatim quotes from text that demonstrate specific qualities."
+                ),
+                HumanMessage(content=prompt),
+            ]
+
+            with get_usage_metadata_callback():
+                response = self.llm.invoke(messages)
+            model_calls += 1
+
+            raw_response = response.content if hasattr(response, "content") else str(response)
+
+            # Parse excerpts
+            try:
+                raw_excerpts = self._parse_excerpt_response(raw_response)
+            except Exception as e:
+                logger.warning(f"Failed to parse excerpt response for trait '{trait.name}': {e}")
+                if attempt < max_attempts:
+                    validation_feedback = (
+                        f"Failed to parse response: {e}. Please return valid JSON with an 'excerpts' array."
+                    )
+                    retry_count += 1
+                    continue
+                else:
+                    # All retries exhausted
+                    return {
+                        "excerpts": [],
+                        "retry_count": retry_count,
+                        "model_calls": model_calls,
+                        "auto_fail": True,
+                    }
+
+            # Validate excerpts with fuzzy matching
+            validated, failed = self._validate_trait_excerpts(raw_excerpts, answer, fuzzy_threshold)
+
+            if validated:
+                # Success!
+                return {
+                    "excerpts": validated,
+                    "retry_count": retry_count,
+                    "model_calls": model_calls,
+                    "auto_fail": False,
+                }
+
+            # All excerpts failed validation
+            if attempt < max_attempts:
+                # Build feedback for retry
+                validation_feedback = self._build_retry_feedback(failed, fuzzy_threshold)
+                retry_count += 1
+                logger.debug(
+                    f"Trait '{trait.name}' excerpt validation failed (attempt {attempt + 1}), retrying with feedback"
+                )
+            else:
+                # Exhausted all retries
+                logger.warning(f"Trait '{trait.name}' failed excerpt extraction after {retry_count} retries")
+                return {
+                    "excerpts": [],
+                    "retry_count": retry_count,
+                    "model_calls": model_calls,
+                    "auto_fail": True,
+                }
+
+        # Should not reach here
+        return {
+            "excerpts": [],
+            "retry_count": retry_count,
+            "model_calls": model_calls,
+            "auto_fail": True,
+        }
+
+    def _validate_trait_excerpts(
+        self, excerpts: list[dict[str, Any]], answer: str, fuzzy_threshold: float
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """
+        Validate excerpts using fuzzy matching.
+
+        Returns:
+            Tuple of (valid_excerpts, failed_excerpts)
+        """
+        from ..tools.fuzzy_match import fuzzy_match_excerpt
+
+        valid = []
+        failed = []
+
+        for excerpt in excerpts:
+            excerpt_text = excerpt.get("text", "")
+            match_found, similarity = fuzzy_match_excerpt(excerpt_text, answer)
+
+            if match_found and similarity >= fuzzy_threshold:
+                excerpt["similarity_score"] = similarity
+                valid.append(excerpt)
+            else:
+                excerpt["similarity_score"] = similarity
+                failed.append(excerpt)
+
+        return valid, failed
+
+    def _build_retry_feedback(self, failed_excerpts: list[dict[str, Any]], fuzzy_threshold: float) -> str:
+        """
+        Build feedback message for retry attempt.
+
+        Same format as template Deep Judgment.
+        """
+        feedback = "The following excerpts failed validation (not found in answer):\n"
+
+        for i, excerpt in enumerate(failed_excerpts, 1):
+            feedback += (
+                f'{i}. "{excerpt.get("text", "")}" '
+                f"(similarity: {excerpt.get('similarity_score', 0):.2f}, "
+                f"threshold: {fuzzy_threshold:.2f})\n"
+            )
+
+        feedback += "\nPlease provide verbatim quotes that exactly match the answer text."
+        return feedback
+
+    def _build_trait_excerpt_prompt(
+        self, trait: "LLMRubricTrait", max_excerpts: int, answer: str, feedback: str | None = None
+    ) -> str:
+        """Build prompt for excerpt extraction (with optional retry feedback)."""
+        prompt = f"""Extract verbatim quotes from the answer that demonstrate the following quality trait:
+
+**Trait**: {trait.name}
+**Criteria**: {trait.description or "Assess this quality"}
+
+**Answer to analyze**:
+{answer}
+
+**Task**:
+Extract up to {max_excerpts} verbatim quotes from the answer that demonstrate or relate to this trait.
+
+For each quote, assign a confidence level:
+- "high": Strong evidence for the trait
+- "medium": Moderate evidence
+- "low": Weak or ambiguous evidence
+
+**CRITICAL**: Quotes must be EXACT verbatim text from the answer. Do not paraphrase or modify.
+"""
+
+        if feedback:
+            prompt += f"\n**RETRY FEEDBACK**:\n{feedback}\n"
+
+        prompt += """
+Return your response as JSON:
+{
+  "excerpts": [
+    {"text": "exact quote 1", "confidence": "high"},
+    {"text": "exact quote 2", "confidence": "medium"}
+  ]
+}
+
+JSON Response:"""
+
+        return prompt
+
+    def _parse_excerpt_response(self, response: str) -> list[dict[str, Any]]:
+        """Parse the excerpt extraction response."""
+        # Try to extract JSON from response
+        json_match = re.search(r"\{.*\}", response, re.DOTALL)
+        if not json_match:
+            raise ValueError(f"No JSON found in response: {response[:200]}")
+
+        try:
+            result = json.loads(json_match.group())
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON in response: {e}") from e
+
+        excerpts = result.get("excerpts", [])
+        if not isinstance(excerpts, list):
+            raise ValueError(f"'excerpts' must be a list, got {type(excerpts)}")
+
+        return excerpts
+
+    def _assess_trait_hallucination(
+        self, excerpts: list[dict[str, Any]], trait: "LLMRubricTrait", config: Any
+    ) -> dict[str, Any]:
+        """
+        Assess hallucination risk for trait excerpts using search.
+
+        Returns:
+            Dictionary with: excerpts (updated with search results), risk_assessment, model_calls
+        """
+        from ..tools.search_tools import create_search_tool
+
+        # Create search tool
+        search_tool = create_search_tool(config.deep_judgment_rubric_search_tool)
+
+        # Batch search for all excerpts
+        excerpt_texts = [e.get("text", "") for e in excerpts]
+        try:
+            search_results = search_tool(excerpt_texts)
+            # Ensure it's a list
+            if not isinstance(search_results, list):
+                search_results = [search_results] * len(excerpt_texts)
+        except Exception as e:
+            logger.warning(f"Search failed for trait '{trait.name}': {e}")
+            search_results = ["Search failed"] * len(excerpt_texts)  # type: ignore[assignment]
+
+        # Assess hallucination risk per excerpt
+        model_calls = 0
+        per_excerpt_risks = []
+
+        for i, excerpt in enumerate(excerpts):
+            # Build prompt for hallucination assessment
+            prompt = f"""Assess the hallucination risk for this excerpt:
+
+**Excerpt**: {excerpt.get("text", "")}
+
+**Search Results**:
+{search_results[i] if i < len(search_results) else "No results"}
+
+Based on the search results, assess the risk that this excerpt contains hallucinated or unverifiable information:
+- "none": Strong external evidence supports this
+- "low": Some external evidence, likely accurate
+- "medium": Weak or ambiguous external evidence
+- "high": No external evidence or contradicted by sources
+
+Return only the risk level (none/low/medium/high) and a brief justification.
+
+JSON Response:
+{{"risk": "none|low|medium|high", "justification": "brief explanation"}}
+"""
+
+            messages = [
+                SystemMessage(content="You are an expert at assessing hallucination risk using external evidence."),
+                HumanMessage(content=prompt),
+            ]
+
+            with get_usage_metadata_callback():
+                response = self.llm.invoke(messages)
+            model_calls += 1
+
+            raw_response = response.content if hasattr(response, "content") else str(response)
+
+            # Parse response
+            try:
+                json_match = re.search(r"\{.*\}", raw_response, re.DOTALL)
+                if json_match:
+                    risk_data = json.loads(json_match.group())
+                    risk = risk_data.get("risk", "medium")
+                    justification = risk_data.get("justification", "")
+                else:
+                    risk = "medium"
+                    justification = "Failed to parse response"
+            except Exception as e:
+                logger.warning(f"Failed to parse hallucination assessment: {e}")
+                risk = "medium"
+                justification = "Failed to parse"
+
+            # Update excerpt with search data
+            excerpt["search_results"] = search_results[i] if i < len(search_results) else None
+            excerpt["hallucination_risk"] = risk
+            excerpt["hallucination_justification"] = justification
+            per_excerpt_risks.append(risk)
+
+        # Overall risk = MAX of per-excerpt risks
+        risk_levels = {"none": 0, "low": 1, "medium": 2, "high": 3}
+        max_risk_level = max((risk_levels.get(r, 2) for r in per_excerpt_risks), default=2)
+        overall_risk = [k for k, v in risk_levels.items() if v == max_risk_level][0]
+
+        return {
+            "excerpts": excerpts,
+            "risk_assessment": {
+                "overall_risk": overall_risk,
+                "per_excerpt_risks": per_excerpt_risks,
+            },
+            "model_calls": model_calls,
+        }
+
+    def _generate_reasoning_for_trait(
+        self,
+        question: str,
+        answer: str,
+        trait: "LLMRubricTrait",
+        excerpts: list[dict[str, Any]] | None = None,
+        hallucination_risk: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """
+        Generate reasoning explaining the trait score.
+
+        Returns:
+            Dictionary with: reasoning (string)
+        """
+        if excerpts is not None:
+            # With excerpts
+            prompt = self._build_trait_reasoning_prompt_with_excerpts(
+                question, answer, trait, excerpts, hallucination_risk
+            )
+        else:
+            # Without excerpts
+            prompt = self._build_trait_reasoning_prompt_without_excerpts(question, answer, trait)
+
+        messages = [
+            SystemMessage(content="You are an expert at analyzing text quality and providing clear reasoning."),
+            HumanMessage(content=prompt),
+        ]
+
+        with get_usage_metadata_callback():
+            response = self.llm.invoke(messages)
+
+        raw_response = response.content if hasattr(response, "content") else str(response)
+        reasoning = raw_response.strip()
+
+        return {"reasoning": reasoning}
+
+    def _build_trait_reasoning_prompt_with_excerpts(
+        self,
+        question: str,
+        answer: str,  # noqa: ARG002
+        trait: "LLMRubricTrait",
+        excerpts: list[dict[str, Any]],
+        hallucination_risk: dict[str, Any] | None = None,
+    ) -> str:
+        """Build reasoning prompt with excerpts."""
+        # Format excerpts
+        excerpts_formatted = []
+        for i, excerpt in enumerate(excerpts, 1):
+            conf = excerpt.get("confidence", "unknown")
+            text = excerpt.get("text", "")
+            risk = excerpt.get("hallucination_risk", "")
+            risk_str = f" (hallucination risk: {risk})" if risk else ""
+            excerpts_formatted.append(f'{i}. "{text}" [{conf} confidence]{risk_str}')
+
+        excerpts_text = "\n".join(excerpts_formatted) if excerpts_formatted else "No excerpts found."
+
+        risk_context = ""
+        if hallucination_risk:
+            risk_context = f"\n**Overall Hallucination Risk**: {hallucination_risk.get('overall_risk', 'unknown')}\n"
+
+        return f"""Based on the extracted excerpts, explain how they demonstrate (or fail to demonstrate) the following trait:
+
+**Trait**: {trait.name}
+**Criteria**: {trait.description or "Assess this quality"}
+
+**Question**: {question}
+
+**Extracted Excerpts**:
+{excerpts_text}
+{risk_context}
+
+Provide 2-3 sentences explaining how these excerpts inform your assessment of this trait.
+Be specific about what the excerpts reveal about the answer's quality for this trait.
+
+Your reasoning:"""
+
+    def _build_trait_reasoning_prompt_without_excerpts(
+        self, question: str, answer: str, trait: "LLMRubricTrait"
+    ) -> str:
+        """Build reasoning prompt without excerpts (based on full response)."""
+        return f"""Analyze the following answer for the quality trait below and explain your assessment:
+
+**Trait**: {trait.name}
+**Criteria**: {trait.description or "Assess this quality"}
+
+**Question**: {question}
+
+**Complete Answer**:
+{answer}
+
+Provide 2-3 sentences explaining how this answer demonstrates (or fails to demonstrate) this trait.
+Base your reasoning on the complete answer text and the trait criteria.
+
+Your reasoning:"""
+
+    def _extract_score_for_trait(
+        self,
+        question: str,  # noqa: ARG002
+        answer: str,  # noqa: ARG002
+        trait: "LLMRubricTrait",
+        reasoning: str,
+    ) -> dict[str, Any]:
+        """
+        Extract final score for trait based on reasoning.
+
+        Returns:
+            Dictionary with: score (int | bool)
+        """
+        prompt = self._build_trait_scoring_prompt(trait, reasoning)
+
+        messages = [
+            SystemMessage(content="You are an expert evaluator providing precise trait scores."),
+            HumanMessage(content=prompt),
+        ]
+
+        with get_usage_metadata_callback():
+            response = self.llm.invoke(messages)
+
+        raw_response = response.content if hasattr(response, "content") else str(response)
+
+        # Parse score
+        score = self._parse_trait_score_response(raw_response, trait)
+
+        return {"score": score}
+
+    def _build_trait_scoring_prompt(self, trait: "LLMRubricTrait", reasoning: str) -> str:
+        """Build prompt for final scoring."""
+        if trait.kind == "boolean":
+            return f"""Based on the following reasoning, provide a boolean score for this trait:
+
+**Trait**: {trait.name}
+**Criteria**: {trait.description or "Boolean evaluation"}
+
+**Reasoning**:
+{reasoning}
+
+Based on this reasoning, does the answer meet the criteria for this trait?
+
+Respond with only "true" or "false".
+
+Your score:"""
+        else:
+            min_score = trait.min_score or 1
+            max_score = trait.max_score or 5
+            return f"""Based on the following reasoning, provide a numeric score for this trait:
+
+**Trait**: {trait.name}
+**Criteria**: {trait.description or "Score-based evaluation"}
+**Scale**: {min_score} (poor/does not meet criteria) to {max_score} (excellent/fully meets criteria)
+
+**Reasoning**:
+{reasoning}
+
+Based on this reasoning, what score ({min_score}-{max_score}) should this answer receive?
+
+Respond with only the numeric score.
+
+Your score:"""
+
+    def _parse_trait_score_response(self, response: str, trait: "LLMRubricTrait") -> int | bool:
+        """Parse a trait score response."""
+        response = response.strip().lower()
+
+        if trait.kind == "boolean":
+            if response in ["true", "yes", "1"]:
+                return True
+            elif response in ["false", "no", "0"]:
+                return False
+            else:
+                # Try to extract boolean from longer response
+                if "true" in response or "yes" in response:
+                    return True
+                elif "false" in response or "no" in response:
+                    return False
+                else:
+                    logger.warning(f"Could not parse boolean from: {response}, defaulting to False")
+                    return False
+        else:
+            # Extract numeric score
+            numbers = re.findall(r"\d+", response)
+            if not numbers:
+                logger.warning(f"No numeric score found in: {response}, defaulting to minimum score")
+                return trait.min_score or 1
+
+            score = int(numbers[0])
+            # Validate and clamp score
+            min_score = trait.min_score or 1
+            max_score = trait.max_score or 5
+            clamped_score = max(min_score, min(max_score, score))
+
+            if clamped_score != score:
+                logger.debug(f"Score {score} clamped to valid range [{min_score}, {max_score}]: {clamped_score}")
+
+            return clamped_score

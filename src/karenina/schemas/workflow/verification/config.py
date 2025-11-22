@@ -1,26 +1,43 @@
-"""Verification configuration and result models."""
+"""Verification configuration model."""
 
+import contextlib
 import json
+import os
+import re
+import uuid
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from .models import (
+from ..models import (
     INTERFACE_LANGCHAIN,
     INTERFACES_NO_PROVIDER_REQUIRED,
     FewShotConfig,
     ModelConfig,
 )
 
-if TYPE_CHECKING:
-    from .verification_result_set import VerificationResultSet
-
 # Default system prompts for answering and parsing models
 DEFAULT_ANSWERING_SYSTEM_PROMPT = "You are an expert assistant. Answer the question accurately and concisely."
 DEFAULT_PARSING_SYSTEM_PROMPT = (
     "You are a validation assistant. Parse and validate responses against the given Pydantic template."
 )
+
+
+class DeepJudgmentTraitConfig(BaseModel):
+    """
+    Configuration for deep judgment evaluation of a single rubric trait.
+
+    This model validates trait-level deep judgment settings used in custom mode.
+    """
+
+    enabled: bool = True
+    excerpt_enabled: bool = True
+    max_excerpts: int | None = None
+    fuzzy_match_threshold: float | None = None
+    excerpt_retry_attempts: int | None = None
+    search_enabled: bool = False
 
 
 class VerificationConfig(BaseModel):
@@ -71,6 +88,33 @@ class VerificationConfig(BaseModel):
     # Can also pass any callable: (str | list[str]) -> (str | list[str])
     # Examples: langchain tools, MCP tools, custom functions
 
+    # Deep-judgment rubric settings (global defaults for per-trait configuration)
+    deep_judgment_rubric_max_excerpts_default: int = 7  # Default max excerpts per trait (higher than templates)
+    deep_judgment_rubric_fuzzy_match_threshold_default: float = 0.80  # Default fuzzy match threshold for traits
+    deep_judgment_rubric_excerpt_retry_attempts_default: int = 2  # Default retry attempts for trait excerpts
+    deep_judgment_rubric_search_tool: str | Any = "tavily"  # Search tool for rubric hallucination detection
+
+    # Deep-judgment rubric configuration modes (NEW - runtime control of deep judgment)
+    deep_judgment_rubric_mode: Literal["disabled", "enable_all", "use_checkpoint", "custom"] = "disabled"
+    # - "disabled": Deep judgment is OFF (default, explicit)
+    # - "enable_all": Apply deep judgment to all LLM traits (respects excerpt toggle)
+    # - "use_checkpoint": Use deep judgment settings saved in checkpoint (if available)
+    # - "custom": Use per-trait configuration from deep_judgment_rubric_config
+
+    deep_judgment_rubric_global_excerpts: bool = True  # For enable_all mode: enable/disable excerpts globally
+    deep_judgment_rubric_config: dict[str, Any] | None = None  # For custom mode: nested trait config
+    # Expected structure for custom mode:
+    # {
+    #   "global": {
+    #     "TraitName": {"enabled": True, "excerpt_enabled": True, ...}
+    #   },
+    #   "question_specific": {
+    #     "question-id": {
+    #       "TraitName": {"enabled": True, ...}
+    #     }
+    #   }
+    # }
+
     # Few-shot prompting settings
     few_shot_config: FewShotConfig | None = None  # New flexible configuration
 
@@ -104,9 +148,6 @@ class VerificationConfig(BaseModel):
         2. Environment variables (only if set)
         3. Field defaults
         """
-        import contextlib
-        import os
-
         # Read environment variables for embedding check settings (only if not explicitly provided AND env var is set)
         if "embedding_check_enabled" not in data:
             env_val = os.getenv("EMBEDDING_CHECK")
@@ -426,8 +467,6 @@ class VerificationConfig(BaseModel):
             >>> VerificationConfig.sanitize_preset_name("My Test Config!")
             "my-test-config.json"
         """
-        import re
-
         sanitized = name.lower()
         sanitized = sanitized.replace(" ", "-")
         sanitized = re.sub(r"[^a-z0-9-]", "", sanitized)
@@ -547,10 +586,6 @@ class VerificationConfig(BaseModel):
             >>> metadata = config.save_preset("Quick Test", "Fast testing configuration")
             >>> print(f"Saved to {metadata['filepath']}")
         """
-        import os
-        import uuid
-        from datetime import UTC, datetime
-
         # Determine presets directory
         if presets_dir is None:
             # Check environment variable first
@@ -559,7 +594,7 @@ class VerificationConfig(BaseModel):
                 presets_dir = Path(env_presets_dir)
             else:
                 # Default to benchmark_presets/ directory in project root
-                project_root = Path(__file__).parent.parent.parent.parent.parent
+                project_root = Path(__file__).parent.parent.parent.parent.parent.parent
                 presets_dir = project_root / "benchmark_presets"
 
         presets_dir = presets_dir.resolve()
@@ -662,583 +697,3 @@ class VerificationConfig(BaseModel):
         except Exception as e:
             preset_name = preset.get("name", "unknown")
             raise ValueError(f"Failed to load preset '{preset_name}' from {filepath}: {e}") from e
-
-
-class VerificationResultMetadata(BaseModel):
-    """Core metadata and identification fields for a verification result."""
-
-    question_id: str
-    template_id: str  # MD5 of template or "no_template" (composite key component)
-    completed_without_errors: bool
-    error: str | None = None
-    question_text: str
-    keywords: list[str] | None = None  # Keywords associated with the question
-    answering_model: str
-    parsing_model: str
-    answering_system_prompt: str | None = None  # System prompt used for answering model
-    parsing_system_prompt: str | None = None  # System prompt used for parsing model
-    execution_time: float
-    timestamp: str
-    run_name: str | None = None
-    job_id: str | None = None
-    answering_replicate: int | None = None  # Replicate number for answering model (1, 2, 3, ...)
-    parsing_replicate: int | None = None  # Replicate number for parsing model (1, 2, 3, ...)
-
-
-class VerificationResultTemplate(BaseModel):
-    """Template verification and answer generation fields."""
-
-    raw_llm_response: str
-    parsed_gt_response: dict[str, Any] | None = None  # Ground truth from 'correct' field
-    parsed_llm_response: dict[str, Any] | None = None  # LLM extracted fields (excluding 'id' and 'correct')
-
-    # Verification outcomes
-    template_verification_performed: bool = False  # Whether template verification was executed
-    verify_result: Any | None = None  # Template verification result (None if template verification skipped)
-    verify_granular_result: Any | None = None
-
-    # Embeddings
-    embedding_check_performed: bool = False  # Whether embedding check was attempted
-    embedding_similarity_score: float | None = None  # Similarity score (0.0 to 1.0)
-    embedding_override_applied: bool = False  # Whether embedding check overrode the result
-    embedding_model_used: str | None = None  # Name of the embedding model used
-
-    # Regex checks
-    regex_validations_performed: bool = False  # Whether regex validation was attempted
-    regex_validation_results: dict[str, bool] | None = None  # Individual regex pattern results
-    regex_validation_details: dict[str, dict[str, Any]] | None = None  # Detailed regex match information
-    regex_overall_success: bool | None = None  # Overall regex validation result
-    regex_extraction_results: dict[str, Any] | None = None  # What the regex patterns actually extracted
-
-    # Recursion limit metadata
-    recursion_limit_reached: bool = False  # Whether agent hit recursion limit
-
-    # Abstention
-    abstention_check_performed: bool = False  # Whether abstention check was attempted
-    abstention_detected: bool | None = None  # Whether model refused/abstained from answering
-    abstention_override_applied: bool = False  # Whether abstention check overrode the result
-    abstention_reasoning: str | None = None  # LLM's reasoning for abstention determination
-
-    # MCP
-    answering_mcp_servers: list[str] | None = None  # Names of MCP servers attached to answering model
-
-    # Usage
-    usage_metadata: dict[str, dict[str, Any]] | None = None  # Token usage breakdown by verification stage
-    # Structure: {
-    #   "answer_generation": {
-    #     "input_tokens": 150, "output_tokens": 200, "total_tokens": 350,
-    #     "model": "gpt-4.1-mini-2025-04-14",
-    #     "input_token_details": {"audio": 0, "cache_read": 0},
-    #     "output_token_details": {"audio": 0, "reasoning": 0}
-    #   },
-    #   "parsing": {...}, "rubric_evaluation": {...}, "abstention_check": {...},
-    #   "total": {"input_tokens": 600, "output_tokens": 360, "total_tokens": 960}
-    # }
-    agent_metrics: dict[str, Any] | None = None  # MCP agent execution metrics (only if agent used)
-    # Structure: {
-    #   "iterations": 3,  # Number of agent think-act cycles
-    #   "tool_calls": 5,  # Total tool invocations
-    #   "tools_used": ["mcp__brave_search", "mcp__read_resource"],  # Unique tool names used
-    #   "suspect_failed_tool_calls": 2,  # Count of tool calls with error-like output patterns
-    #   "suspect_failed_tools": ["mcp__brave_search"]  # List of tools with suspected failures
-    # }
-
-
-class VerificationResultRubric(BaseModel):
-    """Rubric evaluation fields with split trait types."""
-
-    rubric_evaluation_performed: bool = False  # Whether rubric evaluation was executed
-    rubric_evaluation_strategy: str | None = None  # Strategy used: "batch" or "sequential"
-
-    # Split trait scores by type (replaces old verify_rubric dict)
-    llm_trait_scores: dict[str, int | bool] | None = None  # LLM-evaluated traits (1-5 scale or binary)
-    regex_trait_scores: dict[str, bool] | None = None  # Regex-based traits (boolean)
-    callable_trait_scores: dict[str, bool | int] | None = None  # Callable-based traits (boolean or score)
-    metric_trait_scores: dict[str, dict[str, float]] | None = None  # Metric traits with nested metrics dict
-
-    evaluation_rubric: dict[str, Any] | None = None  # The merged rubric used for evaluation
-
-    # Metric trait evaluation metadata (confusion-matrix analysis)
-    metric_trait_confusion_lists: dict[str, dict[str, list[str]]] | None = None  # Confusion lists per metric trait
-    # Structure: {"trait_name": {"tp": ["excerpt1", ...], "tn": [...], "fp": [...], "fn": [...]}}
-    # Each trait has four lists (TP/TN/FP/FN) containing extracted excerpts from the answer
-
-    def get_all_trait_scores(self) -> dict[str, int | bool | dict[str, float]]:
-        """
-        Get all trait scores across all trait types in a flat dictionary.
-
-        Returns:
-            dict: All trait scores, e.g.:
-                {
-                    "clarity": 4,
-                    "mentions_regulatory_elements": True,
-                    "feature_identification": {"precision": 1.0, "recall": 1.0, "f1": 1.0}
-                }
-        """
-        scores: dict[str, int | bool | dict[str, float]] = {}
-
-        if self.llm_trait_scores:
-            scores.update(self.llm_trait_scores)
-        if self.regex_trait_scores:
-            scores.update(self.regex_trait_scores)
-        if self.callable_trait_scores:
-            scores.update(self.callable_trait_scores)
-        if self.metric_trait_scores:
-            scores.update(self.metric_trait_scores)
-
-        return scores
-
-    def get_trait_by_name(self, name: str) -> tuple[Any, str] | None:
-        """
-        Look up a trait by name across all trait types.
-
-        Args:
-            name: The trait name to search for
-
-        Returns:
-            tuple: (value, trait_type) where trait_type is "llm", "regex", "callable", or "metric"
-            None: If the trait is not found
-        """
-        if self.llm_trait_scores and name in self.llm_trait_scores:
-            return (self.llm_trait_scores[name], "llm")
-        if self.regex_trait_scores and name in self.regex_trait_scores:
-            return (self.regex_trait_scores[name], "regex")
-        if self.callable_trait_scores and name in self.callable_trait_scores:
-            return (self.callable_trait_scores[name], "callable")
-        if self.metric_trait_scores and name in self.metric_trait_scores:
-            return (self.metric_trait_scores[name], "metric")
-        return None
-
-
-class VerificationResultDeepJudgment(BaseModel):
-    """Deep-judgment metadata (multi-stage parsing with excerpts and reasoning)."""
-
-    deep_judgment_enabled: bool = False  # Whether deep-judgment was configured
-    deep_judgment_performed: bool = False  # Whether deep-judgment was successfully executed
-    extracted_excerpts: dict[str, list[dict[str, Any]]] | None = None  # Extracted excerpts per attribute
-    # Structure: {"attribute_name": [{"text": str, "confidence": "low|medium|high", "similarity_score": float,
-    #   "search_results"?: str, "hallucination_risk"?: "none|low|medium|high", "hallucination_justification"?: str}]}
-    # Empty list [] indicates no excerpts found for that attribute (e.g., refusals, no corroborating evidence)
-    # When search is enabled, each excerpt includes:
-    #   - "search_results": External validation text from search tool
-    #   - "hallucination_risk": Per-excerpt risk assessment (none/low/medium/high)
-    #   - "hallucination_justification": Explanation for the risk level
-    attribute_reasoning: dict[str, str] | None = None  # Reasoning traces per attribute
-    # Structure: {"attribute_name": "reasoning text"}
-    # Reasoning can exist even when excerpts are empty (explains why no excerpts found)
-    deep_judgment_stages_completed: list[str] | None = None  # Stages completed: ["excerpts", "reasoning", "parameters"]
-    deep_judgment_model_calls: int = 0  # Number of LLM invocations for deep-judgment
-    deep_judgment_excerpt_retry_count: int = 0  # Number of retries for excerpt validation
-    attributes_without_excerpts: list[str] | None = None  # Attributes with no corroborating excerpts
-
-    # Search-enhanced deep-judgment metadata
-    deep_judgment_search_enabled: bool = False  # Whether search enhancement was enabled for this verification
-    hallucination_risk_assessment: dict[str, str] | None = None  # Hallucination risk per attribute
-    # Structure: {"attribute_name": "none" | "low" | "medium" | "high"}
-    # Scale: "none" = lowest risk (strong external evidence), "high" = highest risk (weak/no evidence)
-    # Only populated when deep_judgment_search_enabled=True
-
-
-class VerificationResult(BaseModel):
-    """Result of verifying a single question."""
-
-    metadata: VerificationResultMetadata
-    template: VerificationResultTemplate | None = None
-    rubric: VerificationResultRubric | None = None
-    deep_judgment: VerificationResultDeepJudgment | None = None
-
-    # Backward compatibility properties for common field access
-    @property
-    def question_id(self) -> str:
-        """Backward compatibility accessor for question_id."""
-        return self.metadata.question_id
-
-    @property
-    def completed_without_errors(self) -> bool:
-        """Backward compatibility accessor for completed_without_errors."""
-        return self.metadata.completed_without_errors
-
-    @property
-    def error(self) -> str | None:
-        """Backward compatibility accessor for error."""
-        return self.metadata.error
-
-    @property
-    def question_text(self) -> str:
-        """Backward compatibility accessor for question_text."""
-        return self.metadata.question_text
-
-    @property
-    def keywords(self) -> list[str] | None:
-        """Backward compatibility accessor for keywords."""
-        return self.metadata.keywords
-
-    @property
-    def answering_model(self) -> str:
-        """Backward compatibility accessor for answering_model."""
-        return self.metadata.answering_model
-
-    @property
-    def parsing_model(self) -> str:
-        """Backward compatibility accessor for parsing_model."""
-        return self.metadata.parsing_model
-
-    @property
-    def run_name(self) -> str | None:
-        """Backward compatibility accessor for run_name."""
-        return self.metadata.run_name
-
-    @property
-    def timestamp(self) -> str:
-        """Backward compatibility accessor for timestamp."""
-        return self.metadata.timestamp
-
-    # Template field backward compatibility
-    @property
-    def raw_llm_response(self) -> str | None:
-        """Backward compatibility accessor for raw_llm_response."""
-        return self.template.raw_llm_response if self.template else None
-
-    @property
-    def usage_metadata(self) -> dict[str, Any] | None:
-        """Backward compatibility accessor for usage_metadata."""
-        return self.template.usage_metadata if self.template else None
-
-    @property
-    def agent_metrics(self) -> dict[str, Any] | None:
-        """Backward compatibility accessor for agent_metrics."""
-        return self.template.agent_metrics if self.template else None
-
-    @property
-    def recursion_limit_reached(self) -> bool | None:
-        """Backward compatibility accessor for recursion_limit_reached."""
-        return self.template.recursion_limit_reached if self.template else None
-
-    @property
-    def answering_mcp_servers(self) -> list[str] | None:
-        """Backward compatibility accessor for answering_mcp_servers."""
-        return self.template.answering_mcp_servers if self.template else None
-
-    @property
-    def abstention_detected(self) -> bool | None:
-        """Backward compatibility accessor for abstention_detected."""
-        return self.template.abstention_detected if self.template else None
-
-    @property
-    def abstention_override_applied(self) -> bool:
-        """Backward compatibility accessor for abstention_override_applied."""
-        return self.template.abstention_override_applied if self.template else False
-
-    @property
-    def abstention_check_performed(self) -> bool:
-        """Backward compatibility accessor for abstention_check_performed."""
-        return self.template.abstention_check_performed if self.template else False
-
-    @property
-    def parsed_gt_response(self) -> dict[str, Any] | None:
-        """Backward compatibility accessor for parsed_gt_response."""
-        return self.template.parsed_gt_response if self.template else None
-
-    @property
-    def parsed_llm_response(self) -> dict[str, Any] | None:
-        """Backward compatibility accessor for parsed_llm_response."""
-        return self.template.parsed_llm_response if self.template else None
-
-    @property
-    def verify_result(self) -> bool | None:
-        """Backward compatibility accessor for verify_result."""
-        return self.template.verify_result if self.template else None
-
-    @property
-    def verify_granular_result(self) -> Any | None:
-        """Backward compatibility accessor for verify_granular_result."""
-        return self.template.verify_granular_result if self.template else None
-
-    @property
-    def embedding_check_performed(self) -> bool:
-        """Backward compatibility accessor for embedding_check_performed."""
-        return self.template.embedding_check_performed if self.template else False
-
-    @property
-    def embedding_similarity_score(self) -> float | None:
-        """Backward compatibility accessor for embedding_similarity_score."""
-        return self.template.embedding_similarity_score if self.template else None
-
-    @property
-    def embedding_override_applied(self) -> bool:
-        """Backward compatibility accessor for embedding_override_applied."""
-        return self.template.embedding_override_applied if self.template else False
-
-    @property
-    def embedding_model_used(self) -> str | None:
-        """Backward compatibility accessor for embedding_model_used."""
-        return self.template.embedding_model_used if self.template else None
-
-    @property
-    def template_verification_performed(self) -> bool:
-        """Backward compatibility accessor for template_verification_performed."""
-        return self.template.template_verification_performed if self.template else False
-
-    @property
-    def abstention_reasoning(self) -> str | None:
-        """Backward compatibility accessor for abstention_reasoning."""
-        return self.template.abstention_reasoning if self.template else None
-
-    @property
-    def regex_validations_performed(self) -> bool:
-        """Backward compatibility accessor for regex_validations_performed."""
-        return self.template.regex_validations_performed if self.template else False
-
-    @property
-    def regex_validation_results(self) -> dict[str, bool] | None:
-        """Backward compatibility accessor for regex_validation_results."""
-        return self.template.regex_validation_results if self.template else None
-
-    @property
-    def regex_validation_details(self) -> dict[str, dict[str, Any]] | None:
-        """Backward compatibility accessor for regex_validation_details."""
-        return self.template.regex_validation_details if self.template else None
-
-    @property
-    def regex_overall_success(self) -> bool | None:
-        """Backward compatibility accessor for regex_overall_success."""
-        return self.template.regex_overall_success if self.template else None
-
-    @property
-    def regex_extraction_results(self) -> dict[str, Any] | None:
-        """Backward compatibility accessor for regex_extraction_results."""
-        return self.template.regex_extraction_results if self.template else None
-
-    # Deep judgment backward compatibility
-    @property
-    def deep_judgment_performed(self) -> bool:
-        """Backward compatibility accessor for deep_judgment_performed."""
-        return self.deep_judgment.deep_judgment_performed if self.deep_judgment else False
-
-    @property
-    def deep_judgment_enabled(self) -> bool:
-        """Backward compatibility accessor for deep_judgment_enabled."""
-        return self.deep_judgment.deep_judgment_enabled if self.deep_judgment else False
-
-    @property
-    def extracted_excerpts(self) -> dict[str, list[dict[str, Any]]] | None:
-        """Backward compatibility accessor for extracted_excerpts."""
-        return self.deep_judgment.extracted_excerpts if self.deep_judgment else None
-
-    @property
-    def attribute_reasoning(self) -> dict[str, str] | None:
-        """Backward compatibility accessor for attribute_reasoning."""
-        return self.deep_judgment.attribute_reasoning if self.deep_judgment else None
-
-    @property
-    def deep_judgment_stages_completed(self) -> list[str] | None:
-        """Backward compatibility accessor for deep_judgment_stages_completed."""
-        return self.deep_judgment.deep_judgment_stages_completed if self.deep_judgment else None
-
-    @property
-    def deep_judgment_model_calls(self) -> int:
-        """Backward compatibility accessor for deep_judgment_model_calls."""
-        return self.deep_judgment.deep_judgment_model_calls if self.deep_judgment else 0
-
-    @property
-    def deep_judgment_excerpt_retry_count(self) -> int:
-        """Backward compatibility accessor for deep_judgment_excerpt_retry_count."""
-        return self.deep_judgment.deep_judgment_excerpt_retry_count if self.deep_judgment else 0
-
-    @property
-    def attributes_without_excerpts(self) -> list[str] | None:
-        """Backward compatibility accessor for attributes_without_excerpts."""
-        return self.deep_judgment.attributes_without_excerpts if self.deep_judgment else None
-
-    @property
-    def deep_judgment_search_enabled(self) -> bool:
-        """Backward compatibility accessor for deep_judgment_search_enabled."""
-        return self.deep_judgment.deep_judgment_search_enabled if self.deep_judgment else False
-
-    @property
-    def hallucination_risk_assessment(self) -> dict[str, str] | None:
-        """Backward compatibility accessor for hallucination_risk_assessment."""
-        return self.deep_judgment.hallucination_risk_assessment if self.deep_judgment else None
-
-    # Rubric field backward compatibility
-    @property
-    def rubric_evaluation_performed(self) -> bool:
-        """Backward compatibility accessor for rubric_evaluation_performed."""
-        return self.rubric.rubric_evaluation_performed if self.rubric else False
-
-    @property
-    def verify_rubric(self) -> dict[str, Any] | None:
-        """Backward compatibility accessor for verify_rubric (combines all trait types)."""
-        if not self.rubric:
-            return None
-
-        scores = self.rubric.get_all_trait_scores()
-        return scores if scores else None
-
-    @property
-    def metric_trait_metrics(self) -> dict[str, dict[str, float]] | None:
-        """Backward compatibility accessor for metric_trait_metrics."""
-        return self.rubric.metric_trait_scores if self.rubric else None
-
-    @property
-    def metric_trait_confusion_lists(self) -> dict[str, dict[str, list[str]]] | None:
-        """Backward compatibility accessor for metric_trait_confusion_lists."""
-        return self.rubric.metric_trait_confusion_lists if self.rubric else None
-
-    @property
-    def evaluation_rubric(self) -> dict[str, Any] | None:
-        """Backward compatibility accessor for evaluation_rubric."""
-        return self.rubric.evaluation_rubric if self.rubric else None
-
-
-class VerificationJob(BaseModel):
-    """Represents a verification job."""
-
-    job_id: str
-    run_name: str  # User-defined or auto-generated run name
-    status: Literal["pending", "running", "completed", "failed", "cancelled"]
-    config: VerificationConfig
-
-    # Database storage
-    storage_url: str | None = None  # Database URL for auto-save functionality
-    benchmark_name: str | None = None  # Benchmark name for auto-save functionality
-
-    # Progress tracking
-    total_questions: int
-    processed_count: int = 0
-    successful_count: int = 0
-    failed_count: int = 0
-    percentage: float = 0.0
-    current_question: str = ""
-    last_task_duration: float | None = None  # Execution time of last completed task
-
-    # WebSocket streaming progress fields
-    in_progress_questions: list[str] = Field(default_factory=list)
-
-    # Task timing tracking (maps question_id to start time)
-    task_start_times: dict[str, float] = Field(default_factory=dict)
-
-    # Timing
-    start_time: float | None = None
-    end_time: float | None = None
-
-    # Results
-    result_set: "VerificationResultSet | None" = None  # Unified verification result container
-    error_message: str | None = None
-
-    def task_started(self, question_id: str) -> None:
-        """Mark a task as started and record start time."""
-        import time
-
-        if question_id not in self.in_progress_questions:
-            self.in_progress_questions.append(question_id)
-
-        # Record task start time
-        self.task_start_times[question_id] = time.time()
-
-    def task_finished(self, question_id: str, success: bool) -> None:
-        """Mark a task as finished, calculate duration, and update counts."""
-        import time
-
-        # Calculate task duration from recorded start time
-        task_duration = 0.0
-        if question_id in self.task_start_times:
-            task_duration = time.time() - self.task_start_times[question_id]
-            # Clean up start time
-            del self.task_start_times[question_id]
-
-        # Remove from in-progress list
-        if question_id in self.in_progress_questions:
-            self.in_progress_questions.remove(question_id)
-
-        # Update counts
-        self.processed_count += 1
-        if success:
-            self.successful_count += 1
-        else:
-            self.failed_count += 1
-
-        # Update percentage
-        self.percentage = (self.processed_count / self.total_questions) * 100 if self.total_questions > 0 else 0.0
-
-        # Track last task duration
-        self.last_task_duration = task_duration
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert job to dictionary for API response."""
-        # Calculate duration if job has started
-        duration = None
-        if self.start_time:
-            if self.end_time:
-                duration = self.end_time - self.start_time  # Completed
-            else:
-                import time
-
-                duration = time.time() - self.start_time  # In progress
-
-        return {
-            "job_id": self.job_id,
-            "run_name": self.run_name,
-            "status": self.status,
-            "total_questions": self.total_questions,
-            "processed_count": self.processed_count,
-            "successful_count": self.successful_count,
-            "failed_count": self.failed_count,
-            "percentage": self.percentage,
-            "current_question": self.current_question,
-            "duration_seconds": duration,
-            "last_task_duration": self.last_task_duration,
-            "error_message": self.error_message,
-            "start_time": self.start_time,
-            "end_time": self.end_time,
-            "in_progress_questions": self.in_progress_questions,
-        }
-
-
-class FinishedTemplate(BaseModel):
-    """Metadata for a finished answer template."""
-
-    question_id: str
-    question_text: str
-    question_preview: str  # Truncated version for UI
-    template_code: str
-    last_modified: str
-    finished: bool = True
-    question_rubric: dict[str, Any] | None = None  # Question-specific rubric as dict
-    keywords: list[str] | None = None  # Keywords associated with the question
-    few_shot_examples: list[dict[str, str]] | None = None  # Few-shot examples for this question
-
-
-class VerificationRequest(BaseModel):
-    """Request to start verification."""
-
-    config: VerificationConfig
-    question_ids: list[str] | None = None  # If None, verify all finished templates
-    run_name: str | None = None  # Optional user-defined run name
-
-
-class VerificationStatusResponse(BaseModel):
-    """Response for verification status."""
-
-    job_id: str
-    run_name: str
-    status: str
-    percentage: float
-    current_question: str
-    processed_count: int
-    total_count: int
-    successful_count: int
-    failed_count: int
-    duration_seconds: float | None = None
-    last_task_duration: float | None = None
-    error: str | None = None
-    results: dict[str, VerificationResult] | None = None
-
-
-class VerificationStartResponse(BaseModel):
-    """Response when starting verification."""
-
-    job_id: str
-    run_name: str
-    status: str
-    message: str

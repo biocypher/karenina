@@ -108,6 +108,16 @@ class VerificationContext:
     deep_judgment_search_enabled: bool = False
     deep_judgment_search_tool: str | Any = "tavily"
 
+    # Deep-Judgment Rubric Configuration (NEW - runtime control of deep judgment for rubrics)
+    deep_judgment_rubric_mode: str = "disabled"  # Mode: disabled, enable_all, use_checkpoint, custom
+    deep_judgment_rubric_global_excerpts: bool = True  # For enable_all mode: enable/disable excerpts
+    deep_judgment_rubric_config: dict[str, Any] | None = None  # For custom mode: nested trait config
+    deep_judgment_rubric_max_excerpts_default: int = 7
+    deep_judgment_rubric_fuzzy_match_threshold_default: float = 0.80
+    deep_judgment_rubric_excerpt_retry_attempts_default: int = 2
+    deep_judgment_rubric_search_enabled: bool = False
+    deep_judgment_rubric_search_tool: str | Any = "tavily"
+
     # Few-Shot Configuration
     few_shot_examples: list[dict[str, str]] | None = None
 

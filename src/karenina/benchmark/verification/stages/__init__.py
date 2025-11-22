@@ -11,13 +11,15 @@ Available Stages:
 - VerifyTemplateStage: Field and regex validation
 - EmbeddingCheckStage: Semantic similarity fallback
 - AbstentionCheckStage: Refusal detection
-- DeepJudgmentAutoFailStage: Excerpt validation
+- DeepJudgmentAutoFailStage: Excerpt validation (templates)
+- DeepJudgmentRubricAutoFailStage: Excerpt validation (rubric traits)
 - RubricEvaluationStage: Qualitative evaluation
 - FinalizeResultStage: Result object construction
 """
 
 from .abstention_check import AbstentionCheckStage
 from .deep_judgment_autofail import DeepJudgmentAutoFailStage
+from .deep_judgment_rubric_auto_fail import DeepJudgmentRubricAutoFailStage
 from .embedding_check import EmbeddingCheckStage
 from .finalize_result import FinalizeResultStage
 from .generate_answer import GenerateAnswerStage
@@ -34,6 +36,7 @@ __all__ = [
     "EmbeddingCheckStage",
     "AbstentionCheckStage",
     "DeepJudgmentAutoFailStage",
+    "DeepJudgmentRubricAutoFailStage",
     "RubricEvaluationStage",
     "FinalizeResultStage",
 ]

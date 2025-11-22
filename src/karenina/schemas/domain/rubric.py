@@ -2,13 +2,14 @@
 Rubric data models for qualitative evaluation traits.
 """
 
+import base64
 import re
 import warnings
 from collections.abc import Callable
-from typing import Literal
+from typing import Any, Literal
 
 import cloudpickle
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator, model_validator
 
 TraitKind = Literal["boolean", "score"]
 
@@ -19,6 +20,13 @@ class LLMRubricTrait(BaseModel):
 
     A trait can be either boolean (true/false) or score-based (1-5 scale).
     Evaluated by prompting an LLM to assess the answer quality.
+
+    Deep Judgment Mode (optional):
+        When enabled, provides evidence-based evaluation with:
+        - Optional excerpt extraction from answer text
+        - Retry mechanism with validation feedback
+        - Reasoning generation explaining the score
+        - Optional search-enhanced hallucination detection
     """
 
     name: str = Field(..., min_length=1, description="Human readable identifier for the trait")
@@ -27,6 +35,32 @@ class LLMRubricTrait(BaseModel):
     min_score: int | None = Field(1, description="Lower bound for score traits (default: 1)")
     max_score: int | None = Field(5, description="Upper bound for score traits (default: 5)")
 
+    # Deep Judgment fields
+    deep_judgment_enabled: bool = Field(
+        False,
+        description="Enable deep judgment evaluation for this trait (multi-stage with reasoning)",
+    )
+    deep_judgment_excerpt_enabled: bool = Field(
+        True,
+        description="Extract verbatim excerpts from answer as evidence (only if deep_judgment_enabled=True)",
+    )
+    deep_judgment_max_excerpts: int | None = Field(
+        None,
+        description="Maximum number of excerpts to extract (overrides global default if set)",
+    )
+    deep_judgment_fuzzy_match_threshold: float | None = Field(
+        None,
+        description="Fuzzy matching threshold for excerpt validation 0.0-1.0 (overrides global default if set)",
+    )
+    deep_judgment_excerpt_retry_attempts: int | None = Field(
+        None,
+        description="Number of retry attempts for excerpt extraction (overrides global default if set)",
+    )
+    deep_judgment_search_enabled: bool = Field(
+        False,
+        description="Enable search-enhanced hallucination detection for excerpts (only if excerpt_enabled=True)",
+    )
+
     model_config = ConfigDict(extra="forbid")
 
     def validate_score(self, value: int | bool) -> bool:
@@ -34,10 +68,14 @@ class LLMRubricTrait(BaseModel):
         if self.kind == "boolean":
             return isinstance(value, bool)
         else:  # self.kind == "score"
+            # Reject boolean values explicitly (bool is a subclass of int in Python)
+            if isinstance(value, bool):
+                return False
             if not isinstance(value, int):
                 return False
-            min_val = self.min_score or 1
-            max_val = self.max_score or 5
+            # Use explicit None checks to allow min_score=0
+            min_val = self.min_score if self.min_score is not None else 1
+            max_val = self.max_score if self.max_score is not None else 5
             return min_val <= value <= max_val
 
 
@@ -128,6 +166,11 @@ class CallableTrait(BaseModel):
     invert_result: bool = Field(False, description="Whether to invert the boolean result (only for kind='boolean')")
 
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
+
+    @field_serializer("callable_code")
+    def serialize_callable_code(self, value: bytes, _info: Any) -> str:
+        """Serialize callable_code bytes to base64 string for JSON export."""
+        return base64.b64encode(value).decode("ascii")
 
     @classmethod
     def from_callable(

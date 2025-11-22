@@ -32,6 +32,15 @@ def _create_verification_task(
     deep_judgment_excerpt_retry_attempts: int = 2,
     deep_judgment_search_enabled: bool = False,
     deep_judgment_search_tool: str | Any = "tavily",
+    # Deep-judgment rubric configuration (NEW)
+    deep_judgment_rubric_mode: str = "disabled",
+    deep_judgment_rubric_global_excerpts: bool = True,
+    deep_judgment_rubric_config: dict[str, Any] | None = None,
+    deep_judgment_rubric_max_excerpts_default: int = 7,
+    deep_judgment_rubric_fuzzy_match_threshold_default: float = 0.80,
+    deep_judgment_rubric_excerpt_retry_attempts_default: int = 2,
+    deep_judgment_rubric_search_enabled: bool = False,
+    deep_judgment_rubric_search_tool: str | Any = "tavily",
 ) -> dict[str, Any]:
     """Create a verification task dictionary from parameters."""
     return {
@@ -56,6 +65,15 @@ def _create_verification_task(
         "deep_judgment_excerpt_retry_attempts": deep_judgment_excerpt_retry_attempts,
         "deep_judgment_search_enabled": deep_judgment_search_enabled,
         "deep_judgment_search_tool": deep_judgment_search_tool,
+        # Deep-judgment rubric configuration (NEW)
+        "deep_judgment_rubric_mode": deep_judgment_rubric_mode,
+        "deep_judgment_rubric_global_excerpts": deep_judgment_rubric_global_excerpts,
+        "deep_judgment_rubric_config": deep_judgment_rubric_config,
+        "deep_judgment_rubric_max_excerpts_default": deep_judgment_rubric_max_excerpts_default,
+        "deep_judgment_rubric_fuzzy_match_threshold_default": deep_judgment_rubric_fuzzy_match_threshold_default,
+        "deep_judgment_rubric_excerpt_retry_attempts_default": deep_judgment_rubric_excerpt_retry_attempts_default,
+        "deep_judgment_rubric_search_enabled": deep_judgment_rubric_search_enabled,
+        "deep_judgment_rubric_search_tool": deep_judgment_rubric_search_tool,
     }
 
 
@@ -96,6 +114,19 @@ def _execute_verification_task(task: dict[str, Any]) -> tuple[str, VerificationR
         deep_judgment_excerpt_retry_attempts=task.get("deep_judgment_excerpt_retry_attempts", 2),
         deep_judgment_search_enabled=task.get("deep_judgment_search_enabled", False),
         deep_judgment_search_tool=task.get("deep_judgment_search_tool", "tavily"),
+        # Deep-judgment rubric configuration (NEW)
+        deep_judgment_rubric_mode=task.get("deep_judgment_rubric_mode", "disabled"),
+        deep_judgment_rubric_global_excerpts=task.get("deep_judgment_rubric_global_excerpts", True),
+        deep_judgment_rubric_config=task.get("deep_judgment_rubric_config"),
+        deep_judgment_rubric_max_excerpts_default=task.get("deep_judgment_rubric_max_excerpts_default", 7),
+        deep_judgment_rubric_fuzzy_match_threshold_default=task.get(
+            "deep_judgment_rubric_fuzzy_match_threshold_default", 0.80
+        ),
+        deep_judgment_rubric_excerpt_retry_attempts_default=task.get(
+            "deep_judgment_rubric_excerpt_retry_attempts_default", 2
+        ),
+        deep_judgment_rubric_search_enabled=task.get("deep_judgment_rubric_search_enabled", False),
+        deep_judgment_rubric_search_tool=task.get("deep_judgment_rubric_search_tool", "tavily"),
     )
 
     return result_key, result
@@ -186,6 +217,21 @@ def run_question_verification(
                     deep_judgment_excerpt_retry_attempts=getattr(config, "deep_judgment_excerpt_retry_attempts", 2),
                     deep_judgment_search_enabled=getattr(config, "deep_judgment_search_enabled", False),
                     deep_judgment_search_tool=getattr(config, "deep_judgment_search_tool", "tavily"),
+                    # Deep-judgment rubric configuration (NEW)
+                    deep_judgment_rubric_mode=getattr(config, "deep_judgment_rubric_mode", "disabled"),
+                    deep_judgment_rubric_global_excerpts=getattr(config, "deep_judgment_rubric_global_excerpts", True),
+                    deep_judgment_rubric_config=getattr(config, "deep_judgment_rubric_config", None),
+                    deep_judgment_rubric_max_excerpts_default=getattr(
+                        config, "deep_judgment_rubric_max_excerpts_default", 7
+                    ),
+                    deep_judgment_rubric_fuzzy_match_threshold_default=getattr(
+                        config, "deep_judgment_rubric_fuzzy_match_threshold_default", 0.80
+                    ),
+                    deep_judgment_rubric_excerpt_retry_attempts_default=getattr(
+                        config, "deep_judgment_rubric_excerpt_retry_attempts_default", 2
+                    ),
+                    deep_judgment_rubric_search_enabled=getattr(config, "deep_judgment_rubric_search_enabled", False),
+                    deep_judgment_rubric_search_tool=getattr(config, "deep_judgment_rubric_search_tool", "tavily"),
                 )
                 verification_tasks.append(task)
 

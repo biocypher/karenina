@@ -7,9 +7,10 @@ multiple verification runs, supporting aggregation and analysis of trait scores.
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
 from .aggregation import AggregatorRegistry, create_default_registry
 
@@ -35,20 +36,25 @@ class RubricResults(BaseModel):
     """
 
     results: list[VerificationResult] = Field(description="List of verification results containing rubric data")
+    _include_deep_judgment: bool = PrivateAttr(default=False)
+    _aggregator_registry: AggregatorRegistry = PrivateAttr()
 
     model_config = {"arbitrary_types_allowed": True}
 
-    def __init__(self, results: list[VerificationResult], **data: Any) -> None:
+    def __init__(self, results: list[VerificationResult], include_deep_judgment: bool = False, **data: Any) -> None:
         """
         Initialize RubricResults with verification results.
 
         Args:
             results: List of VerificationResult objects
+            include_deep_judgment: Whether to include deep judgment columns (default: False)
             **data: Additional pydantic model data
         """
         super().__init__(results=results, **data)
+        # Store configuration in private attributes
+        self._include_deep_judgment = include_deep_judgment
         # Create default aggregator registry
-        self._aggregator_registry: AggregatorRegistry = create_default_registry()
+        self._aggregator_registry = create_default_registry()
 
     # ========================================================================
     # DataFrame Conversion
@@ -80,15 +86,32 @@ class RubricResults(BaseModel):
             4. Rubric Data: trait_name, trait_score, trait_type (+ metric_name for metrics)
             5. Rubric Metadata: evaluation_rubric
             6. Execution Metadata: execution_time, timestamp, run_name, job_id
+            7. Deep Judgment (if include_deep_judgment=True):
+               - trait_reasoning: Reasoning text for the trait score
+               - trait_excerpts: JSON-serialized list of excerpts
+               - trait_hallucination_risk: Hallucination risk assessment
+
+        Deep Judgment Columns:
+            When `include_deep_judgment=True` is set during initialization,
+            three additional columns are added for LLM traits:
+            - trait_reasoning: String containing the reasoning for the trait score
+            - trait_excerpts: JSON string of excerpt objects with text, confidence, similarity
+            - trait_hallucination_risk: Optional hallucination risk assessment object
 
         Returns:
             pandas.DataFrame: Exploded DataFrame with one row per trait/metric
 
         Example:
-            >>> rubric_results = result_set.get_rubrics_results()
+            >>> # Standard rubric results (backward compatible)
+            >>> rubric_results = result_set.get_rubrics()
             >>> df = rubric_results.to_dataframe(trait_type="llm_score")
-            >>> # Filter and aggregate using pandas
             >>> avg_scores = df[df['trait_name'] == 'clarity'].groupby('question_id')['trait_score'].mean()
+
+            >>> # With deep judgment columns
+            >>> rubric_results = result_set.get_rubrics(include_deep_judgment=True)
+            >>> df = rubric_results.to_dataframe(trait_type="llm")
+            >>> # Analyze reasoning and excerpts
+            >>> df[['trait_name', 'trait_score', 'trait_reasoning']].head()
         """
         import pandas as pd
 
@@ -157,7 +180,7 @@ class RubricResults(BaseModel):
         if replicate is None:
             replicate = metadata.parsing_replicate
 
-        return {
+        row = {
             # === Status ===
             "completed_without_errors": metadata.completed_without_errors,
             "error": metadata.error,
@@ -184,6 +207,34 @@ class RubricResults(BaseModel):
             "run_name": metadata.run_name,
             "job_id": metadata.job_id,
         }
+
+        # Add deep judgment columns if requested
+        if self._include_deep_judgment:
+            # Get deep judgment rubric data
+            rubric_dj = result.deep_judgment_rubric
+
+            # Add trait_reasoning
+            row["trait_reasoning"] = (
+                rubric_dj.rubric_trait_reasoning.get(trait_name)
+                if rubric_dj and rubric_dj.rubric_trait_reasoning
+                else None
+            )
+
+            # Add trait_excerpts (JSON serialized)
+            row["trait_excerpts"] = json.dumps(
+                rubric_dj.extracted_rubric_excerpts.get(trait_name, [])
+                if rubric_dj and rubric_dj.extracted_rubric_excerpts
+                else []
+            )
+
+            # Add trait_hallucination_risk
+            row["trait_hallucination_risk"] = (
+                rubric_dj.rubric_hallucination_risk_assessment.get(trait_name)
+                if rubric_dj and rubric_dj.rubric_hallucination_risk_assessment
+                else None
+            )
+
+        return row
 
     def _create_regex_trait_row(
         self,

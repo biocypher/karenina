@@ -12,6 +12,7 @@ from .stage import StageList, StageRegistry, VerificationContext
 from .stages import (
     AbstentionCheckStage,
     DeepJudgmentAutoFailStage,
+    DeepJudgmentRubricAutoFailStage,
     EmbeddingCheckStage,
     FinalizeResultStage,
     GenerateAnswerStage,
@@ -51,7 +52,8 @@ class StageOrchestrator:
         6. AbstentionCheckStage (optional, after verify)
         7. DeepJudgmentAutoFailStage (optional, after verify)
         8. RubricEvaluationStage (optional, after generate)
-        9. FinalizeResultStage (always last)
+        9. DeepJudgmentRubricAutoFailStage (optional, after rubric)
+        10. FinalizeResultStage (always last)
     """
 
     def __init__(self, stages: StageList) -> None:
@@ -116,6 +118,8 @@ class StageOrchestrator:
             # Rubric evaluation (required for rubric_only mode)
             if rubric and (rubric.llm_traits or rubric.regex_traits or rubric.callable_traits or rubric.metric_traits):
                 stages.append(RubricEvaluationStage())
+                # Deep judgment rubric auto-fail (if deep judgment traits were evaluated)
+                stages.append(DeepJudgmentRubricAutoFailStage())
 
             # Finalize result (always last)
             stages.append(FinalizeResultStage())
@@ -150,6 +154,8 @@ class StageOrchestrator:
                 and (rubric.llm_traits or rubric.regex_traits or rubric.callable_traits or rubric.metric_traits)
             ):
                 stages.append(RubricEvaluationStage())
+                # Deep judgment rubric auto-fail (if deep judgment traits were evaluated)
+                stages.append(DeepJudgmentRubricAutoFailStage())
 
             # Finalize result (always last)
             stages.append(FinalizeResultStage())
