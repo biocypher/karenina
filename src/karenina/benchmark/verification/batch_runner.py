@@ -140,6 +140,19 @@ def _extract_feature_flags(config: VerificationConfig) -> dict[str, Any]:
         "deep_judgment_excerpt_retry_attempts": getattr(config, "deep_judgment_excerpt_retry_attempts", 2),
         "deep_judgment_search_enabled": getattr(config, "deep_judgment_search_enabled", False),
         "deep_judgment_search_tool": getattr(config, "deep_judgment_search_tool", "tavily"),
+        # Deep-judgment rubric configuration (NEW)
+        "deep_judgment_rubric_mode": getattr(config, "deep_judgment_rubric_mode", "disabled"),
+        "deep_judgment_rubric_global_excerpts": getattr(config, "deep_judgment_rubric_global_excerpts", True),
+        "deep_judgment_rubric_config": getattr(config, "deep_judgment_rubric_config", None),
+        "deep_judgment_rubric_max_excerpts_default": getattr(config, "deep_judgment_rubric_max_excerpts_default", 7),
+        "deep_judgment_rubric_fuzzy_match_threshold_default": getattr(
+            config, "deep_judgment_rubric_fuzzy_match_threshold_default", 0.80
+        ),
+        "deep_judgment_rubric_excerpt_retry_attempts_default": getattr(
+            config, "deep_judgment_rubric_excerpt_retry_attempts_default", 2
+        ),
+        "deep_judgment_rubric_search_enabled": getattr(config, "deep_judgment_rubric_search_enabled", False),
+        "deep_judgment_rubric_search_tool": getattr(config, "deep_judgment_rubric_search_tool", "tavily"),
     }
 
 
@@ -307,6 +320,19 @@ def execute_task(
             deep_judgment_excerpt_retry_attempts=task.get("deep_judgment_excerpt_retry_attempts", 2),
             deep_judgment_search_enabled=task.get("deep_judgment_search_enabled", False),
             deep_judgment_search_tool=task.get("deep_judgment_search_tool", "tavily"),
+            # Deep-judgment rubric configuration (NEW)
+            deep_judgment_rubric_mode=task.get("deep_judgment_rubric_mode", "disabled"),
+            deep_judgment_rubric_global_excerpts=task.get("deep_judgment_rubric_global_excerpts", True),
+            deep_judgment_rubric_config=task.get("deep_judgment_rubric_config"),
+            deep_judgment_rubric_max_excerpts_default=task.get("deep_judgment_rubric_max_excerpts_default", 7),
+            deep_judgment_rubric_fuzzy_match_threshold_default=task.get(
+                "deep_judgment_rubric_fuzzy_match_threshold_default", 0.80
+            ),
+            deep_judgment_rubric_excerpt_retry_attempts_default=task.get(
+                "deep_judgment_rubric_excerpt_retry_attempts_default", 2
+            ),
+            deep_judgment_rubric_search_enabled=task.get("deep_judgment_rubric_search_enabled", False),
+            deep_judgment_rubric_search_tool=task.get("deep_judgment_rubric_search_tool", "tavily"),
             cached_answer_data=cached_answer_data,
         )
 

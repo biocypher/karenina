@@ -240,8 +240,33 @@ class FinalizeResultStage(BaseVerificationStage):
                 hallucination_risk_assessment=context.get_result_field("hallucination_risk_assessment"),
             )
 
+        # Create deep-judgment rubric subclass (if performed)
+        deep_judgment_rubric = None
+        if context.get_result_field("deep_judgment_rubric_performed", False):
+            from karenina.schemas.workflow import VerificationResultDeepJudgmentRubric
+
+            deep_judgment_rubric = VerificationResultDeepJudgmentRubric(
+                deep_judgment_rubric_performed=context.get_result_field("deep_judgment_rubric_performed", False),
+                extracted_rubric_excerpts=context.get_result_field("extracted_rubric_excerpts"),
+                rubric_trait_reasoning=context.get_result_field("rubric_trait_reasoning"),
+                deep_judgment_rubric_scores=context.get_result_field("deep_judgment_rubric_scores"),
+                standard_rubric_scores=context.get_result_field("standard_rubric_scores"),
+                trait_metadata=context.get_result_field("trait_metadata"),
+                traits_without_valid_excerpts=context.get_result_field("traits_without_valid_excerpts"),
+                rubric_hallucination_risk_assessment=context.get_result_field("rubric_hallucination_risk_assessment"),
+                total_deep_judgment_model_calls=context.get_result_field("total_deep_judgment_model_calls", 0),
+                total_traits_evaluated=context.get_result_field("total_traits_evaluated", 0),
+                total_excerpt_retries=context.get_result_field("total_excerpt_retries", 0),
+            )
+
         # Create final VerificationResult with nested composition
-        result = VerificationResult(metadata=metadata, template=template, rubric=rubric, deep_judgment=deep_judgment)
+        result = VerificationResult(
+            metadata=metadata,
+            template=template,
+            rubric=rubric,
+            deep_judgment=deep_judgment,
+            deep_judgment_rubric=deep_judgment_rubric,
+        )
 
         # Store final result
         context.set_artifact("final_result", result)

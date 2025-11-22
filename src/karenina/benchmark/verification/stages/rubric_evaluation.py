@@ -40,6 +40,7 @@ def resolve_deep_judgment_config_for_trait(
         DeepJudgmentTraitConfig with resolved settings
     """
     mode = getattr(config, "deep_judgment_rubric_mode", "disabled")
+    logger.debug(f"Resolving deep judgment config for trait '{trait.name}', mode='{mode}'")
 
     if mode == "disabled":
         # Explicit: Deep judgment OFF

@@ -2,13 +2,14 @@
 Rubric data models for qualitative evaluation traits.
 """
 
+import base64
 import re
 import warnings
 from collections.abc import Callable
-from typing import Literal
+from typing import Any, Literal
 
 import cloudpickle
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator, model_validator
 
 TraitKind = Literal["boolean", "score"]
 
@@ -165,6 +166,11 @@ class CallableTrait(BaseModel):
     invert_result: bool = Field(False, description="Whether to invert the boolean result (only for kind='boolean')")
 
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
+
+    @field_serializer("callable_code")
+    def serialize_callable_code(self, value: bytes, _info: Any) -> str:
+        """Serialize callable_code bytes to base64 string for JSON export."""
+        return base64.b64encode(value).decode("ascii")
 
     @classmethod
     def from_callable(

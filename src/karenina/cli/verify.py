@@ -45,6 +45,14 @@ def _build_config_from_cli_args(
     abstention: bool,
     embedding_check: bool,
     deep_judgment: bool,
+    deep_judgment_rubric_mode: str,
+    deep_judgment_rubric_excerpts: bool,
+    deep_judgment_rubric_max_excerpts: int,
+    deep_judgment_rubric_fuzzy_threshold: float,
+    deep_judgment_rubric_retry_attempts: int,
+    deep_judgment_rubric_search: bool,
+    deep_judgment_rubric_search_tool: str,
+    deep_judgment_rubric_config: Path | None,
     evaluation_mode: str,
     embedding_threshold: float,
     embedding_model: str,
@@ -76,8 +84,30 @@ def _build_config_from_cli_args(
     config_dict["embedding_check_enabled"] = embedding_check
     config_dict["deep_judgment_enabled"] = deep_judgment
 
+    # Override deep judgment rubric settings (always override since they have defaults)
+    config_dict["deep_judgment_rubric_mode"] = deep_judgment_rubric_mode
+    config_dict["deep_judgment_rubric_global_excerpts"] = deep_judgment_rubric_excerpts
+    config_dict["deep_judgment_rubric_max_excerpts_default"] = deep_judgment_rubric_max_excerpts
+    config_dict["deep_judgment_rubric_fuzzy_match_threshold_default"] = deep_judgment_rubric_fuzzy_threshold
+    config_dict["deep_judgment_rubric_excerpt_retry_attempts_default"] = deep_judgment_rubric_retry_attempts
+    config_dict["deep_judgment_rubric_search_enabled"] = deep_judgment_rubric_search
+    config_dict["deep_judgment_rubric_search_tool"] = deep_judgment_rubric_search_tool
+
+    # Load custom config JSON if provided (for custom mode)
+    if deep_judgment_rubric_config is not None:
+        import json
+
+        try:
+            with open(deep_judgment_rubric_config) as f:
+                custom_config = json.load(f)
+            config_dict["deep_judgment_rubric_config"] = custom_config
+        except Exception as e:
+            raise ValueError(f"Failed to load custom rubric config from {deep_judgment_rubric_config}: {e}") from e
+
     # Override advanced settings (always override since they have defaults)
     config_dict["evaluation_mode"] = evaluation_mode
+    # Set rubric_enabled based on evaluation_mode
+    config_dict["rubric_enabled"] = evaluation_mode in ["template_and_rubric", "rubric_only"]
     config_dict["embedding_similarity_threshold"] = embedding_threshold
     config_dict["embedding_model_name"] = embedding_model
     config_dict["async_enabled"] = async_execution
@@ -210,7 +240,33 @@ def verify(
     # Feature flags
     abstention: Annotated[bool, typer.Option("--abstention", help="Enable abstention detection")] = False,
     embedding_check: Annotated[bool, typer.Option("--embedding-check", help="Enable embedding check")] = False,
-    deep_judgment: Annotated[bool, typer.Option("--deep-judgment", help="Enable deep judgment")] = False,
+    deep_judgment: Annotated[bool, typer.Option("--deep-judgment", help="Enable deep judgment for templates")] = False,
+    # Deep judgment rubric settings
+    deep_judgment_rubric_mode: Annotated[
+        str, typer.Option(help="Deep judgment mode for rubrics (disabled/enable_all/use_checkpoint/custom)")
+    ] = "disabled",
+    deep_judgment_rubric_excerpts: Annotated[
+        bool,
+        typer.Option("--deep-judgment-rubric-excerpts", help="Enable excerpts for rubric traits (enable_all mode)"),
+    ] = True,
+    deep_judgment_rubric_max_excerpts: Annotated[
+        int, typer.Option(help="Max excerpts per rubric trait (enable_all mode)")
+    ] = 7,
+    deep_judgment_rubric_fuzzy_threshold: Annotated[
+        float, typer.Option(help="Fuzzy match threshold for rubric excerpts (0.0-1.0)")
+    ] = 0.80,
+    deep_judgment_rubric_retry_attempts: Annotated[
+        int, typer.Option(help="Retry attempts for rubric excerpt extraction")
+    ] = 2,
+    deep_judgment_rubric_search: Annotated[
+        bool, typer.Option("--deep-judgment-rubric-search", help="Enable search validation for rubric excerpts")
+    ] = False,
+    deep_judgment_rubric_search_tool: Annotated[
+        str, typer.Option(help="Search tool for rubric hallucination detection")
+    ] = "tavily",
+    deep_judgment_rubric_config: Annotated[
+        Path | None, typer.Option(help="Path to custom rubric deep judgment config JSON (custom mode)")
+    ] = None,
     # Advanced settings
     evaluation_mode: Annotated[
         str, typer.Option(help="Evaluation mode (template_only/template_and_rubric/rubric_only)")
@@ -394,6 +450,14 @@ def verify(
                     abstention=abstention,
                     embedding_check=embedding_check,
                     deep_judgment=deep_judgment,
+                    deep_judgment_rubric_mode=deep_judgment_rubric_mode,
+                    deep_judgment_rubric_excerpts=deep_judgment_rubric_excerpts,
+                    deep_judgment_rubric_max_excerpts=deep_judgment_rubric_max_excerpts,
+                    deep_judgment_rubric_fuzzy_threshold=deep_judgment_rubric_fuzzy_threshold,
+                    deep_judgment_rubric_retry_attempts=deep_judgment_rubric_retry_attempts,
+                    deep_judgment_rubric_search=deep_judgment_rubric_search,
+                    deep_judgment_rubric_search_tool=deep_judgment_rubric_search_tool,
+                    deep_judgment_rubric_config=deep_judgment_rubric_config,
                     evaluation_mode=evaluation_mode,
                     embedding_threshold=embedding_threshold,
                     embedding_model=embedding_model,
@@ -433,6 +497,32 @@ def verify(
             except Exception as e:
                 console.print(f"[red]Error building configuration: {e}[/red]")
                 raise typer.Exit(code=1) from e
+
+            # Validate deep judgment rubric mode
+            valid_modes = ["disabled", "enable_all", "use_checkpoint", "custom"]
+            if deep_judgment_rubric_mode not in valid_modes:
+                console.print(f"[red]Error: Invalid deep_judgment_rubric_mode '{deep_judgment_rubric_mode}'[/red]")
+                console.print(f"[red]Valid modes: {', '.join(valid_modes)}[/red]")
+                raise typer.Exit(code=1)
+
+            # Validate fuzzy threshold is in valid range
+            if not 0.0 <= deep_judgment_rubric_fuzzy_threshold <= 1.0:
+                console.print("[red]Error: deep_judgment_rubric_fuzzy_threshold must be between 0.0 and 1.0[/red]")
+                raise typer.Exit(code=1)
+
+            # Warn about use_checkpoint mode
+            if deep_judgment_rubric_mode == "use_checkpoint":
+                console.print(
+                    "[yellow]Note: use_checkpoint mode requires deep judgment settings to be saved in the checkpoint file.[/yellow]"
+                )
+                console.print(
+                    "[yellow]If the checkpoint doesn't have deep judgment config, traits will be disabled by default.[/yellow]"
+                )
+
+            # Validate custom config file if in custom mode
+            if deep_judgment_rubric_mode == "custom" and not deep_judgment_rubric_config:
+                console.print("[red]Error: custom mode requires --deep-judgment-rubric-config to be specified[/red]")
+                raise typer.Exit(code=1)
 
         # Step 4: Get and filter templates
         all_templates = benchmark.get_finished_templates()
