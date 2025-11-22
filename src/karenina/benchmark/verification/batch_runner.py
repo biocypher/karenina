@@ -166,7 +166,6 @@ def generate_task_queue(
     config: VerificationConfig,
     global_rubric: Rubric | None = None,
     run_name: str | None = None,
-    job_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """
     Generate complete task queue via combinatorial expansion.
@@ -179,7 +178,6 @@ def generate_task_queue(
         config: Verification configuration with models and settings
         global_rubric: Optional global rubric for evaluation
         run_name: Optional name for this verification run
-        job_id: Optional job identifier
 
     Returns:
         List of task dictionaries with all arguments for verification
@@ -212,7 +210,6 @@ def generate_task_queue(
                             "parsing_model": parse_model,
                             # Metadata
                             "run_name": run_name,
-                            "job_id": job_id,
                             "replicate": replicate,
                             # Context
                             "rubric": rubric,
@@ -243,7 +240,7 @@ def execute_task(
     This function supports answer caching to avoid regenerating answers
     when multiple judges evaluate the same answering model output.
 
-    Key format: {question_id}_{answering}_{parsing}_rep{N}_{job_id}_{timestamp}
+    Key format: {question_id}_{answering}_{parsing}_rep{N}_{timestamp}
 
     Args:
         task: Task dictionary with all verification parameters
@@ -265,9 +262,6 @@ def execute_task(
 
     if task["replicate"] is not None:
         key_parts.append(f"rep{task['replicate']}")
-
-    if task.get("job_id"):
-        key_parts.append(task["job_id"][:8])  # Short job ID
 
     key_parts.append(str(int(time.time() * 1000)))  # Timestamp in ms
 
@@ -305,7 +299,6 @@ def execute_task(
             answering_model=task["answering_model"],
             parsing_model=task["parsing_model"],
             run_name=task.get("run_name"),
-            job_id=task.get("job_id"),
             answering_replicate=task["replicate"],
             parsing_replicate=task["replicate"],
             rubric=task["rubric"],
@@ -677,7 +670,6 @@ def run_verification_batch(
     templates: list[FinishedTemplate],
     config: VerificationConfig,
     run_name: str | None = None,
-    job_id: str | None = None,
     global_rubric: Rubric | None = None,
     async_enabled: bool | None = None,
     max_workers: int | None = None,
@@ -694,7 +686,6 @@ def run_verification_batch(
         templates: List of finished templates to verify
         config: Verification configuration with models and settings
         run_name: Optional name for this run (auto-generated if not provided)
-        job_id: Optional job identifier
         global_rubric: Optional global rubric for evaluation
         async_enabled: Whether to run in parallel (defaults to KARENINA_ASYNC_ENABLED env var)
         max_workers: Maximum parallel workers (defaults to KARENINA_ASYNC_MAX_WORKERS env var)
@@ -723,7 +714,6 @@ def run_verification_batch(
         config=config,
         global_rubric=global_rubric,
         run_name=run_name,
-        job_id=job_id,
     )
 
     # Log execution plan
@@ -745,7 +735,7 @@ def run_verification_batch(
             benchmark_name=benchmark_name,
             run_name=run_name,
             config_dict=config.model_dump(),
-            run_id=job_id if job_id else run_name,
+            run_id=run_name,
         )
 
     # Convert dict to VerificationResultSet

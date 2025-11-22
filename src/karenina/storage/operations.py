@@ -744,7 +744,6 @@ def _model_to_verification_result(model: VerificationResultModel) -> "Verificati
         execution_time=model.execution_time,
         timestamp=model.timestamp,
         run_name=model.run.run_name if model.run else None,
-        job_id=model.job_id,
         answering_replicate=model.answering_replicate,
         parsing_replicate=model.parsing_replicate,
     )

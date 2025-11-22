@@ -21,7 +21,6 @@ class VerificationResultMetadata(BaseModel):
     execution_time: float
     timestamp: str
     run_name: str | None = None
-    job_id: str | None = None
     answering_replicate: int | None = None  # Replicate number for answering model (1, 2, 3, ...)
     parsing_replicate: int | None = None  # Replicate number for parsing model (1, 2, 3, ...)
 

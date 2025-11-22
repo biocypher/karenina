@@ -68,7 +68,7 @@ class TemplateResults(BaseModel):
             4. Template Response: raw_llm_response
             5. Field Comparison: field_name, gt_value, llm_value, field_match, field_type
             6. Verification Checks: embedding, abstention, regex
-            7. Execution Metadata: execution_time, timestamp, run_name, job_id
+            7. Execution Metadata: execution_time, timestamp, run_name
 
         Returns:
             pandas.DataFrame: Exploded DataFrame with one row per field comparison
@@ -204,7 +204,6 @@ class TemplateResults(BaseModel):
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
             "run_name": metadata.run_name,
-            "job_id": metadata.job_id,
         }
 
         return row
@@ -267,7 +266,6 @@ class TemplateResults(BaseModel):
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
             "run_name": metadata.run_name,
-            "job_id": metadata.job_id,
         }
 
     def _compare_values(self, value1: Any, value2: Any) -> bool:
@@ -307,7 +305,7 @@ class TemplateResults(BaseModel):
             3. Model Config: answering_model, parsing_model
             4. Regex Details: pattern_name, pattern_regex, matched, extracted_value, match positions
             5. Validation Context: raw_llm_response
-            6. Execution Metadata: timestamp, run_name, job_id
+            6. Execution Metadata: timestamp, run_name
 
         Returns:
             pandas.DataFrame: Exploded DataFrame with one row per regex pattern
@@ -383,7 +381,6 @@ class TemplateResults(BaseModel):
                         # === Execution Metadata ===
                         "timestamp": metadata.timestamp,
                         "run_name": metadata.run_name,
-                        "job_id": metadata.job_id,
                     }
                 )
 
@@ -405,7 +402,7 @@ class TemplateResults(BaseModel):
             6. Model Used: model_used
             7. Detailed Breakdowns: input_audio_tokens, cache_read_tokens, etc.
             8. Agent Metrics: agent_iterations, agent_tool_calls, etc.
-            9. Execution Metadata: timestamp, run_name, job_id
+            9. Execution Metadata: timestamp, run_name
 
         Args:
             totals_only: If True, only include "total" stage (one row per verification)
@@ -506,7 +503,6 @@ class TemplateResults(BaseModel):
                         # === Execution Metadata ===
                         "timestamp": metadata.timestamp,
                         "run_name": metadata.run_name,
-                        "job_id": metadata.job_id,
                     }
                 )
 

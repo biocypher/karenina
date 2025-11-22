@@ -36,7 +36,6 @@ class VerificationManager:
         question_id: str,
         config: VerificationConfig,
         run_name: str | None = None,
-        job_id: str | None = None,
         async_enabled: bool | None = None,
     ) -> dict[str, VerificationResult]:
         """
@@ -46,7 +45,6 @@ class VerificationManager:
             question_id: The question ID to verify
             config: Verification configuration
             run_name: Optional run name for tracking
-            job_id: Optional job ID for tracking
             async_enabled: Optional async control (overrides KARENINA_ASYNC_ENABLED env var if provided)
 
         Returns:
@@ -59,7 +57,6 @@ class VerificationManager:
             config=config,
             question_ids=[question_id],
             run_name=run_name,
-            job_id=job_id,
             async_enabled=async_enabled,
         )
         return result_set.to_legacy_dict()
@@ -69,7 +66,6 @@ class VerificationManager:
         question_ids: list[str],
         config: VerificationConfig,
         run_name: str | None = None,
-        job_id: str | None = None,
         async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
     ) -> dict[str, VerificationResult]:
@@ -80,7 +76,6 @@ class VerificationManager:
             question_ids: List of question IDs to verify
             config: Verification configuration
             run_name: Optional run name for tracking
-            job_id: Optional job ID for tracking
             async_enabled: Optional async control (overrides KARENINA_ASYNC_ENABLED env var if provided)
             progress_callback: Optional callback for progress updates
 
@@ -91,7 +86,6 @@ class VerificationManager:
             config=config,
             question_ids=question_ids,
             run_name=run_name,
-            job_id=job_id,
             async_enabled=async_enabled,
             progress_callback=progress_callback,
         )
@@ -105,7 +99,6 @@ class VerificationManager:
         has_rubric: bool | None = None,
         author: str | None = None,
         run_name: str | None = None,
-        job_id: str | None = None,
         async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
     ) -> dict[str, VerificationResult]:
@@ -119,7 +112,6 @@ class VerificationManager:
             has_rubric: Filter by rubric existence
             author: Filter by author name
             run_name: Optional run name for tracking
-            job_id: Optional job ID for tracking
             async_enabled: Optional async control (overrides KARENINA_ASYNC_ENABLED env var if provided)
             progress_callback: Optional callback for progress updates
 
@@ -144,7 +136,6 @@ class VerificationManager:
             config=config,
             question_ids=question_ids,
             run_name=run_name,
-            job_id=job_id,
             async_enabled=async_enabled,
             progress_callback=progress_callback,
         )
@@ -154,7 +145,6 @@ class VerificationManager:
         self,
         config: VerificationConfig,
         run_name: str | None = None,
-        job_id: str | None = None,
         async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
     ) -> dict[str, VerificationResult]:
@@ -164,7 +154,6 @@ class VerificationManager:
         Args:
             config: Verification configuration
             run_name: Optional run name for tracking
-            job_id: Optional job ID for tracking
             async_enabled: Optional async control (overrides KARENINA_ASYNC_ENABLED env var if provided)
             progress_callback: Optional callback for progress updates
 
@@ -175,7 +164,6 @@ class VerificationManager:
             config=config,
             question_ids=None,  # This defaults to all finished questions
             run_name=run_name,
-            job_id=job_id,
             async_enabled=async_enabled,
             progress_callback=progress_callback,
         )
@@ -186,7 +174,6 @@ class VerificationManager:
         question_selector: Callable[[dict[str, Any]], bool],
         config: VerificationConfig,
         run_name: str | None = None,
-        job_id: str | None = None,
         async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
     ) -> dict[str, VerificationResult]:
@@ -197,7 +184,6 @@ class VerificationManager:
             question_selector: Function that takes question data and returns bool
             config: Verification configuration
             run_name: Optional run name for tracking
-            job_id: Optional job ID for tracking
             async_enabled: Optional async control (overrides KARENINA_ASYNC_ENABLED env var if provided)
             progress_callback: Optional callback for progress updates
 
@@ -214,7 +200,6 @@ class VerificationManager:
             config=config,
             question_ids=selected_questions,
             run_name=run_name,
-            job_id=job_id,
             async_enabled=async_enabled,
             progress_callback=progress_callback,
         )
@@ -270,7 +255,6 @@ class VerificationManager:
         config: VerificationConfig,
         question_ids: list[str] | None = None,
         run_name: str | None = None,
-        job_id: str | None = None,
         async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
     ) -> VerificationResultSet:
@@ -281,7 +265,6 @@ class VerificationManager:
             config: Verification configuration
             question_ids: Optional list of question IDs to verify (default: all finished)
             run_name: Optional run name for tracking
-            job_id: Optional job ID for tracking
             async_enabled: Optional async control (overrides KARENINA_ASYNC_ENABLED env var if provided)
             progress_callback: Optional callback for progress updates
 
@@ -386,7 +369,6 @@ class VerificationManager:
             templates=templates,
             config=config,
             run_name=run_name,
-            job_id=job_id,
             global_rubric=global_rubric,
             async_enabled=async_enabled,  # Can override env var
             storage_url=storage_url,

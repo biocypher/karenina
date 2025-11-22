@@ -71,7 +71,7 @@ class JudgmentResults(BaseModel):
             8. Search Enhancement: excerpt_search_results, excerpt_hallucination_risk, excerpt_hallucination_justification
             9. Attribute Metadata: attribute_reasoning, attribute_overall_risk, attribute_has_excerpts
             10. Processing Metrics: deep_judgment_model_calls, deep_judgment_excerpt_retries, stages_completed
-            11. Execution Metadata: execution_time, timestamp, run_name, job_id
+            11. Execution Metadata: execution_time, timestamp, run_name
 
         Returns:
             pandas.DataFrame: Exploded DataFrame with one row per (attribute × excerpt)
@@ -270,7 +270,6 @@ class JudgmentResults(BaseModel):
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
             "run_name": metadata.run_name,
-            "job_id": metadata.job_id,
         }
 
     def _create_empty_judgment_row(self, result: VerificationResult) -> dict[str, Any]:
@@ -335,7 +334,6 @@ class JudgmentResults(BaseModel):
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
             "run_name": metadata.run_name,
-            "job_id": metadata.job_id,
         }
 
     # ========================================================================
