@@ -85,7 +85,7 @@ class RubricResults(BaseModel):
             3. Model Config: answering_model, parsing_model, system_prompts
             4. Rubric Data: trait_name, trait_score, trait_type, metric_name (for metrics only)
             5. Confusion Matrix: confusion_tp, confusion_fp, confusion_fn, confusion_tn (for metrics only)
-            6. Execution Metadata: execution_time, timestamp, run_name, job_id
+            6. Execution Metadata: execution_time, timestamp, run_name
             7. Deep Judgment (if include_deep_judgment=True):
                - trait_reasoning: Reasoning text for the trait score
                - trait_excerpts: JSON-serialized list of excerpts
@@ -195,7 +195,6 @@ class RubricResults(BaseModel):
             "execution_time",
             "timestamp",
             "run_name",
-            "job_id",
             # Deep Judgment (if included)
             "trait_reasoning",
             "trait_excerpts",
@@ -206,7 +205,7 @@ class RubricResults(BaseModel):
         column_order = [col for col in desired_order if col in df.columns]
 
         # Columns to explicitly exclude from output
-        excluded_columns = {"evaluation_rubric"}
+        excluded_columns = {"evaluation_rubric", "job_id"}
 
         # Add any columns that weren't in our desired order (shouldn't happen, but defensive)
         for col in df.columns:
@@ -256,7 +255,6 @@ class RubricResults(BaseModel):
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
             "run_name": metadata.run_name,
-            "job_id": metadata.job_id,
         }
 
         # Add deep judgment columns if requested
@@ -327,7 +325,6 @@ class RubricResults(BaseModel):
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
             "run_name": metadata.run_name,
-            "job_id": metadata.job_id,
         }
 
     def _create_callable_trait_row(
@@ -370,7 +367,6 @@ class RubricResults(BaseModel):
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
             "run_name": metadata.run_name,
-            "job_id": metadata.job_id,
         }
 
     def _create_metric_trait_row(
@@ -421,7 +417,6 @@ class RubricResults(BaseModel):
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
             "run_name": metadata.run_name,
-            "job_id": metadata.job_id,
         }
 
     def _create_empty_rubric_row(self, result: VerificationResult) -> dict[str, Any]:
@@ -458,7 +453,6 @@ class RubricResults(BaseModel):
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
             "run_name": metadata.run_name,
-            "job_id": metadata.job_id,
         }
 
     # ========================================================================

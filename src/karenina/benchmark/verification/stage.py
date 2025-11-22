@@ -37,7 +37,6 @@ class VerificationContext:
 
         # Run Metadata
         run_name: Optional run name for tracking
-        job_id: Optional job ID for tracking
         answering_replicate: Replicate number for answering (1, 2, 3, ...)
         parsing_replicate: Replicate number for parsing (1, 2, 3, ...)
 
@@ -89,7 +88,6 @@ class VerificationContext:
 
     # Run Metadata
     run_name: str | None = None
-    job_id: str | None = None
     answering_replicate: int | None = None
     parsing_replicate: int | None = None
 

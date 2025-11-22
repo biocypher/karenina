@@ -139,7 +139,6 @@ class FinalizeResultStage(BaseVerificationStage):
             execution_time=execution_time,
             timestamp=timestamp,
             run_name=context.run_name,
-            job_id=context.job_id,
             answering_replicate=context.answering_replicate,
             parsing_replicate=context.parsing_replicate,
         )

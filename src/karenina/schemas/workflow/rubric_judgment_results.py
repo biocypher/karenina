@@ -92,7 +92,7 @@ class RubricJudgmentResults(BaseModel):
                - excerpt_hallucination_risk: Risk level assessment
                - excerpt_hallucination_justification: Reasoning for risk
                - excerpt_search_results: JSON of search validation results
-            9. Execution Metadata: execution_time, timestamp, run_name, job_id
+            9. Execution Metadata: execution_time, timestamp, run_name
 
         Returns:
             pandas.DataFrame: Exploded DataFrame with one row per (trait × excerpt)
@@ -183,7 +183,6 @@ class RubricJudgmentResults(BaseModel):
                         "execution_time": metadata.execution_time,
                         "timestamp": metadata.timestamp,
                         "run_name": metadata.run_name,
-                        "job_id": metadata.job_id,
                     }
 
                     if trait_excerpts:

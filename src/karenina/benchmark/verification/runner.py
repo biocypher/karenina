@@ -19,7 +19,6 @@ def run_single_model_verification(
     answering_model: ModelConfig,
     parsing_model: ModelConfig,
     run_name: str | None = None,
-    job_id: str | None = None,
     answering_replicate: int | None = None,
     parsing_replicate: int | None = None,
     rubric: Rubric | None = None,
@@ -61,7 +60,6 @@ def run_single_model_verification(
         answering_model: Configuration for the answering model
         parsing_model: Configuration for the parsing model
         run_name: Optional run name for tracking
-        job_id: Optional job ID for tracking
         answering_replicate: Optional replicate number for answering model
         parsing_replicate: Optional replicate number for parsing model
         rubric: Optional rubric for qualitative evaluation
@@ -110,7 +108,6 @@ def run_single_model_verification(
         keywords=keywords,
         # Run Metadata
         run_name=run_name,
-        job_id=job_id,
         answering_replicate=answering_replicate,
         parsing_replicate=parsing_replicate,
         # Feature Flags

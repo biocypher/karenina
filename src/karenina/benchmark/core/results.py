@@ -547,7 +547,6 @@ class ResultsManager:
                 self._escape_csv_field(result.metadata.execution_time),
                 self._escape_csv_field(result.metadata.timestamp),
                 self._escape_csv_field(result.metadata.run_name or ""),
-                self._escape_csv_field(result.metadata.job_id or ""),
                 # Embedding check fields
                 self._escape_csv_field(result.template.embedding_check_performed if result.template else False),
                 self._escape_csv_field(result.template.embedding_similarity_score if result.template else ""),
