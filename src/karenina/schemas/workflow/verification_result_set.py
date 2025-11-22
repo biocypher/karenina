@@ -170,7 +170,7 @@ class VerificationResultSet(BaseModel):
         """
         return JudgmentResults(results=self.results)
 
-    def get_rubric_judgments_detailed(self) -> RubricJudgmentResults:
+    def get_rubric_judgments_results(self) -> RubricJudgmentResults:
         """
         Get detailed deep judgment rubric results with excerpt-level explosion.
 
@@ -186,7 +186,7 @@ class VerificationResultSet(BaseModel):
 
         Key Differences:
             - get_rubrics_results(): Standard export, one row per trait
-            - get_rubric_judgments_detailed(): Detailed export, one row per (trait × excerpt)
+            - get_rubric_judgments_results(): Detailed export, one row per (trait × excerpt)
 
         Returns:
             RubricJudgmentResults instance with excerpt-exploded data
@@ -194,7 +194,7 @@ class VerificationResultSet(BaseModel):
         Example:
             ```python
             result_set = benchmark.run_verification(config)
-            rubric_judgments = result_set.get_rubric_judgments_detailed()
+            rubric_judgments = result_set.get_rubric_judgments_results()
 
             # Get detailed DataFrame with excerpt explosion
             df = rubric_judgments.to_dataframe()

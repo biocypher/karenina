@@ -210,7 +210,7 @@ def test_deep_judgment_rubrics_dataframe_export_real_api():
 
     Validates:
     - Standard export with include_deep_judgment=True
-    - Detailed export with get_rubric_judgments_detailed()
+    - Detailed export with get_rubric_judgments_results()
     """
     print("\n" + "=" * 70)
     print("REAL API TEST: Dataframe Export with Deep Judgment")
@@ -291,7 +291,7 @@ def test_deep_judgment_rubrics_dataframe_export_real_api():
 
     # Test detailed export (excerpt explosion)
     print("\nTesting detailed export (excerpt explosion)...")
-    rubric_judgments = result_set.get_rubric_judgments_detailed()
+    rubric_judgments = result_set.get_rubric_judgments_results()
     df_detailed = rubric_judgments.to_dataframe()
 
     # Should have excerpt-level columns

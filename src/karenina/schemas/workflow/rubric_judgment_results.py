@@ -99,7 +99,7 @@ class RubricJudgmentResults(BaseModel):
 
         Example:
             >>> result_set = benchmark.run_verification_new(config)["question_id"]
-            >>> rubric_judgments = result_set.get_rubric_judgments_detailed()
+            >>> rubric_judgments = result_set.get_rubric_judgments_results()
             >>> df = rubric_judgments.to_dataframe()
             >>> # Analyze per-excerpt confidence
             >>> df.groupby("trait_name")["excerpt_confidence"].mean()
