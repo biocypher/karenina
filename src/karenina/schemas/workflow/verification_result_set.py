@@ -510,40 +510,63 @@ class VerificationResultSet(BaseModel):
             r.metadata.execution_time for r in self.results if r.metadata.execution_time is not None
         )
 
-        # Token usage
-        total_input_tokens = 0
-        total_output_tokens = 0
-        template_input_tokens = 0
-        template_output_tokens = 0
-        rubric_input_tokens = 0
-        rubric_output_tokens = 0
-        deep_judgment_input_tokens = 0
-        deep_judgment_output_tokens = 0
+        # Token usage - collect per-result measurements for median/std calculation
+        import numpy as np
+
+        total_input_tokens_list: list[int] = []
+        total_output_tokens_list: list[int] = []
+        template_input_tokens_list: list[int] = []
+        template_output_tokens_list: list[int] = []
+        rubric_input_tokens_list: list[int] = []
+        rubric_output_tokens_list: list[int] = []
+        deep_judgment_input_tokens_list: list[int] = []
+        deep_judgment_output_tokens_list: list[int] = []
+
+        # Per-question token measurements for "median tokens per question" statistic
+        per_question_input_tokens: list[int] = []
+        per_question_output_tokens: list[int] = []
 
         for result in self.results:
             if result.template and hasattr(result.template, "usage_metadata") and result.template.usage_metadata:
                 usage_metadata = result.template.usage_metadata
 
+                # Total tokens
                 if "total" in usage_metadata:
                     total_usage = usage_metadata["total"]
-                    total_input_tokens += total_usage.get("input_tokens", 0)
-                    total_output_tokens += total_usage.get("output_tokens", 0)
+                    inp = total_usage.get("input_tokens", 0)
+                    out = total_usage.get("output_tokens", 0)
+                    total_input_tokens_list.append(inp)
+                    total_output_tokens_list.append(out)
+                    per_question_input_tokens.append(inp)
+                    per_question_output_tokens.append(out)
 
+                # Template tokens (answer_generation + parsing)
+                template_inp = 0
+                template_out = 0
                 if "answer_generation" in usage_metadata:
                     answer_usage = usage_metadata["answer_generation"]
-                    template_input_tokens += answer_usage.get("input_tokens", 0)
-                    template_output_tokens += answer_usage.get("output_tokens", 0)
+                    template_inp += answer_usage.get("input_tokens", 0)
+                    template_out += answer_usage.get("output_tokens", 0)
 
                 if "parsing" in usage_metadata:
                     parsing_usage = usage_metadata["parsing"]
-                    template_input_tokens += parsing_usage.get("input_tokens", 0)
-                    template_output_tokens += parsing_usage.get("output_tokens", 0)
+                    template_inp += parsing_usage.get("input_tokens", 0)
+                    template_out += parsing_usage.get("output_tokens", 0)
 
+                if template_inp > 0 or template_out > 0:
+                    template_input_tokens_list.append(template_inp)
+                    template_output_tokens_list.append(template_out)
+
+                # Rubric tokens
                 if "rubric_evaluation" in usage_metadata:
                     rubric_usage = usage_metadata["rubric_evaluation"]
-                    rubric_input_tokens += rubric_usage.get("input_tokens", 0)
-                    rubric_output_tokens += rubric_usage.get("output_tokens", 0)
+                    rubric_inp = rubric_usage.get("input_tokens", 0)
+                    rubric_out = rubric_usage.get("output_tokens", 0)
+                    if rubric_inp > 0 or rubric_out > 0:
+                        rubric_input_tokens_list.append(rubric_inp)
+                        rubric_output_tokens_list.append(rubric_out)
 
+            # Deep judgment tokens
             if (
                 result.deep_judgment
                 and hasattr(result.deep_judgment, "usage_metadata")
@@ -552,8 +575,32 @@ class VerificationResultSet(BaseModel):
                 dj_usage = result.deep_judgment.usage_metadata
                 if "total" in dj_usage:
                     dj_total = dj_usage["total"]
-                    deep_judgment_input_tokens += dj_total.get("input_tokens", 0)
-                    deep_judgment_output_tokens += dj_total.get("output_tokens", 0)
+                    dj_inp = dj_total.get("input_tokens", 0)
+                    dj_out = dj_total.get("output_tokens", 0)
+                    if dj_inp > 0 or dj_out > 0:
+                        deep_judgment_input_tokens_list.append(dj_inp)
+                        deep_judgment_output_tokens_list.append(dj_out)
+
+        # Compute median and std for each token type
+        def compute_stats(values: list[int]) -> tuple[float, float]:
+            """Compute median and std, returning (median, std)"""
+            if not values:
+                return 0.0, 0.0
+            arr = np.array(values)
+            return float(np.median(arr)), float(np.std(arr))
+
+        total_input_median, total_input_std = compute_stats(total_input_tokens_list)
+        total_output_median, total_output_std = compute_stats(total_output_tokens_list)
+        template_input_median, template_input_std = compute_stats(template_input_tokens_list)
+        template_output_median, template_output_std = compute_stats(template_output_tokens_list)
+        rubric_input_median, rubric_input_std = compute_stats(rubric_input_tokens_list)
+        rubric_output_median, rubric_output_std = compute_stats(rubric_output_tokens_list)
+        dj_input_median, dj_input_std = compute_stats(deep_judgment_input_tokens_list)
+        dj_output_median, dj_output_std = compute_stats(deep_judgment_output_tokens_list)
+
+        # Median tokens per question (median of all per-result measurements)
+        per_q_input_median, per_q_input_std = compute_stats(per_question_input_tokens)
+        per_q_output_median, per_q_output_std = compute_stats(per_question_output_tokens)
 
         # Token usage by model combination
         combo_token_stats: dict[tuple[str, str, tuple[str, ...] | None], dict[str, int]] = defaultdict(
@@ -806,16 +853,29 @@ class VerificationResultSet(BaseModel):
             "num_replicates": len(replicates),
             # Execution
             "total_execution_time": total_execution_time,
-            # Token usage
+            # Token usage (median ± std across all replicates)
             "tokens": {
-                "total_input": total_input_tokens,
-                "total_output": total_output_tokens,
-                "template_input": template_input_tokens,
-                "template_output": template_output_tokens,
-                "rubric_input": rubric_input_tokens,
-                "rubric_output": rubric_output_tokens,
-                "deep_judgment_input": deep_judgment_input_tokens if num_with_judgment > 0 else None,
-                "deep_judgment_output": deep_judgment_output_tokens if num_with_judgment > 0 else None,
+                "total_input": total_input_median,
+                "total_input_std": total_input_std,
+                "total_output": total_output_median,
+                "total_output_std": total_output_std,
+                "template_input": template_input_median,
+                "template_input_std": template_input_std,
+                "template_output": template_output_median,
+                "template_output_std": template_output_std,
+                "rubric_input": rubric_input_median,
+                "rubric_input_std": rubric_input_std,
+                "rubric_output": rubric_output_median,
+                "rubric_output_std": rubric_output_std,
+                "deep_judgment_input": dj_input_median if num_with_judgment > 0 else None,
+                "deep_judgment_input_std": dj_input_std if num_with_judgment > 0 else None,
+                "deep_judgment_output": dj_output_median if num_with_judgment > 0 else None,
+                "deep_judgment_output_std": dj_output_std if num_with_judgment > 0 else None,
+                # Median tokens per question (aggregated over questions and replicates)
+                "median_per_question_input": per_q_input_median,
+                "median_per_question_input_std": per_q_input_std,
+                "median_per_question_output": per_q_output_median,
+                "median_per_question_output_std": per_q_output_std,
             },
             # Token usage by model combination
             "tokens_by_combo": tokens_by_combo,
