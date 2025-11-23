@@ -320,9 +320,15 @@ class RubricEvaluationStage(BaseVerificationStage):
                     context.set_result_field("total_traits_evaluated", len(dj_result["deep_judgment_scores"]))
                     context.set_result_field("total_excerpt_retries", total_retries)
 
-                    # Note: Usage tracking for deep judgment is not yet implemented
-                    # TODO: Track deep judgment LLM calls properly
-                    logger.debug(f"Deep judgment used {total_model_calls} model calls with {total_retries} retries")
+                    # Track deep judgment usage metadata
+                    usage_metadata_list = dj_result.get("usage_metadata_list", [])
+                    for usage_metadata in usage_metadata_list:
+                        if usage_metadata:
+                            usage_tracker.track_call("rubric_evaluation", parsing_model_str, usage_metadata)
+                    logger.debug(
+                        f"Deep judgment used {total_model_calls} model calls with {total_retries} retries, "
+                        f"tracked {len(usage_metadata_list)} usage metadata entries"
+                    )
 
                 else:
                     # Standard rubric evaluation (no deep judgment)

@@ -7,7 +7,7 @@ with accessor methods for specialized result views (rubrics, templates, judgment
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -328,32 +328,74 @@ class VerificationResultSet(BaseModel):
 
         return {qid: VerificationResultSet(results=results) for qid, results in grouped.items()}
 
-    def group_by_model(self) -> dict[str, VerificationResultSet]:
+    def group_by_model(
+        self, by: Literal["answering", "parsing", "both"] = "answering"
+    ) -> dict[str, VerificationResultSet]:
         """
-        Group results by answering model.
+        Group results by model(s).
+
+        Args:
+            by: How to group results:
+                - "answering": Group by answering model (includes MCP servers if attached)
+                - "parsing": Group by parsing model
+                - "both": Group by both answering and parsing models
 
         Returns:
-            Dictionary mapping model names to VerificationResultSet instances
+            Dictionary mapping model identifier(s) to VerificationResultSet instances
+
+        Notes:
+            - When grouping by answering model, MCP servers are included in the key
+              to distinguish between the same model with different MCP configurations
+            - Format examples:
+              - answering: "gpt-4" or "gpt-4 + MCP[server1,server2]"
+              - parsing: "gpt-4o-mini"
+              - both: "gpt-4 / gpt-4o-mini" or "gpt-4 + MCP[server1] / gpt-4o-mini"
 
         Example:
             ```python
-            by_model = result_set.group_by_model()
-            for model_name, model_results in by_model.items():
-                print(f"Model {model_name}: {len(model_results)} results")
+            # Group by answering model (with MCP distinction)
+            by_answering = result_set.group_by_model(by="answering")
+            for model_key, model_results in by_answering.items():
+                print(f"Model {model_key}: {len(model_results)} results")
 
-                # Get template results for this model
-                template_results = model_results.get_template_results()
-                pass_rate = template_results.aggregate_pass_rate(by="question")
+            # Group by parsing model
+            by_parsing = result_set.group_by_model(by="parsing")
+
+            # Group by both
+            by_both = result_set.group_by_model(by="both")
+            for combo_key, combo_results in by_both.items():
+                print(f"Combination {combo_key}: {len(combo_results)} results")
             ```
         """
         grouped: dict[str, list[VerificationResult]] = {}
-        for result in self.results:
-            model = result.metadata.answering_model
-            if model not in grouped:
-                grouped[model] = []
-            grouped[model].append(result)
 
-        return {model: VerificationResultSet(results=results) for model, results in grouped.items()}
+        for result in self.results:
+            answering_model = result.metadata.answering_model
+            parsing_model = result.metadata.parsing_model
+
+            # Build answering model key with MCP if present
+            if by in ("answering", "both"):
+                mcp_servers = result.answering_mcp_servers
+                if mcp_servers and len(mcp_servers) > 0:
+                    answering_key = f"{answering_model} + MCP[{','.join(sorted(mcp_servers))}]"
+                else:
+                    answering_key = answering_model
+
+            # Determine grouping key based on mode
+            if by == "answering":
+                key = answering_key
+            elif by == "parsing":
+                key = parsing_model
+            elif by == "both":
+                key = f"{answering_key} / {parsing_model}"
+            else:
+                raise ValueError(f"Invalid grouping mode: {by}. Must be 'answering', 'parsing', or 'both'")
+
+            if key not in grouped:
+                grouped[key] = []
+            grouped[key].append(result)
+
+        return {key: VerificationResultSet(results=results) for key, results in grouped.items()}
 
     def group_by_replicate(self) -> dict[int, VerificationResultSet]:
         """
@@ -384,10 +426,12 @@ class VerificationResultSet(BaseModel):
 
     def get_summary(self) -> dict[str, Any]:
         """
-        Get summary statistics for the entire result set.
+        Get comprehensive summary statistics for the entire result set.
 
         Returns:
-            Dictionary with summary statistics:
+            Dictionary with summary statistics including:
+
+            **Basic Counts**:
             - num_results: Total number of results
             - num_completed: Number of results that completed without errors
             - num_with_template: Number with template verification
@@ -395,22 +439,51 @@ class VerificationResultSet(BaseModel):
             - num_with_judgment: Number with deep judgment
             - num_questions: Number of unique questions
             - num_models: Number of unique answering models
+            - num_parsing_models: Number of unique parsing models
             - num_replicates: Number of unique replicates
+
+            **Execution**:
+            - total_execution_time: Total execution time in seconds
+
+            **Token Usage**:
+            - tokens: Dict with total_input, total_output, template_input, template_output,
+                     rubric_input, rubric_output
+            - tokens_by_combo: Dict mapping (answering, parsing, mcp_tuple) to
+                              {input, output, total}
+
+            **Completion Status**:
+            - completion_by_combo: Dict mapping (answering, parsing, mcp_tuple) to
+                                  {total, completed, completion_pct}
+
+            **Evaluation Types** (if rubrics enabled):
+            - rubric_traits: Dict with trait breakdowns (global/question-specific by type)
+
+            **Template Pass Rates**:
+            - template_pass_by_combo: Dict mapping combos to {total, passed, pass_pct}
+            - template_pass_overall: Dict with {total, passed, pass_pct}
+
+            **Replicate Statistics** (if replicates > 1):
+            - replicate_pass_rates: Dict mapping replicate number to {total, passed, pass_pct, pass_rate}
+            - replicate_summary: Dict with {mean, std}
 
         Example:
             ```python
             summary = result_set.get_summary()
             print(f"Total results: {summary['num_results']}")
             print(f"Questions: {summary['num_questions']}")
-            print(f"Models: {summary['num_models']}")
+            print(f"Total tokens: {summary['tokens']['total_input']} input")
             ```
         """
+        from collections import defaultdict
+
+        # Basic counts
         num_completed = 0
         num_with_template = 0
         num_with_rubric = 0
         num_with_judgment = 0
         questions = set()
         models = set()
+        parsing_models = set()
         replicates = set()
 
         for result in self.results:
@@ -428,10 +501,300 @@ class VerificationResultSet(BaseModel):
 
             questions.add(result.metadata.question_id)
             models.add(result.metadata.answering_model)
+            parsing_models.add(result.metadata.parsing_model)
             if result.metadata.answering_replicate is not None:
                 replicates.add(result.metadata.answering_replicate)
 
+        # Execution time
+        total_execution_time = sum(
+            r.metadata.execution_time for r in self.results if r.metadata.execution_time is not None
+        )
+
+        # Token usage
+        total_input_tokens = 0
+        total_output_tokens = 0
+        template_input_tokens = 0
+        template_output_tokens = 0
+        rubric_input_tokens = 0
+        rubric_output_tokens = 0
+        deep_judgment_input_tokens = 0
+        deep_judgment_output_tokens = 0
+
+        for result in self.results:
+            if result.template and hasattr(result.template, "usage_metadata") and result.template.usage_metadata:
+                usage_metadata = result.template.usage_metadata
+
+                if "total" in usage_metadata:
+                    total_usage = usage_metadata["total"]
+                    total_input_tokens += total_usage.get("input_tokens", 0)
+                    total_output_tokens += total_usage.get("output_tokens", 0)
+
+                if "answer_generation" in usage_metadata:
+                    answer_usage = usage_metadata["answer_generation"]
+                    template_input_tokens += answer_usage.get("input_tokens", 0)
+                    template_output_tokens += answer_usage.get("output_tokens", 0)
+
+                if "parsing" in usage_metadata:
+                    parsing_usage = usage_metadata["parsing"]
+                    template_input_tokens += parsing_usage.get("input_tokens", 0)
+                    template_output_tokens += parsing_usage.get("output_tokens", 0)
+
+                if "rubric_evaluation" in usage_metadata:
+                    rubric_usage = usage_metadata["rubric_evaluation"]
+                    rubric_input_tokens += rubric_usage.get("input_tokens", 0)
+                    rubric_output_tokens += rubric_usage.get("output_tokens", 0)
+
+            if (
+                result.deep_judgment
+                and hasattr(result.deep_judgment, "usage_metadata")
+                and result.deep_judgment.usage_metadata
+            ):
+                dj_usage = result.deep_judgment.usage_metadata
+                if "total" in dj_usage:
+                    dj_total = dj_usage["total"]
+                    deep_judgment_input_tokens += dj_total.get("input_tokens", 0)
+                    deep_judgment_output_tokens += dj_total.get("output_tokens", 0)
+
+        # Token usage by model combination
+        combo_token_stats: dict[tuple[str, str, tuple[str, ...] | None], dict[str, int]] = defaultdict(
+            lambda: {"input": 0, "output": 0}
+        )
+
+        for result in self.results:
+            mcp_servers = (
+                result.template.answering_mcp_servers
+                if result.template and result.template.answering_mcp_servers
+                else None
+            )
+            mcp_key = tuple(sorted(mcp_servers)) if mcp_servers else None
+            combo_key = (result.metadata.answering_model, result.metadata.parsing_model, mcp_key)
+
+            # Add tokens from template verification
+            if result.template and hasattr(result.template, "usage_metadata") and result.template.usage_metadata:
+                usage_metadata = result.template.usage_metadata
+                if "total" in usage_metadata:
+                    total_usage = usage_metadata["total"]
+                    combo_token_stats[combo_key]["input"] += total_usage.get("input_tokens", 0)
+                    combo_token_stats[combo_key]["output"] += total_usage.get("output_tokens", 0)
+
+            # Add tokens from deep judgment
+            if (
+                result.deep_judgment
+                and hasattr(result.deep_judgment, "usage_metadata")
+                and result.deep_judgment.usage_metadata
+            ):
+                dj_usage = result.deep_judgment.usage_metadata
+                if "total" in dj_usage:
+                    dj_total = dj_usage["total"]
+                    combo_token_stats[combo_key]["input"] += dj_total.get("input_tokens", 0)
+                    combo_token_stats[combo_key]["output"] += dj_total.get("output_tokens", 0)
+
+        tokens_by_combo = {}
+        for combo_key, stats in combo_token_stats.items():
+            tokens_by_combo[combo_key] = {
+                "input": stats["input"],
+                "output": stats["output"],
+                "total": stats["input"] + stats["output"],
+            }
+
+        # Completion status by model combination
+        combo_stats: dict[tuple[str, str, tuple[str, ...] | None], dict[str, int]] = defaultdict(
+            lambda: {"total": 0, "completed": 0}
+        )
+
+        for result in self.results:
+            mcp_servers = (
+                result.template.answering_mcp_servers
+                if result.template and result.template.answering_mcp_servers
+                else None
+            )
+            mcp_key = tuple(sorted(mcp_servers)) if mcp_servers else None
+            combo_key = (result.metadata.answering_model, result.metadata.parsing_model, mcp_key)
+
+            combo_stats[combo_key]["total"] += 1
+            if result.metadata.completed_without_errors:
+                combo_stats[combo_key]["completed"] += 1
+
+        # Add completion percentages
+        completion_by_combo = {}
+        for combo_key, stats in combo_stats.items():
+            completion_by_combo[combo_key] = {
+                "total": stats["total"],
+                "completed": stats["completed"],
+                "completion_pct": (stats["completed"] / stats["total"] * 100) if stats["total"] > 0 else 0,
+            }
+
+        # Rubric trait breakdown (if rubrics enabled)
+        rubric_traits = None
+        if num_with_rubric > 0:
+            trait_questions = defaultdict(set)
+            trait_types = {}
+
+            for result in self.results:
+                if result.rubric and result.rubric.rubric_evaluation_performed:
+                    q_id = result.metadata.question_id
+
+                    if result.rubric.llm_trait_scores:
+                        for trait_name in result.rubric.llm_trait_scores:
+                            trait_questions[trait_name].add(q_id)
+                            trait_types[trait_name] = "llm"
+
+                    if result.rubric.regex_trait_scores:
+                        for trait_name in result.rubric.regex_trait_scores:
+                            trait_questions[trait_name].add(q_id)
+                            trait_types[trait_name] = "regex"
+
+                    if result.rubric.callable_trait_scores:
+                        for trait_name in result.rubric.callable_trait_scores:
+                            trait_questions[trait_name].add(q_id)
+                            trait_types[trait_name] = "callable"
+
+                    if result.rubric.metric_trait_confusion_lists:
+                        for trait_name in result.rubric.metric_trait_confusion_lists:
+                            trait_questions[trait_name].add(q_id)
+                            trait_types[trait_name] = "metric"
+
+            num_questions = len(questions)
+            global_traits = {trait for trait, qs in trait_questions.items() if len(qs) == num_questions}
+
+            # Count evaluations by type
+            global_llm = global_regex = global_callable = global_metric = 0
+            qs_llm = qs_regex = qs_callable = qs_metric = 0
+
+            for result in self.results:
+                if result.rubric and result.rubric.rubric_evaluation_performed:
+                    if result.rubric.llm_trait_scores:
+                        for trait in result.rubric.llm_trait_scores:
+                            if trait in global_traits:
+                                global_llm += 1
+                            else:
+                                qs_llm += 1
+
+                    if result.rubric.regex_trait_scores:
+                        for trait in result.rubric.regex_trait_scores:
+                            if trait in global_traits:
+                                global_regex += 1
+                            else:
+                                qs_regex += 1
+
+                    if result.rubric.callable_trait_scores:
+                        for trait in result.rubric.callable_trait_scores:
+                            if trait in global_traits:
+                                global_callable += 1
+                            else:
+                                qs_callable += 1
+
+                    if result.rubric.metric_trait_confusion_lists:
+                        for trait in result.rubric.metric_trait_confusion_lists:
+                            if trait in global_traits:
+                                global_metric += 1
+                            else:
+                                qs_metric += 1
+
+            rubric_traits = {
+                "global_traits": {
+                    "llm": {"count": global_llm},
+                    "regex": {"count": global_regex},
+                    "callable": {"count": global_callable},
+                    "metric": {"count": global_metric},
+                },
+                "question_specific_traits": {
+                    "llm": {"count": qs_llm},
+                    "regex": {"count": qs_regex},
+                    "callable": {"count": qs_callable},
+                    "metric": {"count": qs_metric},
+                },
+            }
+
+        # Template pass rates
+        template_pass_by_combo = None
+        template_pass_overall = None
+
+        if num_with_template > 0:
+            combo_pass_stats: dict[tuple[str, str, tuple[str, ...] | None], dict[str, int]] = defaultdict(
+                lambda: {"total": 0, "passed": 0}
+            )
+
+            for result in self.results:
+                if result.template and result.template.template_verification_performed:
+                    mcp_servers = (
+                        result.template.answering_mcp_servers if result.template.answering_mcp_servers else None
+                    )
+                    mcp_key = tuple(sorted(mcp_servers)) if mcp_servers else None
+                    combo_key = (result.metadata.answering_model, result.metadata.parsing_model, mcp_key)
+
+                    combo_pass_stats[combo_key]["total"] += 1
+                    if result.template.verify_result:
+                        combo_pass_stats[combo_key]["passed"] += 1
+
+            # Add pass percentages
+            template_pass_by_combo = {}
+            for combo_key, stats in combo_pass_stats.items():
+                template_pass_by_combo[combo_key] = {
+                    "total": stats["total"],
+                    "passed": stats["passed"],
+                    "pass_pct": (stats["passed"] / stats["total"] * 100) if stats["total"] > 0 else 0,
+                }
+
+            # Overall pass rate
+            overall_passed = sum(s["passed"] for s in combo_pass_stats.values())
+            overall_total = sum(s["total"] for s in combo_pass_stats.values())
+            template_pass_overall = {
+                "total": overall_total,
+                "passed": overall_passed,
+                "pass_pct": (overall_passed / overall_total * 100) if overall_total > 0 else 0,
+            }
+
+        # Replicate statistics
+        replicate_pass_rates = None
+        replicate_summary = None
+
+        if len(replicates) > 1 and num_with_template > 0:
+            rep_stats_dict: dict[int, dict[str, int]] = defaultdict(lambda: {"total": 0, "passed": 0})
+
+            for result in self.results:
+                if result.template and result.template.template_verification_performed:
+                    rep_num = result.metadata.answering_replicate
+                    if rep_num is not None:
+                        rep_stats_dict[rep_num]["total"] += 1
+                        if result.template.verify_result:
+                            rep_stats_dict[rep_num]["passed"] += 1
+
+            replicate_pass_rates = {}
+            pass_rates_list = []
+
+            for rep_num, stats in rep_stats_dict.items():
+                passed = stats["passed"]
+                total = stats["total"]
+                pct = (passed / total * 100) if total > 0 else 0
+                pass_rate = passed / total if total > 0 else 0
+                pass_rates_list.append(pass_rate)
+
+                replicate_pass_rates[rep_num] = {
+                    "total": total,
+                    "passed": passed,
+                    "pass_pct": pct,
+                    "pass_rate": pass_rate,
+                }
+
+            # Calculate mean and std
+            if len(pass_rates_list) > 0:
+                import statistics
+
+                mean = statistics.mean(pass_rates_list)
+                std = statistics.stdev(pass_rates_list) if len(pass_rates_list) > 1 else 0.0
+                replicate_summary = {"mean": mean, "std": std}
+
+        # Build replicate_stats only if we have replicates
+        replicate_stats: dict[str, dict[int, dict[str, float | int]] | dict[str, float]] | None = None
+        if replicate_pass_rates is not None and replicate_summary is not None:
+            replicate_stats = {
+                "replicate_pass_rates": replicate_pass_rates,
+                "replicate_summary": replicate_summary,
+            }
+
         return {
+            # Basic counts
             "num_results": len(self.results),
             "num_completed": num_completed,
             "num_with_template": num_with_template,
@@ -439,7 +802,32 @@ class VerificationResultSet(BaseModel):
             "num_with_judgment": num_with_judgment,
             "num_questions": len(questions),
             "num_models": len(models),
+            "num_parsing_models": len(parsing_models),
             "num_replicates": len(replicates),
+            # Execution
+            "total_execution_time": total_execution_time,
+            # Token usage
+            "tokens": {
+                "total_input": total_input_tokens,
+                "total_output": total_output_tokens,
+                "template_input": template_input_tokens,
+                "template_output": template_output_tokens,
+                "rubric_input": rubric_input_tokens,
+                "rubric_output": rubric_output_tokens,
+                "deep_judgment_input": deep_judgment_input_tokens if num_with_judgment > 0 else None,
+                "deep_judgment_output": deep_judgment_output_tokens if num_with_judgment > 0 else None,
+            },
+            # Token usage by model combination
+            "tokens_by_combo": tokens_by_combo,
+            # Completion status
+            "completion_by_combo": completion_by_combo,
+            # Evaluation types
+            "rubric_traits": rubric_traits,
+            # Template pass rates
+            "template_pass_by_combo": template_pass_by_combo,
+            "template_pass_overall": template_pass_overall,
+            # Replicate statistics
+            "replicate_stats": replicate_stats,
         }
 
     def get_question_ids(self) -> list[str]:
@@ -514,14 +902,177 @@ class VerificationResultSet(BaseModel):
         return self.results[index]
 
     def __repr__(self) -> str:
-        """String representation of the result set."""
+        """
+        Enhanced string representation with detailed statistics.
+
+        Fetches comprehensive data from get_summary() and formats it for display.
+        Shows overview, completion status, evaluation types, template pass rates,
+        and replicate statistics.
+        """
+        if not self.results:
+            return "VerificationResultSet(empty)"
+
+        # Helper function to format time
+        def format_time(seconds: float) -> str:
+            """Format seconds as H:M:S, omitting hours/minutes if zero."""
+            hours = int(seconds // 3600)
+            minutes = int((seconds % 3600) // 60)
+            secs = seconds % 60
+
+            if hours > 0:
+                return f"{hours}h {minutes}m {secs:.1f}s"
+            elif minutes > 0:
+                return f"{minutes}m {secs:.1f}s"
+            else:
+                return f"{secs:.1f}s"
+
+        # Helper function to format token counts with dot separators
+        def format_tokens(count: int) -> str:
+            """Format token count with dot separators (thousands)."""
+            return f"{count:,}".replace(",", ".")
+
+        # Get comprehensive summary
         summary = self.get_summary()
-        return (
-            f"VerificationResultSet("
-            f"results={summary['num_results']}, "
-            f"questions={summary['num_questions']}, "
-            f"models={summary['num_models']})"
+
+        lines = ["VerificationResultSet("]
+
+        # === OVERVIEW ===
+        lines.append("  === OVERVIEW ===")
+        lines.append(f"  Total Results: {summary['num_results']}")
+        lines.append(f"  Questions: {summary['num_questions']}")
+        lines.append(f"  Models: {summary['num_models']} answering x {summary['num_parsing_models']} parsing")
+
+        if summary["num_replicates"] > 0:
+            lines.append(f"  Replicates: {summary['num_replicates']}")
+
+        if summary["total_execution_time"] > 0:
+            lines.append(f"  Total Execution Time: {format_time(summary['total_execution_time'])}")
+
+        # Token usage breakdown
+        tokens = summary["tokens"]
+        if tokens["total_input"] > 0 or tokens["total_output"] > 0:
+            lines.append(
+                f"  Total Tokens: {format_tokens(tokens['total_input'])} input, "
+                f"{format_tokens(tokens['total_output'])} output"
+            )
+
+            if tokens["template_input"] > 0 or tokens["template_output"] > 0:
+                lines.append(
+                    f"    └─ Templates: {format_tokens(tokens['template_input'])} input, "
+                    f"{format_tokens(tokens['template_output'])} output"
+                )
+
+            if tokens["rubric_input"] > 0 or tokens["rubric_output"] > 0:
+                lines.append(
+                    f"    └─ Rubrics: {format_tokens(tokens['rubric_input'])} input, "
+                    f"{format_tokens(tokens['rubric_output'])} output"
+                )
+
+        # === COMPLETION STATUS ===
+        lines.append("")
+        lines.append("  === COMPLETION STATUS ===")
+        lines.append("  By Model Combination:")
+
+        for combo_key, stats in sorted(summary["completion_by_combo"].items()):
+            answering, parsing, mcp_key = combo_key
+            # Format MCP suffix
+            mcp_suffix = f" + {', '.join(mcp_key)}" if mcp_key else ""
+
+            combo_str = f"{answering} / {parsing}{mcp_suffix}"
+            lines.append(
+                f"    {combo_str:40} {stats['completed']}/{stats['total']} completed ({stats['completion_pct']:.1f}%)"
+            )
+
+        lines.append(
+            f"  Overall: {summary['num_completed']}/{summary['num_results']} "
+            f"completed ({(summary['num_completed'] / summary['num_results'] * 100) if summary['num_results'] > 0 else 0:.1f}%)"
         )
+
+        # === EVALUATION TYPES ===
+        lines.append("")
+        lines.append("  === EVALUATION TYPES ===")
+
+        if summary["num_with_template"] > 0:
+            lines.append(f"  Template Verification: {summary['num_with_template']} results")
+
+        if summary["num_with_rubric"] > 0 and summary["rubric_traits"]:
+            traits = summary["rubric_traits"]
+            lines.append(f"  Rubric Evaluation: {summary['num_with_rubric']} results")
+            lines.append(f"    Total Trait Evaluations: {traits['total']}")
+
+            # Global traits breakdown
+            if traits["global_total"] > 0:
+                lines.append(f"    Global: {traits['global_total']}")
+                breakdown = []
+                if traits["global_llm"] > 0:
+                    breakdown.append(f"LLM: {traits['global_llm']}")
+                if traits["global_regex"] > 0:
+                    breakdown.append(f"Regex: {traits['global_regex']}")
+                if traits["global_callable"] > 0:
+                    breakdown.append(f"Callable: {traits['global_callable']}")
+                if traits["global_metric"] > 0:
+                    breakdown.append(f"Metric: {traits['global_metric']}")
+                if breakdown:
+                    lines.append(f"      └─ {', '.join(breakdown)}")
+
+            # Question-specific traits breakdown
+            if traits["qs_total"] > 0:
+                lines.append(f"    Question-Specific: {traits['qs_total']}")
+                breakdown = []
+                if traits["qs_llm"] > 0:
+                    breakdown.append(f"LLM: {traits['qs_llm']}")
+                if traits["qs_regex"] > 0:
+                    breakdown.append(f"Regex: {traits['qs_regex']}")
+                if traits["qs_callable"] > 0:
+                    breakdown.append(f"Callable: {traits['qs_callable']}")
+                if traits["qs_metric"] > 0:
+                    breakdown.append(f"Metric: {traits['qs_metric']}")
+                if breakdown:
+                    lines.append(f"      └─ {', '.join(breakdown)}")
+
+        if summary["num_with_judgment"] > 0:
+            lines.append(f"  Deep Judgment: {summary['num_with_judgment']} results")
+
+        # === TEMPLATE PASS RATES ===
+        if summary["template_pass_by_combo"]:
+            lines.append("")
+            lines.append("  === TEMPLATE PASS RATES ===")
+            lines.append("  By Model Combination (+ MCP if used):")
+
+            for combo_key, stats in sorted(summary["template_pass_by_combo"].items()):
+                answering, parsing, mcp_key = combo_key
+                mcp_suffix = f" + {', '.join(mcp_key)}" if mcp_key else ""
+
+                combo_str = f"{answering} / {parsing}{mcp_suffix}"
+                lines.append(f"    {combo_str:40} {stats['passed']}/{stats['total']} passed ({stats['pass_pct']:.1f}%)")
+
+            if summary["template_pass_overall"]:
+                overall = summary["template_pass_overall"]
+                lines.append(f"  Overall: {overall['passed']}/{overall['total']} passed ({overall['pass_pct']:.1f}%)")
+
+        # === REPLICATE STATISTICS ===
+        if summary["replicate_pass_rates"]:
+            lines.append("")
+            lines.append("  === REPLICATE STATISTICS ===")
+            lines.append("  Template Pass Rate by Replicate:")
+
+            for rep_num in sorted(summary["replicate_pass_rates"].keys()):
+                stats = summary["replicate_pass_rates"][rep_num]
+                lines.append(
+                    f"    Replicate {rep_num}: {stats['passed']}/{stats['total']} passed ({stats['pass_pct']:.1f}%)"
+                )
+
+            if summary["replicate_summary"]:
+                rep_sum = summary["replicate_summary"]
+                lines.append(f"  Summary: mean={rep_sum['mean']:.3f}, std={rep_sum['std']:.3f}")
+
+        lines.append(")")
+
+        return "\n".join(lines)
+
+    def __str__(self) -> str:
+        """String representation (same as repr for developer-friendly output)."""
+        return self.__repr__()
 
     # ========================================================================
     # Legacy Compatibility
