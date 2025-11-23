@@ -448,6 +448,8 @@ class VerificationResultSet(BaseModel):
             **Token Usage**:
             - tokens: Dict with total_input, total_output, template_input, template_output,
                      rubric_input, rubric_output
+            - tokens_by_combo: Dict mapping (answering, parsing, mcp_tuple) to
+                              {input, output, total}
 
             **Completion Status**:
             - completion_by_combo: Dict mapping (answering, parsing, mcp_tuple) to
@@ -552,6 +554,48 @@ class VerificationResultSet(BaseModel):
                     dj_total = dj_usage["total"]
                     deep_judgment_input_tokens += dj_total.get("input_tokens", 0)
                     deep_judgment_output_tokens += dj_total.get("output_tokens", 0)
+
+        # Token usage by model combination
+        combo_token_stats: dict[tuple[str, str, tuple[str, ...] | None], dict[str, int]] = defaultdict(
+            lambda: {"input": 0, "output": 0}
+        )
+
+        for result in self.results:
+            mcp_servers = (
+                result.template.answering_mcp_servers
+                if result.template and result.template.answering_mcp_servers
+                else None
+            )
+            mcp_key = tuple(sorted(mcp_servers)) if mcp_servers else None
+            combo_key = (result.metadata.answering_model, result.metadata.parsing_model, mcp_key)
+
+            # Add tokens from template verification
+            if result.template and hasattr(result.template, "usage_metadata") and result.template.usage_metadata:
+                usage_metadata = result.template.usage_metadata
+                if "total" in usage_metadata:
+                    total_usage = usage_metadata["total"]
+                    combo_token_stats[combo_key]["input"] += total_usage.get("input_tokens", 0)
+                    combo_token_stats[combo_key]["output"] += total_usage.get("output_tokens", 0)
+
+            # Add tokens from deep judgment
+            if (
+                result.deep_judgment
+                and hasattr(result.deep_judgment, "usage_metadata")
+                and result.deep_judgment.usage_metadata
+            ):
+                dj_usage = result.deep_judgment.usage_metadata
+                if "total" in dj_usage:
+                    dj_total = dj_usage["total"]
+                    combo_token_stats[combo_key]["input"] += dj_total.get("input_tokens", 0)
+                    combo_token_stats[combo_key]["output"] += dj_total.get("output_tokens", 0)
+
+        tokens_by_combo = {}
+        for combo_key, stats in combo_token_stats.items():
+            tokens_by_combo[combo_key] = {
+                "input": stats["input"],
+                "output": stats["output"],
+                "total": stats["input"] + stats["output"],
+            }
 
         # Completion status by model combination
         combo_stats: dict[tuple[str, str, tuple[str, ...] | None], dict[str, int]] = defaultdict(
@@ -773,6 +817,8 @@ class VerificationResultSet(BaseModel):
                 "deep_judgment_input": deep_judgment_input_tokens if num_with_judgment > 0 else None,
                 "deep_judgment_output": deep_judgment_output_tokens if num_with_judgment > 0 else None,
             },
+            # Token usage by model combination
+            "tokens_by_combo": tokens_by_combo,
             # Completion status
             "completion_by_combo": completion_by_combo,
             # Evaluation types
