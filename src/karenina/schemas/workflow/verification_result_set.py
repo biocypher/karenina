@@ -589,6 +589,17 @@ class VerificationResultSet(BaseModel):
             arr = np.array(values)
             return float(np.median(arr)), float(np.std(arr))
 
+        # Compute actual totals (sum) for all token types
+        total_input_sum = sum(total_input_tokens_list)
+        total_output_sum = sum(total_output_tokens_list)
+        template_input_sum = sum(template_input_tokens_list)
+        template_output_sum = sum(template_output_tokens_list)
+        rubric_input_sum = sum(rubric_input_tokens_list)
+        rubric_output_sum = sum(rubric_output_tokens_list)
+        dj_input_sum = sum(deep_judgment_input_tokens_list)
+        dj_output_sum = sum(deep_judgment_output_tokens_list)
+
+        # Compute median and std for variance information
         total_input_median, total_input_std = compute_stats(total_input_tokens_list)
         total_output_median, total_output_std = compute_stats(total_output_tokens_list)
         template_input_median, template_input_std = compute_stats(template_input_tokens_list)
@@ -853,23 +864,27 @@ class VerificationResultSet(BaseModel):
             "num_replicates": len(replicates),
             # Execution
             "total_execution_time": total_execution_time,
-            # Token usage (median ± std across all replicates)
+            # Token usage
             "tokens": {
-                "total_input": total_input_median,
+                # Total tokens (sum across all results)
+                "total_input": total_input_sum,
                 "total_input_std": total_input_std,
-                "total_output": total_output_median,
+                "total_output": total_output_sum,
                 "total_output_std": total_output_std,
-                "template_input": template_input_median,
+                # Template tokens (sum)
+                "template_input": template_input_sum,
                 "template_input_std": template_input_std,
-                "template_output": template_output_median,
+                "template_output": template_output_sum,
                 "template_output_std": template_output_std,
-                "rubric_input": rubric_input_median,
+                # Rubric tokens (sum)
+                "rubric_input": rubric_input_sum,
                 "rubric_input_std": rubric_input_std,
-                "rubric_output": rubric_output_median,
+                "rubric_output": rubric_output_sum,
                 "rubric_output_std": rubric_output_std,
-                "deep_judgment_input": dj_input_median if num_with_judgment > 0 else None,
+                # Deep judgment tokens (sum)
+                "deep_judgment_input": dj_input_sum if num_with_judgment > 0 else None,
                 "deep_judgment_input_std": dj_input_std if num_with_judgment > 0 else None,
-                "deep_judgment_output": dj_output_median if num_with_judgment > 0 else None,
+                "deep_judgment_output": dj_output_sum if num_with_judgment > 0 else None,
                 "deep_judgment_output_std": dj_output_std if num_with_judgment > 0 else None,
                 # Median tokens per question (aggregated over questions and replicates)
                 "median_per_question_input": per_q_input_median,
