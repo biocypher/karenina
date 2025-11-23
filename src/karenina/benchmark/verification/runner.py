@@ -139,13 +139,18 @@ def run_single_model_verification(
 
     # Compute model strings for result (needed even if validation fails)
     # For OpenRouter interface, don't include provider in the model string
+    # For OpenAI Endpoint interface, use "endpoint/" prefix
     if answering_model.interface == "openrouter":
         answering_model_str = answering_model.model_name
+    elif answering_model.interface == "openai_endpoint":
+        answering_model_str = f"endpoint/{answering_model.model_name}"
     else:
         answering_model_str = f"{answering_model.model_provider}/{answering_model.model_name}"
 
     if parsing_model.interface == "openrouter":
         parsing_model_str = parsing_model.model_name
+    elif parsing_model.interface == "openai_endpoint":
+        parsing_model_str = f"endpoint/{parsing_model.model_name}"
     else:
         parsing_model_str = f"{parsing_model.model_provider}/{parsing_model.model_name}"
 
