@@ -139,19 +139,29 @@ def run_single_model_verification(
 
     # Compute model strings for result (needed even if validation fails)
     # For OpenRouter interface, don't include provider in the model string
+    # For OpenAI Endpoint interface, use "endpoint/" prefix
     if answering_model.interface == "openrouter":
         answering_model_str = answering_model.model_name
+    elif answering_model.interface == "openai_endpoint":
+        answering_model_str = f"endpoint/{answering_model.model_name}"
     else:
         answering_model_str = f"{answering_model.model_provider}/{answering_model.model_name}"
 
     if parsing_model.interface == "openrouter":
         parsing_model_str = parsing_model.model_name
+    elif parsing_model.interface == "openai_endpoint":
+        parsing_model_str = f"endpoint/{parsing_model.model_name}"
     else:
         parsing_model_str = f"{parsing_model.model_provider}/{parsing_model.model_name}"
 
     # Store model strings in context for early access (e.g., in error cases)
     context.set_artifact("answering_model_str", answering_model_str)
     context.set_artifact("parsing_model_str", parsing_model_str)
+
+    # Extract and store MCP server names for early access (e.g., in error cases)
+    answering_mcp_servers = list(answering_model.mcp_urls_dict.keys()) if answering_model.mcp_urls_dict else None
+    context.set_artifact("answering_mcp_servers", answering_mcp_servers)
+    context.set_result_field("answering_mcp_servers", answering_mcp_servers)
 
     # Determine evaluation mode automatically if not explicitly set
     # If rubric is provided and mode is template_only, upgrade to template_and_rubric
