@@ -1195,13 +1195,186 @@ class Benchmark:
         return self._base.get_progress()
 
     # Magic methods for better usability
-    def __str__(self) -> str:
-        """Human-readable string representation."""
-        return str(self._base)
-
     def __repr__(self) -> str:
-        """Developer-friendly representation."""
-        return repr(self._base)
+        """
+        Developer-friendly representation with detailed statistics.
+
+        Shows metadata, content stats, rubric breakdown, sample questions,
+        and readiness status in a structured multi-line format.
+        """
+        lines = ["Benchmark("]
+
+        # === METADATA ===
+        lines.append("  === METADATA ===")
+        lines.append(f"  Name: {self._base.name}")
+        lines.append(f"  Version: {self._base.version}")
+        lines.append(f"  Creator: {self._base.creator}")
+        lines.append(f"  Created: {self._base.created_at}")
+        lines.append(f"  Modified: {self._base.modified_at}")
+
+        # Collect unique keywords
+        all_questions_data = self.get_all_questions(ids_only=False)
+        assert isinstance(all_questions_data, list)
+        unique_keywords: set[str] = set()
+        for q in all_questions_data:
+            if isinstance(q, dict):
+                keywords = q.get("keywords", [])
+                if keywords:
+                    unique_keywords.update(keywords)
+
+        if unique_keywords:
+            keyword_list = sorted(unique_keywords)
+            keywords_str = ", ".join(keyword_list)
+            lines.append(f"  Keywords: {keywords_str} ({len(keyword_list)} total)")
+        else:
+            lines.append("  Keywords: none")
+
+        # === CONTENT ===
+        lines.append("")
+        lines.append("  === CONTENT ===")
+        summary = self._export_manager.get_summary()
+        progress = summary["progress_percentage"]
+        lines.append(
+            f"  Questions: {self._base.question_count} total, "
+            f"{self._base.finished_count} finished ({progress:.1f}% complete)"
+        )
+        lines.append(f"  Templates: {summary['has_template_count']}/{self._base.question_count} questions")
+
+        # === RUBRICS ===
+        lines.append("")
+        lines.append("  === RUBRICS ===")
+        global_rubric = self._rubric_manager.get_global_rubric()
+
+        if global_rubric:
+            # Count traits by type in global rubric
+            llm_count = len(global_rubric.llm_traits)
+            regex_count = len(global_rubric.regex_traits)
+            metric_count = len(global_rubric.metric_traits)
+            callable_count = len(global_rubric.callable_traits)
+
+            total_traits = llm_count + regex_count + metric_count + callable_count
+            lines.append(f"  Global Rubric: {total_traits} traits")
+            trait_breakdown = []
+            if llm_count > 0:
+                trait_breakdown.append(f"LLM: {llm_count}")
+            if regex_count > 0:
+                trait_breakdown.append(f"Regex: {regex_count}")
+            if metric_count > 0:
+                trait_breakdown.append(f"Metric: {metric_count}")
+            if callable_count > 0:
+                trait_breakdown.append(f"Callable: {callable_count}")
+
+            if trait_breakdown:
+                lines.append(f"    └─ {', '.join(trait_breakdown)}")
+        else:
+            lines.append("  Global Rubric: none")
+
+        # Question-specific rubrics
+        questions_with_rubrics = []
+        total_llm = total_regex = total_metric = total_callable = 0
+
+        for q in all_questions_data:
+            if not isinstance(q, dict):
+                continue
+            question_rubric = self._rubric_manager.get_question_rubric(q["id"])
+            if question_rubric and len(question_rubric) > 0:
+                questions_with_rubrics.append(q["id"])
+                # Count traits by type
+                for trait in question_rubric:
+                    if isinstance(trait, LLMRubricTrait):
+                        total_llm += 1
+                    elif isinstance(trait, RegexTrait):
+                        total_regex += 1
+                    elif isinstance(trait, MetricRubricTrait):
+                        total_metric += 1
+                    elif isinstance(trait, CallableTrait):
+                        total_callable += 1
+
+        if questions_with_rubrics:
+            lines.append(f"  Question-Specific: {len(questions_with_rubrics)} questions with rubrics")
+            trait_breakdown = []
+            if total_llm > 0:
+                trait_breakdown.append(f"LLM: {total_llm} total")
+            if total_regex > 0:
+                trait_breakdown.append(f"Regex: {total_regex} total")
+            if total_metric > 0:
+                trait_breakdown.append(f"Metric: {total_metric} total")
+            if total_callable > 0:
+                trait_breakdown.append(f"Callable: {total_callable} total")
+
+            if trait_breakdown:
+                lines.append(f"    └─ {', '.join(trait_breakdown)}")
+        else:
+            lines.append("  Question-Specific: none")
+
+        # === QUESTIONS ===
+        lines.append("")
+        if self._base.question_count == 0:
+            lines.append("  === QUESTIONS ===")
+            lines.append("  (empty benchmark)")
+        else:
+            display_count = min(3, len(all_questions_data))
+            lines.append(f"  === QUESTIONS (showing {display_count} of {self._base.question_count}) ===")
+
+            for idx, q_item in enumerate(all_questions_data[:display_count], 1):
+                if not isinstance(q_item, dict):
+                    continue
+
+                # Question text (truncate to 80 chars)
+                question_text = q_item.get("question", "")
+                if len(question_text) > 80:
+                    question_text = question_text[:77] + "..."
+
+                # Keywords
+                keywords = q_item.get("keywords", [])
+                keywords_str = f" [{', '.join(keywords)}]" if keywords else ""
+
+                lines.append(f"  {idx}. {question_text}{keywords_str}")
+
+                # Raw answer (truncate to 80 chars)
+                raw_answer = q_item.get("raw_answer", "")
+                if raw_answer:
+                    if len(raw_answer) > 80:
+                        raw_answer = raw_answer[:77] + "..."
+                    lines.append(f"     → {raw_answer}")
+                else:
+                    lines.append("     → (no answer yet)")
+
+                # Add blank line between questions
+                if idx < display_count:
+                    lines.append("")
+
+            # Show remaining count
+            if self._base.question_count > display_count:
+                remaining = self._base.question_count - display_count
+                lines.append(f"  ... ({remaining} more)")
+
+        # === READINESS ===
+        if not self._base.is_complete:
+            lines.append("")
+            lines.append("  === READINESS ===")
+            readiness = self._export_manager.check_readiness()
+
+            if readiness["ready_for_verification"]:
+                lines.append("  Status: Ready for verification")
+            else:
+                lines.append("  Status: Not ready for verification")
+                lines.append("  Issues:")
+
+                if readiness["missing_templates_count"] > 0:
+                    lines.append(f"    - {readiness['missing_templates_count']} questions missing templates")
+
+                unfinished_count = int(readiness["unfinished_count"])
+                if unfinished_count > 0:
+                    lines.append(f"    - {unfinished_count} questions not finished")
+
+        lines.append(")")
+
+        return "\n".join(lines)
+
+    def __str__(self) -> str:
+        """String representation (same as repr for developer-friendly output)."""
+        return self.__repr__()
 
     def __len__(self) -> int:
         """Return the number of questions in the benchmark."""

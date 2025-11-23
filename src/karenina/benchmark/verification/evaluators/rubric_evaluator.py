@@ -851,6 +851,7 @@ Your JSON response:"""
         metadata: dict[str, dict[str, Any]] = {}
         hallucination_risks: dict[str, dict[str, Any]] = {}
         auto_fail_traits: list[str] = []
+        usage_metadata_list: list[dict[str, Any]] = []  # Aggregate usage across all traits
 
         logger.info(
             f"Evaluating rubric with deep judgment: {len(dj_traits)} DJ traits, {len(standard_traits)} standard traits"
@@ -861,6 +862,9 @@ Your JSON response:"""
             logger.debug(f"Evaluating deep judgment trait: {trait.name}")
             try:
                 trait_result = self._evaluate_single_trait_with_deep_judgment(question, answer, trait, config)
+
+                # Collect usage metadata from this trait
+                usage_metadata_list.extend(trait_result.get("usage_metadata_list", []))
 
                 # Check for auto-fail
                 if trait_result.get("auto_fail"):
@@ -896,10 +900,12 @@ Your JSON response:"""
 
         # Evaluate standard traits using existing batch/sequential logic
         standard_scores: dict[str, int | bool] = {}
+        standard_usage_metadata_list: list[dict[str, Any]] = []
         if standard_traits:
             logger.debug(f"Evaluating {len(standard_traits)} standard traits")
             standard_rubric = Rubric(llm_traits=standard_traits)
-            standard_scores, _ = self.evaluate_rubric(question, answer, standard_rubric)
+            standard_scores, standard_usage_metadata_list = self.evaluate_rubric(question, answer, standard_rubric)
+            usage_metadata_list.extend(standard_usage_metadata_list)
 
         return {
             "deep_judgment_scores": dj_scores,
@@ -909,6 +915,7 @@ Your JSON response:"""
             "metadata": metadata,
             "hallucination_risks": hallucination_risks,
             "traits_without_valid_excerpts": auto_fail_traits,
+            "usage_metadata_list": usage_metadata_list,
         }
 
     def _evaluate_single_trait_with_deep_judgment(
@@ -949,10 +956,13 @@ Your JSON response:"""
         2. Generate reasoning based on excerpts
         3. Extract final score
         """
+        usage_metadata_list = []  # Aggregate usage across all stages
+
         # Stage 1: Extract excerpts with retry
         excerpt_result = self._extract_excerpts_for_trait(answer, trait, config)
         metadata["model_calls"] += excerpt_result["model_calls"]
         metadata["excerpt_retry_count"] = excerpt_result["retry_count"]
+        usage_metadata_list.extend(excerpt_result.get("usage_metadata_list", []))
 
         # Check for auto-fail
         if excerpt_result.get("auto_fail"):
@@ -960,6 +970,7 @@ Your JSON response:"""
             return {
                 "auto_fail": True,
                 "metadata": metadata,
+                "usage_metadata_list": usage_metadata_list,
             }
 
         excerpts = excerpt_result["excerpts"]
@@ -972,6 +983,7 @@ Your JSON response:"""
             excerpts = hallucination_result["excerpts"]  # Updated with search results
             hallucination_risk = hallucination_result["risk_assessment"]
             metadata["model_calls"] += hallucination_result["model_calls"]
+            usage_metadata_list.extend(hallucination_result.get("usage_metadata_list", []))
             metadata["stages_completed"].append("hallucination_assessment")
 
         # Stage 2: Generate reasoning based on excerpts
@@ -980,12 +992,16 @@ Your JSON response:"""
         )
         reasoning = reasoning_result["reasoning"]
         metadata["model_calls"] += 1
+        if reasoning_result.get("usage_metadata"):
+            usage_metadata_list.append(reasoning_result["usage_metadata"])
         metadata["stages_completed"].append("reasoning_generation")
 
         # Stage 3: Extract score
         score_result = self._extract_score_for_trait(question, answer, trait, reasoning)
         score = score_result["score"]
         metadata["model_calls"] += 1
+        if score_result.get("usage_metadata"):
+            usage_metadata_list.append(score_result["usage_metadata"])
         metadata["stages_completed"].append("score_extraction")
 
         return {
@@ -995,6 +1011,7 @@ Your JSON response:"""
             "hallucination_risk": hallucination_risk,
             "metadata": metadata,
             "auto_fail": False,
+            "usage_metadata_list": usage_metadata_list,
         }
 
     def _evaluate_trait_without_excerpts(
@@ -1012,18 +1029,24 @@ Your JSON response:"""
         1. Generate reasoning based on full answer
         2. Extract final score
         """
+        usage_metadata_list = []  # Aggregate usage across stages
+
         # Stage 1: Generate reasoning (no excerpts)
         reasoning_result = self._generate_reasoning_for_trait(
             question, answer, trait, excerpts=None, hallucination_risk=None
         )
         reasoning = reasoning_result["reasoning"]
         metadata["model_calls"] += 1
+        if reasoning_result.get("usage_metadata"):
+            usage_metadata_list.append(reasoning_result["usage_metadata"])
         metadata["stages_completed"].append("reasoning_generation")
 
         # Stage 2: Extract score
         score_result = self._extract_score_for_trait(question, answer, trait, reasoning)
         score = score_result["score"]
         metadata["model_calls"] += 1
+        if score_result.get("usage_metadata"):
+            usage_metadata_list.append(score_result["usage_metadata"])
         metadata["stages_completed"].append("score_extraction")
 
         return {
@@ -1031,6 +1054,7 @@ Your JSON response:"""
             "reasoning": reasoning,
             "metadata": metadata,
             "auto_fail": False,
+            "usage_metadata_list": usage_metadata_list,
         }
 
     def _extract_excerpts_for_trait(self, answer: str, trait: "LLMRubricTrait", config: Any) -> dict[str, Any]:
@@ -1038,7 +1062,7 @@ Your JSON response:"""
         Extract excerpts for a trait with retry on validation failure.
 
         Returns:
-            Dictionary with: excerpts, retry_count, model_calls, auto_fail flag
+            Dictionary with: excerpts, retry_count, model_calls, auto_fail flag, usage_metadata
         """
         # Get configuration values (per-trait overrides global defaults)
         max_attempts = (
@@ -1060,6 +1084,7 @@ Your JSON response:"""
         retry_count = 0
         model_calls = 0
         validation_feedback = None
+        usage_metadata_list = []  # Track usage across retries
 
         # Retry loop
         for attempt in range(max_attempts + 1):  # Initial + retries
@@ -1074,9 +1099,11 @@ Your JSON response:"""
                 HumanMessage(content=prompt),
             ]
 
-            with get_usage_metadata_callback():
+            with get_usage_metadata_callback() as cb:
                 response = self.llm.invoke(messages)
             model_calls += 1
+            if cb.usage_metadata:
+                usage_metadata_list.append(dict(cb.usage_metadata))
 
             raw_response = response.content if hasattr(response, "content") else str(response)
 
@@ -1098,6 +1125,7 @@ Your JSON response:"""
                         "retry_count": retry_count,
                         "model_calls": model_calls,
                         "auto_fail": True,
+                        "usage_metadata_list": usage_metadata_list,
                     }
 
             # Validate excerpts with fuzzy matching
@@ -1110,6 +1138,7 @@ Your JSON response:"""
                     "retry_count": retry_count,
                     "model_calls": model_calls,
                     "auto_fail": False,
+                    "usage_metadata_list": usage_metadata_list,
                 }
 
             # All excerpts failed validation
@@ -1128,6 +1157,7 @@ Your JSON response:"""
                     "retry_count": retry_count,
                     "model_calls": model_calls,
                     "auto_fail": True,
+                    "usage_metadata_list": usage_metadata_list,
                 }
 
         # Should not reach here
@@ -1136,6 +1166,7 @@ Your JSON response:"""
             "retry_count": retry_count,
             "model_calls": model_calls,
             "auto_fail": True,
+            "usage_metadata_list": usage_metadata_list,
         }
 
     def _validate_trait_excerpts(
@@ -1247,7 +1278,7 @@ JSON Response:"""
         Assess hallucination risk for trait excerpts using search.
 
         Returns:
-            Dictionary with: excerpts (updated with search results), risk_assessment, model_calls
+            Dictionary with: excerpts (updated with search results), risk_assessment, model_calls, usage_metadata_list
         """
         from ..tools.search_tools import create_search_tool
 
@@ -1268,6 +1299,7 @@ JSON Response:"""
         # Assess hallucination risk per excerpt
         model_calls = 0
         per_excerpt_risks = []
+        usage_metadata_list = []  # Track usage across hallucination assessments
 
         for i, excerpt in enumerate(excerpts):
             # Build prompt for hallucination assessment
@@ -1295,9 +1327,11 @@ JSON Response:
                 HumanMessage(content=prompt),
             ]
 
-            with get_usage_metadata_callback():
+            with get_usage_metadata_callback() as cb:
                 response = self.llm.invoke(messages)
             model_calls += 1
+            if cb.usage_metadata:
+                usage_metadata_list.append(dict(cb.usage_metadata))
 
             raw_response = response.content if hasattr(response, "content") else str(response)
 
@@ -1334,6 +1368,7 @@ JSON Response:
                 "per_excerpt_risks": per_excerpt_risks,
             },
             "model_calls": model_calls,
+            "usage_metadata_list": usage_metadata_list,
         }
 
     def _generate_reasoning_for_trait(
@@ -1348,7 +1383,7 @@ JSON Response:
         Generate reasoning explaining the trait score.
 
         Returns:
-            Dictionary with: reasoning (string)
+            Dictionary with: reasoning (string), usage_metadata
         """
         if excerpts is not None:
             # With excerpts
@@ -1364,13 +1399,14 @@ JSON Response:
             HumanMessage(content=prompt),
         ]
 
-        with get_usage_metadata_callback():
+        with get_usage_metadata_callback() as cb:
             response = self.llm.invoke(messages)
 
         raw_response = response.content if hasattr(response, "content") else str(response)
         reasoning = raw_response.strip()
 
-        return {"reasoning": reasoning}
+        usage_metadata = dict(cb.usage_metadata) if cb.usage_metadata else {}
+        return {"reasoning": reasoning, "usage_metadata": usage_metadata}
 
     def _build_trait_reasoning_prompt_with_excerpts(
         self,
@@ -1442,7 +1478,7 @@ Your reasoning:"""
         Extract final score for trait based on reasoning.
 
         Returns:
-            Dictionary with: score (int | bool)
+            Dictionary with: score (int | bool), usage_metadata
         """
         prompt = self._build_trait_scoring_prompt(trait, reasoning)
 
@@ -1451,7 +1487,7 @@ Your reasoning:"""
             HumanMessage(content=prompt),
         ]
 
-        with get_usage_metadata_callback():
+        with get_usage_metadata_callback() as cb:
             response = self.llm.invoke(messages)
 
         raw_response = response.content if hasattr(response, "content") else str(response)
@@ -1459,7 +1495,8 @@ Your reasoning:"""
         # Parse score
         score = self._parse_trait_score_response(raw_response, trait)
 
-        return {"score": score}
+        usage_metadata = dict(cb.usage_metadata) if cb.usage_metadata else {}
+        return {"score": score, "usage_metadata": usage_metadata}
 
     def _build_trait_scoring_prompt(self, trait: "LLMRubricTrait", reasoning: str) -> str:
         """Build prompt for final scoring."""

@@ -352,6 +352,125 @@ class VerificationConfig(BaseModel):
                     "or a callable with signature (str | list[str]) -> (str | list[str])"
                 )
 
+    def __repr__(self) -> str:
+        """
+        Return detailed string representation for debugging/inspection.
+
+        Shows key configuration settings including models, execution parameters,
+        and enabled features in a human-readable multi-line format.
+        """
+        lines = ["VerificationConfig("]
+
+        # === MODELS ===
+        lines.append("  === MODELS ===")
+
+        # Answering models
+        if self.answering_models:
+            lines.append(f"  Answering ({len(self.answering_models)}):")
+            for model in self.answering_models:
+                provider = model.model_provider or "none"
+                lines.append(
+                    f"    - {model.model_name} ({provider}) [temp={model.temperature}, interface={model.interface}]"
+                )
+        else:
+            lines.append("  Answering: none")
+
+        # Parsing models
+        lines.append(f"  Parsing ({len(self.parsing_models)}):")
+        for model in self.parsing_models:
+            provider = model.model_provider or "none"
+            lines.append(
+                f"    - {model.model_name} ({provider}) [temp={model.temperature}, interface={model.interface}]"
+            )
+
+        # === EXECUTION ===
+        lines.append("")
+        lines.append("  === EXECUTION ===")
+        lines.append(f"  Replicates: {self.replicate_count}")
+        lines.append(f"  Async: {self.async_enabled}")
+        if self.async_enabled:
+            lines.append(f"    └─ workers: {self.async_max_workers}")
+        if self.parsing_only:
+            lines.append("  Parsing Only: True")
+        lines.append(f"  Evaluation Mode: {self.evaluation_mode}")
+        lines.append(f"  Rubric Evaluation Strategy: {self.rubric_evaluation_strategy}")
+
+        # === FEATURES ===
+        lines.append("")
+        lines.append("  === FEATURES ===")
+        features_shown = False
+
+        # Rubric - just enabled/disabled status with optional trait selection
+        if self.rubric_enabled:
+            features_shown = True
+            trait_info = ""
+            if self.rubric_trait_names:
+                trait_info = f" ({len(self.rubric_trait_names)} traits selected)"
+            lines.append(f"  Rubric: enabled{trait_info}")
+        else:
+            lines.append("  Rubric: disabled")
+
+        # Deep Judgment - Template
+        if self.deep_judgment_enabled:
+            features_shown = True
+            lines.append(
+                f"  Deep Judgment (Template): "
+                f"max_excerpts={self.deep_judgment_max_excerpts_per_attribute}, "
+                f"fuzzy_threshold={self.deep_judgment_fuzzy_match_threshold}"
+            )
+            if self.deep_judgment_search_enabled:
+                search_tool = self.deep_judgment_search_tool
+                if callable(search_tool):
+                    search_tool = "<custom_callable>"
+                lines.append(f"    └─ search: {search_tool}")
+
+        # Deep Judgment - Rubric
+        if self.deep_judgment_rubric_mode != "disabled":
+            features_shown = True
+            lines.append(
+                f"  Deep Judgment (Rubric): mode={self.deep_judgment_rubric_mode}, "
+                f"global_excerpts={self.deep_judgment_rubric_global_excerpts}"
+            )
+            # Warning about sequential evaluation
+            lines.append("    ⚠️  Deep judgment traits are ALWAYS evaluated sequentially (one-by-one)")
+            if self.deep_judgment_rubric_mode == "custom" and self.deep_judgment_rubric_config:
+                global_traits = self.deep_judgment_rubric_config.get("global", {})
+                question_configs = self.deep_judgment_rubric_config.get("question_specific", {})
+                lines.append(f"    └─ {len(global_traits)} global traits, {len(question_configs)} question configs")
+
+        # Abstention
+        if self.abstention_enabled:
+            features_shown = True
+            lines.append("  Abstention: enabled")
+
+        # Embedding Check
+        if self.embedding_check_enabled:
+            features_shown = True
+            lines.append(
+                f"  Embedding Check: model={self.embedding_check_model}, threshold={self.embedding_check_threshold}"
+            )
+
+        # Few-Shot
+        few_shot_config = self.get_few_shot_config()
+        if few_shot_config and few_shot_config.enabled:
+            features_shown = True
+            lines.append(f"  Few-Shot: mode={few_shot_config.global_mode}")
+            if few_shot_config.global_mode == "k-shot":
+                lines.append(f"    └─ k={few_shot_config.global_k}")
+            if few_shot_config.question_configs:
+                lines.append(f"    └─ {len(few_shot_config.question_configs)} question configs")
+
+        if not features_shown:
+            lines.append("  (none enabled)")
+
+        lines.append(")")
+
+        return "\n".join(lines)
+
+    def __str__(self) -> str:
+        """String representation (same as repr for developer-friendly output)."""
+        return self.__repr__()
+
     def get_few_shot_config(self) -> FewShotConfig | None:
         """
         Get the effective FewShotConfig, handling backward compatibility.
