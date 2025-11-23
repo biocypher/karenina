@@ -17,6 +17,7 @@ from .stages import (
     FinalizeResultStage,
     GenerateAnswerStage,
     ParseTemplateStage,
+    RecursionLimitAutoFailStage,
     RubricEvaluationStage,
     ValidateTemplateStage,
     VerifyTemplateStage,
@@ -46,14 +47,15 @@ class StageOrchestrator:
     Stage Order:
         1. ValidateTemplateStage (always first)
         2. GenerateAnswerStage (always after validate)
-        3. ParseTemplateStage (requires raw_answer)
-        4. VerifyTemplateStage (requires parsed_answer)
-        5. EmbeddingCheckStage (optional, after verify)
-        6. AbstentionCheckStage (optional, after verify)
-        7. DeepJudgmentAutoFailStage (optional, after verify)
-        8. RubricEvaluationStage (optional, after generate)
-        9. DeepJudgmentRubricAutoFailStage (optional, after rubric)
-        10. FinalizeResultStage (always last)
+        3. RecursionLimitAutoFailStage (auto-fail if recursion limit hit)
+        4. ParseTemplateStage (requires raw_answer)
+        5. VerifyTemplateStage (requires parsed_answer)
+        6. EmbeddingCheckStage (optional, after verify)
+        7. AbstentionCheckStage (optional, after verify)
+        8. DeepJudgmentAutoFailStage (optional, after verify)
+        9. RubricEvaluationStage (optional, after generate)
+        10. DeepJudgmentRubricAutoFailStage (optional, after rubric)
+        11. FinalizeResultStage (always last)
     """
 
     def __init__(self, stages: StageList) -> None:
@@ -111,6 +113,9 @@ class StageOrchestrator:
             # Only generate answer, optionally check abstention, evaluate rubric, finalize
             stages.append(GenerateAnswerStage())
 
+            # Auto-fail if recursion limit hit (always runs after GenerateAnswer)
+            stages.append(RecursionLimitAutoFailStage())
+
             # Optional abstention check (can run on raw response)
             if abstention_enabled:
                 stages.append(AbstentionCheckStage())
@@ -131,6 +136,7 @@ class StageOrchestrator:
                 [
                     ValidateTemplateStage(),
                     GenerateAnswerStage(),
+                    RecursionLimitAutoFailStage(),  # Auto-fail if recursion limit hit
                     ParseTemplateStage(),
                     VerifyTemplateStage(),
                 ]

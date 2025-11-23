@@ -412,13 +412,43 @@ def call_model(
                     # Check if this is a GraphRecursionError
                     if "GraphRecursionError" in str(type(e).__name__) or "recursion_limit" in str(e).lower():
                         recursion_limit_reached = True
-                        # Try to extract partial state from the agent
+
+                        # Try multiple methods to extract accumulated messages from the agent
+                        # Method 1: Check if exception contains state information
+                        if hasattr(e, "state") and e.state is not None:
+                            return e.state
+
+                        # Method 2: Try to get current graph state if checkpointer exists
+                        if hasattr(session.llm, "checkpointer") and session.llm.checkpointer is not None:
+                            try:
+                                if hasattr(session.llm, "get_state"):
+                                    config = {"configurable": {"thread_id": "default"}}
+                                    state = session.llm.get_state(config)
+                                    if state and hasattr(state, "values") and "messages" in state.values:
+                                        return {"messages": state.values["messages"]}
+                            except Exception:
+                                pass
+
+                        # Method 3: Check if exception has accumulated messages attribute
+                        if hasattr(e, "messages"):
+                            return {"messages": e.messages}
+
+                        # Method 4: Try to access graph state directly through internal attributes
                         try:
-                            agent_state = session.llm.get_state({"messages": session.messages})
-                            return agent_state
+                            if hasattr(session.llm, "_state") and session.llm._state is not None:
+                                return session.llm._state
                         except Exception:
-                            # If we can't get state, return the messages we have so far
-                            return {"messages": session.messages}
+                            pass
+
+                        # FALLBACK: Return input messages with warning
+                        import logging
+
+                        logger = logging.getLogger(__name__)
+                        logger.warning(
+                            "Could not extract partial agent state after recursion limit. "
+                            "Returning input messages only. Accumulated trace may be lost."
+                        )
+                        return {"messages": session.messages}
                     else:
                         raise e
 
