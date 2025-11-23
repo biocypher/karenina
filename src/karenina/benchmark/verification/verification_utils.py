@@ -12,6 +12,7 @@ import re
 from typing import Any
 
 from langchain_core.callbacks import get_usage_metadata_callback
+from langchain_core.callbacks.usage import UsageMetadataCallbackHandler
 from langchain_core.messages import BaseMessage, HumanMessage
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
@@ -223,26 +224,77 @@ def _invoke_llm_with_retry(
                 import asyncio
 
                 async def invoke_agent_async() -> Any:
+                    cb_manager = None
+                    cb: UsageMetadataCallbackHandler | None = None
                     try:
                         # Wrap async invoke with usage metadata callback
-                        with get_usage_metadata_callback() as cb:
-                            response = await llm.ainvoke({"messages": messages})
-                        # Capture usage metadata
+                        cb_manager = get_usage_metadata_callback()
+                        cb = cb_manager.__enter__()
+                        response = await llm.ainvoke({"messages": messages})
+                        # Capture usage metadata on success
                         nonlocal usage_metadata
-                        usage_metadata = dict(cb.usage_metadata) if cb.usage_metadata else {}
+                        usage_metadata = dict(cb.usage_metadata) if cb and cb.usage_metadata else {}
+                        cb_manager.__exit__(None, None, None)
                         return response
                     except Exception as e:
+                        # CRITICAL: Capture usage metadata BEFORE handling exception
+                        # This ensures we track tokens even when recursion limit is hit
+                        if cb and cb.usage_metadata:
+                            usage_metadata = dict(cb.usage_metadata)
+                            # Close the callback context
+                            from contextlib import suppress
+
+                            if cb_manager:
+                                with suppress(Exception):
+                                    cb_manager.__exit__(type(e), e, e.__traceback__)
+
                         # Check if this is a GraphRecursionError
                         if "GraphRecursionError" in str(type(e).__name__) or "recursion_limit" in str(e).lower():
                             nonlocal recursion_limit_reached
                             recursion_limit_reached = True
-                            # Try to extract partial state from the agent
+
+                            # Try multiple methods to extract accumulated messages from the agent
+                            # Method 1: Check if exception contains state information
+                            if hasattr(e, "state") and e.state is not None:
+                                logger.info("Extracted partial state from GraphRecursionError.state")
+                                return e.state
+
+                            # Method 2: Try to get current graph state if checkpointer exists
+                            if hasattr(llm, "checkpointer") and llm.checkpointer is not None:
+                                try:
+                                    # Get the latest state from checkpointer
+                                    # This requires accessing the graph's internal state
+                                    if hasattr(llm, "get_state"):
+                                        # Some versions expose get_state as a method
+                                        config = {"configurable": {"thread_id": "default"}}
+                                        state = llm.get_state(config)
+                                        if state and hasattr(state, "values") and "messages" in state.values:
+                                            logger.info("Extracted partial state from graph checkpointer")
+                                            return {"messages": state.values["messages"]}
+                                except Exception as state_error:
+                                    logger.debug(f"Could not extract state from checkpointer: {state_error}")
+
+                            # Method 3: Check if exception has accumulated messages attribute
+                            if hasattr(e, "messages"):
+                                logger.info("Extracted messages from exception.messages attribute")
+                                return {"messages": e.messages}
+
+                            # Method 4: Try to access graph state directly through internal attributes
                             try:
-                                agent_state = llm.get_state({"messages": messages})
-                                return agent_state
+                                # LangGraph agents have internal state in ._state or similar
+                                if hasattr(llm, "_state") and llm._state is not None:
+                                    logger.info("Extracted state from agent._state")
+                                    return llm._state
                             except Exception:
-                                # If we can't get state, return the messages we have so far
-                                return {"messages": messages}
+                                pass
+
+                            # FALLBACK: Return input messages with warning
+                            # This is not ideal but prevents complete data loss
+                            logger.warning(
+                                "Could not extract partial agent state after recursion limit. "
+                                "Returning input messages only. Accumulated trace may be lost."
+                            )
+                            return {"messages": messages}
                         else:
                             # Check if this is a retryable error
                             if is_retryable_error(e):
