@@ -172,6 +172,16 @@ class CallableTrait(BaseModel):
         """Serialize callable_code bytes to base64 string for JSON export."""
         return base64.b64encode(value).decode("ascii")
 
+    @field_validator("callable_code", mode="before")
+    @classmethod
+    def validate_callable_code(cls, value: bytes | str) -> bytes:
+        """Convert base64 string to bytes if needed."""
+        if isinstance(value, bytes):
+            return value
+        if isinstance(value, str):
+            return base64.b64decode(value)
+        raise ValueError(f"callable_code must be bytes or base64 string, got {type(value)}")
+
     @classmethod
     def from_callable(
         cls,

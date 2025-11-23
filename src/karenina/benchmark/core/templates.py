@@ -128,7 +128,14 @@ class TemplateManager:
                 # Convert question rubric to dict format if present
                 question_rubric = None
                 if q_data.get("question_rubric"):
-                    question_rubric = {"traits": [trait.model_dump() for trait in q_data["question_rubric"]]}
+                    # question_rubric is now a dict with llm_traits, regex_traits, callable_traits, metric_traits
+                    rubric_dict = q_data["question_rubric"]
+                    question_rubric = {
+                        "llm_traits": [trait.model_dump() for trait in rubric_dict.get("llm_traits", [])],
+                        "regex_traits": [trait.model_dump() for trait in rubric_dict.get("regex_traits", [])],
+                        "callable_traits": [trait.model_dump() for trait in rubric_dict.get("callable_traits", [])],
+                        "metric_traits": [trait.model_dump() for trait in rubric_dict.get("metric_traits", [])],
+                    }
 
                 template = FinishedTemplate(
                     question_id=q_id,

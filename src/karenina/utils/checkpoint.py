@@ -636,7 +636,8 @@ def extract_questions_from_benchmark(
         # Extract question-specific rubric
         question_rubric = None
         if question.rating:
-            question_rubric = [
+            # Convert ratings to traits
+            traits = [
                 convert_rating_to_rubric_trait(rating)
                 for rating in question.rating
                 if rating.additionalType
@@ -647,6 +648,22 @@ def extract_questions_from_benchmark(
                     "QuestionSpecificMetricRubricTrait",
                 ]
             ]
+
+            # Categorize traits by type to match Rubric schema
+            if traits:
+                from ..schemas.domain.rubric import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
+
+                llm_traits = [t for t in traits if isinstance(t, LLMRubricTrait)]
+                regex_traits = [t for t in traits if isinstance(t, RegexTrait)]
+                callable_traits = [t for t in traits if isinstance(t, CallableTrait)]
+                metric_traits = [t for t in traits if isinstance(t, MetricRubricTrait)]
+
+                question_rubric = {
+                    "llm_traits": llm_traits,
+                    "regex_traits": regex_traits,
+                    "callable_traits": callable_traits,
+                    "metric_traits": metric_traits,
+                }
 
         questions.append(
             {
