@@ -158,6 +158,11 @@ def run_single_model_verification(
     context.set_artifact("answering_model_str", answering_model_str)
     context.set_artifact("parsing_model_str", parsing_model_str)
 
+    # Extract and store MCP server names for early access (e.g., in error cases)
+    answering_mcp_servers = list(answering_model.mcp_urls_dict.keys()) if answering_model.mcp_urls_dict else None
+    context.set_artifact("answering_mcp_servers", answering_mcp_servers)
+    context.set_result_field("answering_mcp_servers", answering_mcp_servers)
+
     # Determine evaluation mode automatically if not explicitly set
     # If rubric is provided and mode is template_only, upgrade to template_and_rubric
     if (
