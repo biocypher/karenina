@@ -166,6 +166,9 @@ class FinalizeResultStage(BaseVerificationStage):
             abstention_override_applied=context.get_result_field("abstention_override_applied", False),
             abstention_reasoning=context.get_result_field("abstention_reasoning"),
             answering_mcp_servers=context.get_result_field("answering_mcp_servers"),
+            template_evaluation_input=context.get_result_field("template_evaluation_input"),
+            used_full_trace_for_template=context.get_result_field("used_full_trace_for_template", True),
+            trace_extraction_error=context.get_result_field("trace_extraction_error"),
             usage_metadata=usage_metadata,
             agent_metrics=agent_metrics,
         )
@@ -215,6 +218,9 @@ class FinalizeResultStage(BaseVerificationStage):
             rubric = VerificationResultRubric(
                 rubric_evaluation_performed=rubric_evaluation_performed,
                 rubric_evaluation_strategy=context.get_result_field("rubric_evaluation_strategy"),
+                rubric_evaluation_input=context.get_result_field("rubric_evaluation_input"),
+                used_full_trace_for_rubric=context.get_result_field("used_full_trace_for_rubric", True),
+                rubric_trace_extraction_error=context.get_result_field("rubric_trace_extraction_error"),
                 llm_trait_scores=llm_trait_scores,
                 regex_trait_scores=regex_trait_scores,
                 callable_trait_scores=callable_trait_scores,

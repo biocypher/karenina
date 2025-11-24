@@ -53,6 +53,8 @@ def _build_config_from_cli_args(
     deep_judgment_rubric_search: bool,
     deep_judgment_rubric_search_tool: str,
     deep_judgment_rubric_config: Path | None,
+    use_full_trace_for_template: bool,
+    use_full_trace_for_rubric: bool,
     evaluation_mode: str,
     embedding_threshold: float,
     embedding_model: str,
@@ -103,6 +105,10 @@ def _build_config_from_cli_args(
             config_dict["deep_judgment_rubric_config"] = custom_config
         except Exception as e:
             raise ValueError(f"Failed to load custom rubric config from {deep_judgment_rubric_config}: {e}") from e
+
+    # Override MCP trace filtering settings (always override since they have defaults)
+    config_dict["use_full_trace_for_template"] = use_full_trace_for_template
+    config_dict["use_full_trace_for_rubric"] = use_full_trace_for_rubric
 
     # Override advanced settings (always override since they have defaults)
     config_dict["evaluation_mode"] = evaluation_mode
@@ -267,6 +273,21 @@ def verify(
     deep_judgment_rubric_config: Annotated[
         Path | None, typer.Option(help="Path to custom rubric deep judgment config JSON (custom mode)")
     ] = None,
+    # MCP agent trace filtering
+    use_full_trace_for_template: Annotated[
+        bool,
+        typer.Option(
+            "--use-full-trace-for-template/--use-final-message-for-template",
+            help="Use full MCP agent trace (True) or only final AI message (False) for template parsing",
+        ),
+    ] = True,
+    use_full_trace_for_rubric: Annotated[
+        bool,
+        typer.Option(
+            "--use-full-trace-for-rubric/--use-final-message-for-rubric",
+            help="Use full MCP agent trace (True) or only final AI message (False) for rubric evaluation",
+        ),
+    ] = True,
     # Advanced settings
     evaluation_mode: Annotated[
         str, typer.Option(help="Evaluation mode (template_only/template_and_rubric/rubric_only)")
@@ -458,6 +479,8 @@ def verify(
                     deep_judgment_rubric_search=deep_judgment_rubric_search,
                     deep_judgment_rubric_search_tool=deep_judgment_rubric_search_tool,
                     deep_judgment_rubric_config=deep_judgment_rubric_config,
+                    use_full_trace_for_template=use_full_trace_for_template,
+                    use_full_trace_for_rubric=use_full_trace_for_rubric,
                     evaluation_mode=evaluation_mode,
                     embedding_threshold=embedding_threshold,
                     embedding_model=embedding_model,

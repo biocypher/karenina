@@ -7,6 +7,7 @@ import logging
 from copy import deepcopy
 from typing import Any
 
+from ....infrastructure.llm.mcp_utils import extract_final_ai_message
 from ....schemas.domain import LLMRubricTrait
 from ....schemas.workflow.verification.config import DeepJudgmentTraitConfig
 from ..evaluators.rubric_evaluator import RubricEvaluator
@@ -183,6 +184,9 @@ class RubricEvaluationStage(BaseVerificationStage):
             "rubric_result",
             "metric_confusion_lists",
             "metric_results",
+            "rubric_evaluation_input",
+            "used_full_trace_for_rubric",
+            "rubric_trace_extraction_error",
         ]
 
     def should_run(self, context: VerificationContext) -> bool:
@@ -223,6 +227,40 @@ class RubricEvaluationStage(BaseVerificationStage):
         if usage_tracker is None:
             usage_tracker = UsageTracker()
             logger.warning("No usage tracker found in context, initializing new one")
+
+        # Determine what input to pass to rubric evaluation based on config
+        use_full_trace = context.use_full_trace_for_rubric
+        rubric_trace_extraction_error = None
+        rubric_evaluation_input = raw_llm_response  # Default to full trace
+
+        if not use_full_trace:
+            # Extract only the final AI message
+            extracted_message, error = extract_final_ai_message(raw_llm_response)
+
+            if error is not None:
+                # Extraction failed - mark as error and stop
+                error_msg = f"Failed to extract final AI message for rubric evaluation: {error}"
+                logger.error(error_msg)
+                rubric_trace_extraction_error = error
+                context.mark_error(error_msg)
+
+                # Store metadata before returning
+                context.set_artifact("used_full_trace_for_rubric", use_full_trace)
+                context.set_artifact("rubric_trace_extraction_error", rubric_trace_extraction_error)
+                context.set_artifact("rubric_evaluation_input", None)
+                context.set_result_field("used_full_trace_for_rubric", use_full_trace)
+                context.set_result_field("rubric_trace_extraction_error", rubric_trace_extraction_error)
+                context.set_result_field("rubric_evaluation_input", None)
+                return
+            else:
+                # Extraction successful - use extracted message
+                rubric_evaluation_input = extracted_message
+                logger.info("Using final AI message only for rubric evaluation")
+
+        # Store trace filtering metadata
+        context.set_artifact("used_full_trace_for_rubric", use_full_trace)
+        context.set_artifact("rubric_evaluation_input", rubric_evaluation_input)
+        context.set_artifact("rubric_trace_extraction_error", rubric_trace_extraction_error)
 
         rubric_result = None
         metric_confusion_lists = None
@@ -288,7 +326,7 @@ class RubricEvaluationStage(BaseVerificationStage):
 
                     dj_result = evaluator.evaluate_rubric_with_deep_judgment(
                         question=context.question_text,
-                        answer=raw_llm_response,
+                        answer=rubric_evaluation_input,  # Use filtered or full trace based on config
                         rubric=configured_rubric,  # Use configured rubric with resolved settings
                         config=dj_config,  # Pass config for deep judgment settings
                     )
@@ -334,7 +372,7 @@ class RubricEvaluationStage(BaseVerificationStage):
                     # Standard rubric evaluation (no deep judgment)
                     rubric_result, usage_metadata_list = evaluator.evaluate_rubric(
                         question=context.question_text,
-                        answer=raw_llm_response,
+                        answer=rubric_evaluation_input,  # Use filtered or full trace based on config
                         rubric=configured_rubric,  # Use configured rubric
                     )
 
@@ -353,7 +391,7 @@ class RubricEvaluationStage(BaseVerificationStage):
 
                 metric_confusion_lists, metric_results, metric_usage_metadata_list = evaluator.evaluate_metric_traits(
                     question=context.question_text,
-                    answer=raw_llm_response,
+                    answer=rubric_evaluation_input,  # Use filtered or full trace based on config
                     metric_traits=rubric.metric_traits,
                 )
 
@@ -394,3 +432,8 @@ class RubricEvaluationStage(BaseVerificationStage):
         context.set_result_field("metric_trait_metrics", metric_results)
         context.set_result_field("evaluation_rubric", rubric.model_dump() if rubric else None)
         context.set_result_field("rubric_evaluation_strategy", context.rubric_evaluation_strategy)
+
+        # Store trace filtering metadata in result builder
+        context.set_result_field("used_full_trace_for_rubric", use_full_trace)
+        context.set_result_field("rubric_evaluation_input", rubric_evaluation_input)
+        context.set_result_field("rubric_trace_extraction_error", rubric_trace_extraction_error)
