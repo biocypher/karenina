@@ -7,6 +7,7 @@ a specific verification task.
 Available Stages:
 - ValidateTemplateStage: Template syntax validation
 - GenerateAnswerStage: LLM answer generation
+- RecursionLimitAutoFailStage: Auto-fail on recursion limit
 - ParseTemplateStage: Response parsing to Pydantic
 - VerifyTemplateStage: Field and regex validation
 - EmbeddingCheckStage: Semantic similarity fallback
@@ -24,6 +25,7 @@ from .embedding_check import EmbeddingCheckStage
 from .finalize_result import FinalizeResultStage
 from .generate_answer import GenerateAnswerStage
 from .parse_template import ParseTemplateStage
+from .recursion_limit_autofail import RecursionLimitAutoFailStage
 from .rubric_evaluation import RubricEvaluationStage
 from .validate_template import ValidateTemplateStage
 from .verify_template import VerifyTemplateStage
@@ -31,6 +33,7 @@ from .verify_template import VerifyTemplateStage
 __all__ = [
     "ValidateTemplateStage",
     "GenerateAnswerStage",
+    "RecursionLimitAutoFailStage",
     "ParseTemplateStage",
     "VerifyTemplateStage",
     "EmbeddingCheckStage",

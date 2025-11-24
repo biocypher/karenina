@@ -510,49 +510,76 @@ class VerificationResultSet(BaseModel):
             r.metadata.execution_time for r in self.results if r.metadata.execution_time is not None
         )
 
-        # Token usage
-        total_input_tokens = 0
-        total_output_tokens = 0
-        template_input_tokens = 0
-        template_output_tokens = 0
-        rubric_input_tokens = 0
-        rubric_output_tokens = 0
-        deep_judgment_input_tokens = 0
-        deep_judgment_output_tokens = 0
+        # Token usage - collect per-result measurements for median/std calculation
+        import numpy as np
+
+        total_input_tokens_list: list[int] = []
+        total_output_tokens_list: list[int] = []
+        template_input_tokens_list: list[int] = []
+        template_output_tokens_list: list[int] = []
+        rubric_input_tokens_list: list[int] = []
+        rubric_output_tokens_list: list[int] = []
+        deep_judgment_input_tokens_list: list[int] = []
+        deep_judgment_output_tokens_list: list[int] = []
+
+        # Per-question token measurements for "median tokens per question" statistic
+        per_question_input_tokens: list[int] = []
+        per_question_output_tokens: list[int] = []
 
         for result in self.results:
             if result.template and hasattr(result.template, "usage_metadata") and result.template.usage_metadata:
                 usage_metadata = result.template.usage_metadata
 
+                # Total tokens
                 if "total" in usage_metadata:
                     total_usage = usage_metadata["total"]
                     inp = total_usage.get("input_tokens", 0)
                     out = total_usage.get("output_tokens", 0)
-                    # Handle None values
-                    total_input_tokens += int(inp) if inp is not None and isinstance(inp, int | float) else 0
-                    total_output_tokens += int(out) if out is not None and isinstance(out, int | float) else 0
+                    # Only append non-None values to avoid NaN in statistics
+                    if inp is not None and isinstance(inp, int | float):
+                        total_input_tokens_list.append(int(inp))
+                        per_question_input_tokens.append(int(inp))
+                    if out is not None and isinstance(out, int | float):
+                        total_output_tokens_list.append(int(out))
+                        per_question_output_tokens.append(int(out))
 
+                # Template tokens (answer_generation + parsing)
+                template_inp = 0
+                template_out = 0
                 if "answer_generation" in usage_metadata:
                     answer_usage = usage_metadata["answer_generation"]
-                    inp = answer_usage.get("input_tokens", 0)
-                    out = answer_usage.get("output_tokens", 0)
-                    template_input_tokens += int(inp) if inp is not None and isinstance(inp, int | float) else 0
-                    template_output_tokens += int(out) if out is not None and isinstance(out, int | float) else 0
+                    ans_inp = answer_usage.get("input_tokens", 0)
+                    ans_out = answer_usage.get("output_tokens", 0)
+                    if ans_inp is not None and isinstance(ans_inp, int | float):
+                        template_inp += int(ans_inp)
+                    if ans_out is not None and isinstance(ans_out, int | float):
+                        template_out += int(ans_out)
 
                 if "parsing" in usage_metadata:
                     parsing_usage = usage_metadata["parsing"]
-                    inp = parsing_usage.get("input_tokens", 0)
-                    out = parsing_usage.get("output_tokens", 0)
-                    template_input_tokens += int(inp) if inp is not None and isinstance(inp, int | float) else 0
-                    template_output_tokens += int(out) if out is not None and isinstance(out, int | float) else 0
+                    parse_inp = parsing_usage.get("input_tokens", 0)
+                    parse_out = parsing_usage.get("output_tokens", 0)
+                    if parse_inp is not None and isinstance(parse_inp, int | float):
+                        template_inp += int(parse_inp)
+                    if parse_out is not None and isinstance(parse_out, int | float):
+                        template_out += int(parse_out)
 
+                if template_inp > 0 or template_out > 0:
+                    template_input_tokens_list.append(template_inp)
+                    template_output_tokens_list.append(template_out)
+
+                # Rubric tokens
                 if "rubric_evaluation" in usage_metadata:
                     rubric_usage = usage_metadata["rubric_evaluation"]
-                    inp = rubric_usage.get("input_tokens", 0)
-                    out = rubric_usage.get("output_tokens", 0)
-                    rubric_input_tokens += int(inp) if inp is not None and isinstance(inp, int | float) else 0
-                    rubric_output_tokens += int(out) if out is not None and isinstance(out, int | float) else 0
+                    rubric_inp = rubric_usage.get("input_tokens", 0)
+                    rubric_out = rubric_usage.get("output_tokens", 0)
+                    # Only append non-None values
+                    if rubric_inp is not None and isinstance(rubric_inp, int | float) and rubric_inp > 0:
+                        rubric_input_tokens_list.append(int(rubric_inp))
+                    if rubric_out is not None and isinstance(rubric_out, int | float) and rubric_out > 0:
+                        rubric_output_tokens_list.append(int(rubric_out))
 
+            # Deep judgment tokens
             if (
                 result.deep_judgment
                 and hasattr(result.deep_judgment, "usage_metadata")
@@ -561,10 +588,45 @@ class VerificationResultSet(BaseModel):
                 dj_usage = result.deep_judgment.usage_metadata
                 if "total" in dj_usage:
                     dj_total = dj_usage["total"]
-                    inp = dj_total.get("input_tokens", 0)
-                    out = dj_total.get("output_tokens", 0)
-                    deep_judgment_input_tokens += int(inp) if inp is not None and isinstance(inp, int | float) else 0
-                    deep_judgment_output_tokens += int(out) if out is not None and isinstance(out, int | float) else 0
+                    dj_inp = dj_total.get("input_tokens", 0)
+                    dj_out = dj_total.get("output_tokens", 0)
+                    # Only append non-None values
+                    if dj_inp is not None and isinstance(dj_inp, int | float) and dj_inp > 0:
+                        deep_judgment_input_tokens_list.append(int(dj_inp))
+                    if dj_out is not None and isinstance(dj_out, int | float) and dj_out > 0:
+                        deep_judgment_output_tokens_list.append(int(dj_out))
+
+        # Compute median and std for each token type
+        def compute_stats(values: list[int]) -> tuple[float, float]:
+            """Compute median and std, returning (median, std)"""
+            if not values:
+                return 0.0, 0.0
+            arr = np.array(values)
+            return float(np.median(arr)), float(np.std(arr))
+
+        # Compute actual totals (sum) for all token types
+        total_input_sum = sum(total_input_tokens_list)
+        total_output_sum = sum(total_output_tokens_list)
+        template_input_sum = sum(template_input_tokens_list)
+        template_output_sum = sum(template_output_tokens_list)
+        rubric_input_sum = sum(rubric_input_tokens_list)
+        rubric_output_sum = sum(rubric_output_tokens_list)
+        dj_input_sum = sum(deep_judgment_input_tokens_list)
+        dj_output_sum = sum(deep_judgment_output_tokens_list)
+
+        # Compute median and std for variance information
+        total_input_median, total_input_std = compute_stats(total_input_tokens_list)
+        total_output_median, total_output_std = compute_stats(total_output_tokens_list)
+        template_input_median, template_input_std = compute_stats(template_input_tokens_list)
+        template_output_median, template_output_std = compute_stats(template_output_tokens_list)
+        rubric_input_median, rubric_input_std = compute_stats(rubric_input_tokens_list)
+        rubric_output_median, rubric_output_std = compute_stats(rubric_output_tokens_list)
+        dj_input_median, dj_input_std = compute_stats(deep_judgment_input_tokens_list)
+        dj_output_median, dj_output_std = compute_stats(deep_judgment_output_tokens_list)
+
+        # Median tokens per question (median of all per-result measurements)
+        per_q_input_median, per_q_input_std = compute_stats(per_question_input_tokens)
+        per_q_output_median, per_q_output_std = compute_stats(per_question_output_tokens)
 
         # Token usage by model combination
         combo_token_stats: dict[tuple[str, str, tuple[str, ...] | None], dict[str, int]] = defaultdict(
@@ -587,13 +649,11 @@ class VerificationResultSet(BaseModel):
                     total_usage = usage_metadata["total"]
                     inp = total_usage.get("input_tokens", 0)
                     out = total_usage.get("output_tokens", 0)
-                    # Handle None values
-                    combo_token_stats[combo_key]["input"] += (
-                        int(inp) if inp is not None and isinstance(inp, int | float) else 0
-                    )
-                    combo_token_stats[combo_key]["output"] += (
-                        int(out) if out is not None and isinstance(out, int | float) else 0
-                    )
+                    # Only add non-None values
+                    if inp is not None and isinstance(inp, int | float):
+                        combo_token_stats[combo_key]["input"] += int(inp)
+                    if out is not None and isinstance(out, int | float):
+                        combo_token_stats[combo_key]["output"] += int(out)
 
             # Add tokens from deep judgment
             if (
@@ -604,14 +664,13 @@ class VerificationResultSet(BaseModel):
                 dj_usage = result.deep_judgment.usage_metadata
                 if "total" in dj_usage:
                     dj_total = dj_usage["total"]
-                    inp = dj_total.get("input_tokens", 0)
-                    out = dj_total.get("output_tokens", 0)
-                    combo_token_stats[combo_key]["input"] += (
-                        int(inp) if inp is not None and isinstance(inp, int | float) else 0
-                    )
-                    combo_token_stats[combo_key]["output"] += (
-                        int(out) if out is not None and isinstance(out, int | float) else 0
-                    )
+                    dj_inp = dj_total.get("input_tokens", 0)
+                    dj_out = dj_total.get("output_tokens", 0)
+                    # Only add non-None values
+                    if dj_inp is not None and isinstance(dj_inp, int | float):
+                        combo_token_stats[combo_key]["input"] += int(dj_inp)
+                    if dj_out is not None and isinstance(dj_out, int | float):
+                        combo_token_stats[combo_key]["output"] += int(dj_out)
 
         tokens_by_combo = {}
         for combo_key, stats in combo_token_stats.items():
@@ -832,14 +891,31 @@ class VerificationResultSet(BaseModel):
             "total_execution_time": total_execution_time,
             # Token usage
             "tokens": {
-                "total_input": total_input_tokens,
-                "total_output": total_output_tokens,
-                "template_input": template_input_tokens,
-                "template_output": template_output_tokens,
-                "rubric_input": rubric_input_tokens,
-                "rubric_output": rubric_output_tokens,
-                "deep_judgment_input": deep_judgment_input_tokens if num_with_judgment > 0 else None,
-                "deep_judgment_output": deep_judgment_output_tokens if num_with_judgment > 0 else None,
+                # Total tokens (sum across all results)
+                "total_input": total_input_sum,
+                "total_input_std": total_input_std,
+                "total_output": total_output_sum,
+                "total_output_std": total_output_std,
+                # Template tokens (sum)
+                "template_input": template_input_sum,
+                "template_input_std": template_input_std,
+                "template_output": template_output_sum,
+                "template_output_std": template_output_std,
+                # Rubric tokens (sum)
+                "rubric_input": rubric_input_sum,
+                "rubric_input_std": rubric_input_std,
+                "rubric_output": rubric_output_sum,
+                "rubric_output_std": rubric_output_std,
+                # Deep judgment tokens (sum)
+                "deep_judgment_input": dj_input_sum if num_with_judgment > 0 else None,
+                "deep_judgment_input_std": dj_input_std if num_with_judgment > 0 else None,
+                "deep_judgment_output": dj_output_sum if num_with_judgment > 0 else None,
+                "deep_judgment_output_std": dj_output_std if num_with_judgment > 0 else None,
+                # Median tokens per question (aggregated over questions and replicates)
+                "median_per_question_input": per_q_input_median,
+                "median_per_question_input_std": per_q_input_std,
+                "median_per_question_output": per_q_output_median,
+                "median_per_question_output_std": per_q_output_std,
             },
             # Token usage by model combination
             "tokens_by_combo": tokens_by_combo,
