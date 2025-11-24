@@ -119,6 +119,10 @@ class VerificationContext:
     # Few-Shot Configuration
     few_shot_examples: list[dict[str, str]] | None = None
 
+    # Trace Filtering Configuration (MCP Agent Evaluation)
+    use_full_trace_for_template: bool = True  # Whether to use full trace for template parsing
+    use_full_trace_for_rubric: bool = True  # Whether to use full trace for rubric evaluation
+
     # Answer Caching
     cached_answer_data: dict[str, Any] | None = None
 
