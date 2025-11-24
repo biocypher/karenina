@@ -409,34 +409,11 @@ def call_model(
                 Invoke agent and return (response, recursion_limit_reached).
                 This avoids using 'nonlocal' which can cause issues with nested async functions.
                 """
-                accumulated_messages = list(session.messages)  # Start with input messages
-                last_known_state = None
                 local_recursion_limit_reached = False
 
                 try:
-                    # Use streaming to capture messages as they're generated
-                    # This ensures we preserve the full trace even if recursion limit is hit
-                    try:
-                        async for chunk in session.llm.astream({"messages": session.messages}):
-                            # Each chunk is a state update from the agent
-                            last_known_state = chunk
-                            # Extract messages from chunk - handle both flat and nested structures
-                            if isinstance(chunk, dict):
-                                # Nested structure from astream: {'agent': {'messages': [...]}}
-                                if (
-                                    "agent" in chunk
-                                    and isinstance(chunk["agent"], dict)
-                                    and "messages" in chunk["agent"]
-                                ):
-                                    accumulated_messages = chunk["agent"]["messages"]
-                                # Flat structure: {'messages': [...]}
-                                elif "messages" in chunk:
-                                    accumulated_messages = chunk["messages"]
-                    except StopAsyncIteration:
-                        pass  # Stream completed normally
-
-                    # Use final state if we have it
-                    response = last_known_state if last_known_state is not None else {"messages": accumulated_messages}
+                    # Use ainvoke - returns complete final state with all messages
+                    response = await session.llm.ainvoke({"messages": session.messages})
                     return response, local_recursion_limit_reached
 
                 except Exception as e:
@@ -444,19 +421,7 @@ def call_model(
                     if "GraphRecursionError" in str(type(e).__name__) or "recursion_limit" in str(e).lower():
                         local_recursion_limit_reached = True
 
-                        # CRITICAL: Return accumulated messages from streaming
-                        # This preserves the full trace up to the point where recursion limit was hit
-                        if accumulated_messages and len(accumulated_messages) > len(session.messages):
-                            import logging
-
-                            logger = logging.getLogger(__name__)
-                            logger.info(
-                                f"Recursion limit hit. Returning accumulated trace with "
-                                f"{len(accumulated_messages)} messages (started with {len(session.messages)})"
-                            )
-                            return {"messages": accumulated_messages}, local_recursion_limit_reached
-
-                        # Fallback methods if streaming didn't capture messages
+                        # Try multiple methods to extract accumulated messages from the agent
                         # Method 1: Check if exception contains state information
                         if hasattr(e, "state") and e.state is not None:
                             return e.state, local_recursion_limit_reached
