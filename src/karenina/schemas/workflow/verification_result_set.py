@@ -535,23 +535,34 @@ class VerificationResultSet(BaseModel):
                     total_usage = usage_metadata["total"]
                     inp = total_usage.get("input_tokens", 0)
                     out = total_usage.get("output_tokens", 0)
-                    total_input_tokens_list.append(inp)
-                    total_output_tokens_list.append(out)
-                    per_question_input_tokens.append(inp)
-                    per_question_output_tokens.append(out)
+                    # Only append non-None values to avoid NaN in statistics
+                    if inp is not None and isinstance(inp, int | float):
+                        total_input_tokens_list.append(int(inp))
+                        per_question_input_tokens.append(int(inp))
+                    if out is not None and isinstance(out, int | float):
+                        total_output_tokens_list.append(int(out))
+                        per_question_output_tokens.append(int(out))
 
                 # Template tokens (answer_generation + parsing)
                 template_inp = 0
                 template_out = 0
                 if "answer_generation" in usage_metadata:
                     answer_usage = usage_metadata["answer_generation"]
-                    template_inp += answer_usage.get("input_tokens", 0)
-                    template_out += answer_usage.get("output_tokens", 0)
+                    ans_inp = answer_usage.get("input_tokens", 0)
+                    ans_out = answer_usage.get("output_tokens", 0)
+                    if ans_inp is not None and isinstance(ans_inp, int | float):
+                        template_inp += int(ans_inp)
+                    if ans_out is not None and isinstance(ans_out, int | float):
+                        template_out += int(ans_out)
 
                 if "parsing" in usage_metadata:
                     parsing_usage = usage_metadata["parsing"]
-                    template_inp += parsing_usage.get("input_tokens", 0)
-                    template_out += parsing_usage.get("output_tokens", 0)
+                    parse_inp = parsing_usage.get("input_tokens", 0)
+                    parse_out = parsing_usage.get("output_tokens", 0)
+                    if parse_inp is not None and isinstance(parse_inp, int | float):
+                        template_inp += int(parse_inp)
+                    if parse_out is not None and isinstance(parse_out, int | float):
+                        template_out += int(parse_out)
 
                 if template_inp > 0 or template_out > 0:
                     template_input_tokens_list.append(template_inp)
@@ -562,9 +573,11 @@ class VerificationResultSet(BaseModel):
                     rubric_usage = usage_metadata["rubric_evaluation"]
                     rubric_inp = rubric_usage.get("input_tokens", 0)
                     rubric_out = rubric_usage.get("output_tokens", 0)
-                    if rubric_inp > 0 or rubric_out > 0:
-                        rubric_input_tokens_list.append(rubric_inp)
-                        rubric_output_tokens_list.append(rubric_out)
+                    # Only append non-None values
+                    if rubric_inp is not None and isinstance(rubric_inp, int | float) and rubric_inp > 0:
+                        rubric_input_tokens_list.append(int(rubric_inp))
+                    if rubric_out is not None and isinstance(rubric_out, int | float) and rubric_out > 0:
+                        rubric_output_tokens_list.append(int(rubric_out))
 
             # Deep judgment tokens
             if (
@@ -577,9 +590,11 @@ class VerificationResultSet(BaseModel):
                     dj_total = dj_usage["total"]
                     dj_inp = dj_total.get("input_tokens", 0)
                     dj_out = dj_total.get("output_tokens", 0)
-                    if dj_inp > 0 or dj_out > 0:
-                        deep_judgment_input_tokens_list.append(dj_inp)
-                        deep_judgment_output_tokens_list.append(dj_out)
+                    # Only append non-None values
+                    if dj_inp is not None and isinstance(dj_inp, int | float) and dj_inp > 0:
+                        deep_judgment_input_tokens_list.append(int(dj_inp))
+                    if dj_out is not None and isinstance(dj_out, int | float) and dj_out > 0:
+                        deep_judgment_output_tokens_list.append(int(dj_out))
 
         # Compute median and std for each token type
         def compute_stats(values: list[int]) -> tuple[float, float]:
@@ -632,8 +647,13 @@ class VerificationResultSet(BaseModel):
                 usage_metadata = result.template.usage_metadata
                 if "total" in usage_metadata:
                     total_usage = usage_metadata["total"]
-                    combo_token_stats[combo_key]["input"] += total_usage.get("input_tokens", 0)
-                    combo_token_stats[combo_key]["output"] += total_usage.get("output_tokens", 0)
+                    inp = total_usage.get("input_tokens", 0)
+                    out = total_usage.get("output_tokens", 0)
+                    # Only add non-None values
+                    if inp is not None and isinstance(inp, int | float):
+                        combo_token_stats[combo_key]["input"] += int(inp)
+                    if out is not None and isinstance(out, int | float):
+                        combo_token_stats[combo_key]["output"] += int(out)
 
             # Add tokens from deep judgment
             if (
@@ -644,8 +664,13 @@ class VerificationResultSet(BaseModel):
                 dj_usage = result.deep_judgment.usage_metadata
                 if "total" in dj_usage:
                     dj_total = dj_usage["total"]
-                    combo_token_stats[combo_key]["input"] += dj_total.get("input_tokens", 0)
-                    combo_token_stats[combo_key]["output"] += dj_total.get("output_tokens", 0)
+                    dj_inp = dj_total.get("input_tokens", 0)
+                    dj_out = dj_total.get("output_tokens", 0)
+                    # Only add non-None values
+                    if dj_inp is not None and isinstance(dj_inp, int | float):
+                        combo_token_stats[combo_key]["input"] += int(dj_inp)
+                    if dj_out is not None and isinstance(dj_out, int | float):
+                        combo_token_stats[combo_key]["output"] += int(dj_out)
 
         tokens_by_combo = {}
         for combo_key, stats in combo_token_stats.items():
