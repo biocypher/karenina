@@ -404,19 +404,52 @@ def call_model(
 
             recursion_limit_reached = False
 
-            async def invoke_agent_async():
-                nonlocal recursion_limit_reached
+            async def invoke_agent_async() -> tuple[Any, bool]:
+                """
+                Invoke agent and return (response, recursion_limit_reached).
+                This avoids using 'nonlocal' which can cause issues with nested async functions.
+                """
+                accumulated_messages = list(session.messages)  # Start with input messages
+                last_known_state = None
+                local_recursion_limit_reached = False
+
                 try:
-                    return await session.llm.ainvoke({"messages": session.messages})
+                    # Use streaming to capture messages as they're generated
+                    # This ensures we preserve the full trace even if recursion limit is hit
+                    try:
+                        async for chunk in session.llm.astream({"messages": session.messages}):
+                            # Each chunk is a state update from the agent
+                            last_known_state = chunk
+                            if isinstance(chunk, dict) and "messages" in chunk:
+                                accumulated_messages = chunk["messages"]
+                    except StopAsyncIteration:
+                        pass  # Stream completed normally
+
+                    # Use final state if we have it
+                    response = last_known_state if last_known_state is not None else {"messages": accumulated_messages}
+                    return response, local_recursion_limit_reached
+
                 except Exception as e:
                     # Check if this is a GraphRecursionError
                     if "GraphRecursionError" in str(type(e).__name__) or "recursion_limit" in str(e).lower():
-                        recursion_limit_reached = True
+                        local_recursion_limit_reached = True
 
-                        # Try multiple methods to extract accumulated messages from the agent
+                        # CRITICAL: Return accumulated messages from streaming
+                        # This preserves the full trace up to the point where recursion limit was hit
+                        if accumulated_messages and len(accumulated_messages) > len(session.messages):
+                            import logging
+
+                            logger = logging.getLogger(__name__)
+                            logger.info(
+                                f"Recursion limit hit. Returning accumulated trace with "
+                                f"{len(accumulated_messages)} messages (started with {len(session.messages)})"
+                            )
+                            return {"messages": accumulated_messages}, local_recursion_limit_reached
+
+                        # Fallback methods if streaming didn't capture messages
                         # Method 1: Check if exception contains state information
                         if hasattr(e, "state") and e.state is not None:
-                            return e.state
+                            return e.state, local_recursion_limit_reached
 
                         # Method 2: Try to get current graph state if checkpointer exists
                         if hasattr(session.llm, "checkpointer") and session.llm.checkpointer is not None:
@@ -425,20 +458,13 @@ def call_model(
                                     config = {"configurable": {"thread_id": "default"}}
                                     state = session.llm.get_state(config)
                                     if state and hasattr(state, "values") and "messages" in state.values:
-                                        return {"messages": state.values["messages"]}
+                                        return {"messages": state.values["messages"]}, local_recursion_limit_reached
                             except Exception:
                                 pass
 
                         # Method 3: Check if exception has accumulated messages attribute
                         if hasattr(e, "messages"):
-                            return {"messages": e.messages}
-
-                        # Method 4: Try to access graph state directly through internal attributes
-                        try:
-                            if hasattr(session.llm, "_state") and session.llm._state is not None:
-                                return session.llm._state
-                        except Exception:
-                            pass
+                            return {"messages": e.messages}, local_recursion_limit_reached
 
                         # FALLBACK: Return input messages with warning
                         import logging
@@ -448,7 +474,7 @@ def call_model(
                             "Could not extract partial agent state after recursion limit. "
                             "Returning input messages only. Accumulated trace may be lost."
                         )
-                        return {"messages": session.messages}
+                        return {"messages": session.messages}, local_recursion_limit_reached
                     else:
                         raise e
 
@@ -463,11 +489,12 @@ def call_model(
 
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     future = executor.submit(run_in_thread)
-                    response = future.result(timeout=60)  # 60 second timeout
+                    result = future.result(timeout=60)  # 60 second timeout
+                    response, recursion_limit_reached = result
 
             except RuntimeError:
                 # No event loop running, safe to use asyncio.run
-                response = asyncio.run(invoke_agent_async())
+                response, recursion_limit_reached = asyncio.run(invoke_agent_async())
 
             from .mcp_utils import harmonize_agent_response
 
