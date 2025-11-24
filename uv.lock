@@ -1760,6 +1760,10 @@ examples = [
     { name = "ipykernel" },
     { name = "jupyter" },
 ]
+native = [
+    { name = "anthropic" },
+    { name = "openai" },
+]
 search = [
     { name = "langchain-community" },
     { name = "tavily-python" },
@@ -1786,6 +1790,7 @@ requires-dist = [
     { name = "aiohttp", specifier = ">=3.8.0" },
     { name = "alembic", specifier = ">=1.12.0" },
     { name = "anthropic", specifier = ">=0.18.0" },
+    { name = "anthropic", marker = "extra == 'native'", specifier = ">=0.25.0" },
     { name = "cloudpickle", specifier = ">=3.0.0" },
     { name = "httpx", specifier = ">=0.24.0" },
     { name = "ipykernel", marker = "extra == 'examples'", specifier = ">=6.0.0" },
@@ -1804,6 +1809,7 @@ requires-dist = [
     { name = "mkdocs-material", marker = "extra == 'dev'", specifier = ">=9.0.0" },
     { name = "mkdocstrings", extras = ["python"], marker = "extra == 'dev'", specifier = ">=0.20.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
+    { name = "openai", marker = "extra == 'native'", specifier = ">=1.0.0" },
     { name = "openpyxl", specifier = ">=3.0.0" },
     { name = "pandas", specifier = ">=2.0.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.0.0" },

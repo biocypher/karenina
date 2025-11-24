@@ -74,6 +74,12 @@ examples = [
     "jupyter>=1.0.0",  # For running example notebooks
     "ipykernel>=6.0.0",  # Jupyter kernel support
 ]
+native = [
+    # Native tool calling (bypasses LangChain/LangGraph for MCP agents)
+    # These are also transitive dependencies, but listed here for explicit version requirements
+    "openai>=1.0.0",  # For native OpenAI tool-calling agents
+    "anthropic>=0.25.0",  # For native Anthropic tool-calling agents
+]
 
 [project.scripts]
 karenina = "karenina.cli:app"
