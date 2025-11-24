@@ -11,6 +11,7 @@ from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_core.output_parsers import PydanticOutputParser
 
 from ....infrastructure.llm.interface import init_chat_model_unified
+from ....infrastructure.llm.mcp_utils import extract_final_ai_message
 from ....schemas.workflow import VerificationConfig
 from ..evaluators.deep_judgment import deep_judgment_parse
 from ..stage import BaseVerificationStage, VerificationContext
@@ -86,6 +87,9 @@ class ParseTemplateStage(BaseVerificationStage):
             "deep_judgment_excerpt_retry_count",
             "attributes_without_excerpts",
             "hallucination_risk_assessment",
+            "template_evaluation_input",
+            "used_full_trace_for_template",
+            "trace_extraction_error",
         ]
 
     def should_run(self, context: VerificationContext) -> bool:
@@ -115,6 +119,40 @@ class ParseTemplateStage(BaseVerificationStage):
         if usage_tracker is None:
             usage_tracker = UsageTracker()
             logger.warning("No usage tracker found in context, initializing new one")
+
+        # Determine what input to pass to template parsing based on config
+        use_full_trace = context.use_full_trace_for_template
+        trace_extraction_error = None
+        template_evaluation_input = raw_llm_response  # Default to full trace
+
+        if not use_full_trace:
+            # Extract only the final AI message
+            extracted_message, error = extract_final_ai_message(raw_llm_response)
+
+            if error is not None:
+                # Extraction failed - mark as error and stop
+                error_msg = f"Failed to extract final AI message for template parsing: {error}"
+                logger.error(error_msg)
+                trace_extraction_error = error
+                context.mark_error(error_msg)
+
+                # Store metadata before returning
+                context.set_artifact("used_full_trace_for_template", use_full_trace)
+                context.set_artifact("trace_extraction_error", trace_extraction_error)
+                context.set_artifact("template_evaluation_input", None)
+                context.set_result_field("used_full_trace_for_template", use_full_trace)
+                context.set_result_field("trace_extraction_error", trace_extraction_error)
+                context.set_result_field("template_evaluation_input", None)
+                return
+            else:
+                # Extraction successful - use extracted message
+                template_evaluation_input = extracted_message
+                logger.info("Using final AI message only for template parsing")
+
+        # Store trace filtering metadata
+        context.set_artifact("used_full_trace_for_template", use_full_trace)
+        context.set_artifact("template_evaluation_input", template_evaluation_input)
+        context.set_artifact("trace_extraction_error", trace_extraction_error)
 
         # Build model string for result
         if parsing_model.interface == "openrouter":
@@ -186,6 +224,7 @@ class ParseTemplateStage(BaseVerificationStage):
         combined_system_prompt = _system_prompt_compose(parsing_model.system_prompt, format_instructions, ground_truth)
 
         # Construct the parsing prompt (user message) with question context
+        # Use template_evaluation_input which may be full trace or final AI message
         parsing_prompt = f"""<original_question>
 Your task is to parse an answer given to the question reported in this section. Use the question to contextualize the info from the schema fields below:
 
@@ -193,7 +232,7 @@ Original Question: {context.question_text}
 </original_question>
 
 <response_to_parse>
-{raw_llm_response}
+{template_evaluation_input}
 </response_to_parse>"""
 
         parsing_messages: list[BaseMessage] = []
@@ -228,8 +267,9 @@ Original Question: {context.question_text}
                 )
 
                 # Deep-judgment multi-stage parsing
+                # Use template_evaluation_input which may be full trace or final AI message
                 parsed_answer, extracted_excerpts, attribute_reasoning, dj_metadata = deep_judgment_parse(
-                    raw_llm_response=raw_llm_response,
+                    raw_llm_response=template_evaluation_input,
                     RawAnswer=RawAnswer,
                     parsing_model=parsing_model,
                     parsing_llm=parsing_llm,
@@ -318,3 +358,8 @@ Original Question: {context.question_text}
         context.set_result_field("attributes_without_excerpts", attributes_without_excerpts)
         context.set_result_field("deep_judgment_search_enabled", context.deep_judgment_search_enabled)
         context.set_result_field("hallucination_risk_assessment", hallucination_risk_assessment)
+
+        # Store trace filtering metadata in result builder
+        context.set_result_field("used_full_trace_for_template", use_full_trace)
+        context.set_result_field("template_evaluation_input", template_evaluation_input)
+        context.set_result_field("trace_extraction_error", trace_extraction_error)
