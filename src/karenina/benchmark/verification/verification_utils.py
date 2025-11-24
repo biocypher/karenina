@@ -223,24 +223,50 @@ def _invoke_llm_with_retry(
                 # LangGraph agents with MCP tools need async invocation
                 import asyncio
 
-                async def invoke_agent_async() -> Any:
+                async def invoke_agent_async() -> tuple[Any, dict[str, Any], bool]:
+                    """
+                    Invoke agent and return (response, usage_metadata, recursion_limit_reached).
+                    This avoids using 'nonlocal' which can cause issues with nested async functions.
+                    """
                     cb_manager = None
                     cb: UsageMetadataCallbackHandler | None = None
+                    accumulated_messages = list(messages)  # Start with input messages
+                    last_known_state = None
+                    local_usage_metadata: dict[str, Any] = {}
+                    local_recursion_limit_reached = False
+
                     try:
                         # Wrap async invoke with usage metadata callback
                         cb_manager = get_usage_metadata_callback()
                         cb = cb_manager.__enter__()
-                        response = await llm.ainvoke({"messages": messages})
+
+                        # Use streaming to capture messages as they're generated
+                        # This ensures we preserve the full trace even if recursion limit is hit
+                        try:
+                            async for chunk in llm.astream({"messages": messages}):
+                                # Each chunk is a state update from the agent
+                                # Accumulate the latest state to have full trace even on error
+                                last_known_state = chunk
+                                if isinstance(chunk, dict) and "messages" in chunk:
+                                    accumulated_messages = chunk["messages"]
+                        except StopAsyncIteration:
+                            pass  # Stream completed normally
+
+                        # Use final state if we have it
+                        response = (
+                            last_known_state if last_known_state is not None else {"messages": accumulated_messages}
+                        )
+
                         # Capture usage metadata on success
-                        nonlocal usage_metadata
-                        usage_metadata = dict(cb.usage_metadata) if cb and cb.usage_metadata else {}
+                        local_usage_metadata = dict(cb.usage_metadata) if cb and cb.usage_metadata else {}
                         cb_manager.__exit__(None, None, None)
-                        return response
+                        return response, local_usage_metadata, local_recursion_limit_reached
+
                     except Exception as e:
                         # CRITICAL: Capture usage metadata BEFORE handling exception
                         # This ensures we track tokens even when recursion limit is hit
                         if cb and cb.usage_metadata:
-                            usage_metadata = dict(cb.usage_metadata)
+                            local_usage_metadata = dict(cb.usage_metadata)
                             # Close the callback context
                             from contextlib import suppress
 
@@ -250,51 +276,54 @@ def _invoke_llm_with_retry(
 
                         # Check if this is a GraphRecursionError
                         if "GraphRecursionError" in str(type(e).__name__) or "recursion_limit" in str(e).lower():
-                            nonlocal recursion_limit_reached
-                            recursion_limit_reached = True
+                            local_recursion_limit_reached = True
 
-                            # Try multiple methods to extract accumulated messages from the agent
+                            # CRITICAL: Return accumulated messages from streaming
+                            # This preserves the full trace up to the point where recursion limit was hit
+                            if accumulated_messages and len(accumulated_messages) > len(messages):
+                                logger.info(
+                                    f"Recursion limit hit. Returning accumulated trace with "
+                                    f"{len(accumulated_messages)} messages (started with {len(messages)})"
+                                )
+                                return (
+                                    {"messages": accumulated_messages},
+                                    local_usage_metadata,
+                                    local_recursion_limit_reached,
+                                )
+
+                            # Fallback methods if streaming didn't capture messages
                             # Method 1: Check if exception contains state information
                             if hasattr(e, "state") and e.state is not None:
                                 logger.info("Extracted partial state from GraphRecursionError.state")
-                                return e.state
+                                return e.state, local_usage_metadata, local_recursion_limit_reached
 
                             # Method 2: Try to get current graph state if checkpointer exists
                             if hasattr(llm, "checkpointer") and llm.checkpointer is not None:
                                 try:
-                                    # Get the latest state from checkpointer
-                                    # This requires accessing the graph's internal state
                                     if hasattr(llm, "get_state"):
-                                        # Some versions expose get_state as a method
                                         config = {"configurable": {"thread_id": "default"}}
                                         state = llm.get_state(config)
                                         if state and hasattr(state, "values") and "messages" in state.values:
                                             logger.info("Extracted partial state from graph checkpointer")
-                                            return {"messages": state.values["messages"]}
+                                            return (
+                                                {"messages": state.values["messages"]},
+                                                local_usage_metadata,
+                                                local_recursion_limit_reached,
+                                            )
                                 except Exception as state_error:
                                     logger.debug(f"Could not extract state from checkpointer: {state_error}")
 
                             # Method 3: Check if exception has accumulated messages attribute
                             if hasattr(e, "messages"):
                                 logger.info("Extracted messages from exception.messages attribute")
-                                return {"messages": e.messages}
-
-                            # Method 4: Try to access graph state directly through internal attributes
-                            try:
-                                # LangGraph agents have internal state in ._state or similar
-                                if hasattr(llm, "_state") and llm._state is not None:
-                                    logger.info("Extracted state from agent._state")
-                                    return llm._state
-                            except Exception:
-                                pass
+                                return {"messages": e.messages}, local_usage_metadata, local_recursion_limit_reached
 
                             # FALLBACK: Return input messages with warning
-                            # This is not ideal but prevents complete data loss
                             logger.warning(
                                 "Could not extract partial agent state after recursion limit. "
                                 "Returning input messages only. Accumulated trace may be lost."
                             )
-                            return {"messages": messages}
+                            return {"messages": messages}, local_usage_metadata, local_recursion_limit_reached
                         else:
                             # Check if this is a retryable error
                             if is_retryable_error(e):
@@ -314,11 +343,12 @@ def _invoke_llm_with_retry(
 
                     with concurrent.futures.ThreadPoolExecutor() as executor:
                         future = executor.submit(run_in_thread)
-                        response = future.result(timeout=timeout)
+                        result = future.result(timeout=timeout)
+                        response, usage_metadata, recursion_limit_reached = result
 
                 except RuntimeError:
                     # No event loop running, safe to use asyncio.run
-                    response = asyncio.run(invoke_agent_async())
+                    response, usage_metadata, recursion_limit_reached = asyncio.run(invoke_agent_async())
 
                 # Extract agent metrics before harmonization
                 agent_metrics = _extract_agent_metrics(response)
