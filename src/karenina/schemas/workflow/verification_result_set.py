@@ -535,11 +535,19 @@ class VerificationResultSet(BaseModel):
                     total_usage = usage_metadata["total"]
                     inp = total_usage.get("input_tokens", 0)
                     out = total_usage.get("output_tokens", 0)
-                    # Only append non-None values to avoid NaN in statistics
-                    if inp is not None and isinstance(inp, int | float):
+                    # Only append non-None, non-NaN values to avoid NaN in statistics
+                    if (
+                        inp is not None
+                        and isinstance(inp, int | float)
+                        and not (isinstance(inp, float) and np.isnan(inp))
+                    ):
                         total_input_tokens_list.append(int(inp))
                         per_question_input_tokens.append(int(inp))
-                    if out is not None and isinstance(out, int | float):
+                    if (
+                        out is not None
+                        and isinstance(out, int | float)
+                        and not (isinstance(out, float) and np.isnan(out))
+                    ):
                         total_output_tokens_list.append(int(out))
                         per_question_output_tokens.append(int(out))
 
@@ -550,18 +558,34 @@ class VerificationResultSet(BaseModel):
                     answer_usage = usage_metadata["answer_generation"]
                     ans_inp = answer_usage.get("input_tokens", 0)
                     ans_out = answer_usage.get("output_tokens", 0)
-                    if ans_inp is not None and isinstance(ans_inp, int | float):
+                    if (
+                        ans_inp is not None
+                        and isinstance(ans_inp, int | float)
+                        and not (isinstance(ans_inp, float) and np.isnan(ans_inp))
+                    ):
                         template_inp += int(ans_inp)
-                    if ans_out is not None and isinstance(ans_out, int | float):
+                    if (
+                        ans_out is not None
+                        and isinstance(ans_out, int | float)
+                        and not (isinstance(ans_out, float) and np.isnan(ans_out))
+                    ):
                         template_out += int(ans_out)
 
                 if "parsing" in usage_metadata:
                     parsing_usage = usage_metadata["parsing"]
                     parse_inp = parsing_usage.get("input_tokens", 0)
                     parse_out = parsing_usage.get("output_tokens", 0)
-                    if parse_inp is not None and isinstance(parse_inp, int | float):
+                    if (
+                        parse_inp is not None
+                        and isinstance(parse_inp, int | float)
+                        and not (isinstance(parse_inp, float) and np.isnan(parse_inp))
+                    ):
                         template_inp += int(parse_inp)
-                    if parse_out is not None and isinstance(parse_out, int | float):
+                    if (
+                        parse_out is not None
+                        and isinstance(parse_out, int | float)
+                        and not (isinstance(parse_out, float) and np.isnan(parse_out))
+                    ):
                         template_out += int(parse_out)
 
                 if template_inp > 0 or template_out > 0:
@@ -573,10 +597,20 @@ class VerificationResultSet(BaseModel):
                     rubric_usage = usage_metadata["rubric_evaluation"]
                     rubric_inp = rubric_usage.get("input_tokens", 0)
                     rubric_out = rubric_usage.get("output_tokens", 0)
-                    # Only append non-None values
-                    if rubric_inp is not None and isinstance(rubric_inp, int | float) and rubric_inp > 0:
+                    # Only append non-None, non-NaN values
+                    if (
+                        rubric_inp is not None
+                        and isinstance(rubric_inp, int | float)
+                        and rubric_inp > 0
+                        and not (isinstance(rubric_inp, float) and np.isnan(rubric_inp))
+                    ):
                         rubric_input_tokens_list.append(int(rubric_inp))
-                    if rubric_out is not None and isinstance(rubric_out, int | float) and rubric_out > 0:
+                    if (
+                        rubric_out is not None
+                        and isinstance(rubric_out, int | float)
+                        and rubric_out > 0
+                        and not (isinstance(rubric_out, float) and np.isnan(rubric_out))
+                    ):
                         rubric_output_tokens_list.append(int(rubric_out))
 
             # Deep judgment tokens
@@ -590,10 +624,20 @@ class VerificationResultSet(BaseModel):
                     dj_total = dj_usage["total"]
                     dj_inp = dj_total.get("input_tokens", 0)
                     dj_out = dj_total.get("output_tokens", 0)
-                    # Only append non-None values
-                    if dj_inp is not None and isinstance(dj_inp, int | float) and dj_inp > 0:
+                    # Only append non-None, non-NaN values
+                    if (
+                        dj_inp is not None
+                        and isinstance(dj_inp, int | float)
+                        and dj_inp > 0
+                        and not (isinstance(dj_inp, float) and np.isnan(dj_inp))
+                    ):
                         deep_judgment_input_tokens_list.append(int(dj_inp))
-                    if dj_out is not None and isinstance(dj_out, int | float) and dj_out > 0:
+                    if (
+                        dj_out is not None
+                        and isinstance(dj_out, int | float)
+                        and dj_out > 0
+                        and not (isinstance(dj_out, float) and np.isnan(dj_out))
+                    ):
                         deep_judgment_output_tokens_list.append(int(dj_out))
 
         # Compute median and std for each token type
@@ -601,8 +645,19 @@ class VerificationResultSet(BaseModel):
             """Compute median and std, returning (median, std)"""
             if not values:
                 return 0.0, 0.0
-            arr = np.array(values)
-            return float(np.median(arr)), float(np.std(arr))
+            # Filter out any NaN values and convert to numpy array
+            arr = np.array([v for v in values if not (isinstance(v, float) and np.isnan(v))])
+            if len(arr) == 0:
+                return 0.0, 0.0
+            # Compute median and std, handling potential NaN results
+            median_val = float(np.median(arr))
+            std_val = float(np.std(arr))
+            # Replace NaN with 0.0
+            if np.isnan(median_val):
+                median_val = 0.0
+            if np.isnan(std_val):
+                std_val = 0.0
+            return median_val, std_val
 
         # Compute actual totals (sum) for all token types
         total_input_sum = sum(total_input_tokens_list)
@@ -649,10 +704,18 @@ class VerificationResultSet(BaseModel):
                     total_usage = usage_metadata["total"]
                     inp = total_usage.get("input_tokens", 0)
                     out = total_usage.get("output_tokens", 0)
-                    # Only add non-None values
-                    if inp is not None and isinstance(inp, int | float):
+                    # Only add non-None, non-NaN values
+                    if (
+                        inp is not None
+                        and isinstance(inp, int | float)
+                        and not (isinstance(inp, float) and np.isnan(inp))
+                    ):
                         combo_token_stats[combo_key]["input"] += int(inp)
-                    if out is not None and isinstance(out, int | float):
+                    if (
+                        out is not None
+                        and isinstance(out, int | float)
+                        and not (isinstance(out, float) and np.isnan(out))
+                    ):
                         combo_token_stats[combo_key]["output"] += int(out)
 
             # Add tokens from deep judgment
@@ -666,10 +729,18 @@ class VerificationResultSet(BaseModel):
                     dj_total = dj_usage["total"]
                     dj_inp = dj_total.get("input_tokens", 0)
                     dj_out = dj_total.get("output_tokens", 0)
-                    # Only add non-None values
-                    if dj_inp is not None and isinstance(dj_inp, int | float):
+                    # Only add non-None, non-NaN values
+                    if (
+                        dj_inp is not None
+                        and isinstance(dj_inp, int | float)
+                        and not (isinstance(dj_inp, float) and np.isnan(dj_inp))
+                    ):
                         combo_token_stats[combo_key]["input"] += int(dj_inp)
-                    if dj_out is not None and isinstance(dj_out, int | float):
+                    if (
+                        dj_out is not None
+                        and isinstance(dj_out, int | float)
+                        and not (isinstance(dj_out, float) and np.isnan(dj_out))
+                    ):
                         combo_token_stats[combo_key]["output"] += int(dj_out)
 
         tokens_by_combo = {}
