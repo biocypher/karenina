@@ -184,6 +184,9 @@ class GenerateAnswerStage(BaseVerificationStage):
                 "interface": answering_model.interface,
                 "mcp_urls_dict": answering_model.mcp_urls_dict,
                 "mcp_tool_filter": answering_model.mcp_tool_filter,
+                # Native tool calling configuration (for MCP agents)
+                "native_tool_calling": answering_model.native_tool_calling,
+                "native_tool_calling_max_iterations": answering_model.native_tool_calling_max_iterations,
             }
 
             # Add interface-specific parameters

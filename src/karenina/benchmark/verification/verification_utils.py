@@ -219,7 +219,68 @@ def _invoke_llm_with_retry(
         agent_metrics = None
 
         try:
-            if is_agent:
+            # Check if this is a native tool-calling agent
+            from ...infrastructure.llm.native_agents import NativeAgentBase
+
+            is_native_agent = isinstance(llm, NativeAgentBase)
+
+            if is_native_agent:
+                # Native agent path - simpler handling without LangChain callbacks
+                import asyncio
+
+                # Convert LangChain messages to native format
+                native_messages = []
+                for msg in messages:
+                    if hasattr(msg, "type"):
+                        role_map = {"system": "system", "human": "user", "ai": "assistant"}
+                        native_messages.append(
+                            {
+                                "role": role_map.get(msg.type, msg.type),
+                                "content": msg.content,
+                            }
+                        )
+                    elif isinstance(msg, dict):
+                        native_messages.append(msg)
+                    else:
+                        # Fallback: try to extract content
+                        native_messages.append(
+                            {
+                                "role": "user",
+                                "content": str(msg),
+                            }
+                        )
+
+                # Run native agent
+                try:
+                    asyncio.get_running_loop()
+                    # Already in async context, use thread pool
+                    import concurrent.futures
+
+                    def run_native_in_thread() -> Any:
+                        return asyncio.run(llm.ainvoke(native_messages))
+
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(run_native_in_thread)
+                        response = future.result(timeout=timeout)
+                except RuntimeError:
+                    # No event loop running, safe to use asyncio.run
+                    response = asyncio.run(llm.ainvoke(native_messages))
+
+                # Convert native response to expected format
+                # Native agents now return full usage including token details
+                usage_metadata = {llm.model: response.usage}
+
+                agent_metrics = response.agent_metrics
+                recursion_limit_reached = response.recursion_limit_reached
+
+                # Harmonize response for downstream compatibility
+                # Native agents return dict-like messages, convert to format expected by harmonize
+                from ...infrastructure.llm.mcp_utils import harmonize_agent_response
+
+                harmonized = harmonize_agent_response({"messages": response.messages})
+                return harmonized, recursion_limit_reached, usage_metadata, agent_metrics
+
+            elif is_agent:
                 # LangGraph agents with MCP tools need async invocation
                 import asyncio
 
