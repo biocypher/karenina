@@ -63,6 +63,17 @@ class VerificationConfig(BaseModel):
     # - "template_and_rubric": Run both template verification AND rubric evaluation
     # - "rubric_only": Skip template verification, only evaluate rubrics on raw LLM response
 
+    # Trace input control: determines what portion of MCP agent trace is passed to evaluation
+    use_full_trace_for_template: bool = (
+        True  # If True, pass full agent trace to template parsing; if False, extract only final AI message
+    )
+    use_full_trace_for_rubric: bool = (
+        True  # If True, pass full agent trace to rubric evaluation; if False, extract only final AI message
+    )
+    # Note: The full trace is ALWAYS captured and stored in raw_llm_response regardless of these settings.
+    # These flags only control what input is provided to the parsing/evaluation models.
+    # If False and the trace doesn't end with an AI message, verification stage will fail with error.
+
     # Abstention detection settings
     abstention_enabled: bool = False  # Enable abstention/refusal detection
 
