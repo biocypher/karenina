@@ -67,11 +67,64 @@ def _format_message_for_trace(msg: Any) -> str:
     Uses simple dashes instead of equal signs to avoid Excel formula confusion.
 
     Args:
-        msg: A LangChain message object (AIMessage, ToolMessage, or HumanMessage)
+        msg: A LangChain message object (AIMessage, ToolMessage, or HumanMessage),
+             or a dict with 'role' and 'content' keys (from native agents)
 
     Returns:
         Formatted message string with header and content
     """
+    # Handle dict messages (from native agents)
+    if isinstance(msg, dict):
+        role = msg.get("role", "unknown")
+        content = msg.get("content", "")
+
+        # Map role to header
+        role_headers = {
+            "assistant": "--- AI Message ---",
+            "user": "--- Human Message ---",
+            "tool": "--- Tool Message ---",
+            "system": "--- System Message ---",
+        }
+        header = role_headers.get(role, f"--- {role.title()} Message ---")
+
+        # For assistant messages with tool calls (OpenAI format)
+        if role == "assistant" and "tool_calls" in msg and msg["tool_calls"]:
+            content_parts = [str(content)] if content else []
+            content_parts.append("\nTool Calls:")
+            for tool_call in msg["tool_calls"]:
+                func = tool_call.get("function", {})
+                tool_name = func.get("name", "unknown")
+                tool_id = tool_call.get("id", "unknown")
+                tool_args = func.get("arguments", "{}")
+                content_parts.append(f"  {tool_name} (call_{tool_id})")
+                content_parts.append(f"   Call ID: {tool_id}")
+                content_parts.append(f"   Args: {tool_args}")
+            content = "\n".join(content_parts)
+
+        # For tool result messages (OpenAI format)
+        if role == "tool":
+            tool_call_id = msg.get("tool_call_id", "unknown")
+            header = f"--- Tool Message (call_id: {tool_call_id}) ---"
+
+        # For Anthropic-style content blocks
+        if isinstance(content, list):
+            # Handle Anthropic content blocks
+            content_parts = []
+            for block in content:
+                if isinstance(block, dict):
+                    if block.get("type") == "text":
+                        content_parts.append(block.get("text", ""))
+                    elif block.get("type") == "tool_use":
+                        content_parts.append(f"\nTool Call: {block.get('name', 'unknown')}")
+                        content_parts.append(f"   ID: {block.get('id', 'unknown')}")
+                        content_parts.append(f"   Input: {block.get('input', {})}")
+                    elif block.get("type") == "tool_result":
+                        content_parts.append(f"Tool Result (id: {block.get('tool_use_id', 'unknown')})")
+                        content_parts.append(str(block.get("content", "")))
+            content = "\n".join(content_parts) if content_parts else str(content)
+
+        return f"{header}\n{content}" if content else header
+
     try:
         from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
     except ImportError:
@@ -129,19 +182,47 @@ def _extract_agent_trace(messages: list[Any]) -> str:
     but preserves subsequent human messages that may contain agent reasoning steps.
 
     Args:
-        messages: List of LangChain messages
+        messages: List of LangChain messages or dict messages (from native agents)
 
     Returns:
         The formatted trace of AI, Tool, and intermediate Human messages (excluding first), empty string if none found
     """
+    trace_parts = []
+    first_human_found = False
+
+    # Check if we have dict messages (from native agents)
+    has_dict_messages = messages and isinstance(messages[0], dict)
+
+    if has_dict_messages:
+        # Handle dict messages from native agents
+        for msg in messages:
+            if not isinstance(msg, dict):
+                continue
+
+            role = msg.get("role", "")
+
+            # Skip system messages
+            if role == "system":
+                continue
+
+            # Skip first human/user message (initial user question)
+            if role == "user" and not first_human_found:
+                first_human_found = True
+                continue
+
+            # Include assistant, tool, and subsequent user messages
+            if role in ("assistant", "tool", "user"):
+                formatted_msg = _format_message_for_trace(msg)
+                if formatted_msg.strip():
+                    trace_parts.append(formatted_msg.strip())
+
+        return "\n\n".join(trace_parts) if trace_parts else ""
+
     # Import here to avoid circular imports
     try:
         from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
     except ImportError:
         # Fallback: look for messages with type or role indicating AI, Tool, or Human messages
-        trace_parts = []
-        first_human_found = False
-
         for msg in messages:
             if hasattr(msg, "content") and msg.content:
                 # Check message type
@@ -175,9 +256,6 @@ def _extract_agent_trace(messages: list[Any]) -> str:
         return "\n\n".join(trace_parts) if trace_parts else ""
 
     # Extract AI, Tool, and intermediate Human messages (skip first Human and all System messages)
-    trace_parts = []
-    first_human_found = False
-
     for msg in messages:
         # Skip system messages
         if isinstance(msg, SystemMessage):
