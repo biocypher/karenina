@@ -40,10 +40,17 @@ def harmonize_agent_response(response: Any) -> str:
     if hasattr(response, "content"):
         return str(response.content)
 
-    # Handle agent state dict with 'messages' key
-    if isinstance(response, dict) and "messages" in response:
-        messages = response["messages"]
-        return _extract_agent_trace(messages)
+    # Handle nested agent state dict (from astream): {'agent': {'messages': [...]}}
+    # This is the structure returned by LangGraph's astream method
+    if isinstance(response, dict):
+        # Check for nested agent state first
+        if "agent" in response and isinstance(response["agent"], dict) and "messages" in response["agent"]:
+            messages = response["agent"]["messages"]
+            return _extract_agent_trace(messages)
+        # Handle flat state dict with 'messages' key (from ainvoke)
+        elif "messages" in response:
+            messages = response["messages"]
+            return _extract_agent_trace(messages)
 
     # Handle list of messages directly
     if isinstance(response, list):
