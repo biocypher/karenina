@@ -366,6 +366,9 @@ class ModelConfig(BaseModel):
     max_retries: int = 2  # Optional max retries for template generation
     mcp_urls_dict: dict[str, str] | None = None  # Optional MCP server URLs
     mcp_tool_filter: list[str] | None = None  # Optional list of MCP tools to include
+    # Native tool calling configuration (for MCP agents)
+    native_tool_calling: bool = False  # Use native OpenAI/Anthropic SDK instead of LangGraph
+    native_tool_calling_max_iterations: int = 10  # Max agent loop iterations
     # OpenAI Endpoint configuration (for openai_endpoint interface)
     endpoint_base_url: str | None = None  # Custom endpoint base URL
     endpoint_api_key: SecretStr | None = None  # User-provided API key
