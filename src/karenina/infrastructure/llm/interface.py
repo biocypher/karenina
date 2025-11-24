@@ -76,6 +76,8 @@ class ChatSession:
         interface: str = "langchain",
         endpoint_base_url: str | None = None,
         endpoint_api_key: str | None = None,
+        native_tool_calling: bool = False,
+        native_tool_calling_max_iterations: int = 10,
     ):
         self.session_id = session_id
         self.model = model
@@ -86,9 +88,11 @@ class ChatSession:
         self.interface = interface
         self.endpoint_base_url = endpoint_base_url
         self.endpoint_api_key = endpoint_api_key
+        self.native_tool_calling = native_tool_calling
+        self.native_tool_calling_max_iterations = native_tool_calling_max_iterations
         self.messages: list[BaseMessage] = []
         self.llm = None
-        self.is_agent = False  # Track if LLM is actually a LangGraph agent
+        self.is_agent = False  # Track if LLM is actually a LangGraph or native agent
         self.created_at = datetime.now()
         self.last_used = datetime.now()
 
@@ -104,9 +108,10 @@ class ChatSession:
                 mcp_tool_filter=self.mcp_tool_filter,
                 endpoint_base_url=self.endpoint_base_url,
                 endpoint_api_key=self.endpoint_api_key,
+                native_tool_calling=self.native_tool_calling,
+                native_tool_calling_max_iterations=self.native_tool_calling_max_iterations,
             )
-            # Check if we got an agent by looking for 'invoke' vs 'stream' methods
-            # Agents typically have additional methods like 'stream' for state management
+            # Check if we got an agent (either LangGraph or native)
             self.is_agent = self.mcp_urls_dict is not None
 
     def add_message(self, message: str, is_human: bool = True) -> None:
@@ -193,6 +198,8 @@ def init_chat_model_unified(
     mcp_tool_filter: list[str] | None = None,
     endpoint_base_url: str | None = None,
     endpoint_api_key: str | SecretStr | None = None,
+    native_tool_calling: bool = False,
+    native_tool_calling_max_iterations: int = 10,
     **kwargs: Any,
 ) -> Any:
     """Initialize a chat model using the unified interface.
@@ -216,6 +223,11 @@ def init_chat_model_unified(
         mcp_tool_filter: Optional list of tool names to include from MCP servers.
                         If provided, only tools with names in this list will be used.
                         Ignored if mcp_urls_dict is None.
+        native_tool_calling: If True, use native OpenAI/Anthropic SDK for tool calling
+                            instead of LangGraph. Only applies when mcp_urls_dict is provided.
+                            Requires provider to be "openai", "openrouter", or "anthropic".
+        native_tool_calling_max_iterations: Maximum iterations for native agent loop (default 10).
+                                           Ignored if native_tool_calling is False.
         endpoint_base_url: Custom base URL for openai_endpoint interface.
                           Required for openai_endpoint interface.
                           Used to connect to OpenAI-compatible endpoints (vLLM, Ollama, etc.)
@@ -297,31 +309,65 @@ def init_chat_model_unified(
     if mcp_urls_dict is None:
         return base_model
 
-    # Create LangGraph agent with MCP tools
+    # Get MCP tools (used by both native and LangGraph paths)
     try:
-        from langgraph.checkpoint.memory import MemorySaver
-        from langgraph.prebuilt import create_react_agent
-
         from .mcp_utils import sync_create_mcp_client_and_tools
     except ImportError as e:
         raise ImportError(
-            "langgraph and langchain-mcp-adapters are required for MCP support. "
-            "Install with: uv add langgraph langchain-mcp-adapters"
+            "langchain-mcp-adapters is required for MCP support. Install with: uv add langchain-mcp-adapters"
         ) from e
 
     try:
-        # Get MCP client and tools
         _, tools = sync_create_mcp_client_and_tools(mcp_urls_dict, mcp_tool_filter)
+    except Exception as e:
+        raise Exception(f"Failed to fetch MCP tools: {e}") from e
 
+    # Native tool calling path
+    if native_tool_calling:
+        if provider is None:
+            raise ValueError(
+                "Native tool calling requires provider to be specified. "
+                "Supported providers: openai, openrouter, anthropic"
+            )
+
+        try:
+            from .native_agents import create_native_agent
+        except ImportError as e:
+            raise ImportError(
+                "Native tool calling requires openai>=1.0.0 or anthropic>=0.25.0. Install with: uv add openai anthropic"
+            ) from e
+
+        try:
+            return create_native_agent(
+                provider=provider,
+                model=model,
+                tools=tools,
+                system_prompt=kwargs.get("system_prompt"),
+                temperature=kwargs.get("temperature", 0.0),
+                max_iterations=native_tool_calling_max_iterations,
+                api_key=kwargs.get("api_key"),
+                **{k: v for k, v in kwargs.items() if k not in ("system_prompt", "temperature", "api_key")},
+            )
+        except Exception as e:
+            raise Exception(f"Failed to create native agent: {e}") from e
+
+    # LangGraph agent path (default)
+    try:
+        from langgraph.checkpoint.memory import MemorySaver
+        from langgraph.prebuilt import create_react_agent
+    except ImportError as e:
+        raise ImportError(
+            "langgraph is required for MCP support with LangGraph agents. Install with: uv add langgraph"
+        ) from e
+
+    try:
         # Create React agent with base model, MCP tools, and checkpointer
         # MemorySaver enables partial state recovery when recursion limit is hit
         memory = MemorySaver()
         agent = create_react_agent(base_model, tools, checkpointer=memory)
-
         return agent
-
     except Exception as e:
-        raise Exception(f"Failed to create MCP-enabled agent: {e}") from e
+        raise Exception(f"Failed to create LangGraph agent: {e}") from e
 
 
 def call_model(
