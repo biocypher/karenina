@@ -420,8 +420,18 @@ def call_model(
                         async for chunk in session.llm.astream({"messages": session.messages}):
                             # Each chunk is a state update from the agent
                             last_known_state = chunk
-                            if isinstance(chunk, dict) and "messages" in chunk:
-                                accumulated_messages = chunk["messages"]
+                            # Extract messages from chunk - handle both flat and nested structures
+                            if isinstance(chunk, dict):
+                                # Nested structure from astream: {'agent': {'messages': [...]}}
+                                if (
+                                    "agent" in chunk
+                                    and isinstance(chunk["agent"], dict)
+                                    and "messages" in chunk["agent"]
+                                ):
+                                    accumulated_messages = chunk["agent"]["messages"]
+                                # Flat structure: {'messages': [...]}
+                                elif "messages" in chunk:
+                                    accumulated_messages = chunk["messages"]
                     except StopAsyncIteration:
                         pass  # Stream completed normally
 
