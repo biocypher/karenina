@@ -416,8 +416,15 @@ def extract_final_ai_message_from_response(response: Any) -> tuple[str | None, s
     This function works with the original agent response before harmonization,
     checking message types directly rather than parsing strings.
 
+    Supports:
+    - LangChain AIMessage objects
+    - Dict messages from native agents (OpenAI and Anthropic formats)
+
     Args:
-        response: Response from a LangGraph agent (messages list, dict with 'messages', or state dict)
+        response: Response from a LangGraph agent or native agent:
+                 - messages list (LangChain messages or dicts)
+                 - dict with 'messages' key
+                 - state dict {'agent': {'messages': [...]}}
 
     Returns:
         Tuple of (extracted_message, error_message) where:
@@ -426,19 +433,27 @@ def extract_final_ai_message_from_response(response: Any) -> tuple[str | None, s
 
     Error cases:
         - Empty or no messages
-        - Last message is not an AIMessage
-        - Final AIMessage has no text content (only tool calls)
+        - Last message is not an AI/assistant message
+        - Final AI message has no text content (only tool calls)
 
     Examples:
         >>> from langchain_core.messages import AIMessage
         >>> messages = [AIMessage(content="Final answer")]
         >>> message, error = extract_final_ai_message_from_response(messages)
         >>> print(message)  # "Final answer"
+
+        >>> # Native agent dict messages (OpenAI format)
+        >>> messages = [{"role": "assistant", "content": "Final answer"}]
+        >>> message, error = extract_final_ai_message_from_response(messages)
+        >>> print(message)  # "Final answer"
     """
     try:
         from langchain_core.messages import AIMessage
+
+        has_langchain = True
     except ImportError:
-        return None, "langchain_core not available"
+        has_langchain = False
+        AIMessage = None  # type: ignore[assignment, misc]
 
     # Extract messages list from various response formats
     messages = None
@@ -455,8 +470,8 @@ def extract_final_ai_message_from_response(response: Any) -> tuple[str | None, s
     # Handle list of messages directly
     elif isinstance(response, list):
         messages = response
-    # Handle single message
-    elif isinstance(response, AIMessage):
+    # Handle single LangChain message
+    elif has_langchain and isinstance(response, AIMessage):
         messages = [response]
 
     if not messages or len(messages) == 0:
@@ -465,16 +480,74 @@ def extract_final_ai_message_from_response(response: Any) -> tuple[str | None, s
     # Get the last message
     last_message = messages[-1]
 
-    # Check if it's an AIMessage
-    if not isinstance(last_message, AIMessage):
-        return None, "Last message is not an AIMessage"
+    # Handle dict messages (from native agents)
+    if isinstance(last_message, dict):
+        return _extract_final_ai_from_dict_message(last_message)
 
-    # Extract content
-    content = last_message.content if last_message.content else ""
+    # Handle LangChain AIMessage
+    if has_langchain and isinstance(last_message, AIMessage):
+        return _extract_final_ai_from_langchain_message(last_message)
+
+    return None, "Last message is not an AI/assistant message"
+
+
+def _extract_final_ai_from_dict_message(msg: dict[str, Any]) -> tuple[str | None, str | None]:
+    """
+    Extract final AI content from a dict message (native agent format).
+
+    Supports:
+    - OpenAI format: {"role": "assistant", "content": "...", "tool_calls": [...]}
+    - Anthropic format: {"role": "assistant", "content": [{"type": "text", "text": "..."}, ...]}
+    """
+    role = msg.get("role", "")
+
+    # Check if this is an assistant message
+    if role != "assistant":
+        return None, f"Last message is not an assistant message (role: {role})"
+
+    content = msg.get("content", "")
+
+    # Handle string content (OpenAI format)
+    if isinstance(content, str):
+        if not content or not content.strip():
+            # Check for tool calls
+            if msg.get("tool_calls"):
+                return None, "Final AI message has no text content (only tool calls)"
+            return None, "Final AI message has no content"
+        return content.strip(), None
+
+    # Handle list content (Anthropic format)
+    if isinstance(content, list):
+        text_parts = []
+        has_tool_use = False
+
+        for block in content:
+            if isinstance(block, dict):
+                if block.get("type") == "text":
+                    text = block.get("text", "")
+                    if text:
+                        text_parts.append(text)
+                elif block.get("type") == "tool_use":
+                    has_tool_use = True
+            elif isinstance(block, str):
+                text_parts.append(block)
+
+        if text_parts:
+            return " ".join(text_parts).strip(), None
+
+        if has_tool_use:
+            return None, "Final AI message has no text content (only tool calls)"
+        return None, "Final AI message has no content"
+
+    return None, "Final AI message has unexpected content format"
+
+
+def _extract_final_ai_from_langchain_message(msg: Any) -> tuple[str | None, str | None]:
+    """Extract final AI content from a LangChain AIMessage."""
+    content = msg.content if msg.content else ""
 
     # Handle list content (convert to string)
     if isinstance(content, list):
-        # Try to extract text from list of content blocks
         text_parts = []
         for item in content:
             if isinstance(item, str):
@@ -486,7 +559,7 @@ def extract_final_ai_message_from_response(response: Any) -> tuple[str | None, s
     # Check if content is empty
     if not content or not content.strip():
         # Check if there are tool calls but no text content
-        if hasattr(last_message, "tool_calls") and last_message.tool_calls:
+        if hasattr(msg, "tool_calls") and msg.tool_calls:
             return None, "Final AI message has no text content (only tool calls)"
         return None, "Final AI message has no content"
 

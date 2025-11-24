@@ -273,7 +273,7 @@ class TestExtractFinalAIMessageFromResponse:
         message, error = extract_final_ai_message_from_response(messages)
 
         assert message is None
-        assert error == "Last message is not an AIMessage"
+        assert error == "Last message is not an AI/assistant message"
 
     def test_error_on_empty_content(self) -> None:
         """Test error when AIMessage has empty content."""
@@ -298,6 +298,128 @@ class TestExtractFinalAIMessageFromResponse:
 
         assert result is None
         assert error == "Final AI message has no text content (only tool calls)"
+
+
+class TestExtractFinalAIMessageFromNativeAgents:
+    """Test suite for extract_final_ai_message_from_response with native agent dict messages."""
+
+    def test_extract_from_openai_format_messages(self) -> None:
+        """Test extraction from OpenAI native agent format."""
+        messages = [
+            {"role": "user", "content": "What is 2+2?"},
+            {"role": "assistant", "content": "The answer is 4."},
+        ]
+
+        result, error = extract_final_ai_message_from_response(messages)
+
+        assert error is None
+        assert result == "The answer is 4."
+
+    def test_extract_from_openai_format_with_tool_calls(self) -> None:
+        """Test extraction from OpenAI format with tool call history."""
+        messages = [
+            {"role": "user", "content": "Search for something."},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [{"id": "call_123", "function": {"name": "search", "arguments": "{}"}}],
+            },
+            {"role": "tool", "tool_call_id": "call_123", "content": "Search results..."},
+            {"role": "assistant", "content": "Based on the search, the answer is 42."},
+        ]
+
+        result, error = extract_final_ai_message_from_response(messages)
+
+        assert error is None
+        assert result == "Based on the search, the answer is 42."
+
+    def test_extract_from_anthropic_format_messages(self) -> None:
+        """Test extraction from Anthropic native agent format (content blocks)."""
+        messages = [
+            {"role": "user", "content": [{"type": "text", "text": "What is 2+2?"}]},
+            {"role": "assistant", "content": [{"type": "text", "text": "The answer is 4."}]},
+        ]
+
+        result, error = extract_final_ai_message_from_response(messages)
+
+        assert error is None
+        assert result == "The answer is 4."
+
+    def test_extract_from_anthropic_format_with_tool_use(self) -> None:
+        """Test extraction from Anthropic format with tool use history."""
+        messages = [
+            {"role": "user", "content": [{"type": "text", "text": "Search for something."}]},
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "text", "text": "Let me search."},
+                    {"type": "tool_use", "id": "call_123", "name": "search", "input": {}},
+                ],
+            },
+            {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "call_123", "content": "Results..."}]},
+            {"role": "assistant", "content": [{"type": "text", "text": "Based on results, the answer is 42."}]},
+        ]
+
+        result, error = extract_final_ai_message_from_response(messages)
+
+        assert error is None
+        assert result == "Based on results, the answer is 42."
+
+    def test_error_on_dict_message_ending_with_tool(self) -> None:
+        """Test error when last dict message is a tool result."""
+        messages = [
+            {"role": "user", "content": "Search for something."},
+            {"role": "assistant", "content": "", "tool_calls": [{"id": "call_123"}]},
+            {"role": "tool", "tool_call_id": "call_123", "content": "Search results..."},
+        ]
+
+        result, error = extract_final_ai_message_from_response(messages)
+
+        assert result is None
+        assert "not an assistant message" in error
+
+    def test_error_on_openai_format_empty_content(self) -> None:
+        """Test error when OpenAI format assistant message has empty content."""
+        messages = [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": ""},
+        ]
+
+        result, error = extract_final_ai_message_from_response(messages)
+
+        assert result is None
+        assert "no content" in error
+
+    def test_error_on_openai_format_only_tool_calls(self) -> None:
+        """Test error when OpenAI format assistant message has only tool calls."""
+        messages = [
+            {"role": "user", "content": "Search"},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [{"id": "call_123", "function": {"name": "search", "arguments": "{}"}}],
+            },
+        ]
+
+        result, error = extract_final_ai_message_from_response(messages)
+
+        assert result is None
+        assert "only tool calls" in error
+
+    def test_error_on_anthropic_format_only_tool_use(self) -> None:
+        """Test error when Anthropic format assistant message has only tool use."""
+        messages = [
+            {"role": "user", "content": [{"type": "text", "text": "Search"}]},
+            {
+                "role": "assistant",
+                "content": [{"type": "tool_use", "id": "call_123", "name": "search", "input": {}}],
+            },
+        ]
+
+        result, error = extract_final_ai_message_from_response(messages)
+
+        assert result is None
+        assert "only tool calls" in error
 
 
 class TestParseTemplateStageTraceFiltering:
@@ -377,6 +499,7 @@ class TestParseTemplateStageTraceFiltering:
             use_full_trace_for_template=False,  # Extract final message only
         )
         basic_context.config = config
+        basic_context.use_full_trace_for_template = False  # Also set direct attribute
 
         # Mock LLM and parser
         mock_llm = Mock()
@@ -428,6 +551,7 @@ class TestParseTemplateStageTraceFiltering:
             use_full_trace_for_template=False,
         )
         basic_context.config = config
+        basic_context.use_full_trace_for_template = False  # Also set direct attribute
 
         # Execute stage
         stage = ParseTemplateStage()
@@ -466,6 +590,7 @@ class TestParseTemplateStageTraceFiltering:
             use_full_trace_for_template=False,
         )
         basic_context.config = config
+        basic_context.use_full_trace_for_template = False  # Also set direct attribute
 
         # Mock LLM
         mock_llm = Mock()
@@ -588,7 +713,6 @@ class TestRubricEvaluationStageTraceFiltering:
         self,
         mock_evaluator_class: Mock,
         context_with_rubric: VerificationContext,
-        _full_agent_trace: str,
     ) -> None:
         """Test that only final message is used when use_full_trace_for_rubric=False."""
         config = VerificationConfig(
@@ -599,6 +723,7 @@ class TestRubricEvaluationStageTraceFiltering:
             use_full_trace_for_rubric=False,
         )
         context_with_rubric.config = config
+        context_with_rubric.use_full_trace_for_rubric = False  # Also set direct attribute
 
         # Mock evaluator
         mock_evaluator = Mock()
@@ -639,6 +764,7 @@ class TestRubricEvaluationStageTraceFiltering:
             use_full_trace_for_rubric=False,
         )
         context_with_rubric.config = config
+        context_with_rubric.use_full_trace_for_rubric = False  # Also set direct attribute
 
         # Execute stage
         stage = RubricEvaluationStage()
@@ -657,7 +783,6 @@ class TestRubricEvaluationStageTraceFiltering:
         self,
         mock_evaluator_class: Mock,
         context_with_rubric: VerificationContext,
-        _full_agent_trace: str,
     ) -> None:
         """Test that metric trait evaluation receives filtered trace."""
         from karenina.schemas.domain import MetricRubricTrait
@@ -682,6 +807,7 @@ class TestRubricEvaluationStageTraceFiltering:
             use_full_trace_for_rubric=False,
         )
         context_with_rubric.config = config
+        context_with_rubric.use_full_trace_for_rubric = False  # Also set direct attribute
 
         # Mock evaluator
         mock_evaluator = Mock()
@@ -750,6 +876,8 @@ class TestIndependentTraceControls:
             use_full_trace_for_rubric=True,  # Use full trace
         )
         basic_context.config = config
+        basic_context.use_full_trace_for_template = False  # Also set direct attribute
+        basic_context.use_full_trace_for_rubric = True  # Also set direct attribute
 
         # Mock template parsing
         mock_llm = Mock()
