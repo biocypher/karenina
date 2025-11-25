@@ -101,6 +101,7 @@ def _execute_verification_task(task: dict[str, Any]) -> tuple[str, VerificationR
         parsing_replicate=task["parsing_replicate"],
         rubric=task["rubric"],
         keywords=task.get("keywords"),
+        raw_answer=task.get("raw_answer"),
         few_shot_examples=task.get("few_shot_examples"),
         few_shot_enabled=task.get("few_shot_enabled", False),
         abstention_enabled=task.get("abstention_enabled", False),
