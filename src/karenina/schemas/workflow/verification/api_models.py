@@ -14,6 +14,7 @@ class FinishedTemplate(BaseModel):
     question_id: str
     question_text: str
     question_preview: str  # Truncated version for UI
+    raw_answer: str | None = None  # Ground truth answer from checkpoint
     template_code: str
     last_modified: str
     finished: bool = True

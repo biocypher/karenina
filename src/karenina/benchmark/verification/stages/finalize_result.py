@@ -132,6 +132,7 @@ class FinalizeResultStage(BaseVerificationStage):
             error=context.error,
             keywords=context.keywords,
             question_text=context.question_text,
+            raw_answer=context.raw_answer,
             answering_model=answering_model_str,
             parsing_model=parsing_model_str,
             answering_system_prompt=context.answering_model.system_prompt,
