@@ -213,6 +213,7 @@ class VerificationResultModel(Base):
 
     # Raw data
     question_text: Mapped[str] = mapped_column(Text, nullable=False)
+    raw_answer: Mapped[str | None] = mapped_column(Text, nullable=True, comment="Ground truth answer from checkpoint")
     raw_llm_response: Mapped[str] = mapped_column(Text, nullable=False)
     parsed_gt_response: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     parsed_llm_response: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)

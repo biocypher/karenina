@@ -204,6 +204,7 @@ def generate_task_queue(
                             # Core
                             "question_id": template.question_id,
                             "question_text": template.question_text,
+                            "raw_answer": template.raw_answer,
                             "template_code": template.template_code,
                             # Models
                             "answering_model": ans_model,

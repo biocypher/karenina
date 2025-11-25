@@ -85,6 +85,7 @@ class VerificationContext:
     parsing_model: ModelConfig
     rubric: Rubric | None = None
     keywords: list[str] | None = None
+    raw_answer: str | None = None
 
     # Run Metadata
     run_name: str | None = None

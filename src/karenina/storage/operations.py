@@ -595,6 +595,7 @@ def _create_result_model(run_id: str, result: "VerificationResult") -> Verificat
         completed_without_errors=metadata.completed_without_errors,
         error=metadata.error,
         question_text=metadata.question_text,
+        raw_answer=metadata.raw_answer,
         keywords=metadata.keywords,
         answering_model=metadata.answering_model,
         parsing_model=metadata.parsing_model,
@@ -664,6 +665,7 @@ def _update_result_model(model: VerificationResultModel, result: "VerificationRe
     model.completed_without_errors = metadata.completed_without_errors
     model.error = metadata.error
     model.question_text = metadata.question_text
+    model.raw_answer = metadata.raw_answer
     model.keywords = metadata.keywords
     model.execution_time = metadata.execution_time
     model.timestamp = metadata.timestamp
@@ -736,6 +738,7 @@ def _model_to_verification_result(model: VerificationResultModel) -> "Verificati
         completed_without_errors=model.completed_without_errors,
         error=model.error,
         question_text=model.question_text,
+        raw_answer=model.raw_answer,
         keywords=model.keywords,
         answering_model=model.answering_model,
         parsing_model=model.parsing_model,

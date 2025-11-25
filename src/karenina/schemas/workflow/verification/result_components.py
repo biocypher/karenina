@@ -13,6 +13,7 @@ class VerificationResultMetadata(BaseModel):
     completed_without_errors: bool
     error: str | None = None
     question_text: str
+    raw_answer: str | None = None  # Ground truth answer from checkpoint
     keywords: list[str] | None = None  # Keywords associated with the question
     answering_model: str
     parsing_model: str
