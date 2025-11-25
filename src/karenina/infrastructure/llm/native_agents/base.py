@@ -172,19 +172,76 @@ class NativeAgentBase(ABC):
         if not tool:
             return f"Error: Tool '{tool_name}' not found"
 
+        # Try to map argument names if schema has aliases
+        mapped_args = self._map_tool_args(tool, tool_args)
+
         try:
             # MCP tools from langchain-mcp-adapters support ainvoke
             if hasattr(tool, "ainvoke"):
-                result = await tool.ainvoke(tool_args)
+                result = await tool.ainvoke(mapped_args)
             elif hasattr(tool, "invoke"):
-                result = tool.invoke(tool_args)
+                result = tool.invoke(mapped_args)
             elif hasattr(tool, "run"):
-                result = tool.run(tool_args)
+                result = tool.run(mapped_args)
             elif callable(tool):
-                result = tool(tool_args)
+                result = tool(mapped_args)
             else:
                 return f"Error: Tool '{tool_name}' is not callable"
 
             return str(result)
         except Exception as e:
             return f"Error executing tool '{tool_name}': {e!s}"
+
+    def _map_tool_args(self, tool: Any, tool_args: dict[str, Any]) -> dict[str, Any]:
+        """Map tool arguments from JSON schema names to Pydantic field names.
+
+        MCP tools may have JSON schema property names that differ from Pydantic
+        field names (due to aliases). This method attempts to map the argument
+        names correctly.
+
+        Args:
+            tool: The LangChain tool with args_schema
+            tool_args: Arguments with JSON schema property names
+
+        Returns:
+            Arguments with Pydantic field names
+        """
+        if not hasattr(tool, "args_schema") or tool.args_schema is None:
+            return tool_args
+
+        try:
+            args_schema = tool.args_schema
+
+            # Build mapping from JSON property name (alias) to field name
+            alias_to_field: dict[str, str] = {}
+
+            # Pydantic v2: Check model_fields for alias information
+            if hasattr(args_schema, "model_fields"):
+                for field_name, field_info in args_schema.model_fields.items():
+                    # Get the alias if set, otherwise use field name
+                    alias = getattr(field_info, "alias", None)
+                    if alias and alias != field_name:
+                        alias_to_field[alias] = field_name
+                    # Also check serialization_alias and validation_alias
+                    ser_alias = getattr(field_info, "serialization_alias", None)
+                    val_alias = getattr(field_info, "validation_alias", None)
+                    if ser_alias and ser_alias != field_name:
+                        alias_to_field[ser_alias] = field_name
+                    if val_alias and val_alias != field_name:
+                        alias_to_field[val_alias] = field_name
+
+            # If we found alias mappings, apply them
+            if alias_to_field:
+                mapped_args = {}
+                for key, value in tool_args.items():
+                    # Use field name if key is an alias, otherwise keep original
+                    mapped_key = alias_to_field.get(key, key)
+                    mapped_args[mapped_key] = value
+                return mapped_args
+
+            # No aliases found, return original args
+            return tool_args
+
+        except Exception:
+            # If mapping fails, return original args
+            return tool_args

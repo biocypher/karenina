@@ -280,6 +280,34 @@ def _invoke_llm_with_retry(
                 harmonized = harmonize_agent_response({"messages": response.messages})
                 return harmonized, recursion_limit_reached, usage_metadata, agent_metrics
 
+            # Check if this is a NativeSimpleLLM (native SDK without tools)
+            from ...infrastructure.llm.native_agents import NativeSimpleLLM
+
+            is_native_simple_llm = isinstance(llm, NativeSimpleLLM)
+
+            if is_native_simple_llm:
+                # NativeSimpleLLM path - direct SDK call, extract usage from response metadata
+                response = llm.invoke(messages)
+
+                # Extract usage from response metadata
+                model_name = getattr(response, "response_metadata", {}).get("model", llm.model)
+                response_usage = getattr(response, "response_metadata", {}).get("usage", {})
+
+                # Format usage for the tracker (keyed by model name)
+                usage_metadata = {
+                    model_name: {
+                        "input_tokens": response_usage.get("input_tokens", 0),
+                        "output_tokens": response_usage.get("output_tokens", 0),
+                        "total_tokens": response_usage.get("total_tokens", 0),
+                        "input_token_details": {"audio": 0, "cache_read": 0},
+                        "output_token_details": {"audio": 0, "reasoning": 0},
+                    }
+                }
+
+                # Extract content for consistency
+                raw_response = response.content if hasattr(response, "content") else str(response)
+                return raw_response, recursion_limit_reached, usage_metadata, None
+
             elif is_agent:
                 # LangGraph agents with MCP tools need async invocation
                 import asyncio

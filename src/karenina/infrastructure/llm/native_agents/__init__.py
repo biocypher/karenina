@@ -23,6 +23,7 @@ from __future__ import annotations
 from typing import Any
 
 from .base import NativeAgentBase, NativeAgentResponse
+from .simple_llm import NativeSimpleLLM, NativeSimpleLLMResponse
 from .tool_converter import NativeToolConverter
 
 
@@ -114,5 +115,7 @@ __all__ = [
     "create_native_agent",
     "NativeAgentBase",
     "NativeAgentResponse",
+    "NativeSimpleLLM",
+    "NativeSimpleLLMResponse",
     "NativeToolConverter",
 ]

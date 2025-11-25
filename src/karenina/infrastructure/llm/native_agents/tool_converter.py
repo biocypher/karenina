@@ -6,6 +6,7 @@ OpenAI and Anthropic tool schema formats.
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 
@@ -61,8 +62,20 @@ class NativeToolConverter:
             }
 
             if hasattr(tool, "args_schema") and tool.args_schema is not None:
-                try:
-                    schema = tool.args_schema.model_json_schema()
+                args_schema = tool.args_schema
+                schema: dict[str, Any] | None = None
+
+                # Check if args_schema is already a dict (raw JSON schema from MCP)
+                if isinstance(args_schema, dict):
+                    schema = args_schema
+                # Check if it's a Pydantic model
+                elif hasattr(args_schema, "model_json_schema"):
+                    with contextlib.suppress(Exception):
+                        # Use by_alias=False to ensure property names match field names
+                        # This prevents mismatch between schema (aliases) and validation (field names)
+                        schema = args_schema.model_json_schema(by_alias=False)
+
+                if schema:
                     parameters = {
                         "type": "object",
                         "properties": schema.get("properties", {}),
@@ -72,10 +85,6 @@ class NativeToolConverter:
                     # Handle $defs if present (nested schemas)
                     if "$defs" in schema:
                         parameters["$defs"] = schema["$defs"]
-
-                except Exception:
-                    # If schema extraction fails, use empty parameters
-                    pass
 
             description = getattr(tool, "description", "") or ""
 
@@ -130,8 +139,20 @@ class NativeToolConverter:
             }
 
             if hasattr(tool, "args_schema") and tool.args_schema is not None:
-                try:
-                    schema = tool.args_schema.model_json_schema()
+                args_schema = tool.args_schema
+                schema: dict[str, Any] | None = None
+
+                # Check if args_schema is already a dict (raw JSON schema from MCP)
+                if isinstance(args_schema, dict):
+                    schema = args_schema
+                # Check if it's a Pydantic model
+                elif hasattr(args_schema, "model_json_schema"):
+                    with contextlib.suppress(Exception):
+                        # Use by_alias=False to ensure property names match field names
+                        # This prevents mismatch between schema (aliases) and validation (field names)
+                        schema = args_schema.model_json_schema(by_alias=False)
+
+                if schema:
                     input_schema = {
                         "type": "object",
                         "properties": schema.get("properties", {}),
@@ -142,10 +163,6 @@ class NativeToolConverter:
                     # Anthropic expects these to be inlined or referenced properly
                     if "$defs" in schema:
                         input_schema["$defs"] = schema["$defs"]
-
-                except Exception:
-                    # If schema extraction fails, use empty schema
-                    pass
 
             description = getattr(tool, "description", "") or ""
 
