@@ -78,8 +78,10 @@ def _build_config_from_cli_args(
     # Start with preset if provided, otherwise create new config
     config_dict = preset_config.model_dump() if preset_config else {}
 
-    # Override general settings (always override since they have defaults)
-    config_dict["replicate_count"] = replicate_count
+    # Override replicate_count only if no preset OR if explicitly different from default
+    # (This preserves preset value unless user explicitly passes --replicate-count)
+    if not preset_config or replicate_count != 1:
+        config_dict["replicate_count"] = replicate_count
 
     # Override feature flags (always override since they have defaults)
     config_dict["abstention_enabled"] = abstention
