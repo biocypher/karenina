@@ -12,7 +12,9 @@ INTERFACE_OPENROUTER = "openrouter"
 INTERFACE_MANUAL = "manual"
 INTERFACE_LANGCHAIN = "langchain"
 INTERFACE_OPENAI_ENDPOINT = "openai_endpoint"
+INTERFACE_NATIVE_SDK = "native_sdk"
 INTERFACES_NO_PROVIDER_REQUIRED = [INTERFACE_OPENROUTER, INTERFACE_MANUAL, INTERFACE_OPENAI_ENDPOINT]
+# Note: native_sdk REQUIRES provider (openai or anthropic)
 
 
 class QuestionFewShotConfig(BaseModel):
@@ -361,7 +363,7 @@ class ModelConfig(BaseModel):
     model_provider: str | None = None  # Optional - only required for langchain interface
     model_name: str | None = None  # Optional - defaults to "manual" for manual interface
     temperature: float = 0.1
-    interface: Literal["langchain", "openrouter", "manual", "openai_endpoint"] = "langchain"
+    interface: Literal["langchain", "openrouter", "manual", "openai_endpoint", "native_sdk"] = "langchain"
     system_prompt: str | None = None  # Optional - defaults applied based on context (answering/parsing)
     max_retries: int = 2  # Optional max retries for template generation
     mcp_urls_dict: dict[str, str] | None = None  # Optional MCP server URLs
@@ -401,6 +403,18 @@ class ModelConfig(BaseModel):
                     "MCP tools are not supported with manual interface. "
                     "Manual traces are precomputed and cannot use dynamic tools."
                 )
+        elif self.interface == INTERFACE_NATIVE_SDK:
+            # Native SDK interface requires provider to be openai or anthropic
+            if self.model_provider not in ("openai", "anthropic"):
+                raise ValueError(
+                    f"Native SDK interface requires model_provider to be 'openai' or 'anthropic', "
+                    f"got: {self.model_provider}"
+                )
+            # Non-manual interfaces require id and model_name
+            if self.id is None:
+                raise ValueError("id is required for native_sdk interface")
+            if self.model_name is None:
+                raise ValueError("model_name is required for native_sdk interface")
         else:
             # Non-manual interfaces require id and model_name
             if self.id is None:

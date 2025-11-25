@@ -205,16 +205,17 @@ def init_chat_model_unified(
     """Initialize a chat model using the unified interface.
 
     This function provides a unified way to initialize different chat models
-    across various interfaces (LangChain, OpenRouter, OpenAI Endpoint, Manual) with consistent
-    parameter handling. When MCP URLs are provided, creates a LangGraph agent
-    with tools from MCP servers.
+    across various interfaces (LangChain, OpenRouter, OpenAI Endpoint, Native SDK, Manual)
+    with consistent parameter handling. When MCP URLs are provided, creates either a
+    LangGraph agent or native SDK agent with tools from MCP servers.
 
     Args:
         model: The model name (e.g., "gemini-2.0-flash", "gpt-4.1-mini", "claude-3-sonnet")
         provider: The model provider (e.g., "google_genai", "openai", "anthropic").
                  Optional for OpenRouter, OpenAI Endpoint, and Manual interfaces.
+                 Required for Native SDK interface (must be "openai" or "anthropic").
         interface: The interface to use for model initialization.
-                  Supported values: "langchain", "openrouter", "openai_endpoint", "manual"
+                  Supported values: "langchain", "openrouter", "openai_endpoint", "native_sdk", "manual"
         question_hash: The MD5 hash of the question (required for manual interface)
         mcp_urls_dict: Dictionary mapping tool names to MCP server URLs.
                       When provided, creates a LangGraph agent with MCP tools.
@@ -272,12 +273,76 @@ def init_chat_model_unified(
         Initialize with custom temperature:
         >>> model = init_chat_model_unified("claude-3-sonnet", "anthropic", temperature=0.2)
 
+        Initialize with Native SDK (no tools):
+        >>> model = init_chat_model_unified(
+        ...     "gpt-4.1-mini",
+        ...     provider="openai",
+        ...     interface="native_sdk",
+        ...     temperature=0.0
+        ... )
+
+        Initialize with Native SDK and MCP tools:
+        >>> mcp_urls = {"biocontext": "https://mcp.biocontext.ai/mcp/"}
+        >>> agent = init_chat_model_unified(
+        ...     "claude-sonnet-4-20250514",
+        ...     provider="anthropic",
+        ...     interface="native_sdk",
+        ...     mcp_urls_dict=mcp_urls
+        ... )
+
         Initialize manual traces:
         >>> model = init_chat_model_unified("manual", interface="manual", question_hash="abc123...")
     """
     # Check for MCP with manual interface (not supported)
     if mcp_urls_dict is not None and interface == "manual":
         raise ValueError("MCP integration is not supported with manual interface")
+
+    # Handle native_sdk interface
+    if interface == "native_sdk":
+        if provider not in ("openai", "anthropic"):
+            raise ValueError(f"Native SDK interface requires provider 'openai' or 'anthropic', got: {provider}")
+
+        # If MCP configured, use native agent with tools
+        if mcp_urls_dict is not None:
+            try:
+                from .mcp_utils import sync_create_mcp_client_and_tools
+            except ImportError as e:
+                raise ImportError(
+                    "langchain-mcp-adapters is required for MCP support. Install with: uv add langchain-mcp-adapters"
+                ) from e
+
+            try:
+                _, tools = sync_create_mcp_client_and_tools(mcp_urls_dict, mcp_tool_filter)
+            except Exception as e:
+                raise Exception(f"Failed to fetch MCP tools: {e}") from e
+
+            try:
+                from .native_agents import create_native_agent
+
+                return create_native_agent(
+                    provider=provider,
+                    model=model,
+                    tools=tools,
+                    system_prompt=kwargs.get("system_prompt"),
+                    temperature=kwargs.get("temperature", 0.0),
+                    max_iterations=native_tool_calling_max_iterations,
+                    api_key=kwargs.get("api_key"),
+                    **{k: v for k, v in kwargs.items() if k not in ("system_prompt", "temperature", "api_key")},
+                )
+            except Exception as e:
+                raise Exception(f"Failed to create native agent: {e}") from e
+        else:
+            # Simple LLM call without tools
+            from .native_agents import NativeSimpleLLM
+
+            return NativeSimpleLLM(
+                provider=provider,
+                model=model,
+                temperature=kwargs.get("temperature", 0.0),
+                api_key=kwargs.get("api_key"),
+                system_prompt=kwargs.get("system_prompt"),
+                **{k: v for k, v in kwargs.items() if k not in ("temperature", "api_key", "system_prompt")},
+            )
 
     # Initialize base model first
     if interface == "langchain":

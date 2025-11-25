@@ -328,7 +328,7 @@ class TestModelConfigurationValidation:
 
     def test_interfaces_no_provider_required_constant(self) -> None:
         """Test that the INTERFACES_NO_PROVIDER_REQUIRED constant is correct."""
-        from karenina.schemas.workflow.models import INTERFACE_OPENAI_ENDPOINT
+        from karenina.schemas.workflow.models import INTERFACE_NATIVE_SDK, INTERFACE_OPENAI_ENDPOINT
 
         assert INTERFACES_NO_PROVIDER_REQUIRED == [
             INTERFACE_OPENROUTER,
@@ -336,6 +336,58 @@ class TestModelConfigurationValidation:
             INTERFACE_OPENAI_ENDPOINT,
         ]
         assert INTERFACE_LANGCHAIN not in INTERFACES_NO_PROVIDER_REQUIRED
+        # Note: native_sdk REQUIRES provider, so it's not in this list
+        assert INTERFACE_NATIVE_SDK not in INTERFACES_NO_PROVIDER_REQUIRED
+
+    def test_valid_native_sdk_model_config(self) -> None:
+        """Test valid configuration for native_sdk interface."""
+        from karenina.schemas.workflow.models import INTERFACE_NATIVE_SDK
+
+        config = ModelConfig(
+            id="test-native",
+            model_provider="openai",
+            model_name="gpt-4.1-mini",
+            temperature=0.1,
+            interface=INTERFACE_NATIVE_SDK,
+            system_prompt="You are a helpful assistant.",
+        )
+
+        assert config.id == "test-native"
+        assert config.model_provider == "openai"
+        assert config.interface == INTERFACE_NATIVE_SDK
+
+    def test_native_sdk_requires_openai_or_anthropic_provider(self) -> None:
+        """Test that native_sdk interface requires openai or anthropic provider."""
+        from karenina.schemas.workflow.models import INTERFACE_NATIVE_SDK
+
+        # Valid with openai
+        config_openai = ModelConfig(
+            id="native-openai",
+            model_provider="openai",
+            model_name="gpt-4.1-mini",
+            interface=INTERFACE_NATIVE_SDK,
+        )
+        assert config_openai.model_provider == "openai"
+
+        # Valid with anthropic
+        config_anthropic = ModelConfig(
+            id="native-anthropic",
+            model_provider="anthropic",
+            model_name="claude-sonnet-4",
+            interface=INTERFACE_NATIVE_SDK,
+        )
+        assert config_anthropic.model_provider == "anthropic"
+
+        # Invalid with other providers
+        import pytest
+
+        with pytest.raises(ValueError, match="Native SDK interface requires model_provider"):
+            ModelConfig(
+                id="native-invalid",
+                model_provider="google_genai",
+                model_name="gemini-2.5-flash",
+                interface=INTERFACE_NATIVE_SDK,
+            )
 
 
 class TestLegacyConfigurationSupport:
