@@ -23,6 +23,7 @@ def run_single_model_verification(
     parsing_replicate: int | None = None,
     rubric: Rubric | None = None,
     keywords: list[str] | None = None,
+    raw_answer: str | None = None,
     few_shot_examples: list[dict[str, str]] | None = None,
     few_shot_enabled: bool = False,
     abstention_enabled: bool = False,
@@ -109,6 +110,7 @@ def run_single_model_verification(
         parsing_model=parsing_model,
         rubric=rubric,
         keywords=keywords,
+        raw_answer=raw_answer,
         # Run Metadata
         run_name=run_name,
         answering_replicate=answering_replicate,
