@@ -130,16 +130,16 @@ def export_verification_results_json(job: VerificationJob, results: Verification
             "job_id": job.job_id,
             "verification_config": {
                 "answering_model": {
-                    "provider": job.config.answering_model_provider,
-                    "name": job.config.answering_model_name,
-                    "temperature": job.config.answering_temperature,
-                    "interface": job.config.answering_interface,
+                    "provider": job.config.answering_models[0].model_provider if job.config.answering_models else None,
+                    "name": job.config.answering_models[0].model_name if job.config.answering_models else None,
+                    "temperature": job.config.answering_models[0].temperature if job.config.answering_models else None,
+                    "interface": job.config.answering_models[0].interface if job.config.answering_models else None,
                 },
                 "parsing_model": {
-                    "provider": job.config.parsing_model_provider,
-                    "name": job.config.parsing_model_name,
-                    "temperature": job.config.parsing_temperature,
-                    "interface": job.config.parsing_interface,
+                    "provider": job.config.parsing_models[0].model_provider if job.config.parsing_models else None,
+                    "name": job.config.parsing_models[0].model_name if job.config.parsing_models else None,
+                    "temperature": job.config.parsing_models[0].temperature if job.config.parsing_models else None,
+                    "interface": job.config.parsing_models[0].interface if job.config.parsing_models else None,
                 },
             },
             "job_summary": {
@@ -156,17 +156,9 @@ def export_verification_results_json(job: VerificationJob, results: Verification
 
     # Convert results to serializable format with nested structure
     for result in results:
-        # Use Pydantic's model_dump to serialize nested structure, then apply custom serialization to verify_result
+        # Use Pydantic's native JSON serialization - NO custom stringification
+        # This preserves complex types (dicts, lists, booleans) for JSON export
         result_dict = result.model_dump(mode="json")
-
-        # Apply custom serialization to verify_result fields if present
-        if result.template and result.template.verify_result is not None:
-            result_dict["template"]["verify_result"] = _serialize_verification_result(result.template.verify_result)
-        if result.template and result.template.verify_granular_result is not None:
-            result_dict["template"]["verify_granular_result"] = _serialize_verification_result(
-                result.template.verify_granular_result
-            )
-
         export_data["results"].append(result_dict)
 
     return json.dumps(export_data, indent=2, ensure_ascii=False)

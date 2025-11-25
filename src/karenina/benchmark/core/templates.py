@@ -143,10 +143,13 @@ class TemplateManager:
                     question_preview=q_data["question"][:100] + "..."
                     if len(q_data["question"]) > 100
                     else q_data["question"],
+                    raw_answer=q_data.get("raw_answer"),
                     template_code=q_data["answer_template"],
                     last_modified=q_data.get("date_modified", datetime.now().isoformat()),
                     finished=True,
                     question_rubric=question_rubric,
+                    keywords=q_data.get("keywords"),
+                    few_shot_examples=q_data.get("few_shot_examples"),
                 )
                 templates.append(template)
         return templates
