@@ -787,7 +787,7 @@ def _model_to_verification_result(model: VerificationResultModel) -> "Verificati
             regex_trait_scores=model.regex_trait_scores,
             callable_trait_scores=model.callable_trait_scores,
             metric_trait_scores=model.metric_trait_scores,  # Use metric_trait_metrics from DB
-            evaluation_rubric=model.evaluation_rubric,
+            # Note: evaluation_rubric removed in v2.0 format - stored in shared_data instead
             metric_trait_confusion_lists=model.metric_trait_confusion_lists,
         )
 

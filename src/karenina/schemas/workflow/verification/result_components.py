@@ -63,11 +63,6 @@ class VerificationResultTemplate(BaseModel):
     # MCP
     answering_mcp_servers: list[str] | None = None  # Names of MCP servers attached to answering model
 
-    # Trace filtering (for MCP agent responses)
-    template_evaluation_input: str | None = None  # Input passed to template parsing (full trace or final AI message)
-    used_full_trace_for_template: bool = True  # Whether full trace was used (True) or only final AI message (False)
-    trace_extraction_error: str | None = None  # Error if final AI message extraction failed
-
     # Usage
     usage_metadata: dict[str, dict[str, Any]] | None = None  # Token usage breakdown by verification stage
     # Structure: {
@@ -96,18 +91,11 @@ class VerificationResultRubric(BaseModel):
     rubric_evaluation_performed: bool = False  # Whether rubric evaluation was executed
     rubric_evaluation_strategy: str | None = None  # Strategy used: "batch" or "sequential"
 
-    # Trace filtering (for MCP agent responses)
-    rubric_evaluation_input: str | None = None  # Input passed to rubric evaluation (full trace or final AI message)
-    used_full_trace_for_rubric: bool = True  # Whether full trace was used (True) or only final AI message (False)
-    rubric_trace_extraction_error: str | None = None  # Error if final AI message extraction failed
-
     # Split trait scores by type (replaces old verify_rubric dict)
     llm_trait_scores: dict[str, int | bool] | None = None  # LLM-evaluated traits (1-5 scale or binary)
     regex_trait_scores: dict[str, bool] | None = None  # Regex-based traits (boolean)
     callable_trait_scores: dict[str, bool | int] | None = None  # Callable-based traits (boolean or score)
     metric_trait_scores: dict[str, dict[str, float]] | None = None  # Metric traits with nested metrics dict
-
-    evaluation_rubric: dict[str, Any] | None = None  # The merged rubric used for evaluation
 
     # Metric trait evaluation metadata (confusion-matrix analysis)
     metric_trait_confusion_lists: dict[str, dict[str, list[str]]] | None = None  # Confusion lists per metric trait

@@ -205,7 +205,7 @@ class RubricResults(BaseModel):
         column_order = [col for col in desired_order if col in df.columns]
 
         # Columns to explicitly exclude from output
-        excluded_columns = {"evaluation_rubric", "job_id"}
+        excluded_columns = {"job_id"}
 
         # Add any columns that weren't in our desired order (shouldn't happen, but defensive)
         for col in df.columns:
@@ -223,14 +223,13 @@ class RubricResults(BaseModel):
     ) -> dict[str, Any]:
         """Create DataFrame row for LLM trait."""
         metadata = result.metadata
-        rubric = result.rubric
 
         # Unified replicate
         replicate = metadata.answering_replicate
         if replicate is None:
             replicate = metadata.parsing_replicate
 
-        row = {
+        row: dict[str, Any] = {
             # === Status ===
             "completed_without_errors": metadata.completed_without_errors,
             "error": metadata.error,
@@ -250,7 +249,7 @@ class RubricResults(BaseModel):
             "trait_type": score_type,
             "trait_score": trait_score,
             # === Rubric Metadata ===
-            "evaluation_rubric": rubric.evaluation_rubric if rubric else None,
+            # Note: evaluation_rubric removed in v2.0 format - stored in shared_data instead
             # === Execution Metadata ===
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
@@ -293,7 +292,6 @@ class RubricResults(BaseModel):
     ) -> dict[str, Any]:
         """Create DataFrame row for regex trait."""
         metadata = result.metadata
-        rubric = result.rubric
 
         # Unified replicate
         replicate = metadata.answering_replicate
@@ -320,7 +318,7 @@ class RubricResults(BaseModel):
             "trait_type": "regex",
             "trait_score": trait_score,
             # === Rubric Metadata ===
-            "evaluation_rubric": rubric.evaluation_rubric if rubric else None,
+            # Note: evaluation_rubric removed in v2.0 format - stored in shared_data instead
             # === Execution Metadata ===
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
@@ -335,7 +333,6 @@ class RubricResults(BaseModel):
     ) -> dict[str, Any]:
         """Create DataFrame row for callable trait."""
         metadata = result.metadata
-        rubric = result.rubric
 
         # Unified replicate
         replicate = metadata.answering_replicate
@@ -362,7 +359,7 @@ class RubricResults(BaseModel):
             "trait_type": "callable",
             "trait_score": trait_score,
             # === Rubric Metadata ===
-            "evaluation_rubric": rubric.evaluation_rubric if rubric else None,
+            # Note: evaluation_rubric removed in v2.0 format - stored in shared_data instead
             # === Execution Metadata ===
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
@@ -379,7 +376,6 @@ class RubricResults(BaseModel):
     ) -> dict[str, Any]:
         """Create DataFrame row for metric trait (EXPLODED by metric)."""
         metadata = result.metadata
-        rubric = result.rubric
 
         # Unified replicate
         replicate = metadata.answering_replicate
@@ -412,7 +408,7 @@ class RubricResults(BaseModel):
             "confusion_fn": confusion_data.get("fn") if confusion_data else None,
             "confusion_tn": confusion_data.get("tn") if confusion_data else None,
             # === Rubric Metadata ===
-            "evaluation_rubric": rubric.evaluation_rubric if rubric else None,
+            # Note: evaluation_rubric removed in v2.0 format - stored in shared_data instead
             # === Execution Metadata ===
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
@@ -448,7 +444,7 @@ class RubricResults(BaseModel):
             "trait_score": None,
             "trait_type": None,
             # === Rubric Metadata ===
-            "evaluation_rubric": None,
+            # Note: evaluation_rubric removed in v2.0 format - stored in shared_data instead
             # === Execution Metadata ===
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
