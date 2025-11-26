@@ -25,6 +25,12 @@ class VerificationResult(BaseModel):
     deep_judgment: VerificationResultDeepJudgment | None = None
     deep_judgment_rubric: VerificationResultDeepJudgmentRubric | None = None
 
+    # Shared trace filtering fields (for MCP agent responses)
+    # These are at the root level because both template and rubric evaluation use the same input
+    evaluation_input: str | None = None  # Input passed to evaluation (full trace or final AI message)
+    used_full_trace: bool = True  # Whether full trace was used (True) or only final AI message (False)
+    trace_extraction_error: str | None = None  # Error if final AI message extraction failed
+
     # Backward compatibility properties for common field access
     @property
     def question_id(self) -> str:
@@ -262,8 +268,3 @@ class VerificationResult(BaseModel):
     def metric_trait_confusion_lists(self) -> dict[str, dict[str, list[str]]] | None:
         """Backward compatibility accessor for metric_trait_confusion_lists."""
         return self.rubric.metric_trait_confusion_lists if self.rubric else None
-
-    @property
-    def evaluation_rubric(self) -> dict[str, Any] | None:
-        """Backward compatibility accessor for evaluation_rubric."""
-        return self.rubric.evaluation_rubric if self.rubric else None

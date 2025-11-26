@@ -145,6 +145,8 @@ class FinalizeResultStage(BaseVerificationStage):
         )
 
         # Create template subclass
+        # Note: trace filtering fields (evaluation_input, used_full_trace, trace_extraction_error)
+        # are now stored at the root level of VerificationResult, not in template
         template = VerificationResultTemplate(
             raw_llm_response=context.get_result_field("raw_llm_response", ""),
             parsed_gt_response=parsed_gt_response,
@@ -167,19 +169,18 @@ class FinalizeResultStage(BaseVerificationStage):
             abstention_override_applied=context.get_result_field("abstention_override_applied", False),
             abstention_reasoning=context.get_result_field("abstention_reasoning"),
             answering_mcp_servers=context.get_result_field("answering_mcp_servers"),
-            template_evaluation_input=context.get_result_field("template_evaluation_input"),
-            used_full_trace_for_template=context.get_result_field("used_full_trace_for_template", True),
-            trace_extraction_error=context.get_result_field("trace_extraction_error"),
             usage_metadata=usage_metadata,
             agent_metrics=agent_metrics,
         )
 
         # Create rubric subclass (if rubric evaluation was performed)
-        rubric = None
+        rubric_result = None
         if rubric_evaluation_performed:
             # Split verify_rubric into separate trait score dicts
             verify_rubric = context.get_result_field("verify_rubric")
-            evaluation_rubric = context.get_result_field("evaluation_rubric")
+            # Get rubric definition from context directly (not from result_field)
+            # Note: evaluation_rubric is no longer stored per-result, it goes in shared_data at export
+            evaluation_rubric = context.rubric
 
             llm_trait_scores: dict[str, int] | None = None
             regex_trait_scores: dict[str, bool] | None = None
@@ -187,10 +188,10 @@ class FinalizeResultStage(BaseVerificationStage):
             metric_trait_scores_dict: dict[str, dict[str, float]] | None = None
 
             if verify_rubric and evaluation_rubric and isinstance(verify_rubric, dict):
-                # Get trait names from evaluation_rubric
-                llm_trait_names = {trait["name"] for trait in evaluation_rubric.get("llm_traits", [])}
-                regex_trait_names = {trait["name"] for trait in evaluation_rubric.get("regex_traits", [])}
-                callable_trait_names = {trait["name"] for trait in evaluation_rubric.get("callable_traits", [])}
+                # Get trait names from evaluation_rubric (Rubric object)
+                llm_trait_names = {trait.name for trait in (evaluation_rubric.llm_traits or [])}
+                regex_trait_names = {trait.name for trait in (evaluation_rubric.regex_traits or [])}
+                callable_trait_names = {trait.name for trait in (evaluation_rubric.callable_traits or [])}
 
                 # Split verify_rubric by trait type
                 llm_results: dict[str, int] = {}
@@ -216,17 +217,16 @@ class FinalizeResultStage(BaseVerificationStage):
             # Get metric trait scores from context (already in the right format)
             metric_trait_scores_dict = context.get_result_field("metric_trait_metrics")
 
-            rubric = VerificationResultRubric(
+            # Note: trace filtering fields and evaluation_rubric are no longer stored per-result
+            # - trace filtering fields are at root level of VerificationResult
+            # - evaluation_rubric goes in shared_data at export time
+            rubric_result = VerificationResultRubric(
                 rubric_evaluation_performed=rubric_evaluation_performed,
                 rubric_evaluation_strategy=context.get_result_field("rubric_evaluation_strategy"),
-                rubric_evaluation_input=context.get_result_field("rubric_evaluation_input"),
-                used_full_trace_for_rubric=context.get_result_field("used_full_trace_for_rubric", True),
-                rubric_trace_extraction_error=context.get_result_field("rubric_trace_extraction_error"),
                 llm_trait_scores=llm_trait_scores,
                 regex_trait_scores=regex_trait_scores,
                 callable_trait_scores=callable_trait_scores,
                 metric_trait_scores=metric_trait_scores_dict,
-                evaluation_rubric=evaluation_rubric,
                 metric_trait_confusion_lists=context.get_result_field("metric_trait_confusion_lists"),
             )
 
@@ -266,12 +266,17 @@ class FinalizeResultStage(BaseVerificationStage):
             )
 
         # Create final VerificationResult with nested composition
+        # Note: trace filtering fields are now at the root level (shared by template and rubric)
         result = VerificationResult(
             metadata=metadata,
             template=template,
-            rubric=rubric,
+            rubric=rubric_result,
             deep_judgment=deep_judgment,
             deep_judgment_rubric=deep_judgment_rubric,
+            # Root-level trace filtering fields (shared by template and rubric evaluation)
+            evaluation_input=context.get_result_field("evaluation_input"),
+            used_full_trace=context.get_result_field("used_full_trace", True),
+            trace_extraction_error=context.get_result_field("trace_extraction_error"),
         )
 
         # Store final result
