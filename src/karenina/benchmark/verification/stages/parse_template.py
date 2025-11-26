@@ -144,9 +144,9 @@ class ParseTemplateStage(BaseVerificationStage):
                 context.set_artifact("used_full_trace_for_template", use_full_trace)
                 context.set_artifact("trace_extraction_error", trace_extraction_error)
                 context.set_artifact("template_evaluation_input", None)
-                context.set_result_field("used_full_trace_for_template", use_full_trace)
+                context.set_result_field("used_full_trace", use_full_trace)
                 context.set_result_field("trace_extraction_error", trace_extraction_error)
-                context.set_result_field("template_evaluation_input", None)
+                context.set_result_field("evaluation_input", None)
                 return
             else:
                 # Extraction successful - use extracted message
@@ -382,7 +382,7 @@ Original Question: {context.question_text}
         context.set_result_field("deep_judgment_search_enabled", context.deep_judgment_search_enabled)
         context.set_result_field("hallucination_risk_assessment", hallucination_risk_assessment)
 
-        # Store trace filtering metadata in result builder
-        context.set_result_field("used_full_trace_for_template", use_full_trace)
-        context.set_result_field("template_evaluation_input", template_evaluation_input)
+        # Store trace filtering metadata in result builder (root level - shared by template and rubric)
+        context.set_result_field("used_full_trace", use_full_trace)
+        context.set_result_field("evaluation_input", template_evaluation_input)
         context.set_result_field("trace_extraction_error", trace_extraction_error)

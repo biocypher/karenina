@@ -244,13 +244,12 @@ class RubricEvaluationStage(BaseVerificationStage):
                 rubric_trace_extraction_error = error
                 context.mark_error(error_msg)
 
-                # Store metadata before returning
+                # Store metadata before returning (artifacts only - result fields are at root level)
                 context.set_artifact("used_full_trace_for_rubric", use_full_trace)
                 context.set_artifact("rubric_trace_extraction_error", rubric_trace_extraction_error)
                 context.set_artifact("rubric_evaluation_input", None)
-                context.set_result_field("used_full_trace_for_rubric", use_full_trace)
-                context.set_result_field("rubric_trace_extraction_error", rubric_trace_extraction_error)
-                context.set_result_field("rubric_evaluation_input", None)
+                # Note: trace filtering fields (evaluation_input, used_full_trace, trace_extraction_error)
+                # are now stored at the root level by parse_template stage
                 return
             else:
                 # Extraction successful - use extracted message
@@ -430,10 +429,7 @@ class RubricEvaluationStage(BaseVerificationStage):
         context.set_result_field("verify_rubric", rubric_result)
         context.set_result_field("metric_trait_confusion_lists", metric_confusion_lists)
         context.set_result_field("metric_trait_metrics", metric_results)
-        context.set_result_field("evaluation_rubric", rubric.model_dump() if rubric else None)
+        # Note: evaluation_rubric is now stored in shared_data at export time (not per-result)
         context.set_result_field("rubric_evaluation_strategy", context.rubric_evaluation_strategy)
-
-        # Store trace filtering metadata in result builder
-        context.set_result_field("used_full_trace_for_rubric", use_full_trace)
-        context.set_result_field("rubric_evaluation_input", rubric_evaluation_input)
-        context.set_result_field("rubric_trace_extraction_error", rubric_trace_extraction_error)
+        # Note: trace filtering fields (evaluation_input, used_full_trace, trace_extraction_error)
+        # are stored at the root level by parse_template stage

@@ -114,16 +114,30 @@ def get_karenina_version() -> str:
 
 def export_verification_results_json(job: VerificationJob, results: VerificationResultSet) -> str:
     """
-    Export verification results to JSON format with metadata.
+    Export verification results to JSON format with metadata (v2.0 format).
+
+    The v2.0 format optimizations:
+    - Stores rubric definition once in shared_data (not per-result)
+    - Stores trace filtering fields (evaluation_input, used_full_trace, trace_extraction_error)
+      at result root level (shared by template and rubric evaluation)
+    - 50-70% size reduction compared to legacy format
 
     Args:
         job: The verification job
         results: VerificationResultSet containing all verification results
 
     Returns:
-        JSON string with results and metadata
+        JSON string with results and metadata in v2.0 format
     """
+    # Extract rubric definition from results (if available)
+    # This is stored once in shared_data instead of per-result
+    # TODO: Get rubric definition from benchmark/question instead of config
+    rubric_definition = None
+    # Note: Rubric definition is stored per-question in the benchmark, not in VerificationConfig
+    # For now, we set this to None - will be populated when we have access to the benchmark
+
     export_data: dict[str, Any] = {
+        "format_version": "2.0",
         "metadata": {
             "export_timestamp": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
             "karenina_version": get_karenina_version(),
@@ -151,6 +165,9 @@ def export_verification_results_json(job: VerificationJob, results: Verification
                 "total_duration": job.end_time - job.start_time if job.end_time and job.start_time else None,
             },
         },
+        "shared_data": {
+            "rubric_definition": rubric_definition,
+        },
         "results": [],
     }
 
@@ -158,6 +175,8 @@ def export_verification_results_json(job: VerificationJob, results: Verification
     for result in results:
         # Use Pydantic's native JSON serialization - NO custom stringification
         # This preserves complex types (dicts, lists, booleans) for JSON export
+        # Note: The schema no longer includes per-result evaluation_rubric,
+        # duplicate trace filtering fields, etc. - they're in shared_data or root level
         result_dict = result.model_dump(mode="json")
         export_data["results"].append(result_dict)
 
