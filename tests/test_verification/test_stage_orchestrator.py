@@ -20,6 +20,7 @@ from karenina.benchmark.verification.stages import (
     FinalizeResultStage,
     GenerateAnswerStage,
     ParseTemplateStage,
+    RecursionLimitAutoFailStage,
     RubricEvaluationStage,
     ValidateTemplateStage,
     VerifyTemplateStage,
@@ -44,6 +45,7 @@ class TestStageOrchestratorConfiguration:
         expected_stages = [
             ValidateTemplateStage,
             GenerateAnswerStage,
+            RecursionLimitAutoFailStage,  # Auto-fail if recursion limit hit
             ParseTemplateStage,
             VerifyTemplateStage,
             EmbeddingCheckStage,  # Always included (has should_run logic)

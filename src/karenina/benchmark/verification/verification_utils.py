@@ -238,8 +238,10 @@ def _invoke_llm_with_retry(
                         cb_manager = get_usage_metadata_callback()
                         cb = cb_manager.__enter__()
 
-                        # Use ainvoke - returns complete final state with all messages
-                        response = await llm.ainvoke({"messages": messages})
+                        # Use ainvoke with thread_id for checkpointer to track state
+                        # This enables partial state recovery when recursion limit is hit
+                        config = {"configurable": {"thread_id": "default"}}
+                        response = await llm.ainvoke({"messages": messages}, config=config)
 
                         # Capture usage metadata on success
                         local_usage_metadata = dict(cb.usage_metadata) if cb and cb.usage_metadata else {}
@@ -285,7 +287,7 @@ def _invoke_llm_with_retry(
                                     logger.debug(f"Could not extract state from checkpointer: {state_error}")
 
                             # Method 3: Check if exception has accumulated messages attribute
-                            if hasattr(e, "messages"):
+                            if hasattr(e, "messages") and e.messages is not None:
                                 logger.info("Extracted messages from exception.messages attribute")
                                 return {"messages": e.messages}, local_usage_metadata, local_recursion_limit_reached
 
@@ -638,4 +640,144 @@ Please provide a corrected response with all required fields populated."""
 
     except Exception as e:
         logger.warning(f"✗ Retry parsing failed after null-value feedback: {e}")
+        return None, {}
+
+
+def _is_invalid_json_error(error: Exception) -> bool:
+    """Check if an error is related to invalid JSON output.
+
+    Detects parsing errors where:
+    - JSON is malformed (missing quotes, brackets, etc.)
+    - Response contains reasoning text mixed with JSON
+    - Output doesn't match expected JSON structure
+
+    Args:
+        error: The exception from parsing attempt
+
+    Returns:
+        True if this is an invalid JSON error that might benefit from format feedback
+    """
+    error_str = str(error).lower()
+    error_type = type(error).__name__
+
+    # Common JSON parsing error indicators
+    json_error_patterns = [
+        "invalid json",
+        "json decode",
+        "jsondecodeerror",
+        "expecting value",
+        "expecting property name",
+        "unterminated string",
+        "extra data",
+        "invalid control character",
+        "invalid \\escape",
+        "invalid literal",
+        "no json object could be decoded",
+        "output_parsing_failure",
+    ]
+
+    # Check error message
+    if any(pattern in error_str for pattern in json_error_patterns):
+        return True
+
+    # Check exception type
+    return error_type in ["JSONDecodeError", "OutputParserException"]
+
+
+def _retry_parse_with_format_feedback(
+    parsing_llm: Any,
+    parser: Any,  # PydanticOutputParser
+    original_messages: list[BaseMessage],
+    failed_response: str,
+    error: Exception,
+    usage_tracker: Any | None = None,
+    model_str: str | None = None,
+) -> tuple[Any | None, dict[str, Any]]:
+    """
+    Retry parsing with feedback about JSON format requirements.
+
+    When parsing fails due to invalid JSON (e.g., reasoning text mixed with JSON),
+    this function:
+    1. Detects if the error is JSON-format related
+    2. Sends clear feedback to LLM asking for clean JSON only
+    3. Retries parsing once
+
+    This complements _retry_parse_with_null_feedback which handles null-value errors.
+
+    Args:
+        parsing_llm: The LLM to use for retry
+        parser: PydanticOutputParser instance
+        original_messages: Original messages that produced failed_response
+        failed_response: The response that failed to parse
+        error: The validation error from first parse attempt
+        usage_tracker: Optional usage tracker
+        model_str: Optional model string for tracking
+
+    Returns:
+        Tuple of (parsed_answer, usage_metadata)
+        parsed_answer is None if retry also fails
+    """
+    from .utils.parsing import _strip_markdown_fences
+
+    # Only handle JSON format errors
+    if not _is_invalid_json_error(error):
+        logger.debug("Error is not JSON-format related, skipping format feedback retry")
+        return None, {}
+
+    logger.info("Detected invalid JSON output. Retrying with format feedback...")
+
+    # Get the format instructions from the parser for reference
+    try:
+        format_instructions = parser.get_format_instructions()
+        # Extract just the schema part, not the full instructions
+        schema_hint = ""
+        if "```" in format_instructions:
+            # Try to extract schema from markdown block
+            import re
+
+            schema_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", format_instructions, re.DOTALL)
+            if schema_match:
+                schema_hint = f"\n\nExpected schema:\n{schema_match.group(1).strip()}"
+    except Exception:
+        schema_hint = ""
+
+    # Build feedback message
+    feedback_prompt = f"""Your previous response could not be parsed as valid JSON.
+
+**CRITICAL**: You must output ONLY a valid JSON object. Do not include:
+- Any reasoning, explanation, or thinking
+- Any text before or after the JSON
+- Any markdown formatting (no ``` blocks)
+- Any comments
+
+**Your previous response that failed to parse:**
+{failed_response[:1000]}{"..." if len(failed_response) > 1000 else ""}
+
+**Error message:**
+{str(error)[:500]}
+{schema_hint}
+
+Please respond with ONLY the JSON object, nothing else."""
+
+    # Create retry messages
+    retry_messages = list(original_messages)  # Copy original messages
+    retry_messages.append(HumanMessage(content=feedback_prompt))
+
+    # Invoke LLM with retry
+    try:
+        raw_response, _, usage_metadata, _ = _invoke_llm_with_retry(parsing_llm, retry_messages, is_agent=False)
+
+        # Track usage if tracker provided
+        if usage_tracker and usage_metadata and model_str:
+            usage_tracker.track_call("parsing_format_retry", model_str, usage_metadata)
+
+        # Try parsing again
+        cleaned = _strip_markdown_fences(raw_response)
+        parsed = parser.parse(cleaned)
+
+        logger.info("✓ Successfully parsed after format feedback retry")
+        return parsed, usage_metadata
+
+    except Exception as e:
+        logger.warning(f"✗ Retry parsing failed after format feedback: {e}")
         return None, {}

@@ -18,6 +18,7 @@ from ..stage import BaseVerificationStage, VerificationContext
 from ..utils import UsageTracker
 from ..utils.parsing import _strip_markdown_fences
 from ..verification_utils import (
+    _retry_parse_with_format_feedback,
     _retry_parse_with_null_feedback,
     _should_expose_ground_truth,
     _system_prompt_compose,
@@ -93,7 +94,10 @@ class ParseTemplateStage(BaseVerificationStage):
         ]
 
     def should_run(self, context: VerificationContext) -> bool:
-        """Run if we have raw LLM response and no errors."""
+        """Run if we have raw LLM response, no errors, and no recursion limit."""
+        # Skip parsing if recursion limit was reached (response is truncated/unreliable)
+        if context.get_artifact("recursion_limit_reached", False):
+            return False
         return context.has_artifact("raw_llm_response") and context.has_artifact("Answer") and not context.error
 
     def execute(self, context: VerificationContext) -> None:
@@ -305,12 +309,16 @@ Original Question: {context.question_text}
                 if cleaned_response is None:
                     raise ValueError("Empty response from parsing model after markdown fence removal")
 
-                # Try parsing, with null-value retry on failure
+                # Try parsing, with retry strategies on failure
                 try:
                     parsed_answer = parser.parse(cleaned_response)
                 except Exception as parse_error:
-                    # Try to recover with null-value feedback
+                    # Try recovery strategies in order:
+                    # 1. Null-value feedback (for null in required fields)
+                    # 2. Format feedback (for invalid JSON / reasoning mixed with JSON)
                     logger.warning(f"Initial parsing failed: {parse_error}")
+
+                    # Strategy 1: Try null-value feedback
                     retried_answer, retry_usage = _retry_parse_with_null_feedback(
                         parsing_llm=parsing_llm,
                         parser=parser,
@@ -324,8 +332,23 @@ Original Question: {context.question_text}
                     if retried_answer is not None:
                         parsed_answer = retried_answer
                     else:
-                        # Retry failed, re-raise original error
-                        raise parse_error
+                        # Strategy 2: Try format feedback (for invalid JSON errors)
+                        logger.info("Null-value retry did not succeed, trying format feedback...")
+                        retried_answer, retry_usage = _retry_parse_with_format_feedback(
+                            parsing_llm=parsing_llm,
+                            parser=parser,
+                            original_messages=parsing_messages,
+                            failed_response=cleaned_response,
+                            error=parse_error,
+                            usage_tracker=usage_tracker,
+                            model_str=parsing_model_str,
+                        )
+
+                        if retried_answer is not None:
+                            parsed_answer = retried_answer
+                        else:
+                            # All retry strategies failed, re-raise original error
+                            raise parse_error
 
         except Exception as e:
             error_msg = f"Parsing failed: {e}"
