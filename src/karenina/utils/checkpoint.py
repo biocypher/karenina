@@ -692,24 +692,59 @@ def extract_global_rubric_from_benchmark(
     """
     Extract global rubric traits from a benchmark.
 
+    This function extracts traits from two sources:
+    1. benchmark.rating - Rating objects with additionalType indicating trait type
+    2. benchmark.additionalProperty - Legacy format where traits are stored as JSON strings
+       under keys like 'global_regex_rubric_traits', 'global_callable_rubric_traits', etc.
+
     Args:
         benchmark: The benchmark to extract from
 
     Returns:
         List of trait objects or None if no global rubric
     """
-    if not benchmark.rating:
-        return None
+    traits: list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait] = []
 
-    traits = []
-    for rating in benchmark.rating:
-        if rating.additionalType in [
-            "GlobalRubricTrait",
-            "GlobalRegexTrait",
-            "GlobalCallableTrait",
-            "GlobalMetricRubricTrait",
-        ]:
-            traits.append(convert_rating_to_rubric_trait(rating))
+    # Extract from rating array (standard format)
+    if benchmark.rating:
+        for rating in benchmark.rating:
+            if rating.additionalType in [
+                "GlobalRubricTrait",
+                "GlobalRegexTrait",
+                "GlobalCallableTrait",
+                "GlobalMetricRubricTrait",
+            ]:
+                traits.append(convert_rating_to_rubric_trait(rating))
+
+    # Extract from additionalProperty (legacy format from GUI checkpoint-converter)
+    if benchmark.additionalProperty:
+        for prop in benchmark.additionalProperty:
+            if prop.name == "global_regex_rubric_traits" and isinstance(prop.value, str):
+                try:
+                    regex_traits_data = json.loads(prop.value)
+                    for trait_data in regex_traits_data:
+                        # Normalize legacy "invert" field to "invert_result"
+                        if "invert" in trait_data and "invert_result" not in trait_data:
+                            trait_data["invert_result"] = trait_data.pop("invert")
+                        traits.append(RegexTrait(**trait_data))
+                except (json.JSONDecodeError, TypeError):
+                    pass  # Invalid JSON, skip
+
+            elif prop.name == "global_callable_rubric_traits" and isinstance(prop.value, str):
+                try:
+                    callable_traits_data = json.loads(prop.value)
+                    for trait_data in callable_traits_data:
+                        traits.append(CallableTrait(**trait_data))
+                except (json.JSONDecodeError, TypeError):
+                    pass  # Invalid JSON, skip
+
+            elif prop.name == "global_metric_rubric_traits" and isinstance(prop.value, str):
+                try:
+                    metric_traits_data = json.loads(prop.value)
+                    for trait_data in metric_traits_data:
+                        traits.append(MetricRubricTrait(**trait_data))
+                except (json.JSONDecodeError, TypeError):
+                    pass  # Invalid JSON, skip
 
     return traits if traits else None
 
