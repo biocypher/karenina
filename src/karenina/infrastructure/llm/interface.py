@@ -299,6 +299,7 @@ def init_chat_model_unified(
 
     # Create LangGraph agent with MCP tools
     try:
+        from langgraph.checkpoint.memory import MemorySaver
         from langgraph.prebuilt import create_react_agent
 
         from .mcp_utils import sync_create_mcp_client_and_tools
@@ -312,8 +313,10 @@ def init_chat_model_unified(
         # Get MCP client and tools
         _, tools = sync_create_mcp_client_and_tools(mcp_urls_dict, mcp_tool_filter)
 
-        # Create React agent with base model and MCP tools
-        agent = create_react_agent(base_model, tools)
+        # Create React agent with base model, MCP tools, and checkpointer
+        # MemorySaver enables partial state recovery when recursion limit is hit
+        memory = MemorySaver()
+        agent = create_react_agent(base_model, tools, checkpointer=memory)
 
         return agent
 

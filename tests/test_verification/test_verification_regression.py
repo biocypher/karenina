@@ -1275,13 +1275,19 @@ class TestEdgeCaseRegression:
         # Both should have the same error about invalid template
         assert new_result.error == legacy_result.error
 
-    @patch("legacy.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
-    def test_recursion_limit_equivalence(
-        self, mock_parse_llm: Mock, mock_generate_llm: Mock, mock_runner_legacy_llm: Mock
-    ) -> None:
-        """Test recursion limit handling produces identical results."""
+    def test_recursion_limit_handling(self, mock_parse_llm: Mock, mock_generate_llm: Mock) -> None:
+        """Test recursion limit handling skips parsing and sets verify_result=False.
+
+        Note: This test no longer compares with legacy implementation because the new
+        implementation has improved behavior:
+        - Parsing is skipped when recursion limit is reached (prevents incorrect field values)
+        - completed_without_errors is True (graceful handling)
+        - verify_result is False (auto-fail)
+        - recursion_limit_reached flag is set
+        - parsed_gt_response and parsed_llm_response are None
+        """
         answering_model = ModelConfig(
             id="test-answering",
             model_provider="openai",
@@ -1299,32 +1305,26 @@ class TestEdgeCaseRegression:
             system_prompt="Parse the response.",
         )
 
-        # Mock LLM responses - answering model hits recursion limit
-        call_count = [0]
-
-        def mock_llm_side_effect(model, provider=None, **kwargs):  # noqa: ARG001
+        # Mock LLM - answering model hits recursion limit
+        def mock_generate_llm_side_effect(model, provider=None, **kwargs):  # noqa: ARG001
             mock_llm = Mock()
 
-            # Alternate between answering (even calls) and parsing (odd calls)
-            if call_count[0] % 2 == 0:
-                # Answering model raises GraphRecursionError
-                def raise_recursion_error(*args, **kwargs):  # noqa: ARG001
-                    raise Exception("GraphRecursionError: recursion_limit exceeded")
+            def raise_recursion_error(*args, **kwargs):  # noqa: ARG001
+                raise Exception("GraphRecursionError: recursion_limit exceeded")
 
-                mock_llm.invoke.side_effect = raise_recursion_error
-            else:
-                # Parsing model returns JSON (won't be reached due to recursion error)
-                mock_response = Mock()
-                mock_response.content = '{"result": 0}'
-                mock_llm.invoke.return_value = mock_response
-
-            call_count[0] += 1
+            mock_llm.invoke.side_effect = raise_recursion_error
             return mock_llm
 
-        # Apply the same side_effect to all three patches
-        mock_parse_llm.side_effect = mock_llm_side_effect
-        mock_generate_llm.side_effect = mock_llm_side_effect
-        mock_runner_legacy_llm.side_effect = mock_llm_side_effect
+        def mock_parse_llm_side_effect(model, provider=None, **kwargs):  # noqa: ARG001
+            # Parsing model should NOT be called when recursion limit is reached
+            mock_llm = Mock()
+            mock_response = Mock()
+            mock_response.content = '{"result": 0}'
+            mock_llm.invoke.return_value = mock_response
+            return mock_llm
+
+        mock_generate_llm.side_effect = mock_generate_llm_side_effect
+        mock_parse_llm.side_effect = mock_parse_llm_side_effect
 
         template_code = """class Answer(BaseAnswer):
     result: int = Field(description="The answer")
@@ -1344,19 +1344,21 @@ class TestEdgeCaseRegression:
             "few_shot_examples": None,
         }
 
-        # Run both implementations
+        # Run new implementation only
         new_result = run_single_model_verification(**kwargs)
-        legacy_result = run_single_model_verification_LEGACY(**kwargs)
 
-        # Compare results
-        compare_verification_results(new_result, legacy_result)
+        # Verify expected behavior when recursion limit is reached
+        assert new_result.recursion_limit_reached is True, "recursion_limit_reached should be True"
+        assert new_result.completed_without_errors is True, "Pipeline should complete gracefully"
+        assert new_result.verify_result is False, "verify_result should be False (auto-fail)"
 
-        # Should have recursion limit reached
-        assert new_result.recursion_limit_reached is True
-        assert legacy_result.recursion_limit_reached is True
-        # Both should have completed (recursion limit is handled gracefully)
-        assert new_result.completed_without_errors is True
-        assert legacy_result.completed_without_errors is True
+        # Parsing should be skipped - these should be None
+        assert new_result.parsed_gt_response is None, "parsed_gt_response should be None when parsing is skipped"
+        assert new_result.parsed_llm_response is None, "parsed_llm_response should be None when parsing is skipped"
+
+        # Verify parsing model was NOT called (because recursion limit was detected)
+        # The parsing LLM mock should have been created but invoke should not be called
+        assert mock_parse_llm.call_count == 0, "Parsing model should not be initialized when recursion limit reached"
 
     @patch("legacy.runner_legacy.init_chat_model_unified")
     @patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified")
