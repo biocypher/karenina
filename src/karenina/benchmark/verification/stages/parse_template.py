@@ -93,7 +93,10 @@ class ParseTemplateStage(BaseVerificationStage):
         ]
 
     def should_run(self, context: VerificationContext) -> bool:
-        """Run if we have raw LLM response and no errors."""
+        """Run if we have raw LLM response, no errors, and no recursion limit."""
+        # Skip parsing if recursion limit was reached (response is truncated/unreliable)
+        if context.get_artifact("recursion_limit_reached", False):
+            return False
         return context.has_artifact("raw_llm_response") and context.has_artifact("Answer") and not context.error
 
     def execute(self, context: VerificationContext) -> None:

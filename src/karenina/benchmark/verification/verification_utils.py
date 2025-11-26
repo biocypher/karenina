@@ -238,8 +238,10 @@ def _invoke_llm_with_retry(
                         cb_manager = get_usage_metadata_callback()
                         cb = cb_manager.__enter__()
 
-                        # Use ainvoke - returns complete final state with all messages
-                        response = await llm.ainvoke({"messages": messages})
+                        # Use ainvoke with thread_id for checkpointer to track state
+                        # This enables partial state recovery when recursion limit is hit
+                        config = {"configurable": {"thread_id": "default"}}
+                        response = await llm.ainvoke({"messages": messages}, config=config)
 
                         # Capture usage metadata on success
                         local_usage_metadata = dict(cb.usage_metadata) if cb and cb.usage_metadata else {}
@@ -285,7 +287,7 @@ def _invoke_llm_with_retry(
                                     logger.debug(f"Could not extract state from checkpointer: {state_error}")
 
                             # Method 3: Check if exception has accumulated messages attribute
-                            if hasattr(e, "messages"):
+                            if hasattr(e, "messages") and e.messages is not None:
                                 logger.info("Extracted messages from exception.messages attribute")
                                 return {"messages": e.messages}, local_usage_metadata, local_recursion_limit_reached
 
