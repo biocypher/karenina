@@ -17,7 +17,7 @@ Usage:
     from karenina.benchmark import export_verification_results_csv, export_verification_results_json
 
     # Export verification job results
-    json_export = export_verification_results_json(job, results)
+    json_export = export_verification_results_json(job, results, global_rubric)
     csv_export = export_verification_results_csv(job, results, global_rubric)
 """
 
@@ -112,7 +112,9 @@ def get_karenina_version() -> str:
         return "unknown"
 
 
-def export_verification_results_json(job: VerificationJob, results: VerificationResultSet) -> str:
+def export_verification_results_json(
+    job: VerificationJob, results: VerificationResultSet, global_rubric: HasTraitNames | None = None
+) -> str:
     """
     Export verification results to JSON format with metadata (v2.0 format).
 
@@ -125,16 +127,22 @@ def export_verification_results_json(job: VerificationJob, results: Verification
     Args:
         job: The verification job
         results: VerificationResultSet containing all verification results
+        global_rubric: Optional global rubric to include in shared_data for rubric definition
 
     Returns:
         JSON string with results and metadata in v2.0 format
     """
-    # Extract rubric definition from results (if available)
+    # Build rubric definition from global_rubric if provided
     # This is stored once in shared_data instead of per-result
-    # TODO: Get rubric definition from benchmark/question instead of config
+    # Use exclude_unset=True to match frontend export format (only include explicitly set fields)
     rubric_definition = None
-    # Note: Rubric definition is stored per-question in the benchmark, not in VerificationConfig
-    # For now, we set this to None - will be populated when we have access to the benchmark
+    if global_rubric is not None:
+        # Use model_dump for Pydantic models, otherwise try to extract trait lists
+        if hasattr(global_rubric, "model_dump"):
+            rubric_definition = global_rubric.model_dump(mode="json", exclude_unset=True)
+        else:
+            # Fallback for non-Pydantic objects that implement HasTraitNames
+            rubric_definition = {"trait_names": global_rubric.get_trait_names()}
 
     export_data: dict[str, Any] = {
         "format_version": "2.0",

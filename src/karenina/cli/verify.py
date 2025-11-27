@@ -673,10 +673,11 @@ def verify(
             job = create_export_job(results_dict, config, "cli-verification", start_time, end_time)
 
             # Export using backend exporter (uses VerificationResultSet directly)
+            global_rubric = benchmark.get_global_rubric()
             if output_format == "json":
-                export_data = export_verification_results_json(job, results)
+                export_data = export_verification_results_json(job, results, global_rubric)
             else:  # csv
-                export_data = export_verification_results_csv(job, results, benchmark.get_global_rubric())
+                export_data = export_verification_results_csv(job, results, global_rubric)
 
             # Write to file
             output.write_text(export_data)
