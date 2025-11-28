@@ -23,6 +23,7 @@ The Karenina CLI provides a streamlined way to run verification workflows from t
 - [Configuration Hierarchy](#configuration-hierarchy) - Understanding precedence rules
 - [Error Handling](#error-handling) - Common errors and solutions
 - [Progress Monitoring](#progress-monitoring) - Real-time verification tracking
+- [Progressive Save & Resume](#progressive-save--resume) - Crash recovery and resumption
 - [Best Practices](#best-practices) - Tips for effective CLI usage
 - [CI/CD Integration](#integration-with-cicd) - Automation and pipeline setup
 - [Limitations](#limitations) - Known constraints and workarounds
@@ -60,6 +61,7 @@ karenina verify checkpoint.jsonld \
 
 ```bash
 karenina verify BENCHMARK [OPTIONS]    # Run verification
+karenina verify-status STATE_FILE      # Inspect progressive save status
 karenina preset list                    # List available presets
 karenina preset show NAME               # Show preset configuration
 karenina preset delete NAME             # Delete a preset
@@ -102,6 +104,13 @@ See [Usage Examples](#usage-examples) below for detailed workflows.
 | `--questions SPEC` | String | Question indices: `0,1,2` or `0-5` or `0-2,5` | - | No |
 | `--question-ids IDS` | String | Comma-separated question IDs | - | No |
 | `--verbose` | Flag | Show progress bar with real-time updates | false | No |
+
+#### Progressive Save and Resume
+
+| Option | Type | Description | Default | Required? |
+|--------|------|-------------|---------|-----------|
+| `--progressive-save` | Flag | Enable incremental saving to `.tmp` and `.state` files for crash recovery | false | No |
+| `--resume STATE_FILE` | Path | Resume from a `.state` file (loads config from state, ignores other config options) | - | No |
 
 #### Model Configuration
 
@@ -689,6 +698,386 @@ karenina verify checkpoint.jsonld \
 ```
 Verifying questions... ✓ ━━━━━━━━━━━━━━━━━━━━━━━━━ 75% 0:00:05
 ```
+
+## Progressive Save & Resume
+
+The CLI supports crash recovery through progressive save and resume capabilities, essential for long-running verifications that may be interrupted.
+
+### Overview
+
+**Progressive Save** enables incremental saving of verification results to disk during execution, allowing you to:
+
+- **Recover from crashes**: Hardware failures, network interruptions, or process termination
+- **Resume interrupted jobs**: Continue from where you left off without re-running completed tasks
+- **Monitor progress**: Inspect partial results while verification is running
+- **Save costs**: Avoid re-running expensive LLM API calls
+
+### How It Works
+
+When `--progressive-save` is enabled, Karenina creates two files:
+
+1. **`.tmp` file** (`output.json.tmp`): Contains results in standard format (frontend-readable)
+2. **`.state` file** (`output.json.state`): Contains task manifest and progress tracking
+
+Both files are updated atomically after each task completes, ensuring crash safety. On successful completion, both temporary files are automatically deleted and the final output file is created.
+
+### Basic Usage
+
+#### Starting a Job with Progressive Save
+
+```bash
+karenina verify benchmark.jsonld \
+  --preset default.json \
+  --output results.json \
+  --progressive-save \
+  --verbose
+```
+
+**Created files:**
+- `results.json.tmp` - Incremental results (updated after each task)
+- `results.json.state` - Progress tracking metadata
+
+**Output:**
+```
+Loading benchmark...
+✓ Loaded benchmark: Karenina LLM Benchmark Checkpoint
+✓ Progressive save enabled: results.json.tmp
+
+Starting verification...
+  Questions: 20
+  Answering models: 1
+  Parsing models: 1
+  Replicates: 1
+  Progressive save: enabled
+
+  Verifying questions... ✓ ━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:02:15
+
+Exporting results to results.json...
+✓ Results exported to results.json
+Progressive save files cleaned up
+
+✓ Verification complete!
+```
+
+#### Resuming an Interrupted Job
+
+If the job is interrupted (Ctrl+C, crash, network failure), resume with:
+
+```bash
+karenina verify --resume results.json.state
+```
+
+**Key features:**
+- Loads config and benchmark path from state file
+- Skips already-completed tasks
+- Only runs pending tasks
+- Combines resumed + new results in final output
+- Cleans up temporary files on completion
+
+**Output:**
+```
+Loading resume state from results.json.state...
+✓ Resuming: 12/20 tasks already completed
+Loading benchmark...
+✓ Loaded benchmark: Karenina LLM Benchmark Checkpoint
+Using configuration from resume state
+Filtered to 8 questions with pending tasks
+
+Starting verification...
+  Questions: 8
+  Answering models: 1
+  Parsing models: 1
+  Replicates: 1
+  Progressive save: enabled
+
+  Verifying questions... ✓ ━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:45
+Total results (including resumed): 20
+
+Exporting results to results.json...
+✓ Results exported to results.json
+Progressive save files cleaned up
+
+✓ Verification complete!
+```
+
+### Inspecting Job Status
+
+Use `karenina verify-status` to inspect the progress of an interrupted job:
+
+```bash
+karenina verify-status results.json.state
+```
+
+**Output:**
+```
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Job In Progress                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+Progress
+Tasks ━━━━━━━━━━━━━━━━━━━━━━━━━━━━              60% (12/20)
+
+Summary
+  State file     results.json.state
+  Output path    results.json
+  Benchmark      /path/to/benchmark.jsonld
+
+  Completed      12
+  Pending        8
+  Total          20
+
+  Started        2025-11-28T10:15:30Z
+  Last update    2025-11-28T10:17:45Z
+  Elapsed        2.3m
+
+Configuration
+  Answering models    answering-1 (gpt-4.1-mini)
+  Parsing models      parsing-1 (gpt-4.1-mini)
+  Replicates          1
+
+Files
+  Results file (.tmp)    exists (48.2 KB)
+  State file (.state)    exists
+
+To resume: karenina verify --resume results.json.state
+```
+
+#### Status Command Options
+
+```bash
+# Basic status
+karenina verify-status results.json.state
+
+# Show completed and pending question IDs
+karenina verify-status results.json.state --show-questions
+
+# Show all task IDs (verbose)
+karenina verify-status results.json.state --show-tasks
+
+# JSON output for scripting
+karenina verify-status results.json.state --json
+```
+
+**JSON Output Example:**
+```json
+{
+  "state_file": "results.json.state",
+  "output_path": "results.json",
+  "benchmark_path": "/path/to/benchmark.jsonld",
+  "progress": {
+    "total_tasks": 20,
+    "completed_count": 12,
+    "pending_count": 8,
+    "progress_percent": 60.0
+  },
+  "timing": {
+    "created_at": "2025-11-28T10:15:30Z",
+    "last_updated_at": "2025-11-28T10:17:45Z",
+    "elapsed_seconds": 135.4
+  },
+  "config": {
+    "answering_models": ["answering-1 (gpt-4.1-mini)"],
+    "parsing_models": ["parsing-1 (gpt-4.1-mini)"],
+    "replicate_count": 1
+  },
+  "completed_question_ids": [...],
+  "pending_question_ids": [...]
+}
+```
+
+### Interactive Mode Integration
+
+Progressive save is also available in interactive mode:
+
+```bash
+karenina verify benchmark.jsonld --interactive
+```
+
+**Interactive flow includes:**
+
+1. Question Selection
+2. Replicate Count
+3. Feature Configuration
+4. Model Configuration
+5. Save Preset (optional)
+6. Progress Display
+7. **Progressive Save** ← New step
+   - "Enable progressive save?" [y/N]
+   - If yes, output file is required
+8. Run Verification
+
+### Use Cases
+
+#### 1. Long-Running Benchmarks
+
+For benchmarks with many questions or expensive models:
+
+```bash
+# Start with progressive save enabled
+karenina verify large-benchmark.jsonld \
+  --preset gpt-4.json \
+  --output results.json \
+  --progressive-save \
+  --verbose
+```
+
+If interrupted, inspect status and resume:
+
+```bash
+karenina verify-status results.json.state
+karenina verify --resume results.json.state
+```
+
+#### 2. Unreliable Network Environments
+
+When running on servers with network instability:
+
+```bash
+# Always use progressive save for remote execution
+karenina verify benchmark.jsonld \
+  --preset default.json \
+  --output results.json \
+  --progressive-save
+```
+
+#### 3. CI/CD Pipelines
+
+Enable progressive save in CI/CD for automatic resumption:
+
+```yaml
+- name: Run verification
+  run: |
+    # Try to resume if state file exists
+    if [ -f results.json.state ]; then
+      karenina verify --resume results.json.state
+    else
+      karenina verify benchmark.jsonld \
+        --preset ci-config.json \
+        --output results.json \
+        --progressive-save
+    fi
+```
+
+#### 4. Monitoring Live Progress
+
+Inspect partial results while verification is running:
+
+```bash
+# Terminal 1: Start verification
+karenina verify benchmark.jsonld \
+  --preset default.json \
+  --output results.json \
+  --progressive-save \
+  --verbose
+
+# Terminal 2: Monitor progress
+watch -n 5 "karenina verify-status results.json.state"
+
+# Or view partial results in frontend
+# Frontend can load the .tmp file directly as a results dump
+```
+
+### File Format Details
+
+#### State File (`.state`)
+
+Contains job metadata and progress tracking:
+
+```json
+{
+  "format_version": "1.0",
+  "created_at": "2025-11-28T10:15:30Z",
+  "last_updated_at": "2025-11-28T10:17:45Z",
+  "benchmark_path": "/path/to/benchmark.jsonld",
+  "output_path": "results.json",
+  "config_hash": "abc123...",
+  "config": { /* VerificationConfig */ },
+  "task_manifest": [
+    "question_1_answering-1__parsing-1",
+    "question_2_answering-1__parsing-1",
+    ...
+  ],
+  "completed_task_ids": [
+    "question_1_answering-1__parsing-1",
+    ...
+  ],
+  "total_tasks": 20,
+  "completed_count": 12
+}
+```
+
+#### Results File (`.tmp`)
+
+Standard format 2.0 export, identical to final output:
+
+```json
+{
+  "format_version": "2.0",
+  "metadata": {
+    "export_timestamp": "2025-11-28 10:17:45 UTC",
+    "karenina_version": "0.1.0",
+    "job_id": "progressive-123456",
+    "total_questions": 20,
+    "successful_count": 12,
+    "end_time": null  // null until complete
+  },
+  "results": [ /* VerificationResult objects */ ]
+}
+```
+
+**Frontend Compatibility:** The `.tmp` file uses the standard export format and can be loaded directly by the frontend to view partial results.
+
+### Safety and Error Handling
+
+#### Atomic Writes
+
+All file writes use an atomic write-rename pattern:
+
+1. Write to `.partial` file
+2. Flush to disk with `fsync`
+3. Atomically rename to `.tmp` or `.state`
+
+This ensures temporary files are always valid JSON, even if interrupted mid-write.
+
+#### Compatibility Validation
+
+When resuming, Karenina validates:
+
+- Benchmark path matches
+- Configuration hash matches
+- State file format version is compatible
+
+**Error if incompatible:**
+```
+Error: Configuration has changed since the job started
+```
+
+**Fix:** Start a fresh job with updated configuration.
+
+#### Cleanup on Success
+
+On successful completion, both `.tmp` and `.state` files are automatically deleted. Only the final output file remains.
+
+**Manual cleanup if needed:**
+```bash
+# Remove incomplete job files
+rm results.json.tmp results.json.state
+```
+
+### Limitations and Notes
+
+**Requirements:**
+- `--progressive-save` requires `--output` to be specified
+- `--resume` does not require `BENCHMARK_PATH` (loaded from state)
+- Frontend can load `.tmp` files as regular results dumps
+
+**Task Identification:**
+- Each task is uniquely identified by: `{question_id}_{answering_model_id}_{mcp_hash}_{parsing_model_id}_{replicate}`
+- MCP hash ensures tasks with different MCP configurations are tracked separately
+
+**Performance:**
+- Minimal overhead: ~0.1-0.2s per result for file I/O
+- Atomic writes ensure crash safety without sacrificing performance
 
 ## Best Practices
 
