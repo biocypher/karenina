@@ -1,0 +1,468 @@
+"""Progressive save functionality for CLI verification with resume support.
+
+This module provides incremental saving of verification results and the ability
+to resume interrupted verification runs.
+
+Key Components:
+- TaskIdentifier: Unique identifier for a verification task
+- ProgressiveSaveManager: Manages .tmp and .state files for progressive saving
+"""
+
+import contextlib
+import hashlib
+import json
+import logging
+import os
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from ..schemas import VerificationConfig, VerificationResult
+from ..schemas.workflow.models import ModelConfig
+from ..schemas.workflow.verification_result_set import VerificationResultSet
+
+logger = logging.getLogger(__name__)
+
+
+def get_karenina_version() -> str:
+    """Get the current Karenina version."""
+    try:
+        import karenina
+
+        return getattr(karenina, "__version__", "unknown")
+    except ImportError:
+        return "unknown"
+
+
+@dataclass
+class TaskIdentifier:
+    """Unique identifier for a verification task.
+
+    A task is uniquely identified by:
+    - question_id: The question being verified
+    - answering_model_id: The model generating answers
+    - mcp_hash: Hash of MCP config (urls + tool filter), empty if no MCP
+    - parsing_model_id: The model parsing responses
+    - replicate: Replicate number (None for single replicate)
+    """
+
+    question_id: str
+    answering_model_id: str
+    mcp_hash: str  # 8-char hash or empty string
+    parsing_model_id: str
+    replicate: int | None
+
+    def to_key(self) -> str:
+        """Generate unique string key for this task.
+
+        Format: {question_id}_{answering_id}_{mcp_hash}_{parsing_id}[_repN]
+        """
+        parts = [
+            self.question_id,
+            self.answering_model_id,
+            self.mcp_hash,  # Empty string if no MCP
+            self.parsing_model_id,
+        ]
+        if self.replicate is not None:
+            parts.append(f"rep{self.replicate}")
+        return "_".join(parts)
+
+    @classmethod
+    def from_key(cls, key: str) -> "TaskIdentifier":
+        """Parse a task key back into a TaskIdentifier."""
+        parts = key.split("_")
+
+        # Check if last part is a replicate marker
+        replicate = None
+        if parts[-1].startswith("rep"):
+            replicate = int(parts[-1][3:])
+            parts = parts[:-1]
+
+        if len(parts) != 4:
+            raise ValueError(f"Invalid task key format: {key}")
+
+        return cls(
+            question_id=parts[0],
+            answering_model_id=parts[1],
+            mcp_hash=parts[2],
+            parsing_model_id=parts[3],
+            replicate=replicate,
+        )
+
+    @classmethod
+    def from_task_dict(cls, task: dict[str, Any]) -> "TaskIdentifier":
+        """Create TaskIdentifier from a batch_runner task dictionary."""
+        answering_model: ModelConfig = task["answering_model"]
+        parsing_model: ModelConfig = task["parsing_model"]
+
+        return cls(
+            question_id=task["question_id"],
+            answering_model_id=answering_model.id or "unknown",
+            mcp_hash=cls.compute_mcp_hash(answering_model),
+            parsing_model_id=parsing_model.id or "unknown",
+            replicate=task.get("replicate"),
+        )
+
+    @classmethod
+    def from_result(cls, result: VerificationResult, config: VerificationConfig) -> "TaskIdentifier":
+        """Create TaskIdentifier from a VerificationResult.
+
+        Args:
+            result: The verification result
+            config: The verification config (needed to look up model config ID and MCP hash)
+        """
+        # The result metadata stores model as "provider/model_name" (e.g., "anthropic/claude-haiku-4-5-20251001")
+        # We need to find the matching config to get the config ID (e.g., "answering-1")
+        result_answering_model = result.metadata.answering_model
+        result_parsing_model = result.metadata.parsing_model
+
+        # Find matching answering model config
+        answering_model_id = result_answering_model  # fallback to result value
+        mcp_hash = ""
+        for model in config.answering_models:
+            model_str = cls._get_model_string(model)
+            if model_str == result_answering_model:
+                answering_model_id = model.id or result_answering_model
+                mcp_hash = cls.compute_mcp_hash(model)
+                break
+
+        # Find matching parsing model config
+        parsing_model_id = result_parsing_model  # fallback to result value
+        for model in config.parsing_models:
+            model_str = cls._get_model_string(model)
+            if model_str == result_parsing_model:
+                parsing_model_id = model.id or result_parsing_model
+                break
+
+        return cls(
+            question_id=result.metadata.question_id,
+            answering_model_id=answering_model_id,
+            mcp_hash=mcp_hash,
+            parsing_model_id=parsing_model_id,
+            replicate=result.metadata.answering_replicate,
+        )
+
+    @staticmethod
+    def _get_model_string(model: ModelConfig) -> str:
+        """Get the model string as it appears in result metadata.
+
+        This mirrors the logic in runner.py for computing answering_model_str.
+        """
+        if model.interface == "openrouter":
+            return model.model_name or ""
+        elif model.interface == "openai_endpoint":
+            return f"endpoint/{model.model_name}"
+        elif model.interface == "manual":
+            return "manual"
+        else:
+            return f"{model.model_provider}/{model.model_name}"
+
+    @staticmethod
+    def compute_mcp_hash(model_config: ModelConfig) -> str:
+        """Compute hash from mcp_urls_dict and mcp_tool_filter.
+
+        Returns:
+            8-character MD5 hash, or empty string if no MCP config
+        """
+        if not model_config.mcp_urls_dict:
+            return ""
+
+        # Create deterministic representation
+        data = {
+            "urls": dict(sorted(model_config.mcp_urls_dict.items())),
+            "filter": sorted(model_config.mcp_tool_filter or []),
+        }
+        json_str = json.dumps(data, sort_keys=True)
+        return hashlib.md5(json_str.encode()).hexdigest()[:8]
+
+
+class ProgressiveSaveManager:
+    """Manages progressive save state with two files.
+
+    Files:
+    - .tmp: Results in standard export format (frontend-readable)
+    - .state: Task manifest and progress tracking
+
+    Usage:
+        # New job
+        manager = ProgressiveSaveManager(output, config, benchmark_path)
+        manager.initialize(task_manifest)
+
+        # Resume existing
+        manager = ProgressiveSaveManager.load_for_resume(state_path)
+
+        # During verification
+        manager.add_result(result)
+
+        # After completion
+        manager.finalize()
+    """
+
+    STATE_FORMAT_VERSION = "1.0"
+    RESULTS_FORMAT_VERSION = "2.0"
+
+    def __init__(
+        self,
+        output_path: Path,
+        config: VerificationConfig,
+        benchmark_path: str,
+    ):
+        """Initialize a new ProgressiveSaveManager.
+
+        Args:
+            output_path: Final output path (e.g., results.json)
+            config: Verification configuration
+            benchmark_path: Path to the benchmark file
+        """
+        self.output_path = output_path
+        self.tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
+        self.state_path = output_path.with_suffix(output_path.suffix + ".state")
+        self.config = config
+        self.benchmark_path = benchmark_path
+
+        # State tracking
+        self._task_manifest: list[str] = []
+        self._completed_task_ids: set[str] = set()
+        self._results: list[VerificationResult] = []
+        self._start_time: float | None = None
+        self._config_hash: str = ""
+
+    @classmethod
+    def can_resume(cls, output_path: Path) -> bool:
+        """Check if state file exists for resumption."""
+        state_path = output_path.with_suffix(output_path.suffix + ".state")
+        tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
+        return state_path.exists() and tmp_path.exists()
+
+    @classmethod
+    def load_for_resume(cls, state_path: Path) -> "ProgressiveSaveManager":
+        """Load existing state and results for resume.
+
+        Args:
+            state_path: Path to the .state file
+
+        Returns:
+            Initialized ProgressiveSaveManager ready for resume
+        """
+        if not state_path.exists():
+            raise FileNotFoundError(f"State file not found: {state_path}")
+
+        # Derive paths
+        # State path is like results.json.state, so we need results.json
+        output_path = Path(str(state_path).rsplit(".state", 1)[0])
+        tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
+
+        if not tmp_path.exists():
+            raise FileNotFoundError(f"Results file not found: {tmp_path} (state file exists but results missing)")
+
+        # Load state
+        with open(state_path) as f:
+            state_data = json.load(f)
+
+        # Validate format version
+        if state_data.get("format_version") != cls.STATE_FORMAT_VERSION:
+            raise ValueError(
+                f"Incompatible state format version: {state_data.get('format_version')} "
+                f"(expected {cls.STATE_FORMAT_VERSION})"
+            )
+
+        # Load config from state
+        config = VerificationConfig(**state_data["config"])
+        benchmark_path = state_data["benchmark_path"]
+
+        # Create manager
+        manager = cls(output_path, config, benchmark_path)
+        manager._task_manifest = state_data["task_manifest"]
+        manager._completed_task_ids = set(state_data["completed_task_ids"])
+        manager._start_time = state_data.get("start_time")
+        manager._config_hash = state_data.get("config_hash", "")
+
+        # Load existing results
+        with open(tmp_path) as f:
+            tmp_data = json.load(f)
+
+        for result_dict in tmp_data.get("results", []):
+            result = VerificationResult.model_validate(result_dict)
+            manager._results.append(result)
+
+        logger.info(
+            f"Loaded progressive save state: {len(manager._completed_task_ids)}/{len(manager._task_manifest)} "
+            f"tasks completed"
+        )
+
+        return manager
+
+    def is_compatible(self, config: VerificationConfig, benchmark_path: str) -> tuple[bool, str]:
+        """Verify config/benchmark match for safe resume.
+
+        Returns:
+            Tuple of (is_compatible, reason_if_not)
+        """
+        # Check benchmark path
+        if self.benchmark_path != benchmark_path:
+            return False, f"Benchmark path changed: {self.benchmark_path} -> {benchmark_path}"
+
+        # Check config hash
+        new_config_hash = self._compute_config_hash(config)
+        if self._config_hash and self._config_hash != new_config_hash:
+            return False, "Configuration has changed since the job started"
+
+        return True, ""
+
+    def initialize(self, task_manifest: list[str]) -> None:
+        """Initialize fresh state and tmp files with task manifest.
+
+        Args:
+            task_manifest: List of task IDs (from TaskIdentifier.to_key())
+        """
+        self._task_manifest = task_manifest
+        self._completed_task_ids = set()
+        self._results = []
+        self._start_time = time.time()
+        self._config_hash = self._compute_config_hash(self.config)
+
+        # Create initial files
+        self._save_state()
+        self._save_results()
+
+        logger.info(f"Initialized progressive save with {len(task_manifest)} tasks")
+
+    def get_pending_task_ids(self) -> set[str]:
+        """Get task IDs not yet completed."""
+        return set(self._task_manifest) - self._completed_task_ids
+
+    def add_result(self, result: VerificationResult) -> None:
+        """Add result to .tmp and mark complete in .state.
+
+        Uses atomic write pattern for crash safety.
+        """
+        # Generate task ID from result
+        task_id = TaskIdentifier.from_result(result, self.config).to_key()
+
+        # Add to results
+        self._results.append(result)
+        self._completed_task_ids.add(task_id)
+
+        # Save both files atomically
+        self._save_results()
+        self._save_state()
+
+        logger.debug(f"Saved result for task: {task_id}")
+
+    def get_all_results(self) -> list[VerificationResult]:
+        """Load all results from memory."""
+        return self._results.copy()
+
+    def get_result_set(self) -> VerificationResultSet:
+        """Get all results as a VerificationResultSet."""
+        return VerificationResultSet(results=self._results)
+
+    def finalize(self) -> None:
+        """Delete .tmp and .state files after successful completion."""
+        try:
+            if self.tmp_path.exists():
+                self.tmp_path.unlink()
+                logger.info(f"Removed temporary file: {self.tmp_path}")
+        except OSError as e:
+            logger.warning(f"Failed to remove {self.tmp_path}: {e}")
+
+        try:
+            if self.state_path.exists():
+                self.state_path.unlink()
+                logger.info(f"Removed state file: {self.state_path}")
+        except OSError as e:
+            logger.warning(f"Failed to remove {self.state_path}: {e}")
+
+    @property
+    def completed_count(self) -> int:
+        """Number of completed tasks."""
+        return len(self._completed_task_ids)
+
+    @property
+    def total_tasks(self) -> int:
+        """Total number of tasks in manifest."""
+        return len(self._task_manifest)
+
+    def _compute_config_hash(self, config: VerificationConfig) -> str:
+        """Compute hash of configuration for compatibility checking."""
+        config_json = config.model_dump_json(exclude={"manual_traces"})
+        return hashlib.md5(config_json.encode()).hexdigest()
+
+    def _save_state(self) -> None:
+        """Save state file with atomic write."""
+        state_data = {
+            "format_version": self.STATE_FORMAT_VERSION,
+            "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(self._start_time or time.time())),
+            "last_updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "benchmark_path": self.benchmark_path,
+            "output_path": str(self.output_path),
+            "config_hash": self._config_hash,
+            "config": self.config.model_dump(mode="json", exclude={"manual_traces": True}),
+            "task_manifest": self._task_manifest,
+            "completed_task_ids": list(self._completed_task_ids),
+            "total_tasks": len(self._task_manifest),
+            "completed_count": len(self._completed_task_ids),
+            "start_time": self._start_time,
+        }
+
+        self._atomic_write(self.state_path, json.dumps(state_data, indent=2))
+
+    def _save_results(self) -> None:
+        """Save results file in standard export format with atomic write."""
+        # Build export data in standard format (same as export_verification_results_json)
+        export_data: dict[str, Any] = {
+            "format_version": self.RESULTS_FORMAT_VERSION,
+            "metadata": {
+                "export_timestamp": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
+                "karenina_version": get_karenina_version(),
+                "job_id": f"progressive-{int(self._start_time or time.time())}",
+                "run_name": "cli-verification",
+                "total_questions": self.total_tasks,
+                "successful_count": self.completed_count,
+                "start_time": self._start_time,
+                "end_time": None,  # Not complete yet
+                "config": self.config.model_dump(mode="json", exclude={"manual_traces": True}),
+            },
+            "results": [],
+        }
+
+        # Add results
+        for result in self._results:
+            result_dict = result.model_dump(mode="json")
+            export_data["results"].append(result_dict)
+
+        self._atomic_write(self.tmp_path, json.dumps(export_data, indent=2, ensure_ascii=False))
+
+    def _atomic_write(self, path: Path, content: str) -> None:
+        """Write content to file atomically using write-rename pattern."""
+        partial_path = path.with_suffix(path.suffix + ".partial")
+
+        try:
+            # Write to partial file
+            with open(partial_path, "w", encoding="utf-8") as f:
+                f.write(content)
+                f.flush()
+                os.fsync(f.fileno())
+
+            # Atomic rename
+            partial_path.replace(path)
+
+        except Exception as e:
+            # Clean up partial file on error
+            if partial_path.exists():
+                with contextlib.suppress(OSError):
+                    partial_path.unlink()
+            raise e
+
+
+def generate_task_manifest(tasks: list[dict[str, Any]]) -> list[str]:
+    """Generate task manifest (list of task IDs) from task queue.
+
+    Args:
+        tasks: Task queue from generate_task_queue()
+
+    Returns:
+        List of task ID strings
+    """
+    return [TaskIdentifier.from_task_dict(task).to_key() for task in tasks]

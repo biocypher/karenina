@@ -10,14 +10,23 @@ from typing import Annotated
 
 import typer
 from rich.console import Console
-from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn, TimeRemainingColumn
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TaskID,
+    TaskProgressColumn,
+    TextColumn,
+    TimeRemainingColumn,
+)
 from rich.prompt import Confirm, Prompt
 
 from karenina.benchmark import Benchmark
 from karenina.benchmark.exporter import export_verification_results_csv, export_verification_results_json
-from karenina.benchmark.verification.batch_runner import run_verification_batch
+from karenina.benchmark.verification.batch_runner import generate_task_queue, run_verification_batch
 from karenina.schemas import VerificationConfig, VerificationResult
 
+from .progressive_save import ProgressiveSaveManager, TaskIdentifier, generate_task_manifest
 from .utils import (
     create_export_job,
     filter_templates_by_ids,
@@ -218,7 +227,9 @@ def _build_config_from_cli_args(
 
 
 def verify(
-    benchmark_path: Annotated[str, typer.Argument(help="Path to benchmark JSON-LD file")],
+    benchmark_path: Annotated[
+        str | None, typer.Argument(help="Path to benchmark JSON-LD file (not required with --resume)")
+    ] = None,
     # Configuration sources (priority: interactive > CLI+preset > preset > defaults)
     preset: Annotated[Path | None, typer.Option(help="Path to preset configuration")] = None,
     interactive: Annotated[bool, typer.Option("--interactive", help="Interactive configuration mode")] = False,
@@ -306,6 +317,21 @@ def verify(
             help="JSON file with manual traces (question_hash: trace_string mapping). Required when --interface manual.",
         ),
     ] = None,
+    # Progressive save and resume support
+    progressive_save: Annotated[
+        bool,
+        typer.Option(
+            "--progressive-save",
+            help="Enable incremental saving to .tmp and .state files for crash recovery",
+        ),
+    ] = False,
+    resume: Annotated[
+        Path | None,
+        typer.Option(
+            "--resume",
+            help="Resume from a .state file (loads config from state, ignores other config options)",
+        ),
+    ] = None,
 ) -> None:
     """
     Run verification on a benchmark.
@@ -348,9 +374,54 @@ def verify(
                 console.print(f"[red]Error: {e}[/red]")
                 raise typer.Exit(code=1) from e
 
+        # Validate progressive save requires output
+        if progressive_save and not output:
+            console.print("[red]Error: --progressive-save requires --output to be specified[/red]")
+            raise typer.Exit(code=1)
+
+        # Validate benchmark_path is provided unless resuming
+        if not resume and not benchmark_path:
+            console.print("[red]Error: BENCHMARK_PATH is required (unless using --resume)[/red]")
+            raise typer.Exit(code=1)
+
+        # Initialize progressive save manager (will be set up later)
+        progressive_manager: ProgressiveSaveManager | None = None
+        pending_task_ids: set[str] | None = None
+
+        # Handle resume mode - load everything from state file
+        if resume:
+            if not resume.exists():
+                console.print(f"[red]Error: State file not found: {resume}[/red]")
+                raise typer.Exit(code=1)
+
+            console.print(f"[cyan]Loading resume state from {resume}...[/cyan]")
+            try:
+                progressive_manager = ProgressiveSaveManager.load_for_resume(resume)
+                config = progressive_manager.config
+                benchmark_path = progressive_manager.benchmark_path
+                output = progressive_manager.output_path
+                output_format = validate_output_path(output)
+
+                console.print(
+                    f"[green]✓ Resuming: {progressive_manager.completed_count}/{progressive_manager.total_tasks} "
+                    f"tasks already completed[/green]"
+                )
+
+                pending_task_ids = progressive_manager.get_pending_task_ids()
+                if not pending_task_ids:
+                    console.print("[yellow]All tasks already completed. Nothing to resume.[/yellow]")
+                    raise typer.Exit(code=0)
+
+            except Exception as e:
+                console.print(f"[red]Error loading resume state: {e}[/red]")
+                raise typer.Exit(code=1) from e
+
         # Step 2: Load benchmark
         console.print("[cyan]Loading benchmark...[/cyan]")
         try:
+            # At this point, benchmark_path is guaranteed to be set
+            # Either from CLI args or loaded from resume state
+            assert benchmark_path is not None, "benchmark_path should be set"
             benchmark = Benchmark.load(Path(benchmark_path))
         except Exception as e:
             console.print(f"[red]Error loading benchmark: {e}[/red]")
@@ -359,16 +430,22 @@ def verify(
         console.print(f"[green]✓ Loaded benchmark: {benchmark.name or 'Unnamed'}[/green]")
         console.print(f"  Total questions: {len(benchmark.get_all_questions())}")
 
-        # Step 3: Load or build config
+        # Step 3: Load or build config (skip if resuming - config loaded from state)
         # Priority: interactive > preset+CLI > CLI only
         selected_question_indices = None
         show_progress_bar_interactive = None
-        if interactive:
+        if resume:
+            # Config already loaded from state file, skip config building
+            console.print("[dim]Using configuration from resume state[/dim]")
+        elif interactive:
             from .interactive import build_config_interactively
 
-            config, selected_question_indices, show_progress_bar_interactive = build_config_interactively(
-                benchmark, mode=_mode
+            config, selected_question_indices, show_progress_bar_interactive, progressive_save_interactive = (
+                build_config_interactively(benchmark, mode=_mode)
             )
+            # Use interactive progressive save setting if not overridden by CLI flag
+            if not progressive_save:
+                progressive_save = progressive_save_interactive
         else:
             # Load preset if provided, otherwise use None (will build from CLI args/defaults)
             preset_config = None
@@ -580,29 +657,79 @@ def verify(
             raise typer.Exit(code=1)
 
         # Step 5: Prompt for output file (if interactive and not already specified)
-        if (
-            not output
-            and interactive
-            and Confirm.ask("\nWould you like to save the verification results to a file?", default=True)
-        ):
-            # Prompt for output format
-            format_choice = Prompt.ask("Output format", choices=["json", "csv"], default="json")
+        # If progressive save is enabled, output is required
+        if not output and interactive:
+            if progressive_save:
+                console.print("\n[yellow]Progressive save requires an output file.[/yellow]")
+                save_to_file = True
+            else:
+                save_to_file = Confirm.ask("\nWould you like to save the verification results to a file?", default=True)
 
-            # Prompt for filename
-            default_filename = f"verification_results.{format_choice}"
-            output_filename = Prompt.ask("Output filename", default=default_filename)
+            if save_to_file:
+                # Prompt for output format
+                format_choice = Prompt.ask("Output format", choices=["json", "csv"], default="json")
 
-            # Set output and format
-            output = Path(output_filename)
-            output_format = format_choice
+                # Prompt for filename
+                default_filename = f"verification_results.{format_choice}"
+                output_filename = Prompt.ask("Output filename", default=default_filename)
 
-            # Validate the path
-            try:
-                output_format = validate_output_path(output)
-                console.print(f"[green]✓ Results will be saved to: {output}[/green]")
-            except ValueError as e:
-                console.print(f"[yellow]Warning: {e}. Results will not be saved to file.[/yellow]")
-                output = None
+                # Set output and format
+                output = Path(output_filename)
+                output_format = format_choice
+
+                # Validate the path
+                try:
+                    output_format = validate_output_path(output)
+                    console.print(f"[green]✓ Results will be saved to: {output}[/green]")
+                except ValueError as e:
+                    console.print(f"[yellow]Warning: {e}. Results will not be saved to file.[/yellow]")
+                    output = None
+                    # If progressive save requires output but validation failed, disable it
+                    if progressive_save:
+                        console.print("[yellow]Disabling progressive save due to invalid output path.[/yellow]")
+                        progressive_save = False
+
+        # Step 5.5: Initialize progressive save (if enabled and not resuming)
+        if progressive_save and not resume:
+            # Generate task queue to create manifest
+            task_queue = generate_task_queue(
+                templates=templates,
+                config=config,
+                global_rubric=benchmark.get_global_rubric(),
+                run_name="cli-verification",
+            )
+            task_manifest = generate_task_manifest(task_queue)
+
+            # Initialize progressive save manager
+            # At this point, output and benchmark_path are guaranteed to be set
+            assert output is not None, "output should be set for progressive save"
+            assert benchmark_path is not None, "benchmark_path should be set"
+            progressive_manager = ProgressiveSaveManager(output, config, benchmark_path)
+            progressive_manager.initialize(task_manifest)
+            console.print(f"[green]✓ Progressive save enabled: {progressive_manager.tmp_path}[/green]")
+
+        # Filter templates if resuming (only keep questions with pending tasks)
+        if resume and pending_task_ids:
+            # Generate task queue for current templates
+            task_queue = generate_task_queue(
+                templates=templates,
+                config=config,
+                global_rubric=benchmark.get_global_rubric(),
+                run_name="cli-verification",
+            )
+
+            # Find which question IDs have pending tasks
+            pending_question_ids = set()
+            for task in task_queue:
+                task_id = TaskIdentifier.from_task_dict(task).to_key()
+                if task_id in pending_task_ids:
+                    pending_question_ids.add(task["question_id"])
+
+            # Filter templates to only those with pending tasks
+            original_count = len(templates)
+            templates = [t for t in templates if t.question_id in pending_question_ids]
+            if len(templates) < original_count:
+                console.print(f"[dim]Filtered to {len(templates)} questions with pending tasks[/dim]")
 
         # Step 6: Run verification
         console.print("\n[bold cyan]Starting verification...[/bold cyan]")
@@ -610,6 +737,8 @@ def verify(
         console.print(f"  Answering models: {len(config.answering_models)}")
         console.print(f"  Parsing models: {len(config.parsing_models)}")
         console.print(f"  Replicates: {config.replicate_count}")
+        if progressive_manager:
+            console.print("  Progressive save: enabled")
         console.print()
 
         start_time = time.time()
@@ -633,15 +762,20 @@ def verify(
                 TimeRemainingColumn(),
                 console=console,
             ) as progress:
-                task = progress.add_task("Verifying questions...", total=total_verifications)
+                progress_task: TaskID = progress.add_task("Verifying questions...", total=total_verifications)
 
                 def progress_callback(current: int, _total: int, result: VerificationResult | None = None) -> None:
                     """Update progress bar on each verification completion."""
-                    progress.update(task, completed=current)
+                    progress.update(progress_task, completed=current)
                     if result and result.verify_result is not None:
                         # Add pass/fail indicator to description
                         status = "✓" if result.verify_result else "✗"
-                        progress.update(task, description=f"Verifying questions... {status}")
+                        progress.update(progress_task, description=f"Verifying questions... {status}")
+
+                    # Progressive save: save result incrementally
+                    if progressive_manager and result and result.metadata.timestamp:
+                        # Only save completed results (with timestamp)
+                        progressive_manager.add_result(result)
 
                 results = run_verification_batch(
                     templates=templates,
@@ -651,23 +785,37 @@ def verify(
                     progress_callback=progress_callback,
                 )
         else:
+            # Define callback for progressive save even without progress bar
+            def simple_progress_callback(_current: int, _total: int, result: VerificationResult | None = None) -> None:
+                """Save result incrementally (no progress bar display)."""
+                if progressive_manager and result and result.metadata.timestamp:
+                    progressive_manager.add_result(result)
+
             results = run_verification_batch(
                 templates=templates,
                 config=config,
                 run_name="cli-verification",
                 global_rubric=benchmark.get_global_rubric(),
-                progress_callback=None,
+                progress_callback=simple_progress_callback if progressive_manager else None,
             )
 
         end_time = time.time()
         duration = end_time - start_time
 
-        # Step 7: Export results (if output was configured)
+        # Step 7: Get final results (combine with resumed results if applicable)
+        # When using progressive save, the manager has all results (resumed + new)
+        if progressive_manager:
+            final_results = progressive_manager.get_result_set()
+            console.print(f"[dim]Total results (including resumed): {len(final_results)}[/dim]")
+        else:
+            final_results = results
+
+        # Step 8: Export results (if output was configured)
         if output:
             console.print(f"\n[cyan]Exporting results to {output}...[/cyan]")
 
             # Convert to legacy dict for job creation
-            results_dict = results.to_legacy_dict()
+            results_dict = final_results.to_legacy_dict()
 
             # Create job for export (comprehensive backend format)
             job = create_export_job(results_dict, config, "cli-verification", start_time, end_time)
@@ -675,19 +823,24 @@ def verify(
             # Export using backend exporter (uses VerificationResultSet directly)
             global_rubric = benchmark.get_global_rubric()
             if output_format == "json":
-                export_data = export_verification_results_json(job, results, global_rubric)
+                export_data = export_verification_results_json(job, final_results, global_rubric)
             else:  # csv
-                export_data = export_verification_results_csv(job, results, global_rubric)
+                export_data = export_verification_results_csv(job, final_results, global_rubric)
 
             # Write to file
             output.write_text(export_data)
             console.print(f"[green]✓ Results exported to {output}[/green]")
 
+            # Clean up progressive save temp files on successful completion
+            if progressive_manager:
+                progressive_manager.finalize()
+                console.print("[dim]Progressive save files cleaned up[/dim]")
+
         # Display summary
-        total = len(results)
-        passed = sum(1 for r in results if r.template and r.template.verify_result)
+        total = len(final_results)
+        passed = sum(1 for r in final_results if r.template and r.template.verify_result)
         failed = total - passed
-        errors = sum(1 for r in results if not r.metadata.completed_without_errors)
+        errors = sum(1 for r in final_results if not r.metadata.completed_without_errors)
 
         console.print("\n[bold]Verification Summary:[/bold]")
         console.print(f"  Total: {total}")
