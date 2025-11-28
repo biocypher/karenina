@@ -466,3 +466,148 @@ def generate_task_manifest(tasks: list[dict[str, Any]]) -> list[str]:
         List of task ID strings
     """
     return [TaskIdentifier.from_task_dict(task).to_key() for task in tasks]
+
+
+@dataclass
+class ProgressiveJobStatus:
+    """Status summary for a progressive save job."""
+
+    # Basic info
+    state_file_path: Path
+    output_path: Path
+    benchmark_path: str
+
+    # Progress
+    total_tasks: int
+    completed_count: int
+    pending_count: int
+
+    # Task details
+    completed_task_ids: list[str]
+    pending_task_ids: list[str]
+
+    # Timing
+    created_at: str
+    last_updated_at: str
+    start_time: float | None
+
+    # Config summary
+    answering_models: list[str]
+    parsing_models: list[str]
+    replicate_count: int
+
+    # File status
+    tmp_file_exists: bool
+    tmp_file_size: int | None
+
+    @property
+    def progress_percent(self) -> float:
+        """Get progress as a percentage."""
+        if self.total_tasks == 0:
+            return 0.0
+        return (self.completed_count / self.total_tasks) * 100
+
+    @property
+    def elapsed_time(self) -> float | None:
+        """Get elapsed time in seconds since job started."""
+        if self.start_time is None:
+            return None
+        return time.time() - self.start_time
+
+    def get_unique_question_ids(self, task_ids: list[str]) -> list[str]:
+        """Extract unique question IDs from task IDs."""
+        question_ids = set()
+        for task_id in task_ids:
+            # Task ID format: {question_id}_{answering_id}_{mcp_hash}_{parsing_id}[_repN]
+            parts = task_id.split("_")
+            if parts:
+                question_ids.add(parts[0])
+        return sorted(question_ids)
+
+    @property
+    def completed_question_ids(self) -> list[str]:
+        """Get unique question IDs that have been completed."""
+        return self.get_unique_question_ids(self.completed_task_ids)
+
+    @property
+    def pending_question_ids(self) -> list[str]:
+        """Get unique question IDs that are still pending."""
+        return self.get_unique_question_ids(self.pending_task_ids)
+
+
+def inspect_state_file(state_path: Path) -> ProgressiveJobStatus:
+    """Inspect a progressive save state file and return status summary.
+
+    Args:
+        state_path: Path to the .state file
+
+    Returns:
+        ProgressiveJobStatus with job summary
+
+    Raises:
+        FileNotFoundError: If state file doesn't exist
+        ValueError: If state file is invalid
+    """
+    if not state_path.exists():
+        raise FileNotFoundError(f"State file not found: {state_path}")
+
+    with open(state_path) as f:
+        state_data = json.load(f)
+
+    # Validate format version
+    format_version = state_data.get("format_version")
+    if format_version != ProgressiveSaveManager.STATE_FORMAT_VERSION:
+        raise ValueError(
+            f"Incompatible state format version: {format_version} "
+            f"(expected {ProgressiveSaveManager.STATE_FORMAT_VERSION})"
+        )
+
+    # Extract config info
+    config = state_data.get("config", {})
+    answering_models = []
+    for model in config.get("answering_models", []):
+        model_name = model.get("model_name", "unknown")
+        model_id = model.get("id", "")
+        if model_id:
+            answering_models.append(f"{model_id} ({model_name})")
+        else:
+            answering_models.append(model_name)
+
+    parsing_models = []
+    for model in config.get("parsing_models", []):
+        model_name = model.get("model_name", "unknown")
+        model_id = model.get("id", "")
+        if model_id:
+            parsing_models.append(f"{model_id} ({model_name})")
+        else:
+            parsing_models.append(model_name)
+
+    # Get task lists
+    task_manifest = state_data.get("task_manifest", [])
+    completed_task_ids = state_data.get("completed_task_ids", [])
+    pending_task_ids = list(set(task_manifest) - set(completed_task_ids))
+
+    # Check tmp file
+    output_path = Path(state_data.get("output_path", ""))
+    tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
+    tmp_file_exists = tmp_path.exists()
+    tmp_file_size = tmp_path.stat().st_size if tmp_file_exists else None
+
+    return ProgressiveJobStatus(
+        state_file_path=state_path,
+        output_path=output_path,
+        benchmark_path=state_data.get("benchmark_path", ""),
+        total_tasks=state_data.get("total_tasks", len(task_manifest)),
+        completed_count=state_data.get("completed_count", len(completed_task_ids)),
+        pending_count=len(pending_task_ids),
+        completed_task_ids=completed_task_ids,
+        pending_task_ids=pending_task_ids,
+        created_at=state_data.get("created_at", ""),
+        last_updated_at=state_data.get("last_updated_at", ""),
+        start_time=state_data.get("start_time"),
+        answering_models=answering_models,
+        parsing_models=parsing_models,
+        replicate_count=config.get("replicate_count", 1),
+        tmp_file_exists=tmp_file_exists,
+        tmp_file_size=tmp_file_size,
+    )
