@@ -28,10 +28,14 @@ def callback() -> None:
 # These imports will be added as we implement each command module
 try:
     from .preset import preset_app
+    from .status import verify_status
     from .verify import verify
 
     # Register verify command directly on main app
     app.command(name="verify")(verify)
+
+    # Register verify-status command for inspecting progressive save state
+    app.command(name="verify-status")(verify_status)
 
     # Register preset as a sub-command group
     app.add_typer(preset_app, name="preset", help="Manage verification presets")

@@ -32,7 +32,9 @@ from .utils import parse_question_indices
 console = Console()
 
 
-def build_config_interactively(benchmark: Benchmark, mode: str = "basic") -> tuple[VerificationConfig, list[int], bool]:
+def build_config_interactively(
+    benchmark: Benchmark, mode: str = "basic"
+) -> tuple[VerificationConfig, list[int], bool, bool]:
     """
     Build VerificationConfig interactively through prompts.
 
@@ -41,7 +43,7 @@ def build_config_interactively(benchmark: Benchmark, mode: str = "basic") -> tup
         mode: "basic" or "advanced"
 
     Returns:
-        Tuple of (VerificationConfig object, list of selected question indices, show_progress_bar)
+        Tuple of (VerificationConfig object, list of selected question indices, show_progress_bar, progressive_save_enabled)
 
     Raises:
         ValueError: If mode is invalid or user provides invalid input
@@ -385,9 +387,19 @@ def build_config_interactively(benchmark: Benchmark, mode: str = "basic") -> tup
     else:
         console.print("[dim]Progress bar will be hidden[/dim]")
 
+    # Step 8: Ask about progressive save
+    console.print("\n[bold]Step 8: Progressive Save[/bold]")
+    console.print("[dim]Progressive save enables crash recovery by saving results incrementally.[/dim]")
+    console.print("[dim]If interrupted, you can resume with: karenina verify --resume <state_file>[/dim]")
+    progressive_save_enabled = Confirm.ask("Enable progressive save?", default=False)
+    if progressive_save_enabled:
+        console.print("[green]✓ Progressive save enabled - results will be saved incrementally[/green]")
+    else:
+        console.print("[dim]Progressive save disabled[/dim]")
+
     console.print("\n[green]✓ Configuration complete![/green]\n")
 
-    return config, selected_indices, show_progress_bar
+    return config, selected_indices, show_progress_bar, progressive_save_enabled
 
 
 def _display_questions_table(templates: list[Any]) -> None:
