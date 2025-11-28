@@ -490,3 +490,60 @@ def extract_final_ai_message(harmonized_trace: str) -> tuple[str | None, str | N
         return None, "Final AI message has no text content (only tool calls)"
 
     return content, None
+
+
+def cleanup_mcp_client(client: Any) -> None:
+    """
+    Clean up MCP client connections gracefully.
+
+    This function attempts to close MCP client connections that might keep
+    background threads or event loops alive after usage is complete.
+
+    Args:
+        client: MCP client instance (MultiServerMCPClient or similar)
+
+    Examples:
+        >>> client, tools = sync_create_mcp_client_and_tools(mcp_urls)
+        >>> # ... use client ...
+        >>> cleanup_mcp_client(client)
+    """
+    import asyncio
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    if client is None:
+        return
+
+    try:
+        # Try synchronous close first
+        if hasattr(client, "close"):
+            client.close()
+            logger.debug("MCP client closed (sync)")
+            return
+
+        # Try async close
+        if hasattr(client, "aclose"):
+            try:
+                # Check if we're in an async context
+                loop = asyncio.get_running_loop()
+                # We're in an async context - schedule close
+                loop.create_task(client.aclose())
+                logger.debug("MCP client close scheduled (async)")
+            except RuntimeError:
+                # No event loop running - run async close in new loop
+                asyncio.run(client.aclose())
+                logger.debug("MCP client closed (async new loop)")
+            return
+
+        # Try __exit__ if it's a context manager
+        if hasattr(client, "__exit__"):
+            client.__exit__(None, None, None)
+            logger.debug("MCP client exited (context manager)")
+            return
+
+    except Exception as e:
+        logger.warning(f"Failed to cleanup MCP client: {e}")
+
+    # If no cleanup method found, log a warning
+    logger.debug("No cleanup method found for MCP client")

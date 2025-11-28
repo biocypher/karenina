@@ -852,6 +852,16 @@ def verify(
 
         console.print("\n[green]✓ Verification complete![/green]")
 
+        # Force exit to cleanup lingering resources (HTTP clients, MCP connections, etc.)
+        # These resources prevent the process from exiting naturally
+        import sys
+
+        # Give a brief moment for final I/O to flush
+        time.sleep(0.5)
+
+        # Force exit with success status
+        sys.exit(0)
+
     except typer.Exit:
         raise
     except Exception as e:

@@ -664,6 +664,57 @@ def auto_save_results(
 
 
 # ============================================================================
+# Resource Cleanup
+# ============================================================================
+
+
+def cleanup_resources() -> None:
+    """
+    Clean up lingering resources that may prevent process exit.
+
+    This function attempts to close HTTP connection pools, MCP clients,
+    and other resources that might keep background threads alive after
+    verification completes.
+    """
+    import gc
+
+    # Force garbage collection to close unused objects
+    gc.collect()
+
+    # Try to close httpx default client (used by many LangChain integrations)
+    try:
+        import httpx
+
+        # Close the singleton/default client if it exists
+        if hasattr(httpx, "_client") and httpx._client:
+            httpx._client.close()  # type: ignore[attr-defined]
+    except (ImportError, AttributeError, Exception):
+        pass
+
+    # Try to close aiohttp default client session
+    try:
+        import aiohttp
+
+        # Close any default ClientSession instances
+        if hasattr(aiohttp, "_default_session") and aiohttp._default_session:
+            import asyncio
+
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(aiohttp._default_session.close())  # type: ignore[attr-defined]
+            except RuntimeError:
+                # No event loop running
+                pass
+    except (ImportError, AttributeError, Exception):
+        pass
+
+    # Final garbage collection
+    gc.collect()
+
+    logger.debug("Resource cleanup completed")
+
+
+# ============================================================================
 # High-Level Batch Runner
 # ============================================================================
 
@@ -745,4 +796,8 @@ def run_verification_batch(
     result_set = VerificationResultSet(results=result_list)
 
     logger.info(f"Verification complete: {len(result_set)} results")
+
+    # Clean up lingering resources (HTTP clients, event loops, etc.)
+    cleanup_resources()
+
     return result_set
