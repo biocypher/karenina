@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from ..schemas import VerificationConfig, VerificationResult
+from ..schemas.domain.rubric import Rubric
 from ..schemas.workflow.models import ModelConfig
 from ..schemas.workflow.verification_result_set import VerificationResultSet
 
@@ -207,6 +208,7 @@ class ProgressiveSaveManager:
         output_path: Path,
         config: VerificationConfig,
         benchmark_path: str,
+        global_rubric: Rubric | None = None,
     ):
         """Initialize a new ProgressiveSaveManager.
 
@@ -214,12 +216,14 @@ class ProgressiveSaveManager:
             output_path: Final output path (e.g., results.json)
             config: Verification configuration
             benchmark_path: Path to the benchmark file
+            global_rubric: Optional global rubric for rubric definition in exports
         """
         self.output_path = output_path
         self.tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
         self.state_path = output_path.with_suffix(output_path.suffix + ".state")
         self.config = config
         self.benchmark_path = benchmark_path
+        self.global_rubric = global_rubric
 
         # State tracking
         self._task_manifest: list[str] = []
@@ -332,6 +336,17 @@ class ProgressiveSaveManager:
         """Get task IDs not yet completed."""
         return set(self._task_manifest) - self._completed_task_ids
 
+    def set_global_rubric(self, global_rubric: Rubric | None) -> None:
+        """Set the global rubric for export formatting.
+
+        This is typically called after loading from resume state,
+        once the benchmark is loaded and the rubric is available.
+
+        Args:
+            global_rubric: The global rubric from the benchmark
+        """
+        self.global_rubric = global_rubric
+
     def add_result(self, result: VerificationResult) -> None:
         """Add result to .tmp and mark complete in .state.
 
@@ -409,20 +424,58 @@ class ProgressiveSaveManager:
         self._atomic_write(self.state_path, json.dumps(state_data, indent=2))
 
     def _save_results(self) -> None:
-        """Save results file in standard export format with atomic write."""
-        # Build export data in standard format (same as export_verification_results_json)
+        """Save results file in standard export format with atomic write.
+
+        Uses the same v2.0 format as export_verification_results_json for consistency:
+        - metadata.verification_config: answering_model and parsing_model info
+        - metadata.job_summary: total_questions, successful_count, etc.
+        - shared_data.rubric_definition: global rubric traits (if available)
+        """
+        # Build rubric definition from global_rubric if provided
+        # This is stored once in shared_data instead of per-result
+        rubric_definition = None
+        if self.global_rubric is not None:
+            if hasattr(self.global_rubric, "model_dump"):
+                rubric_definition = self.global_rubric.model_dump(mode="json", exclude_unset=True)
+            elif hasattr(self.global_rubric, "get_trait_names"):
+                rubric_definition = {"trait_names": self.global_rubric.get_trait_names()}
+
+        # Get model info for verification_config
+        answering_model = self.config.answering_models[0] if self.config.answering_models else None
+        parsing_model = self.config.parsing_models[0] if self.config.parsing_models else None
+
+        # Build export data in standard v2.0 format (same as export_verification_results_json)
         export_data: dict[str, Any] = {
             "format_version": self.RESULTS_FORMAT_VERSION,
             "metadata": {
                 "export_timestamp": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
                 "karenina_version": get_karenina_version(),
                 "job_id": f"progressive-{int(self._start_time or time.time())}",
-                "run_name": "cli-verification",
-                "total_questions": self.total_tasks,
-                "successful_count": self.completed_count,
-                "start_time": self._start_time,
-                "end_time": None,  # Not complete yet
-                "config": self.config.model_dump(mode="json", exclude={"manual_traces": True}),
+                "verification_config": {
+                    "answering_model": {
+                        "provider": answering_model.model_provider if answering_model else None,
+                        "name": answering_model.model_name if answering_model else None,
+                        "temperature": answering_model.temperature if answering_model else None,
+                        "interface": answering_model.interface if answering_model else None,
+                    },
+                    "parsing_model": {
+                        "provider": parsing_model.model_provider if parsing_model else None,
+                        "name": parsing_model.model_name if parsing_model else None,
+                        "temperature": parsing_model.temperature if parsing_model else None,
+                        "interface": parsing_model.interface if parsing_model else None,
+                    },
+                },
+                "job_summary": {
+                    "total_questions": self.total_tasks,
+                    "successful_count": self.completed_count,
+                    "failed_count": 0,  # Not tracked during progressive save
+                    "start_time": self._start_time,
+                    "end_time": None,  # Not complete yet
+                    "total_duration": None,  # Not complete yet
+                },
+            },
+            "shared_data": {
+                "rubric_definition": rubric_definition,
             },
             "results": [],
         }

@@ -430,6 +430,10 @@ def verify(
         console.print(f"[green]✓ Loaded benchmark: {benchmark.name or 'Unnamed'}[/green]")
         console.print(f"  Total questions: {len(benchmark.get_all_questions())}")
 
+        # Set global rubric on progressive manager if resuming (needed for export format)
+        if resume and progressive_manager:
+            progressive_manager.set_global_rubric(benchmark.get_global_rubric())
+
         # Step 3: Load or build config (skip if resuming - config loaded from state)
         # Priority: interactive > preset+CLI > CLI only
         selected_question_indices = None
@@ -704,7 +708,9 @@ def verify(
             # At this point, output and benchmark_path are guaranteed to be set
             assert output is not None, "output should be set for progressive save"
             assert benchmark_path is not None, "benchmark_path should be set"
-            progressive_manager = ProgressiveSaveManager(output, config, benchmark_path)
+            progressive_manager = ProgressiveSaveManager(
+                output, config, benchmark_path, global_rubric=benchmark.get_global_rubric()
+            )
             progressive_manager.initialize(task_manifest)
             console.print(f"[green]✓ Progressive save enabled: {progressive_manager.tmp_path}[/green]")
 
