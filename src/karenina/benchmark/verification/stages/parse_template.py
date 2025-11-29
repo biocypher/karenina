@@ -16,12 +16,18 @@ from ....schemas.workflow import VerificationConfig
 from ..evaluators.deep_judgment import deep_judgment_parse
 from ..stage import BaseVerificationStage, VerificationContext
 from ..utils import UsageTracker
-from ..utils.parsing import _strip_markdown_fences
+from ..utils.parsing import (
+    _strip_markdown_fences,
+    invoke_with_structured_output_for_template,
+    parse_template_response,
+)
 from ..verification_utils import (
+    _build_enhanced_parsing_system_prompt,
+    _build_enhanced_parsing_user_prompt,
+    _extract_agent_metrics,
     _retry_parse_with_format_feedback,
     _retry_parse_with_null_feedback,
     _should_expose_ground_truth,
-    _system_prompt_compose,
 )
 
 # Set up logger
@@ -144,9 +150,12 @@ class ParseTemplateStage(BaseVerificationStage):
                 context.set_artifact("used_full_trace_for_template", use_full_trace)
                 context.set_artifact("trace_extraction_error", trace_extraction_error)
                 context.set_artifact("template_evaluation_input", None)
+                # Set result fields with both generic and template-specific names
                 context.set_result_field("used_full_trace", use_full_trace)
+                context.set_result_field("used_full_trace_for_template", use_full_trace)
                 context.set_result_field("trace_extraction_error", trace_extraction_error)
                 context.set_result_field("evaluation_input", None)
+                context.set_result_field("template_evaluation_input", None)
                 return
             else:
                 # Extraction successful - use extracted message
@@ -223,21 +232,33 @@ class ParseTemplateStage(BaseVerificationStage):
                 # If we can't extract ground truth, continue without it
                 logger.warning(f"Could not extract ground truth for question {context.question_id}: {e}")
 
-        # Step 4: Create parsing prompt
+        # Step 4: Create parsing prompt with enhanced composable system prompt
         format_instructions = parser.get_format_instructions()
-        combined_system_prompt = _system_prompt_compose(parsing_model.system_prompt, format_instructions, ground_truth)
 
-        # Construct the parsing prompt (user message) with question context
-        # Use template_evaluation_input which may be full trace or final AI message
-        parsing_prompt = f"""<original_question>
-Your task is to parse an answer given to the question reported in this section. Use the question to contextualize the info from the schema fields below:
+        # Detect if there are tool traces in the response
+        # This is used to conditionally include tool verification instructions
+        # We need to check for MCP agent response format (dict with "messages" key)
+        # The raw_llm_response can be a string or an agent response dict
+        agent_metrics = None
+        if isinstance(raw_llm_response, dict):
+            # Agent response format - extract metrics
+            agent_metrics = _extract_agent_metrics(raw_llm_response)
+        has_tool_traces = agent_metrics is not None and agent_metrics.get("tool_calls", 0) > 0
 
-Original Question: {context.question_text}
-</original_question>
+        # Use the new composable system prompt builder
+        combined_system_prompt = _build_enhanced_parsing_system_prompt(
+            format_instructions=format_instructions,
+            user_system_prompt=parsing_model.system_prompt,
+            has_tool_traces=has_tool_traces,
+            ground_truth=ground_truth,
+        )
 
-<response_to_parse>
-{template_evaluation_input}
-</response_to_parse>"""
+        # Use the enhanced user prompt with JSON schema
+        parsing_prompt = _build_enhanced_parsing_user_prompt(
+            question_text=context.question_text,
+            response_to_parse=template_evaluation_input,
+            answer_class=Answer,
+        )
 
         parsing_messages: list[BaseMessage] = []
         if combined_system_prompt:
@@ -291,50 +312,60 @@ Original Question: {context.question_text}
                 attributes_without_excerpts = dj_metadata.get("attributes_without_excerpts", None)
                 hallucination_risk_assessment = dj_metadata.get("hallucination_risk", None)
             else:
-                # Standard single-stage parsing with usage tracking
-                with get_usage_metadata_callback() as cb:
-                    parsing_response = parsing_llm.invoke(parsing_messages)
+                # Standard parsing with two-way strategy:
+                # 1. Try native structured output first (most reliable when available)
+                # 2. Fall back to PydanticOutputParser + json-repair + retry strategies
 
-                # Track the parsing call
-                usage_metadata = dict(cb.usage_metadata) if cb.usage_metadata else {}
-                if usage_metadata:
-                    usage_tracker.track_call("parsing", parsing_model_str, usage_metadata)
-
-                raw_parsing_response = (
-                    parsing_response.content if hasattr(parsing_response, "content") else str(parsing_response)
+                # Strategy 1: Try native structured output (method="json_schema")
+                structured_result, struct_usage, used_structured = invoke_with_structured_output_for_template(
+                    llm=parsing_llm,
+                    messages=parsing_messages,
+                    answer_class=Answer,
                 )
 
-                # Strip markdown fences and parse with PydanticOutputParser
-                cleaned_response = _strip_markdown_fences(raw_parsing_response)
-                if cleaned_response is None:
-                    raise ValueError("Empty response from parsing model after markdown fence removal")
+                if struct_usage:
+                    usage_tracker.track_call("parsing", parsing_model_str, struct_usage)
 
-                # Try parsing, with retry strategies on failure
-                try:
-                    parsed_answer = parser.parse(cleaned_response)
-                except Exception as parse_error:
-                    # Try recovery strategies in order:
-                    # 1. Null-value feedback (for null in required fields)
-                    # 2. Format feedback (for invalid JSON / reasoning mixed with JSON)
-                    logger.warning(f"Initial parsing failed: {parse_error}")
+                if structured_result is not None and used_structured:
+                    # Native structured output succeeded
+                    parsed_answer = structured_result
+                    logger.debug("Template parsing succeeded via native structured output")
+                else:
+                    # Strategy 2: Fall back to manual parsing with json-repair and retries
+                    logger.debug("Native structured output failed, falling back to manual parsing")
 
-                    # Strategy 1: Try null-value feedback
-                    retried_answer, retry_usage = _retry_parse_with_null_feedback(
-                        parsing_llm=parsing_llm,
-                        parser=parser,
-                        original_messages=parsing_messages,
-                        failed_response=cleaned_response,
-                        error=parse_error,
-                        usage_tracker=usage_tracker,
-                        model_str=parsing_model_str,
+                    # If we already made an LLM call for structured output, we might have a response
+                    # Otherwise, make a fresh call
+                    with get_usage_metadata_callback() as cb:
+                        parsing_response = parsing_llm.invoke(parsing_messages)
+
+                    # Track the parsing call
+                    usage_metadata = dict(cb.usage_metadata) if cb.usage_metadata else {}
+                    if usage_metadata:
+                        usage_tracker.track_call("parsing", parsing_model_str, usage_metadata)
+
+                    raw_parsing_response = (
+                        parsing_response.content if hasattr(parsing_response, "content") else str(parsing_response)
                     )
 
-                    if retried_answer is not None:
-                        parsed_answer = retried_answer
-                    else:
-                        # Strategy 2: Try format feedback (for invalid JSON errors)
-                        logger.info("Null-value retry did not succeed, trying format feedback...")
-                        retried_answer, retry_usage = _retry_parse_with_format_feedback(
+                    # Try multi-strategy parsing with json-repair
+                    try:
+                        # This function includes: strip markdown → direct parse → json-repair
+                        parsed_answer = parse_template_response(raw_parsing_response, Answer)
+                        logger.debug("Template parsing succeeded via manual parsing with json-repair")
+                    except Exception as parse_error:
+                        # Try recovery strategies in order:
+                        # 1. Null-value feedback (for null in required fields)
+                        # 2. Format feedback (for invalid JSON / reasoning mixed with JSON)
+                        logger.warning(f"Initial parsing failed: {parse_error}")
+
+                        # Get cleaned response for retry strategies
+                        cleaned_response = _strip_markdown_fences(raw_parsing_response)
+                        if cleaned_response is None:
+                            raise ValueError("Empty response from parsing model after markdown fence removal") from None
+
+                        # Strategy 3: Try null-value feedback
+                        retried_answer, retry_usage = _retry_parse_with_null_feedback(
                             parsing_llm=parsing_llm,
                             parser=parser,
                             original_messages=parsing_messages,
@@ -347,8 +378,23 @@ Original Question: {context.question_text}
                         if retried_answer is not None:
                             parsed_answer = retried_answer
                         else:
-                            # All retry strategies failed, re-raise original error
-                            raise parse_error
+                            # Strategy 4: Try format feedback (for invalid JSON errors)
+                            logger.info("Null-value retry did not succeed, trying format feedback...")
+                            retried_answer, retry_usage = _retry_parse_with_format_feedback(
+                                parsing_llm=parsing_llm,
+                                parser=parser,
+                                original_messages=parsing_messages,
+                                failed_response=cleaned_response,
+                                error=parse_error,
+                                usage_tracker=usage_tracker,
+                                model_str=parsing_model_str,
+                            )
+
+                            if retried_answer is not None:
+                                parsed_answer = retried_answer
+                            else:
+                                # All retry strategies failed, re-raise original error
+                                raise parse_error
 
         except Exception as e:
             error_msg = f"Parsing failed: {e}"
@@ -383,6 +429,9 @@ Original Question: {context.question_text}
         context.set_result_field("hallucination_risk_assessment", hallucination_risk_assessment)
 
         # Store trace filtering metadata in result builder (root level - shared by template and rubric)
+        # Set both generic names (used_full_trace) and template-specific names (used_full_trace_for_template)
         context.set_result_field("used_full_trace", use_full_trace)
+        context.set_result_field("used_full_trace_for_template", use_full_trace)
         context.set_result_field("evaluation_input", template_evaluation_input)
+        context.set_result_field("template_evaluation_input", template_evaluation_input)
         context.set_result_field("trace_extraction_error", trace_extraction_error)
