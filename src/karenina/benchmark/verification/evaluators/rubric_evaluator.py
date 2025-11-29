@@ -1236,7 +1236,24 @@ Your JSON response:"""
             # Call LLM
             messages = [
                 SystemMessage(
-                    content="You are an expert at extracting verbatim quotes from text that demonstrate specific qualities."
+                    content="""You are an expert at extracting verbatim quotes from text that demonstrate specific qualities.
+
+You will receive a JSON Schema specifying the exact output structure. Your response MUST conform to this schema.
+Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
+
+**CRITICAL REQUIREMENTS:**
+1. **JSON ONLY**: Your entire response must be valid JSON conforming to the provided schema
+2. **VERBATIM QUOTES**: Excerpts must be EXACT text from the answer - do not paraphrase
+3. **Confidence Levels**: Assign confidence based on strength of evidence:
+   - "high": Direct, explicit evidence for the trait
+   - "medium": Reasonable inference or moderate evidence
+   - "low": Weak or ambiguous evidence
+
+**WHAT NOT TO DO:**
+- Do NOT wrap JSON in markdown code blocks (no ```)
+- Do NOT add explanatory text before or after the JSON
+- Do NOT paraphrase or modify quotes
+- Do NOT invent quotes not present in the text"""
                 ),
                 HumanMessage(content=prompt),
             ]
@@ -1360,38 +1377,51 @@ Your JSON response:"""
         self, trait: "LLMRubricTrait", max_excerpts: int, answer: str, feedback: str | None = None
     ) -> str:
         """Build prompt for excerpt extraction (with optional retry feedback)."""
+        from ....schemas.workflow.rubric_outputs import TraitExcerptsOutput
+
+        json_schema = json.dumps(TraitExcerptsOutput.model_json_schema(), indent=2)
+
         prompt = f"""Extract verbatim quotes from the answer that demonstrate the following quality trait:
 
-**Trait**: {trait.name}
-**Criteria**: {trait.description or "Assess this quality"}
+**TRAIT:** {trait.name}
+**CRITERIA:** {trait.description or "Assess this quality"}
 
-**Answer to analyze**:
+**ANSWER TO ANALYZE:**
 {answer}
 
-**Task**:
+**TASK:**
 Extract up to {max_excerpts} verbatim quotes from the answer that demonstrate or relate to this trait.
 
-For each quote, assign a confidence level:
-- "high": Strong evidence for the trait
-- "medium": Moderate evidence
-- "low": Weak or ambiguous evidence
+**CONFIDENCE LEVELS:**
+- "high": Direct, explicit statement that clearly demonstrates the trait
+- "medium": Indirect evidence or reasonable inference supporting the trait
+- "low": Weak, ambiguous, or tangential evidence
 
-**CRITICAL**: Quotes must be EXACT verbatim text from the answer. Do not paraphrase or modify.
+**IMPORTANT RULES:**
+1. Quotes MUST be EXACT verbatim text from the answer above
+2. Do not paraphrase, summarize, or modify the text in any way
+3. If no relevant excerpts exist, return an empty excerpts array: {{"excerpts": []}}
+4. Select the most relevant excerpts - quality over quantity
 """
 
         if feedback:
-            prompt += f"\n**RETRY FEEDBACK**:\n{feedback}\n"
+            prompt += f"""
+**RETRY FEEDBACK (previous excerpts failed validation):**
+{feedback}
+"""
 
-        prompt += """
-Return your response as JSON:
-{
-  "excerpts": [
-    {"text": "exact quote 1", "confidence": "high"},
-    {"text": "exact quote 2", "confidence": "medium"}
-  ]
-}
+        prompt += f"""
+**JSON SCHEMA (your response MUST conform to this):**
+```json
+{json_schema}
+```
 
-JSON Response:"""
+**PARSING NOTES:**
+- We validate excerpts using fuzzy matching against the original answer
+- Excerpts that don't match will be rejected and may trigger a retry
+- Minor whitespace differences are tolerated
+
+**YOUR JSON RESPONSE:**"""
 
         return prompt
 
@@ -1445,27 +1475,61 @@ JSON Response:"""
 
         for i, excerpt in enumerate(excerpts):
             # Build prompt for hallucination assessment
-            prompt = f"""Assess the hallucination risk for this excerpt:
+            from ....schemas.workflow.rubric_outputs import HallucinationRiskOutput
 
-**Excerpt**: {excerpt.get("text", "")}
+            json_schema = json.dumps(HallucinationRiskOutput.model_json_schema(), indent=2)
 
-**Search Results**:
-{search_results[i] if i < len(search_results) else "No results"}
+            prompt = f"""Assess the hallucination risk for this excerpt by comparing it against external search results.
 
-Based on the search results, assess the risk that this excerpt contains hallucinated or unverifiable information:
-- "none": Strong external evidence supports this
-- "low": Some external evidence, likely accurate
-- "medium": Weak or ambiguous external evidence
-- "high": No external evidence or contradicted by sources
+**EXCERPT TO VERIFY:**
+"{excerpt.get("text", "")}"
 
-Return only the risk level (none/low/medium/high) and a brief justification.
+**EXTERNAL SEARCH RESULTS:**
+{search_results[i] if i < len(search_results) else "No results available"}
 
-JSON Response:
-{{"risk": "none|low|medium|high", "justification": "brief explanation"}}
-"""
+**RISK LEVELS (choose one):**
+- "none": Strong external evidence supports this - multiple reliable sources confirm
+- "low": Some external evidence, likely accurate - at least one source supports
+- "medium": Weak or ambiguous evidence - sources unclear or partially contradict
+- "high": No supporting evidence or actively contradicted by external sources
+
+**EVALUATION GUIDELINES:**
+1. Compare the excerpt's claims against the search results
+2. Consider the reliability and specificity of sources
+3. When uncertain between adjacent levels, choose the more conservative (higher risk) option
+4. Provide a brief justification explaining your reasoning
+
+**JSON SCHEMA (your response MUST conform to this):**
+```json
+{json_schema}
+```
+
+**PARSING NOTES:**
+- Return ONLY valid JSON - no surrounding text or markdown
+- The "risk" field must be exactly one of: "none", "low", "medium", "high"
+
+**YOUR JSON RESPONSE:**"""
 
             messages = [
-                SystemMessage(content="You are an expert at assessing hallucination risk using external evidence."),
+                SystemMessage(
+                    content="""You are an expert at assessing hallucination risk using external evidence.
+
+You will receive a JSON Schema specifying the exact output structure. Your response MUST conform to this schema.
+Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
+
+**YOUR ROLE:**
+Compare excerpts against external search results to determine if the information is factually supported.
+
+**CRITICAL REQUIREMENTS:**
+1. **JSON ONLY**: Your entire response must be valid JSON conforming to the provided schema
+2. **Conservative Assessment**: When uncertain, lean toward higher risk levels
+3. **Evidence-Based**: Base your assessment solely on the search results provided
+
+**WHAT NOT TO DO:**
+- Do NOT wrap JSON in markdown code blocks (no ```)
+- Do NOT add explanatory text before or after the JSON
+- Do NOT assume claims are true without supporting evidence"""
+                ),
                 HumanMessage(content=prompt),
             ]
 
@@ -1638,15 +1702,27 @@ This reasoning will be used in a follow-up step to determine the final score.
             SystemMessage(
                 content="""You are an expert evaluator providing precise trait scores based on prior reasoning.
 
-**Your Role**: Convert your analytical reasoning into a final score.
+You will receive a JSON Schema specifying the exact output structure. Your response MUST conform to this schema.
+Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
 
-**Guidelines**:
-- Base your score solely on the reasoning provided
-- Be consistent with the reasoning's conclusions
+**YOUR ROLE:**
+Convert analytical reasoning into a final score that accurately reflects the assessment.
+
+**CRITICAL REQUIREMENTS:**
+1. **JSON ONLY**: Your entire response must be valid JSON conforming to the provided schema
+2. **Reasoning-Based**: Base your score solely on the reasoning provided
+3. **Consistency**: Your score should logically follow from the reasoning's conclusions
+
+**SCORING GUIDELINES:**
+- Be consistent: similar reasoning should lead to similar scores
 - When uncertain, choose conservatively based on the trait's nature:
-  - For positive traits, lean toward lower scores/false
-  - For negative traits, lean toward higher scores/true
-- Keep your response concise - just the score"""
+  - For positive traits (e.g., "is accurate"), lean toward `false` or lower scores
+  - For negative traits (e.g., "contains errors"), lean toward `true` or higher scores
+
+**WHAT NOT TO DO:**
+- Do NOT wrap JSON in markdown code blocks (no ```)
+- Do NOT add explanatory text before or after the JSON
+- Do NOT contradict the reasoning - your score should align with it"""
             ),
             HumanMessage(content=prompt),
         ]
@@ -1664,48 +1740,64 @@ This reasoning will be used in a follow-up step to determine the final score.
 
     def _build_trait_scoring_prompt(self, trait: "LLMRubricTrait", reasoning: str) -> str:
         """Build prompt for final scoring."""
+        from ....schemas.workflow.rubric_outputs import SingleBooleanScore, SingleNumericScore
+
         if trait.kind == "boolean":
+            json_schema = json.dumps(SingleBooleanScore.model_json_schema(), indent=2)
             return f"""Based on the following reasoning, provide a final score for this trait.
 
-**Trait**: {trait.name}
-**Criteria**: {trait.description or "Boolean evaluation"}
+**TRAIT:** {trait.name}
+**CRITERIA:** {trait.description or "Boolean evaluation"}
 
-**Your Previous Reasoning**:
+**YOUR PREVIOUS REASONING:**
 {reasoning}
 
-**Score Required**: true or false
+**SCORE REQUIRED:** true or false
 
 Based on your reasoning above, does the answer meet the criteria?
+- `true`: The criteria IS met based on your reasoning
+- `false`: The criteria IS NOT met based on your reasoning
 
-**Response Format**:
-Return valid JSON: {{"result": true}} or {{"result": false}}
-Alternatively, respond with just "true" or "false".
+**JSON SCHEMA (your response MUST conform to this):**
+```json
+{json_schema}
+```
 
-**Your score:**"""
+**PARSING NOTES:**
+- Return valid JSON: {{"result": true}} or {{"result": false}}
+- We also accept plain text: "true", "yes", "false", "no"
+- Use lowercase boolean values (not "True" or "False")
+
+**YOUR JSON RESPONSE:**"""
         else:
             min_score = trait.min_score or 1
             max_score = trait.max_score or 5
             mid_score = (min_score + max_score) // 2
+            json_schema = json.dumps(SingleNumericScore.model_json_schema(), indent=2)
             return f"""Based on the following reasoning, provide a final score for this trait.
 
-**Trait**: {trait.name}
-**Criteria**: {trait.description or "Score-based evaluation"}
+**TRAIT:** {trait.name}
+**CRITERIA:** {trait.description or "Score-based evaluation"}
 
-**Your Previous Reasoning**:
+**YOUR PREVIOUS REASONING:**
 {reasoning}
 
-**Score Scale**:
-- {min_score} = Poor - Does not meet criteria
+**SCORING SCALE:**
+- {min_score} = Poor - Does not meet criteria at all
 - {mid_score} = Average - Partially meets criteria
-- {max_score} = Excellent - Fully meets criteria
+- {max_score} = Excellent - Fully meets or exceeds criteria
 
-**Response Format**:
-Return valid JSON: {{"score": N}} where N is from {min_score} to {max_score}
-Alternatively, respond with just the number.
+**JSON SCHEMA (your response MUST conform to this):**
+```json
+{json_schema}
+```
 
-**Score Clamping**: Scores outside [{min_score}, {max_score}] are clamped to the nearest boundary.
+**PARSING NOTES:**
+- Return valid JSON: {{"score": N}} where N is an integer from {min_score} to {max_score}
+- Scores outside [{min_score}, {max_score}] are automatically clamped to boundaries
+- Use integers only (no decimals)
 
-**Your score:**"""
+**YOUR JSON RESPONSE:**"""
 
     def _parse_trait_score_response(self, response: str, trait: "LLMRubricTrait") -> int | bool:
         """Parse a trait score response."""

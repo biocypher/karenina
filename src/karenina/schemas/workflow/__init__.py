@@ -15,8 +15,11 @@ from .rubric_judgment_results import RubricJudgmentResults
 from .rubric_outputs import (
     BatchRubricScores,
     ConfusionMatrixOutput,
+    HallucinationRiskOutput,
     SingleBooleanScore,
     SingleNumericScore,
+    TraitExcerpt,
+    TraitExcerptsOutput,
 )
 from .rubric_results import RubricResults
 from .template_results import TemplateResults
@@ -87,4 +90,8 @@ __all__ = [
     "SingleBooleanScore",
     "SingleNumericScore",
     "ConfusionMatrixOutput",
+    # Deep Judgment Rubric structured output models
+    "TraitExcerpt",
+    "TraitExcerptsOutput",
+    "HallucinationRiskOutput",
 ]

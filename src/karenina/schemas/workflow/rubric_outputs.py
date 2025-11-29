@@ -5,6 +5,8 @@ These models are used with LangChain's structured output features
 LLM responses during rubric evaluation.
 """
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -63,3 +65,33 @@ class ConfusionMatrixOutput(BaseModel):
         default_factory=list,
         description="True negatives - content that should NOT be present AND IS correctly absent (reference instruction content)",
     )
+
+
+# ========== Deep Judgment Rubric Models ==========
+
+
+class TraitExcerpt(BaseModel):
+    """Single excerpt for trait evaluation in Deep Judgment Rubric."""
+
+    text: str = Field(description="Exact verbatim quote from the answer")
+    confidence: Literal["high", "medium", "low"] = Field(
+        description="Confidence level: high=strong evidence, medium=moderate evidence, low=weak/ambiguous evidence"
+    )
+
+
+class TraitExcerptsOutput(BaseModel):
+    """Structured output for excerpt extraction in Deep Judgment Rubric."""
+
+    excerpts: list[TraitExcerpt] = Field(
+        default_factory=list,
+        description="List of verbatim excerpts demonstrating the trait",
+    )
+
+
+class HallucinationRiskOutput(BaseModel):
+    """Structured output for hallucination risk assessment in Deep Judgment Rubric."""
+
+    risk: Literal["none", "low", "medium", "high"] = Field(
+        description="Hallucination risk level: none=strong external support, low=some support, medium=weak/ambiguous, high=no support or contradicted"
+    )
+    justification: str = Field(description="Brief explanation for the risk assessment")
