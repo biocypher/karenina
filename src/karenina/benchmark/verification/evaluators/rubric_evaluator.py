@@ -190,25 +190,49 @@ class RubricEvaluator:
         self, question: str, answer: str, rubric: Rubric
     ) -> tuple[dict[str, int | bool], dict[str, Any]]:
         """
-        Evaluate all traits in a single LLM call (more efficient).
+        Evaluate all traits in a single LLM call using LangChain strategies.
+
+        Strategy order:
+        1. json_schema method (native structured output)
+        2. Manual parsing with json-repair
 
         Returns:
             Tuple of (results_dict, usage_metadata)
         """
+        from ....schemas.workflow.rubric_outputs import BatchRubricScores
+        from .rubric_parsing import invoke_with_structured_output
+
         system_prompt = self._build_batch_system_prompt()
         user_prompt = self._build_batch_user_prompt(question, answer, rubric.llm_traits)
 
         messages: list[BaseMessage] = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
 
-        # Wrap invoke with usage metadata callback
-        with get_usage_metadata_callback() as cb:
-            response = self.llm.invoke(messages)
-        usage_metadata = dict(cb.usage_metadata) if cb.usage_metadata else {}
+        # Invoke with automatic strategy selection and fallbacks
+        parsed_result, usage_metadata = invoke_with_structured_output(self.llm, messages, BatchRubricScores)
 
-        raw_response = response.content if hasattr(response, "content") else str(response)
-
-        results = self._parse_batch_response(raw_response, rubric.llm_traits)
+        # Validate scores against trait definitions
+        results = self._validate_batch_scores(parsed_result.scores, rubric.llm_traits)
         return results, usage_metadata
+
+    def _validate_batch_scores(
+        self, scores: dict[str, int | bool], traits: list[LLMRubricTrait]
+    ) -> dict[str, int | bool]:
+        """Validate and normalize batch scores against trait definitions."""
+        validated_results: dict[str, int | bool] = {}
+        trait_map = {trait.name: trait for trait in traits}
+
+        for trait_name, score in scores.items():
+            if trait_name in trait_map:
+                trait = trait_map[trait_name]
+                validated_score = self._validate_score(score, trait)
+                validated_results[trait_name] = validated_score
+
+        # Add None for missing traits
+        for trait in traits:
+            if trait.name not in validated_results:
+                validated_results[trait.name] = None  # type: ignore[assignment]
+
+        return validated_results
 
     def _evaluate_sequential(
         self, question: str, answer: str, rubric: Rubric
@@ -238,103 +262,199 @@ class RubricEvaluator:
         self, question: str, answer: str, trait: LLMRubricTrait
     ) -> tuple[int | bool, dict[str, Any]]:
         """
-        Evaluate a single trait.
+        Evaluate a single trait using LangChain strategies.
+
+        Strategy order:
+        1. json_schema method (native structured output)
+        2. Manual parsing with json-repair
 
         Returns:
             Tuple of (score, usage_metadata)
         """
+        from ....schemas.workflow.rubric_outputs import SingleBooleanScore, SingleNumericScore
+        from .rubric_parsing import invoke_with_structured_output
+
         system_prompt = self._build_single_trait_system_prompt(trait)
         user_prompt = self._build_single_trait_user_prompt(question, answer, trait)
 
         messages: list[BaseMessage] = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
 
-        # Wrap invoke with usage metadata callback
-        with get_usage_metadata_callback() as cb:
-            response = self.llm.invoke(messages)
-        usage_metadata = dict(cb.usage_metadata) if cb.usage_metadata else {}
+        # Choose model class based on trait kind
+        model_class = SingleBooleanScore if trait.kind == "boolean" else SingleNumericScore
 
-        raw_response = response.content if hasattr(response, "content") else str(response)
+        # Invoke with automatic strategy selection and fallbacks
+        parsed_result, usage_metadata = invoke_with_structured_output(self.llm, messages, model_class)
 
-        score = self._parse_single_trait_response(raw_response, trait)
-        return score, usage_metadata
+        # Extract score from result
+        score: int | bool = parsed_result.result if trait.kind == "boolean" else parsed_result.score  # type: ignore[attr-defined]
+
+        return self._validate_score(score, trait), usage_metadata
 
     def _build_batch_system_prompt(self) -> str:
         """Build system prompt for batch evaluation."""
         return """You are an expert evaluator assessing the quality of responses using a structured rubric.
 
-Your task is to evaluate a given answer against multiple evaluation traits and return scores in a specific JSON format.
+Your task is to evaluate a given answer against multiple evaluation traits and return scores in JSON format.
 
-For each trait, you will be given:
-- A trait name
-- A description of what to evaluate
-- The trait type (boolean or score)
-- For score traits: the valid range (e.g., 1-5)
+**RESPONSE FORMAT:**
+You will receive a JSON Schema specifying the exact output structure. Your response MUST conform to this schema.
+Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
 
-Your evaluation should be:
-- Objective and consistent
-- Based solely on the provided criteria
-- Independent for each trait
+**CRITICAL REQUIREMENTS:**
+1. **JSON ONLY**: Your entire response must be valid JSON conforming to the provided schema
+2. **Schema Compliance**: Follow the JSON Schema exactly - it defines the structure for parsing
+3. **Exact Trait Names**: Use the EXACT trait names provided - case-sensitive matching is required
+4. **Boolean Traits**: Use JSON `true` or `false` (lowercase, no quotes around the value)
+5. **Score Traits**: Use integers within the specified range
+6. **Score Clamping**: Scores outside the valid range will be automatically clamped to the nearest boundary
+7. **Missing Traits**: Any trait not included will be recorded as `null` (evaluation failure)
 
-Return your evaluation as a JSON object where keys are trait names and values are the scores."""
+**EVALUATION GUIDELINES:**
+- Evaluate each trait independently based on its specific criteria
+- When uncertain, choose the most conservative/defensive value based on the trait's intent:
+  - For positive traits (e.g., "is accurate"), lean toward `false` when uncertain
+  - For negative traits (e.g., "contains errors"), lean toward `true` when uncertain
+  - For scores, lean toward the middle of the scale when uncertain
+- Base assessments solely on the answer content, not assumptions about intent
+- Be consistent: similar answers should receive similar scores
+
+**WHAT NOT TO DO:**
+- Do NOT wrap JSON in markdown code blocks (no ```)
+- Do NOT add explanatory text before or after the JSON
+- Do NOT use string values like "true" - use the boolean `true`
+- Do NOT skip any traits - include ALL traits in your response"""
 
     def _build_batch_user_prompt(self, question: str, answer: str, traits: list[LLMRubricTrait]) -> str:
         """Build user prompt for batch evaluation."""
+        from ....schemas.workflow.rubric_outputs import BatchRubricScores
+
         traits_description = []
+        trait_names = []
 
         for trait in traits:
+            trait_names.append(trait.name)
             if trait.kind == "boolean":
-                trait_desc = f"- {trait.name}: {trait.description or 'Boolean evaluation'} (return true or false)"
+                trait_desc = f"- **{trait.name}** (boolean): {trait.description or 'Boolean evaluation'}\n  → Return `true` or `false`"
             else:
                 min_score = trait.min_score or 1
                 max_score = trait.max_score or 5
-                trait_desc = f"- {trait.name}: {trait.description or 'Score-based evaluation'} (return integer from {min_score} to {max_score})"
+                trait_desc = f"- **{trait.name}** (score {min_score}-{max_score}): {trait.description or 'Score-based evaluation'}\n  → Return integer from {min_score} to {max_score}"
             traits_description.append(trait_desc)
 
-        return f"""Please evaluate the following answer using these traits:
+        # Build example JSON with actual trait names
+        example_scores: dict[str, bool | int] = {}
+        for trait in traits:
+            if trait.kind == "boolean":
+                example_scores[trait.name] = True
+            else:
+                example_scores[trait.name] = (trait.min_score or 1) + 2
 
+        example_json = json.dumps({"scores": example_scores}, indent=2)
+
+        # Get JSON schema from Pydantic model
+        json_schema = json.dumps(BatchRubricScores.model_json_schema(), indent=2)
+
+        return f"""Evaluate the following answer against these traits:
+
+**TRAITS TO EVALUATE:**
 {chr(10).join(traits_description)}
 
-QUESTION:
+**QUESTION:**
 {question}
 
-ANSWER TO EVALUATE:
+**ANSWER TO EVALUATE:**
 {answer}
 
-Return your evaluation as a JSON object with trait names as keys and scores as values. For example:
-{{"trait1": true, "trait2": 4, "trait3": false}}
+**JSON SCHEMA (your response MUST conform to this):**
+```json
+{json_schema}
+```
 
-JSON Response:"""
+**REQUIRED OUTPUT FORMAT:**
+Return a JSON object with a "scores" key. Use EXACT trait names as shown above.
+
+Example (using YOUR trait names):
+{example_json}
+
+**YOUR JSON RESPONSE:**"""
 
     def _build_single_trait_system_prompt(self, trait: LLMRubricTrait) -> str:
         """Build system prompt for single trait evaluation."""
         if trait.kind == "boolean":
-            return f"""You are evaluating responses for the trait: {trait.name}
+            return f"""You are evaluating responses for the trait: **{trait.name}**
 
-Description: {trait.description or "Boolean evaluation"}
+**Criteria:** {trait.description or "Boolean evaluation"}
 
-Respond with only "true" or "false" based on whether the answer meets this criteria."""
+**RESPONSE FORMAT:**
+You will receive a JSON Schema specifying the exact output structure. Your response MUST conform to this schema.
+Return valid JSON: {{"result": true}} or {{"result": false}}
+Keep your response concise - the JSON is the primary output.
+
+**EVALUATION GUIDELINES:**
+- `true`: The criteria IS met - answer clearly satisfies the requirement
+- `false`: The criteria IS NOT met - answer fails to satisfy the requirement
+- When uncertain, choose the most conservative value based on the trait's nature:
+  - For positive traits (e.g., "is accurate"), lean toward `false`
+  - For negative traits (e.g., "contains errors"), lean toward `true`
+
+**PARSING NOTES:**
+- If JSON parsing fails, we also accept: "true", "yes", "false", "no"
+- Do NOT use string values like "true" with quotes - use the boolean
+- Avoid wrapping in markdown code blocks"""
         else:
             min_score = trait.min_score or 1
             max_score = trait.max_score or 5
-            return f"""You are evaluating responses for the trait: {trait.name}
+            mid_score = (min_score + max_score) // 2
+            return f"""You are evaluating responses for the trait: **{trait.name}**
 
-Description: {trait.description or "Score-based evaluation"}
+**Criteria:** {trait.description or "Score-based evaluation"}
 
-Rate the answer on a scale from {min_score} to {max_score}, where:
-- {min_score} = Poor/Does not meet criteria
-- {max_score} = Excellent/Fully meets criteria
+**RESPONSE FORMAT:**
+You will receive a JSON Schema specifying the exact output structure. Your response MUST conform to this schema.
+Return valid JSON: {{"score": N}} where N is an integer from {min_score} to {max_score}
+Keep your response concise - the JSON is the primary output.
 
-Respond with only the numeric score ({min_score}-{max_score})."""
+**SCORING GUIDELINES:**
+- {min_score} = Poor - Does not meet criteria at all
+- {mid_score} = Average - Partially meets criteria
+- {max_score} = Excellent - Fully meets or exceeds criteria
+
+When uncertain about borderline cases, choose conservatively based on the trait's nature:
+- For traits where higher is better (e.g., "quality"), lean toward lower scores
+- For traits where lower is better (e.g., "error severity"), lean toward higher scores
+- When completely uncertain, default to the middle value ({mid_score})
+
+**PARSING NOTES:**
+- Scores outside [{min_score}, {max_score}] are automatically clamped to the nearest boundary
+- Use integers only (no decimals)
+- Avoid wrapping in markdown code blocks"""
 
     def _build_single_trait_user_prompt(self, question: str, answer: str, trait: LLMRubricTrait) -> str:
         """Build user prompt for single trait evaluation."""
-        return f"""QUESTION:
+        from ....schemas.workflow.rubric_outputs import SingleBooleanScore, SingleNumericScore
+
+        if trait.kind == "boolean":
+            format_hint = '{"result": true} or {"result": false}'
+            json_schema = json.dumps(SingleBooleanScore.model_json_schema(), indent=2)
+        else:
+            format_hint = '{"score": N}'
+            json_schema = json.dumps(SingleNumericScore.model_json_schema(), indent=2)
+
+        return f"""**QUESTION:**
 {question}
 
-ANSWER TO EVALUATE:
+**ANSWER TO EVALUATE:**
 {answer}
 
-Please evaluate this answer for the trait "{trait.name}": {trait.description or "No description provided"}"""
+**TRAIT:** {trait.name}
+**CRITERIA:** {trait.description or "No description provided"}
+
+**JSON SCHEMA (your response MUST conform to this):**
+```json
+{json_schema}
+```
+
+Evaluate this answer for the trait above and return your assessment as JSON: {format_hint}"""
 
     def _parse_batch_response(self, response: str, traits: list[LLMRubricTrait]) -> dict[str, int | bool]:
         """Parse the batch evaluation response."""
@@ -461,7 +581,11 @@ Please evaluate this answer for the trait "{trait.name}": {trait.description or 
         self, question: str, answer: str, trait: MetricRubricTrait
     ) -> tuple[dict[str, list[str]], dict[str, float], dict[str, Any]]:
         """
-        Evaluate a single metric trait.
+        Evaluate a single metric trait using LangChain strategies.
+
+        Strategy order:
+        1. json_schema method (native structured output)
+        2. Manual parsing with json-repair
 
         Args:
             question: The original question
@@ -471,22 +595,24 @@ Please evaluate this answer for the trait "{trait.name}": {trait.description or 
         Returns:
             Tuple of (confusion_lists, metrics, usage_metadata)
         """
+        from ....schemas.workflow.rubric_outputs import ConfusionMatrixOutput
+        from .rubric_parsing import invoke_with_structured_output
+
         # Build prompt
         system_prompt = self._build_metric_trait_system_prompt()
         user_prompt = self._build_metric_trait_user_prompt(question, answer, trait)
 
-        # Invoke LLM with usage tracking
-        from langchain_core.callbacks import get_usage_metadata_callback
-
         messages: list[BaseMessage] = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
-        with get_usage_metadata_callback() as cb:
-            response = self.llm.invoke(messages)
-        usage_metadata = dict(cb.usage_metadata) if cb.usage_metadata else {}
 
-        raw_response = response.content if hasattr(response, "content") else str(response)
+        # Invoke with automatic strategy selection and fallbacks
+        parsed_result, usage_metadata = invoke_with_structured_output(self.llm, messages, ConfusionMatrixOutput)
 
-        # Parse response to get confusion lists
-        confusion_lists = self._parse_metric_trait_response(raw_response, trait)
+        confusion_lists = {
+            "tp": parsed_result.tp,
+            "fn": parsed_result.fn,
+            "fp": parsed_result.fp,
+            "tn": parsed_result.tn,
+        }
 
         # Apply deduplication if requested
         if trait.repeated_extraction:
@@ -505,44 +631,50 @@ Please evaluate this answer for the trait "{trait.name}": {trait.description or 
 
 Your task is to analyze an answer and categorize its content based on provided instructions.
 
+**RESPONSE FORMAT:**
+You will receive a JSON Schema specifying the exact output structure. Your response MUST conform to this schema.
+Return ONLY valid JSON with the required structure. Empty arrays [] are valid.
+
+Do NOT include any text before or after the JSON.
+
 **CONFUSION MATRIX CATEGORIES:**
 
-- **True Positive (TP)**: Content from the answer that SHOULD be present AND IS present
-  - Extract actual excerpts/terms from the answer that match TP instructions
+- **tp (True Positives)**: Content from the answer that SHOULD be present AND IS present
+  → Extract actual excerpts/terms FROM THE ANSWER (not instruction text)
 
-- **False Negative (FN)**: Content that SHOULD be present BUT IS NOT found in the answer
-  - List what is missing based on TP instructions
+- **fn (False Negatives)**: Content that SHOULD be present BUT IS NOT in the answer
+  → List what is missing (reference the instruction content)
 
-- **True Negative (TN)**: Content that SHOULD NOT be present AND IS correctly absent
-  - List instructions that are correctly not mentioned in the answer
+- **tn (True Negatives)**: Content that SHOULD NOT be present AND IS correctly absent
+  → List TN instructions correctly not mentioned in the answer
 
-- **False Positive (FP)**: Content from the answer that SHOULD NOT be present BUT IS present
-  - Extract actual excerpts/terms from the answer that should not be there
+- **fp (False Positives)**: Content from the answer that SHOULD NOT be present BUT IS present
+  → Extract actual excerpts/terms FROM THE ANSWER that should not be there
 
 **MATCHING CRITERIA:**
-
-1. **Exact matches**: If the instruction specifies an exact term, look for that exact term or very close variants
-2. **Semantic matches**: If the instruction describes a concept, accept semantically equivalent expressions
-3. **Synonyms**: Accept commonly recognized synonyms (e.g., "disease" and "illness", "tumor" and "neoplasm")
-4. **Case insensitive**: Ignore case differences unless specifically instructed otherwise
-5. **Partial matches**: If an answer contains a broader or narrower term than instructed, use your judgment:
-   - If instruction is "mention cancer" and answer says "lung cancer", count it as TP
-   - If instruction is "mention specific organ" and answer just says "organ", it may not fully satisfy the instruction
+- Accept exact matches and close variants
+- Accept synonyms (e.g., "disease"/"illness", "tumor"/"neoplasm")
+- Case insensitive matching unless instructed otherwise
+- For partial matches: "lung cancer" satisfies "mention cancer"
 
 **CRITICAL RULES:**
+- For tp and fp: Extract ACTUAL text FROM THE ANSWER
+- For fn and tn: Reference the instruction content
+- Extract key terms or short phrases, not full sentences
+- When uncertain, include the item (err on inclusivity)
 
-- For TP and FP: Extract the ACTUAL text/excerpts FROM THE ANSWER (not the instruction text)
-- For FN and TN: Reference the instruction content (what should/shouldn't be there)
-- Be thorough but focused - extract key terms or short phrases, not full sentences
-- When in doubt, err on the side of being inclusive rather than overly strict
-- If something is ambiguous, include it and let the metrics reflect the ambiguity
-
-**OUTPUT FORMAT:**
-
-Return a JSON object with arrays for each category. Each array should contain strings (excerpts or descriptions)."""
+**WHAT NOT TO DO:**
+- Do NOT wrap JSON in markdown code blocks
+- Do NOT add explanatory text
+- Do NOT include duplicate items in the same list"""
 
     def _build_metric_trait_user_prompt(self, question: str, answer: str, trait: MetricRubricTrait) -> str:
         """Build user prompt for metric trait evaluation (mode-specific)."""
+        from ....schemas.workflow.rubric_outputs import ConfusionMatrixOutput
+
+        # Get JSON schema from Pydantic model
+        json_schema = json.dumps(ConfusionMatrixOutput.model_json_schema(), indent=2)
+
         # Format TP instructions as numbered list
         tp_instructions_formatted = "\n".join(
             f"  {i}. {instruction}" for i, instruction in enumerate(trait.tp_instructions, 1)
@@ -588,6 +720,11 @@ You are evaluating an answer against required content (TP instructions). Your jo
 - Example: If TP instructions ask for inflammatory lung diseases (asthma, bronchitis, pneumonia) but answer includes restrictive lung diseases (pulmonary fibrosis, sarcoidosis), those are FP
 - DO NOT include: generic filler text, explanations, or content clearly not attempting to match TP instructions
 - If unsure whether something is FP, consider: "Is this term in the same category as TP instructions but not actually correct?"
+
+**JSON SCHEMA (your response MUST conform to this):**
+```json
+{json_schema}
+```
 
 **OUTPUT FORMAT:**
 
@@ -645,6 +782,11 @@ Categorize the answer content into four confusion matrix categories.
 - Extract terms/excerpts from the answer that match TN instructions
 - These are items that SHOULD NOT be there but ARE present
 - Use the same matching criteria as TP (accept synonyms, etc.)
+
+**JSON SCHEMA (your response MUST conform to this):**
+```json
+{json_schema}
+```
 
 **OUTPUT FORMAT:**
 
@@ -1432,7 +1574,7 @@ JSON Response:
         if hallucination_risk:
             risk_context = f"\n**Overall Hallucination Risk**: {hallucination_risk.get('overall_risk', 'unknown')}\n"
 
-        return f"""Based on the extracted excerpts, explain how they demonstrate (or fail to demonstrate) the following trait:
+        return f"""Analyze the extracted excerpts to explain how they demonstrate (or fail to demonstrate) the following trait.
 
 **Trait**: {trait.name}
 **Criteria**: {trait.description or "Assess this quality"}
@@ -1443,16 +1585,21 @@ JSON Response:
 {excerpts_text}
 {risk_context}
 
-Provide 2-3 sentences explaining how these excerpts inform your assessment of this trait.
-Be specific about what the excerpts reveal about the answer's quality for this trait.
+**Your Task**:
+Provide 2-3 sentences of reasoning that:
+1. Reference specific excerpts and their content
+2. Connect each excerpt to the trait criteria
+3. Assess whether the excerpts collectively satisfy the trait
 
-Your reasoning:"""
+This reasoning will be used in a follow-up step to determine the final score.
+
+**Your reasoning:**"""
 
     def _build_trait_reasoning_prompt_without_excerpts(
         self, question: str, answer: str, trait: "LLMRubricTrait"
     ) -> str:
         """Build reasoning prompt without excerpts (based on full response)."""
-        return f"""Analyze the following answer for the quality trait below and explain your assessment:
+        return f"""Analyze the following answer for the quality trait below and provide your reasoning.
 
 **Trait**: {trait.name}
 **Criteria**: {trait.description or "Assess this quality"}
@@ -1462,10 +1609,15 @@ Your reasoning:"""
 **Complete Answer**:
 {answer}
 
-Provide 2-3 sentences explaining how this answer demonstrates (or fails to demonstrate) this trait.
-Base your reasoning on the complete answer text and the trait criteria.
+**Your Task**:
+Provide 2-3 sentences of reasoning that:
+1. Identify specific aspects of the answer relevant to this trait
+2. Explain how these aspects satisfy or fail to satisfy the criteria
+3. Consider both positive and negative evidence
 
-Your reasoning:"""
+This reasoning will be used in a follow-up step to determine the final score.
+
+**Your reasoning:**"""
 
     def _extract_score_for_trait(
         self,
@@ -1483,7 +1635,19 @@ Your reasoning:"""
         prompt = self._build_trait_scoring_prompt(trait, reasoning)
 
         messages = [
-            SystemMessage(content="You are an expert evaluator providing precise trait scores."),
+            SystemMessage(
+                content="""You are an expert evaluator providing precise trait scores based on prior reasoning.
+
+**Your Role**: Convert your analytical reasoning into a final score.
+
+**Guidelines**:
+- Base your score solely on the reasoning provided
+- Be consistent with the reasoning's conclusions
+- When uncertain, choose conservatively based on the trait's nature:
+  - For positive traits, lean toward lower scores/false
+  - For negative traits, lean toward higher scores/true
+- Keep your response concise - just the score"""
+            ),
             HumanMessage(content=prompt),
         ]
 
@@ -1501,36 +1665,47 @@ Your reasoning:"""
     def _build_trait_scoring_prompt(self, trait: "LLMRubricTrait", reasoning: str) -> str:
         """Build prompt for final scoring."""
         if trait.kind == "boolean":
-            return f"""Based on the following reasoning, provide a boolean score for this trait:
+            return f"""Based on the following reasoning, provide a final score for this trait.
 
 **Trait**: {trait.name}
 **Criteria**: {trait.description or "Boolean evaluation"}
 
-**Reasoning**:
+**Your Previous Reasoning**:
 {reasoning}
 
-Based on this reasoning, does the answer meet the criteria for this trait?
+**Score Required**: true or false
 
-Respond with only "true" or "false".
+Based on your reasoning above, does the answer meet the criteria?
 
-Your score:"""
+**Response Format**:
+Return valid JSON: {{"result": true}} or {{"result": false}}
+Alternatively, respond with just "true" or "false".
+
+**Your score:**"""
         else:
             min_score = trait.min_score or 1
             max_score = trait.max_score or 5
-            return f"""Based on the following reasoning, provide a numeric score for this trait:
+            mid_score = (min_score + max_score) // 2
+            return f"""Based on the following reasoning, provide a final score for this trait.
 
 **Trait**: {trait.name}
 **Criteria**: {trait.description or "Score-based evaluation"}
-**Scale**: {min_score} (poor/does not meet criteria) to {max_score} (excellent/fully meets criteria)
 
-**Reasoning**:
+**Your Previous Reasoning**:
 {reasoning}
 
-Based on this reasoning, what score ({min_score}-{max_score}) should this answer receive?
+**Score Scale**:
+- {min_score} = Poor - Does not meet criteria
+- {mid_score} = Average - Partially meets criteria
+- {max_score} = Excellent - Fully meets criteria
 
-Respond with only the numeric score.
+**Response Format**:
+Return valid JSON: {{"score": N}} where N is from {min_score} to {max_score}
+Alternatively, respond with just the number.
 
-Your score:"""
+**Score Clamping**: Scores outside [{min_score}, {max_score}] are clamped to the nearest boundary.
+
+**Your score:**"""
 
     def _parse_trait_score_response(self, response: str, trait: "LLMRubricTrait") -> int | bool:
         """Parse a trait score response."""
