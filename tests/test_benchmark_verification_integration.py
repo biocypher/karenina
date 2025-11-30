@@ -264,16 +264,16 @@ class TestBenchmarkVerificationIntegration:
         # Test rubric merging
         merged_rubric = benchmark._get_merged_rubric_for_question(q1_id)
         assert merged_rubric is not None
-        assert len(merged_rubric.traits) == 2
+        assert len(merged_rubric.get_trait_names()) == 2
 
-        trait_names = [t.name for t in merged_rubric.traits]
+        trait_names = merged_rubric.get_trait_names()
         assert "clarity" in trait_names
         assert "accuracy" in trait_names
 
         # Test question without specific rubric (should only have global)
         merged_rubric_q2 = benchmark._get_merged_rubric_for_question(q2_id)
         assert merged_rubric_q2 is not None
-        assert len(merged_rubric_q2.traits) == 1
+        assert len(merged_rubric_q2.get_trait_names()) == 1
         assert merged_rubric_q2.llm_traits[0].name == "clarity"
 
     def test_verification_result_storage(self, sample_benchmark, sample_config):  # noqa -> None: ARG002

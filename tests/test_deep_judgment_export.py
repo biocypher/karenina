@@ -68,7 +68,6 @@ def test_deep_judgment_in_json_export():
         parsing_only=True,
     )
     job = VerificationJob(
-        job_id="test_job",
         run_name="Test Run",
         status="completed",
         config=config,
@@ -145,7 +144,6 @@ def test_deep_judgment_in_csv_export():
         parsing_only=True,
     )
     job = VerificationJob(
-        job_id="test_job_2",
         run_name="Test Run 2",
         status="completed",
         config=config,
@@ -225,7 +223,6 @@ def test_deep_judgment_with_empty_excerpts_export():
         parsing_only=True,
     )
     job = VerificationJob(
-        job_id="test_job_3",
         run_name="Test Run 3",
         status="completed",
         config=config,
@@ -313,7 +310,6 @@ def test_search_enhanced_deep_judgment_in_json_export():
         parsing_only=True,
     )
     job = VerificationJob(
-        job_id="test_job_4",
         run_name="Test Run 4",
         status="completed",
         config=config,
@@ -399,7 +395,6 @@ def test_search_enhanced_deep_judgment_in_csv_export():
         parsing_only=True,
     )
     job = VerificationJob(
-        job_id="test_job_5",
         run_name="Test Run 5",
         status="completed",
         config=config,

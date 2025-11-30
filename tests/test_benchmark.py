@@ -144,7 +144,7 @@ def test_save_and_load() -> None:
 
         loaded_rubric = loaded.get_global_rubric()
         assert loaded_rubric is not None
-        assert len(loaded_rubric.traits) == 1
+        assert len(loaded_rubric.llm_traits) == 1
         assert loaded_rubric.llm_traits[0].name == "accuracy"
 
     finally:

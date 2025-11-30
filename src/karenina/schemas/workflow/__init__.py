@@ -12,6 +12,15 @@ from .models import (
     QuestionFewShotConfig,
 )
 from .rubric_judgment_results import RubricJudgmentResults
+from .rubric_outputs import (
+    BatchRubricScores,
+    ConfusionMatrixOutput,
+    HallucinationRiskOutput,
+    SingleBooleanScore,
+    SingleNumericScore,
+    TraitExcerpt,
+    TraitExcerptsOutput,
+)
 from .rubric_results import RubricResults
 from .template_results import TemplateResults
 from .verification import (
@@ -76,4 +85,13 @@ __all__ = [
     "ResultAggregator",
     "AggregatorRegistry",
     "create_default_registry",
+    # Structured output models for rubric evaluation
+    "BatchRubricScores",
+    "SingleBooleanScore",
+    "SingleNumericScore",
+    "ConfusionMatrixOutput",
+    # Deep Judgment Rubric structured output models
+    "TraitExcerpt",
+    "TraitExcerptsOutput",
+    "HallucinationRiskOutput",
 ]

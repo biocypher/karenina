@@ -256,7 +256,6 @@ class TestAbstentionIntegrationWithOrchestrator:
                 id="p", model_provider="openai", model_name="gpt-4o-mini", temperature=0.0, system_prompt="Test"
             ),
             run_name="test",
-            job_id="job-123",
             answering_replicate=1,
             parsing_replicate=1,
             rubric=None,
@@ -280,7 +279,6 @@ class TestAbstentionIntegrationWithOrchestrator:
                 id="p", model_provider="openai", model_name="gpt-4o-mini", temperature=0.0, system_prompt="Test"
             ),
             run_name="test",
-            job_id="job-123",
             answering_replicate=1,
             parsing_replicate=1,
             rubric=None,

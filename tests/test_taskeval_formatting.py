@@ -110,7 +110,7 @@ class TestTaskEvalFormatting:
 
     def test_step_eval_format_question_results(self, sample_step_eval) -> None:
         """Test question verification results formatting."""
-        formatted = sample_step_eval.format_question_results()
+        formatted = sample_step_eval.format_verification_results()
 
         assert "Question: q1" in formatted
         assert "Question: q2" in formatted
@@ -118,12 +118,10 @@ class TestTaskEvalFormatting:
         assert "✗ FAILED" in formatted
         assert "The answer is 42" in formatted
         assert "Error in calculation" in formatted
-        assert "Time: 0.500s" in formatted
-        assert "Time: 0.200s" in formatted
-        # Check expected and parsed responses are shown as dictionaries
-        assert "Expected: {'result': '42'}" in formatted
-        assert "Parsed: {'result': '42'}" in formatted
-        assert "Parsed: {'result': '43'}" in formatted
+        # Rubric scores are shown inline
+        assert "accuracy=✓" in formatted  # True shows as checkmark
+        assert "clarity=3" in formatted  # Integer scores shown as-is
+        assert "accuracy=✗" in formatted  # False shows as X
 
     def test_step_eval_get_summary_stats(self, sample_step_eval) -> None:
         """Test summary statistics calculation."""
@@ -132,8 +130,8 @@ class TestTaskEvalFormatting:
         assert stats["traces_total"] == 2
         assert stats["traces_passed"] == 1  # Only q1 passed
         assert stats["results_total"] == 2
-        assert stats["rubric_traits_passed"] == 2  # accuracy=True, clarity=3>0
-        assert stats["rubric_traits_total"] == 4
+        assert stats["rubric_traits_passed"] == 2  # q1: accuracy=True, clarity=3>0; q2: accuracy=False
+        assert stats["rubric_traits_total"] == 3  # q1: 2 traits, q2: 1 trait
         assert stats["success_rate"] == 50.0  # 1/2 traces passed
 
     def test_task_result_display(self, sample_task_result) -> None:
@@ -145,26 +143,26 @@ class TestTaskEvalFormatting:
         assert "Purpose: Test formatting" in display_output
         assert "GLOBAL EVALUATION" in display_output
         assert "STEP EVALUATION: step1" in display_output
-        assert "Rubric Scores:" in display_output
-        assert "Question Verification:" in display_output
+        assert "Verification Results:" in display_output
         assert "SUMMARY:" in display_output
 
     def test_task_result_display_minimal(self, sample_task_result) -> None:
-        """Test display with minimal details."""
-        display_output = sample_task_result.display(show_details=False)
+        """Test display method includes all sections."""
+        display_output = sample_task_result.display()
 
         assert "TASK EVALUATION RESULTS" in display_output
-        assert "Rubric Scores:" in display_output
-        # Question details should not be included
-        assert "Question Verification:" not in display_output
+        assert "GLOBAL EVALUATION" in display_output
+        assert "STEP EVALUATION:" in display_output
+        assert "SUMMARY:" in display_output
 
     def test_task_result_summary(self, sample_task_result) -> None:
         """Test summary method."""
         summary = sample_task_result.summary()
 
         assert "rubric traits passed" in summary
-        # Should include both global and step stats
-        assert "4/8 rubric traits passed" in summary  # 2 global + 2 step
+        # Should include both global and step stats (3 traits each: q1 has 2, q2 has 1)
+        # Both global and step have same data, so: 3 + 3 = 6 total, 2 + 2 = 4 passed
+        assert "4/6 rubric traits passed" in summary
 
     def test_task_result_summary_compact(self, sample_task_result) -> None:
         """Test compact summary method."""
@@ -199,9 +197,8 @@ class TestTaskEvalFormatting:
         assert "step_evaluations" in parsed
         assert "summary" in parsed
 
-        # Check structure
-        assert "rubric_scores" in parsed["global_evaluation"]
-        assert "question_verification" in parsed["global_evaluation"]
+        # Check structure - contains verification results and summary stats
+        assert "verification_results" in parsed["global_evaluation"]
         assert "summary_stats" in parsed["global_evaluation"]
         assert "step1" in parsed["step_evaluations"]
 
@@ -241,10 +238,9 @@ class TestTaskEvalFormatting:
         assert "# Task Evaluation Results" in md_str
         assert "**Task ID:** test_task_123" in md_str
         assert "**Purpose:** Test formatting" in md_str
-        assert "## Rubric Scores" in md_str
-        assert "| Trait | Result | Status |" in md_str
-        assert "| accuracy | ✅ Pass | PASS |" in md_str
-        assert "| completeness | ❌ Fail | FAIL |" in md_str
+        assert "## Verification Results" in md_str
+        assert "**Traces Passed**:" in md_str
+        assert "**Rubric Traits Passed**:" in md_str
         assert "## Summary" in md_str
 
     def test_task_result_status_emoji(self, sample_task_result) -> None:
@@ -253,8 +249,27 @@ class TestTaskEvalFormatting:
         emoji = sample_task_result._get_status_emoji()
         assert "❌ Some Failed" in emoji
 
-        # Test with 100% success rate
-        sample_task_result.global_eval.question_verification = {"q1": [{"correct": True}]}
+        # Test with 100% success rate - replace results with all passing
+        sample_task_result.global_eval.verification_results = {
+            "q1": [
+                VerificationResult(
+                    metadata=VerificationResultMetadata(
+                        question_id="q1",
+                        template_id="test_template",
+                        completed_without_errors=True,
+                        question_text="Test",
+                        answering_model="gpt-4.1-mini",
+                        parsing_model="gpt-4.1-mini",
+                        execution_time=1.0,
+                        timestamp="2025-11-11T00:00:00",
+                    ),
+                    template=VerificationResultTemplate(
+                        raw_llm_response="Success",
+                        verify_result=True,
+                    ),
+                )
+            ]
+        }
         emoji = sample_task_result._get_status_emoji()
         assert "✅ All Passed" in emoji
 
@@ -283,10 +298,10 @@ class TestTaskEvalFormatting:
         empty_step = StepEval()
 
         rubric_formatted = empty_step.format_rubric_scores()
-        assert "No rubric scores available" in rubric_formatted
+        assert "No verification results" in rubric_formatted
 
-        question_formatted = empty_step.format_question_results()
-        assert "No question verification results" in question_formatted
+        question_formatted = empty_step.format_verification_results()
+        assert "No verification results" in question_formatted
 
         stats = empty_step.get_summary_stats()
         assert stats["traces_total"] == 0
@@ -295,17 +310,30 @@ class TestTaskEvalFormatting:
     def test_formatting_with_special_characters(self) -> None:
         """Test formatting handles special characters properly."""
         step_eval = StepEval(
-            rubric_scores={"trait_with_special_chars": True},
-            question_verification={
+            verification_results={
                 "q_special": [
-                    {
-                        "agent_output": "Answer with émojis 🎉 and unicode ñ",
-                        "correct": True,
-                        "success": True,
-                        "error": None,
-                    }
+                    VerificationResult(
+                        metadata=VerificationResultMetadata(
+                            question_id="q_special",
+                            template_id="test_template",
+                            completed_without_errors=True,
+                            question_text="Test with special chars",
+                            answering_model="gpt-4.1-mini",
+                            parsing_model="gpt-4.1-mini",
+                            execution_time=1.0,
+                            timestamp="2025-11-11T00:00:00",
+                        ),
+                        template=VerificationResultTemplate(
+                            raw_llm_response="Answer with émojis 🎉 and unicode ñ",
+                            verify_result=True,
+                        ),
+                        rubric=VerificationResultRubric(
+                            rubric_evaluation_performed=True,
+                            llm_trait_scores={"trait_with_special_chars": True},
+                        ),
+                    )
                 ]
-            },
+            }
         )
 
         result = TaskEvalResult(task_id="special_chars_test", global_eval=step_eval)
@@ -315,8 +343,8 @@ class TestTaskEvalFormatting:
         json_str = result.export_json()
         md_str = result.export_markdown()
 
+        # Check special characters are preserved
         assert "émojis 🎉" in display_output
         parsed = json.loads(json_str)
         assert "émojis 🎉" in str(parsed)
-        # Markdown export only shows rubric scores, not question details
         assert "special_chars_test" in md_str

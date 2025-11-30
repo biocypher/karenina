@@ -588,7 +588,7 @@ class TestRubricEvaluationStageTraceFiltering:
         self,
         mock_evaluator_class: Mock,
         context_with_rubric: VerificationContext,
-        _full_agent_trace: str,
+        full_agent_trace: str,  # noqa: ARG002
     ) -> None:
         """Test that only final message is used when use_full_trace_for_rubric=False."""
         config = VerificationConfig(
@@ -630,15 +630,7 @@ class TestRubricEvaluationStageTraceFiltering:
     ) -> None:
         """Test that stage fails when trace extraction fails."""
         context_with_rubric.set_artifact("raw_llm_response", trace_ending_with_tool)
-
-        config = VerificationConfig(
-            answering_models=[context_with_rubric.answering_model],
-            parsing_models=[context_with_rubric.parsing_model],
-            rubric_enabled=True,
-            evaluation_mode="template_and_rubric",
-            use_full_trace_for_rubric=False,
-        )
-        context_with_rubric.config = config
+        context_with_rubric.use_full_trace_for_rubric = False
 
         # Execute stage
         stage = RubricEvaluationStage()
@@ -657,7 +649,7 @@ class TestRubricEvaluationStageTraceFiltering:
         self,
         mock_evaluator_class: Mock,
         context_with_rubric: VerificationContext,
-        _full_agent_trace: str,
+        full_agent_trace: str,  # noqa: ARG002
     ) -> None:
         """Test that metric trait evaluation receives filtered trace."""
         from karenina.schemas.domain import MetricRubricTrait

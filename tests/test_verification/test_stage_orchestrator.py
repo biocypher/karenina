@@ -127,7 +127,7 @@ class TestStageOrchestratorConfiguration:
 
     def test_empty_rubric_not_included(self, answering_model: ModelConfig, parsing_model: ModelConfig) -> None:
         """Test that rubric stage is not included if rubric has no traits."""
-        empty_rubric = Rubric(llm_traits=[], manual_traits=[], metric_traits=[])
+        empty_rubric = Rubric(llm_traits=[], regex_traits=[], callable_traits=[], metric_traits=[])
 
         orchestrator = StageOrchestrator.from_config(
             answering_model=answering_model,
@@ -360,7 +360,7 @@ class TestStageExecution:
         # Verify result was created
         assert isinstance(result, VerificationResult)
         assert result.question_id == basic_context.question_id
-        assert result.metadata.template_id == basic_context.metadata.template_id
+        assert result.metadata.template_id == basic_context.template_id
 
     def test_error_in_stage_continues_to_finalize(self, basic_context: VerificationContext) -> None:
         """Test that errors in stages don't prevent FinalizeResultStage from running."""

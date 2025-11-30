@@ -1169,35 +1169,48 @@ class VerificationResultSet(BaseModel):
         if summary["num_with_rubric"] > 0 and summary["rubric_traits"]:
             traits = summary["rubric_traits"]
             lines.append(f"  Rubric Evaluation: {summary['num_with_rubric']} results")
-            lines.append(f"    Total Trait Evaluations: {traits['total']}")
 
             # Global traits breakdown
-            if traits["global_total"] > 0:
-                lines.append(f"    Global: {traits['global_total']}")
+            global_traits = traits.get("global_traits", {})
+            global_llm = global_traits.get("llm", {}).get("count", 0)
+            global_regex = global_traits.get("regex", {}).get("count", 0)
+            global_callable = global_traits.get("callable", {}).get("count", 0)
+            global_metric = global_traits.get("metric", {}).get("count", 0)
+            global_total = global_llm + global_regex + global_callable + global_metric
+
+            if global_total > 0:
+                lines.append(f"    Global: {global_total}")
                 breakdown = []
-                if traits["global_llm"] > 0:
-                    breakdown.append(f"LLM: {traits['global_llm']}")
-                if traits["global_regex"] > 0:
-                    breakdown.append(f"Regex: {traits['global_regex']}")
-                if traits["global_callable"] > 0:
-                    breakdown.append(f"Callable: {traits['global_callable']}")
-                if traits["global_metric"] > 0:
-                    breakdown.append(f"Metric: {traits['global_metric']}")
+                if global_llm > 0:
+                    breakdown.append(f"LLM: {global_llm}")
+                if global_regex > 0:
+                    breakdown.append(f"Regex: {global_regex}")
+                if global_callable > 0:
+                    breakdown.append(f"Callable: {global_callable}")
+                if global_metric > 0:
+                    breakdown.append(f"Metric: {global_metric}")
                 if breakdown:
                     lines.append(f"      └─ {', '.join(breakdown)}")
 
             # Question-specific traits breakdown
-            if traits["qs_total"] > 0:
-                lines.append(f"    Question-Specific: {traits['qs_total']}")
+            qs_traits = traits.get("question_specific_traits", {})
+            qs_llm = qs_traits.get("llm", {}).get("count", 0)
+            qs_regex = qs_traits.get("regex", {}).get("count", 0)
+            qs_callable = qs_traits.get("callable", {}).get("count", 0)
+            qs_metric = qs_traits.get("metric", {}).get("count", 0)
+            qs_total = qs_llm + qs_regex + qs_callable + qs_metric
+
+            if qs_total > 0:
+                lines.append(f"    Question-Specific: {qs_total}")
                 breakdown = []
-                if traits["qs_llm"] > 0:
-                    breakdown.append(f"LLM: {traits['qs_llm']}")
-                if traits["qs_regex"] > 0:
-                    breakdown.append(f"Regex: {traits['qs_regex']}")
-                if traits["qs_callable"] > 0:
-                    breakdown.append(f"Callable: {traits['qs_callable']}")
-                if traits["qs_metric"] > 0:
-                    breakdown.append(f"Metric: {traits['qs_metric']}")
+                if qs_llm > 0:
+                    breakdown.append(f"LLM: {qs_llm}")
+                if qs_regex > 0:
+                    breakdown.append(f"Regex: {qs_regex}")
+                if qs_callable > 0:
+                    breakdown.append(f"Callable: {qs_callable}")
+                if qs_metric > 0:
+                    breakdown.append(f"Metric: {qs_metric}")
                 if breakdown:
                     lines.append(f"      └─ {', '.join(breakdown)}")
 
@@ -1222,19 +1235,20 @@ class VerificationResultSet(BaseModel):
                 lines.append(f"  Overall: {overall['passed']}/{overall['total']} passed ({overall['pass_pct']:.1f}%)")
 
         # === REPLICATE STATISTICS ===
-        if summary["replicate_pass_rates"]:
+        replicate_stats = summary.get("replicate_stats")
+        if replicate_stats and replicate_stats.get("replicate_pass_rates"):
             lines.append("")
             lines.append("  === REPLICATE STATISTICS ===")
             lines.append("  Template Pass Rate by Replicate:")
 
-            for rep_num in sorted(summary["replicate_pass_rates"].keys()):
-                stats = summary["replicate_pass_rates"][rep_num]
+            for rep_num in sorted(replicate_stats["replicate_pass_rates"].keys()):
+                stats = replicate_stats["replicate_pass_rates"][rep_num]
                 lines.append(
                     f"    Replicate {rep_num}: {stats['passed']}/{stats['total']} passed ({stats['pass_pct']:.1f}%)"
                 )
 
-            if summary["replicate_summary"]:
-                rep_sum = summary["replicate_summary"]
+            if replicate_stats.get("replicate_summary"):
+                rep_sum = replicate_stats["replicate_summary"]
                 lines.append(f"  Summary: mean={rep_sum['mean']:.3f}, std={rep_sum['std']:.3f}")
 
         lines.append(")")

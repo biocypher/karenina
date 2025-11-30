@@ -42,7 +42,7 @@ def test_checkpoint_loads_with_all_trait_types(benchmark):
     assert global_rubric is not None, "Global rubric should exist"
 
     # Check all trait types are present
-    assert len(global_rubric.traits) == 4, "Should have 4 LLM traits"
+    assert len(global_rubric.llm_traits) == 4, "Should have 4 LLM traits"
     assert len(global_rubric.regex_traits) == 2, "Should have 2 Regex traits"
     assert len(global_rubric.callable_traits) == 2, "Should have 2 Callable traits"
     assert len(global_rubric.metric_traits) == 0, "Should have 0 Metric traits"
