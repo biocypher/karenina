@@ -156,8 +156,8 @@ class TestRubricResultsIntegrationFull:
             trait_types = set(df["trait_type"].dropna().unique())
             assert trait_types.issubset(valid_llm_types), f"Non-LLM trait types found: {trait_types - valid_llm_types}"
 
-    def test_to_dataframe_manual_traits_only(self, verification_results):
-        """Test RubricResults.to_dataframe() with trait_type='manual' filter."""
+    def test_to_dataframe_regex_traits_only(self, verification_results):
+        """Test RubricResults.to_dataframe() with trait_type='regex' filter."""
         rubric_results_list = [
             r for r in verification_results.results if r.rubric and r.rubric.rubric_evaluation_performed
         ]
@@ -167,16 +167,16 @@ class TestRubricResultsIntegrationFull:
 
         rubric_results = RubricResults(results=rubric_results_list)
 
-        # Convert to DataFrame (manual traits only)
-        df = rubric_results.to_dataframe(trait_type="manual")
+        # Convert to DataFrame (regex traits only)
+        df = rubric_results.to_dataframe(trait_type="regex")
 
         # Validate DataFrame
         assert isinstance(df, pd.DataFrame)
 
         if len(df) > 0:
-            # All trait_type values should be manual
+            # All trait_type values should be regex
             trait_types = set(df["trait_type"].dropna().unique())
-            assert trait_types == {"manual"}, f"Non-manual trait types found: {trait_types - {'manual'}}"
+            assert trait_types == {"regex"}, f"Non-regex trait types found: {trait_types - {'regex'}}"
 
     def test_to_dataframe_metric_traits_only(self, verification_results):
         """Test RubricResults.to_dataframe() with trait_type='metric' filter."""
@@ -253,22 +253,22 @@ class TestRubricResultsIntegrationFull:
                 assert isinstance(trait_name, str)
                 assert isinstance(score, int | float | bool)
 
-    def test_aggregate_manual_traits_with_real_data(self, verification_results):
-        """Test aggregate_manual_traits() with real rubric evaluation results."""
-        # Filter to results with manual traits
-        rubric_results_list = [r for r in verification_results.results if r.rubric and r.rubric.manual_trait_scores]
+    def test_aggregate_regex_traits_with_real_data(self, verification_results):
+        """Test aggregate_regex_traits() with real rubric evaluation results."""
+        # Filter to results with regex traits
+        rubric_results_list = [r for r in verification_results.results if r.rubric and r.rubric.regex_trait_scores]
 
         if not rubric_results_list:
-            pytest.skip("No manual trait data in verification results")
+            pytest.skip("No regex trait data in verification results")
 
         rubric_results = RubricResults(results=rubric_results_list)
 
-        # Aggregate manual traits by question
-        aggregated = rubric_results.aggregate_manual_traits(strategy="mean", by="question_id")
+        # Aggregate regex traits by question
+        aggregated = rubric_results.aggregate_regex_traits(strategy="mean", by="question_id")
 
         # Validate results
         assert isinstance(aggregated, dict)
-        assert len(aggregated) > 0, "Should have aggregated manual trait data"
+        assert len(aggregated) > 0, "Should have aggregated regex trait data"
 
         for question_id, traits in aggregated.items():
             assert isinstance(question_id, str)
@@ -276,8 +276,8 @@ class TestRubricResultsIntegrationFull:
 
             for trait_name, score in traits.items():
                 assert isinstance(trait_name, str)
-                # Manual scores can be numeric or boolean
-                assert isinstance(score, int | float | bool)
+                # Regex scores are boolean
+                assert isinstance(score, bool | int | float)
 
     def test_aggregate_metric_traits_with_real_data(self, verification_results):
         """Test aggregate_metric_traits() with real rubric evaluation results."""

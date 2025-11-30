@@ -93,8 +93,8 @@ def test_to_dataframe_llm_binary_traits():
     assert relevant_row["trait_score"]
 
 
-def test_to_dataframe_manual_traits():
-    """Test DataFrame creation for regex traits (formerly manual traits)."""
+def test_to_dataframe_regex_traits():
+    """Test DataFrame creation for regex traits."""
     metadata = VerificationResultMetadata(
         question_id="q3",
         template_id="template3",
