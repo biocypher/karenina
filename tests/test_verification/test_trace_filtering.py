@@ -87,6 +87,8 @@ def context_with_trace_config(basic_context: VerificationContext, full_agent_tra
     basic_context.set_artifact("RawAnswer", MockAnswer)
     basic_context.set_artifact("Answer", MockAnswer)
     basic_context.set_artifact("raw_llm_response", full_agent_trace)
+    # Set trace_validation_failed=False to simulate TraceValidationAutoFailStage passing
+    basic_context.set_artifact("trace_validation_failed", False)
 
     # Create config with trace filtering disabled
     config = VerificationConfig(
@@ -96,6 +98,9 @@ def context_with_trace_config(basic_context: VerificationContext, full_agent_tra
         use_full_trace_for_rubric=False,
     )
     basic_context.config = config
+    # Also set context fields directly (these are used by stages)
+    basic_context.use_full_trace_for_template = False
+    basic_context.use_full_trace_for_rubric = False
 
     return basic_context
 
@@ -369,6 +374,8 @@ class TestParseTemplateStageTraceFiltering:
         basic_context.set_artifact("RawAnswer", MockAnswer)
         basic_context.set_artifact("Answer", MockAnswer)
         basic_context.set_artifact("raw_llm_response", full_agent_trace)
+        # Set trace_validation_failed=False to simulate TraceValidationAutoFailStage passing
+        basic_context.set_artifact("trace_validation_failed", False)
         basic_context.deep_judgment_enabled = False
 
         config = VerificationConfig(
@@ -377,6 +384,7 @@ class TestParseTemplateStageTraceFiltering:
             use_full_trace_for_template=False,  # Extract final message only
         )
         basic_context.config = config
+        basic_context.use_full_trace_for_template = False
 
         # Mock LLM and parser
         mock_llm = Mock()
@@ -411,16 +419,23 @@ class TestParseTemplateStageTraceFiltering:
         assert template_input in human_message.content
         assert "Tool Calls:" not in human_message.content
 
-    def test_fails_on_invalid_trace(
+    def test_skips_when_trace_validation_failed(
         self,
         basic_context: VerificationContext,
         trace_ending_with_tool: str,
     ) -> None:
-        """Test that stage fails when trace extraction fails."""
+        """Test that stage skips when trace_validation_failed=True.
+
+        Note: With the new TraceValidationAutoFailStage, invalid traces are
+        detected early and trace_validation_failed is set to True. ParseTemplateStage
+        checks this and skips execution.
+        """
         # Set up context with invalid trace
         basic_context.set_artifact("RawAnswer", MockAnswer)
         basic_context.set_artifact("Answer", MockAnswer)
         basic_context.set_artifact("raw_llm_response", trace_ending_with_tool)
+        # Simulate TraceValidationAutoFailStage having run and detected invalid trace
+        basic_context.set_artifact("trace_validation_failed", True)
 
         config = VerificationConfig(
             answering_models=[basic_context.answering_model],
@@ -429,15 +444,12 @@ class TestParseTemplateStageTraceFiltering:
         )
         basic_context.config = config
 
-        # Execute stage
+        # Stage should not run due to trace_validation_failed
         stage = ParseTemplateStage()
-        stage.execute(basic_context)
+        assert stage.should_run(basic_context) is False
 
-        # Verify error was set
-        assert basic_context.error is not None
-        assert "Failed to extract final AI message" in basic_context.error
-        assert basic_context.get_result_field("trace_extraction_error") == "Last message in trace is not an AI message"
-        assert basic_context.get_result_field("template_evaluation_input") is None
+        # If we force execute (for coverage), no error should be set
+        # because the stage logic depends on should_run() being called first
 
     @patch("karenina.benchmark.verification.stages.parse_template.deep_judgment_parse")
     @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
@@ -453,6 +465,8 @@ class TestParseTemplateStageTraceFiltering:
         basic_context.set_artifact("RawAnswer", MockAnswer)
         basic_context.set_artifact("Answer", MockAnswer)
         basic_context.set_artifact("raw_llm_response", full_agent_trace)
+        # Set trace_validation_failed=False to simulate TraceValidationAutoFailStage passing
+        basic_context.set_artifact("trace_validation_failed", False)
         basic_context.deep_judgment_enabled = True
         basic_context.deep_judgment_max_excerpts_per_attribute = 3
         basic_context.deep_judgment_fuzzy_match_threshold = 0.8
@@ -466,6 +480,7 @@ class TestParseTemplateStageTraceFiltering:
             use_full_trace_for_template=False,
         )
         basic_context.config = config
+        basic_context.use_full_trace_for_template = False
 
         # Mock LLM
         mock_llm = Mock()
@@ -544,6 +559,8 @@ class TestRubricEvaluationStageTraceFiltering:
         )
         basic_context.rubric = rubric
         basic_context.set_artifact("raw_llm_response", full_agent_trace)
+        # Set trace_validation_failed=False to simulate TraceValidationAutoFailStage passing
+        basic_context.set_artifact("trace_validation_failed", False)
         basic_context.rubric_evaluation_strategy = "batch"
         return basic_context
 
@@ -599,6 +616,7 @@ class TestRubricEvaluationStageTraceFiltering:
             use_full_trace_for_rubric=False,
         )
         context_with_rubric.config = config
+        context_with_rubric.use_full_trace_for_rubric = False
 
         # Mock evaluator
         mock_evaluator = Mock()
@@ -623,26 +641,73 @@ class TestRubricEvaluationStageTraceFiltering:
         call_kwargs = mock_evaluator.evaluate_rubric.call_args[1]
         assert call_kwargs["answer"] == rubric_input
 
-    def test_fails_on_invalid_trace(
+    def test_skips_when_trace_validation_failed_and_extraction_needed(
         self,
         context_with_rubric: VerificationContext,
         trace_ending_with_tool: str,
     ) -> None:
-        """Test that stage fails when trace extraction fails."""
+        """Test that stage skips when trace_validation_failed=True and use_full_trace_for_rubric=False.
+
+        Note: With the new TraceValidationAutoFailStage, invalid traces are
+        detected early. RubricEvaluationStage checks this and skips if extraction
+        would be needed (use_full_trace_for_rubric=False).
+        """
         context_with_rubric.set_artifact("raw_llm_response", trace_ending_with_tool)
+        # Simulate TraceValidationAutoFailStage having run and detected invalid trace
+        context_with_rubric.set_artifact("trace_validation_failed", True)
+
+        config = VerificationConfig(
+            answering_models=[context_with_rubric.answering_model],
+            parsing_models=[context_with_rubric.parsing_model],
+            rubric_enabled=True,
+            evaluation_mode="template_and_rubric",
+            use_full_trace_for_rubric=False,  # Would need extraction
+        )
+        context_with_rubric.config = config
         context_with_rubric.use_full_trace_for_rubric = False
 
-        # Execute stage
+        # Stage should not run due to trace_validation_failed + use_full_trace_for_rubric=False
         stage = RubricEvaluationStage()
-        stage.execute(context_with_rubric)
+        assert stage.should_run(context_with_rubric) is False
 
-        # Verify error was set
-        assert context_with_rubric.error is not None
-        assert "Failed to extract final AI message" in context_with_rubric.error
-        assert (
-            context_with_rubric.get_result_field("rubric_trace_extraction_error")
-            == "Last message in trace is not an AI message"
+    @patch("karenina.benchmark.verification.stages.rubric_evaluation.RubricEvaluator")
+    def test_runs_with_full_trace_when_trace_validation_failed(
+        self,
+        mock_evaluator_class: Mock,
+        context_with_rubric: VerificationContext,
+        trace_ending_with_tool: str,
+    ) -> None:
+        """Test that stage runs with full trace even when trace_validation_failed=True.
+
+        When use_full_trace_for_rubric=True, the stage doesn't need extraction
+        and can evaluate the full trace even if it doesn't end with an AI message.
+        """
+        context_with_rubric.set_artifact("raw_llm_response", trace_ending_with_tool)
+        # Simulate TraceValidationAutoFailStage having run and detected invalid trace
+        context_with_rubric.set_artifact("trace_validation_failed", True)
+
+        config = VerificationConfig(
+            answering_models=[context_with_rubric.answering_model],
+            parsing_models=[context_with_rubric.parsing_model],
+            rubric_enabled=True,
+            evaluation_mode="template_and_rubric",
+            use_full_trace_for_rubric=True,  # Use full trace, no extraction needed
         )
+        context_with_rubric.config = config
+
+        # Mock evaluator
+        mock_evaluator = Mock()
+        mock_evaluator.evaluate_rubric.return_value = ({"Accuracy": 5}, [])
+        mock_evaluator_class.return_value = mock_evaluator
+
+        # Stage should run (full trace doesn't need AI message extraction)
+        stage = RubricEvaluationStage()
+        assert stage.should_run(context_with_rubric) is True
+
+        # Execute and verify it works
+        stage.execute(context_with_rubric)
+        assert context_with_rubric.error is None
+        assert context_with_rubric.get_result_field("used_full_trace_for_rubric") is True
 
     @patch("karenina.benchmark.verification.stages.rubric_evaluation.RubricEvaluator")
     def test_metric_traits_use_filtered_trace(
@@ -674,6 +739,7 @@ class TestRubricEvaluationStageTraceFiltering:
             use_full_trace_for_rubric=False,
         )
         context_with_rubric.config = config
+        context_with_rubric.use_full_trace_for_rubric = False
 
         # Mock evaluator
         mock_evaluator = Mock()
@@ -730,6 +796,8 @@ class TestIndependentTraceControls:
         basic_context.set_artifact("RawAnswer", MockAnswer)
         basic_context.set_artifact("Answer", MockAnswer)
         basic_context.set_artifact("raw_llm_response", full_agent_trace)
+        # Set trace_validation_failed=False to simulate TraceValidationAutoFailStage passing
+        basic_context.set_artifact("trace_validation_failed", False)
         basic_context.deep_judgment_enabled = False
 
         # Configure: template uses final message, rubric uses full trace
@@ -742,6 +810,8 @@ class TestIndependentTraceControls:
             use_full_trace_for_rubric=True,  # Use full trace
         )
         basic_context.config = config
+        basic_context.use_full_trace_for_template = False
+        basic_context.use_full_trace_for_rubric = True
 
         # Mock template parsing
         mock_llm = Mock()
