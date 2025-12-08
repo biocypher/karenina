@@ -75,6 +75,9 @@ examples = [
     "jupyter>=1.0.0",  # For running example notebooks
     "ipykernel>=6.0.0",  # Jupyter kernel support
 ]
+webapp = [
+    "karenina-server>=0.1.0",  # Webapp server with bundled GUI
+]
 
 [project.scripts]
 karenina = "karenina.cli:app"
@@ -190,6 +193,10 @@ min_confidence = 80
 ignore_decorators = ["@pytest.fixture", "@property", "@abstractmethod"]
 ignore_names = ["test_*", "setUp", "tearDown"]
 make_whitelist = true
+
+[tool.uv.sources]
+# Local development: resolve karenina-server from sibling directory
+karenina-server = { path = "../karenina-server", editable = true }
 
 [dependency-groups]
 dev = [

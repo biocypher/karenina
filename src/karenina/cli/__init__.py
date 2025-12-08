@@ -28,6 +28,7 @@ def callback() -> None:
 # These imports will be added as we implement each command module
 try:
     from .preset import preset_app
+    from .serve import init, serve
     from .status import verify_status
     from .verify import verify
 
@@ -39,6 +40,10 @@ try:
 
     # Register preset as a sub-command group
     app.add_typer(preset_app, name="preset", help="Manage verification presets")
+
+    # Register serve and init commands for webapp
+    app.command(name="serve")(serve)
+    app.command(name="init")(init)
 except ImportError:
     # Commands not yet implemented
     pass
