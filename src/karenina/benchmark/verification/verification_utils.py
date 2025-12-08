@@ -1,34 +1,30 @@
 """Verification utility functions.
 
-Shared utilities used by verification stages and runner.
-These functions handle common tasks like LLM retries, prompt composition,
+Shared utilities used by verification stages, runner, and evaluators.
+These functions handle common tasks like LLM invocation with retries,
 response parsing, and validation.
 
-Note: Template-specific prompt construction and parsing functions are also
-available in the TemplateEvaluator class (evaluators/template_evaluator.py)
-which provides a cleaner encapsulation following the evaluator pattern.
+Functions provided:
+- Error handling: is_retryable_error
+- LLM invocation: _invoke_llm_with_retry
+- Agent metrics: _extract_agent_metrics, TOOL_FAILURE_PATTERNS
+- Response parsing: _split_parsed_response
+- Prompt construction: _construct_few_shot_prompt
+- Retry logic: _retry_parse_with_null_feedback, _extract_null_fields_from_error
 
-For new code, prefer using TemplateEvaluator for template parsing operations.
-
-Functions maintained here for backward compatibility:
-- General utilities: is_retryable_error, _invoke_llm_with_retry, _extract_agent_metrics
-- Response parsing: _split_parsed_response, _is_valid_md5_hash
-- Prompt construction: _system_prompt_compose, _construct_few_shot_prompt
-- Enhanced prompts: _build_enhanced_parsing_system_prompt, _build_enhanced_parsing_user_prompt
-- Retry logic: _retry_parse_with_null_feedback, _retry_parse_with_format_feedback
-- Feature flags: _should_expose_ground_truth
+Note: Template-specific parsing and prompt construction is handled by
+TemplateEvaluator (evaluators/template_evaluator.py) which encapsulates
+all template evaluation logic following the evaluator pattern.
 """
 
 import json
 import logging
-import os
 import re
 from typing import Any
 
 from langchain_core.callbacks import get_usage_metadata_callback
 from langchain_core.callbacks.usage import UsageMetadataCallbackHandler
 from langchain_core.messages import BaseMessage, HumanMessage
-from pydantic import BaseModel
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 # Set up logger
@@ -397,24 +393,6 @@ def _split_parsed_response(parsed_answer: Any) -> tuple[dict[str, Any] | None, d
     return parsed_gt_response, parsed_llm_response
 
 
-def _is_valid_md5_hash(hash_string: str) -> bool:
-    """
-    Validate that a string is a proper MD5 hash format.
-
-    Args:
-        hash_string: String to validate
-
-    Returns:
-        True if valid MD5 hash format, False otherwise
-    """
-    if not isinstance(hash_string, str):
-        return False
-
-    # MD5 hash is exactly 32 hexadecimal characters
-    md5_pattern = re.compile(r"^[a-fA-F0-9]{32}$")
-    return bool(md5_pattern.match(hash_string))
-
-
 # ============================================================================
 # Prompt Construction
 # ============================================================================
@@ -451,222 +429,6 @@ def _construct_few_shot_prompt(
     prompt_parts.append("Answer:")
 
     return "\n".join(prompt_parts)
-
-
-def _system_prompt_compose(
-    system_prompt: str | None, format_instructions: str, ground_truth: dict[str, Any] | None = None
-) -> str:
-    """
-    Compose a system prompt with format instructions and optional ground truth information.
-
-    Args:
-        system_prompt: The system prompt to compose
-        format_instructions: The format instructions to compose
-        ground_truth: Optional ground truth information to include for parsing assistance
-
-    Returns:
-        The composed system prompt
-    """
-    prompt_parts = [
-        f"<general_instructions>\n{system_prompt if system_prompt else ''}\n</general_instructions>",
-        f"<format_instructions>\n{format_instructions}\n</format_instructions>",
-    ]
-
-    # Add ground truth instructions if provided
-    if ground_truth is not None:
-        ground_truth_str = json.dumps(ground_truth, indent=2, default=str)
-
-        ground_truth_section = f"""<ground_truth_reference>
-The following ground truth information is provided as reference to help with semantic matching and disambiguation.
-Use this information carefully - do not blindly copy it, but it may help resolve ambiguities when the trace
-and template are semantically close but differ in exact wording. IF AND ONLY IF the answer is very close to the ground truth,
-use the ground truth as final answer.
-
-Ground Truth:
-{ground_truth_str}
-</ground_truth_reference>"""
-
-        prompt_parts.append(ground_truth_section)
-
-    return "\n\n".join(prompt_parts) + "\n"
-
-
-def _build_enhanced_parsing_system_prompt(
-    format_instructions: str,
-    user_system_prompt: str | None = None,
-    has_tool_traces: bool = False,
-    ground_truth: dict[str, Any] | None = None,
-) -> str:
-    """Build enhanced composable system prompt for template parsing.
-
-    This function creates a composable system prompt with:
-    1. Base guidelines (always included) - extraction protocol and critical rules
-    2. Tool trace verification section (conditional - only when MCP/tools present)
-    3. User customizations (merged as "Additional Instructions")
-    4. Ground truth section (optional - for semantic matching assistance)
-    5. Output format section with format instructions
-
-    Args:
-        format_instructions: Pydantic format instructions from PydanticOutputParser
-        user_system_prompt: Optional user-provided system prompt to merge
-        has_tool_traces: Whether the response includes tool call traces (MCP context)
-        ground_truth: Optional ground truth for disambiguation assistance
-
-    Returns:
-        Composed system prompt string
-    """
-    # === BASE GUIDELINES (always included) ===
-    base_guidelines = """You are an evaluator that extracts structured information from responses.
-
-You will receive:
-1. A response to parse (either a final answer or a complete trace)
-2. A JSON schema with descriptive fields indicating what information to extract
-
-# Extraction Protocol
-
-## 1. Focus on the Final Answer
-- Your primary extraction source is the **final answer** given to the user
-- Extract information from this answer according to the schema field descriptions
-
-## 2. Extract According to Schema
-- Each field description specifies WHAT to extract from the answer and HOW
-- Follow field descriptions precisely
-- Use `null` for information not present in the final answer (if field allows null)
-
-## 3. Validate Structure
-- Return valid JSON matching the provided schema exactly
-- Use correct data types for each field
-
-# Critical Rules
-
-**Answer-First**: Extract primarily from the final answer content.
-
-**Description Adherence**: Each field's description is authoritative for what and how to extract.
-
-**Fidelity**: Extract only what's actually stated. Don't infer or add information not present.
-
-**JSON Only**: Return ONLY the JSON object - no explanations, no markdown fences, no surrounding text."""
-
-    # === TOOL TRACE SECTION (conditional - only when MCP/tools present) ===
-    tool_trace_section = """
-
-# Tool Trace Verification (when traces are present)
-
-When the response includes tool calls and results:
-
-## Verify Grounding in Tool Results
-- Cross-reference claims in the final answer against tool results in the trace
-- Check that factual statements are supported by retrieved data
-- Note if the answer includes information not present in tool results
-
-**Grounding Check**: Use the trace to verify the answer's claims are supported by tool calls/results."""
-
-    # === USER CUSTOMIZATIONS SECTION ===
-    user_section = ""
-    if user_system_prompt:
-        user_section = f"""
-
-# Additional Instructions
-
-{user_system_prompt}"""
-
-    # === GROUND TRUTH SECTION (optional) ===
-    ground_truth_section = ""
-    if ground_truth is not None:
-        ground_truth_str = json.dumps(ground_truth, indent=2, default=str)
-        ground_truth_section = f"""
-
-# Ground Truth Reference
-
-The following ground truth information is provided as reference to help with semantic matching and disambiguation.
-Use this information carefully - do not blindly copy it, but it may help resolve ambiguities when the trace
-and template are semantically close but differ in exact wording.
-
-Ground Truth:
-{ground_truth_str}"""
-
-    # === OUTPUT FORMAT ===
-    output_section = f"""
-
-# Output Format
-
-Return only the completed JSON object - no surrounding text, no markdown fences:
-
-<format_instructions>
-{format_instructions}
-</format_instructions>"""
-
-    # Compose final prompt
-    sections = [base_guidelines]
-    if has_tool_traces:
-        sections.append(tool_trace_section)
-    if user_section:
-        sections.append(user_section)
-    if ground_truth_section:
-        sections.append(ground_truth_section)
-    sections.append(output_section)
-
-    return "".join(sections)
-
-
-def _build_enhanced_parsing_user_prompt(
-    question_text: str,
-    response_to_parse: str,
-    answer_class: type[BaseModel],
-) -> str:
-    """Build enhanced user prompt for template parsing.
-
-    Includes the original question, response to parse, and JSON schema
-    to help the LLM understand the expected output structure.
-
-    Args:
-        question_text: The original question that was asked
-        response_to_parse: The LLM response to parse into structured format
-        answer_class: The Pydantic Answer class defining the schema
-
-    Returns:
-        Formatted user prompt string
-    """
-    # Generate JSON schema from the Answer class
-    json_schema = json.dumps(answer_class.model_json_schema(), indent=2)
-
-    return f"""Parse the following response and extract structured information.
-
-**ORIGINAL QUESTION:**
-{question_text}
-
-**RESPONSE TO PARSE:**
-{response_to_parse}
-
-**JSON SCHEMA (your response MUST conform to this):**
-```json
-{json_schema}
-```
-
-**PARSING NOTES:**
-- Extract values for each field based on its description in the schema
-- If information for a field is not present, use null (if field allows null) or your best inference
-- Return ONLY the JSON object - no surrounding text
-
-**YOUR JSON RESPONSE:**"""
-
-
-# ============================================================================
-# Configuration and Feature Flags
-# ============================================================================
-
-
-def _should_expose_ground_truth() -> bool:
-    """
-    Check if ground truth should be exposed to the parser model.
-
-    Reads from the KARENINA_EXPOSE_GROUND_TRUTH environment variable.
-    Defaults to False for backward compatibility.
-
-    Returns:
-        True if ground truth should be exposed, False otherwise
-    """
-    return os.getenv("KARENINA_EXPOSE_GROUND_TRUTH", "false").lower() in ("true", "1", "yes", "on")
 
 
 # ============================================================================
@@ -815,144 +577,4 @@ Please provide a corrected response with all required fields populated."""
 
     except Exception as e:
         logger.warning(f"✗ Retry parsing failed after null-value feedback: {e}")
-        return None, {}
-
-
-def _is_invalid_json_error(error: Exception) -> bool:
-    """Check if an error is related to invalid JSON output.
-
-    Detects parsing errors where:
-    - JSON is malformed (missing quotes, brackets, etc.)
-    - Response contains reasoning text mixed with JSON
-    - Output doesn't match expected JSON structure
-
-    Args:
-        error: The exception from parsing attempt
-
-    Returns:
-        True if this is an invalid JSON error that might benefit from format feedback
-    """
-    error_str = str(error).lower()
-    error_type = type(error).__name__
-
-    # Common JSON parsing error indicators
-    json_error_patterns = [
-        "invalid json",
-        "json decode",
-        "jsondecodeerror",
-        "expecting value",
-        "expecting property name",
-        "unterminated string",
-        "extra data",
-        "invalid control character",
-        "invalid \\escape",
-        "invalid literal",
-        "no json object could be decoded",
-        "output_parsing_failure",
-    ]
-
-    # Check error message
-    if any(pattern in error_str for pattern in json_error_patterns):
-        return True
-
-    # Check exception type
-    return error_type in ["JSONDecodeError", "OutputParserException"]
-
-
-def _retry_parse_with_format_feedback(
-    parsing_llm: Any,
-    parser: Any,  # PydanticOutputParser
-    original_messages: list[BaseMessage],
-    failed_response: str,
-    error: Exception,
-    usage_tracker: Any | None = None,
-    model_str: str | None = None,
-) -> tuple[Any | None, dict[str, Any]]:
-    """
-    Retry parsing with feedback about JSON format requirements.
-
-    When parsing fails due to invalid JSON (e.g., reasoning text mixed with JSON),
-    this function:
-    1. Detects if the error is JSON-format related
-    2. Sends clear feedback to LLM asking for clean JSON only
-    3. Retries parsing once
-
-    This complements _retry_parse_with_null_feedback which handles null-value errors.
-
-    Args:
-        parsing_llm: The LLM to use for retry
-        parser: PydanticOutputParser instance
-        original_messages: Original messages that produced failed_response
-        failed_response: The response that failed to parse
-        error: The validation error from first parse attempt
-        usage_tracker: Optional usage tracker
-        model_str: Optional model string for tracking
-
-    Returns:
-        Tuple of (parsed_answer, usage_metadata)
-        parsed_answer is None if retry also fails
-    """
-    from .utils.parsing import _strip_markdown_fences
-
-    # Only handle JSON format errors
-    if not _is_invalid_json_error(error):
-        logger.debug("Error is not JSON-format related, skipping format feedback retry")
-        return None, {}
-
-    logger.info("Detected invalid JSON output. Retrying with format feedback...")
-
-    # Get the format instructions from the parser for reference
-    try:
-        format_instructions = parser.get_format_instructions()
-        # Extract just the schema part, not the full instructions
-        schema_hint = ""
-        if "```" in format_instructions:
-            # Try to extract schema from markdown block
-            import re
-
-            schema_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", format_instructions, re.DOTALL)
-            if schema_match:
-                schema_hint = f"\n\nExpected schema:\n{schema_match.group(1).strip()}"
-    except Exception:
-        schema_hint = ""
-
-    # Build feedback message
-    feedback_prompt = f"""Your previous response could not be parsed as valid JSON.
-
-**CRITICAL**: You must output ONLY a valid JSON object. Do not include:
-- Any reasoning, explanation, or thinking
-- Any text before or after the JSON
-- Any markdown formatting (no ``` blocks)
-- Any comments
-
-**Your previous response that failed to parse:**
-{failed_response[:1000]}{"..." if len(failed_response) > 1000 else ""}
-
-**Error message:**
-{str(error)[:500]}
-{schema_hint}
-
-Please respond with ONLY the JSON object, nothing else."""
-
-    # Create retry messages
-    retry_messages = list(original_messages)  # Copy original messages
-    retry_messages.append(HumanMessage(content=feedback_prompt))
-
-    # Invoke LLM with retry
-    try:
-        raw_response, _, usage_metadata, _ = _invoke_llm_with_retry(parsing_llm, retry_messages, is_agent=False)
-
-        # Track usage if tracker provided
-        if usage_tracker and usage_metadata and model_str:
-            usage_tracker.track_call("parsing_format_retry", model_str, usage_metadata)
-
-        # Try parsing again
-        cleaned = _strip_markdown_fences(raw_response)
-        parsed = parser.parse(cleaned)
-
-        logger.info("✓ Successfully parsed after format feedback retry")
-        return parsed, usage_metadata
-
-    except Exception as e:
-        logger.warning(f"✗ Retry parsing failed after format feedback: {e}")
         return None, {}
