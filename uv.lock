@@ -1885,7 +1885,6 @@ dependencies = [
     { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "rich" },
-    { name = "sentence-transformers" },
     { name = "sqlalchemy" },
     { name = "tavily-python" },
     { name = "tenacity" },
@@ -1908,6 +1907,9 @@ dev = [
     { name = "pytest-testmon" },
     { name = "ruff" },
     { name = "vulture" },
+]
+embeddings = [
+    { name = "sentence-transformers" },
 ]
 examples = [
     { name = "ipykernel" },
@@ -1974,7 +1976,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "rich", specifier = ">=13.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
-    { name = "sentence-transformers", specifier = ">=5.1.0" },
+    { name = "sentence-transformers", marker = "extra == 'embeddings'", specifier = ">=5.1.0" },
     { name = "sqlalchemy", specifier = ">=2.0.0" },
     { name = "tavily-python", specifier = ">=0.7.12" },
     { name = "tavily-python", marker = "extra == 'search'", specifier = ">=0.3.0" },

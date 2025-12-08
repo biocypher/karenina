@@ -38,7 +38,6 @@ dependencies = [
     "langchain-core>=0.3.66",
     "langchain-google-genai>=2.1.6",
     "langchain-anthropic>=0.3.15",
-    "sentence-transformers>=5.1.0",
     "langgraph>=0.5.4",
     "langchain-mcp-adapters>=0.1.0",
     "sqlalchemy>=2.0.0",
@@ -77,6 +76,9 @@ examples = [
 ]
 webapp = [
     "karenina-server>=0.1.0",  # Webapp server with bundled GUI
+]
+embeddings = [
+    "sentence-transformers>=5.1.0",  # For embedding similarity checks
 ]
 
 [project.scripts]
