@@ -1,4 +1,9 @@
-"""Shared utility functions for parsing operations and template utilities."""
+"""Shared utility functions for parsing operations and template utilities.
+
+Note: Template-specific parsing functions are also available in
+evaluators/template_parsing.py which is used by TemplateEvaluator.
+For new code, prefer using TemplateEvaluator for template parsing operations.
+"""
 
 import json
 import logging

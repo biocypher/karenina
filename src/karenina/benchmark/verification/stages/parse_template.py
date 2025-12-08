@@ -6,29 +6,9 @@ Parses LLM responses into Pydantic objects using standard or deep-judgment parsi
 import logging
 from typing import Any
 
-from langchain_core.callbacks import get_usage_metadata_callback
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
-from langchain_core.output_parsers import PydanticOutputParser
-
-from ....infrastructure.llm.interface import init_chat_model_unified
-from ....infrastructure.llm.mcp_utils import extract_final_ai_message
-from ....schemas.workflow import VerificationConfig
-from ..evaluators.deep_judgment import deep_judgment_parse
+from ..evaluators.template_evaluator import TemplateEvaluator
 from ..stage import BaseVerificationStage, VerificationContext
 from ..utils import UsageTracker
-from ..utils.parsing import (
-    _strip_markdown_fences,
-    invoke_with_structured_output_for_template,
-    parse_template_response,
-)
-from ..verification_utils import (
-    _build_enhanced_parsing_system_prompt,
-    _build_enhanced_parsing_user_prompt,
-    _extract_agent_metrics,
-    _retry_parse_with_format_feedback,
-    _retry_parse_with_null_feedback,
-    _should_expose_ground_truth,
-)
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -39,14 +19,9 @@ class ParseTemplateStage(BaseVerificationStage):
     Parses LLM response into Pydantic object.
 
     This stage:
-    1. Initializes the parsing LLM
-    2. Creates PydanticOutputParser for the Answer class
-    3. Optionally extracts ground truth for semantic matching
-    4. Creates parsing prompt with format instructions
-    5. Chooses parsing strategy (standard vs deep-judgment)
-    6. For standard: Single-stage parsing with PydanticOutputParser
-    7. For deep-judgment: Multi-stage parsing with excerpt extraction
-    8. Handles parsing errors gracefully
+    1. Creates a TemplateEvaluator with the parsing model
+    2. Delegates parsing to the evaluator (standard or deep-judgment)
+    3. Stores parsing results and metadata
 
     Requires:
         - "RawAnswer": Validated Answer class (before question ID injection)
@@ -56,6 +31,7 @@ class ParseTemplateStage(BaseVerificationStage):
     Produces:
         - "parsed_answer": Parsed Pydantic object
         - "parsing_model_str": Model string for result
+        - "template_evaluator": TemplateEvaluator instance for reuse
         - "deep_judgment_performed": Whether deep-judgment was used (bool)
         - "extracted_excerpts": Dict of excerpts per attribute (if deep-judgment)
         - "attribute_reasoning": Dict of reasoning per attribute (if deep-judgment)
@@ -86,6 +62,7 @@ class ParseTemplateStage(BaseVerificationStage):
         return [
             "parsed_answer",
             "parsing_model_str",
+            "template_evaluator",
             "deep_judgment_performed",
             "extracted_excerpts",
             "attribute_reasoning",
@@ -119,6 +96,7 @@ class ParseTemplateStage(BaseVerificationStage):
         Side Effects:
             - Sets context.artifacts["parsed_answer"]
             - Sets context.artifacts["parsing_model_str"]
+            - Sets context.artifacts["template_evaluator"]
             - Sets deep-judgment artifacts if enabled
             - Sets context.error if parsing fails
         """
@@ -135,306 +113,94 @@ class ParseTemplateStage(BaseVerificationStage):
 
         # Determine what input to pass to template parsing based on config
         use_full_trace = context.use_full_trace_for_template
-        trace_extraction_error = None
-        template_evaluation_input = raw_llm_response  # Default to full trace
 
-        if not use_full_trace:
-            # Extract only the final AI message
-            extracted_message, error = extract_final_ai_message(raw_llm_response)
-
-            if error is not None:
-                # Extraction failed - mark as error and stop
-                error_msg = f"Failed to extract final AI message for template parsing: {error}"
-                logger.error(error_msg)
-                trace_extraction_error = error
-                context.mark_error(error_msg)
-
-                # Store metadata before returning
-                context.set_artifact("used_full_trace_for_template", use_full_trace)
-                context.set_artifact("trace_extraction_error", trace_extraction_error)
-                context.set_artifact("template_evaluation_input", None)
-                # Set result fields with both generic and template-specific names
-                context.set_result_field("used_full_trace", use_full_trace)
-                context.set_result_field("used_full_trace_for_template", use_full_trace)
-                context.set_result_field("trace_extraction_error", trace_extraction_error)
-                context.set_result_field("evaluation_input", None)
-                context.set_result_field("template_evaluation_input", None)
-                return
-            else:
-                # Extraction successful - use extracted message
-                template_evaluation_input = extracted_message
-                logger.info("Using final AI message only for template parsing")
-
-        # Store trace filtering metadata
-        context.set_artifact("used_full_trace_for_template", use_full_trace)
-        context.set_artifact("template_evaluation_input", template_evaluation_input)
-        context.set_artifact("trace_extraction_error", trace_extraction_error)
-
-        # Build model string for result
-        if parsing_model.interface == "openrouter":
-            parsing_model_str = parsing_model.model_name
-        elif parsing_model.interface == "openai_endpoint":
-            parsing_model_str = f"endpoint/{parsing_model.model_name}"
-        else:
-            parsing_model_str = f"{parsing_model.model_provider}/{parsing_model.model_name}"
-        context.set_artifact("parsing_model_str", parsing_model_str)
-
-        # Step 1: Initialize parsing LLM
+        # Step 1: Create TemplateEvaluator
         try:
-            # Note: model_name is guaranteed non-None by ModelConfig validator
-            assert parsing_model.model_name is not None, "model_name must not be None"
+            evaluator = TemplateEvaluator(
+                model_config=parsing_model,
+                answer_class=Answer,
+                raw_answer_class=RawAnswer,
+            )
+        except Exception as e:
+            error_msg = f"Failed to create TemplateEvaluator: {type(e).__name__}: {e}"
+            logger.error(error_msg)
+            context.mark_error(error_msg)
+            return
 
-            # Build base kwargs for model initialization
-            model_kwargs: dict[str, Any] = {
-                "model": parsing_model.model_name,
-                "provider": parsing_model.model_provider,
-                "temperature": parsing_model.temperature,
-                "interface": parsing_model.interface,
+        # Store evaluator for reuse by verify stage
+        context.set_artifact("template_evaluator", evaluator)
+        context.set_artifact("parsing_model_str", evaluator.model_str)
+
+        # Build deep judgment config
+        deep_judgment_config: dict[str, Any] = {}
+        if context.deep_judgment_enabled:
+            deep_judgment_config = {
+                "max_excerpts_per_attribute": context.deep_judgment_max_excerpts_per_attribute,
+                "fuzzy_match_threshold": context.deep_judgment_fuzzy_match_threshold,
+                "excerpt_retry_attempts": context.deep_judgment_excerpt_retry_attempts,
+                "search_enabled": context.deep_judgment_search_enabled,
+                "search_tool": context.deep_judgment_search_tool,
             }
 
-            # Add interface-specific parameters
-            if parsing_model.interface == "openai_endpoint":
-                # Require endpoint configuration
-                if not parsing_model.endpoint_base_url:
-                    raise ValueError("endpoint_base_url is required for openai_endpoint interface")
-                if not parsing_model.endpoint_api_key:
-                    raise ValueError("endpoint_api_key is required for openai_endpoint interface")
-
-                model_kwargs["endpoint_base_url"] = parsing_model.endpoint_base_url
-                model_kwargs["endpoint_api_key"] = parsing_model.endpoint_api_key.get_secret_value()
-
-            # Add any extra kwargs if provided (e.g., vendor-specific API keys)
-            if parsing_model.extra_kwargs:
-                model_kwargs.update(parsing_model.extra_kwargs)
-
-            parsing_llm = init_chat_model_unified(**model_kwargs)
-        except Exception as e:
-            error_msg = f"Failed to initialize parsing model: {type(e).__name__}: {e}"
-            logger.error(error_msg)
-            context.mark_error(error_msg)
-            return
-
-        # Step 2: Create PydanticOutputParser
-        try:
-            parser: Any = PydanticOutputParser(pydantic_object=Answer)
-        except Exception as e:
-            error_msg = f"Failed to create PydanticOutputParser: {e}"
-            logger.error(error_msg)
-            context.mark_error(error_msg)
-            return
-
-        # Step 3: Extract ground truth if enabled
-        ground_truth = None
-        if _should_expose_ground_truth():
-            try:
-                from ..utils.parsing import create_test_instance_from_answer_class
-
-                # Create test instance and extract ground truth
-                _, ground_truth = create_test_instance_from_answer_class(RawAnswer)
-            except Exception as e:
-                # If we can't extract ground truth, continue without it
-                logger.warning(f"Could not extract ground truth for question {context.question_id}: {e}")
-
-        # Step 4: Create parsing prompt with enhanced composable system prompt
-        format_instructions = parser.get_format_instructions()
-
-        # Detect if there are tool traces in the response
-        # This is used to conditionally include tool verification instructions
-        # We need to check for MCP agent response format (dict with "messages" key)
-        # The raw_llm_response can be a string or an agent response dict
-        agent_metrics = None
-        if isinstance(raw_llm_response, dict):
-            # Agent response format - extract metrics
-            agent_metrics = _extract_agent_metrics(raw_llm_response)
-        has_tool_traces = agent_metrics is not None and agent_metrics.get("tool_calls", 0) > 0
-
-        # Use the new composable system prompt builder
-        combined_system_prompt = _build_enhanced_parsing_system_prompt(
-            format_instructions=format_instructions,
-            user_system_prompt=parsing_model.system_prompt,
-            has_tool_traces=has_tool_traces,
-            ground_truth=ground_truth,
-        )
-
-        # Use the enhanced user prompt with JSON schema
-        parsing_prompt = _build_enhanced_parsing_user_prompt(
+        # Step 2: Parse response using evaluator
+        parse_result = evaluator.parse_response(
+            raw_response=raw_llm_response,
             question_text=context.question_text,
-            response_to_parse=template_evaluation_input,
-            answer_class=Answer,
+            deep_judgment_enabled=context.deep_judgment_enabled,
+            deep_judgment_config=deep_judgment_config,
+            use_full_trace=use_full_trace,
+            usage_tracker=usage_tracker,
         )
 
-        parsing_messages: list[BaseMessage] = []
-        if combined_system_prompt:
-            parsing_messages.append(SystemMessage(content=combined_system_prompt))
-        parsing_messages.append(HumanMessage(content=parsing_prompt))
-
-        # Initialize deep-judgment metadata variables
-        deep_judgment_performed = False
-        extracted_excerpts = None
-        attribute_reasoning = None
-        deep_judgment_stages_completed = None
-        deep_judgment_model_calls = 0
-        deep_judgment_excerpt_retry_count = 0
-        attributes_without_excerpts = None
-        hallucination_risk_assessment = None
-
-        # Step 5: Choose parsing strategy and execute
-        try:
-            if context.deep_judgment_enabled:
-                # Create minimal config for deep-judgment
-                dj_config = VerificationConfig(
-                    answering_models=[],
-                    parsing_models=[parsing_model],
-                    parsing_only=True,
-                    deep_judgment_enabled=True,
-                    deep_judgment_max_excerpts_per_attribute=context.deep_judgment_max_excerpts_per_attribute,
-                    deep_judgment_fuzzy_match_threshold=context.deep_judgment_fuzzy_match_threshold,
-                    deep_judgment_excerpt_retry_attempts=context.deep_judgment_excerpt_retry_attempts,
-                    deep_judgment_search_enabled=context.deep_judgment_search_enabled,
-                    deep_judgment_search_tool=context.deep_judgment_search_tool,
-                )
-
-                # Deep-judgment multi-stage parsing
-                # Use template_evaluation_input which may be full trace or final AI message
-                parsed_answer, extracted_excerpts, attribute_reasoning, dj_metadata = deep_judgment_parse(
-                    raw_llm_response=template_evaluation_input,
-                    RawAnswer=RawAnswer,
-                    parsing_model=parsing_model,
-                    parsing_llm=parsing_llm,
-                    question_text=context.question_text,
-                    config=dj_config,
-                    format_instructions=format_instructions,
-                    combined_system_prompt=combined_system_prompt,
-                    usage_tracker=usage_tracker,
-                    parsing_model_str=parsing_model_str,
-                )
-                deep_judgment_performed = True
-                deep_judgment_stages_completed = dj_metadata.get("stages_completed", [])
-                deep_judgment_model_calls = dj_metadata.get("model_calls", 0)
-                deep_judgment_excerpt_retry_count = dj_metadata.get("excerpt_retry_count", 0)
-                attributes_without_excerpts = dj_metadata.get("attributes_without_excerpts", None)
-                hallucination_risk_assessment = dj_metadata.get("hallucination_risk", None)
-            else:
-                # Standard parsing with two-way strategy:
-                # 1. Try native structured output first (most reliable when available)
-                # 2. Fall back to PydanticOutputParser + json-repair + retry strategies
-
-                # Strategy 1: Try native structured output (method="json_schema")
-                structured_result, struct_usage, used_structured = invoke_with_structured_output_for_template(
-                    llm=parsing_llm,
-                    messages=parsing_messages,
-                    answer_class=Answer,
-                )
-
-                if struct_usage:
-                    usage_tracker.track_call("parsing", parsing_model_str, struct_usage)
-
-                if structured_result is not None and used_structured:
-                    # Native structured output succeeded
-                    parsed_answer = structured_result
-                    logger.debug("Template parsing succeeded via native structured output")
-                else:
-                    # Strategy 2: Fall back to manual parsing with json-repair and retries
-                    logger.debug("Native structured output failed, falling back to manual parsing")
-
-                    # If we already made an LLM call for structured output, we might have a response
-                    # Otherwise, make a fresh call
-                    with get_usage_metadata_callback() as cb:
-                        parsing_response = parsing_llm.invoke(parsing_messages)
-
-                    # Track the parsing call
-                    usage_metadata = dict(cb.usage_metadata) if cb.usage_metadata else {}
-                    if usage_metadata:
-                        usage_tracker.track_call("parsing", parsing_model_str, usage_metadata)
-
-                    raw_parsing_response = (
-                        parsing_response.content if hasattr(parsing_response, "content") else str(parsing_response)
-                    )
-
-                    # Try multi-strategy parsing with json-repair
-                    try:
-                        # This function includes: strip markdown → direct parse → json-repair
-                        parsed_answer = parse_template_response(raw_parsing_response, Answer)
-                        logger.debug("Template parsing succeeded via manual parsing with json-repair")
-                    except Exception as parse_error:
-                        # Try recovery strategies in order:
-                        # 1. Null-value feedback (for null in required fields)
-                        # 2. Format feedback (for invalid JSON / reasoning mixed with JSON)
-                        logger.warning(f"Initial parsing failed: {parse_error}")
-
-                        # Get cleaned response for retry strategies
-                        cleaned_response = _strip_markdown_fences(raw_parsing_response)
-                        if cleaned_response is None:
-                            raise ValueError("Empty response from parsing model after markdown fence removal") from None
-
-                        # Strategy 3: Try null-value feedback
-                        retried_answer, retry_usage = _retry_parse_with_null_feedback(
-                            parsing_llm=parsing_llm,
-                            parser=parser,
-                            original_messages=parsing_messages,
-                            failed_response=cleaned_response,
-                            error=parse_error,
-                            usage_tracker=usage_tracker,
-                            model_str=parsing_model_str,
-                        )
-
-                        if retried_answer is not None:
-                            parsed_answer = retried_answer
-                        else:
-                            # Strategy 4: Try format feedback (for invalid JSON errors)
-                            logger.info("Null-value retry did not succeed, trying format feedback...")
-                            retried_answer, retry_usage = _retry_parse_with_format_feedback(
-                                parsing_llm=parsing_llm,
-                                parser=parser,
-                                original_messages=parsing_messages,
-                                failed_response=cleaned_response,
-                                error=parse_error,
-                                usage_tracker=usage_tracker,
-                                model_str=parsing_model_str,
-                            )
-
-                            if retried_answer is not None:
-                                parsed_answer = retried_answer
-                            else:
-                                # All retry strategies failed, re-raise original error
-                                raise parse_error
-
-        except Exception as e:
-            error_msg = f"Parsing failed: {e}"
-            logger.error(error_msg)
-            context.mark_error(error_msg)
+        # Step 3: Handle parse result
+        if not parse_result.success:
+            context.mark_error(parse_result.error or "Parsing failed")
+            # Store metadata even on failure
+            context.set_artifact("used_full_trace_for_template", use_full_trace)
+            context.set_artifact("template_evaluation_input", None)
+            context.set_artifact("trace_extraction_error", parse_result.error)
+            context.set_result_field("used_full_trace", use_full_trace)
+            context.set_result_field("used_full_trace_for_template", use_full_trace)
+            context.set_result_field("trace_extraction_error", parse_result.error)
             return
 
-        # Store results
-        context.set_artifact("parsed_answer", parsed_answer)
-        context.set_artifact("deep_judgment_performed", deep_judgment_performed)
+        # Step 4: Store results
+        context.set_artifact("parsed_answer", parse_result.parsed_answer)
+        context.set_artifact("deep_judgment_performed", parse_result.deep_judgment_performed)
+        context.set_artifact("used_full_trace_for_template", use_full_trace)
+        context.set_artifact("template_evaluation_input", raw_llm_response if use_full_trace else None)
+        context.set_artifact("trace_extraction_error", None)
 
-        # Store updated usage tracker for next stages
+        # Store deep judgment metadata
+        context.set_artifact("extracted_excerpts", parse_result.extracted_excerpts)
+        context.set_artifact("attribute_reasoning", parse_result.attribute_reasoning)
+        context.set_artifact("deep_judgment_stages_completed", parse_result.deep_judgment_stages_completed)
+        context.set_artifact("deep_judgment_model_calls", parse_result.deep_judgment_model_calls)
+        context.set_artifact("deep_judgment_excerpt_retry_count", parse_result.deep_judgment_excerpt_retry_count)
+        context.set_artifact("attributes_without_excerpts", parse_result.attributes_without_excerpts)
+        context.set_artifact("hallucination_risk_assessment", parse_result.hallucination_risk_assessment)
+
+        # Update usage tracker with any usage from parsing
+        for usage_meta in parse_result.usage_metadata_list:
+            if usage_meta:
+                usage_tracker.track_call("parsing", evaluator.model_str, usage_meta)
         context.set_artifact("usage_tracker", usage_tracker)
-        context.set_artifact("extracted_excerpts", extracted_excerpts)
-        context.set_artifact("attribute_reasoning", attribute_reasoning)
-        context.set_artifact("deep_judgment_stages_completed", deep_judgment_stages_completed)
-        context.set_artifact("deep_judgment_model_calls", deep_judgment_model_calls)
-        context.set_artifact("deep_judgment_excerpt_retry_count", deep_judgment_excerpt_retry_count)
-        context.set_artifact("attributes_without_excerpts", attributes_without_excerpts)
-        context.set_artifact("hallucination_risk_assessment", hallucination_risk_assessment)
 
-        # Also store in result builder
+        # Store in result builder
         context.set_result_field("deep_judgment_enabled", context.deep_judgment_enabled)
-        context.set_result_field("deep_judgment_performed", deep_judgment_performed)
-        context.set_result_field("extracted_excerpts", extracted_excerpts)
-        context.set_result_field("attribute_reasoning", attribute_reasoning)
-        context.set_result_field("deep_judgment_stages_completed", deep_judgment_stages_completed)
-        context.set_result_field("deep_judgment_model_calls", deep_judgment_model_calls)
-        context.set_result_field("deep_judgment_excerpt_retry_count", deep_judgment_excerpt_retry_count)
-        context.set_result_field("attributes_without_excerpts", attributes_without_excerpts)
+        context.set_result_field("deep_judgment_performed", parse_result.deep_judgment_performed)
+        context.set_result_field("extracted_excerpts", parse_result.extracted_excerpts)
+        context.set_result_field("attribute_reasoning", parse_result.attribute_reasoning)
+        context.set_result_field("deep_judgment_stages_completed", parse_result.deep_judgment_stages_completed)
+        context.set_result_field("deep_judgment_model_calls", parse_result.deep_judgment_model_calls)
+        context.set_result_field("deep_judgment_excerpt_retry_count", parse_result.deep_judgment_excerpt_retry_count)
+        context.set_result_field("attributes_without_excerpts", parse_result.attributes_without_excerpts)
         context.set_result_field("deep_judgment_search_enabled", context.deep_judgment_search_enabled)
-        context.set_result_field("hallucination_risk_assessment", hallucination_risk_assessment)
+        context.set_result_field("hallucination_risk_assessment", parse_result.hallucination_risk_assessment)
 
-        # Store trace filtering metadata in result builder (root level - shared by template and rubric)
-        # Set both generic names (used_full_trace) and template-specific names (used_full_trace_for_template)
+        # Store trace filtering metadata in result builder
         context.set_result_field("used_full_trace", use_full_trace)
         context.set_result_field("used_full_trace_for_template", use_full_trace)
-        context.set_result_field("evaluation_input", template_evaluation_input)
-        context.set_result_field("template_evaluation_input", template_evaluation_input)
-        context.set_result_field("trace_extraction_error", trace_extraction_error)
+        context.set_result_field("evaluation_input", raw_llm_response if use_full_trace else None)
+        context.set_result_field("template_evaluation_input", raw_llm_response if use_full_trace else None)
+        context.set_result_field("trace_extraction_error", None)

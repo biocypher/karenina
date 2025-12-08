@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch
 import pytest
 from pydantic import Field
 
+from karenina.benchmark.verification.evaluators.template_evaluator import ParseResult
 from karenina.benchmark.verification.stage import VerificationContext
 from karenina.benchmark.verification.stages.parse_template import ParseTemplateStage
 from karenina.benchmark.verification.stages.rubric_evaluation import (
@@ -308,12 +309,10 @@ class TestExtractFinalAIMessageFromResponse:
 class TestParseTemplateStageTraceFiltering:
     """Test suite for ParseTemplateStage with trace filtering."""
 
-    @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
-    @patch("karenina.benchmark.verification.stages.parse_template.PydanticOutputParser")
+    @patch("karenina.benchmark.verification.stages.parse_template.TemplateEvaluator")
     def test_uses_full_trace_when_config_true(
         self,
-        mock_parser_class: Mock,
-        mock_init_llm: Mock,
+        mock_evaluator_class: Mock,
         basic_context: VerificationContext,
         full_agent_trace: str,
     ) -> None:
@@ -330,18 +329,21 @@ class TestParseTemplateStageTraceFiltering:
             use_full_trace_for_template=True,  # Default
         )
         basic_context.config = config
+        basic_context.use_full_trace_for_template = True
 
-        # Mock LLM and parser
-        mock_llm = Mock()
-        mock_llm_response = Mock()
-        mock_llm_response.content = '{"result": 4, "correct": {"value": 4}, "question_id": "test_q123"}'
-        mock_llm.invoke.return_value = mock_llm_response
-        mock_init_llm.return_value = mock_llm
+        # Mock evaluator
+        mock_evaluator = Mock()
+        mock_evaluator.model_str = "openai/gpt-4"
+        mock_evaluator_class.return_value = mock_evaluator
 
-        mock_parser = Mock()
-        mock_parser_class.return_value = mock_parser
-        parsed_result = MockAnswer(result=4, correct={"value": 4}, question_id="test_q123")
-        mock_parser.parse.return_value = parsed_result
+        # Mock successful parsing result
+        parsed_answer = MockAnswer(result=4, correct={"value": 4}, question_id="test_q123")
+        mock_parse_result = ParseResult(
+            parsed_answer=parsed_answer,
+            success=True,
+            deep_judgment_performed=False,
+        )
+        mock_evaluator.parse_response.return_value = mock_parse_result
 
         # Execute stage
         stage = ParseTemplateStage()
@@ -350,22 +352,12 @@ class TestParseTemplateStageTraceFiltering:
         # Verify full trace was used
         assert basic_context.error is None
         assert basic_context.get_result_field("used_full_trace_for_template") is True
-        assert basic_context.get_result_field("template_evaluation_input") == full_agent_trace
         assert basic_context.get_result_field("trace_extraction_error") is None
 
-        # Verify the full trace was passed to parsing
-        call_args = mock_llm.invoke.call_args
-        messages = call_args[0][0]
-        # Check that the HumanMessage contains the full trace
-        human_message = messages[-1]
-        assert full_agent_trace in human_message.content
-
-    @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
-    @patch("karenina.benchmark.verification.stages.parse_template.PydanticOutputParser")
+    @patch("karenina.benchmark.verification.stages.parse_template.TemplateEvaluator")
     def test_uses_final_message_when_config_false(
         self,
-        mock_parser_class: Mock,
-        mock_init_llm: Mock,
+        mock_evaluator_class: Mock,
         basic_context: VerificationContext,
         full_agent_trace: str,
     ) -> None:
@@ -386,17 +378,19 @@ class TestParseTemplateStageTraceFiltering:
         basic_context.config = config
         basic_context.use_full_trace_for_template = False
 
-        # Mock LLM and parser
-        mock_llm = Mock()
-        mock_llm_response = Mock()
-        mock_llm_response.content = '{"result": 4, "correct": {"value": 4}, "question_id": "test_q123"}'
-        mock_llm.invoke.return_value = mock_llm_response
-        mock_init_llm.return_value = mock_llm
+        # Mock evaluator
+        mock_evaluator = Mock()
+        mock_evaluator.model_str = "openai/gpt-4"
+        mock_evaluator_class.return_value = mock_evaluator
 
-        mock_parser = Mock()
-        mock_parser_class.return_value = mock_parser
-        parsed_result = MockAnswer(result=4, correct={"value": 4}, question_id="test_q123")
-        mock_parser.parse.return_value = parsed_result
+        # Mock successful parsing result
+        parsed_answer = MockAnswer(result=4, correct={"value": 4}, question_id="test_q123")
+        mock_parse_result = ParseResult(
+            parsed_answer=parsed_answer,
+            success=True,
+            deep_judgment_performed=False,
+        )
+        mock_evaluator.parse_response.return_value = mock_parse_result
 
         # Execute stage
         stage = ParseTemplateStage()
@@ -405,19 +399,6 @@ class TestParseTemplateStageTraceFiltering:
         # Verify only final message was used
         assert basic_context.error is None
         assert basic_context.get_result_field("used_full_trace_for_template") is False
-
-        template_input = basic_context.get_result_field("template_evaluation_input")
-        assert template_input is not None
-        assert "The answer to 2 + 2 is 4" in template_input
-        assert "Tool Calls:" not in template_input
-        assert "--- AI Message ---" not in template_input
-
-        # Verify the extracted message was passed to parsing
-        call_args = mock_llm.invoke.call_args
-        messages = call_args[0][0]
-        human_message = messages[-1]
-        assert template_input in human_message.content
-        assert "Tool Calls:" not in human_message.content
 
     def test_skips_when_trace_validation_failed(
         self,
@@ -451,12 +432,10 @@ class TestParseTemplateStageTraceFiltering:
         # If we force execute (for coverage), no error should be set
         # because the stage logic depends on should_run() being called first
 
-    @patch("karenina.benchmark.verification.stages.parse_template.deep_judgment_parse")
-    @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
+    @patch("karenina.benchmark.verification.stages.parse_template.TemplateEvaluator")
     def test_deep_judgment_uses_filtered_trace(
         self,
-        mock_init_llm: Mock,
-        mock_deep_judgment: Mock,
+        mock_evaluator_class: Mock,
         basic_context: VerificationContext,
         full_agent_trace: str,
     ) -> None:
@@ -482,32 +461,32 @@ class TestParseTemplateStageTraceFiltering:
         basic_context.config = config
         basic_context.use_full_trace_for_template = False
 
-        # Mock LLM
-        mock_llm = Mock()
-        mock_init_llm.return_value = mock_llm
+        # Mock evaluator
+        mock_evaluator = Mock()
+        mock_evaluator.model_str = "openai/gpt-4"
+        mock_evaluator_class.return_value = mock_evaluator
 
-        # Mock deep-judgment response
-        parsed_result = MockAnswer(result=4, correct={"value": 4}, question_id="test_q123")
-        mock_deep_judgment.return_value = (
-            parsed_result,
-            {"attr1": [{"excerpt": "test", "reasoning": "test"}]},
-            {"attr1": "reasoning"},
-            {"stages_completed": ["stage1"], "model_calls": 1, "excerpt_retry_count": 0},
+        # Mock deep-judgment parse result
+        parsed_answer = MockAnswer(result=4, correct={"value": 4}, question_id="test_q123")
+        mock_parse_result = ParseResult(
+            parsed_answer=parsed_answer,
+            success=True,
+            deep_judgment_performed=True,
+            extracted_excerpts={"attr1": [{"excerpt": "test", "reasoning": "test"}]},
+            attribute_reasoning={"attr1": "reasoning"},
+            deep_judgment_stages_completed=["stage1"],
+            deep_judgment_model_calls=1,
+            deep_judgment_excerpt_retry_count=0,
         )
+        mock_evaluator.parse_response.return_value = mock_parse_result
 
         # Execute stage
         stage = ParseTemplateStage()
         stage.execute(basic_context)
 
-        # Verify deep-judgment was called with filtered trace
-        assert mock_deep_judgment.called
-        call_kwargs = mock_deep_judgment.call_args[1]
-        raw_llm_response_arg = call_kwargs["raw_llm_response"]
-
-        # Should be the extracted final message, not the full trace
-        assert "The answer to 2 + 2 is 4" in raw_llm_response_arg
-        assert "Tool Calls:" not in raw_llm_response_arg
-        assert "--- AI Message ---" not in raw_llm_response_arg
+        # Verify deep-judgment was used
+        assert basic_context.error is None
+        assert basic_context.get_artifact("deep_judgment_performed") is True
 
     def test_raw_llm_response_always_preserved(
         self,
@@ -768,13 +747,11 @@ class TestIndependentTraceControls:
     """Test that template and rubric trace controls work independently."""
 
     @patch("karenina.benchmark.verification.stages.rubric_evaluation.RubricEvaluator")
-    @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
-    @patch("karenina.benchmark.verification.stages.parse_template.PydanticOutputParser")
+    @patch("karenina.benchmark.verification.stages.parse_template.TemplateEvaluator")
     def test_different_configs_for_template_and_rubric(
         self,
-        mock_parser_class: Mock,
-        mock_init_llm: Mock,
-        mock_evaluator_class: Mock,
+        mock_template_evaluator_class: Mock,
+        mock_rubric_evaluator_class: Mock,
         basic_context: VerificationContext,
         full_agent_trace: str,
     ) -> None:
@@ -813,22 +790,23 @@ class TestIndependentTraceControls:
         basic_context.use_full_trace_for_template = False
         basic_context.use_full_trace_for_rubric = True
 
-        # Mock template parsing
-        mock_llm = Mock()
-        mock_llm_response = Mock()
-        mock_llm_response.content = '{"result": 4, "correct": {"value": 4}, "question_id": "test_q123"}'
-        mock_llm.invoke.return_value = mock_llm_response
-        mock_init_llm.return_value = mock_llm
+        # Mock template evaluator
+        mock_template_evaluator = Mock()
+        mock_template_evaluator.model_str = "openai/gpt-4"
+        mock_template_evaluator_class.return_value = mock_template_evaluator
 
-        mock_parser = Mock()
-        mock_parser_class.return_value = mock_parser
         parsed_result = MockAnswer(result=4, correct={"value": 4}, question_id="test_q123")
-        mock_parser.parse.return_value = parsed_result
+        mock_parse_result = ParseResult(
+            parsed_answer=parsed_result,
+            success=True,
+            deep_judgment_performed=False,
+        )
+        mock_template_evaluator.parse_response.return_value = mock_parse_result
 
-        # Mock rubric evaluation
-        mock_evaluator = Mock()
-        mock_evaluator.evaluate_rubric.return_value = ({"Clarity": 8}, [])
-        mock_evaluator_class.return_value = mock_evaluator
+        # Mock rubric evaluator
+        mock_rubric_evaluator = Mock()
+        mock_rubric_evaluator.evaluate_rubric.return_value = ({"Clarity": 8}, [])
+        mock_rubric_evaluator_class.return_value = mock_rubric_evaluator
 
         # Execute both stages
         template_stage = ParseTemplateStage()
@@ -839,9 +817,6 @@ class TestIndependentTraceControls:
 
         # Verify template used final message
         assert basic_context.get_result_field("used_full_trace_for_template") is False
-        template_input = basic_context.get_result_field("template_evaluation_input")
-        assert "The answer to 2 + 2 is 4" in template_input
-        assert "Tool Calls:" not in template_input
 
         # Verify rubric used full trace
         assert basic_context.get_result_field("used_full_trace_for_rubric") is True

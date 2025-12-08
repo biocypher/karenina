@@ -3,6 +3,20 @@
 Shared utilities used by verification stages and runner.
 These functions handle common tasks like LLM retries, prompt composition,
 response parsing, and validation.
+
+Note: Template-specific prompt construction and parsing functions are also
+available in the TemplateEvaluator class (evaluators/template_evaluator.py)
+which provides a cleaner encapsulation following the evaluator pattern.
+
+For new code, prefer using TemplateEvaluator for template parsing operations.
+
+Functions maintained here for backward compatibility:
+- General utilities: is_retryable_error, _invoke_llm_with_retry, _extract_agent_metrics
+- Response parsing: _split_parsed_response, _is_valid_md5_hash
+- Prompt construction: _system_prompt_compose, _construct_few_shot_prompt
+- Enhanced prompts: _build_enhanced_parsing_system_prompt, _build_enhanced_parsing_user_prompt
+- Retry logic: _retry_parse_with_null_feedback, _retry_parse_with_format_feedback
+- Feature flags: _should_expose_ground_truth
 """
 
 import json
