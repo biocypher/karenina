@@ -105,7 +105,6 @@ class Answer(BaseAnswer):
             rubric=None,  # No rubric
             evaluation_mode="template_only",
             run_name="test_run",
-            job_id="test_job",
         )
 
         # Verify template verification was performed
@@ -164,7 +163,6 @@ class Answer(BaseAnswer):
             rubric=test_rubric,
             evaluation_mode="template_and_rubric",
             run_name="test_run",
-            job_id="test_job",
         )
 
         # Verify BOTH template verification and rubric evaluation performed
@@ -210,7 +208,6 @@ class TestRubricOnlyMode:
             rubric=test_rubric,
             evaluation_mode="rubric_only",
             run_name="test_run",
-            job_id="test_job",
         )
 
         # Verify template verification was NOT performed
@@ -256,7 +253,6 @@ class TestRubricOnlyMode:
                 evaluation_mode="rubric_only",
                 abstention_enabled=True,
                 run_name="test_run",
-                job_id="test_job",
             )
 
         # Verify template verification was NOT performed
