@@ -14,16 +14,17 @@ logger = logging.getLogger(__name__)
 
 class TraceValidationAutoFailStage(BaseVerificationStage):
     """
-    Auto-fails verification when trace doesn't end with an AI message.
+    Auto-fails verification when MCP agent trace doesn't end with an AI message.
 
     This stage:
     1. Always runs after GenerateAnswerStage (if raw_llm_response exists)
-    2. Checks if trace was manually provided (interface="manual")
-    3. For manual traces: skips validation (user-provided traces are trusted)
-    4. For MCP agent traces: validates it ends with a valid AI message
-    5. If validation fails, auto-fails the verification (verify_result=False)
-    6. Keeps completed_without_errors as True (we want trace and tokens)
-    7. Subsequent parsing stages will skip their extraction logic
+    2. Checks if MCP is enabled (mcp_urls_dict is set on answering model)
+    3. For non-MCP responses: skips validation (regular LLM responses are valid)
+    4. For manual traces: skips validation (user-provided traces are trusted)
+    5. For MCP agent traces: validates it ends with a valid AI message
+    6. If validation fails, auto-fails the verification (verify_result=False)
+    7. Keeps completed_without_errors as True (we want trace and tokens)
+    8. Subsequent parsing stages will skip their extraction logic
 
     Requires:
         - "raw_llm_response": Raw LLM response text (agent trace)
@@ -31,18 +32,18 @@ class TraceValidationAutoFailStage(BaseVerificationStage):
     Produces:
         - "trace_validation_failed": Whether trace validation failed (bool)
         - "trace_validation_error": Error message if validation failed
-        - "manual_trace_used": Whether a manual trace was used (bool)
+        - "mcp_enabled": Whether MCP was enabled for this verification (bool)
 
     Side Effects:
-        - Sets verify_result to False if validation fails
+        - Sets verify_result to False if MCP trace doesn't end with AI message
         - Stores trace validation error for diagnostics
         - Logs auto-fail reason
 
     Note:
-        A valid MCP agent trace should always end with an AI message containing
-        the final answer. Traces ending with tool messages or having no
-        AI message content indicate incomplete or failed agent execution.
-        Manual traces (interface="manual") skip validation entirely.
+        Validation only applies to MCP agent traces (mcp_urls_dict configured).
+        Regular LLM responses and manual traces skip validation entirely.
+        A valid MCP trace should always end with an AI message containing
+        the final answer.
     """
 
     @property
@@ -58,7 +59,7 @@ class TraceValidationAutoFailStage(BaseVerificationStage):
     @property
     def produces(self) -> list[str]:
         """Artifacts produced by this stage."""
-        return ["trace_validation_failed", "trace_validation_error", "manual_trace_used"]
+        return ["trace_validation_failed", "trace_validation_error", "mcp_enabled"]
 
     def should_run(self, context: VerificationContext) -> bool:
         """
@@ -73,10 +74,10 @@ class TraceValidationAutoFailStage(BaseVerificationStage):
 
     def execute(self, context: VerificationContext) -> None:
         """
-        Validate that trace ends with an AI message.
+        Validate that MCP agent trace ends with an AI message.
 
-        For manual traces (interface="manual"), validation is skipped entirely.
-        For MCP agent traces, validates the trace ends with an AI message.
+        Validation only runs when MCP is enabled (mcp_urls_dict is configured).
+        Regular LLM responses and manual traces skip validation entirely.
 
         Args:
             context: Verification context
@@ -84,26 +85,35 @@ class TraceValidationAutoFailStage(BaseVerificationStage):
         Side Effects:
             - Sets trace_validation_failed artifact
             - Sets trace_validation_error artifact (if failed)
-            - Sets manual_trace_used artifact
+            - Sets mcp_enabled artifact
             - Sets verify_result to False (if failed)
             - Logs validation result
         """
         raw_llm_response = context.get_artifact("raw_llm_response")
 
-        # Check if this trace was manually provided
-        is_manual_trace = context.answering_model.interface == "manual"
-        context.set_artifact("manual_trace_used", is_manual_trace)
+        # Check if MCP is enabled (mcp_urls_dict is configured on answering model)
+        mcp_enabled = context.answering_model.mcp_urls_dict is not None
+        context.set_artifact("mcp_enabled", mcp_enabled)
 
-        if is_manual_trace:
-            # Manual trace - skip validation entirely
-            # User-provided traces are trusted as-is
+        # Also check for manual interface
+        is_manual = context.answering_model.interface == "manual"
+
+        if not mcp_enabled or is_manual:
+            # Non-MCP response or manual trace - skip validation
+            # Regular LLM responses are plain text, manual traces are trusted
             context.set_artifact("trace_validation_failed", False)
             context.set_artifact("trace_validation_error", None)
             context.set_result_field("trace_validation_failed", False)
 
-            logger.debug(
-                f"Trace validation skipped for question {context.question_id}: Manual trace (interface='manual')"
-            )
+            if is_manual:
+                logger.debug(
+                    f"Trace validation skipped for question {context.question_id}: Manual trace (interface='manual')"
+                )
+            else:
+                logger.debug(
+                    f"Trace validation skipped for question {context.question_id}: "
+                    f"MCP not enabled (regular LLM response)"
+                )
             return
 
         # MCP agent trace - validate it ends with an AI message
