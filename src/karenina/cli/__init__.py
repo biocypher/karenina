@@ -11,17 +11,18 @@ app = typer.Typer(
     name="karenina",
     help="Karenina - LLM Benchmark Verification CLI",
     add_completion=False,
+    invoke_without_command=True,
 )
 
 
 @app.callback()
-def callback() -> None:
+def callback(ctx: typer.Context) -> None:
     """
     Karenina CLI for running benchmark verifications.
-
-    Use 'karenina --help' to see available commands.
     """
-    pass
+    if ctx.invoked_subcommand is None:
+        # No subcommand was invoked, show help
+        print(ctx.get_help())
 
 
 # Import subcommands (will be implemented in subsequent phases)
