@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch
 
 from pydantic import Field
 
+from karenina.benchmark.verification.evaluators.template_evaluator import ParseResult
 from karenina.benchmark.verification.stage import VerificationContext
 from karenina.benchmark.verification.stages.parse_template import ParseTemplateStage
 from karenina.schemas.domain import BaseAnswer
@@ -52,12 +53,10 @@ class TestParseTemplateStage:
         stage = ParseTemplateStage()
         assert stage.should_run(basic_context) is False
 
-    @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
-    @patch("karenina.benchmark.verification.stages.parse_template.PydanticOutputParser")
+    @patch("karenina.benchmark.verification.stages.parse_template.TemplateEvaluator")
     def test_standard_parsing_success(
         self,
-        mock_parser_class: Mock,
-        mock_init_llm: Mock,
+        mock_evaluator_class: Mock,
         basic_context: VerificationContext,
     ) -> None:
         """Test successful standard parsing without deep-judgment."""
@@ -67,24 +66,23 @@ class TestParseTemplateStage:
         basic_context.set_artifact("Answer", MockAnswer)
         basic_context.set_artifact("raw_llm_response", "The answer is 4")
 
-        # Mock LLM and its invoke response
-        mock_llm = Mock()
-        mock_llm_response = Mock()
-        mock_llm_response.content = '{"result": 4, "correct": {"value": 4}, "question_id": "test_q123"}'
-        mock_llm.invoke.return_value = mock_llm_response
-        mock_init_llm.return_value = mock_llm
+        # Mock evaluator
+        mock_evaluator = Mock()
+        mock_evaluator.model_str = "openai/gpt-4"
+        mock_evaluator_class.return_value = mock_evaluator
 
-        # Mock parser
-        mock_parser = Mock()
-        mock_parser_class.return_value = mock_parser
-
-        # Mock successful parsing
-        parsed_result = MockAnswer(
+        # Mock successful parsing result
+        parsed_answer = MockAnswer(
             result=4,
             correct={"value": 4},
             question_id="test_q123",
         )
-        mock_parser.parse.return_value = parsed_result
+        mock_parse_result = ParseResult(
+            parsed_answer=parsed_answer,
+            success=True,
+            deep_judgment_performed=False,
+        )
+        mock_evaluator.parse_response.return_value = mock_parse_result
 
         # Execute stage
         stage = ParseTemplateStage()
@@ -97,12 +95,10 @@ class TestParseTemplateStage:
         assert parsed.result == 4
         assert basic_context.get_artifact("deep_judgment_performed") is False
 
-    @patch("karenina.benchmark.verification.stages.parse_template.deep_judgment_parse")
-    @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
+    @patch("karenina.benchmark.verification.stages.parse_template.TemplateEvaluator")
     def test_deep_judgment_parsing(
         self,
-        mock_init_llm: Mock,
-        mock_deep_judgment: Mock,
+        mock_evaluator_class: Mock,
         basic_context: VerificationContext,
     ) -> None:
         """Test deep-judgment parsing when enabled."""
@@ -112,28 +108,29 @@ class TestParseTemplateStage:
         basic_context.set_artifact("Answer", MockAnswer)
         basic_context.set_artifact("raw_llm_response", "The answer is 4")
 
-        # Mock LLM
-        mock_llm = Mock()
-        mock_init_llm.return_value = mock_llm
+        # Mock evaluator
+        mock_evaluator = Mock()
+        mock_evaluator.model_str = "openai/gpt-4"
+        mock_evaluator_class.return_value = mock_evaluator
 
-        # Mock deep-judgment parse
-        parsed_result = MockAnswer(
+        # Mock deep-judgment parse result
+        parsed_answer = MockAnswer(
             result=4,
             correct={"value": 4},
             question_id="test_q123",
         )
-        mock_deep_judgment.return_value = (
-            parsed_result,  # parsed_answer
-            {"result": [{"text": "The answer is 4", "confidence": "high"}]},  # extracted_excerpts
-            {"result": "Basic arithmetic"},  # attribute_reasoning
-            {  # dj_metadata dictionary
-                "stages_completed": ["excerpt_extraction", "attribute_parsing"],
-                "model_calls": 3,
-                "excerpt_retry_count": 0,
-                "attributes_without_excerpts": [],
-                "hallucination_risk": {},
-            },
+        mock_parse_result = ParseResult(
+            parsed_answer=parsed_answer,
+            success=True,
+            deep_judgment_performed=True,
+            extracted_excerpts={"result": [{"text": "The answer is 4", "confidence": "high"}]},
+            attribute_reasoning={"result": "Basic arithmetic"},
+            deep_judgment_stages_completed=["excerpt_extraction", "attribute_parsing"],
+            deep_judgment_model_calls=3,
+            deep_judgment_excerpt_retry_count=0,
+            attributes_without_excerpts=[],
         )
+        mock_evaluator.parse_response.return_value = mock_parse_result
 
         # Execute stage
         stage = ParseTemplateStage()
@@ -146,54 +143,48 @@ class TestParseTemplateStage:
         assert basic_context.has_artifact("attribute_reasoning")
         assert basic_context.get_artifact("deep_judgment_model_calls") == 3
 
-    @patch("karenina.benchmark.verification.stages.parse_template._should_expose_ground_truth")
-    @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
-    @patch("karenina.benchmark.verification.stages.parse_template.PydanticOutputParser")
+    @patch("karenina.benchmark.verification.stages.parse_template.TemplateEvaluator")
     def test_ground_truth_exposure(
         self,
-        mock_parser_class: Mock,
-        mock_init_llm: Mock,
-        mock_should_expose: Mock,
+        mock_evaluator_class: Mock,
         basic_context: VerificationContext,
     ) -> None:
         """Test that ground truth is exposed when configured."""
-        # Configure ground truth exposure
-        mock_should_expose.return_value = True
+        # Set up context
         basic_context.set_artifact("RawAnswer", MockAnswer)
         basic_context.set_artifact("Answer", MockAnswer)
         basic_context.set_artifact("raw_llm_response", "The answer is 4")
 
-        # Mock LLM and its invoke response
-        mock_llm = Mock()
-        mock_llm_response = Mock()
-        mock_llm_response.content = '{"result": 4, "correct": {"value": 4}, "question_id": "test_q123"}'
-        mock_llm.invoke.return_value = mock_llm_response
-        mock_init_llm.return_value = mock_llm
+        # Mock evaluator
+        mock_evaluator = Mock()
+        mock_evaluator.model_str = "openai/gpt-4"
+        mock_evaluator_class.return_value = mock_evaluator
 
-        # Mock parser
-        mock_parser = Mock()
-        mock_parser_class.return_value = mock_parser
-        parsed_result = MockAnswer(
+        # Mock successful parsing result
+        parsed_answer = MockAnswer(
             result=4,
             correct={"value": 4},
             question_id="test_q123",
         )
-        mock_parser.parse.return_value = parsed_result
+        mock_parse_result = ParseResult(
+            parsed_answer=parsed_answer,
+            success=True,
+            deep_judgment_performed=False,
+        )
+        mock_evaluator.parse_response.return_value = mock_parse_result
 
         # Execute stage
         stage = ParseTemplateStage()
         stage.execute(basic_context)
 
-        # Verify ground truth exposure was checked
-        mock_should_expose.assert_called_once()
+        # Verify evaluator was called (ground truth exposure is internal to evaluator now)
+        mock_evaluator.parse_response.assert_called_once()
         assert basic_context.error is None
 
-    @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
-    @patch("karenina.benchmark.verification.stages.parse_template.PydanticOutputParser")
+    @patch("karenina.benchmark.verification.stages.parse_template.TemplateEvaluator")
     def test_parsing_failure(
         self,
-        mock_parser_class: Mock,
-        mock_init_llm: Mock,
+        mock_evaluator_class: Mock,
         basic_context: VerificationContext,
     ) -> None:
         """Test handling of parsing failures."""
@@ -202,17 +193,17 @@ class TestParseTemplateStage:
         basic_context.set_artifact("Answer", MockAnswer)
         basic_context.set_artifact("raw_llm_response", "Invalid unparseable response")
 
-        # Mock LLM and its invoke response
-        mock_llm = Mock()
-        mock_llm_response = Mock()
-        mock_llm_response.content = "Invalid JSON that cannot be parsed"
-        mock_llm.invoke.return_value = mock_llm_response
-        mock_init_llm.return_value = mock_llm
+        # Mock evaluator
+        mock_evaluator = Mock()
+        mock_evaluator.model_str = "openai/gpt-4"
+        mock_evaluator_class.return_value = mock_evaluator
 
-        # Mock parser to raise exception
-        mock_parser = Mock()
-        mock_parser_class.return_value = mock_parser
-        mock_parser.parse.side_effect = Exception("Failed to parse response")
+        # Mock failed parsing result
+        mock_parse_result = ParseResult(
+            success=False,
+            error="Failed to parse response",
+        )
+        mock_evaluator.parse_response.return_value = mock_parse_result
 
         # Execute stage
         stage = ParseTemplateStage()
@@ -220,14 +211,12 @@ class TestParseTemplateStage:
 
         # Verify error was set
         assert basic_context.error is not None
-        assert "Parsing failed" in basic_context.error
+        assert "Failed to parse response" in basic_context.error
 
-    @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
-    @patch("karenina.benchmark.verification.stages.parse_template.PydanticOutputParser")
+    @patch("karenina.benchmark.verification.stages.parse_template.TemplateEvaluator")
     def test_invalid_response_format(
         self,
-        mock_parser_class: Mock,
-        mock_init_llm: Mock,
+        mock_evaluator_class: Mock,
         basic_context: VerificationContext,
     ) -> None:
         """Test handling of responses with invalid format."""
@@ -236,14 +225,17 @@ class TestParseTemplateStage:
         basic_context.set_artifact("Answer", MockAnswer)
         basic_context.set_artifact("raw_llm_response", "```\nNot valid JSON\n```")
 
-        # Mock LLM
-        mock_llm = Mock()
-        mock_init_llm.return_value = mock_llm
+        # Mock evaluator
+        mock_evaluator = Mock()
+        mock_evaluator.model_str = "openai/gpt-4"
+        mock_evaluator_class.return_value = mock_evaluator
 
-        # Mock parser to fail on invalid format
-        mock_parser = Mock()
-        mock_parser_class.return_value = mock_parser
-        mock_parser.parse.side_effect = ValueError("Invalid JSON format")
+        # Mock failed parsing result
+        mock_parse_result = ParseResult(
+            success=False,
+            error="Invalid JSON format",
+        )
+        mock_evaluator.parse_response.return_value = mock_parse_result
 
         # Execute stage
         stage = ParseTemplateStage()
@@ -252,20 +244,20 @@ class TestParseTemplateStage:
         # Verify error was set
         assert basic_context.error is not None
 
-    @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
+    @patch("karenina.benchmark.verification.stages.parse_template.TemplateEvaluator")
     def test_error_handling_llm_initialization(
         self,
-        mock_init_llm: Mock,
+        mock_evaluator_class: Mock,
         basic_context: VerificationContext,
     ) -> None:
-        """Test error handling when parsing LLM initialization fails."""
+        """Test error handling when TemplateEvaluator initialization fails."""
         # Set up context
         basic_context.set_artifact("RawAnswer", MockAnswer)
         basic_context.set_artifact("Answer", MockAnswer)
         basic_context.set_artifact("raw_llm_response", "The answer is 4")
 
-        # Mock LLM initialization failure
-        mock_init_llm.side_effect = Exception("Failed to initialize parsing model")
+        # Mock evaluator initialization failure
+        mock_evaluator_class.side_effect = RuntimeError("Failed to initialize LLM for template evaluation")
 
         # Execute stage
         stage = ParseTemplateStage()
@@ -273,7 +265,7 @@ class TestParseTemplateStage:
 
         # Verify error was set
         assert basic_context.error is not None
-        assert "Failed to initialize parsing model" in basic_context.error
+        assert "Failed to create TemplateEvaluator" in basic_context.error
 
     def test_stage_metadata(self) -> None:
         """Test stage name and artifact declarations."""
@@ -286,66 +278,53 @@ class TestParseTemplateStage:
         assert "parsed_answer" in stage.produces
         assert "parsing_model_str" in stage.produces
         assert "deep_judgment_performed" in stage.produces
+        assert "template_evaluator" in stage.produces  # New artifact
 
-    @patch("karenina.benchmark.verification.stages.parse_template._retry_parse_with_null_feedback")
-    @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
-    @patch("karenina.benchmark.verification.stages.parse_template.PydanticOutputParser")
+    @patch("karenina.benchmark.verification.stages.parse_template.TemplateEvaluator")
     def test_null_value_retry_on_parsing_failure(
         self,
-        mock_parser_class: Mock,
-        mock_init_llm: Mock,
-        mock_retry: Mock,
+        mock_evaluator_class: Mock,
         basic_context: VerificationContext,
     ) -> None:
-        """Test that null-value retry is triggered when parsing fails with null values."""
+        """Test that null-value retry is handled by evaluator when parsing fails with null values."""
         # Set up context
         basic_context.set_artifact("RawAnswer", MockAnswer)
         basic_context.set_artifact("Answer", MockAnswer)
         basic_context.set_artifact("raw_llm_response", "The answer is 4")
 
-        # Mock LLM and its invoke response with null values
-        mock_llm = Mock()
-        mock_llm_response = Mock()
-        mock_llm_response.content = '{"result": null, "correct": null, "question_id": "test_q123"}'
-        mock_llm.invoke.return_value = mock_llm_response
-        mock_init_llm.return_value = mock_llm
+        # Mock evaluator
+        mock_evaluator = Mock()
+        mock_evaluator.model_str = "openai/gpt-4"
+        mock_evaluator_class.return_value = mock_evaluator
 
-        # Mock parser to fail on first attempt (null values)
-        mock_parser = Mock()
-        mock_parser_class.return_value = mock_parser
-        mock_parser.parse.side_effect = ValueError(
-            "1 validation error for Answer\nresult\n  Input should be a valid number [type=int_type, input_value=None, input_type=NoneType]"
-        )
-
-        # Mock successful retry
-        retried_answer = MockAnswer(
+        # Mock successful parsing result (after internal retry)
+        parsed_answer = MockAnswer(
             result=4,
             correct={"value": 4},
             question_id="test_q123",
         )
-        mock_retry.return_value = (retried_answer, {"input_tokens": 100, "output_tokens": 50})
+        mock_parse_result = ParseResult(
+            parsed_answer=parsed_answer,
+            success=True,
+            deep_judgment_performed=False,
+            usage_metadata_list=[],  # Empty list - usage tracking not tested here
+        )
+        mock_evaluator.parse_response.return_value = mock_parse_result
 
         # Execute stage
         stage = ParseTemplateStage()
         stage.execute(basic_context)
 
-        # Verify retry was called
-        mock_retry.assert_called_once()
-
-        # Verify successful retry result
+        # Verify successful result (retry is internal to evaluator now)
         assert basic_context.error is None
         assert basic_context.has_artifact("parsed_answer")
         parsed = basic_context.get_artifact("parsed_answer")
         assert parsed.result == 4
 
-    @patch("karenina.benchmark.verification.stages.parse_template._retry_parse_with_null_feedback")
-    @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
-    @patch("karenina.benchmark.verification.stages.parse_template.PydanticOutputParser")
+    @patch("karenina.benchmark.verification.stages.parse_template.TemplateEvaluator")
     def test_null_value_retry_fails_marks_error(
         self,
-        mock_parser_class: Mock,
-        mock_init_llm: Mock,
-        mock_retry: Mock,
+        mock_evaluator_class: Mock,
         basic_context: VerificationContext,
     ) -> None:
         """Test that error is marked when null-value retry also fails."""
@@ -354,72 +333,53 @@ class TestParseTemplateStage:
         basic_context.set_artifact("Answer", MockAnswer)
         basic_context.set_artifact("raw_llm_response", "The answer is 4")
 
-        # Mock LLM
-        mock_llm = Mock()
-        mock_llm_response = Mock()
-        mock_llm_response.content = '{"result": null, "correct": null, "question_id": "test_q123"}'
-        mock_llm.invoke.return_value = mock_llm_response
-        mock_init_llm.return_value = mock_llm
+        # Mock evaluator
+        mock_evaluator = Mock()
+        mock_evaluator.model_str = "openai/gpt-4"
+        mock_evaluator_class.return_value = mock_evaluator
 
-        # Mock parser to fail
-        mock_parser = Mock()
-        mock_parser_class.return_value = mock_parser
-        original_error = ValueError(
-            "1 validation error for Answer\nresult\n  Input should be a valid number [type=int_type, input_value=None, input_type=NoneType]"
+        # Mock failed parsing result (retry also failed)
+        mock_parse_result = ParseResult(
+            success=False,
+            error="Parsing failed: 1 validation error for Answer - result field has null value",
         )
-        mock_parser.parse.side_effect = original_error
-
-        # Mock failed retry (returns None)
-        mock_retry.return_value = (None, {})
+        mock_evaluator.parse_response.return_value = mock_parse_result
 
         # Execute stage
         stage = ParseTemplateStage()
         stage.execute(basic_context)
-
-        # Verify retry was attempted
-        mock_retry.assert_called_once()
 
         # Verify error was marked
         assert basic_context.error is not None
         assert "Parsing failed" in basic_context.error
 
-    @patch("karenina.benchmark.verification.stages.parse_template._retry_parse_with_null_feedback")
-    @patch("karenina.benchmark.verification.stages.parse_template.init_chat_model_unified")
-    @patch("karenina.benchmark.verification.stages.parse_template.PydanticOutputParser")
+    @patch("karenina.benchmark.verification.stages.parse_template.TemplateEvaluator")
     def test_no_retry_for_non_null_errors(
         self,
-        mock_parser_class: Mock,
-        mock_init_llm: Mock,
-        mock_retry: Mock,
+        mock_evaluator_class: Mock,
         basic_context: VerificationContext,
     ) -> None:
-        """Test that retry is NOT triggered for non-null parsing errors."""
+        """Test that non-null parsing errors are handled by evaluator."""
         # Set up context
         basic_context.set_artifact("RawAnswer", MockAnswer)
         basic_context.set_artifact("Answer", MockAnswer)
         basic_context.set_artifact("raw_llm_response", "The answer is 4")
 
-        # Mock LLM
-        mock_llm = Mock()
-        mock_llm_response = Mock()
-        mock_llm_response.content = '{"result": "not a number", "correct": {}, "question_id": "test_q123"}'
-        mock_llm.invoke.return_value = mock_llm_response
-        mock_init_llm.return_value = mock_llm
+        # Mock evaluator
+        mock_evaluator = Mock()
+        mock_evaluator.model_str = "openai/gpt-4"
+        mock_evaluator_class.return_value = mock_evaluator
 
-        # Mock parser to fail with non-null error
-        mock_parser = Mock()
-        mock_parser_class.return_value = mock_parser
-        mock_parser.parse.side_effect = ValueError("Invalid type: expected int, got str")
-
-        # Mock retry to return None (not triggered for non-null errors)
-        mock_retry.return_value = (None, {})
+        # Mock failed parsing result
+        mock_parse_result = ParseResult(
+            success=False,
+            error="Parsing failed: Invalid type - expected int, got str",
+        )
+        mock_evaluator.parse_response.return_value = mock_parse_result
 
         # Execute stage
         stage = ParseTemplateStage()
         stage.execute(basic_context)
-
-        # Verify retry was still called but returned None (non-null error)
-        mock_retry.assert_called_once()
 
         # Verify error was marked
         assert basic_context.error is not None

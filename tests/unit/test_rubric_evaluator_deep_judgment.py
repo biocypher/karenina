@@ -336,7 +336,7 @@ class TestDeepJudgmentFlows:
         return "Photosynthesis is the process by which plants convert light energy into chemical energy."
 
     @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
-    def test_flow_with_excerpts_full_pipeline(self, mock_init_model, _mock_model_config):
+    def test_flow_with_excerpts_full_pipeline(self, mock_init_model, mock_model_config):  # noqa: ARG002
         """Test full pipeline: extract → validate → reasoning → scoring."""
         mock_llm = Mock()
         mock_init_model.return_value = mock_llm
@@ -367,7 +367,7 @@ class TestDeepJudgmentFlows:
         assert mock_llm.invoke.call_count == 0  # Not called yet
 
     @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
-    def test_flow_without_excerpts(self, mock_init_model, _mock_model_config):
+    def test_flow_without_excerpts(self, mock_init_model, mock_model_config):  # noqa: ARG002
         """Test flow without excerpts: reasoning → scoring (2 stages)."""
         mock_llm = Mock()
         mock_init_model.return_value = mock_llm
@@ -394,7 +394,7 @@ class TestDeepJudgmentFlows:
         assert trait.deep_judgment_excerpt_enabled is False
 
     @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
-    def test_mixed_excerpt_settings(self, mock_init_model, _mock_model_config):
+    def test_mixed_excerpt_settings(self, mock_init_model, mock_model_config):  # noqa: ARG002
         """Test rubric with mixed excerpt settings."""
         mock_llm = Mock()
         mock_init_model.return_value = mock_llm
@@ -455,7 +455,7 @@ class TestDeepJudgmentConfiguration:
         )
 
     @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
-    def test_per_trait_max_excerpts_override(self, mock_init_model, _mock_model_config):
+    def test_per_trait_max_excerpts_override(self, mock_init_model, mock_model_config):  # noqa: ARG002
         """Test per-trait max_excerpts override."""
         mock_llm = Mock()
         mock_init_model.return_value = mock_llm
@@ -475,7 +475,7 @@ class TestDeepJudgmentConfiguration:
         assert trait.deep_judgment_max_excerpts == 10
 
     @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
-    def test_per_trait_fuzzy_threshold_override(self, mock_init_model, _mock_model_config):
+    def test_per_trait_fuzzy_threshold_override(self, mock_init_model, mock_model_config):  # noqa: ARG002
         """Test per-trait fuzzy_threshold override."""
         mock_llm = Mock()
         mock_init_model.return_value = mock_llm
@@ -494,7 +494,7 @@ class TestDeepJudgmentConfiguration:
         assert trait.deep_judgment_fuzzy_match_threshold == 0.95
 
     @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
-    def test_boolean_trait_evaluation(self, mock_init_model, _mock_model_config):
+    def test_boolean_trait_evaluation(self, mock_init_model, mock_model_config):  # noqa: ARG002
         """Test deep judgment evaluation of boolean traits."""
         mock_llm = Mock()
         mock_init_model.return_value = mock_llm
@@ -527,7 +527,7 @@ class TestDeepJudgmentConfiguration:
         assert not trait.validate_score(5)
 
     @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
-    def test_score_trait_evaluation(self, mock_init_model, _mock_model_config):
+    def test_score_trait_evaluation(self, mock_init_model, mock_model_config):  # noqa: ARG002
         """Test deep judgment evaluation of score traits."""
         mock_llm = Mock()
         mock_init_model.return_value = mock_llm
@@ -552,7 +552,7 @@ class TestDeepJudgmentConfiguration:
         assert not trait.validate_score(True)
 
     @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
-    def test_score_range_validation(self, mock_init_model, _mock_model_config):
+    def test_score_range_validation(self, mock_init_model, mock_model_config):  # noqa: ARG002
         """Test custom score range validation."""
         mock_llm = Mock()
         mock_init_model.return_value = mock_llm
@@ -675,7 +675,7 @@ class TestDeepJudgmentEdgeCases:
             assert len(result["excerpts"]) >= 1
 
     @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
-    def test_search_enabled_without_excerpts(self, mock_init_model, _mock_model_config):
+    def test_search_enabled_without_excerpts(self, mock_init_model, mock_model_config):  # noqa: ARG002
         """Test that search_enabled without excerpt_enabled is handled gracefully."""
         mock_llm = Mock()
         mock_init_model.return_value = mock_llm

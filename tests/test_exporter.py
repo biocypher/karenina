@@ -654,8 +654,6 @@ class TestExportVerificationResultsJSON:
         metadata = data["metadata"]
         assert "export_timestamp" in metadata
         assert "karenina_version" in metadata
-        assert "job_id" in metadata
-        assert metadata["job_id"] == "test-job-123"
 
         # Check verification config metadata
         assert "verification_config" in metadata

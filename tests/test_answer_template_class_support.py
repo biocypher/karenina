@@ -35,7 +35,7 @@ class TestAnswerClassSupport:
         # Verify the template was converted to source code
         template_code = question_data["answer_template"]
         assert template_code is not None
-        assert "class TestFileAnswer(BaseAnswer):" in template_code
+        assert "class Answer(BaseAnswer):" in template_code  # Class name is normalized to "Answer"
         assert 'value: int = Field(description="Test value")' in template_code
         assert "def verify(self) -> bool:" in template_code
         assert "return self.value == 42" in template_code
@@ -58,11 +58,11 @@ class TestAnswerClassSupport:
 
 class Answer(BaseAnswer):
     """Custom answer template."""
-    result: str = Field(description="The result")
+    result: str = Field(description='The result')
 
     def verify(self) -> bool:
-        return self.result == "correct"
-'''
+        return self.result == 'correct'
+'''[:-1]  # Remove trailing newline to match stored format
         DynamicAnswer._source_code = custom_source
 
         # Add question with Answer class that has custom source
@@ -206,7 +206,7 @@ class Answer(BaseAnswer):
 
         # Template from Answer class
         template_code = question_data["answer_template"]
-        assert "class LanguageAnswer(BaseAnswer):" in template_code
+        assert "class Answer(BaseAnswer):" in template_code
         assert "language: str = Field(" in template_code
 
     def test_add_question_answer_class_with_traditional_parameters(self) -> None:
@@ -246,7 +246,7 @@ class Answer(BaseAnswer):
 
         # Verify Answer class was converted
         template_code = question_data["answer_template"]
-        assert "class MathAnswer(BaseAnswer):" in template_code
+        assert "class Answer(BaseAnswer):" in template_code
         assert "operation: str = Field(" in template_code
 
     def test_add_question_string_template_still_works(self) -> None:
@@ -316,7 +316,7 @@ class Answer(BaseAnswer):
         # Verify it worked the same as direct QuestionManager usage
         question_data = benchmark.get_question(q_id)
         template_code = question_data["answer_template"]
-        assert "class DelegationAnswer(BaseAnswer):" in template_code
+        assert "class Answer(BaseAnswer):" in template_code
         assert "delegated: bool = Field(" in template_code
 
     def test_answer_with_id_wrapper_pattern_compatibility(self) -> None:
@@ -344,11 +344,11 @@ class Answer(BaseAnswer):
 
 class Answer(BaseAnswer):
     """Original answer template."""
-    original_field: str = Field(description="Original field")
+    original_field: str = Field(description='Original field')
 
     def verify(self) -> bool:
         return True
-'''
+'''[:-1]  # Remove trailing newline
         AnswerWithID._source_code = original_source
 
         # Add question with AnswerWithID (should use preserved source)
@@ -397,7 +397,7 @@ class TestAnswerClassIntegration:
 
         # Verify both Answer class and rubric work together
         question_data = benchmark.get_question(q_id)
-        assert "class RubricAnswer(BaseAnswer):" in question_data["answer_template"]
+        assert "class Answer(BaseAnswer):" in question_data["answer_template"]  # Class name is normalized
         assert question_data.get("question_rubric") is not None
 
     def test_answer_class_with_batch_operations(self) -> None:
@@ -428,7 +428,7 @@ class TestAnswerClassIntegration:
         for q_id in question_ids:
             question_data = benchmark.get_question(q_id)
             template_code = question_data["answer_template"]
-            assert "class BatchAnswer(BaseAnswer):" in template_code
+            assert "class Answer(BaseAnswer):" in template_code
             assert "batch_id: int = Field(" in template_code
 
     def test_answer_class_with_export_operations(self) -> None:
@@ -456,7 +456,7 @@ class TestAnswerClassIntegration:
         # Test dictionary export
         dict_export = benchmark.to_dict()
         question_data = next(q for q in dict_export["questions"] if q["id"] == q_id)
-        assert "class ExportAnswer(BaseAnswer):" in question_data["answer_template"]
+        assert "class Answer(BaseAnswer):" in question_data["answer_template"]  # Class name is normalized
 
         # Test CSV export
         csv_export = benchmark.to_csv()

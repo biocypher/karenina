@@ -195,6 +195,10 @@ class RubricEvaluationStage(BaseVerificationStage):
 
         Rubric evaluation is independent of other verification stages,
         so it runs even if template verification failed.
+
+        However, if trace validation failed (trace doesn't end with AI message)
+        and we need to extract the final AI message (use_full_trace_for_rubric=False),
+        then skip rubric evaluation since extraction would fail.
         """
         if context.error:
             return False
@@ -205,7 +209,19 @@ class RubricEvaluationStage(BaseVerificationStage):
 
         # Check if any trait lists are non-empty
         has_traits = any([rubric.llm_traits, rubric.regex_traits, rubric.callable_traits, rubric.metric_traits])
-        return has_traits
+        if not has_traits:
+            return False
+
+        # If trace validation failed and we need extraction, skip rubric evaluation
+        trace_validation_failed = context.get_artifact("trace_validation_failed", False)
+        if trace_validation_failed and not context.use_full_trace_for_rubric:
+            logger.info(
+                f"Skipping rubric evaluation for question {context.question_id}: "
+                f"trace validation failed and use_full_trace_for_rubric=False"
+            )
+            return False
+
+        return True
 
     def execute(self, context: VerificationContext) -> None:
         """
@@ -431,5 +447,8 @@ class RubricEvaluationStage(BaseVerificationStage):
         context.set_result_field("metric_trait_metrics", metric_results)
         # Note: evaluation_rubric is now stored in shared_data at export time (not per-result)
         context.set_result_field("rubric_evaluation_strategy", context.rubric_evaluation_strategy)
-        # Note: trace filtering fields (evaluation_input, used_full_trace, trace_extraction_error)
-        # are stored at the root level by parse_template stage
+
+        # Store rubric-specific trace filtering fields
+        context.set_result_field("used_full_trace_for_rubric", use_full_trace)
+        context.set_result_field("rubric_evaluation_input", rubric_evaluation_input)
+        context.set_result_field("rubric_trace_extraction_error", rubric_trace_extraction_error)

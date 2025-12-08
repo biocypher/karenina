@@ -28,7 +28,7 @@ def test_get_all_trait_scores_all_types() -> None:
         rubric=VerificationResultRubric(
             rubric_evaluation_performed=True,
             llm_trait_scores={"clarity": 4, "analysis_quality": 2},
-            manual_trait_scores={"mentions_regulatory_elements": True},
+            regex_trait_scores={"mentions_regulatory_elements": True},
             metric_trait_scores={"feature_identification": {"precision": 1.0, "recall": 1.0, "f1": 1.0}},
             evaluation_rubric={
                 "traits": [
@@ -47,7 +47,7 @@ def test_get_all_trait_scores_all_types() -> None:
                         "max_score": 5,
                     },
                 ],
-                "manual_traits": [
+                "regex_traits": [
                     {
                         "name": "mentions_regulatory_elements",
                         "description": "Mentions regulatory elements",
@@ -142,7 +142,7 @@ def test_get_all_trait_scores_partial_data() -> None:
                         "max_score": 5,
                     }
                 ],
-                "manual_traits": [],
+                "regex_traits": [],
                 "metric_traits": [],
             },
         ),
@@ -208,7 +208,7 @@ def test_get_trait_by_name_llm() -> None:
                         "max_score": 5,
                     }
                 ],
-                "manual_traits": [],
+                "regex_traits": [],
                 "metric_traits": [],
             },
         ),
@@ -219,8 +219,8 @@ def test_get_trait_by_name_llm() -> None:
     assert trait_type == "llm"
 
 
-def test_get_trait_by_name_manual() -> None:
-    """Test get_trait_by_name for manual traits."""
+def test_get_trait_by_name_regex() -> None:
+    """Test get_trait_by_name for regex traits."""
     result = VerificationResult(
         metadata=VerificationResultMetadata(
             question_id="test_q1",
@@ -237,10 +237,10 @@ def test_get_trait_by_name_manual() -> None:
         ),
         rubric=VerificationResultRubric(
             rubric_evaluation_performed=True,
-            manual_trait_scores={"has_citation": True},
+            regex_trait_scores={"has_citation": True},
             evaluation_rubric={
                 "traits": [],
-                "manual_traits": [
+                "regex_traits": [
                     {
                         "name": "has_citation",
                         "description": "Has citation",
@@ -257,7 +257,7 @@ def test_get_trait_by_name_manual() -> None:
 
     value, trait_type = result.rubric.get_trait_by_name("has_citation")
     assert value is True
-    assert trait_type == "manual"
+    assert trait_type == "regex"
 
 
 def test_get_trait_by_name_metric() -> None:

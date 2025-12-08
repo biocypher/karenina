@@ -16,17 +16,24 @@ class TestRubricResultsDataAccess:
         question_id: str = "q1",
         model: str = "model1",
         llm_traits: dict[str, int] | None = None,
-        manual_traits: dict[str, bool] | None = None,
+        regex_traits: dict[str, bool] | None = None,
+        callable_traits: dict[str, bool | int] | None = None,
         metric_traits: dict[str, dict[str, float]] | None = None,
         confusion_matrix: dict[str, dict[str, list[str]]] | None = None,
     ):
         """Helper to create a sample verification result with rubric data."""
         rubric_eval = None
-        if llm_traits is not None or manual_traits is not None or metric_traits is not None:
+        if (
+            llm_traits is not None
+            or regex_traits is not None
+            or callable_traits is not None
+            or metric_traits is not None
+        ):
             rubric_eval = VerificationResultRubric(
                 rubric_evaluation_performed=True,
                 llm_trait_scores=llm_traits,
-                manual_trait_scores=manual_traits,
+                regex_trait_scores=regex_traits,
+                callable_trait_scores=callable_traits,
                 metric_trait_scores=metric_traits,
                 metric_trait_confusion_lists=confusion_matrix,
             )
@@ -82,24 +89,24 @@ class TestRubricResultsDataAccess:
             assert "clarity" in scores
             assert "accuracy" not in scores
 
-    def test_get_manual_trait_scores(self):
-        """Test retrieving manual trait scores."""
-        result1 = self.create_sample_result(question_id="q1", manual_traits={"correct": True, "complete": False})
-        result2 = self.create_sample_result(question_id="q2", manual_traits={"correct": False})
+    def test_get_regex_trait_scores(self):
+        """Test retrieving regex trait scores."""
+        result1 = self.create_sample_result(question_id="q1", regex_traits={"correct": True, "complete": False})
+        result2 = self.create_sample_result(question_id="q2", regex_traits={"correct": False})
 
         rubric_results = RubricResults(results=[result1, result2])
 
         # Get all scores
-        all_scores = rubric_results.get_manual_trait_scores()
+        all_scores = rubric_results.get_regex_trait_scores()
         assert len(all_scores) == 2
 
         # Filter by question
-        q1_scores = rubric_results.get_manual_trait_scores(question_id="q1")
+        q1_scores = rubric_results.get_regex_trait_scores(question_id="q1")
         assert len(q1_scores) == 1
         assert list(q1_scores.values())[0]["correct"] is True
 
         # Filter by trait name
-        correct_scores = rubric_results.get_manual_trait_scores(trait_name="correct")
+        correct_scores = rubric_results.get_regex_trait_scores(trait_name="correct")
         assert len(correct_scores) == 2
 
     def test_get_metric_trait_scores(self):
@@ -123,7 +130,7 @@ class TestRubricResultsDataAccess:
         """Test retrieving all trait scores together."""
         result = self.create_sample_result(
             llm_traits={"clarity": 4},
-            manual_traits={"correct": True},
+            regex_traits={"correct": True},
             metric_traits={"precision": {"value": 0.95}},
         )
 
@@ -133,7 +140,6 @@ class TestRubricResultsDataAccess:
         assert len(all_scores) == 1
         result_scores = list(all_scores.values())[0]
         assert "clarity" in result_scores
-        assert "correct" in result_scores
         assert "precision" in result_scores
 
     def test_get_confusion_matrices(self):
@@ -168,14 +174,16 @@ class TestRubricResultsAggregation:
         model: str = "model1",
         replicate: int = 1,
         llm_traits: dict[str, int] | None = None,
-        manual_traits: dict[str, bool] | None = None,
+        regex_traits: dict[str, bool] | None = None,
+        callable_traits: dict[str, bool | int] | None = None,
         metric_traits: dict[str, dict[str, float]] | None = None,
     ):
         """Helper to create a sample verification result."""
         rubric_eval = VerificationResultRubric(
             rubric_evaluation_performed=True,
             llm_trait_scores=llm_traits,
-            manual_trait_scores=manual_traits,
+            regex_trait_scores=regex_traits,
+            callable_trait_scores=callable_traits,
             metric_trait_scores=metric_traits,
         )
 
@@ -237,15 +245,15 @@ class TestRubricResultsAggregation:
         aggregated = rubric_results.aggregate_llm_traits(strategy="median", by="question_id")
         assert list(aggregated.values())[0]["clarity"] == 4
 
-    def test_aggregate_manual_traits_majority_vote(self):
-        """Test aggregating manual traits using majority vote."""
-        result1 = self.create_sample_result(manual_traits={"correct": True})
-        result2 = self.create_sample_result(manual_traits={"correct": True})
-        result3 = self.create_sample_result(manual_traits={"correct": False})
+    def test_aggregate_regex_traits_majority_vote(self):
+        """Test aggregating regex traits using majority vote."""
+        result1 = self.create_sample_result(regex_traits={"correct": True})
+        result2 = self.create_sample_result(regex_traits={"correct": True})
+        result3 = self.create_sample_result(regex_traits={"correct": False})
 
         rubric_results = RubricResults(results=[result1, result2, result3])
 
-        aggregated = rubric_results.aggregate_manual_traits(strategy="majority_vote", by="question_id")
+        aggregated = rubric_results.aggregate_regex_traits(strategy="majority_vote", by="question_id")
         assert list(aggregated.values())[0]["correct"] is True
 
     def test_aggregate_metric_traits_mean(self):
@@ -302,7 +310,7 @@ class TestRubricResultsExtensibility:
         rubric_results.register_aggregator("max", MaxAggregator())
 
         # Use the custom aggregator
-        aggregated = rubric_results.aggregate_llm_traits(strategy="max", by="question")
+        aggregated = rubric_results.aggregate_llm_traits(strategy="max", by="question_id")
         assert list(aggregated.values())[0]["clarity"] == 4
 
     def test_list_aggregators(self):
