@@ -108,7 +108,15 @@ Override Result: False → True ✓
 
 ## Enabling Embedding Check
 
-Embedding check is **disabled by default**. Enable it using environment variables:
+Embedding check is **disabled by default**. Enable it using environment variables.
+
+### Installation
+
+Embedding check requires the `sentence-transformers` library. Install it with the optional dependency:
+
+```bash
+pip install karenina[embeddings]
+```
 
 ### Configuration
 
@@ -542,7 +550,7 @@ for result in results.results:
 
 1. Verify environment variable is set: `os.getenv("EMBEDDING_CHECK")`
 2. Check that initial verification is failing (embedding check only runs on failures)
-3. Ensure sentence-transformers is installed: `pip install sentence-transformers`
+3. Ensure sentence-transformers is installed: `pip install karenina[embeddings]`
 
 ### Issue 2: No Overrides Applied
 
