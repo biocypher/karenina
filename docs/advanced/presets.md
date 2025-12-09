@@ -62,10 +62,10 @@ Share preset files with teammates or across projects:
 
 ```bash
 # Export preset
-cp benchmark_presets/genomics-standard.json shared/
+cp presets/genomics-standard.json shared/
 
 # Teammate imports preset
-cp shared/genomics-standard.json benchmark_presets/
+cp shared/genomics-standard.json presets/
 ```
 
 ## Saving a Preset
@@ -107,7 +107,7 @@ print(f"Preset saved to: {metadata['filepath']}")
 
 **Output:**
 ```
-Preset saved to: benchmark_presets/genomics-standard-config.json
+Preset saved to: presets/genomics-standard-config.json
 ```
 
 ### What Gets Saved?
@@ -128,11 +128,11 @@ Presets include:
 
 ### Preset File Structure
 
-Presets are saved as JSON files in the `benchmark_presets/` directory:
+Presets are saved as JSON files in the `presets/` directory:
 
 ```
 project_root/
-├── benchmark_presets/
+├── presets/
 │   ├── genomics-standard-config.json
 │   ├── quick-test.json
 │   └── production-full.json
@@ -185,7 +185,7 @@ benchmark = Benchmark.load("genomics_benchmark.jsonld")
 
 # Load preset by filepath
 config = VerificationConfig.from_preset(
-    Path("benchmark_presets/genomics-standard-config.json")
+    Path("presets/genomics-standard-config.json")
 )
 
 # Run verification with loaded configuration
@@ -305,7 +305,7 @@ print("✓ Templates generated")
 
 print("\nRunning quick test...")
 test_config = VerificationConfig.from_preset(
-    Path("benchmark_presets/quick-test.json")
+    Path("presets/quick-test.json")
 )
 test_results = benchmark.run_verification(test_config)
 print(f"✓ Quick test complete: {len(test_results)} questions")
@@ -316,7 +316,7 @@ print(f"✓ Quick test complete: {len(test_results)} questions")
 
 print("\nRunning production verification...")
 prod_config = VerificationConfig.from_preset(
-    Path("benchmark_presets/production-full.json")
+    Path("presets/production-full.json")
 )
 prod_results = benchmark.run_verification(prod_config)
 print(f"✓ Production verification complete: {len(prod_results)} questions")
@@ -333,8 +333,8 @@ print("\n✓ Benchmark saved with results")
 **Example Output:**
 
 ```
-✓ Test preset saved: benchmark_presets/quick-test.json
-✓ Production preset saved: benchmark_presets/production-full.json
+✓ Test preset saved: presets/quick-test.json
+✓ Production preset saved: presets/production-full.json
 
 Generating templates...
 ✓ Templates generated
@@ -359,7 +359,7 @@ List all presets in the presets directory:
 from pathlib import Path
 import json
 
-presets_dir = Path("benchmark_presets")
+presets_dir = Path("presets")
 
 if presets_dir.exists():
     preset_files = list(presets_dir.glob("*.json"))
@@ -384,7 +384,7 @@ To update a preset, load it, modify the configuration, and save it again:
 from pathlib import Path
 
 # Load existing preset
-preset_path = Path("benchmark_presets/genomics-standard-config.json")
+preset_path = Path("presets/genomics-standard-config.json")
 config = VerificationConfig.from_preset(preset_path)
 
 # Modify configuration
@@ -407,7 +407,7 @@ Delete a preset file:
 ```python
 from pathlib import Path
 
-preset_path = Path("benchmark_presets/old-config.json")
+preset_path = Path("presets/old-config.json")
 
 if preset_path.exists():
     preset_path.unlink()
@@ -459,11 +459,11 @@ full_config.save_preset(
 
 ```python
 # During development: Use quick test
-config = VerificationConfig.from_preset(Path("benchmark_presets/quick-test.json"))
+config = VerificationConfig.from_preset(Path("presets/quick-test.json"))
 dev_results = benchmark.run_verification(config)
 
 # Before release: Use full evaluation
-config = VerificationConfig.from_preset(Path("benchmark_presets/full-evaluation.json"))
+config = VerificationConfig.from_preset(Path("presets/full-evaluation.json"))
 final_results = benchmark.run_verification(config)
 ```
 
@@ -508,7 +508,7 @@ comparison_config.save_preset(
 ```python
 # Load and run comparison
 config = VerificationConfig.from_preset(
-    Path("benchmark_presets/gpt-4-vs-claude-comparison.json")
+    Path("presets/gpt-4-vs-claude-comparison.json")
 )
 results = benchmark.run_verification(config)
 
@@ -561,10 +561,10 @@ Share preset files with teammates or across projects:
 
 ```bash
 # Copy preset to shared location
-cp benchmark_presets/genomics-standard-config.json /shared/presets/
+cp presets/genomics-standard-config.json /shared/presets/
 
 # Or commit to version control
-git add benchmark_presets/production-full.json
+git add presets/production-full.json
 git commit -m "Add production verification preset"
 git push
 ```
@@ -575,11 +575,11 @@ Import presets shared by others:
 
 ```bash
 # Copy from shared location
-cp /shared/presets/team-standard.json benchmark_presets/
+cp /shared/presets/team-standard.json presets/
 
 # Or pull from version control
 git pull
-# Preset files appear in benchmark_presets/
+# Preset files appear in presets/
 ```
 
 ### Using Presets Across Projects
@@ -654,7 +654,7 @@ ablation_config.save_preset(name="Exp: Ablation Study", description="...")
 Track preset files in version control:
 
 ```bash
-git add benchmark_presets/
+git add presets/
 git commit -m "Add genomics benchmark presets"
 ```
 
@@ -699,12 +699,12 @@ print(f"Test passed: {len(test_results)} questions verified")
 ```python
 from pathlib import Path
 
-preset_path = Path("benchmark_presets/my-config.json")
+preset_path = Path("presets/my-config.json")
 
 if not preset_path.exists():
     print(f"Preset not found: {preset_path}")
     print("Available presets:")
-    for p in Path("benchmark_presets").glob("*.json"):
+    for p in Path("presets").glob("*.json"):
         print(f"  - {p.name}")
 else:
     config = VerificationConfig.from_preset(preset_path)
@@ -720,7 +720,7 @@ else:
 import json
 from pathlib import Path
 
-preset_path = Path("benchmark_presets/broken-config.json")
+preset_path = Path("presets/broken-config.json")
 
 # Inspect preset file
 with open(preset_path) as f:
@@ -744,7 +744,7 @@ elif "answering_models" not in data["config"]:
 ```python
 from pathlib import Path
 
-presets_dir = Path("benchmark_presets")
+presets_dir = Path("presets")
 
 if not presets_dir.exists():
     print("Creating presets directory...")
@@ -762,7 +762,7 @@ if not presets_dir.exists():
 from pathlib import Path
 
 name = "My Config"
-preset_file = Path(f"benchmark_presets/{name.lower().replace(' ', '-')}.json")
+preset_file = Path(f"presets/{name.lower().replace(' ', '-')}.json")
 
 if preset_file.exists():
     print(f"Preset '{name}' already exists")

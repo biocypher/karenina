@@ -33,7 +33,7 @@ def list_presets_cmd() -> None:
 
     if not presets:
         console.print("[yellow]No presets found.[/yellow]")
-        console.print("Presets are stored in the 'benchmark_presets/' directory by default.")
+        console.print("Presets are stored in the 'presets/' directory by default.")
         console.print("You can override this with the KARENINA_PRESETS_DIR environment variable.")
         return
 

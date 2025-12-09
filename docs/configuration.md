@@ -218,7 +218,7 @@ export AUTOSAVE_DATABASE="false"
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `KARENINA_PRESETS_DIR` | Directory for storing configuration presets | `benchmark_presets/` |
+| `KARENINA_PRESETS_DIR` | Directory for storing configuration presets | `presets/` |
 
 **What this setting does**:
 
@@ -338,7 +338,7 @@ KARENINA_ASYNC_ENABLED="true"
 KARENINA_ASYNC_MAX_WORKERS="4"
 
 # Presets
-KARENINA_PRESETS_DIR="benchmark_presets"
+KARENINA_PRESETS_DIR="presets"
 ```
 
 2. Add `.env` to `.gitignore`:

@@ -723,9 +723,9 @@ class VerificationConfig(BaseModel):
             if env_presets_dir:
                 presets_dir = Path(env_presets_dir)
             else:
-                # Default to benchmark_presets/ directory in project root
+                # Default to presets/ directory in project root
                 project_root = Path(__file__).parent.parent.parent.parent.parent.parent
-                presets_dir = project_root / "benchmark_presets"
+                presets_dir = project_root / "presets"
 
         presets_dir = presets_dir.resolve()
 
