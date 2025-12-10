@@ -407,7 +407,14 @@ def _invoke_agent_with_middleware(
 
     from ...infrastructure.llm.mcp_utils import harmonize_agent_response
 
-    return harmonize_agent_response(response), limit_reached, usage_metadata, agent_metrics
+    # Extract original question from input messages for summary detection
+    original_question = None
+    if messages:
+        first_msg = messages[0]
+        if hasattr(first_msg, "content"):
+            original_question = str(first_msg.content)
+
+    return harmonize_agent_response(response, original_question), limit_reached, usage_metadata, agent_metrics
 
 
 def _extract_partial_agent_state(llm: Any, messages: list[BaseMessage], exception: Exception) -> dict[str, Any]:

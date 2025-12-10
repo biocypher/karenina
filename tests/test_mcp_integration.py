@@ -458,6 +458,7 @@ class TestToolFiltering:
         """Test init_chat_model_unified with tool filtering."""
         mock_base_model = Mock()
         mock_agent = Mock()
+        mock_middleware = [Mock(), Mock()]
 
         # Mock filtered tools
         mock_tool1 = Mock()
@@ -473,6 +474,10 @@ class TestToolFiltering:
                 return_value=(Mock(), filtered_tools),
             ) as mock_sync,
             patch("langchain.agents.create_agent", return_value=mock_agent),
+            patch(
+                "karenina.infrastructure.llm.interface._build_agent_middleware",
+                return_value=mock_middleware,
+            ),
         ):
             result = init_chat_model_unified(
                 model="gpt-4.1-mini",

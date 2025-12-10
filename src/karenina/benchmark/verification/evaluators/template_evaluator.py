@@ -252,7 +252,8 @@ class TemplateEvaluator:
         # Harmonize raw response to string if needed
         from ....infrastructure.llm.mcp_utils import harmonize_agent_response
 
-        harmonized_response = harmonize_agent_response(raw_response)
+        # Pass question_text to enable reliable summary detection
+        harmonized_response = harmonize_agent_response(raw_response, original_question=question_text)
 
         # Determine template evaluation input
         template_input: str = harmonized_response

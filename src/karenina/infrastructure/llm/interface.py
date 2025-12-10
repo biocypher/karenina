@@ -282,19 +282,26 @@ def _build_agent_middleware(
                 "or ensure base_model is passed to _build_agent_middleware."
             )
 
-        # Determine trigger strategy based on interface
-        # For langchain interface, use fraction-based (model context is auto-detected)
-        # For openrouter/openai_endpoint, use absolute token count
-        if interface == "langchain":
+        # Determine trigger strategy based on max_context_tokens and interface
+        # If max_context_tokens is explicitly provided, use absolute token count
+        # Otherwise, for langchain interface use fraction-based (auto-detected from model)
+        # For openrouter/openai_endpoint without explicit max_context_tokens, default to 100k
+        trigger: tuple[str, int | float]
+        if max_context_tokens is not None:
+            # Explicit max_context_tokens provided - use absolute token count
+            trigger_tokens = int(max_context_tokens * config.summarization.trigger_fraction)
+            trigger = ("tokens", trigger_tokens)
+            trigger_info = f"trigger_tokens={trigger_tokens} ({config.summarization.trigger_fraction * 100:.0f}% of {max_context_tokens})"
+        elif interface == "langchain":
+            # Langchain interface with no explicit limit - use fraction-based (model context is auto-detected)
             trigger = ("fraction", config.summarization.trigger_fraction)
             trigger_info = f"trigger_fraction={config.summarization.trigger_fraction}"
         else:
-            # For openrouter/openai_endpoint, use absolute token count
-            # Default to 100000 tokens if not specified
-            context_tokens = max_context_tokens or 100000
+            # For openrouter/openai_endpoint without explicit limit, default to 100k
+            context_tokens = 100000
             trigger_tokens = int(context_tokens * config.summarization.trigger_fraction)
             trigger = ("tokens", trigger_tokens)
-            trigger_info = f"trigger_tokens={trigger_tokens} ({config.summarization.trigger_fraction * 100:.0f}% of {context_tokens})"
+            trigger_info = f"trigger_tokens={trigger_tokens} ({config.summarization.trigger_fraction * 100:.0f}% of {context_tokens} default)"
 
         middleware.append(
             SummarizationMiddleware(
@@ -628,7 +635,7 @@ def call_model(
 
             from .mcp_utils import harmonize_agent_response
 
-            response_content = harmonize_agent_response(response)
+            response_content = harmonize_agent_response(response, original_question=message)
 
             # Add note if recursion limit was reached
             if recursion_limit_reached:

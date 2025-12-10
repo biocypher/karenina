@@ -8,7 +8,7 @@ import asyncio
 from typing import Any
 
 
-def harmonize_agent_response(response: Any) -> str:
+def harmonize_agent_response(response: Any, original_question: str | None = None) -> str:
     """
     Harmonize agent response messages into a single string with full trace.
 
@@ -19,6 +19,10 @@ def harmonize_agent_response(response: Any) -> str:
     Args:
         response: Response from a LangGraph agent, which may be a single message,
                  list of messages, or agent state with messages
+        original_question: The original user question. If provided, enables reliable
+                          detection of summary messages from SummarizationMiddleware.
+                          If the first HumanMessage differs from this, it's treated
+                          as a summary and included in the trace.
 
     Returns:
         A single string containing the complete agent trace with reasoning and tool usage
@@ -46,15 +50,15 @@ def harmonize_agent_response(response: Any) -> str:
         # Check for nested agent state first
         if "agent" in response and isinstance(response["agent"], dict) and "messages" in response["agent"]:
             messages = response["agent"]["messages"]
-            return _extract_agent_trace(messages)
+            return _extract_agent_trace(messages, original_question)
         # Handle flat state dict with 'messages' key (from ainvoke)
         elif "messages" in response:
             messages = response["messages"]
-            return _extract_agent_trace(messages)
+            return _extract_agent_trace(messages, original_question)
 
     # Handle list of messages directly
     if isinstance(response, list):
-        return _extract_agent_trace(response)
+        return _extract_agent_trace(response, original_question)
 
     # Fallback: convert to string
     return str(response)
@@ -121,18 +125,62 @@ def _format_message_for_trace(msg: Any) -> str:
     return f"{header}\n{content}" if content else header
 
 
-def _extract_agent_trace(messages: list[Any]) -> str:
+def _is_summary_message(msg: Any, original_question: str | None = None) -> bool:
+    """
+    Check if a message is a summarization middleware summary message.
+
+    Detection methods (in order of reliability):
+    1. If original_question is provided, check if the message content differs from it
+    2. Fall back to pattern matching on known summary prefixes
+
+    Args:
+        msg: A message object to check
+        original_question: The original user question (if known). If the HumanMessage
+                          content doesn't match this, it's likely a summary.
+
+    Returns:
+        True if the message appears to be a summary message
+    """
+    if not hasattr(msg, "content") or not msg.content:
+        return False
+
+    content = str(msg.content).strip()
+
+    # Method 1: Compare with original question (most reliable)
+    if original_question is not None:
+        # If content differs significantly from original question, it's a summary
+        # Use strip and normalize for comparison
+        original_normalized = original_question.strip()
+        return content != original_normalized
+
+    # Method 2: Fall back to pattern matching (less reliable but works without context)
+    content_lower = content.lower()
+    summary_markers = [
+        "here is a summary of the conversation",
+        "summary of the conversation to date",
+        "previous conversation was too long to summarize",
+        "conversation summary:",
+    ]
+    return any(marker in content_lower for marker in summary_markers)
+
+
+def _extract_agent_trace(messages: list[Any], original_question: str | None = None) -> str:
     """
     Extract the complete agent trace from a list of messages.
 
     Filters out system messages and the first human message (initial user question),
-    but preserves subsequent human messages that may contain agent reasoning steps.
+    but preserves:
+    - Subsequent human messages that may contain agent reasoning steps
+    - Summary messages from SummarizationMiddleware (detected by comparing with original_question)
 
     Args:
         messages: List of LangChain messages
+        original_question: The original user question. If provided, enables reliable
+                          detection of summary messages (if first HumanMessage differs
+                          from this, it's treated as a summary and included in trace).
 
     Returns:
-        The formatted trace of AI, Tool, and intermediate Human messages (excluding first), empty string if none found
+        The formatted trace of AI, Tool, and intermediate Human messages (excluding first unless it's a summary), empty string if none found
     """
     # Import here to avoid circular imports
     try:
@@ -152,11 +200,21 @@ def _extract_agent_trace(messages: list[Any]) -> str:
                 if "system" in msg_type or role == "system":
                     continue
 
-                # Skip first human message (initial user question)
-                if ("human" in msg_type or role == "user" or role == "human") and not first_human_found:
-                    first_human_found = True
-                    continue  # Skip the first human message
-                # Continue processing subsequent human messages
+                # Handle human messages
+                if "human" in msg_type or role == "user" or role == "human":
+                    # Check if this is a summary message (not the original question)
+                    if _is_summary_message(msg, original_question):
+                        formatted_msg = _format_message_for_trace(msg)
+                        if formatted_msg.strip():
+                            trace_parts.append(formatted_msg.strip())
+                        first_human_found = True
+                        continue
+
+                    # Skip first human message (initial user question)
+                    if not first_human_found:
+                        first_human_found = True
+                        continue  # Skip the first human message
+                    # Continue processing subsequent human messages
 
                 # Include AI, Tool, and subsequent Human messages
                 if (
@@ -183,11 +241,21 @@ def _extract_agent_trace(messages: list[Any]) -> str:
         if isinstance(msg, SystemMessage):
             continue
 
-        # Skip first human message (initial user question)
-        if isinstance(msg, HumanMessage) and not first_human_found:
-            first_human_found = True
-            continue  # Skip the first human message
-        # Continue processing subsequent human messages
+        # Handle human messages
+        if isinstance(msg, HumanMessage):
+            # Check if this is a summary message (not the original question)
+            if _is_summary_message(msg, original_question):
+                formatted_msg = _format_message_for_trace(msg)
+                if formatted_msg.strip():
+                    trace_parts.append(formatted_msg.strip())
+                first_human_found = True
+                continue
+
+            # Skip first human message (initial user question)
+            if not first_human_found:
+                first_human_found = True
+                continue  # Skip the first human message
+            # Continue processing subsequent human messages
 
         # Include AI, Tool, and subsequent Human messages
         if isinstance(msg, AIMessage | ToolMessage | HumanMessage):
