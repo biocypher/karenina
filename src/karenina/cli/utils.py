@@ -36,8 +36,8 @@ def _get_presets_directory(presets_dir: Path | None = None) -> Path:
     if env_dir:
         return Path(env_dir)
 
-    # Default to benchmark_presets/ in current directory
-    return Path("benchmark_presets")
+    # Default to presets/ in current directory
+    return Path("presets")
 
 
 def list_presets(presets_dir: Path | None = None) -> list[dict[str, Any]]:

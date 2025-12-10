@@ -127,43 +127,61 @@ def deep_judgment_parse(
 
     excerpt_system_prompt = f"""{generic_system_prompt}
 
-<task_structure>
-You will be provided with:
+You are an expert excerpt extractor for deep-judgment template parsing. Your role is to find verbatim evidence in responses.
+
+# Task Overview
+
+You will receive:
 1. An original question in <original_question> tags
 2. A response to analyze in <response_to_analyze> tags
 
-Your task is to extract verbatim excerpts from the response that provide evidence for specific attributes.
-</task_structure>
+Your task: Extract **verbatim excerpts** from the response that provide evidence for specific attributes.
 
-<attribute_guidance>
-For each attribute below, the description indicates what evidence to look for in the response:
+# Attribute Definitions
+
+For each attribute below, the description indicates what evidence to look for:
 
 {attr_guidance}
-</attribute_guidance>
 
-<instructions>
-Extract verbatim excerpts from the response for each attribute listed above.
+# Extraction Protocol
 
 For each attribute:
 1. **Read the attribute's description** to understand what evidence to look for
-2. **Identify excerpts**: Find up to {config.deep_judgment_max_excerpts_per_attribute} exact quotes from the response that provide evidence for this attribute
+2. **Identify excerpts**: Find up to {config.deep_judgment_max_excerpts_per_attribute} exact quotes that provide evidence
    - "high" confidence: Direct, explicit statement matching the attribute description
    - "medium" confidence: Implied information or indirect evidence
    - "low" confidence: Weak or ambiguous evidence
-3. **If no excerpts exist**: Return ONE entry with empty text and explain why (e.g., model refused, no relevant information, implicit answer)
+3. **If no excerpts exist**: Return ONE entry with empty text and explanation
 
-IMPORTANT: Excerpts should be verbatim text spans from the response. Do NOT try to generate or infer content - only extract what is explicitly present.
+# Critical Requirements
 
-Return JSON format:
+**Verbatim Only**: Excerpts MUST be exact text spans from the response - copy-paste, no modifications.
+
+**Evidence-Based**: Only extract text that actually provides evidence for the attribute.
+
+**Completeness**: Cover all attributes listed above, even if no excerpts are found.
+
+**JSON Only**: Return ONLY the JSON object - no explanations, no markdown fences.
+
+# What NOT to Do
+
+- Do NOT paraphrase or reword the response text
+- Do NOT invent or hallucinate excerpts that aren't in the response
+- Do NOT include text from other parts of this prompt
+- Do NOT wrap the JSON in markdown code blocks
+- Do NOT add explanatory text before or after the JSON
+
+# Output Format
+
+Return JSON matching this structure exactly:
 {{
   "attribute_name": [
     {{"text": "exact quote from response", "confidence": "low|medium|high"}}
   ],
   "attribute_without_excerpts": [
-    {{"text": "", "confidence": "none", "explanation": "Brief reason why no excerpts (e.g., 'Model refused to answer', 'No explicit statement found', 'Information was implicit')"}}
+    {{"text": "", "confidence": "none", "explanation": "Brief reason (e.g., 'Model refused', 'No explicit info')"}}
   ]
-}}
-</instructions>"""
+}}"""
 
     # ==========================================
     # STAGE 1: EXCERPT EXTRACTION WITH RETRY
@@ -385,16 +403,45 @@ Return JSON format:
             # Build batch assessment prompt
             assessment_system_prompt = f"""{generic_system_prompt}
 
-You are assessing hallucination risk for extracted excerpts based on search validation.
+You are an expert hallucination risk assessor. Your role is to evaluate whether extracted excerpts are grounded in external evidence.
 
-For EACH excerpt below, evaluate the hallucination risk by comparing the excerpt against the search results:
+# Task Overview
+
+You will receive excerpts extracted from a response, along with search results used to validate each excerpt.
+
+Your task: Assess the **hallucination risk** for each excerpt by comparing it against search evidence.
+
+# Risk Level Definitions
 
 - **none** (lowest risk): Search strongly supports the excerpt with multiple corroborating sources
 - **low**: Search generally supports the excerpt with minor discrepancies or weak evidence
 - **medium**: Search provides mixed evidence, contradictions, or very weak support
-- **high** (highest risk): Search contradicts the excerpt or provides no supporting evidence whatsoever
+- **high** (highest risk): Search contradicts the excerpt or provides no supporting evidence
 
-Be conservative - only assign "none" when evidence is very strong."""
+# Assessment Protocol
+
+For each excerpt:
+1. **Read the excerpt text** - understand what claim is being made
+2. **Examine search results** - look for supporting or contradicting evidence
+3. **Assign risk level** - based on how well search supports the excerpt
+4. **Provide justification** - brief explanation of your assessment
+
+# Critical Requirements
+
+**Conservative Assessment**: Only assign "none" when evidence is very strong with multiple sources.
+
+**Evidence-Based**: Base risk assessment solely on the search results provided.
+
+**All Excerpts**: You MUST assess every excerpt provided, no exceptions.
+
+**JSON Only**: Return ONLY the JSON object - no explanations, no markdown fences.
+
+# What NOT to Do
+
+- Do NOT assign "none" unless search strongly corroborates the excerpt
+- Do NOT skip any excerpts in your assessment
+- Do NOT wrap the JSON in markdown code blocks
+- Do NOT add explanatory text before or after the JSON"""
 
             # Format each excerpt for assessment
             excerpt_descriptions = []
@@ -425,18 +472,19 @@ Be conservative - only assign "none" when evidence is very strong."""
 
 {chr(10).join(excerpt_descriptions)}
 
-Return JSON format with assessments for ALL excerpts:
+**OUTPUT FORMAT** - Return JSON with assessments for ALL {len(excerpts_with_search)} excerpts:
 {{
   "excerpt_assessments": [
     {{
       "excerpt_id": "0",
       "attribute": "attribute_name",
       "hallucination_risk": "none|low|medium|high",
-      "justification": "Brief explanation of why this risk level was assigned based on search evidence"
-    }},
-    ...
+      "justification": "Brief explanation based on search evidence"
+    }}
   ]
-}}"""
+}}
+
+**YOUR JSON RESPONSE:**"""
 
             # Invoke LLM for batch assessment
             messages = [SystemMessage(content=assessment_system_prompt), HumanMessage(content=assessment_prompt)]
@@ -495,85 +543,114 @@ Return JSON format with assessments for ALL excerpts:
     )
 
     # Build base reasoning prompt
-    additional_task = "3. Search snipptes gathered starting from the excerpts." if search_performed else ""
+    additional_task = (
+        "3. Search results and hallucination risk assessments for each excerpt." if search_performed else ""
+    )
     reasoning_system_prompt = f"""{generic_system_prompt}
 
-<task_structure>
-You will be provided with:
+You are an expert reasoning generator for deep-judgment template parsing. Your role is to explain how excerpts inform attribute values.
+
+# Task Overview
+
+You will receive:
 1. An original question in <original_question> tags
 2. Extracted excerpts in <extracted_excerpts> tags from the previous stage
 {additional_task}
 
-Your task is to generate reasoning that explains how the excerpts should inform each attribute's value.
-</task_structure>
+Your task: Generate **reasoning** explaining how the excerpts should inform each attribute's value.
 
-<attribute_guidance>
-For each attribute below, the description indicates what the attribute represents:
+# Attribute Definitions
 
-{attr_guidance}
-</attribute_guidance>"""
+For each attribute below, the description indicates what value it expects:
+
+{attr_guidance}"""
 
     # Conditionally add search context and use nested format when search was performed
     if search_performed:
         reasoning_system_prompt += """
 
-<search_context>
-Each excerpt has been validated against external search results AND has been assigned a hallucination risk score.
-The excerpt data now includes:
-- "Hallucination Risk": Per-excerpt risk assessment (NONE/LOW/MEDIUM/HIGH)
-- "Risk Justification": Explanation of why that risk level was assigned
-- "Search Results": The actual search validation results
+# Search Context
 
-Use these per-excerpt risk assessments to inform your reasoning about each attribute.
-</search_context>
+Each excerpt has been validated against external search and assigned a hallucination risk score:
+- "Hallucination Risk": Per-excerpt risk (NONE/LOW/MEDIUM/HIGH)
+- "Risk Justification": Explanation for the risk level
+- "Search Results": External validation evidence
 
-<instructions>
-Generate reasoning that explains how the excerpts should inform each attribute's value.
+Use these risk assessments to inform your reasoning confidence.
 
-IMPORTANT: Only generate reasoning for the attributes listed above.
+# Reasoning Protocol
 
 For each attribute:
-1. **Review the attribute's description** to understand what value it expects
-2. **Analyze the excerpts** considering their hallucination risk scores
-3. **Generate reasoning** (2-3 sentences) that explains:
-   - How the excerpts relate to the attribute based on its description
-   - What value the attribute should have based on the evidence
-   - How the per-excerpt hallucination risks affect confidence in this attribute
-   - Any ambiguities or confidence issues
+1. **Review the attribute's description** - understand what value it expects
+2. **Analyze the excerpts** - consider their hallucination risk scores
+3. **Generate reasoning** (2-3 sentences) explaining:
+   - How the excerpts relate to the attribute
+   - What value the attribute should have based on evidence
+   - How hallucination risks affect confidence
+   - Any ambiguities or issues
 
-When excerpts are empty: Explain why no excerpts were found and how this affects the attribute.
+When excerpts are empty: Explain why and how this affects the attribute.
 
-Return JSON format with ONLY the attributes listed above:
+# Critical Requirements
+
+**All Attributes**: Generate reasoning for EVERY attribute listed above.
+
+**Evidence-Based**: Base reasoning on the actual excerpts provided.
+
+**Risk-Aware**: Factor hallucination risks into your confidence assessment.
+
+**JSON Only**: Return ONLY the JSON object - no explanations, no markdown fences.
+
+# What NOT to Do
+
+- Do NOT skip any attributes
+- Do NOT wrap the JSON in markdown code blocks
+- Do NOT add explanatory text before or after the JSON
+
+# Output Format
+
+Return JSON with reasoning for ALL attributes:
 {
   "attribute_name": {
     "reasoning": "reasoning text explaining how excerpts inform the attribute value"
   }
-}
-</instructions>"""
+}"""
     else:
         # Use simple string format (backward compatible - no search context)
         reasoning_system_prompt += """
 
-<instructions>
-Generate reasoning that explains how the excerpts should inform each attribute's value.
-
-IMPORTANT: Only generate reasoning for the attributes listed above.
+# Reasoning Protocol
 
 For each attribute:
-1. **Review the attribute's description** to understand what value it expects
-2. **Analyze the excerpts** to determine what they tell us about this attribute
-3. **Generate reasoning** (2-3 sentences) that explains:
-   - How the excerpts relate to the attribute based on its description
-   - What value the attribute should have based on the evidence
+1. **Review the attribute's description** - understand what value it expects
+2. **Analyze the excerpts** - determine what they reveal about this attribute
+3. **Generate reasoning** (2-3 sentences) explaining:
+   - How the excerpts relate to the attribute
+   - What value the attribute should have based on evidence
    - Any ambiguities or confidence issues
 
-When excerpts are empty: Explain why no excerpts were found and how this affects the attribute (e.g., "The response contains a refusal, so this attribute should be marked as not provided" or "No explicit evidence present, attribute may need inference from context").
+When excerpts are empty: Explain why (e.g., "Model refused", "No explicit info") and how this affects the attribute.
 
-Return JSON format with ONLY the attributes listed above:
+# Critical Requirements
+
+**All Attributes**: Generate reasoning for EVERY attribute listed above.
+
+**Evidence-Based**: Base reasoning on the actual excerpts provided.
+
+**JSON Only**: Return ONLY the JSON object - no explanations, no markdown fences.
+
+# What NOT to Do
+
+- Do NOT skip any attributes
+- Do NOT wrap the JSON in markdown code blocks
+- Do NOT add explanatory text before or after the JSON
+
+# Output Format
+
+Return JSON with reasoning for ALL attributes:
 {
   "attribute_name": "reasoning text explaining how excerpts inform the attribute value"
-}
-</instructions>"""
+}"""
 
     reasoning_prompt = f"""<original_question>
 {question_text}
@@ -648,13 +725,41 @@ Return JSON format with ONLY the attributes listed above:
     # Build system prompt with format_instructions for structured output
     parsing_system_prompt = f"""{generic_system_prompt}
 
-<task_structure>
-You will be provided with:
-1. An original question in <original_question> tags
-2. Reasoning traces in <reasoning_traces> tags that explain how excerpts from a response map to attribute values
+You are an expert parameter extractor for deep-judgment template parsing. Your role is to extract final attribute values from reasoning traces.
 
-Your task is to extract the final attribute values based on the reasoning traces, following the JSON schema format specified below.
-</task_structure>
+# Task Overview
+
+You will receive:
+1. An original question in <original_question> tags
+2. Reasoning traces in <reasoning_traces> tags explaining how excerpts map to attribute values
+
+Your task: Extract **final attribute values** based on the reasoning traces, conforming to the JSON schema below.
+
+# Extraction Protocol
+
+For each attribute:
+1. **Read the reasoning** - understand what value was determined
+2. **Apply the schema** - extract the value in the correct format/type
+3. **Handle missing info** - use null if allowed, or best inference
+
+# Critical Requirements
+
+**Schema Compliance**: Output MUST match the JSON schema exactly.
+
+**Reasoning-Based**: Extract values based on the reasoning provided.
+
+**Type Correctness**: Use correct data types (string, bool, int, list, etc.)
+
+**JSON Only**: Return ONLY the JSON object - no explanations, no markdown fences.
+
+# What NOT to Do
+
+- Do NOT invent values not supported by the reasoning
+- Do NOT wrap the JSON in markdown code blocks
+- Do NOT add explanatory text before or after the JSON
+- Do NOT include extra fields not in the schema
+
+# Output Schema
 
 {format_instructions}"""
 
@@ -664,7 +769,9 @@ Your task is to extract the final attribute values based on the reasoning traces
 
 <reasoning_traces>
 {format_reasoning_for_parsing(reasoning)}
-</reasoning_traces>"""
+</reasoning_traces>
+
+**YOUR JSON RESPONSE (following the schema above):**"""
 
     messages = [SystemMessage(content=parsing_system_prompt), HumanMessage(content=parsing_prompt)]
     raw_response, _, usage_metadata, _ = _invoke_llm_with_retry(parsing_llm, messages, is_agent=False)

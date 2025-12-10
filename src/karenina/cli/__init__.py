@@ -11,23 +11,25 @@ app = typer.Typer(
     name="karenina",
     help="Karenina - LLM Benchmark Verification CLI",
     add_completion=False,
+    invoke_without_command=True,
 )
 
 
 @app.callback()
-def callback() -> None:
+def callback(ctx: typer.Context) -> None:
     """
     Karenina CLI for running benchmark verifications.
-
-    Use 'karenina --help' to see available commands.
     """
-    pass
+    if ctx.invoked_subcommand is None:
+        # No subcommand was invoked, show help
+        print(ctx.get_help())
 
 
 # Import subcommands (will be implemented in subsequent phases)
 # These imports will be added as we implement each command module
 try:
     from .preset import preset_app
+    from .serve import init, serve
     from .status import verify_status
     from .verify import verify
 
@@ -39,6 +41,10 @@ try:
 
     # Register preset as a sub-command group
     app.add_typer(preset_app, name="preset", help="Manage verification presets")
+
+    # Register serve and init commands for webapp
+    app.command(name="serve")(serve)
+    app.command(name="init")(init)
 except ImportError:
     # Commands not yet implemented
     pass

@@ -16,9 +16,9 @@ class VerifyTemplateStage(BaseVerificationStage):
     Verifies parsed response against template.
 
     This stage:
-    1. Runs field verification (calls parsed_answer.verify())
-    2. Runs regex validation on raw LLM response
-    3. Extracts regex matches for display
+    1. Retrieves the TemplateEvaluator from context (or creates one)
+    2. Runs field verification via evaluator
+    3. Runs regex verification via evaluator
     4. Combines field and regex results
 
     Requires:
@@ -82,18 +82,43 @@ class VerifyTemplateStage(BaseVerificationStage):
         parsed_answer = context.get_artifact("parsed_answer")
         raw_llm_response = context.get_artifact("raw_llm_response")
 
+        # Get evaluator from context (created by ParseTemplateStage) or use parsed_answer directly
+        evaluator = context.get_artifact("template_evaluator")
+
         try:
-            # Step 1: Field verification
-            field_verification_result = parsed_answer.verify()
+            if evaluator is not None:
+                # Use evaluator methods for consistency
+                field_result = evaluator.verify_fields(parsed_answer)
+                regex_result = evaluator.verify_regex(parsed_answer, raw_llm_response)
 
-            # Step 2: Regex verification on raw trace
-            regex_verification_results = parsed_answer.verify_regex(raw_llm_response)
+                field_verification_result = field_result.success
+                regex_verification_results = {
+                    "success": regex_result.success,
+                    "results": regex_result.results,
+                    "details": regex_result.details,
+                }
+                regex_extraction_results = regex_result.extraction_results
 
-            # Step 3: Extract regex results for display (what the regex actually matched)
-            regex_extraction_results = {}
-            if regex_verification_results["details"]:
-                for field_name, details in regex_verification_results["details"].items():
-                    regex_extraction_results[field_name] = details.get("matches_found", [])
+                # Check for errors
+                if field_result.error:
+                    logger.warning(f"Field verification error: {field_result.error}")
+                if regex_result.error:
+                    logger.warning(f"Regex verification error: {regex_result.error}")
+            else:
+                # Fallback: call methods directly on parsed_answer (backwards compatibility)
+                logger.debug("No evaluator in context, using parsed_answer methods directly")
+
+                # Step 1: Field verification
+                field_verification_result = parsed_answer.verify()
+
+                # Step 2: Regex verification on raw trace
+                regex_verification_results = parsed_answer.verify_regex(raw_llm_response)
+
+                # Step 3: Extract regex results for display
+                regex_extraction_results = {}
+                if regex_verification_results["details"]:
+                    for field_name, details in regex_verification_results["details"].items():
+                        regex_extraction_results[field_name] = details.get("matches_found", [])
 
             # Step 4: Combine field and regex verification results
             verification_result = field_verification_result and regex_verification_results["success"]

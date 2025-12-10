@@ -19,6 +19,7 @@ from .stages import (
     ParseTemplateStage,
     RecursionLimitAutoFailStage,
     RubricEvaluationStage,
+    TraceValidationAutoFailStage,
     ValidateTemplateStage,
     VerifyTemplateStage,
 )
@@ -48,14 +49,15 @@ class StageOrchestrator:
         1. ValidateTemplateStage (always first)
         2. GenerateAnswerStage (always after validate)
         3. RecursionLimitAutoFailStage (auto-fail if recursion limit hit)
-        4. ParseTemplateStage (requires raw_answer)
-        5. VerifyTemplateStage (requires parsed_answer)
-        6. EmbeddingCheckStage (optional, after verify)
-        7. AbstentionCheckStage (optional, after verify)
-        8. DeepJudgmentAutoFailStage (optional, after verify)
-        9. RubricEvaluationStage (optional, after generate)
-        10. DeepJudgmentRubricAutoFailStage (optional, after rubric)
-        11. FinalizeResultStage (always last)
+        4. TraceValidationAutoFailStage (auto-fail if trace doesn't end with AI message)
+        5. ParseTemplateStage (requires raw_answer)
+        6. VerifyTemplateStage (requires parsed_answer)
+        7. EmbeddingCheckStage (optional, after verify)
+        8. AbstentionCheckStage (optional, after verify)
+        9. DeepJudgmentAutoFailStage (optional, after verify)
+        10. RubricEvaluationStage (optional, after generate)
+        11. DeepJudgmentRubricAutoFailStage (optional, after rubric)
+        12. FinalizeResultStage (always last)
     """
 
     def __init__(self, stages: StageList) -> None:
@@ -116,6 +118,9 @@ class StageOrchestrator:
             # Auto-fail if recursion limit hit (always runs after GenerateAnswer)
             stages.append(RecursionLimitAutoFailStage())
 
+            # Auto-fail if trace doesn't end with AI message
+            stages.append(TraceValidationAutoFailStage())
+
             # Optional abstention check (can run on raw response)
             if abstention_enabled:
                 stages.append(AbstentionCheckStage())
@@ -137,6 +142,7 @@ class StageOrchestrator:
                     ValidateTemplateStage(),
                     GenerateAnswerStage(),
                     RecursionLimitAutoFailStage(),  # Auto-fail if recursion limit hit
+                    TraceValidationAutoFailStage(),  # Auto-fail if trace doesn't end with AI message
                     ParseTemplateStage(),
                     VerifyTemplateStage(),
                 ]

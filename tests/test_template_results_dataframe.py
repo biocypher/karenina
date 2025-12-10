@@ -27,7 +27,6 @@ def test_to_dataframe_basic_field_explosion():
         execution_time=2.5,
         timestamp="2024-01-15T10:30:00",
         run_name="test_run",
-        job_id="job-123",
         answering_replicate=1,
         parsing_replicate=None,
     )
@@ -94,7 +93,6 @@ def test_to_dataframe_basic_field_explosion():
     assert answer_row["execution_time"] == 2.5
     assert answer_row["timestamp"] == "2024-01-15T10:30:00"
     assert answer_row["run_name"] == "test_run"
-    assert answer_row["job_id"] == "job-123"
 
 
 def test_to_dataframe_empty_parsed_responses():

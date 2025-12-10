@@ -583,7 +583,7 @@ karenina preset list
 **Default Locations:**
 
 1. `KARENINA_PRESETS_DIR` environment variable (if set)
-2. `benchmark_presets/` in current directory (default)
+2. `presets/` in current directory (default)
 
 ## Configuration Hierarchy
 

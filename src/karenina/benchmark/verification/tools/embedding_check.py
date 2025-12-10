@@ -36,7 +36,7 @@ def preload_embedding_model() -> str:
             from sentence_transformers import SentenceTransformer
         except ImportError as e:
             raise ImportError(
-                "sentence-transformers is required for embedding check. Install it with: uv add sentence-transformers"
+                "sentence-transformers is required for embedding check. Install it with: pip install karenina[embeddings]"
             ) from e
 
         try:
