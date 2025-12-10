@@ -4,10 +4,13 @@ This module provides a unified interface for calling language models,
 managing conversation sessions, and handling LLM-related operations.
 """
 
+from __future__ import annotations
+
+import logging
 import os
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
@@ -17,7 +20,12 @@ from pydantic import BaseModel, Field, SecretStr
 
 from .manual_llm import create_manual_llm
 
+if TYPE_CHECKING:
+    from karenina.schemas.workflow.models import AgentMiddlewareConfig
+
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 
 class LLMError(Exception):
@@ -184,6 +192,125 @@ class ChatOpenAIEndpoint(ChatOpenAI):
         )
 
 
+def _build_agent_middleware(
+    config: AgentMiddlewareConfig | None,
+    max_context_tokens: int | None = None,
+    interface: str = "langchain",
+    base_model: Any = None,
+) -> list[Any]:
+    """
+    Build middleware list from configuration.
+
+    Args:
+        config: Middleware configuration (uses defaults if None)
+        max_context_tokens: Maximum context tokens for the model.
+            For langchain interface, fraction-based triggering is used (auto-detected from model).
+            For openrouter/openai_endpoint, uses absolute token count (defaults to 100000).
+        interface: The interface type (langchain, openrouter, openai_endpoint)
+        base_model: The base LLM model instance to use for summarization when no explicit
+            summarization model is specified. If None, falls back to gpt-4o-mini.
+
+    Returns:
+        List of configured middleware instances
+    """
+    from langchain.agents.middleware import (
+        ModelCallLimitMiddleware,
+        ModelRetryMiddleware,
+        SummarizationMiddleware,
+        ToolCallLimitMiddleware,
+        ToolRetryMiddleware,
+    )
+
+    from karenina.schemas.workflow.models import AgentMiddlewareConfig
+
+    if config is None:
+        config = AgentMiddlewareConfig()
+
+    middleware = []
+
+    # 1. Model call limit (always enabled for safety)
+    middleware.append(
+        ModelCallLimitMiddleware(
+            run_limit=config.limits.model_call_limit,
+            exit_behavior=config.limits.exit_behavior,
+        )
+    )
+
+    # 2. Tool call limit (always enabled for safety)
+    middleware.append(
+        ToolCallLimitMiddleware(
+            run_limit=config.limits.tool_call_limit,
+            exit_behavior="continue" if config.limits.exit_behavior == "end" else "error",
+        )
+    )
+
+    # 3. Model retry middleware (replaces tenacity for agent path)
+    middleware.append(
+        ModelRetryMiddleware(
+            max_retries=config.model_retry.max_retries,
+            backoff_factor=config.model_retry.backoff_factor,
+            initial_delay=config.model_retry.initial_delay,
+            max_delay=config.model_retry.max_delay,
+            jitter=config.model_retry.jitter,
+            on_failure=config.model_retry.on_failure,
+        )
+    )
+
+    # 4. Tool retry middleware (new capability)
+    middleware.append(
+        ToolRetryMiddleware(
+            max_retries=config.tool_retry.max_retries,
+            backoff_factor=config.tool_retry.backoff_factor,
+            initial_delay=config.tool_retry.initial_delay,
+            on_failure=config.tool_retry.on_failure,
+        )
+    )
+
+    # 5. Summarization middleware (optional, token-based trigger)
+    if config.summarization.enabled:
+        # Use explicit model if specified, otherwise use the same model as the agent
+        if config.summarization.model:
+            summarization_model = config.summarization.model
+            model_info = config.summarization.model
+        elif base_model is not None:
+            summarization_model = base_model
+            model_info = "same as answering model"
+        else:
+            raise ValueError(
+                "Summarization is enabled but no model is available. "
+                "Either provide summarization.model in agent_middleware config, "
+                "or ensure base_model is passed to _build_agent_middleware."
+            )
+
+        # Determine trigger strategy based on interface
+        # For langchain interface, use fraction-based (model context is auto-detected)
+        # For openrouter/openai_endpoint, use absolute token count
+        if interface == "langchain":
+            trigger = ("fraction", config.summarization.trigger_fraction)
+            trigger_info = f"trigger_fraction={config.summarization.trigger_fraction}"
+        else:
+            # For openrouter/openai_endpoint, use absolute token count
+            # Default to 100000 tokens if not specified
+            context_tokens = max_context_tokens or 100000
+            trigger_tokens = int(context_tokens * config.summarization.trigger_fraction)
+            trigger = ("tokens", trigger_tokens)
+            trigger_info = f"trigger_tokens={trigger_tokens} ({config.summarization.trigger_fraction * 100:.0f}% of {context_tokens})"
+
+        middleware.append(
+            SummarizationMiddleware(
+                model=summarization_model,
+                trigger=trigger,
+                keep=("messages", config.summarization.keep_messages),
+            )
+        )
+        logger.info(
+            f"Summarization middleware enabled: model={model_info}, "
+            f"{trigger_info}, keep_messages={config.summarization.keep_messages}"
+        )
+
+    return middleware
+
+
 def init_chat_model_unified(
     model: str,
     provider: str | None = None,
@@ -193,6 +320,8 @@ def init_chat_model_unified(
     mcp_tool_filter: list[str] | None = None,
     endpoint_base_url: str | None = None,
     endpoint_api_key: str | SecretStr | None = None,
+    agent_middleware_config: AgentMiddlewareConfig | None = None,
+    max_context_tokens: int | None = None,
     **kwargs: Any,
 ) -> Any:
     """Initialize a chat model using the unified interface.
@@ -222,6 +351,13 @@ def init_chat_model_unified(
         endpoint_api_key: API key for openai_endpoint interface.
                          Required for openai_endpoint interface.
                          Must be explicitly provided - does NOT read from environment.
+        agent_middleware_config: Optional middleware configuration for MCP-enabled agents.
+                                Controls retry behavior, execution limits, and summarization.
+                                Only used when mcp_urls_dict is provided.
+        max_context_tokens: Maximum context tokens for the model.
+                           For langchain interface, this is auto-detected from model profiles.
+                           For openrouter/openai_endpoint, defaults to 100000 if not specified.
+                           Used by SummarizationMiddleware to determine trigger threshold.
         **kwargs: Additional keyword arguments passed to the underlying model
                  initialization (e.g., temperature, max_tokens)
 
@@ -297,26 +433,42 @@ def init_chat_model_unified(
     if mcp_urls_dict is None:
         return base_model
 
-    # Create LangGraph agent with MCP tools
+    # Create LangGraph agent with MCP tools and middleware
     try:
-        from langgraph.checkpoint.memory import MemorySaver
-        from langgraph.prebuilt import create_react_agent
+        from langchain.agents import create_agent
+        from langgraph.checkpoint.memory import InMemorySaver
 
         from .mcp_utils import sync_create_mcp_client_and_tools
     except ImportError as e:
         raise ImportError(
-            "langgraph and langchain-mcp-adapters are required for MCP support. "
-            "Install with: uv add langgraph langchain-mcp-adapters"
+            "langchain>=1.1.0, langgraph and langchain-mcp-adapters are required for MCP support. "
+            "Install with: uv add 'langchain>=1.1.0' langgraph langchain-mcp-adapters"
         ) from e
 
     try:
         # Get MCP client and tools
         _, tools = sync_create_mcp_client_and_tools(mcp_urls_dict, mcp_tool_filter)
 
-        # Create React agent with base model, MCP tools, and checkpointer
-        # MemorySaver enables partial state recovery when recursion limit is hit
-        memory = MemorySaver()
-        agent = create_react_agent(base_model, tools, checkpointer=memory)
+        # Build middleware list from configuration
+        # Pass base_model so summarization uses the same model by default
+        middleware = _build_agent_middleware(
+            config=agent_middleware_config,
+            max_context_tokens=max_context_tokens,
+            interface=interface,
+            base_model=base_model,
+        )
+
+        # Create agent with middleware and checkpointer
+        # InMemorySaver enables partial state recovery when limits are hit
+        memory = InMemorySaver()
+        agent = create_agent(
+            model=base_model,
+            tools=tools,
+            checkpointer=memory,
+            middleware=middleware,
+        )
+
+        logger.info(f"Created MCP agent with {len(tools)} tools and {len(middleware)} middleware components")
 
         return agent
 

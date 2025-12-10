@@ -7,6 +7,142 @@ from pydantic import BaseModel, Field, SecretStr, model_validator
 if TYPE_CHECKING:
     pass
 
+
+# ============================================================================
+# Agent Middleware Configuration Models
+# ============================================================================
+
+
+class ModelRetryConfig(BaseModel):
+    """Configuration for LangChain ModelRetryMiddleware.
+
+    Controls automatic retry behavior for failed model calls with exponential backoff.
+    """
+
+    max_retries: int = Field(
+        default=2,
+        description="Maximum retry attempts (total calls = max_retries + 1 initial)",
+    )
+    backoff_factor: float = Field(
+        default=2.0,
+        description="Multiplier for exponential backoff between retries",
+    )
+    initial_delay: float = Field(
+        default=2.0,
+        description="Initial delay in seconds before first retry",
+    )
+    max_delay: float = Field(
+        default=10.0,
+        description="Maximum delay in seconds between retries",
+    )
+    jitter: bool = Field(
+        default=True,
+        description="Add random jitter (±25%) to retry delays",
+    )
+    on_failure: Literal["continue", "raise"] = Field(
+        default="continue",
+        description="Behavior when all retries exhausted: 'continue' returns partial response, 'raise' raises exception",
+    )
+
+
+class ToolRetryConfig(BaseModel):
+    """Configuration for LangChain ToolRetryMiddleware.
+
+    Controls automatic retry behavior for failed tool calls with exponential backoff.
+    """
+
+    max_retries: int = Field(
+        default=3,
+        description="Maximum retry attempts for tool calls",
+    )
+    backoff_factor: float = Field(
+        default=2.0,
+        description="Multiplier for exponential backoff between retries",
+    )
+    initial_delay: float = Field(
+        default=1.0,
+        description="Initial delay in seconds before first retry",
+    )
+    on_failure: Literal["return_message", "raise"] = Field(
+        default="return_message",
+        description="Behavior when all retries exhausted: 'return_message' returns error as message, 'raise' raises exception",
+    )
+
+
+class SummarizationConfig(BaseModel):
+    """Configuration for LangChain SummarizationMiddleware.
+
+    Automatically summarizes conversation history when approaching token limits.
+    """
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable automatic summarization of conversation history (default: True for MCP agents)",
+    )
+    model: str | None = Field(
+        default=None,
+        description="Model to use for summarization (defaults to a lightweight model like gpt-4o-mini)",
+    )
+    trigger_fraction: float = Field(
+        default=0.8,
+        ge=0.0,
+        le=1.0,
+        description="Fraction of context window that triggers summarization (0.0-1.0)",
+    )
+    keep_messages: int = Field(
+        default=20,
+        ge=1,
+        description="Number of recent messages to preserve after summarization",
+    )
+
+
+class AgentLimitConfig(BaseModel):
+    """Configuration for agent execution limits.
+
+    Controls maximum model and tool calls to prevent infinite loops or excessive costs.
+    """
+
+    model_call_limit: int = Field(
+        default=25,
+        ge=1,
+        description="Maximum number of LLM calls per agent invocation",
+    )
+    tool_call_limit: int = Field(
+        default=50,
+        ge=1,
+        description="Maximum number of tool calls per agent invocation",
+    )
+    exit_behavior: Literal["end", "continue"] = Field(
+        default="end",
+        description="Behavior when limit reached: 'end' returns partial response gracefully, 'continue' blocks exceeded calls but continues",
+    )
+
+
+class AgentMiddlewareConfig(BaseModel):
+    """Complete middleware configuration for MCP-enabled agents.
+
+    Only applies when mcp_urls_dict is provided in ModelConfig.
+    Configures retry logic, execution limits, and summarization for agent workflows.
+    """
+
+    limits: AgentLimitConfig = Field(
+        default_factory=AgentLimitConfig,
+        description="Agent execution limits (model/tool call caps)",
+    )
+    model_retry: ModelRetryConfig = Field(
+        default_factory=ModelRetryConfig,
+        description="Model call retry configuration",
+    )
+    tool_retry: ToolRetryConfig = Field(
+        default_factory=ToolRetryConfig,
+        description="Tool call retry configuration",
+    )
+    summarization: SummarizationConfig = Field(
+        default_factory=SummarizationConfig,
+        description="Conversation summarization configuration",
+    )
+
+
 # Interface constants
 INTERFACE_OPENROUTER = "openrouter"
 INTERFACE_MANUAL = "manual"
@@ -374,6 +510,13 @@ class ModelConfig(BaseModel):
     extra_kwargs: dict[str, Any] | None = None
     # Manual interface configuration
     manual_traces: Any = Field(default=None, exclude=True)  # Excluded from serialization; type: ManualTraces | None
+    # Agent middleware configuration (only used when mcp_urls_dict is provided)
+    # Controls retry behavior, execution limits, and summarization for MCP-enabled agents
+    agent_middleware: AgentMiddlewareConfig | None = None
+    # Maximum context tokens for the model (used for summarization trigger)
+    # For langchain interface, this is auto-detected from model profiles
+    # For openrouter and openai_endpoint interfaces, defaults to 100000 if not specified
+    max_context_tokens: int | None = None
 
     @model_validator(mode="after")
     def validate_manual_interface(self) -> "ModelConfig":
