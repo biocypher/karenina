@@ -116,12 +116,20 @@ class RubricManager:
         global_traits = extract_global_rubric_from_benchmark(self.base._checkpoint) or []
 
         # Get question-specific rubric traits
-        question_traits = []
+        question_traits: list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait] = []
         if question_id in self.base._questions_cache:
             q_data = self.base._questions_cache[question_id]
             question_rubric = q_data.get("question_rubric")
             if question_rubric:
-                question_traits = question_rubric
+                # question_rubric is stored as a dict with llm_traits, regex_traits, etc.
+                if isinstance(question_rubric, dict):
+                    question_traits.extend(question_rubric.get("llm_traits", []))
+                    question_traits.extend(question_rubric.get("regex_traits", []))
+                    question_traits.extend(question_rubric.get("callable_traits", []))
+                    question_traits.extend(question_rubric.get("metric_traits", []))
+                elif isinstance(question_rubric, list):
+                    # Backwards compatibility if it's already a flat list
+                    question_traits = question_rubric
 
         # Merge traits (question-specific traits override global ones with same name)
         merged_traits = list(global_traits)  # Start with global traits
