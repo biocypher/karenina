@@ -57,6 +57,7 @@ def invoke_with_structured_output(
 
     Strategy order:
     1. json_schema method (native structured output) - for providers that support it
+       EXCEPT for models with dynamic dict fields (like BatchRubricScores)
     2. Manual parsing with json-repair - robust fallback for any response
 
     Args:
@@ -72,23 +73,34 @@ def invoke_with_structured_output(
     """
     from langchain_core.callbacks import get_usage_metadata_callback
 
+    # Import here to avoid circular imports
+    from ....schemas.workflow.rubric_outputs import BatchRubricScores
+
     usage_metadata: dict[str, Any] = {}
 
+    # Skip json_schema method for models with dynamic dict fields
+    # The json_schema method generates strict schemas with additionalProperties: false
+    # which prevents dynamic keys like trait names in BatchRubricScores.scores
+    skip_json_schema = model_class is BatchRubricScores
+
     # Strategy 1: Try json_schema method (native structured output)
-    try:
-        structured_llm = llm.with_structured_output(model_class, method="json_schema")
+    if not skip_json_schema:
+        try:
+            structured_llm = llm.with_structured_output(model_class, method="json_schema")
 
-        with get_usage_metadata_callback() as cb:
-            result = structured_llm.invoke(messages)
+            with get_usage_metadata_callback() as cb:
+                result = structured_llm.invoke(messages)
 
-        usage_metadata = dict(cb.usage_metadata) if cb.usage_metadata else {}
+            usage_metadata = dict(cb.usage_metadata) if cb.usage_metadata else {}
 
-        if isinstance(result, model_class):
-            logger.debug(f"json_schema method succeeded for {model_class.__name__}")
-            return result, usage_metadata
+            if isinstance(result, model_class):
+                logger.debug(f"json_schema method succeeded for {model_class.__name__}")
+                return result, usage_metadata
 
-    except Exception as e:
-        logger.debug(f"json_schema method failed: {e}")
+        except Exception as e:
+            logger.debug(f"json_schema method failed: {e}")
+    else:
+        logger.debug(f"Skipping json_schema method for {model_class.__name__} (has dynamic dict fields)")
 
     # Strategy 2: Fall back to manual invoke + parsing with json-repair
     logger.debug(f"Falling back to manual parsing for {model_class.__name__}")
