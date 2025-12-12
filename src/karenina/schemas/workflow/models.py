@@ -89,10 +89,46 @@ class SummarizationConfig(BaseModel):
         le=1.0,
         description="Fraction of context window that triggers summarization (0.0-1.0)",
     )
+
+    trigger_tokens: int | None = Field(
+        default=None,
+        ge=1,
+        description="Number of tokens that triggers summarization (optional, overrides trigger_fraction)",
+    )
+
     keep_messages: int = Field(
         default=20,
         ge=1,
         description="Number of recent messages to preserve after summarization",
+    )
+
+
+class PromptCachingConfig(BaseModel):
+    """Configuration for Anthropic prompt caching middleware.
+
+    Reduces costs and latency by caching static or repetitive prompt content
+    (like system prompts, tool definitions, and conversation history) on Anthropic's servers.
+
+    Only applies when using Anthropic models with the langchain interface.
+    See: https://docs.langchain.com/oss/python/integrations/middleware/anthropic#prompt-caching
+    """
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable Anthropic prompt caching (default: True for Anthropic models with MCP tools)",
+    )
+    ttl: Literal["5m", "1h"] = Field(
+        default="5m",
+        description="Time to live for cached content. Valid values: '5m' (5 minutes) or '1h' (1 hour)",
+    )
+    min_messages_to_cache: int = Field(
+        default=0,
+        ge=0,
+        description="Minimum number of messages before caching starts",
+    )
+    unsupported_model_behavior: Literal["ignore", "warn", "raise"] = Field(
+        default="warn",
+        description="Behavior when using non-Anthropic models. Options: 'ignore', 'warn', or 'raise'",
     )
 
 
@@ -122,7 +158,7 @@ class AgentMiddlewareConfig(BaseModel):
     """Complete middleware configuration for MCP-enabled agents.
 
     Only applies when mcp_urls_dict is provided in ModelConfig.
-    Configures retry logic, execution limits, and summarization for agent workflows.
+    Configures retry logic, execution limits, summarization, and prompt caching for agent workflows.
     """
 
     limits: AgentLimitConfig = Field(
@@ -140,6 +176,10 @@ class AgentMiddlewareConfig(BaseModel):
     summarization: SummarizationConfig = Field(
         default_factory=SummarizationConfig,
         description="Conversation summarization configuration",
+    )
+    prompt_caching: PromptCachingConfig = Field(
+        default_factory=PromptCachingConfig,
+        description="Anthropic prompt caching configuration (only applies to Anthropic models)",
     )
 
 
@@ -513,9 +553,10 @@ class ModelConfig(BaseModel):
     # Agent middleware configuration (only used when mcp_urls_dict is provided)
     # Controls retry behavior, execution limits, and summarization for MCP-enabled agents
     agent_middleware: AgentMiddlewareConfig | None = None
-    # Maximum context tokens for the model (used for summarization trigger)
-    # For langchain interface, this is auto-detected from model profiles
-    # For openrouter and openai_endpoint interfaces, defaults to 100000 if not specified
+    # Token threshold for triggering summarization middleware.
+    # When specified, summarization triggers at exactly this token count.
+    # For langchain interface without this value, fraction-based triggering is used (auto-detected from model).
+    # For openrouter and openai_endpoint interfaces without this value, defaults to 100000 * trigger_fraction.
     max_context_tokens: int | None = None
 
     @model_validator(mode="after")

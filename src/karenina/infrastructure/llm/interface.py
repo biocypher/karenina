@@ -192,11 +192,200 @@ class ChatOpenAIEndpoint(ChatOpenAI):
         )
 
 
+def _create_invoke_summarization_middleware(
+    model: Any,
+    trigger_tokens: int,
+    keep_messages: int,
+) -> Any:
+    """
+    Create a custom middleware that summarizes conversation WITHIN a single invoke.
+
+    Unlike built-in SummarizationMiddleware which only triggers between invokes,
+    this uses the before_model hook to check and summarize before each model call.
+
+    Uses LangGraph's RemoveMessage to properly remove old messages from state,
+    since the default message reducer appends rather than replaces.
+
+    Args:
+        model: The LLM to use for generating summaries
+        trigger_tokens: Number of approximate tokens to trigger summarization
+        keep_messages: Number of recent messages to keep after summarization
+
+    Returns:
+        An InvokeSummarizationMiddleware instance
+    """
+    # Import middleware classes inside function to avoid module-level import issues
+    try:
+        from langchain.agents.middleware import AgentMiddleware
+        from langchain.agents.types import AgentState
+        from langchain_core.messages import RemoveMessage
+    except ImportError as e:
+        raise ImportError(
+            "langchain>=1.1.0 and langgraph are required for middleware support. "
+            "Install with: uv add 'langchain>=1.1.0' langgraph"
+        ) from e
+
+    class InvokeSummarizationMiddleware(AgentMiddleware):
+        """
+        Custom middleware that summarizes conversation WITHIN a single invoke.
+
+        Unlike built-in SummarizationMiddleware which only triggers between invokes,
+        this uses the before_model hook to check and summarize before each model call.
+
+        Uses RemoveMessage operations to properly remove summarized messages from
+        LangGraph state, since the default message reducer appends rather than replaces.
+        """
+
+        def __init__(
+            self,
+            summarization_model: Any,
+            trigger_token_count: int = 4000,
+            keep_message_count: int = 5,
+        ):
+            super().__init__()
+            self.model = summarization_model
+            self.trigger_tokens = trigger_token_count
+            self.keep_messages = keep_message_count
+
+        def _count_tokens(self, messages: list[Any]) -> int:
+            """Approximate token count (4 chars ≈ 1 token)."""
+            total_chars = sum(len(str(m.content)) for m in messages if hasattr(m, "content"))
+            return total_chars // 4
+
+        def _extract_original_question(self, messages: list[Any]) -> str | None:
+            """Extract the original user question from messages."""
+            from langchain_core.messages import HumanMessage as LCHumanMessage
+            from langchain_core.messages import SystemMessage
+
+            for msg in messages:
+                # Skip system messages
+                if isinstance(msg, SystemMessage):
+                    continue
+                # First non-system message with content is likely the question
+                if isinstance(msg, LCHumanMessage) and hasattr(msg, "content") and msg.content:
+                    return str(msg.content)
+            return None
+
+        def _summarize_messages(self, messages: list[Any], original_question: str | None = None) -> str:
+            """Use the model to summarize older messages, preserving critical context."""
+            # Format messages with more detail for tool messages
+            formatted_parts = []
+            for msg in messages:
+                msg_type = type(msg).__name__
+                content = str(getattr(msg, "content", ""))
+
+                # For tool messages, try to preserve key data points
+                if "Tool" in msg_type:
+                    # Truncate but keep more for tool responses (they contain important data)
+                    formatted_parts.append(f"{msg_type}: {content[:1000]}")
+                else:
+                    formatted_parts.append(f"{msg_type}: {content[:500]}")
+
+            messages_text = "\n\n".join(formatted_parts)
+
+            # Build context-aware prompt
+            question_context = ""
+            if original_question:
+                question_context = f"""
+ORIGINAL QUESTION: {original_question}
+
+"""
+
+            summary_prompt = f"""You are summarizing a conversation to preserve context for an ongoing task.
+{question_context}CONVERSATION TO SUMMARIZE:
+{messages_text}
+
+INSTRUCTIONS:
+Create a concise but information-rich summary that preserves:
+1. The original question/goal being addressed
+2. Key data and results from any tool calls (specific values, IDs, names)
+3. Important reasoning steps and conclusions reached
+4. Any errors encountered and how they were handled
+5. The current state of progress toward answering the question
+
+Keep the summary focused and factual. Do not include unnecessary pleasantries or meta-commentary.
+
+SUMMARY:"""
+
+            response = self.model.invoke([HumanMessage(content=summary_prompt)])
+            return str(response.content)
+
+        def before_model(self, state: AgentState[Any], runtime: Any) -> dict[str, Any] | None:  # noqa: ARG002
+            """Check token count before each model call and summarize if needed.
+
+            Uses RemoveMessage to properly delete old messages from LangGraph state,
+            then adds a summary message. This ensures the trace only contains the
+            summarized version, not the original long conversation.
+            """
+            messages = state.get("messages", [])
+
+            current_tokens = self._count_tokens(messages)
+            logger.debug(f"[InvokeSummarization] Token count: ~{current_tokens}, threshold: {self.trigger_tokens}")
+
+            if current_tokens >= self.trigger_tokens and len(messages) > self.keep_messages:
+                logger.info(
+                    f"[InvokeSummarization] TRIGGERING SUMMARIZATION! "
+                    f"Tokens: ~{current_tokens} >= {self.trigger_tokens}"
+                )
+
+                messages_to_summarize = messages[: -self.keep_messages]
+                messages_to_keep = messages[-self.keep_messages :]
+
+                # Extract original question for context-aware summarization
+                original_question = self._extract_original_question(messages)
+
+                summary_text = self._summarize_messages(messages_to_summarize, original_question)
+                summary_message = HumanMessage(content=f"Summary of previous conversation:\n{summary_text}")
+
+                # Create RemoveMessage operations for ALL messages, then re-add in correct order
+                # This ensures summary comes FIRST, followed by kept messages
+                # LangGraph's reducer appends, so we need to remove everything and rebuild
+                remove_ops = []
+                msgs_without_ids = 0
+
+                # Remove ALL messages (both summarized and kept ones)
+                for msg in messages:
+                    msg_id = getattr(msg, "id", None)
+                    if msg_id:
+                        remove_ops.append(RemoveMessage(id=msg_id))
+                    else:
+                        msgs_without_ids += 1
+                        logger.warning(
+                            f"[InvokeSummarization] Message without ID cannot be removed: {type(msg).__name__}"
+                        )
+
+                if msgs_without_ids > 0:
+                    logger.warning(
+                        f"[InvokeSummarization] {msgs_without_ids}/{len(messages)} "
+                        f"messages lack IDs and cannot be removed from state"
+                    )
+
+                # Return: remove ALL messages, then add [summary, kept_messages] in correct order
+                # This ensures trace starts with summary
+                state_updates = remove_ops + [summary_message] + list(messages_to_keep)
+                logger.info(
+                    f"[InvokeSummarization] Summarized {len(messages_to_summarize)} messages, "
+                    f"keeping {len(messages_to_keep)} recent messages, "
+                    f"created {len(remove_ops)} RemoveMessage ops"
+                )
+
+                return {"messages": state_updates}
+
+            return None
+
+    return InvokeSummarizationMiddleware(
+        summarization_model=model,
+        trigger_token_count=trigger_tokens,
+        keep_message_count=keep_messages,
+    )
+
+
 def _build_agent_middleware(
     config: AgentMiddlewareConfig | None,
     max_context_tokens: int | None = None,
     interface: str = "langchain",
     base_model: Any = None,
+    provider: str | None = None,
 ) -> list[Any]:
     """
     Build middleware list from configuration.
@@ -209,6 +398,8 @@ def _build_agent_middleware(
         interface: The interface type (langchain, openrouter, openai_endpoint)
         base_model: The base LLM model instance to use for summarization when no explicit
             summarization model is specified. If None, falls back to gpt-4o-mini.
+        provider: The model provider (e.g., "anthropic", "openai"). Used to add
+            provider-specific middleware like Anthropic prompt caching.
 
     Returns:
         List of configured middleware instances
@@ -216,7 +407,6 @@ def _build_agent_middleware(
     from langchain.agents.middleware import (
         ModelCallLimitMiddleware,
         ModelRetryMiddleware,
-        SummarizationMiddleware,
         ToolCallLimitMiddleware,
         ToolRetryMiddleware,
     )
@@ -226,13 +416,38 @@ def _build_agent_middleware(
     if config is None:
         config = AgentMiddlewareConfig()
 
-    middleware = []
+    middleware: list[Any] = []
+
+    # 0. Anthropic Prompt Caching (if using Anthropic provider with langchain interface)
+    # Added first so it can cache the system prompt, tools, and conversation history
+    # See: https://docs.langchain.com/oss/python/integrations/middleware/anthropic#prompt-caching
+    is_anthropic = provider is not None and provider.lower() == "anthropic"
+    if is_anthropic and interface == "langchain" and config.prompt_caching.enabled:
+        try:
+            from langchain_anthropic.middleware import AnthropicPromptCachingMiddleware
+
+            middleware.append(
+                AnthropicPromptCachingMiddleware(
+                    ttl=config.prompt_caching.ttl,
+                    min_messages_to_cache=config.prompt_caching.min_messages_to_cache,
+                    unsupported_model_behavior=config.prompt_caching.unsupported_model_behavior,
+                )
+            )
+            logger.info(
+                f"Anthropic prompt caching enabled: ttl={config.prompt_caching.ttl}, "
+                f"min_messages_to_cache={config.prompt_caching.min_messages_to_cache}"
+            )
+        except ImportError:
+            logger.warning(
+                "langchain-anthropic not installed or AnthropicPromptCachingMiddleware not available. "
+                "Prompt caching disabled. Install with: uv add langchain-anthropic"
+            )
 
     # 1. Model call limit (always enabled for safety)
     middleware.append(
         ModelCallLimitMiddleware(
             run_limit=config.limits.model_call_limit,
-            exit_behavior=config.limits.exit_behavior,
+            exit_behavior=config.limits.exit_behavior,  # type: ignore[arg-type]
         )
     )
 
@@ -252,7 +467,7 @@ def _build_agent_middleware(
             initial_delay=config.model_retry.initial_delay,
             max_delay=config.model_retry.max_delay,
             jitter=config.model_retry.jitter,
-            on_failure=config.model_retry.on_failure,
+            on_failure=config.model_retry.on_failure,  # type: ignore[arg-type]
         )
     )
 
@@ -262,11 +477,13 @@ def _build_agent_middleware(
             max_retries=config.tool_retry.max_retries,
             backoff_factor=config.tool_retry.backoff_factor,
             initial_delay=config.tool_retry.initial_delay,
-            on_failure=config.tool_retry.on_failure,
+            on_failure=config.tool_retry.on_failure,  # type: ignore[arg-type]
         )
     )
 
     # 5. Summarization middleware (optional, token-based trigger)
+    # Uses custom InvokeSummarizationMiddleware that triggers WITHIN a single invoke,
+    # unlike built-in SummarizationMiddleware which only triggers between invokes.
     if config.summarization.enabled:
         # Use explicit model if specified, otherwise use the same model as the agent
         if config.summarization.model:
@@ -282,36 +499,36 @@ def _build_agent_middleware(
                 "or ensure base_model is passed to _build_agent_middleware."
             )
 
-        # Determine trigger strategy based on max_context_tokens and interface
-        # If max_context_tokens is explicitly provided, use absolute token count
-        # Otherwise, for langchain interface use fraction-based (auto-detected from model)
-        # For openrouter/openai_endpoint without explicit max_context_tokens, default to 100k
-        trigger: tuple[str, int | float]
-        if max_context_tokens is not None:
-            # Explicit max_context_tokens provided - use absolute token count
-            trigger_tokens = int(max_context_tokens * config.summarization.trigger_fraction)
-            trigger = ("tokens", trigger_tokens)
-            trigger_info = f"trigger_tokens={trigger_tokens} ({config.summarization.trigger_fraction * 100:.0f}% of {max_context_tokens})"
-        elif interface == "langchain":
-            # Langchain interface with no explicit limit - use fraction-based (model context is auto-detected)
-            trigger = ("fraction", config.summarization.trigger_fraction)
-            trigger_info = f"trigger_fraction={config.summarization.trigger_fraction}"
+        # Determine trigger token count based on configuration priority:
+        # 1. config.summarization.trigger_tokens (explicit token threshold in config)
+        # 2. max_context_tokens (model's context window, used directly as trigger)
+        # 3. Default fallback based on interface type
+        if config.summarization.trigger_tokens is not None:
+            # Explicit trigger_tokens in config - highest priority
+            trigger_tokens = config.summarization.trigger_tokens
+            trigger_info = f"trigger_tokens={trigger_tokens} (from config)"
+        elif max_context_tokens is not None:
+            # max_context_tokens provided - use directly as trigger threshold
+            trigger_tokens = max_context_tokens
+            trigger_info = f"trigger_tokens={trigger_tokens} (from max_context_tokens)"
         else:
-            # For openrouter/openai_endpoint without explicit limit, default to 100k
+            # Default fallback: use fraction of default context size
             context_tokens = 100000
             trigger_tokens = int(context_tokens * config.summarization.trigger_fraction)
-            trigger = ("tokens", trigger_tokens)
-            trigger_info = f"trigger_tokens={trigger_tokens} ({config.summarization.trigger_fraction * 100:.0f}% of {context_tokens} default)"
-
-        middleware.append(
-            SummarizationMiddleware(
-                model=summarization_model,
-                trigger=trigger,
-                keep=("messages", config.summarization.keep_messages),
+            trigger_info = (
+                f"trigger_tokens={trigger_tokens} "
+                f"({config.summarization.trigger_fraction * 100:.0f}% of {context_tokens} default)"
             )
+
+        # Create custom middleware that summarizes WITHIN a single invoke
+        summarization_mw = _create_invoke_summarization_middleware(
+            model=summarization_model,
+            trigger_tokens=trigger_tokens,
+            keep_messages=config.summarization.keep_messages,
         )
+        middleware.append(summarization_mw)
         logger.info(
-            f"Summarization middleware enabled: model={model_info}, "
+            f"Summarization middleware enabled (InvokeSummarizationMiddleware): model={model_info}, "
             f"{trigger_info}, keep_messages={config.summarization.keep_messages}"
         )
 
@@ -458,17 +675,19 @@ def init_chat_model_unified(
 
         # Build middleware list from configuration
         # Pass base_model so summarization uses the same model by default
+        # Pass provider to enable provider-specific middleware (e.g., Anthropic prompt caching)
         middleware = _build_agent_middleware(
             config=agent_middleware_config,
             max_context_tokens=max_context_tokens,
             interface=interface,
             base_model=base_model,
+            provider=provider,
         )
 
         # Create agent with middleware and checkpointer
         # InMemorySaver enables partial state recovery when limits are hit
         memory = InMemorySaver()
-        agent = create_agent(
+        agent: Any = create_agent(
             model=base_model,
             tools=tools,
             checkpointer=memory,
@@ -566,6 +785,10 @@ def call_model(
 
             recursion_limit_reached = False
 
+            # Config for checkpointer - use session_id as thread_id for state tracking
+            # This is required for middleware (like SummarizationMiddleware) to work correctly
+            agent_config = {"configurable": {"thread_id": session_id}}
+
             async def invoke_agent_async() -> tuple[Any, bool]:
                 """
                 Invoke agent and return (response, recursion_limit_reached).
@@ -575,7 +798,8 @@ def call_model(
 
                 try:
                     # Use ainvoke - returns complete final state with all messages
-                    response = await session.llm.ainvoke({"messages": session.messages})
+                    # Pass config with thread_id for proper checkpointing/middleware support
+                    response = await session.llm.ainvoke({"messages": session.messages}, config=agent_config)
                     return response, local_recursion_limit_reached
 
                 except Exception as e:
@@ -592,8 +816,8 @@ def call_model(
                         if hasattr(session.llm, "checkpointer") and session.llm.checkpointer is not None:
                             try:
                                 if hasattr(session.llm, "get_state"):
-                                    config = {"configurable": {"thread_id": "default"}}
-                                    state = session.llm.get_state(config)
+                                    # Use agent_config which has the correct thread_id (session_id)
+                                    state = session.llm.get_state(agent_config)
                                     if state and hasattr(state, "values") and "messages" in state.values:
                                         return {"messages": state.values["messages"]}, local_recursion_limit_reached
                             except Exception:

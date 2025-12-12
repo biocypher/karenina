@@ -408,11 +408,19 @@ def _invoke_agent_with_middleware(
     from ...infrastructure.llm.mcp_utils import harmonize_agent_response
 
     # Extract original question from input messages for summary detection
+    # Skip SystemMessages to find the actual user question (HumanMessage)
     original_question = None
     if messages:
-        first_msg = messages[0]
-        if hasattr(first_msg, "content"):
-            original_question = str(first_msg.content)
+        from langchain_core.messages import SystemMessage
+
+        for msg in messages:
+            # Skip system messages
+            if isinstance(msg, SystemMessage):
+                continue
+            # Found first non-system message (should be HumanMessage with question)
+            if hasattr(msg, "content"):
+                original_question = str(msg.content)
+                break
 
     return harmonize_agent_response(response, original_question), limit_reached, usage_metadata, agent_metrics
 

@@ -160,6 +160,7 @@ def _is_summary_message(msg: Any, original_question: str | None = None) -> bool:
         "summary of the conversation to date",
         "previous conversation was too long to summarize",
         "conversation summary:",
+        "summary of previous conversation",  # Our custom middleware format
     ]
     return any(marker in content_lower for marker in summary_markers)
 
@@ -255,7 +256,6 @@ def _extract_agent_trace(messages: list[Any], original_question: str | None = No
             if not first_human_found:
                 first_human_found = True
                 continue  # Skip the first human message
-            # Continue processing subsequent human messages
 
         # Include AI, Tool, and subsequent Human messages
         if isinstance(msg, AIMessage | ToolMessage | HumanMessage):
@@ -312,7 +312,7 @@ async def create_mcp_client_and_tools(
 
     try:
         # Create client and fetch tools with timeout
-        client = MultiServerMCPClient(server_config)
+        client = MultiServerMCPClient(server_config)  # type: ignore[arg-type]
 
         # Add timeout to prevent hanging
         tools = await asyncio.wait_for(client.get_tools(), timeout=30.0)
