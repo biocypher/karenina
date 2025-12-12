@@ -226,7 +226,7 @@ class TemplateEvaluator:
         question_text: str,
         deep_judgment_enabled: bool = False,
         deep_judgment_config: dict[str, Any] | None = None,
-        use_full_trace: bool = True,
+        use_full_trace: bool = False,
         usage_tracker: Any | None = None,
     ) -> ParseResult:
         """

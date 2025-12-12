@@ -46,7 +46,7 @@ def run_single_model_verification(
     evaluation_mode: str = "template_only",
     cached_answer_data: dict[str, Any] | None = None,
     # Trace filtering configuration (MCP Agent Evaluation)
-    use_full_trace_for_template: bool = True,
+    use_full_trace_for_template: bool = False,
     use_full_trace_for_rubric: bool = True,
 ) -> VerificationResult:
     """
