@@ -216,8 +216,8 @@ def _create_invoke_summarization_middleware(
     """
     # Import middleware classes inside function to avoid module-level import issues
     try:
+        from langchain.agents import AgentState
         from langchain.agents.middleware import AgentMiddleware
-        from langchain.agents.types import AgentState
         from langchain_core.messages import RemoveMessage
     except ImportError as e:
         raise ImportError(
