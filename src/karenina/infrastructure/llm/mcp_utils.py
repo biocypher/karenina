@@ -363,8 +363,9 @@ def sync_create_mcp_client_and_tools(
 
     # Try to use the shared portal if available (from parallel verification)
     try:
-        from karenina.benchmark.verification.batch_runner import get_async_portal
         from typing import cast
+
+        from karenina.benchmark.verification.batch_runner import get_async_portal
 
         portal = get_async_portal()
         if portal is not None:
@@ -505,8 +506,13 @@ def extract_final_ai_message(harmonized_trace: str) -> tuple[str | None, str | N
     This is a fallback for when only the harmonized string is available.
     Prefer using extract_final_ai_message_from_response() with the original messages.
 
+    For plain text responses (non-agent LLM calls without MCP), the input will not
+    have message block format. In this case, the function returns the input as-is
+    since it represents the direct AI response.
+
     Args:
-        harmonized_trace: The full agent trace string produced by harmonize_agent_response()
+        harmonized_trace: The full agent trace string produced by harmonize_agent_response(),
+                         or plain text from a non-agent LLM response
 
     Returns:
         Tuple of (extracted_message, error_message) where:
@@ -548,7 +554,10 @@ def extract_final_ai_message(harmonized_trace: str) -> tuple[str | None, str | N
 
     # Check if we found any message blocks
     if not message_blocks:
-        return None, "Malformed trace: no message blocks found"
+        # No message blocks found - this is likely a plain text response from a non-agent LLM
+        # (e.g., openai_endpoint or openrouter without MCP). In this case, the entire trace
+        # is the AI's response, so return it directly.
+        return trace, None
 
     # Get the last message block
     last_block = message_blocks[-1]
