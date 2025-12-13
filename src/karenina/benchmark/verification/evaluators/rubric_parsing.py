@@ -18,6 +18,32 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T", bound=BaseModel)
 
 
+def _is_openai_endpoint_llm(llm: Any) -> bool:
+    """Check if the LLM is a ChatOpenAIEndpoint (custom OpenAI-compatible endpoint).
+
+    These endpoints often don't support native structured output (json_schema method)
+    and can hang indefinitely when attempting to use it.
+    """
+    # Check by class name to avoid circular imports
+    llm_class_name = type(llm).__name__
+    # Also check the module path for more robust detection
+    llm_module = type(llm).__module__
+
+    is_endpoint = (
+        llm_class_name == "ChatOpenAIEndpoint"
+        or "ChatOpenAIEndpoint" in str(type(llm).__mro__)
+        or (llm_module and "interface" in llm_module and llm_class_name == "ChatOpenAI")
+    )
+
+    # Also check if it has a custom base_url that's not OpenAI's
+    if hasattr(llm, "openai_api_base") and llm.openai_api_base:
+        base_url = str(llm.openai_api_base)
+        if base_url and not base_url.startswith("https://api.openai.com"):
+            is_endpoint = True
+
+    return bool(is_endpoint)
+
+
 def _normalize_response_data(data: Any, model_class: type[T]) -> Any:
     """
     Normalize response data to match expected model structure.
@@ -58,6 +84,7 @@ def invoke_with_structured_output(
     Strategy order:
     1. json_schema method (native structured output) - for providers that support it
        EXCEPT for models with dynamic dict fields (like BatchRubricScores)
+       EXCEPT for OpenAI-compatible endpoints (can hang indefinitely)
     2. Manual parsing with json-repair - robust fallback for any response
 
     Args:
@@ -83,6 +110,15 @@ def invoke_with_structured_output(
     # which prevents dynamic keys like trait names in BatchRubricScores.scores
     skip_json_schema = model_class is BatchRubricScores
 
+    # Also skip json_schema for OpenAI-compatible endpoints - they often don't support it
+    # and can hang indefinitely when attempting to use json_schema method
+    if _is_openai_endpoint_llm(llm):
+        logger.debug(
+            f"Skipping json_schema method for {type(llm).__name__} - "
+            "OpenAI-compatible endpoints may not support json_schema method"
+        )
+        skip_json_schema = True
+
     # Strategy 1: Try json_schema method (native structured output)
     if not skip_json_schema:
         try:
@@ -100,7 +136,9 @@ def invoke_with_structured_output(
         except Exception as e:
             logger.debug(f"json_schema method failed: {e}")
     else:
-        logger.debug(f"Skipping json_schema method for {model_class.__name__} (has dynamic dict fields)")
+        logger.debug(
+            f"Skipping json_schema method for {model_class.__name__} (has dynamic dict fields or is OpenAI endpoint)"
+        )
 
     # Strategy 2: Fall back to manual invoke + parsing with json-repair
     logger.debug(f"Falling back to manual parsing for {model_class.__name__}")
