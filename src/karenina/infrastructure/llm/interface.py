@@ -839,23 +839,33 @@ def call_model(
                     else:
                         raise e
 
-            # Run the async invocation in the event loop
-            try:
-                asyncio.get_running_loop()
-                # We're in an async context, use ThreadPoolExecutor
-                import concurrent.futures
+            # Run the async invocation using the shared portal if available,
+            # otherwise fall back to asyncio.run()
+            from karenina.benchmark.verification.batch_runner import get_async_portal
 
-                def run_in_thread():
-                    return asyncio.run(invoke_agent_async())
+            portal = get_async_portal()
 
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(run_in_thread)
-                    result = future.result(timeout=60)  # 60 second timeout
-                    response, recursion_limit_reached = result
+            if portal is not None:
+                # Use the shared BlockingPortal for proper event loop management
+                response, recursion_limit_reached = portal.call(invoke_agent_async)
+            else:
+                # No portal available - use asyncio.run()
+                try:
+                    asyncio.get_running_loop()
+                    # We're in an async context, use ThreadPoolExecutor
+                    import concurrent.futures
 
-            except RuntimeError:
-                # No event loop running, safe to use asyncio.run
-                response, recursion_limit_reached = asyncio.run(invoke_agent_async())
+                    def run_in_thread():
+                        return asyncio.run(invoke_agent_async())
+
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(run_in_thread)
+                        result = future.result(timeout=60)  # 60 second timeout
+                        response, recursion_limit_reached = result
+
+                except RuntimeError:
+                    # No event loop running, safe to use asyncio.run
+                    response, recursion_limit_reached = asyncio.run(invoke_agent_async())
 
             from .mcp_utils import harmonize_agent_response
 

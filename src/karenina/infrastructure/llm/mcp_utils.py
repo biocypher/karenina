@@ -344,8 +344,9 @@ def sync_create_mcp_client_and_tools(
     """
     Synchronous wrapper for creating MCP client and fetching tools.
 
-    This function runs the async MCP client creation in a new event loop,
-    making it usable from synchronous code.
+    This function runs the async MCP client creation using the shared portal
+    if available (from parallel verification), otherwise falls back to
+    asyncio.run().
 
     Args:
         mcp_urls_dict: Dictionary mapping tool names to MCP server URLs
@@ -359,6 +360,20 @@ def sync_create_mcp_client_and_tools(
         Same exceptions as create_mcp_client_and_tools
     """
     import threading
+
+    # Try to use the shared portal if available (from parallel verification)
+    try:
+        from karenina.benchmark.verification.batch_runner import get_async_portal
+        from typing import cast
+
+        portal = get_async_portal()
+        if portal is not None:
+            # Use the shared BlockingPortal for proper event loop management
+            portal_result = portal.call(create_mcp_client_and_tools, mcp_urls_dict, tool_filter)
+            return cast(tuple[Any, list[Any]], portal_result)
+    except ImportError:
+        # batch_runner not available, fall back to asyncio.run()
+        pass
 
     # Check if we're already in an async context
     try:
@@ -592,6 +607,18 @@ def cleanup_mcp_client(client: Any) -> None:
 
         # Try async close
         if hasattr(client, "aclose"):
+            try:
+                # Try to use the shared portal if available
+                from karenina.benchmark.verification.batch_runner import get_async_portal
+
+                portal = get_async_portal()
+                if portal is not None:
+                    portal.call(client.aclose)
+                    logger.debug("MCP client closed (via portal)")
+                    return
+            except (ImportError, Exception):
+                pass
+
             try:
                 # Check if we're in an async context
                 loop = asyncio.get_running_loop()

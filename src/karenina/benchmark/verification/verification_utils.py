@@ -384,23 +384,34 @@ def _invoke_agent_with_middleware(
                 # Note: Middleware should have already retried transient errors
                 raise e
 
-    # Run the async invocation in the event loop
-    try:
-        asyncio.get_running_loop()
-        # We're in an async context, use ThreadPoolExecutor
-        import concurrent.futures
+    # Run the async invocation using the shared portal if available,
+    # otherwise fall back to asyncio.run()
+    from .batch_runner import get_async_portal
 
-        def run_in_thread() -> Any:
-            return asyncio.run(invoke_agent_async())
+    portal = get_async_portal()
 
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future = executor.submit(run_in_thread)
-            result = future.result(timeout=timeout)
-            response, usage_metadata, limit_reached = result
+    if portal is not None:
+        # Use the shared BlockingPortal for proper event loop management
+        # This prevents "Event loop is closed" errors and connection pool degradation
+        response, usage_metadata, limit_reached = portal.call(invoke_agent_async)
+    else:
+        # No portal available - use asyncio.run() (may cause event loop issues in threads)
+        try:
+            asyncio.get_running_loop()
+            # We're in an async context, use ThreadPoolExecutor
+            import concurrent.futures
 
-    except RuntimeError:
-        # No event loop running, safe to use asyncio.run
-        response, usage_metadata, limit_reached = asyncio.run(invoke_agent_async())
+            def run_in_thread() -> Any:
+                return asyncio.run(invoke_agent_async())
+
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(run_in_thread)
+                result = future.result(timeout=timeout)
+                response, usage_metadata, limit_reached = result
+
+        except RuntimeError:
+            # No event loop running, safe to use asyncio.run
+            response, usage_metadata, limit_reached = asyncio.run(invoke_agent_async())
 
     # Extract agent metrics before harmonization
     agent_metrics = _extract_agent_metrics(response)
