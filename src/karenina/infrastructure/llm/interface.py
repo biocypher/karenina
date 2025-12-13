@@ -380,6 +380,61 @@ SUMMARY:"""
     )
 
 
+def _fetch_openai_endpoint_context_size(
+    base_url: str,
+    api_key: str | SecretStr,
+    model_name: str,
+) -> int | None:
+    """Fetch max context size from OpenAI-compatible endpoint's /v1/models API.
+
+    Queries the /v1/models endpoint to discover the model's max_model_len,
+    which is the context window size. This is supported by most OpenAI-compatible
+    servers (vLLM, SGLang, Ollama, etc.).
+
+    Args:
+        base_url: The endpoint base URL (e.g., "http://localhost:8000/v1")
+        api_key: The API key for authentication
+        model_name: The model name to look up
+
+    Returns:
+        The max_model_len value if found, None otherwise.
+        Returns None on any error (network, parsing, model not found).
+    """
+    import httpx
+
+    # Normalize base_url (remove trailing /v1 if present, we'll add /v1/models)
+    base_url = base_url.rstrip("/")
+    if base_url.endswith("/v1"):
+        base_url = base_url[:-3]
+
+    url = f"{base_url}/v1/models"
+
+    try:
+        key = api_key.get_secret_value() if isinstance(api_key, SecretStr) else api_key
+        response = httpx.get(
+            url,
+            headers={"Authorization": f"Bearer {key}"},
+            timeout=10.0,
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        # Find the matching model
+        for model_info in data.get("data", []):
+            if model_info.get("id") == model_name:
+                max_len = model_info.get("max_model_len")
+                if max_len is not None:
+                    logger.info(f"Auto-detected max_model_len={max_len} for model '{model_name}'")
+                    return int(max_len)
+
+        logger.debug(f"Model '{model_name}' not found in /v1/models response")
+        return None
+
+    except Exception as e:
+        logger.debug(f"Failed to fetch context size from {url}: {e}")
+        return None
+
+
 def _build_agent_middleware(
     config: AgentMiddlewareConfig | None,
     max_context_tokens: int | None = None,
@@ -394,7 +449,8 @@ def _build_agent_middleware(
         config: Middleware configuration (uses defaults if None)
         max_context_tokens: Maximum context tokens for the model.
             For langchain interface, fraction-based triggering is used (auto-detected from model).
-            For openrouter/openai_endpoint, uses absolute token count (defaults to 100000).
+            For openai_endpoint, auto-detected from /v1/models API if not provided.
+            For openrouter, uses absolute token count (defaults to 100000).
         interface: The interface type (langchain, openrouter, openai_endpoint)
         base_model: The base LLM model instance to use for summarization when no explicit
             summarization model is specified. If None, falls back to gpt-4o-mini.
@@ -580,7 +636,9 @@ def init_chat_model_unified(
                                 Only used when mcp_urls_dict is provided.
         max_context_tokens: Maximum context tokens for the model.
                            For langchain interface, this is auto-detected from model profiles.
-                           For openrouter/openai_endpoint, defaults to 100000 if not specified.
+                           For openai_endpoint, auto-detected from /v1/models API if available,
+                           otherwise defaults to 100000.
+                           For openrouter, defaults to 100000 if not specified.
                            Used by SummarizationMiddleware to determine trigger threshold.
         **kwargs: Additional keyword arguments passed to the underlying model
                  initialization (e.g., temperature, max_tokens)
@@ -640,6 +698,11 @@ def init_chat_model_unified(
                 "endpoint_api_key is required for openai_endpoint interface. "
                 "Pass the API key explicitly - this interface does not read from environment."
             )
+        # Auto-detect max_context_tokens from /v1/models endpoint if not provided
+        if max_context_tokens is None:
+            detected_context = _fetch_openai_endpoint_context_size(endpoint_base_url, endpoint_api_key, model)
+            if detected_context is not None:
+                max_context_tokens = detected_context
         base_model = ChatOpenAIEndpoint(
             base_url=endpoint_base_url,
             openai_api_key=endpoint_api_key,

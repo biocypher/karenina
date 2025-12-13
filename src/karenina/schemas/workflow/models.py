@@ -556,7 +556,8 @@ class ModelConfig(BaseModel):
     # Token threshold for triggering summarization middleware.
     # When specified, summarization triggers at exactly this token count.
     # For langchain interface without this value, fraction-based triggering is used (auto-detected from model).
-    # For openrouter and openai_endpoint interfaces without this value, defaults to 100000 * trigger_fraction.
+    # For openai_endpoint interface without this value, auto-detected from /v1/models API if available.
+    # For openrouter interface without this value, defaults to 100000 * trigger_fraction.
     max_context_tokens: int | None = None
 
     @model_validator(mode="after")
