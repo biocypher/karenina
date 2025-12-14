@@ -67,6 +67,19 @@ def save_benchmark(
         init_database(db_config)
 
     with get_session(db_config) as session:
+        # Serialize global rubric to metadata_json
+        metadata_json: dict[str, Any] = {}
+        global_rubric = benchmark.get_global_rubric()
+        if global_rubric:
+            from ..schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
+
+            metadata_json["global_rubric"] = {
+                "traits": [t.model_dump() for t in global_rubric.llm_traits],
+                "regex_traits": [t.model_dump() for t in global_rubric.regex_traits],
+                "callable_traits": [t.model_dump() for t in global_rubric.callable_traits],
+                "metric_traits": [t.model_dump() for t in global_rubric.metric_traits],
+            }
+
         # Check if benchmark already exists
         existing_benchmark = session.execute(
             select(BenchmarkModel).where(BenchmarkModel.name == benchmark.name)
@@ -87,6 +100,7 @@ def save_benchmark(
                     version=benchmark.version,
                     creator=str(benchmark.creator) if benchmark.creator else None,
                     checkpoint_path=str(checkpoint_path) if checkpoint_path else None,
+                    metadata_json=metadata_json,
                     updated_at=datetime.now(UTC),
                 )
             )
@@ -99,7 +113,7 @@ def save_benchmark(
                 version=benchmark.version,
                 creator=str(benchmark.creator) if benchmark.creator else None,
                 checkpoint_path=str(checkpoint_path) if checkpoint_path else None,
-                metadata_json={},
+                metadata_json=metadata_json,
             )
             session.add(benchmark_model)
             session.flush()  # Get the ID
@@ -147,20 +161,34 @@ def save_benchmark(
             template_id = generate_template_id(answer_template)
 
             # Serialize question rubric to dict format for database storage
-            # The benchmark cache stores rubrics as list of trait objects,
-            # but the database expects a JSON dict format with separate lists by type
+            # The benchmark cache stores rubrics as a dict with keys:
+            # llm_traits, regex_traits, callable_traits, metric_traits
             question_rubric_dict = None
             if q_data.get("question_rubric"):
                 try:
                     from ..schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
 
-                    rubric_traits = q_data["question_rubric"]
-                    if isinstance(rubric_traits, list) and len(rubric_traits) > 0:
-                        # Separate traits by type
-                        llm_traits = [t for t in rubric_traits if isinstance(t, LLMRubricTrait)]
-                        regex_traits = [t for t in rubric_traits if isinstance(t, RegexTrait)]
-                        callable_traits = [t for t in rubric_traits if isinstance(t, CallableTrait)]
-                        metric_traits = [t for t in rubric_traits if isinstance(t, MetricRubricTrait)]
+                    rubric_data = q_data["question_rubric"]
+                    if isinstance(rubric_data, dict):
+                        # Cache format: dict with llm_traits, regex_traits, etc.
+                        llm_traits = rubric_data.get("llm_traits", [])
+                        regex_traits = rubric_data.get("regex_traits", [])
+                        callable_traits = rubric_data.get("callable_traits", [])
+                        metric_traits = rubric_data.get("metric_traits", [])
+
+                        if llm_traits or regex_traits or callable_traits or metric_traits:
+                            question_rubric_dict = {
+                                "traits": [trait.model_dump() for trait in llm_traits],
+                                "regex_traits": [trait.model_dump() for trait in regex_traits],
+                                "callable_traits": [trait.model_dump() for trait in callable_traits],
+                                "metric_traits": [trait.model_dump() for trait in metric_traits],
+                            }
+                    elif isinstance(rubric_data, list) and len(rubric_data) > 0:
+                        # Legacy format: flat list of trait objects
+                        llm_traits = [t for t in rubric_data if isinstance(t, LLMRubricTrait)]
+                        regex_traits = [t for t in rubric_data if isinstance(t, RegexTrait)]
+                        callable_traits = [t for t in rubric_data if isinstance(t, CallableTrait)]
+                        metric_traits = [t for t in rubric_data if isinstance(t, MetricRubricTrait)]
 
                         question_rubric_dict = {
                             "traits": [trait.model_dump() for trait in llm_traits],
@@ -338,8 +366,10 @@ def load_benchmark(
             )
 
             # Add question to benchmark with template
+            # Pass the original question_id so question-specific rubrics can be set correctly
             benchmark.add_question(
                 question=question,
+                question_id=bq.question_id,
                 answer_template=bq.answer_template,
                 finished=bq.finished,
                 few_shot_examples=question_model.few_shot_examples,
@@ -426,6 +456,80 @@ def load_benchmark(
                         metric_traits=metric_traits,
                     )
                     benchmark.set_question_rubric(bq.question_id, rubric)
+
+        # Load global rubric from metadata_json if present
+        if benchmark_model.metadata_json and benchmark_model.metadata_json.get("global_rubric"):
+            from ..schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
+
+            global_rubric_data = benchmark_model.metadata_json["global_rubric"]
+            traits = []
+            regex_traits = []
+            callable_traits = []
+            metric_traits = []
+
+            # Deserialize LLM-based traits
+            for trait_data in global_rubric_data.get("traits", []):
+                kind = trait_data.get("kind", "score")
+                trait = LLMRubricTrait(
+                    name=trait_data["name"],
+                    description=trait_data.get("description"),
+                    kind=kind,
+                    min_score=trait_data.get("min_score", 1) if kind == "score" else None,
+                    max_score=trait_data.get("max_score", 5) if kind == "score" else None,
+                    deep_judgment_enabled=trait_data.get("deep_judgment_enabled", False),
+                    deep_judgment_excerpt_enabled=trait_data.get("deep_judgment_excerpt_enabled", False),
+                    deep_judgment_max_excerpts=trait_data.get("deep_judgment_max_excerpts"),
+                    deep_judgment_fuzzy_match_threshold=trait_data.get("deep_judgment_fuzzy_match_threshold"),
+                    deep_judgment_excerpt_retry_attempts=trait_data.get("deep_judgment_excerpt_retry_attempts"),
+                    deep_judgment_search_enabled=trait_data.get("deep_judgment_search_enabled", False),
+                )
+                traits.append(trait)
+
+            # Deserialize regex traits
+            for regex_trait_data in global_rubric_data.get("regex_traits", []):
+                regex_trait = RegexTrait(
+                    name=regex_trait_data["name"],
+                    description=regex_trait_data.get("description"),
+                    pattern=regex_trait_data.get("pattern", ".*"),
+                    case_sensitive=regex_trait_data.get("case_sensitive", True),
+                    invert_result=regex_trait_data.get("invert_result", False),
+                )
+                regex_traits.append(regex_trait)
+
+            # Deserialize callable traits
+            for callable_trait_data in global_rubric_data.get("callable_traits", []):
+                callable_trait = CallableTrait(
+                    name=callable_trait_data["name"],
+                    description=callable_trait_data.get("description"),
+                    kind=callable_trait_data["kind"],
+                    callable_code=callable_trait_data["callable_code"],
+                    min_score=callable_trait_data.get("min_score"),
+                    max_score=callable_trait_data.get("max_score"),
+                    invert_result=callable_trait_data.get("invert_result", False),
+                )
+                callable_traits.append(callable_trait)
+
+            # Deserialize metric traits
+            for metric_trait_data in global_rubric_data.get("metric_traits", []):
+                metric_trait = MetricRubricTrait(
+                    name=metric_trait_data["name"],
+                    description=metric_trait_data.get("description"),
+                    evaluation_mode=metric_trait_data.get("evaluation_mode", "tp_only"),
+                    metrics=metric_trait_data.get("metrics", []),
+                    tp_instructions=metric_trait_data.get("tp_instructions", []),
+                    tn_instructions=metric_trait_data.get("tn_instructions", []),
+                    repeated_extraction=metric_trait_data.get("repeated_extraction", True),
+                )
+                metric_traits.append(metric_trait)
+
+            if traits or regex_traits or callable_traits or metric_traits:
+                global_rubric = Rubric(
+                    llm_traits=traits,
+                    regex_traits=regex_traits,
+                    callable_traits=callable_traits,
+                    metric_traits=metric_traits,
+                )
+                benchmark.set_global_rubric(global_rubric)
 
     if load_config:
         return benchmark, db_config
