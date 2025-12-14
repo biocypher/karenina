@@ -437,7 +437,9 @@ class ManualTraces:
             )
 
         # Preprocess trace (handle both string and message list formats)
-        harmonized_trace, agent_metrics = self._preprocess_trace(trace)
+        # Pass original question text for summary detection if available
+        original_question = question_identifier if map_to_id else None
+        harmonized_trace, agent_metrics = self._preprocess_trace(trace, original_question)
 
         # Store in trace manager
         self._trace_manager.set_trace(question_hash=question_hash, trace=harmonized_trace, agent_metrics=agent_metrics)
@@ -492,7 +494,9 @@ class ManualTraces:
             "Note: Question text must match EXACTLY (case-sensitive, including whitespace)."
         )
 
-    def _preprocess_trace(self, trace: str | list[Any]) -> tuple[str, dict[str, Any] | None]:
+    def _preprocess_trace(
+        self, trace: str | list[Any], original_question: str | None = None
+    ) -> tuple[str, dict[str, Any] | None]:
         """
         Process trace and extract agent metrics if applicable.
 
@@ -501,6 +505,8 @@ class ManualTraces:
 
         Args:
             trace: Either a string trace or list of LangChain messages
+            original_question: The original user question (if known). Used for reliable
+                              detection of summary messages from SummarizationMiddleware.
 
         Returns:
             Tuple of (harmonized_trace_string, agent_metrics_dict_or_None)
@@ -524,8 +530,8 @@ class ManualTraces:
                 # Extract metrics (tool calls, failures, etc.)
                 agent_metrics = _extract_agent_metrics(response)
 
-                # Convert to string trace
-                harmonized_trace = harmonize_agent_response(response)
+                # Convert to string trace (pass original question for summary detection)
+                harmonized_trace = harmonize_agent_response(response, original_question)
 
                 return harmonized_trace, agent_metrics
 

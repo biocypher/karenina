@@ -7,6 +7,182 @@ from pydantic import BaseModel, Field, SecretStr, model_validator
 if TYPE_CHECKING:
     pass
 
+
+# ============================================================================
+# Agent Middleware Configuration Models
+# ============================================================================
+
+
+class ModelRetryConfig(BaseModel):
+    """Configuration for LangChain ModelRetryMiddleware.
+
+    Controls automatic retry behavior for failed model calls with exponential backoff.
+    """
+
+    max_retries: int = Field(
+        default=2,
+        description="Maximum retry attempts (total calls = max_retries + 1 initial)",
+    )
+    backoff_factor: float = Field(
+        default=2.0,
+        description="Multiplier for exponential backoff between retries",
+    )
+    initial_delay: float = Field(
+        default=2.0,
+        description="Initial delay in seconds before first retry",
+    )
+    max_delay: float = Field(
+        default=10.0,
+        description="Maximum delay in seconds between retries",
+    )
+    jitter: bool = Field(
+        default=True,
+        description="Add random jitter (±25%) to retry delays",
+    )
+    on_failure: Literal["continue", "raise"] = Field(
+        default="continue",
+        description="Behavior when all retries exhausted: 'continue' returns partial response, 'raise' raises exception",
+    )
+
+
+class ToolRetryConfig(BaseModel):
+    """Configuration for LangChain ToolRetryMiddleware.
+
+    Controls automatic retry behavior for failed tool calls with exponential backoff.
+    """
+
+    max_retries: int = Field(
+        default=3,
+        description="Maximum retry attempts for tool calls",
+    )
+    backoff_factor: float = Field(
+        default=2.0,
+        description="Multiplier for exponential backoff between retries",
+    )
+    initial_delay: float = Field(
+        default=1.0,
+        description="Initial delay in seconds before first retry",
+    )
+    on_failure: Literal["return_message", "raise"] = Field(
+        default="return_message",
+        description="Behavior when all retries exhausted: 'return_message' returns error as message, 'raise' raises exception",
+    )
+
+
+class SummarizationConfig(BaseModel):
+    """Configuration for LangChain SummarizationMiddleware.
+
+    Automatically summarizes conversation history when approaching token limits.
+    """
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable automatic summarization of conversation history (default: True for MCP agents)",
+    )
+    model: str | None = Field(
+        default=None,
+        description="Model to use for summarization (defaults to a lightweight model like gpt-4o-mini)",
+    )
+    trigger_fraction: float = Field(
+        default=0.8,
+        ge=0.0,
+        le=1.0,
+        description="Fraction of context window that triggers summarization (0.0-1.0)",
+    )
+
+    trigger_tokens: int | None = Field(
+        default=None,
+        ge=1,
+        description="Number of tokens that triggers summarization (optional, overrides trigger_fraction)",
+    )
+
+    keep_messages: int = Field(
+        default=20,
+        ge=1,
+        description="Number of recent messages to preserve after summarization",
+    )
+
+
+class PromptCachingConfig(BaseModel):
+    """Configuration for Anthropic prompt caching middleware.
+
+    Reduces costs and latency by caching static or repetitive prompt content
+    (like system prompts, tool definitions, and conversation history) on Anthropic's servers.
+
+    Only applies when using Anthropic models with the langchain interface.
+    See: https://docs.langchain.com/oss/python/integrations/middleware/anthropic#prompt-caching
+    """
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable Anthropic prompt caching (default: True for Anthropic models with MCP tools)",
+    )
+    ttl: Literal["5m", "1h"] = Field(
+        default="5m",
+        description="Time to live for cached content. Valid values: '5m' (5 minutes) or '1h' (1 hour)",
+    )
+    min_messages_to_cache: int = Field(
+        default=0,
+        ge=0,
+        description="Minimum number of messages before caching starts",
+    )
+    unsupported_model_behavior: Literal["ignore", "warn", "raise"] = Field(
+        default="warn",
+        description="Behavior when using non-Anthropic models. Options: 'ignore', 'warn', or 'raise'",
+    )
+
+
+class AgentLimitConfig(BaseModel):
+    """Configuration for agent execution limits.
+
+    Controls maximum model and tool calls to prevent infinite loops or excessive costs.
+    """
+
+    model_call_limit: int = Field(
+        default=25,
+        ge=1,
+        description="Maximum number of LLM calls per agent invocation",
+    )
+    tool_call_limit: int = Field(
+        default=50,
+        ge=1,
+        description="Maximum number of tool calls per agent invocation",
+    )
+    exit_behavior: Literal["end", "continue"] = Field(
+        default="end",
+        description="Behavior when limit reached: 'end' returns partial response gracefully, 'continue' blocks exceeded calls but continues",
+    )
+
+
+class AgentMiddlewareConfig(BaseModel):
+    """Complete middleware configuration for MCP-enabled agents.
+
+    Only applies when mcp_urls_dict is provided in ModelConfig.
+    Configures retry logic, execution limits, summarization, and prompt caching for agent workflows.
+    """
+
+    limits: AgentLimitConfig = Field(
+        default_factory=AgentLimitConfig,
+        description="Agent execution limits (model/tool call caps)",
+    )
+    model_retry: ModelRetryConfig = Field(
+        default_factory=ModelRetryConfig,
+        description="Model call retry configuration",
+    )
+    tool_retry: ToolRetryConfig = Field(
+        default_factory=ToolRetryConfig,
+        description="Tool call retry configuration",
+    )
+    summarization: SummarizationConfig = Field(
+        default_factory=SummarizationConfig,
+        description="Conversation summarization configuration",
+    )
+    prompt_caching: PromptCachingConfig = Field(
+        default_factory=PromptCachingConfig,
+        description="Anthropic prompt caching configuration (only applies to Anthropic models)",
+    )
+
+
 # Interface constants
 INTERFACE_OPENROUTER = "openrouter"
 INTERFACE_MANUAL = "manual"
@@ -374,6 +550,15 @@ class ModelConfig(BaseModel):
     extra_kwargs: dict[str, Any] | None = None
     # Manual interface configuration
     manual_traces: Any = Field(default=None, exclude=True)  # Excluded from serialization; type: ManualTraces | None
+    # Agent middleware configuration (only used when mcp_urls_dict is provided)
+    # Controls retry behavior, execution limits, and summarization for MCP-enabled agents
+    agent_middleware: AgentMiddlewareConfig | None = None
+    # Token threshold for triggering summarization middleware.
+    # When specified, summarization triggers at exactly this token count.
+    # For langchain interface without this value, fraction-based triggering is used (auto-detected from model).
+    # For openai_endpoint interface without this value, auto-detected from /v1/models API if available.
+    # For openrouter interface without this value, defaults to 100000 * trigger_fraction.
+    max_context_tokens: int | None = None
 
     @model_validator(mode="after")
     def validate_manual_interface(self) -> "ModelConfig":

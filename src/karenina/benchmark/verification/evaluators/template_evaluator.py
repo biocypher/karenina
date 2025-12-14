@@ -226,7 +226,7 @@ class TemplateEvaluator:
         question_text: str,
         deep_judgment_enabled: bool = False,
         deep_judgment_config: dict[str, Any] | None = None,
-        use_full_trace: bool = True,
+        use_full_trace: bool = False,
         usage_tracker: Any | None = None,
     ) -> ParseResult:
         """
@@ -252,7 +252,8 @@ class TemplateEvaluator:
         # Harmonize raw response to string if needed
         from ....infrastructure.llm.mcp_utils import harmonize_agent_response
 
-        harmonized_response = harmonize_agent_response(raw_response)
+        # Pass question_text to enable reliable summary detection
+        harmonized_response = harmonize_agent_response(raw_response, original_question=question_text)
 
         # Determine template evaluation input
         template_input: str = harmonized_response
