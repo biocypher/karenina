@@ -11,13 +11,11 @@ from Pydantic BaseModel classes, with support for:
 from __future__ import annotations
 
 import types
-from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Type, Union, get_args, get_origin, get_type_hints
+from typing import TYPE_CHECKING, Any, Union, get_args, get_origin, get_type_hints
 
 from pydantic import BaseModel
 from pydantic.fields import FieldInfo
-from sqlalchemy import JSON, Boolean, Column, DateTime, Float, Index, Integer, String, Text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import JSON, Boolean, Column, Float, Index, Integer, String, Text
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import DeclarativeBase
@@ -117,7 +115,7 @@ class ColumnSpec:
         self.default = default
         self.comment = comment
 
-    def to_column(self) -> Column:
+    def to_column(self) -> Column[Any]:
         """Convert to SQLAlchemy Column."""
         kwargs: dict[str, Any] = {
             "nullable": self.nullable,
@@ -165,7 +163,7 @@ class PydanticSQLAlchemyMapper:
 
     def generate_columns(
         self,
-        model: Type[BaseModel],
+        model: type[BaseModel],
         prefix: str = "",
         flatten_nested: bool = True,
         parent_optional: bool = False,
@@ -233,7 +231,7 @@ class PydanticSQLAlchemyMapper:
 
     def generate_columns_for_result(
         self,
-        model: Type[BaseModel],
+        model: type[BaseModel],
         flatten_config: dict[str, dict[str, Any]],
     ) -> dict[str, ColumnSpec]:
         """Generate columns with custom flatten configuration per field.
@@ -297,13 +295,13 @@ class PydanticSQLAlchemyMapper:
 
     def create_model_class(
         self,
-        base: Type["DeclarativeBase"],
+        base: type[DeclarativeBase],
         name: str,
         tablename: str,
         columns: dict[str, ColumnSpec],
-        extra_columns: dict[str, Column] | None = None,
+        extra_columns: dict[str, Column[Any]] | None = None,
         relationships: dict[str, Any] | None = None,
-        table_args: tuple | None = None,
+        table_args: tuple[Any, ...] | None = None,
     ) -> type:
         """Dynamically create a SQLAlchemy ORM model class.
 
@@ -345,7 +343,7 @@ class PydanticSQLAlchemyMapper:
 
 
 def generate_indexes_from_columns(
-    columns: dict[str, ColumnSpec],
+    columns: dict[str, ColumnSpec],  # noqa: ARG001
     tablename: str,
     composite_indexes: list[tuple[str, ...]] | None = None,
 ) -> list[Index]:
@@ -363,7 +361,7 @@ def generate_indexes_from_columns(
 
     # Add composite indexes if specified
     if composite_indexes:
-        for i, col_names in enumerate(composite_indexes):
+        for col_names in composite_indexes:
             index_name = f"idx_{tablename}_{'_'.join(col_names)}"
             indexes.append(Index(index_name, *col_names))
 
@@ -371,7 +369,7 @@ def generate_indexes_from_columns(
 
 
 def get_flat_field_mapping(
-    model: Type[BaseModel],
+    model: type[BaseModel],
     flatten_config: dict[str, dict[str, Any]],
 ) -> dict[str, str]:
     """Get mapping from nested field paths to flat column names.
@@ -401,8 +399,11 @@ def get_flat_field_mapping(
             try:
                 nested_hints = get_type_hints(inner_type)
             except Exception:
+                # Type checker doesn't know inner_type is BaseModel, but we checked with _is_pydantic_model
                 nested_hints = {
-                    name: field.annotation for name, field in inner_type.model_fields.items() if field.annotation
+                    name: field.annotation
+                    for name, field in inner_type.model_fields.items()  # type: ignore[attr-defined]
+                    if field.annotation
                 }
 
             for nested_field in nested_hints:

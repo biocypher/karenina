@@ -7,8 +7,9 @@ approach where nested structures are flattened into prefixed columns.
 
 from __future__ import annotations
 
+import contextlib
 import types
-from typing import TYPE_CHECKING, Any, Type, Union, get_args, get_origin, get_type_hints
+from typing import TYPE_CHECKING, Any, Union, get_args, get_origin, get_type_hints
 
 from pydantic import BaseModel
 
@@ -80,8 +81,11 @@ def pydantic_to_flat_dict(
                 try:
                     nested_hints = get_type_hints(inner_type)
                 except Exception:
+                    # Type checker doesn't know inner_type is BaseModel, but we checked with _is_pydantic_model
                     nested_hints = {
-                        name: field.annotation for name, field in inner_type.model_fields.items() if field.annotation
+                        name: field.annotation
+                        for name, field in inner_type.model_fields.items()  # type: ignore[attr-defined]
+                        if field.annotation
                     }
                 for nested_name in nested_hints:
                     result[f"{prefix}{nested_name}"] = None
@@ -133,10 +137,10 @@ def _flatten_nested_model(obj: BaseModel, prefix: str) -> dict[str, Any]:
 
 def pydantic_to_orm(
     obj: BaseModel,
-    orm_class: Type["DeclarativeBase"],
+    orm_class: type[DeclarativeBase],
     flatten_config: dict[str, dict[str, Any]],
     extra_values: dict[str, Any] | None = None,
-) -> "DeclarativeBase":
+) -> DeclarativeBase:
     """Convert a nested Pydantic model to a flat SQLAlchemy ORM instance.
 
     Args:
@@ -168,7 +172,7 @@ def pydantic_to_orm(
 
 def flat_dict_to_pydantic(
     data: dict[str, Any],
-    pydantic_class: Type[BaseModel],
+    pydantic_class: type[BaseModel],
     flatten_config: dict[str, dict[str, Any]],
 ) -> BaseModel:
     """Convert a flat dictionary to a nested Pydantic model.
@@ -224,7 +228,7 @@ def flat_dict_to_pydantic(
 def _extract_nested_data(
     data: dict[str, Any],
     prefix: str,
-    model_class: Type[BaseModel],
+    model_class: type[BaseModel],
 ) -> dict[str, Any]:
     """Extract data for a nested model from flat dictionary.
 
@@ -262,8 +266,8 @@ def _extract_nested_data(
 
 
 def orm_to_pydantic(
-    orm_obj: "DeclarativeBase",
-    pydantic_class: Type[BaseModel],
+    orm_obj: DeclarativeBase,
+    pydantic_class: type[BaseModel],
     flatten_config: dict[str, dict[str, Any]],
 ) -> BaseModel:
     """Convert a SQLAlchemy ORM instance to a nested Pydantic model.
@@ -286,16 +290,14 @@ def orm_to_pydantic(
         # Fallback: try to get all attributes
         for key in dir(orm_obj):
             if not key.startswith("_"):
-                try:
+                with contextlib.suppress(Exception):
                     flat_data[key] = getattr(orm_obj, key)
-                except Exception:
-                    pass
 
     return flat_dict_to_pydantic(flat_data, pydantic_class, flatten_config)
 
 
 def update_orm_from_pydantic(
-    orm_obj: "DeclarativeBase",
+    orm_obj: DeclarativeBase,
     pydantic_obj: BaseModel,
     flatten_config: dict[str, dict[str, Any]],
     exclude_fields: set[str] | None = None,
