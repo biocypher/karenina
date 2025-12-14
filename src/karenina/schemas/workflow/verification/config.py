@@ -572,6 +572,15 @@ class VerificationConfig(BaseModel):
         if "extra_kwargs" in model and model["extra_kwargs"]:
             sanitized["extra_kwargs"] = model["extra_kwargs"]
 
+        # Include agent_middleware if present (for MCP-enabled agents)
+        if "agent_middleware" in model and model["agent_middleware"]:
+            sanitized["agent_middleware"] = model["agent_middleware"]
+
+        # Include max_context_tokens if specified (for summarization middleware)
+        # Relevant for openrouter and openai_endpoint interfaces
+        if "max_context_tokens" in model and model["max_context_tokens"] is not None:
+            sanitized["max_context_tokens"] = model["max_context_tokens"]
+
         return sanitized
 
     @classmethod

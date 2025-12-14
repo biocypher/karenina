@@ -427,6 +427,71 @@ uvicorn mcp_server:app --port 3000
 python verify_with_mcp.py
 ```
 
+## Anthropic Prompt Caching
+
+When using Anthropic models (Claude) with MCP tools via the `langchain` interface, **prompt caching is enabled by default** to reduce costs and latency. This caches repetitive prompt content like system prompts, tool definitions, and conversation history on Anthropic's servers.
+
+### How It Works
+
+1. **First request**: System prompt, tools, and the user message are sent to the API and cached
+2. **Subsequent requests**: Cached content is retrieved rather than reprocessed
+3. **Cache expiration**: Content expires after the TTL (5 minutes or 1 hour)
+
+### Configuration
+
+Prompt caching is configured via `AgentMiddlewareConfig` in `ModelConfig`:
+
+```python
+from karenina.schemas import ModelConfig
+from karenina.schemas.workflow.models import AgentMiddlewareConfig, PromptCachingConfig
+
+model_config = ModelConfig(
+    id="agent-claude",
+    model_provider="anthropic",
+    model_name="claude-sonnet-4-5-20250929",
+    temperature=0.0,
+    interface="langchain",
+    mcp_urls_dict={"biocontext": "https://mcp.biocontext.ai/mcp/"},
+    agent_middleware=AgentMiddlewareConfig(
+        prompt_caching=PromptCachingConfig(
+            enabled=True,           # Default: True for Anthropic models
+            ttl="5m",               # Cache lifetime: "5m" (5 minutes) or "1h" (1 hour)
+            min_messages_to_cache=0,  # Min messages before caching starts
+            unsupported_model_behavior="warn",  # "ignore", "warn", or "raise"
+        )
+    )
+)
+```
+
+### Configuration Options
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `enabled` | `True` | Enable/disable prompt caching |
+| `ttl` | `"5m"` | Cache time-to-live: `"5m"` or `"1h"` |
+| `min_messages_to_cache` | `0` | Minimum messages before caching activates |
+| `unsupported_model_behavior` | `"warn"` | Behavior for non-Anthropic models |
+
+### Disabling Prompt Caching
+
+To disable prompt caching for Anthropic models:
+
+```python
+agent_middleware=AgentMiddlewareConfig(
+    prompt_caching=PromptCachingConfig(enabled=False)
+)
+```
+
+### Requirements
+
+- **Provider**: `anthropic` only
+- **Interface**: `langchain` only
+- **Dependency**: `langchain-anthropic` must be installed
+
+Prompt caching does **not** provide conversation memory - it only reduces API costs by caching tokens. For conversation persistence, use a checkpointer.
+
+See the [LangChain documentation](https://docs.langchain.com/oss/python/integrations/middleware/anthropic#prompt-caching) for more details.
+
 ## Best Practices
 
 ### Server Configuration

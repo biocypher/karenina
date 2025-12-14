@@ -20,6 +20,7 @@ all template evaluation logic following the evaluator pattern.
 import json
 import logging
 import re
+from collections import defaultdict
 from typing import Any
 
 from langchain_core.callbacks import get_usage_metadata_callback
@@ -111,6 +112,7 @@ def _extract_agent_metrics(response: Any) -> dict[str, Any] | None:
     - Tool calls (successful tool invocations)
     - Tools used (unique tool names)
     - Suspected failed tool calls (tools with error-like output patterns)
+    - Middleware-related metrics (LangChain 1.1+)
 
     Args:
         response: Agent response object from LangGraph (dict with "messages" key)
@@ -120,8 +122,14 @@ def _extract_agent_metrics(response: Any) -> dict[str, Any] | None:
         - iterations: Number of AI message cycles
         - tool_calls: Total tool invocations
         - tools_used: Sorted list of unique tool names
+        - tool_call_counts: Dict mapping tool name to call count
         - suspect_failed_tool_calls: Count of tool calls with error-like patterns
         - suspect_failed_tools: Sorted list of tools with suspected failures
+        - model_call_limit_reached: Whether model call limit was hit (middleware)
+        - tool_call_limit_reached: Whether tool call limit was hit (middleware)
+        - summarization_triggered: Whether summarization middleware ran
+        - model_retries: Number of model retry attempts (middleware)
+        - tool_retries: Number of tool retry attempts (middleware)
         Returns None if extraction fails
     """
     if not response or not isinstance(response, dict):
@@ -135,6 +143,7 @@ def _extract_agent_metrics(response: Any) -> dict[str, Any] | None:
     iterations = 0
     tool_calls = 0
     tools_used = set()
+    tool_call_counts: dict[str, int] = defaultdict(int)  # Per-tool call counts
     suspect_failed_tool_calls = 0
     suspect_failed_tools = set()
 
@@ -155,6 +164,7 @@ def _extract_agent_metrics(response: Any) -> dict[str, Any] | None:
                 tool_name = getattr(msg, "name", None)
                 if tool_name:
                     tools_used.add(tool_name)
+                    tool_call_counts[tool_name] += 1
 
                 # Check for suspected failures in tool output
                 is_suspect_failure = False
@@ -180,13 +190,83 @@ def _extract_agent_metrics(response: Any) -> dict[str, Any] | None:
                     if tool_name:
                         suspect_failed_tools.add(tool_name)
 
+    # Extract middleware metrics from response metadata if available
+    # Note: The exact location of these metrics depends on LangChain 1.1 implementation
+    middleware_metrics = _extract_middleware_metrics(response)
+
     return {
         "iterations": iterations,
         "tool_calls": tool_calls,
         "tools_used": sorted(tools_used),  # Sort for deterministic output
+        "tool_call_counts": dict(tool_call_counts),  # Per-tool call counts
         "suspect_failed_tool_calls": suspect_failed_tool_calls,
         "suspect_failed_tools": sorted(suspect_failed_tools),  # Sort for deterministic output
+        # Middleware metrics (LangChain 1.1+)
+        "model_call_limit_reached": middleware_metrics.get("model_call_limit_reached", False),
+        "tool_call_limit_reached": middleware_metrics.get("tool_call_limit_reached", False),
+        "summarization_triggered": middleware_metrics.get("summarization_triggered", False),
+        "model_retries": middleware_metrics.get("model_retries", 0),
+        "tool_retries": middleware_metrics.get("tool_retries", 0),
     }
+
+
+def _extract_middleware_metrics(response: Any) -> dict[str, Any]:
+    """
+    Extract middleware-related metrics from agent response.
+
+    LangChain 1.1 middleware may include metrics in response metadata.
+    This function attempts to extract them from various possible locations.
+
+    Args:
+        response: Agent response object from LangGraph
+
+    Returns:
+        Dict with middleware metrics (defaults to False/0 if not found)
+    """
+    metrics = {
+        "model_call_limit_reached": False,
+        "tool_call_limit_reached": False,
+        "summarization_triggered": False,
+        "model_retries": 0,
+        "tool_retries": 0,
+    }
+
+    if not response or not isinstance(response, dict):
+        return metrics
+
+    # Try to extract from response metadata
+    metadata = response.get("metadata", {})
+    if isinstance(metadata, dict):
+        # Check for limit-related flags
+        if metadata.get("model_call_limit_reached"):
+            metrics["model_call_limit_reached"] = True
+        if metadata.get("tool_call_limit_reached"):
+            metrics["tool_call_limit_reached"] = True
+        if metadata.get("summarization_triggered"):
+            metrics["summarization_triggered"] = True
+
+        # Check for retry counts
+        if "model_retries" in metadata:
+            metrics["model_retries"] = int(metadata.get("model_retries", 0))
+        if "tool_retries" in metadata:
+            metrics["tool_retries"] = int(metadata.get("tool_retries", 0))
+
+    # Also check for middleware_stats if present
+    middleware_stats = response.get("middleware_stats", {})
+    if isinstance(middleware_stats, dict):
+        metrics["model_call_limit_reached"] = middleware_stats.get(
+            "model_call_limit_reached", metrics["model_call_limit_reached"]
+        )
+        metrics["tool_call_limit_reached"] = middleware_stats.get(
+            "tool_call_limit_reached", metrics["tool_call_limit_reached"]
+        )
+        metrics["summarization_triggered"] = middleware_stats.get(
+            "summarization_triggered", metrics["summarization_triggered"]
+        )
+        metrics["model_retries"] = middleware_stats.get("model_retries", metrics["model_retries"])
+        metrics["tool_retries"] = middleware_stats.get("tool_retries", metrics["tool_retries"])
+
+    return metrics
 
 
 def _invoke_llm_with_retry(
@@ -195,21 +275,235 @@ def _invoke_llm_with_retry(
     """
     Invoke LLM with automatic retry logic for transient errors.
 
+    For agents (LangChain 1.1+): Middleware handles retries via ModelRetryMiddleware
+    and ToolRetryMiddleware. This function only handles state recovery on limit errors.
+
+    For regular LLMs: Uses tenacity for exponential backoff retry logic.
+
     Args:
         llm: The LLM or agent to invoke
         messages: List of messages to send to the LLM
-        is_agent: Whether the LLM is a LangGraph agent
+        is_agent: Whether the LLM is a LangGraph agent (has middleware)
         timeout: Timeout in seconds for agent invocation
 
     Returns:
-        Tuple of (response, recursion_limit_reached, usage_metadata, agent_metrics)
+        Tuple of (response, limit_reached, usage_metadata, agent_metrics)
         - response: The LLM/agent response
-        - recursion_limit_reached: Whether agent hit recursion limit
+        - limit_reached: Whether agent hit a limit (recursion, model calls, or tool calls)
         - usage_metadata: Token usage metadata from LangChain callback
-        - agent_metrics: Agent execution metrics (iterations, tool_calls, tools_used) or None for non-agents
+        - agent_metrics: Agent execution metrics (iterations, tool_calls, tools_used, etc.) or None for non-agents
 
     Raises:
-        Exception: If all retry attempts are exhausted
+        Exception: If all retry attempts are exhausted (non-agent) or unrecoverable error (agent)
+    """
+    if is_agent:
+        # Agent path: Middleware handles retries, we only handle state recovery
+        return _invoke_agent_with_middleware(llm, messages, timeout)
+    else:
+        # Non-agent path: Use tenacity for retry logic
+        return _invoke_llm_with_tenacity_retry(llm, messages)
+
+
+def _invoke_agent_with_middleware(
+    llm: Any, messages: list[BaseMessage], timeout: int = 120
+) -> tuple[Any, bool, dict[str, Any], dict[str, Any] | None]:
+    """
+    Invoke a LangGraph agent with middleware.
+
+    Middleware (ModelRetryMiddleware, ToolRetryMiddleware) handles retries internally.
+    This function focuses on:
+    1. Capturing usage metadata
+    2. Handling limit exceptions (model call, tool call, recursion)
+    3. Extracting partial state when limits are reached
+
+    Args:
+        llm: The LangGraph agent to invoke
+        messages: List of messages to send
+        timeout: Timeout in seconds
+
+    Returns:
+        Tuple of (response, limit_reached, usage_metadata, agent_metrics)
+    """
+    import asyncio
+
+    async def invoke_agent_async() -> tuple[Any, dict[str, Any], bool]:
+        """
+        Invoke agent and return (response, usage_metadata, limit_reached).
+        """
+        cb_manager = None
+        cb: UsageMetadataCallbackHandler | None = None
+        local_usage_metadata: dict[str, Any] = {}
+        limit_reached = False
+
+        try:
+            # Wrap async invoke with usage metadata callback
+            cb_manager = get_usage_metadata_callback()
+            cb = cb_manager.__enter__()
+
+            # Use ainvoke with thread_id for checkpointer to track state
+            # This enables partial state recovery when limits are hit
+            config = {"configurable": {"thread_id": "default"}}
+            response = await llm.ainvoke({"messages": messages}, config=config)
+
+            # Capture usage metadata on success
+            local_usage_metadata = dict(cb.usage_metadata) if cb and cb.usage_metadata else {}
+            cb_manager.__exit__(None, None, None)
+            return response, local_usage_metadata, limit_reached
+
+        except Exception as e:
+            # CRITICAL: Capture usage metadata BEFORE handling exception
+            # This ensures we track tokens even when limits are hit
+            if cb and cb.usage_metadata:
+                local_usage_metadata = dict(cb.usage_metadata)
+                # Close the callback context
+                from contextlib import suppress
+
+                if cb_manager:
+                    with suppress(Exception):
+                        cb_manager.__exit__(type(e), e, e.__traceback__)
+
+            # Check if this is a limit-related error (recursion, model calls, tool calls)
+            error_type = type(e).__name__
+            error_str = str(e).lower()
+
+            is_limit_error = (
+                "GraphRecursionError" in error_type
+                or "recursion_limit" in error_str
+                or "ModelCallLimitExceeded" in error_type
+                or "ToolCallLimitExceeded" in error_type
+                or "model_call_limit" in error_str
+                or "tool_call_limit" in error_str
+                or "limit" in error_str
+                and ("exceeded" in error_str or "reached" in error_str)
+            )
+
+            if is_limit_error:
+                limit_reached = True
+                logger.info(f"Agent hit limit: {error_type}")
+
+                # Try to extract partial state
+                partial_state = _extract_partial_agent_state(llm, messages, e)
+                return partial_state, local_usage_metadata, limit_reached
+            else:
+                # Non-limit error - let it propagate
+                # Note: Middleware should have already retried transient errors
+                raise e
+
+    # Run the async invocation using the shared portal if available,
+    # otherwise fall back to asyncio.run()
+    from .batch_runner import get_async_portal
+
+    portal = get_async_portal()
+
+    if portal is not None:
+        # Use the shared BlockingPortal for proper event loop management
+        # This prevents "Event loop is closed" errors and connection pool degradation
+        response, usage_metadata, limit_reached = portal.call(invoke_agent_async)
+    else:
+        # No portal available - use asyncio.run() (may cause event loop issues in threads)
+        try:
+            asyncio.get_running_loop()
+            # We're in an async context, use ThreadPoolExecutor
+            import concurrent.futures
+
+            def run_in_thread() -> Any:
+                return asyncio.run(invoke_agent_async())
+
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(run_in_thread)
+                result = future.result(timeout=timeout)
+                response, usage_metadata, limit_reached = result
+
+        except RuntimeError:
+            # No event loop running, safe to use asyncio.run
+            response, usage_metadata, limit_reached = asyncio.run(invoke_agent_async())
+
+    # Extract agent metrics before harmonization
+    agent_metrics = _extract_agent_metrics(response)
+
+    from ...infrastructure.llm.mcp_utils import harmonize_agent_response
+
+    # Extract original question from input messages for summary detection
+    # Skip SystemMessages to find the actual user question (HumanMessage)
+    original_question = None
+    if messages:
+        from langchain_core.messages import SystemMessage
+
+        for msg in messages:
+            # Skip system messages
+            if isinstance(msg, SystemMessage):
+                continue
+            # Found first non-system message (should be HumanMessage with question)
+            if hasattr(msg, "content"):
+                original_question = str(msg.content)
+                break
+
+    return harmonize_agent_response(response, original_question), limit_reached, usage_metadata, agent_metrics
+
+
+def _extract_partial_agent_state(llm: Any, messages: list[BaseMessage], exception: Exception) -> dict[str, Any]:
+    """
+    Extract partial agent state after a limit is reached.
+
+    Tries multiple methods to recover accumulated messages:
+    1. Exception's state attribute
+    2. Checkpointer's get_state method
+    3. Exception's messages attribute
+    4. Fallback to input messages
+
+    Args:
+        llm: The LangGraph agent
+        messages: Original input messages
+        exception: The limit exception
+
+    Returns:
+        Dict with "messages" key containing recovered messages
+    """
+    # Method 1: Check if exception contains state information
+    if hasattr(exception, "state") and exception.state is not None:
+        logger.info("Extracted partial state from exception.state")
+        state = exception.state
+        return state if isinstance(state, dict) else {"messages": messages}
+
+    # Method 2: Try to get current graph state if checkpointer exists
+    if hasattr(llm, "checkpointer") and llm.checkpointer is not None:
+        try:
+            if hasattr(llm, "get_state"):
+                config = {"configurable": {"thread_id": "default"}}
+                state = llm.get_state(config)
+                if state and hasattr(state, "values") and "messages" in state.values:
+                    logger.info("Extracted partial state from graph checkpointer")
+                    return {"messages": state.values["messages"]}
+        except Exception as state_error:
+            logger.debug(f"Could not extract state from checkpointer: {state_error}")
+
+    # Method 3: Check if exception has accumulated messages attribute
+    if hasattr(exception, "messages") and exception.messages is not None:
+        logger.info("Extracted messages from exception.messages attribute")
+        return {"messages": exception.messages}
+
+    # FALLBACK: Return input messages with warning
+    logger.warning(
+        "Could not extract partial agent state after limit reached. "
+        "Returning input messages only. Accumulated trace may be lost."
+    )
+    return {"messages": messages}
+
+
+def _invoke_llm_with_tenacity_retry(
+    llm: Any, messages: list[BaseMessage]
+) -> tuple[Any, bool, dict[str, Any], dict[str, Any] | None]:
+    """
+    Invoke a regular LLM (non-agent) with tenacity retry logic.
+
+    Args:
+        llm: The LLM to invoke
+        messages: List of messages to send
+
+    Returns:
+        Tuple of (response, False, usage_metadata, None)
+        - limit_reached is always False for non-agents
+        - agent_metrics is always None for non-agents
     """
 
     def _log_retry(retry_state: Any) -> None:
@@ -224,132 +518,16 @@ def _invoke_llm_with_retry(
         reraise=True,
         before_sleep=_log_retry,
     )
-    def _invoke_with_retry_inner() -> tuple[Any, bool, dict[str, Any], dict[str, Any] | None]:
-        recursion_limit_reached = False
-        usage_metadata: dict[str, Any] = {}
-        agent_metrics = None
-
+    def _invoke_with_retry() -> tuple[Any, bool, dict[str, Any], dict[str, Any] | None]:
         try:
-            if is_agent:
-                # LangGraph agents with MCP tools need async invocation
-                import asyncio
-
-                async def invoke_agent_async() -> tuple[Any, dict[str, Any], bool]:
-                    """
-                    Invoke agent and return (response, usage_metadata, recursion_limit_reached).
-                    This avoids using 'nonlocal' which can cause issues with nested async functions.
-                    """
-                    cb_manager = None
-                    cb: UsageMetadataCallbackHandler | None = None
-                    local_usage_metadata: dict[str, Any] = {}
-                    local_recursion_limit_reached = False
-
-                    try:
-                        # Wrap async invoke with usage metadata callback
-                        cb_manager = get_usage_metadata_callback()
-                        cb = cb_manager.__enter__()
-
-                        # Use ainvoke with thread_id for checkpointer to track state
-                        # This enables partial state recovery when recursion limit is hit
-                        config = {"configurable": {"thread_id": "default"}}
-                        response = await llm.ainvoke({"messages": messages}, config=config)
-
-                        # Capture usage metadata on success
-                        local_usage_metadata = dict(cb.usage_metadata) if cb and cb.usage_metadata else {}
-                        cb_manager.__exit__(None, None, None)
-                        return response, local_usage_metadata, local_recursion_limit_reached
-
-                    except Exception as e:
-                        # CRITICAL: Capture usage metadata BEFORE handling exception
-                        # This ensures we track tokens even when recursion limit is hit
-                        if cb and cb.usage_metadata:
-                            local_usage_metadata = dict(cb.usage_metadata)
-                            # Close the callback context
-                            from contextlib import suppress
-
-                            if cb_manager:
-                                with suppress(Exception):
-                                    cb_manager.__exit__(type(e), e, e.__traceback__)
-
-                        # Check if this is a GraphRecursionError
-                        if "GraphRecursionError" in str(type(e).__name__) or "recursion_limit" in str(e).lower():
-                            local_recursion_limit_reached = True
-
-                            # Try multiple methods to extract accumulated messages from the agent
-                            # Method 1: Check if exception contains state information
-                            if hasattr(e, "state") and e.state is not None:
-                                logger.info("Extracted partial state from GraphRecursionError.state")
-                                return e.state, local_usage_metadata, local_recursion_limit_reached
-
-                            # Method 2: Try to get current graph state if checkpointer exists
-                            if hasattr(llm, "checkpointer") and llm.checkpointer is not None:
-                                try:
-                                    if hasattr(llm, "get_state"):
-                                        config = {"configurable": {"thread_id": "default"}}
-                                        state = llm.get_state(config)
-                                        if state and hasattr(state, "values") and "messages" in state.values:
-                                            logger.info("Extracted partial state from graph checkpointer")
-                                            return (
-                                                {"messages": state.values["messages"]},
-                                                local_usage_metadata,
-                                                local_recursion_limit_reached,
-                                            )
-                                except Exception as state_error:
-                                    logger.debug(f"Could not extract state from checkpointer: {state_error}")
-
-                            # Method 3: Check if exception has accumulated messages attribute
-                            if hasattr(e, "messages") and e.messages is not None:
-                                logger.info("Extracted messages from exception.messages attribute")
-                                return {"messages": e.messages}, local_usage_metadata, local_recursion_limit_reached
-
-                            # FALLBACK: Return input messages with warning
-                            logger.warning(
-                                "Could not extract partial agent state after recursion limit. "
-                                "Returning input messages only. Accumulated trace may be lost."
-                            )
-                            return {"messages": messages}, local_usage_metadata, local_recursion_limit_reached
-                        else:
-                            # Check if this is a retryable error
-                            if is_retryable_error(e):
-                                logger.info(f"Detected retryable error: {type(e).__name__}: {e}")
-                                raise  # Re-raise to trigger retry
-                            else:
-                                raise e
-
-                # Run the async invocation in the event loop
-                try:
-                    asyncio.get_running_loop()
-                    # We're in an async context, use ThreadPoolExecutor
-                    import concurrent.futures
-
-                    def run_in_thread() -> Any:
-                        return asyncio.run(invoke_agent_async())
-
-                    with concurrent.futures.ThreadPoolExecutor() as executor:
-                        future = executor.submit(run_in_thread)
-                        result = future.result(timeout=timeout)
-                        response, usage_metadata, recursion_limit_reached = result
-
-                except RuntimeError:
-                    # No event loop running, safe to use asyncio.run
-                    response, usage_metadata, recursion_limit_reached = asyncio.run(invoke_agent_async())
-
-                # Extract agent metrics before harmonization
-                agent_metrics = _extract_agent_metrics(response)
-
-                from ...infrastructure.llm.mcp_utils import harmonize_agent_response
-
-                return harmonize_agent_response(response), recursion_limit_reached, usage_metadata, agent_metrics
-            else:
-                # Regular LLMs expect the messages list directly
-                # Wrap invoke with usage metadata callback
-                with get_usage_metadata_callback() as cb:
-                    response = llm.invoke(messages)
-                usage_metadata = dict(cb.usage_metadata) if cb.usage_metadata else {}
-                # Extract content from AIMessage for consistency with agent path
-                raw_response = response.content if hasattr(response, "content") else str(response)
-                # Non-agents don't have agent metrics
-                return raw_response, recursion_limit_reached, usage_metadata, None
+            # Wrap invoke with usage metadata callback
+            with get_usage_metadata_callback() as cb:
+                response = llm.invoke(messages)
+            usage_metadata = dict(cb.usage_metadata) if cb.usage_metadata else {}
+            # Extract content from AIMessage for consistency with agent path
+            raw_response = response.content if hasattr(response, "content") else str(response)
+            # Non-agents don't have agent metrics or limit reached
+            return raw_response, False, usage_metadata, None
 
         except Exception as e:
             # Check if this is a retryable error
@@ -360,7 +538,7 @@ def _invoke_llm_with_retry(
                 # Non-retryable error, don't retry
                 raise
 
-    return _invoke_with_retry_inner()
+    return _invoke_with_retry()
 
 
 # ============================================================================

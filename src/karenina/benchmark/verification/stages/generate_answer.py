@@ -203,6 +203,14 @@ class GenerateAnswerStage(BaseVerificationStage):
             if answering_model.extra_kwargs:
                 model_kwargs.update(answering_model.extra_kwargs)
 
+            # Add agent middleware config if provided (for MCP-enabled agents)
+            if answering_model.agent_middleware is not None:
+                model_kwargs["agent_middleware_config"] = answering_model.agent_middleware
+
+            # Add max_context_tokens if specified (for summarization middleware)
+            if answering_model.max_context_tokens is not None:
+                model_kwargs["max_context_tokens"] = answering_model.max_context_tokens
+
             answering_llm = init_chat_model_unified(**model_kwargs)
         except Exception as e:
             error_msg = f"Failed to initialize answering model: {type(e).__name__}: {e}"
