@@ -470,6 +470,10 @@ class VerificationResultSet(BaseModel):
             - tool_usage_stats: Dict with {tools, total_traces_with_tools, total_tool_calls}
               where tools maps tool name to {total_calls, traces_using, avg_calls_per_trace}
 
+            **Trace Length Statistics** (if agents used):
+            - trace_length_stats: Dict with {median_iterations, mean_iterations, std_iterations, min_iterations, max_iterations, num_traces}
+              Iteration counts (AI message cycles) for agent traces
+
         Example:
             ```python
             summary = result_set.get_summary()
@@ -980,6 +984,36 @@ class VerificationResultSet(BaseModel):
                 "total_tool_calls": sum(tool_total_calls.values()),
             }
 
+        # Trace length statistics (iterations = AI message cycles)
+        trace_length_stats: dict[str, Any] | None = None
+        iteration_counts: list[int] = []
+
+        for result in self.results:
+            if result.template and result.template.agent_metrics:
+                iterations = result.template.agent_metrics.get("iterations")
+                if iterations is not None:
+                    iteration_counts.append(iterations)
+
+        if iteration_counts:
+            iterations_sorted = sorted(iteration_counts)
+            n = len(iterations_sorted)
+            median_iterations = (
+                iterations_sorted[n // 2]
+                if n % 2 == 1
+                else (iterations_sorted[n // 2 - 1] + iterations_sorted[n // 2]) / 2
+            )
+            mean_iterations = sum(iteration_counts) / n
+            std_iterations = (sum((x - mean_iterations) ** 2 for x in iteration_counts) / n) ** 0.5
+
+            trace_length_stats = {
+                "median_iterations": median_iterations,
+                "mean_iterations": mean_iterations,
+                "std_iterations": std_iterations,
+                "min_iterations": min(iteration_counts),
+                "max_iterations": max(iteration_counts),
+                "num_traces": n,
+            }
+
         return {
             # Basic counts
             "num_results": len(self.results),
@@ -1034,6 +1068,8 @@ class VerificationResultSet(BaseModel):
             "replicate_stats": replicate_stats,
             # Tool usage statistics (only present when agents are used)
             "tool_usage_stats": tool_usage_stats,
+            # Trace length statistics
+            "trace_length_stats": trace_length_stats,
         }
 
     def get_question_ids(self) -> list[str]:
