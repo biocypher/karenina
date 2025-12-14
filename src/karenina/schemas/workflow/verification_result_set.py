@@ -466,6 +466,10 @@ class VerificationResultSet(BaseModel):
             - replicate_pass_rates: Dict mapping replicate number to {total, passed, pass_pct, pass_rate}
             - replicate_summary: Dict with {mean, std}
 
+            **Tool Usage Statistics** (if agents used):
+            - tool_usage_stats: Dict with {tools, total_traces_with_tools, total_tool_calls}
+              where tools maps tool name to {total_calls, traces_using, avg_calls_per_trace}
+
         Example:
             ```python
             summary = result_set.get_summary()
@@ -947,6 +951,35 @@ class VerificationResultSet(BaseModel):
                 "replicate_summary": replicate_summary,
             }
 
+        # Tool usage aggregation across all results
+        tool_usage_stats: dict[str, Any] | None = None
+        tool_total_calls: dict[str, int] = defaultdict(int)
+        tool_trace_counts: dict[str, int] = defaultdict(int)  # Count of traces using each tool
+        results_with_tools = 0
+
+        for result in self.results:
+            if result.template and result.template.agent_metrics:
+                tool_counts = result.template.agent_metrics.get("tool_call_counts")
+                if tool_counts:
+                    results_with_tools += 1
+                    for tool_name, count in tool_counts.items():
+                        tool_total_calls[tool_name] += count
+                        tool_trace_counts[tool_name] += 1
+
+        if results_with_tools > 0:
+            tool_usage_stats = {
+                "tools": {
+                    name: {
+                        "total_calls": tool_total_calls[name],
+                        "traces_using": tool_trace_counts[name],
+                        "avg_calls_per_trace": tool_total_calls[name] / tool_trace_counts[name],
+                    }
+                    for name in sorted(tool_total_calls.keys())
+                },
+                "total_traces_with_tools": results_with_tools,
+                "total_tool_calls": sum(tool_total_calls.values()),
+            }
+
         return {
             # Basic counts
             "num_results": len(self.results),
@@ -999,6 +1032,8 @@ class VerificationResultSet(BaseModel):
             "template_pass_overall": template_pass_overall,
             # Replicate statistics
             "replicate_stats": replicate_stats,
+            # Tool usage statistics (only present when agents are used)
+            "tool_usage_stats": tool_usage_stats,
         }
 
     def get_question_ids(self) -> list[str]:

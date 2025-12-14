@@ -20,6 +20,7 @@ all template evaluation logic following the evaluator pattern.
 import json
 import logging
 import re
+from collections import defaultdict
 from typing import Any
 
 from langchain_core.callbacks import get_usage_metadata_callback
@@ -121,6 +122,7 @@ def _extract_agent_metrics(response: Any) -> dict[str, Any] | None:
         - iterations: Number of AI message cycles
         - tool_calls: Total tool invocations
         - tools_used: Sorted list of unique tool names
+        - tool_call_counts: Dict mapping tool name to call count
         - suspect_failed_tool_calls: Count of tool calls with error-like patterns
         - suspect_failed_tools: Sorted list of tools with suspected failures
         - model_call_limit_reached: Whether model call limit was hit (middleware)
@@ -141,6 +143,7 @@ def _extract_agent_metrics(response: Any) -> dict[str, Any] | None:
     iterations = 0
     tool_calls = 0
     tools_used = set()
+    tool_call_counts: dict[str, int] = defaultdict(int)  # Per-tool call counts
     suspect_failed_tool_calls = 0
     suspect_failed_tools = set()
 
@@ -161,6 +164,7 @@ def _extract_agent_metrics(response: Any) -> dict[str, Any] | None:
                 tool_name = getattr(msg, "name", None)
                 if tool_name:
                     tools_used.add(tool_name)
+                    tool_call_counts[tool_name] += 1
 
                 # Check for suspected failures in tool output
                 is_suspect_failure = False
@@ -194,6 +198,7 @@ def _extract_agent_metrics(response: Any) -> dict[str, Any] | None:
         "iterations": iterations,
         "tool_calls": tool_calls,
         "tools_used": sorted(tools_used),  # Sort for deterministic output
+        "tool_call_counts": dict(tool_call_counts),  # Per-tool call counts
         "suspect_failed_tool_calls": suspect_failed_tool_calls,
         "suspect_failed_tools": sorted(suspect_failed_tools),  # Sort for deterministic output
         # Middleware metrics (LangChain 1.1+)
