@@ -2,25 +2,27 @@
 
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class VerificationResultMetadata(BaseModel):
     """Core metadata and identification fields for a verification result."""
 
-    question_id: str
-    template_id: str  # MD5 of template or "no_template" (composite key component)
-    completed_without_errors: bool
+    question_id: str = Field(..., json_schema_extra={"index": True, "max_length": 32})
+    template_id: str = Field(
+        ..., json_schema_extra={"index": True, "max_length": 32}
+    )  # MD5 of template or "no_template" (composite key component)
+    completed_without_errors: bool = Field(default=..., json_schema_extra={"index": True})
     error: str | None = None
     question_text: str
     raw_answer: str | None = None  # Ground truth answer from checkpoint
     keywords: list[str] | None = None  # Keywords associated with the question
-    answering_model: str
-    parsing_model: str
+    answering_model: str = Field(..., json_schema_extra={"index": True, "max_length": 255})
+    parsing_model: str = Field(..., json_schema_extra={"index": True, "max_length": 255})
     answering_system_prompt: str | None = None  # System prompt used for answering model
     parsing_system_prompt: str | None = None  # System prompt used for parsing model
     execution_time: float
-    timestamp: str
+    timestamp: str = Field(..., json_schema_extra={"index": True, "max_length": 50})
     run_name: str | None = None
     answering_replicate: int | None = None  # Replicate number for answering model (1, 2, 3, ...)
     parsing_replicate: int | None = None  # Replicate number for parsing model (1, 2, 3, ...)
@@ -35,7 +37,9 @@ class VerificationResultTemplate(BaseModel):
 
     # Verification outcomes
     template_verification_performed: bool = False  # Whether template verification was executed
-    verify_result: Any | None = None  # Template verification result (None if template verification skipped)
+    verify_result: Any | None = Field(
+        default=None, json_schema_extra={"index": True}
+    )  # Template verification result (None if template verification skipped)
     verify_granular_result: Any | None = None
 
     # Embeddings
