@@ -606,15 +606,16 @@ def save_verification_results(
         for result in results.values():
             # Check if result already exists (to avoid duplicates)
             # Include template_id in the uniqueness check (composite key component)
+            # Note: columns are prefixed with "metadata_" due to auto-generated model flattening
             existing_result = session.execute(
                 select(VerificationResultModel).where(
                     VerificationResultModel.run_id == run_id,  # type: ignore[attr-defined]
                     VerificationResultModel.question_id == result.metadata.question_id,  # type: ignore[attr-defined]
-                    VerificationResultModel.template_id == result.metadata.template_id,  # type: ignore[attr-defined]
-                    VerificationResultModel.answering_model == result.metadata.answering_model,  # type: ignore[attr-defined]
-                    VerificationResultModel.parsing_model == result.metadata.parsing_model,  # type: ignore[attr-defined]
-                    VerificationResultModel.answering_replicate == result.metadata.answering_replicate,  # type: ignore[attr-defined]
-                    VerificationResultModel.parsing_replicate == result.metadata.parsing_replicate,  # type: ignore[attr-defined]
+                    VerificationResultModel.metadata_template_id == result.metadata.template_id,  # type: ignore[attr-defined]
+                    VerificationResultModel.metadata_answering_model == result.metadata.answering_model,  # type: ignore[attr-defined]
+                    VerificationResultModel.metadata_parsing_model == result.metadata.parsing_model,  # type: ignore[attr-defined]
+                    VerificationResultModel.metadata_answering_replicate == result.metadata.answering_replicate,  # type: ignore[attr-defined]
+                    VerificationResultModel.metadata_parsing_replicate == result.metadata.parsing_replicate,  # type: ignore[attr-defined]
                 )
             ).scalar_one_or_none()
 

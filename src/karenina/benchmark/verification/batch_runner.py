@@ -824,14 +824,19 @@ def run_verification_batch(
 
     # Auto-save if configured
     autosave_enabled = os.getenv("AUTOSAVE_DATABASE", "true").lower() in ("true", "1", "yes")
+    logger.info(
+        f"🔍 Auto-save check: autosave_enabled={autosave_enabled}, storage_url={storage_url!r}, benchmark_name={benchmark_name!r}"
+    )
     if autosave_enabled and storage_url and benchmark_name:
+        # Use mode='json' to serialize SecretStr and other non-JSON types properly
+        config_dict = config.model_dump(mode="json")
         auto_save_results(
             results=results,
             templates=templates,
             storage_url=storage_url,
             benchmark_name=benchmark_name,
             run_name=run_name,
-            config_dict=config.model_dump(),
+            config_dict=config_dict,
             run_id=run_name,
         )
 
