@@ -781,7 +781,7 @@ def import_verification_results(
     """Import verification results from JSON export format.
 
     Supports:
-    - v2.0 format: {format_version: "2.0", metadata, shared_data, results}
+    - v2.x format: {format_version: "2.0"/"2.1", metadata, shared_data, results}
     - Legacy unified format: {metadata, results}
     - Legacy array format: [result1, result2, ...]
 
@@ -808,7 +808,7 @@ def import_verification_results(
     format_version = json_data.get("format_version", "1.0")
 
     # Extract results and metadata based on format
-    if format_version == "2.0":
+    if format_version in ("2.0", "2.1"):
         results_list = json_data.get("results", [])
         metadata = json_data.get("metadata", {})
         shared_data = json_data.get("shared_data", {})

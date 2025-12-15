@@ -207,7 +207,7 @@ class ProgressiveSaveManager:
     """
 
     STATE_FORMAT_VERSION = "1.0"
-    RESULTS_FORMAT_VERSION = "2.0"
+    RESULTS_FORMAT_VERSION = "2.1"
 
     def __init__(
         self,
