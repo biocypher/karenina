@@ -8,6 +8,8 @@ Description:
 
 Columns:
     - result_id: Unique identifier for the verification result
+    - has_template_results: 1 if template verification was performed, 0 otherwise
+    - has_rubric_results: 1 if rubric evaluation was performed, 0 otherwise
     - execution_time: Total execution time in seconds
     - timestamp: ISO timestamp of verification
     - input_tokens: Total input tokens across all stages (may be NULL)
@@ -56,6 +58,8 @@ def create_results_metadata_view(engine: Engine) -> None:
     view_sql_sqlite = """
         SELECT
             vr.metadata_result_id as result_id,
+            COALESCE(vr.template_template_verification_performed, 0) as has_template_results,
+            COALESCE(vr.rubric_rubric_evaluation_performed, 0) as has_rubric_results,
             vr.metadata_execution_time as execution_time,
             vr.metadata_timestamp as timestamp,
             CAST(json_extract(vr.template_usage_metadata, '$.total.input_tokens') AS INTEGER) as input_tokens,
@@ -83,6 +87,8 @@ def create_results_metadata_view(engine: Engine) -> None:
     view_sql_postgres = """
         SELECT
             vr.metadata_result_id as result_id,
+            COALESCE(vr.template_template_verification_performed::INTEGER, 0) as has_template_results,
+            COALESCE(vr.rubric_rubric_evaluation_performed::INTEGER, 0) as has_rubric_results,
             vr.metadata_execution_time as execution_time,
             vr.metadata_timestamp as timestamp,
             ((vr.template_usage_metadata::jsonb) -> 'total' ->> 'input_tokens')::INTEGER as input_tokens,
