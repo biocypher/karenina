@@ -26,9 +26,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base
 
 if TYPE_CHECKING:
-    # VerificationResultModel is dynamically generated, so we can't import it for type checking
-    # Use Any as a workaround since the actual type is created at runtime
-    VerificationResultModel: Any
+    # VerificationResultModel is dynamically generated, so we import it for type checking
+    from .generated_models import VerificationResultModel  # type: ignore[misc]
 
 
 class BenchmarkModel(Base):
