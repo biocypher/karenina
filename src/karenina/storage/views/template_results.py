@@ -7,18 +7,18 @@ analysis, filtering failed questions, and joining to other result-level views.
 Columns:
     result_id (TEXT): Unique identifier for the verification result
     run_id (TEXT): Unique identifier for the verification run (UUID)
-    verification_date (TEXT): Date the verification was performed (YYYY-MM-DD)
+    verification_date (TIMESTAMP): Timestamp when the verification was performed
     run_name (TEXT): Name of the verification run
     benchmark_name (TEXT): Name of the benchmark
     question_id (TEXT): Unique identifier for the question (MD5 hash)
     question_text (TEXT): The question content
-    verify_result (INTEGER): Verification outcome (1=pass, 0=fail, NULL=not evaluated)
+    verify_result (BOOLEAN): Verification outcome (true=pass, false=fail, NULL=not evaluated)
     replicate (INTEGER): Replicate number (NULL for single runs, 1/2/3/... for replicated)
 
 Keys:
     Primary: result_id
-    Joins: result_id → results_metadata_view, raw_llm_answers_view, rubric_traits_view
-           run_id → run_mcp_servers_view.run_id, combination_info_view.run_id
+    Joins: result_id → results_metadata_view, raw_llm_answers_view, rubric_traits_view, result_mcp_servers_view
+           run_id → combination_info_view.run_id
            run_name → combination_info_view.run_name
            question_id → question_attributes_view.question_id
 
@@ -40,7 +40,7 @@ def create_template_results_view(engine: Engine) -> None:
         SELECT
             vr.metadata_result_id as result_id,
             run.id as run_id,
-            DATE(vr.created_at) as verification_date,
+            vr.created_at as verification_date,
             run.run_name,
             b.name as benchmark_name,
             vr.question_id,

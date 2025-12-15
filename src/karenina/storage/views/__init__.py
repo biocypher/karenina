@@ -7,7 +7,7 @@ and model performance analysis.
 Available Views:
     - template_results_view: One row per verification result (pass/fail)
     - template_attributes_view: One row per template attribute (for detailed analysis)
-    - run_mcp_servers_view: One row per MCP server configured for a run
+    - result_mcp_servers_view: One row per MCP server configured for a result
     - result_tools_used_view: One row per tool actually invoked during verification
     - combination_info_view: Distinct run/model combinations with MCP flag
     - models_used_view: All models used, with flags for answering/parsing roles
@@ -83,11 +83,11 @@ from .raw_llm_answers import (
     drop_raw_llm_answers_view,
 )
 from .result_mcp_servers import (
-    VIEW_NAME as RUN_MCP_SERVERS_VIEW,
+    VIEW_NAME as RESULT_MCP_SERVERS_VIEW,
 )
 from .result_mcp_servers import (
-    create_run_mcp_servers_view,
-    drop_run_mcp_servers_view,
+    create_result_mcp_servers_view,
+    drop_result_mcp_servers_view,
 )
 from .result_tools_used import (
     VIEW_NAME as RESULT_TOOLS_USED_VIEW,
@@ -129,7 +129,7 @@ from .template_results import (
 ALL_VIEW_NAMES = [
     TEMPLATE_RESULTS_VIEW,
     TEMPLATE_ATTRIBUTES_VIEW,
-    RUN_MCP_SERVERS_VIEW,
+    RESULT_MCP_SERVERS_VIEW,
     RESULT_TOOLS_USED_VIEW,
     COMBINATION_INFO_VIEW,
     MODELS_USED_VIEW,
@@ -157,7 +157,7 @@ __all__ = [
     "ALL_VIEW_NAMES",
     "TEMPLATE_RESULTS_VIEW",
     "TEMPLATE_ATTRIBUTES_VIEW",
-    "RUN_MCP_SERVERS_VIEW",
+    "RESULT_MCP_SERVERS_VIEW",
     "RESULT_TOOLS_USED_VIEW",
     "COMBINATION_INFO_VIEW",
     "MODELS_USED_VIEW",
@@ -172,7 +172,7 @@ __all__ = [
     # Individual create functions
     "create_template_results_view",
     "create_template_attributes_view",
-    "create_run_mcp_servers_view",
+    "create_result_mcp_servers_view",
     "create_result_tools_used_view",
     "create_combination_info_view",
     "create_models_used_view",
@@ -184,7 +184,7 @@ __all__ = [
     # Individual drop functions
     "drop_template_results_view",
     "drop_template_attributes_view",
-    "drop_run_mcp_servers_view",
+    "drop_result_mcp_servers_view",
     "drop_result_tools_used_view",
     "drop_combination_info_view",
     "drop_models_used_view",
@@ -204,7 +204,7 @@ def create_all_views(engine: Engine) -> None:
     """
     create_template_results_view(engine)
     create_template_attributes_view(engine)
-    create_run_mcp_servers_view(engine)
+    create_result_mcp_servers_view(engine)
     create_result_tools_used_view(engine)
     create_combination_info_view(engine)
     create_models_used_view(engine)
@@ -223,7 +223,7 @@ def drop_all_views(engine: Engine) -> None:
     """
     drop_template_results_view(engine)
     drop_template_attributes_view(engine)
-    drop_run_mcp_servers_view(engine)
+    drop_result_mcp_servers_view(engine)
     drop_result_tools_used_view(engine)
     drop_combination_info_view(engine)
     drop_models_used_view(engine)

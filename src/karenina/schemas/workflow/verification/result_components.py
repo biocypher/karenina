@@ -91,7 +91,7 @@ class VerificationResultTemplate(BaseModel):
 
     # Verification outcomes
     template_verification_performed: bool = False  # Whether template verification was executed
-    verify_result: Any | None = Field(
+    verify_result: bool | None = Field(
         default=None, json_schema_extra={"index": True}
     )  # Template verification result (None if template verification skipped)
     verify_granular_result: Any | None = None

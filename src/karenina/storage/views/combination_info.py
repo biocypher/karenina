@@ -14,7 +14,7 @@ Columns:
 
 Keys:
     Primary: run_id + answering_model + parsing_model
-    Joins: run_id → template_results_view.run_id, run_mcp_servers_view.run_id
+    Joins: run_id → template_results_view.run_id
            run_name → template_results_view.run_name
 
 Example:
