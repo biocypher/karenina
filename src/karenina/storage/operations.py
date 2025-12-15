@@ -866,6 +866,20 @@ def import_verification_results(
         session.add(run_model)
         session.commit()  # Commit run to satisfy foreign key constraints
 
+        # Build a lookup map for questions by ID and by text hash
+        # This allows matching results even when IDs differ between export and DB
+        question_id_map: dict[str, str] = {}  # Maps various ID forms -> DB question_id
+        all_questions = session.execute(select(QuestionModel)).scalars().all()
+        for q in all_questions:
+            # Map by actual DB ID
+            question_id_map[q.id] = q.id
+            # Map by URN-wrapped ID
+            question_id_map[f"urn:uuid:{q.id}"] = q.id
+            # Map by MD5 hash of question text (common alternative ID scheme)
+            text_hash = hashlib.md5(q.question_text.encode("utf-8")).hexdigest()
+            question_id_map[text_hash] = q.id
+            question_id_map[f"urn:uuid:{text_hash}"] = q.id
+
         # Import results
         imported_count = 0
         skipped_count = 0
@@ -876,6 +890,23 @@ def import_verification_results(
             try:
                 # Parse result with Pydantic validation
                 result = VerificationResult.model_validate(result_data)
+
+                # Resolve question_id to DB ID
+                original_qid = result.metadata.question_id
+                resolved_qid = question_id_map.get(original_qid)
+
+                if not resolved_qid and result.metadata.question_text:
+                    # Try matching by question text as last resort
+                    text_hash = hashlib.md5(result.metadata.question_text.encode("utf-8")).hexdigest()
+                    resolved_qid = question_id_map.get(text_hash)
+
+                if not resolved_qid:
+                    print(f"Warning: Question not found in DB for ID '{original_qid}', skipping")
+                    skipped_count += 1
+                    continue
+
+                # Update the result's question_id to match DB
+                result.metadata.question_id = resolved_qid
 
                 # Create ORM model using auto-converter
                 result_model = _create_result_model(run_id, result)

@@ -13,7 +13,7 @@ from .engine import get_session
 
 
 def get_benchmark_summary(db_config: DBConfig, benchmark_name: str | None = None) -> list[dict[str, Any]]:
-    """Get benchmark summary from the benchmark_summary_view.
+    """Get benchmark summary by querying tables directly.
 
     Args:
         db_config: Database configuration
@@ -23,9 +23,22 @@ def get_benchmark_summary(db_config: DBConfig, benchmark_name: str | None = None
         List of benchmark summary dictionaries
     """
     with get_session(db_config) as session:
-        query = "SELECT * FROM benchmark_summary_view"
+        query = """
+            SELECT
+                b.id as benchmark_id,
+                b.name as benchmark_name,
+                b.version,
+                b.created_at,
+                b.updated_at,
+                COUNT(bq.id) as total_questions,
+                SUM(CASE WHEN bq.finished THEN 1 ELSE 0 END) as finished_count,
+                SUM(CASE WHEN NOT bq.finished THEN 1 ELSE 0 END) as unfinished_count
+            FROM benchmarks b
+            LEFT JOIN benchmark_questions bq ON b.id = bq.benchmark_id
+        """
         if benchmark_name:
-            query += f" WHERE benchmark_name = '{benchmark_name}'"
+            query += f" WHERE b.name = '{benchmark_name}'"
+        query += " GROUP BY b.id, b.name, b.version, b.created_at, b.updated_at"
 
         result = session.execute(text(query))
         return [dict(row._mapping) for row in result]
