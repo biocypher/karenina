@@ -1,41 +1,24 @@
-"""Deep Judgment Rubric Traits View.
+"""deep_judgment_rubric_traits_view
 
-View Name: deep_judgment_rubric_traits_view
-
-Description:
-    Shows deep judgment rubric trait scores with one row per trait per result.
-    Separates deep judgment scores from standard scores evaluated in the same run.
-    Only includes results where deep judgment rubric evaluation was performed.
+Deep judgment rubric scores per result. One row per trait per result, distinguishing
+DJ scores from standard scores in same run via is_deep_judgment flag. Use for
+comparing deep judgment vs standard rubric evaluations.
 
 Columns:
-    - result_id: Unique identifier for the verification result (for joining)
-    - trait_name: Name of the rubric trait
-    - trait_type: Type of trait (always "llm" for deep judgment)
-    - score: The score value (bool or int)
-    - is_deep_judgment: 1 if from deep judgment evaluation, 0 if standard evaluation
+    result_id (TEXT): Unique identifier for the verification result
+    trait_name (TEXT): Name of the rubric trait
+    trait_type (TEXT): Type of trait (always "llm" for deep judgment)
+    score (TEXT): The score value (bool/int as text)
+    is_deep_judgment (INTEGER): 1 if from deep judgment, 0 if standard evaluation
 
-Source Tables:
-    - verification_results (vr)
+Keys:
+    Primary: result_id + trait_name + is_deep_judgment
+    Joins: result_id → template_results_view.result_id
 
-Source Columns:
-    - djr_deep_judgment_rubric_scores: Deep judgment evaluated trait scores (JSON dict)
-    - djr_standard_rubric_scores: Standard (non-DJ) trait scores in DJ runs (JSON dict)
-
-Note:
-    Only includes results where djr_deep_judgment_rubric_performed = 1.
-    Deep judgment is always LLM-based, hence trait_type is always "llm".
-    The is_deep_judgment flag distinguishes between DJ and standard evaluations.
-
-Example Query:
-    -- Compare DJ vs standard scores for same traits
+Example:
     SELECT result_id, trait_name, score, is_deep_judgment
     FROM deep_judgment_rubric_traits_view
     ORDER BY result_id, trait_name, is_deep_judgment;
-
-    -- Count traits evaluated with deep judgment
-    SELECT COUNT(DISTINCT trait_name) as dj_traits
-    FROM deep_judgment_rubric_traits_view
-    WHERE is_deep_judgment = 1;
 """
 
 from sqlalchemy import text

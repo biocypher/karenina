@@ -1,39 +1,29 @@
-"""Template Attributes View.
+"""template_attributes_view
 
-View Name: template_attributes_view
-
-Description:
-    Shows verification results disaggregated by template attribute.
-    One row per attribute in the parsed template response.
-    Useful for analyzing which specific attributes the model got right or wrong.
+Attribute-level comparison of ground truth vs LLM-parsed values. One row per
+attribute per result. Use for debugging verification failures and identifying
+systematic parsing errors by comparing gt_value vs llm_value.
 
 Columns:
-    - result_id: Unique identifier for the verification result
-    - verification_date: Date the verification was performed
-    - run_name: Name of the verification run
-    - benchmark_name: Name of the benchmark
-    - question_id: Unique identifier for the question
-    - question_text: The question text
-    - attribute_name: Name of the template attribute (e.g., 'gene_name', 'tissue')
-    - gt_value: Ground truth value for this attribute
-    - llm_value: Value extracted from the LLM response
-    - attribute_match: 1 if gt_value == llm_value, 0 otherwise
+    result_id (TEXT): Unique identifier for the verification result
+    verification_date (TEXT): Date the verification was performed (YYYY-MM-DD)
+    run_name (TEXT): Name of the verification run
+    benchmark_name (TEXT): Name of the benchmark
+    question_id (TEXT): Unique identifier for the question (MD5 hash)
+    question_text (TEXT): The question content
+    attribute_name (TEXT): Name of the template attribute (e.g., 'gene_name', 'tissue')
+    gt_value (TEXT): Ground truth (expected) value for this attribute
+    llm_value (TEXT): Value extracted from the LLM response
+    attribute_match (INTEGER): 1 if gt_value == llm_value, 0 otherwise
 
-Source Tables:
-    - verification_results (vr)
-    - verification_runs (run)
-    - benchmarks (b)
+Keys:
+    Primary: result_id + attribute_name
+    Joins: result_id → template_results_view.result_id
+           question_id → question_attributes_view.question_id
 
-JSON Functions Used:
-    - SQLite: json_each(), json_extract()
-    - PostgreSQL: jsonb_each_text(), ->> operator
-
-Example Query:
-    SELECT attribute_name,
-           SUM(attribute_match) as correct,
-           COUNT(*) as total
-    FROM template_attributes_view
-    GROUP BY attribute_name;
+Example:
+    SELECT attribute_name, SUM(attribute_match) as correct, COUNT(*) as total
+    FROM template_attributes_view GROUP BY attribute_name;
 """
 
 from sqlalchemy import text

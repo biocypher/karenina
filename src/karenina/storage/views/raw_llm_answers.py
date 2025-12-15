@@ -1,23 +1,20 @@
-"""Raw LLM Answers View.
+"""raw_llm_answers_view
 
-View Name: raw_llm_answers_view
-
-Description:
-    Minimal view for accessing raw LLM response text.
-    One row per verification result with a non-null response.
-    Designed for joining with other views via result_id.
+Raw LLM response text per result. One row per result with non-NULL responses.
+Use for full response analysis, text inspection, and debugging model outputs.
 
 Columns:
-    - result_id: Unique identifier for the verification result
-    - question_id: Question identifier for joining with question tables
-    - raw_llm_response: The complete raw text response from the answering LLM
+    result_id (TEXT): Unique identifier for the verification result
+    question_id (TEXT): Unique identifier for the question (MD5 hash)
+    raw_llm_response (TEXT): The complete raw text response from the answering LLM
 
-Source Tables:
-    - verification_results (vr)
+Keys:
+    Primary: result_id
+    Joins: result_id → template_results_view.result_id
+           question_id → template_results_view.question_id
 
-Example Query:
-    SELECT r.result_id, r.raw_llm_response
-    FROM raw_llm_answers_view r
+Example:
+    SELECT r.result_id, r.raw_llm_response FROM raw_llm_answers_view r
     JOIN template_results_view t ON r.result_id = t.result_id
     WHERE t.verify_result = 0;
 """

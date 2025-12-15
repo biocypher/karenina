@@ -1,47 +1,22 @@
-"""Run MCP Servers View.
+"""run_mcp_servers_view
 
-View Name: run_mcp_servers_view
-
-Description:
-    Shows one row per MCP server configured for each verification run.
-    Provides a compact representation of which MCP servers were attached
-    to each run, avoiding duplication across individual results.
-
-    Note: This shows servers that were *configured*, not necessarily *used*.
-    For actual tool usage, see result_tools_used_view.
+MCP servers configured per run. One row per MCP server per run. Shows servers
+that were *configured* (not necessarily used). Use for understanding MCP tooling
+setup across runs. Join via run_id to template_results_view.
 
 Columns:
-    - run_id: Unique identifier for the verification run
-    - run_name: Name of the verification run
-    - mcp_server: Name of an MCP server configured for this run
+    run_id (TEXT): Unique identifier for the verification run (UUID)
+    run_name (TEXT): Name of the verification run
+    mcp_server (TEXT): Name of an MCP server configured (e.g., 'brave_search', 'filesystem')
 
-Source Tables:
-    - verification_results (vr)
-    - verification_runs (run)
+Keys:
+    Primary: run_id + mcp_server
+    Joins: run_id → template_results_view.run_id, combination_info_view.run_id
+           run_name → template_results_view.run_name
 
-Source Column:
-    - template_answering_mcp_servers: JSON array of MCP server names
-      Example: ["brave_search", "filesystem", "postgres"]
-
-JSON Functions Used:
-    - SQLite: json_each(), json_array_length()
-    - PostgreSQL: jsonb_array_elements_text(), jsonb_array_length()
-
-Example Query:
-    -- List all MCP servers for each run
-    SELECT run_name, mcp_server
-    FROM run_mcp_servers_view
+Example:
+    SELECT run_name, mcp_server FROM run_mcp_servers_view
     ORDER BY run_name, mcp_server;
-
-    -- Count runs by MCP server
-    SELECT mcp_server, COUNT(DISTINCT run_id) as run_count
-    FROM run_mcp_servers_view
-    GROUP BY mcp_server
-    ORDER BY run_count DESC;
-
-    -- Find runs that used a specific MCP server
-    SELECT run_id, run_name FROM run_mcp_servers_view
-    WHERE mcp_server = 'brave_search';
 """
 
 from sqlalchemy import text

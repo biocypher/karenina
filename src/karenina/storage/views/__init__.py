@@ -33,6 +33,20 @@ Usage:
 
 from sqlalchemy.engine import Engine
 
+# Import view modules for direct access (used by karenina-mcp)
+from . import (
+    combination_info,
+    deep_judgment_rubric_traits,
+    models_used,
+    question_attributes,
+    raw_llm_answers,
+    result_mcp_servers,
+    result_tools_used,
+    results_metadata,
+    rubric_traits,
+    template_attributes,
+    template_results,
+)
 from .combination_info import (
     VIEW_NAME as COMBINATION_INFO_VIEW,
 )
@@ -127,6 +141,18 @@ ALL_VIEW_NAMES = [
 ]
 
 __all__ = [
+    # View modules (for karenina-mcp docstring access)
+    "combination_info",
+    "deep_judgment_rubric_traits",
+    "models_used",
+    "question_attributes",
+    "raw_llm_answers",
+    "result_mcp_servers",
+    "result_tools_used",
+    "results_metadata",
+    "rubric_traits",
+    "template_attributes",
+    "template_results",
     # View names
     "ALL_VIEW_NAMES",
     "TEMPLATE_RESULTS_VIEW",

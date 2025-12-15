@@ -1,55 +1,20 @@
-"""Result Tools Used View.
+"""result_tools_used_view
 
-View Name: result_tools_used_view
-
-Description:
-    Shows one row per tool that was actually invoked during verification.
-    Extracts the tools_used array from template_agent_metrics JSON object.
-
-    Note: This shows tools that were *actually called*, not just configured.
-    For configured MCP servers, see result_mcp_servers_view.
+Tools actually invoked during verification. One row per tool per result. Shows
+tools that were *actually called* during agent execution. Use for analyzing
+tool usage patterns and comparing to configured MCP servers.
 
 Columns:
-    - result_id: Unique identifier for the verification result
-    - tool_name: Name of a tool that was invoked (e.g., 'mcp__brave_search')
+    result_id (TEXT): Unique identifier for the verification result
+    tool_name (TEXT): Name of the tool invoked (e.g., 'mcp__brave_search')
 
-Source Tables:
-    - verification_results (vr)
+Keys:
+    Primary: result_id + tool_name
+    Joins: result_id → template_results_view.result_id
 
-Source Column:
-    - template_agent_metrics: JSON object containing agent execution metrics
-      Example: {
-          "iterations": 3,
-          "tool_calls": 5,
-          "tools_used": ["mcp__brave_search", "mcp__read_resource"],
-          "suspect_failed_tool_calls": 0,
-          "suspect_failed_tools": []
-      }
-
-JSON Functions Used:
-    - SQLite: json_each(), json_extract()
-    - PostgreSQL: jsonb_array_elements_text(), -> operator
-
-Example Query:
-    -- Count how often each tool was used across results
+Example:
     SELECT tool_name, COUNT(DISTINCT result_id) as result_count
-    FROM result_tools_used_view
-    GROUP BY tool_name
-    ORDER BY result_count DESC;
-
-    -- Find results that used a specific tool
-    SELECT result_id FROM result_tools_used_view
-    WHERE tool_name = 'mcp__brave_search';
-
-    -- Join with result_mcp_servers_view to compare configured vs used
-    SELECT
-        s.result_id,
-        s.mcp_server as configured,
-        t.tool_name as used
-    FROM result_mcp_servers_view s
-    LEFT JOIN result_tools_used_view t
-        ON s.result_id = t.result_id
-        AND t.tool_name LIKE '%' || s.mcp_server || '%';
+    FROM result_tools_used_view GROUP BY tool_name ORDER BY result_count DESC;
 """
 
 from sqlalchemy import text

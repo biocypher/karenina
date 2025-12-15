@@ -1,36 +1,20 @@
-"""Models Used View.
+"""models_used_view
 
-View Name: models_used_view
-
-Description:
-    Shows all distinct model names used throughout verification runs,
-    with flags indicating whether each model was used for answering
-    (generation) and/or parsing.
+All distinct models used across verification runs with role flags. Shows whether
+each model was used for answering (generation) and/or parsing (judgment). Use
+for inventory of models and filtering by model role.
 
 Columns:
-    - model_name: Name of the model
-    - used_for_answering: 1 if the model was used to generate answers, 0 otherwise
-    - used_for_parsing: 1 if the model was used to parse responses, 0 otherwise
+    model_name (TEXT): Name of the model (e.g., 'gpt-4o', 'claude-sonnet-4-20250514')
+    used_for_answering (INTEGER): 1 if used to generate answers, 0 otherwise
+    used_for_parsing (INTEGER): 1 if used to parse/judge responses, 0 otherwise
 
-Source Tables:
-    - verification_results (vr)
+Keys:
+    Primary: model_name
+    Note: This is a summary view; join to combination_info_view for per-run details.
 
-Source Columns:
-    - metadata_answering_model: The model used for generating answers
-    - metadata_parsing_model: The model used for parsing responses
-
-Example Query:
-    -- List all models and their roles
-    SELECT * FROM models_used_view
-    ORDER BY model_name;
-
-    -- Find models used for both answering and parsing
-    SELECT model_name FROM models_used_view
-    WHERE used_for_answering = 1 AND used_for_parsing = 1;
-
-    -- Find models used only for answering
-    SELECT model_name FROM models_used_view
-    WHERE used_for_answering = 1 AND used_for_parsing = 0;
+Example:
+    SELECT * FROM models_used_view WHERE used_for_answering = 1 AND used_for_parsing = 1;
 """
 
 from sqlalchemy import text

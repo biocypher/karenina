@@ -1,49 +1,36 @@
-"""Results Metadata View.
+"""results_metadata_view
 
-View Name: results_metadata_view
-
-Description:
-    Comprehensive execution metadata including token counts, timing, agent metrics,
-    and status flags. One row per verification result.
+Execution metadata per result - tokens, timing, agent metrics, abstention, and
+status flags. One row per verification result. Use for performance analysis,
+debugging agent behavior, and filtering by execution characteristics.
 
 Columns:
-    - result_id: Unique identifier for the verification result
-    - has_template_results: 1 if template verification was performed, 0 otherwise
-    - has_rubric_results: 1 if rubric evaluation was performed, 0 otherwise
-    - execution_time: Total execution time in seconds
-    - timestamp: ISO timestamp of verification
-    - input_tokens: Total input tokens across all stages (may be NULL)
-    - output_tokens: Total output tokens across all stages (may be NULL)
-    - total_tokens: Total tokens across all stages (may be NULL)
-    - agent_iterations: Number of agent think-act cycles (NULL if no agent)
-    - agent_tool_calls: Total tool invocations (NULL if no agent)
-    - has_mcp: 1 if MCP servers were configured, 0 otherwise
-    - used_full_trace: 1 if full trace was used, 0 if only final AI message
-    - has_trace_extraction_error: 1 if trace extraction failed, 0 otherwise
-    - abstention_detected: Whether model abstained (bool or NULL)
-    - abstention_reasoning: Explanation text if abstention detected (NULL otherwise)
-    - embedding_check_performed: 1 if embedding check ran, 0 otherwise
-    - recursion_limit_reached: 1 if agent hit recursion limit, 0 otherwise
-    - completed_without_errors: Overall success flag
+    result_id (TEXT): Unique identifier for the verification result
+    has_template_results (INTEGER): 1 if template verification was performed, 0 otherwise
+    has_rubric_results (INTEGER): 1 if rubric evaluation was performed, 0 otherwise
+    execution_time (REAL): Total execution time in seconds
+    timestamp (TEXT): ISO timestamp of verification
+    input_tokens (INTEGER): Total input tokens across all stages (NULL if unavailable)
+    output_tokens (INTEGER): Total output tokens across all stages (NULL if unavailable)
+    total_tokens (INTEGER): Total tokens across all stages (NULL if unavailable)
+    agent_iterations (INTEGER): Number of agent think-act cycles (NULL if no agent)
+    agent_tool_calls (INTEGER): Total tool invocations (NULL if no agent)
+    has_mcp (INTEGER): 1 if MCP servers were configured, 0 otherwise
+    used_full_trace (INTEGER): 1 if full trace was used, 0 if only final AI message
+    has_trace_extraction_error (INTEGER): 1 if trace extraction failed, 0 otherwise
+    abstention_detected (INTEGER): 1 if model abstained, 0 if not, NULL if not checked
+    abstention_reasoning (TEXT): Explanation text if abstention detected (NULL otherwise)
+    embedding_check_performed (INTEGER): 1 if embedding check ran, 0 otherwise
+    recursion_limit_reached (INTEGER): 1 if agent hit recursion limit, 0 otherwise
+    completed_without_errors (INTEGER): 1 if no errors during verification, 0 otherwise
 
-Source Tables:
-    - verification_results (vr)
+Keys:
+    Primary: result_id
+    Joins: result_id → template_results_view.result_id
 
-JSON Fields Used:
-    - template_usage_metadata: Token counts structure
-    - template_agent_metrics: Agent execution metrics
-
-Example Query:
-    -- Find results with high token usage
-    SELECT result_id, total_tokens, execution_time
-    FROM results_metadata_view
-    WHERE total_tokens > 10000
-    ORDER BY total_tokens DESC;
-
-    -- Find results where abstention was detected
-    SELECT result_id, abstention_reasoning
-    FROM results_metadata_view
-    WHERE abstention_detected = 1;
+Example:
+    SELECT result_id, total_tokens, execution_time FROM results_metadata_view
+    WHERE total_tokens > 10000 ORDER BY total_tokens DESC;
 """
 
 from sqlalchemy import text

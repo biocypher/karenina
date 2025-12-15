@@ -1,44 +1,23 @@
-"""Question Attributes View.
+"""question_attributes_view
 
-View Name: question_attributes_view
-
-Description:
-    Shows the attributes defined for each question's answer template.
-    One row per attribute per question, with the Pydantic type.
-    Useful for understanding what attributes each question template expects.
+Question metadata and Pydantic-typed template attributes. One row per attribute
+per question. Use for understanding answer template structure and expected
+attribute types (bool, str, int, float, list, dict).
 
 Columns:
-    - benchmark_name: Name of the benchmark
-    - question_id: Unique identifier for the question
-    - question_text: The question text
-    - attribute_name: Name of the template attribute (e.g., 'gene_name', 'tissue')
-    - attribute_type: Pydantic type of the attribute (bool, str, int, float, list, dict)
+    benchmark_name (TEXT): Name of the benchmark
+    question_id (TEXT): Unique identifier for the question (MD5 hash)
+    question_text (TEXT): The question content
+    attribute_name (TEXT): Name of the template attribute (e.g., 'gene_name', 'tissue')
+    attribute_type (TEXT): Pydantic type (bool, str, int, float, list, dict, None)
 
-Source Tables:
-    - verification_results (vr)
-    - verification_runs (run)
-    - benchmarks (b)
+Keys:
+    Primary: question_id + attribute_name
+    Joins: question_id → template_results_view.question_id, template_attributes_view.question_id
 
-Type Mapping:
-    JSON type -> Pydantic type:
-    - true/false -> bool
-    - text -> str
-    - integer -> int
-    - real -> float
-    - array -> list
-    - object -> dict
-    - null -> None
-
-Example Query:
-    -- List all attributes for a question
-    SELECT attribute_name, attribute_type
-    FROM question_attributes_view
+Example:
+    SELECT attribute_name, attribute_type FROM question_attributes_view
     WHERE question_id = 'abc123';
-
-    -- Count attributes by type across all questions
-    SELECT attribute_type, COUNT(*) as count
-    FROM question_attributes_view
-    GROUP BY attribute_type;
 """
 
 from sqlalchemy import text

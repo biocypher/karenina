@@ -1,42 +1,25 @@
-"""Combination Info View.
+"""combination_info_view
 
-View Name: combination_info_view
-
-Description:
-    Shows distinct combinations of run, answering model, and parsing model
-    with an indicator of whether MCP tooling was attached and the number of replicates.
-    Useful for understanding which model configurations were used in each run.
+Distinct run/model/replicate combinations. Shows which model configurations were
+used in each run, with replicate counts and MCP flags. Use for understanding
+experiment design and filtering by model configuration.
 
 Columns:
-    - run_id: Unique identifier for the verification run
-    - run_name: Name of the verification run
-    - answering_model: Name of the model that generated answers
-    - parsing_model: Name of the model that parsed responses
-    - has_mcp: Boolean indicating if MCP servers were configured (1=yes, 0=no)
-    - replicate_count: Number of replicates used for this combination
+    run_id (TEXT): Unique identifier for the verification run (UUID)
+    run_name (TEXT): Name of the verification run
+    answering_model (TEXT): Name of the model that generated answers
+    parsing_model (TEXT): Name of the model that parsed responses
+    has_mcp (INTEGER): 1 if MCP servers were configured, 0 otherwise
+    replicate_count (INTEGER): Number of replicates used for this combination
 
-Source Tables:
-    - verification_results (vr)
-    - verification_runs (run)
+Keys:
+    Primary: run_id + answering_model + parsing_model
+    Joins: run_id → template_results_view.run_id, run_mcp_servers_view.run_id
+           run_name → template_results_view.run_name
 
-Source Columns:
-    - metadata_answering_model: The answering model name
-    - metadata_parsing_model: The parsing model name
-    - metadata_answering_replicate: Replicate number (used to count replicates)
-    - template_answering_mcp_servers: JSON array of MCP server names (used to determine has_mcp)
-
-Example Query:
-    -- List all combinations for a run
-    SELECT * FROM combination_info_view
-    WHERE run_name = 'my_run';
-
-    -- Find all runs that used MCP
-    SELECT DISTINCT run_name FROM combination_info_view
-    WHERE has_mcp = 1;
-
-    -- Find combinations with multiple replicates
-    SELECT * FROM combination_info_view
-    WHERE replicate_count > 1;
+Example:
+    SELECT * FROM combination_info_view WHERE has_mcp = 1;
+    SELECT * FROM combination_info_view WHERE replicate_count > 1;
 """
 
 from sqlalchemy import text

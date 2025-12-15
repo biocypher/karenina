@@ -1,30 +1,31 @@
-"""Template Results View.
+"""template_results_view
 
-View Name: template_results_view
-
-Description:
-    Shows verification results with benchmark context and question details.
-    One row per verification result (overall pass/fail).
+Primary view for verification outcomes. One row per result with pass/fail status,
+result_id, run_id, run_name, question_id, and benchmark_name. Use for pass rate
+analysis, filtering failed questions, and joining to other result-level views.
 
 Columns:
-    - result_id: Unique identifier for the verification result
-    - verification_date: Date the verification was performed
-    - run_name: Name of the verification run
-    - benchmark_name: Name of the benchmark
-    - question_id: Unique identifier for the question
-    - question_text: The question text
-    - verify_result: Boolean indicating if the answer was correct
-    - replicate: Replicate number (NULL for single runs, 1/2/3/... for replicated runs)
+    result_id (TEXT): Unique identifier for the verification result
+    run_id (TEXT): Unique identifier for the verification run (UUID)
+    verification_date (TEXT): Date the verification was performed (YYYY-MM-DD)
+    run_name (TEXT): Name of the verification run
+    benchmark_name (TEXT): Name of the benchmark
+    question_id (TEXT): Unique identifier for the question (MD5 hash)
+    question_text (TEXT): The question content
+    verify_result (INTEGER): Verification outcome (1=pass, 0=fail, NULL=not evaluated)
+    replicate (INTEGER): Replicate number (NULL for single runs, 1/2/3/... for replicated)
 
-Source Tables:
-    - verification_results (vr)
-    - verification_runs (run)
-    - benchmarks (b)
+Keys:
+    Primary: result_id
+    Joins: result_id → results_metadata_view, raw_llm_answers_view, rubric_traits_view
+           run_id → run_mcp_servers_view.run_id, combination_info_view.run_id
+           run_name → combination_info_view.run_name
+           question_id → question_attributes_view.question_id
 
-Example Query:
-    SELECT * FROM template_results_view
-    WHERE benchmark_name = 'my_benchmark'
-    AND verify_result = 1;
+Example:
+    SELECT run_name, COUNT(*) as total, SUM(verify_result) as passed,
+           ROUND(100.0 * SUM(verify_result) / COUNT(*), 2) as pass_rate
+    FROM template_results_view GROUP BY run_name;
 """
 
 from sqlalchemy import text
@@ -38,6 +39,7 @@ def create_template_results_view(engine: Engine) -> None:
     view_sql = """
         SELECT
             vr.metadata_result_id as result_id,
+            run.id as run_id,
             DATE(vr.created_at) as verification_date,
             run.run_name,
             b.name as benchmark_name,
