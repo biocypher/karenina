@@ -118,15 +118,21 @@ class TaskIdentifier:
         result_answering_model = result.metadata.answering_model
         result_parsing_model = result.metadata.parsing_model
 
+        # Get MCP servers from result for matching (needed when multiple configs have same model)
+        result_mcp_servers = set(result.answering_mcp_servers or [])
+
         # Find matching answering model config
         answering_model_id = result_answering_model  # fallback to result value
         mcp_hash = ""
         for model in config.answering_models:
             model_str = cls._get_model_string(model)
             if model_str == result_answering_model:
-                answering_model_id = model.id or result_answering_model
-                mcp_hash = cls.compute_mcp_hash(model)
-                break
+                # Also check MCP servers match to handle multiple configs with same model
+                config_mcp_servers = set(model.mcp_urls_dict.keys()) if model.mcp_urls_dict else set()
+                if result_mcp_servers == config_mcp_servers:
+                    answering_model_id = model.id or result_answering_model
+                    mcp_hash = cls.compute_mcp_hash(model)
+                    break
 
         # Find matching parsing model config
         parsing_model_id = result_parsing_model  # fallback to result value
@@ -201,7 +207,7 @@ class ProgressiveSaveManager:
     """
 
     STATE_FORMAT_VERSION = "1.0"
-    RESULTS_FORMAT_VERSION = "2.0"
+    RESULTS_FORMAT_VERSION = "2.1"
 
     def __init__(
         self,

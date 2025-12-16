@@ -8,7 +8,7 @@ import logging
 import os
 import time
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ...schemas.domain import Rubric
 from ...schemas.workflow import (
@@ -20,7 +20,33 @@ from ...schemas.workflow import (
 )
 from ...utils.answer_cache import AnswerTraceCache
 
+if TYPE_CHECKING:
+    from anyio.from_thread import BlockingPortal
+
 logger = logging.getLogger(__name__)
+
+# Module-level portal for async operations from worker threads
+# This allows LLM invocation code to access the portal without changing all function signatures
+_async_portal: "BlockingPortal | None" = None
+
+
+def get_async_portal() -> "BlockingPortal | None":
+    """Get the current async portal for running async code from threads.
+
+    Returns:
+        The BlockingPortal if one is active, None otherwise
+    """
+    return _async_portal
+
+
+def set_async_portal(portal: "BlockingPortal | None") -> None:
+    """Set the async portal for the current execution context.
+
+    Args:
+        portal: The BlockingPortal to use, or None to clear
+    """
+    global _async_portal
+    _async_portal = portal
 
 
 # ============================================================================
@@ -375,6 +401,12 @@ def execute_sequential(
         # Call progress callback BEFORE starting task (with preview result)
         if progress_callback:
             # Create a minimal result-like object for progress tracking
+            preview_result_id = VerificationResultMetadata.compute_result_id(
+                question_id=task["question_id"],
+                answering_model=task["answering_model"].id,
+                parsing_model=task["parsing_model"].id,
+                timestamp="",  # Empty timestamp indicates "starting" event
+            )
             preview_result = VerificationResult(
                 metadata=VerificationResultMetadata(
                     question_id=task["question_id"],
@@ -385,6 +417,7 @@ def execute_sequential(
                     parsing_model=task["parsing_model"].id,
                     execution_time=0.0,
                     timestamp="",  # Empty timestamp indicates "starting" event
+                    result_id=preview_result_id,
                 )
             )
             progress_callback(idx, total, preview_result)
@@ -420,6 +453,9 @@ def execute_parallel(
     This function creates a thread-safe answer cache and uses task shuffling and
     progressive retry to maximize cache hits while avoiding blocking.
 
+    Uses AnyIO BlockingPortal to properly manage async event loops across worker
+    threads, preventing connection pool degradation that causes performance tapering.
+
     Args:
         tasks: List of task dictionaries
         max_workers: Optional maximum number of parallel workers (defaults to env var or 2)
@@ -432,6 +468,8 @@ def execute_parallel(
     import queue
     import random
     import threading
+
+    from anyio.from_thread import start_blocking_portal
 
     if max_workers is None:
         max_workers = int(os.getenv("KARENINA_ASYNC_MAX_WORKERS", "2"))
@@ -457,8 +495,8 @@ def execute_parallel(
     completed_count = [0]
     total = len(tasks)
 
-    # Retry configuration
-    RETRY_WAIT_SECONDS = 30
+    # Retry wait time for IN_PROGRESS cache entries (reduced from 30s)
+    RETRY_WAIT_SECONDS = 5
 
     # Completion tracking
     tasks_completed_event = threading.Event()
@@ -499,17 +537,23 @@ def execute_parallel(
                         work_queue.put((original_index, task, retry_count + 1))
                         continue
                     else:
-                        # Subsequent encounter: wait 30s then requeue
-                        logger.debug(
-                            f"Task {cache_key} still in progress (retry={retry_count}), waiting {RETRY_WAIT_SECONDS}s"
-                        )
-                        time.sleep(RETRY_WAIT_SECONDS)
+                        # Subsequent encounter: use cache event-based waiting
+                        # Wait for completion with timeout, then requeue if still not ready
+                        completed = answer_cache.wait_for_completion(cache_key, timeout=float(RETRY_WAIT_SECONDS))
+                        if not completed:
+                            logger.debug(f"Task {cache_key} still in progress after {RETRY_WAIT_SECONDS}s, requeueing")
                         work_queue.put((original_index, task, retry_count + 1))
                         continue
 
                 # Status is MISS or HIT - ready to execute
                 # Call preview progress callback
                 if progress_callback:
+                    preview_result_id = VerificationResultMetadata.compute_result_id(
+                        question_id=task["question_id"],
+                        answering_model=task["answering_model"].id,
+                        parsing_model=task["parsing_model"].id,
+                        timestamp="",  # Empty timestamp indicates "starting" event
+                    )
                     preview_result = VerificationResult(
                         metadata=VerificationResultMetadata(
                             question_id=task["question_id"],
@@ -520,6 +564,7 @@ def execute_parallel(
                             parsing_model=task["parsing_model"].id,
                             execution_time=0.0,
                             timestamp="",  # Empty timestamp indicates "starting" event
+                            result_id=preview_result_id,
                         )
                     )
                     with progress_lock:
@@ -555,23 +600,34 @@ def execute_parallel(
                 logger.error(f"Worker error: {e}")
                 work_queue.task_done()
 
-    # Start worker threads
-    workers = []
-    for _ in range(max_workers):
-        t = threading.Thread(target=worker, daemon=True)
-        t.start()
-        workers.append(t)
+    # Use BlockingPortal to properly manage async event loop for all worker threads
+    # This prevents "Event loop is closed" errors and connection pool degradation
+    with start_blocking_portal(backend="asyncio") as portal:
+        # Set the global portal so LLM invocation code can use it
+        set_async_portal(portal)
 
-    # Wait for all tasks to actually complete (not just queue empty)
-    tasks_completed_event.wait()
+        try:
+            # Start worker threads
+            workers = []
+            for _ in range(max_workers):
+                t = threading.Thread(target=worker, daemon=True)
+                t.start()
+                workers.append(t)
 
-    # Send shutdown signal to workers
-    for _ in range(max_workers):
-        work_queue.put(None)
+            # Wait for all tasks to actually complete (not just queue empty)
+            tasks_completed_event.wait()
 
-    # Wait for workers to finish
-    for t in workers:
-        t.join(timeout=5.0)
+            # Send shutdown signal to workers
+            for _ in range(max_workers):
+                work_queue.put(None)
+
+            # Wait for workers to finish
+            for t in workers:
+                t.join(timeout=5.0)
+
+        finally:
+            # Clear the portal when done
+            set_async_portal(None)
 
     # Restore original order and convert to dictionary
     results = {}
@@ -783,13 +839,15 @@ def run_verification_batch(
     # Auto-save if configured
     autosave_enabled = os.getenv("AUTOSAVE_DATABASE", "true").lower() in ("true", "1", "yes")
     if autosave_enabled and storage_url and benchmark_name:
+        # Use mode='json' to serialize SecretStr and other non-JSON types properly
+        config_dict = config.model_dump(mode="json")
         auto_save_results(
             results=results,
             templates=templates,
             storage_url=storage_url,
             benchmark_name=benchmark_name,
             run_name=run_name,
-            config_dict=config.model_dump(),
+            config_dict=config_dict,
             run_id=run_name,
         )
 

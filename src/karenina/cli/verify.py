@@ -293,7 +293,7 @@ def verify(
             "--use-full-trace-for-template/--use-final-message-for-template",
             help="Use full MCP agent trace (True) or only final AI message (False) for template parsing",
         ),
-    ] = True,
+    ] = False,
     use_full_trace_for_rubric: Annotated[
         bool,
         typer.Option(

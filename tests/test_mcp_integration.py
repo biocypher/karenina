@@ -268,6 +268,7 @@ class TestInitChatModelUnifiedWithMCP:
         mock_base_model = Mock()
         mock_agent = Mock()
         mock_tools = [Mock(), Mock()]
+        mock_middleware = [Mock(), Mock()]
 
         with (
             patch("karenina.infrastructure.llm.interface.init_chat_model", return_value=mock_base_model),
@@ -275,7 +276,11 @@ class TestInitChatModelUnifiedWithMCP:
                 "karenina.infrastructure.llm.mcp_utils.sync_create_mcp_client_and_tools",
                 return_value=(Mock(), mock_tools),
             ),
-            patch("langgraph.prebuilt.create_react_agent", return_value=mock_agent),
+            patch("langchain.agents.create_agent", return_value=mock_agent),
+            patch(
+                "karenina.infrastructure.llm.interface._build_agent_middleware",
+                return_value=mock_middleware,
+            ),
         ):
             result = init_chat_model_unified(
                 model="gpt-4.1-mini", provider="openai", interface="langchain", mcp_urls_dict=self.mcp_urls
@@ -453,6 +458,7 @@ class TestToolFiltering:
         """Test init_chat_model_unified with tool filtering."""
         mock_base_model = Mock()
         mock_agent = Mock()
+        mock_middleware = [Mock(), Mock()]
 
         # Mock filtered tools
         mock_tool1 = Mock()
@@ -467,7 +473,11 @@ class TestToolFiltering:
                 "karenina.infrastructure.llm.mcp_utils.sync_create_mcp_client_and_tools",
                 return_value=(Mock(), filtered_tools),
             ) as mock_sync,
-            patch("langgraph.prebuilt.create_react_agent", return_value=mock_agent),
+            patch("langchain.agents.create_agent", return_value=mock_agent),
+            patch(
+                "karenina.infrastructure.llm.interface._build_agent_middleware",
+                return_value=mock_middleware,
+            ),
         ):
             result = init_chat_model_unified(
                 model="gpt-4.1-mini",

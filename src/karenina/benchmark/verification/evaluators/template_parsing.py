@@ -22,6 +22,32 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T", bound=BaseModel)
 
 
+def _is_openai_endpoint_llm(llm: Any) -> bool:
+    """Check if the LLM is a ChatOpenAIEndpoint (custom OpenAI-compatible endpoint).
+
+    These endpoints often don't support native structured output (json_schema method)
+    and can hang indefinitely when attempting to use it.
+    """
+    # Check by class name to avoid circular imports
+    llm_class_name = type(llm).__name__
+    # Also check the module path for more robust detection
+    llm_module = type(llm).__module__
+
+    is_endpoint = (
+        llm_class_name == "ChatOpenAIEndpoint"
+        or "ChatOpenAIEndpoint" in str(type(llm).__mro__)
+        or (llm_module and "interface" in llm_module and llm_class_name == "ChatOpenAI")
+    )
+
+    # Also check if it has a custom base_url that's not OpenAI's
+    if hasattr(llm, "openai_api_base") and llm.openai_api_base:
+        base_url = str(llm.openai_api_base)
+        if base_url and not base_url.startswith("https://api.openai.com"):
+            is_endpoint = True
+
+    return bool(is_endpoint)
+
+
 def invoke_with_structured_output_for_template(
     llm: Any,
     messages: list[Any],  # BaseMessage or dict
@@ -37,6 +63,10 @@ def invoke_with_structured_output_for_template(
     Unlike rubric parsing which always returns a result, this returns None on failure
     to allow the caller to fall back to enhanced PydanticOutputParser flow with retries.
 
+    IMPORTANT: For OpenAI-compatible endpoints (ChatOpenAIEndpoint), we skip the
+    structured output attempt entirely because many such endpoints don't support
+    OpenAI's native structured output and can hang indefinitely.
+
     Args:
         llm: LangChain chat model
         messages: List of messages to send
@@ -51,6 +81,15 @@ def invoke_with_structured_output_for_template(
     from langchain_core.callbacks import get_usage_metadata_callback
 
     usage_metadata: dict[str, Any] = {}
+
+    # Skip structured output for OpenAI-compatible endpoints - they often don't support it
+    # and can hang indefinitely when attempting to use json_schema method
+    if _is_openai_endpoint_llm(llm):
+        logger.debug(
+            f"Skipping structured output for {type(llm).__name__} - "
+            "OpenAI-compatible endpoints may not support json_schema method"
+        )
+        return None, usage_metadata, False
 
     # Try json_schema method (native structured output)
     try:

@@ -30,6 +30,13 @@ class TestRubricResultsStandardExport:
     @pytest.fixture
     def basic_metadata(self) -> VerificationResultMetadata:
         """Create basic metadata for testing."""
+        result_id = VerificationResultMetadata.compute_result_id(
+            question_id="q1",
+            answering_model="gpt-4",
+            parsing_model="gpt-4-mini",
+            timestamp="2024-01-15T10:30:00",
+            answering_replicate=1,
+        )
         return VerificationResultMetadata(
             question_id="q1",
             template_id="template1",
@@ -41,6 +48,7 @@ class TestRubricResultsStandardExport:
             parsing_model="gpt-4-mini",
             execution_time=2.5,
             timestamp="2024-01-15T10:30:00",
+            result_id=result_id,
             answering_replicate=1,
         )
 
@@ -166,6 +174,13 @@ class TestRubricJudgmentResultsCreation:
     @pytest.fixture
     def basic_metadata(self) -> VerificationResultMetadata:
         """Create basic metadata."""
+        result_id = VerificationResultMetadata.compute_result_id(
+            question_id="q1",
+            answering_model="gpt-4",
+            parsing_model="gpt-4-mini",
+            timestamp="2024-01-15T10:30:00",
+            answering_replicate=1,
+        )
         return VerificationResultMetadata(
             question_id="q1",
             template_id="template1",
@@ -177,6 +192,7 @@ class TestRubricJudgmentResultsCreation:
             parsing_model="gpt-4-mini",
             execution_time=1.0,
             timestamp="2024-01-15T10:30:00",
+            result_id=result_id,
             answering_replicate=1,
         )
 
@@ -209,6 +225,13 @@ class TestRubricJudgmentResultsExcerptExplosion:
     @pytest.fixture
     def basic_metadata(self) -> VerificationResultMetadata:
         """Create basic metadata."""
+        result_id = VerificationResultMetadata.compute_result_id(
+            question_id="q1",
+            answering_model="gpt-4",
+            parsing_model="gpt-4-mini",
+            timestamp="2024-01-15T10:30:00",
+            answering_replicate=1,
+        )
         return VerificationResultMetadata(
             question_id="q1",
             template_id="template1",
@@ -220,6 +243,7 @@ class TestRubricJudgmentResultsExcerptExplosion:
             parsing_model="gpt-4-mini",
             execution_time=1.0,
             timestamp="2024-01-15T10:30:00",
+            result_id=result_id,
             answering_replicate=1,
         )
 
@@ -323,6 +347,13 @@ class TestRubricJudgmentResultsMetadata:
     @pytest.fixture
     def basic_metadata(self) -> VerificationResultMetadata:
         """Create basic metadata."""
+        result_id = VerificationResultMetadata.compute_result_id(
+            question_id="q1",
+            answering_model="gpt-4",
+            parsing_model="gpt-4-mini",
+            timestamp="2024-01-15T10:30:00",
+            answering_replicate=1,
+        )
         return VerificationResultMetadata(
             question_id="q1",
             template_id="template1",
@@ -334,6 +365,7 @@ class TestRubricJudgmentResultsMetadata:
             parsing_model="gpt-4-mini",
             execution_time=1.0,
             timestamp="2024-01-15T10:30:00",
+            result_id=result_id,
             answering_replicate=1,
         )
 
@@ -392,6 +424,13 @@ class TestRubricJudgmentResultsMixedTraits:
     @pytest.fixture
     def basic_metadata(self) -> VerificationResultMetadata:
         """Create basic metadata."""
+        result_id = VerificationResultMetadata.compute_result_id(
+            question_id="q1",
+            answering_model="gpt-4",
+            parsing_model="gpt-4-mini",
+            timestamp="2024-01-15T10:30:00",
+            answering_replicate=1,
+        )
         return VerificationResultMetadata(
             question_id="q1",
             template_id="template1",
@@ -403,6 +442,7 @@ class TestRubricJudgmentResultsMixedTraits:
             parsing_model="gpt-4-mini",
             execution_time=1.0,
             timestamp="2024-01-15T10:30:00",
+            result_id=result_id,
             answering_replicate=1,
         )
 
@@ -451,6 +491,13 @@ class TestJSONSerializationComplexFields:
     @pytest.fixture
     def basic_metadata(self) -> VerificationResultMetadata:
         """Create basic metadata."""
+        result_id = VerificationResultMetadata.compute_result_id(
+            question_id="q1",
+            answering_model="gpt-4",
+            parsing_model="gpt-4-mini",
+            timestamp="2024-01-15T10:30:00",
+            answering_replicate=1,
+        )
         return VerificationResultMetadata(
             question_id="q1",
             template_id="template1",
@@ -462,6 +509,7 @@ class TestJSONSerializationComplexFields:
             parsing_model="gpt-4-mini",
             execution_time=1.0,
             timestamp="2024-01-15T10:30:00",
+            result_id=result_id,
             answering_replicate=1,
         )
 

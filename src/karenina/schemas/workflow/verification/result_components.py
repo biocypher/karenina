@@ -2,28 +2,84 @@
 
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class VerificationResultMetadata(BaseModel):
     """Core metadata and identification fields for a verification result."""
 
-    question_id: str
-    template_id: str  # MD5 of template or "no_template" (composite key component)
-    completed_without_errors: bool
+    question_id: str = Field(..., json_schema_extra={"index": True, "max_length": 32})
+    template_id: str = Field(
+        ..., json_schema_extra={"index": True, "max_length": 32}
+    )  # MD5 of template or "no_template" (composite key component)
+    completed_without_errors: bool = Field(default=..., json_schema_extra={"index": True})
     error: str | None = None
     question_text: str
     raw_answer: str | None = None  # Ground truth answer from checkpoint
     keywords: list[str] | None = None  # Keywords associated with the question
-    answering_model: str
-    parsing_model: str
+    answering_model: str = Field(..., json_schema_extra={"index": True, "max_length": 255})
+    parsing_model: str = Field(..., json_schema_extra={"index": True, "max_length": 255})
     answering_system_prompt: str | None = None  # System prompt used for answering model
     parsing_system_prompt: str | None = None  # System prompt used for parsing model
     execution_time: float
-    timestamp: str
+    timestamp: str = Field(..., json_schema_extra={"index": True, "max_length": 50})
+    result_id: str = Field(
+        ...,
+        json_schema_extra={"index": True, "max_length": 16},
+        description="Deterministic hash ID computed from verification parameters",
+    )
     run_name: str | None = None
     answering_replicate: int | None = None  # Replicate number for answering model (1, 2, 3, ...)
     parsing_replicate: int | None = None  # Replicate number for parsing model (1, 2, 3, ...)
+
+    @staticmethod
+    def compute_result_id(
+        question_id: str,
+        answering_model: str,
+        parsing_model: str,
+        timestamp: str,
+        answering_replicate: int | None = None,
+        parsing_replicate: int | None = None,
+        answering_mcp_servers: list[str] | None = None,
+    ) -> str:
+        """
+        Compute deterministic 16-char SHA256 hash from verification parameters.
+
+        The ID is based on a canonical JSON representation of the verification
+        parameters. Same inputs always produce the same ID, enabling deduplication.
+
+        Args:
+            question_id: Question identifier
+            answering_model: Full answering model string (e.g., "anthropic/claude-haiku-4-5")
+            parsing_model: Full parsing model string
+            timestamp: ISO timestamp string
+            answering_replicate: Answering replicate number (None for single run)
+            parsing_replicate: Parsing replicate number (None for single run)
+            answering_mcp_servers: List of MCP server names (None or empty for no MCP)
+
+        Returns:
+            16-character hex string (first 16 chars of SHA256 hash)
+        """
+        import hashlib
+        import json
+
+        # Create canonical representation with sorted keys
+        data = {
+            "answering_mcp_servers": sorted(answering_mcp_servers or []),
+            "answering_model": answering_model,
+            "answering_replicate": answering_replicate,
+            "parsing_model": parsing_model,
+            "parsing_replicate": parsing_replicate,
+            "question_id": question_id,
+            "timestamp": timestamp,
+        }
+
+        # Serialize with sorted keys for determinism
+        json_str = json.dumps(data, sort_keys=True, ensure_ascii=True)
+
+        # Compute SHA256 and take first 16 characters
+        hash_obj = hashlib.sha256(json_str.encode("utf-8"))
+        return hash_obj.hexdigest()[:16]
 
 
 class VerificationResultTemplate(BaseModel):
@@ -35,7 +91,9 @@ class VerificationResultTemplate(BaseModel):
 
     # Verification outcomes
     template_verification_performed: bool = False  # Whether template verification was executed
-    verify_result: Any | None = None  # Template verification result (None if template verification skipped)
+    verify_result: bool | None = Field(
+        default=None, json_schema_extra={"index": True}
+    )  # Template verification result (None if template verification skipped)
     verify_granular_result: Any | None = None
 
     # Embeddings
