@@ -145,7 +145,7 @@ def export_verification_results_json(
             rubric_definition = {"trait_names": global_rubric.get_trait_names()}
 
     export_data: dict[str, Any] = {
-        "format_version": "2.0",
+        "format_version": "2.1",
         "metadata": {
             "export_timestamp": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
             "karenina_version": get_karenina_version(),

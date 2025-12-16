@@ -1,8 +1,12 @@
 """Database storage module for Karenina.
 
 This module provides SQLAlchemy-based persistence for benchmarks and verification results.
+
+The VerificationResultModel is auto-generated from Pydantic schemas to ensure
+the database schema stays in sync with the domain models automatically.
 """
 
+from .base import Base
 from .db_config import DBConfig
 from .engine import (
     close_engine,
@@ -13,15 +17,16 @@ from .engine import (
     init_database,
     reset_database,
 )
+from .generated_models import FLATTEN_CONFIG, VerificationResultModel
 from .models import (
-    Base,
     BenchmarkModel,
     BenchmarkQuestionModel,
+    ImportMetadataModel,
     QuestionModel,
-    VerificationResultModel,
     VerificationRunModel,
 )
 from .operations import (
+    import_verification_results,
     load_benchmark,
     load_verification_results,
     save_benchmark,
@@ -43,6 +48,7 @@ from .queries import (
 __all__ = [
     # Configuration
     "DBConfig",
+    "FLATTEN_CONFIG",
     # Engine and session management
     "get_engine",
     "get_session",
@@ -58,11 +64,13 @@ __all__ = [
     "BenchmarkQuestionModel",
     "VerificationRunModel",
     "VerificationResultModel",
+    "ImportMetadataModel",
     # Operations
     "save_benchmark",
     "load_benchmark",
     "save_verification_results",
     "load_verification_results",
+    "import_verification_results",
     # Query helpers
     "get_benchmark_summary",
     "get_verification_run_summary",

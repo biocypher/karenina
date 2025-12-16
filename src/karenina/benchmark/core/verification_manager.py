@@ -414,6 +414,13 @@ class VerificationManager:
                 q_data = self.base._questions_cache.get(question_id, {})
                 template_code = q_data.get("answer_template", "")
                 template_id = generate_template_id(template_code)
+                error_timestamp = datetime.now().isoformat()
+                error_result_id = VerificationResultMetadata.compute_result_id(
+                    question_id=question_id,
+                    answering_model="unknown",
+                    parsing_model="unknown",
+                    timestamp=error_timestamp,
+                )
                 error_result = VerificationResult(
                     metadata=VerificationResultMetadata(
                         question_id=question_id,
@@ -424,7 +431,8 @@ class VerificationManager:
                         answering_model="unknown",
                         parsing_model="unknown",
                         execution_time=0.0,
-                        timestamp=datetime.now().isoformat(),
+                        timestamp=error_timestamp,
+                        result_id=error_result_id,
                     )
                 )
                 all_results[question_id] = {f"{question_id}_error": error_result}
@@ -480,6 +488,13 @@ class VerificationManager:
                     q_data = self.base._questions_cache.get(q_id, {})
                     template_code = q_data.get("answer_template", "")
                     template_id = generate_template_id(template_code)
+                    error_timestamp = datetime.now().isoformat()
+                    error_result_id = VerificationResultMetadata.compute_result_id(
+                        question_id=q_id,
+                        answering_model="unknown",
+                        parsing_model="unknown",
+                        timestamp=error_timestamp,
+                    )
                     error_result = VerificationResult(
                         metadata=VerificationResultMetadata(
                             question_id=q_id,
@@ -490,7 +505,8 @@ class VerificationManager:
                             answering_model="unknown",
                             parsing_model="unknown",
                             execution_time=0.0,
-                            timestamp=datetime.now().isoformat(),
+                            timestamp=error_timestamp,
+                            result_id=error_result_id,
                             run_name=run_name,
                         )
                     )

@@ -8,21 +8,24 @@ import hashlib
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
+from uuid import uuid4
 
 if TYPE_CHECKING:
     from ...schemas.workflow import VerificationResult
     from ..benchmark.benchmark import Benchmark
 
-from sqlalchemy import select
+from sqlalchemy import Select, select
 
 from ..utils.checkpoint import generate_template_id
+from .converters import orm_to_pydantic, pydantic_to_orm, update_orm_from_pydantic
 from .db_config import DBConfig
 from .engine import get_session, init_database
+from .generated_models import FLATTEN_CONFIG, VerificationResultModel
 from .models import (
     BenchmarkModel,
     BenchmarkQuestionModel,
+    ImportMetadataModel,
     QuestionModel,
-    VerificationResultModel,
     VerificationRunModel,
 )
 
@@ -64,6 +67,19 @@ def save_benchmark(
         init_database(db_config)
 
     with get_session(db_config) as session:
+        # Serialize global rubric to metadata_json
+        metadata_json: dict[str, Any] = {}
+        global_rubric = benchmark.get_global_rubric()
+        if global_rubric:
+            from ..schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
+
+            metadata_json["global_rubric"] = {
+                "traits": [t.model_dump() for t in global_rubric.llm_traits],
+                "regex_traits": [t.model_dump() for t in global_rubric.regex_traits],
+                "callable_traits": [t.model_dump() for t in global_rubric.callable_traits],
+                "metric_traits": [t.model_dump() for t in global_rubric.metric_traits],
+            }
+
         # Check if benchmark already exists
         existing_benchmark = session.execute(
             select(BenchmarkModel).where(BenchmarkModel.name == benchmark.name)
@@ -84,6 +100,7 @@ def save_benchmark(
                     version=benchmark.version,
                     creator=str(benchmark.creator) if benchmark.creator else None,
                     checkpoint_path=str(checkpoint_path) if checkpoint_path else None,
+                    metadata_json=metadata_json,
                     updated_at=datetime.now(UTC),
                 )
             )
@@ -96,7 +113,7 @@ def save_benchmark(
                 version=benchmark.version,
                 creator=str(benchmark.creator) if benchmark.creator else None,
                 checkpoint_path=str(checkpoint_path) if checkpoint_path else None,
-                metadata_json={},
+                metadata_json=metadata_json,
             )
             session.add(benchmark_model)
             session.flush()  # Get the ID
@@ -144,20 +161,34 @@ def save_benchmark(
             template_id = generate_template_id(answer_template)
 
             # Serialize question rubric to dict format for database storage
-            # The benchmark cache stores rubrics as list of trait objects,
-            # but the database expects a JSON dict format with separate lists by type
+            # The benchmark cache stores rubrics as a dict with keys:
+            # llm_traits, regex_traits, callable_traits, metric_traits
             question_rubric_dict = None
             if q_data.get("question_rubric"):
                 try:
                     from ..schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
 
-                    rubric_traits = q_data["question_rubric"]
-                    if isinstance(rubric_traits, list) and len(rubric_traits) > 0:
-                        # Separate traits by type
-                        llm_traits = [t for t in rubric_traits if isinstance(t, LLMRubricTrait)]
-                        regex_traits = [t for t in rubric_traits if isinstance(t, RegexTrait)]
-                        callable_traits = [t for t in rubric_traits if isinstance(t, CallableTrait)]
-                        metric_traits = [t for t in rubric_traits if isinstance(t, MetricRubricTrait)]
+                    rubric_data = q_data["question_rubric"]
+                    if isinstance(rubric_data, dict):
+                        # Cache format: dict with llm_traits, regex_traits, etc.
+                        llm_traits = rubric_data.get("llm_traits", [])
+                        regex_traits = rubric_data.get("regex_traits", [])
+                        callable_traits = rubric_data.get("callable_traits", [])
+                        metric_traits = rubric_data.get("metric_traits", [])
+
+                        if llm_traits or regex_traits or callable_traits or metric_traits:
+                            question_rubric_dict = {
+                                "traits": [trait.model_dump() for trait in llm_traits],
+                                "regex_traits": [trait.model_dump() for trait in regex_traits],
+                                "callable_traits": [trait.model_dump() for trait in callable_traits],
+                                "metric_traits": [trait.model_dump() for trait in metric_traits],
+                            }
+                    elif isinstance(rubric_data, list) and len(rubric_data) > 0:
+                        # Legacy format: flat list of trait objects
+                        llm_traits = [t for t in rubric_data if isinstance(t, LLMRubricTrait)]
+                        regex_traits = [t for t in rubric_data if isinstance(t, RegexTrait)]
+                        callable_traits = [t for t in rubric_data if isinstance(t, CallableTrait)]
+                        metric_traits = [t for t in rubric_data if isinstance(t, MetricRubricTrait)]
 
                         question_rubric_dict = {
                             "traits": [trait.model_dump() for trait in llm_traits],
@@ -335,8 +366,10 @@ def load_benchmark(
             )
 
             # Add question to benchmark with template
+            # Pass the original question_id so question-specific rubrics can be set correctly
             benchmark.add_question(
                 question=question,
+                question_id=bq.question_id,
                 answer_template=bq.answer_template,
                 finished=bq.finished,
                 few_shot_examples=question_model.few_shot_examples,
@@ -424,6 +457,80 @@ def load_benchmark(
                     )
                     benchmark.set_question_rubric(bq.question_id, rubric)
 
+        # Load global rubric from metadata_json if present
+        if benchmark_model.metadata_json and benchmark_model.metadata_json.get("global_rubric"):
+            from ..schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
+
+            global_rubric_data = benchmark_model.metadata_json["global_rubric"]
+            traits = []
+            regex_traits = []
+            callable_traits = []
+            metric_traits = []
+
+            # Deserialize LLM-based traits
+            for trait_data in global_rubric_data.get("traits", []):
+                kind = trait_data.get("kind", "score")
+                trait = LLMRubricTrait(
+                    name=trait_data["name"],
+                    description=trait_data.get("description"),
+                    kind=kind,
+                    min_score=trait_data.get("min_score", 1) if kind == "score" else None,
+                    max_score=trait_data.get("max_score", 5) if kind == "score" else None,
+                    deep_judgment_enabled=trait_data.get("deep_judgment_enabled", False),
+                    deep_judgment_excerpt_enabled=trait_data.get("deep_judgment_excerpt_enabled", False),
+                    deep_judgment_max_excerpts=trait_data.get("deep_judgment_max_excerpts"),
+                    deep_judgment_fuzzy_match_threshold=trait_data.get("deep_judgment_fuzzy_match_threshold"),
+                    deep_judgment_excerpt_retry_attempts=trait_data.get("deep_judgment_excerpt_retry_attempts"),
+                    deep_judgment_search_enabled=trait_data.get("deep_judgment_search_enabled", False),
+                )
+                traits.append(trait)
+
+            # Deserialize regex traits
+            for regex_trait_data in global_rubric_data.get("regex_traits", []):
+                regex_trait = RegexTrait(
+                    name=regex_trait_data["name"],
+                    description=regex_trait_data.get("description"),
+                    pattern=regex_trait_data.get("pattern", ".*"),
+                    case_sensitive=regex_trait_data.get("case_sensitive", True),
+                    invert_result=regex_trait_data.get("invert_result", False),
+                )
+                regex_traits.append(regex_trait)
+
+            # Deserialize callable traits
+            for callable_trait_data in global_rubric_data.get("callable_traits", []):
+                callable_trait = CallableTrait(
+                    name=callable_trait_data["name"],
+                    description=callable_trait_data.get("description"),
+                    kind=callable_trait_data["kind"],
+                    callable_code=callable_trait_data["callable_code"],
+                    min_score=callable_trait_data.get("min_score"),
+                    max_score=callable_trait_data.get("max_score"),
+                    invert_result=callable_trait_data.get("invert_result", False),
+                )
+                callable_traits.append(callable_trait)
+
+            # Deserialize metric traits
+            for metric_trait_data in global_rubric_data.get("metric_traits", []):
+                metric_trait = MetricRubricTrait(
+                    name=metric_trait_data["name"],
+                    description=metric_trait_data.get("description"),
+                    evaluation_mode=metric_trait_data.get("evaluation_mode", "tp_only"),
+                    metrics=metric_trait_data.get("metrics", []),
+                    tp_instructions=metric_trait_data.get("tp_instructions", []),
+                    tn_instructions=metric_trait_data.get("tn_instructions", []),
+                    repeated_extraction=metric_trait_data.get("repeated_extraction", True),
+                )
+                metric_traits.append(metric_trait)
+
+            if traits or regex_traits or callable_traits or metric_traits:
+                global_rubric = Rubric(
+                    llm_traits=traits,
+                    regex_traits=regex_traits,
+                    callable_traits=callable_traits,
+                    metric_traits=metric_traits,
+                )
+                benchmark.set_global_rubric(global_rubric)
+
     if load_config:
         return benchmark, db_config
     else:
@@ -499,15 +606,16 @@ def save_verification_results(
         for result in results.values():
             # Check if result already exists (to avoid duplicates)
             # Include template_id in the uniqueness check (composite key component)
+            # Note: columns are prefixed with "metadata_" due to auto-generated model flattening
             existing_result = session.execute(
                 select(VerificationResultModel).where(
-                    VerificationResultModel.run_id == run_id,
-                    VerificationResultModel.question_id == result.metadata.question_id,
-                    VerificationResultModel.template_id == result.metadata.template_id,
-                    VerificationResultModel.answering_model == result.metadata.answering_model,
-                    VerificationResultModel.parsing_model == result.metadata.parsing_model,
-                    VerificationResultModel.answering_replicate == result.metadata.answering_replicate,
-                    VerificationResultModel.parsing_replicate == result.metadata.parsing_replicate,
+                    VerificationResultModel.run_id == run_id,  # type: ignore[attr-defined]
+                    VerificationResultModel.question_id == result.metadata.question_id,  # type: ignore[attr-defined]
+                    VerificationResultModel.metadata_template_id == result.metadata.template_id,  # type: ignore[attr-defined]
+                    VerificationResultModel.metadata_answering_model == result.metadata.answering_model,  # type: ignore[attr-defined]
+                    VerificationResultModel.metadata_parsing_model == result.metadata.parsing_model,  # type: ignore[attr-defined]
+                    VerificationResultModel.metadata_answering_replicate == result.metadata.answering_replicate,  # type: ignore[attr-defined]
+                    VerificationResultModel.metadata_parsing_replicate == result.metadata.parsing_replicate,  # type: ignore[attr-defined]
                 )
             ).scalar_one_or_none()
 
@@ -526,286 +634,314 @@ def save_verification_results(
 def load_verification_results(
     db_config: DBConfig,
     run_name: str | None = None,
+    run_id: str | None = None,
     benchmark_name: str | None = None,
     question_ids: list[str] | None = None,
-) -> dict[str, "VerificationResult"]:
+    question_id: str | None = None,
+    answering_model: str | None = None,
+    limit: int | None = None,
+    as_dict: bool = True,
+) -> dict[str, "VerificationResult"] | list[dict[str, Any]]:
     """Load verification results from the database.
 
     Args:
         db_config: Database configuration
         run_name: Optional run name to filter by
+        run_id: Optional run ID to filter by
         benchmark_name: Optional benchmark name to filter by
         question_ids: Optional list of question IDs to filter by
+        question_id: Optional single question ID to filter by
+        answering_model: Optional answering model to filter by
+        limit: Optional limit on number of results
+        as_dict: If True, return dict of VerificationResult keyed by question_id_index.
+                 If False, return list of dicts with full data including id and run_id.
 
     Returns:
-        Dictionary of verification results
+        Either a dictionary of VerificationResult objects (as_dict=True)
+        or a list of dict representations with metadata (as_dict=False)
 
     Raises:
         ValueError: If no results found
     """
-    # Import here to avoid circular imports
-
     with get_session(db_config) as session:
         # Build query
-        query = select(VerificationResultModel)
+        query: Select[tuple[VerificationResultModel]] = select(VerificationResultModel)  # type: ignore[valid-type]
 
         # Apply filters
+        needs_run_join = False
+
+        if run_id:
+            query = query.where(VerificationResultModel.run_id == run_id)  # type: ignore[attr-defined]
+
         if run_name:
-            # Join with runs table to filter by run_name
-            query = query.join(VerificationRunModel, VerificationResultModel.run_id == VerificationRunModel.id).where(
+            needs_run_join = True
+            query = query.join(VerificationRunModel, VerificationResultModel.run_id == VerificationRunModel.id).where(  # type: ignore[attr-defined]
                 VerificationRunModel.run_name == run_name
             )
 
         if benchmark_name:
-            # Additional join to filter by benchmark
-            if not run_name:
-                query = query.join(VerificationRunModel, VerificationResultModel.run_id == VerificationRunModel.id)
+            if not needs_run_join:
+                query = query.join(VerificationRunModel, VerificationResultModel.run_id == VerificationRunModel.id)  # type: ignore[attr-defined]
             query = query.join(BenchmarkModel, VerificationRunModel.benchmark_id == BenchmarkModel.id).where(
                 BenchmarkModel.name == benchmark_name
             )
 
         if question_ids:
-            query = query.where(VerificationResultModel.question_id.in_(question_ids))
+            query = query.where(VerificationResultModel.question_id.in_(question_ids))  # type: ignore[attr-defined]
+
+        if question_id:
+            query = query.where(VerificationResultModel.question_id == question_id)  # type: ignore[attr-defined]
+
+        if answering_model:
+            query = query.where(VerificationResultModel.metadata_answering_model == answering_model)  # type: ignore[attr-defined]
+
+        # Apply limit if specified
+        if limit:
+            query = query.limit(limit)
 
         # Execute query
         results_models = session.execute(query).scalars().all()
 
-        # Convert to VerificationResult objects
-        results = {}
-        for i, result_model in enumerate(results_models):
-            result_key = f"{result_model.question_id}_{i}"
-            results[result_key] = _model_to_verification_result(result_model)
+        if as_dict:
+            # Convert to VerificationResult objects (original behavior)
+            results_dict: dict[str, Any] = {}
+            for i, result_model in enumerate(results_models):
+                result_key = f"{result_model.question_id}_{i}"  # type: ignore[attr-defined]
+                results_dict[result_key] = _model_to_verification_result(result_model)
+            return results_dict
+        else:
+            # Return list of dicts with full data
+            results_list: list[dict[str, Any]] = []
+            for result_model in results_models:
+                vr = _model_to_verification_result(result_model)
+                result_dict = vr.model_dump()
+                result_dict["id"] = result_model.id  # type: ignore[attr-defined]
+                result_dict["run_id"] = result_model.run_id  # type: ignore[attr-defined]
+                results_list.append(result_dict)
+            return results_list
 
-        return results
+
+def _create_result_model(run_id: str, result: "VerificationResult") -> VerificationResultModel:  # type: ignore[valid-type]
+    """Convert VerificationResult to VerificationResultModel using auto-converter.
+
+    This function uses the auto-generated schema and converters to
+    automatically map all fields from the nested Pydantic model to
+    the flat SQLAlchemy model.
+    """
+    # Use auto-converter to flatten Pydantic model to ORM
+    # The question_id is needed for the foreign key relationship
+    orm_obj = pydantic_to_orm(
+        result,
+        VerificationResultModel,
+        FLATTEN_CONFIG,
+        extra_values={
+            "run_id": run_id,
+            "question_id": result.metadata.question_id,
+        },
+    )
+    return orm_obj
 
 
-def _create_result_model(run_id: str, result: "VerificationResult") -> VerificationResultModel:
-    """Convert VerificationResult to VerificationResultModel."""
-    # Extract fields from nested structure
-    metadata = result.metadata
-    template = result.template
-    rubric = result.rubric
-    deep_judgment = result.deep_judgment
+def _update_result_model(model: VerificationResultModel, result: "VerificationResult") -> None:  # type: ignore[valid-type]
+    """Update an existing VerificationResultModel with new data using auto-converter.
 
-    return VerificationResultModel(
-        run_id=run_id,
-        # Metadata fields
-        question_id=metadata.question_id,
-        template_id=metadata.template_id,
-        completed_without_errors=metadata.completed_without_errors,
-        error=metadata.error,
-        question_text=metadata.question_text,
-        raw_answer=metadata.raw_answer,
-        keywords=metadata.keywords,
-        answering_model=metadata.answering_model,
-        parsing_model=metadata.parsing_model,
-        execution_time=metadata.execution_time,
-        timestamp=metadata.timestamp,
-        job_id=metadata.job_id,
-        answering_replicate=metadata.answering_replicate,
-        parsing_replicate=metadata.parsing_replicate,
-        # Template fields
-        raw_llm_response=template.raw_llm_response if template else "",
-        parsed_gt_response=template.parsed_gt_response if template else None,
-        parsed_llm_response=template.parsed_llm_response if template else None,
-        template_verification_performed=template.template_verification_performed if template else False,
-        verify_result=template.verify_result if template else None,
-        verify_granular_result=template.verify_granular_result if template else None,
-        answering_system_prompt=metadata.answering_system_prompt if metadata else None,
-        parsing_system_prompt=metadata.parsing_system_prompt if metadata else None,
-        embedding_check_performed=template.embedding_check_performed if template else False,
-        embedding_similarity_score=template.embedding_similarity_score if template else None,
-        embedding_override_applied=template.embedding_override_applied if template else False,
-        embedding_model_used=template.embedding_model_used if template else None,
-        regex_validations_performed=template.regex_validations_performed if template else False,
-        regex_validation_results=template.regex_validation_results if template else None,
-        regex_validation_details=template.regex_validation_details if template else None,
-        regex_overall_success=template.regex_overall_success if template else None,
-        regex_extraction_results=template.regex_extraction_results if template else None,
-        recursion_limit_reached=template.recursion_limit_reached if template else False,
-        abstention_check_performed=template.abstention_check_performed if template else False,
-        abstention_detected=template.abstention_detected if template else None,
-        abstention_override_applied=template.abstention_override_applied if template else False,
-        abstention_reasoning=template.abstention_reasoning if template else None,
-        answering_mcp_servers=template.answering_mcp_servers if template else None,
-        usage_metadata=template.usage_metadata if template else None,
-        agent_metrics=template.agent_metrics if template else None,
-        # Rubric fields (with split trait scores)
-        rubric_evaluation_performed=rubric.rubric_evaluation_performed if rubric else False,
-        llm_trait_scores=rubric.llm_trait_scores if rubric else None,
-        regex_trait_scores=rubric.regex_trait_scores if rubric else None,
-        callable_trait_scores=rubric.callable_trait_scores if rubric else None,
-        metric_trait_scores=rubric.metric_trait_scores if rubric else None,
-        evaluation_rubric=rubric.evaluation_rubric if rubric else None,
-        metric_trait_confusion_lists=rubric.metric_trait_confusion_lists if rubric else None,
-        metric_trait_metrics=rubric.metric_trait_scores if rubric else None,  # DB uses old name metric_trait_metrics
-        # Deep-judgment fields
-        deep_judgment_enabled=deep_judgment.deep_judgment_enabled if deep_judgment else False,
-        deep_judgment_performed=deep_judgment.deep_judgment_performed if deep_judgment else False,
-        extracted_excerpts=deep_judgment.extracted_excerpts if deep_judgment else None,
-        attribute_reasoning=deep_judgment.attribute_reasoning if deep_judgment else None,
-        deep_judgment_stages_completed=deep_judgment.deep_judgment_stages_completed if deep_judgment else None,
-        deep_judgment_model_calls=deep_judgment.deep_judgment_model_calls if deep_judgment else 0,
-        deep_judgment_excerpt_retry_count=deep_judgment.deep_judgment_excerpt_retry_count if deep_judgment else 0,
-        attributes_without_excerpts=deep_judgment.attributes_without_excerpts if deep_judgment else None,
-        deep_judgment_search_enabled=deep_judgment.deep_judgment_search_enabled if deep_judgment else False,
-        hallucination_risk_assessment=deep_judgment.hallucination_risk_assessment if deep_judgment else None,
+    This function uses the auto-generated schema and converters to
+    automatically update all fields from the nested Pydantic model.
+    """
+    # Use auto-converter to update ORM model from Pydantic
+    # Exclude id, run_id, question_id, and created_at to preserve identity
+    update_orm_from_pydantic(
+        model,
+        result,
+        FLATTEN_CONFIG,
+        exclude_fields={"id", "run_id", "question_id", "created_at"},
     )
 
 
-def _update_result_model(model: VerificationResultModel, result: "VerificationResult") -> None:
-    """Update an existing VerificationResultModel with new data."""
-    # Extract fields from nested structure
-    metadata = result.metadata
-    template = result.template
-    rubric = result.rubric
-    deep_judgment = result.deep_judgment
+def _model_to_verification_result(model: VerificationResultModel) -> "VerificationResult":  # type: ignore[valid-type]
+    """Convert VerificationResultModel to VerificationResult using auto-converter.
 
-    # Update metadata fields
-    model.completed_without_errors = metadata.completed_without_errors
-    model.error = metadata.error
-    model.question_text = metadata.question_text
-    model.raw_answer = metadata.raw_answer
-    model.keywords = metadata.keywords
-    model.execution_time = metadata.execution_time
-    model.timestamp = metadata.timestamp
+    This function uses the auto-generated schema and converters to
+    automatically reconstruct the nested Pydantic model from the
+    flat SQLAlchemy model.
+    """
+    from karenina.schemas.workflow import VerificationResult
 
-    # Update template fields
-    if template:
-        model.raw_llm_response = template.raw_llm_response
-        model.parsed_gt_response = template.parsed_gt_response
-        model.parsed_llm_response = template.parsed_llm_response
-        model.template_verification_performed = template.template_verification_performed
-        model.verify_result = template.verify_result
-        model.verify_granular_result = template.verify_granular_result
-        model.embedding_check_performed = template.embedding_check_performed
-        model.embedding_similarity_score = template.embedding_similarity_score
-        model.embedding_override_applied = template.embedding_override_applied
-        model.embedding_model_used = template.embedding_model_used
-        model.regex_validations_performed = template.regex_validations_performed
-        model.regex_validation_results = template.regex_validation_results
-        model.regex_validation_details = template.regex_validation_details
-        model.regex_overall_success = template.regex_overall_success
-        model.regex_extraction_results = template.regex_extraction_results
-        model.recursion_limit_reached = template.recursion_limit_reached
-        model.answering_mcp_servers = template.answering_mcp_servers
-        model.abstention_check_performed = template.abstention_check_performed
-        model.abstention_detected = template.abstention_detected
-        model.abstention_override_applied = template.abstention_override_applied
-        model.abstention_reasoning = template.abstention_reasoning
-        model.usage_metadata = template.usage_metadata
-        model.agent_metrics = template.agent_metrics
-
-    # Update rubric fields (with split trait scores)
-    if rubric:
-        model.rubric_evaluation_performed = rubric.rubric_evaluation_performed
-        model.llm_trait_scores = rubric.llm_trait_scores
-        model.regex_trait_scores = rubric.regex_trait_scores
-        model.callable_trait_scores = rubric.callable_trait_scores
-        model.metric_trait_scores = rubric.metric_trait_scores
-        model.evaluation_rubric = rubric.evaluation_rubric
-        model.metric_trait_confusion_lists = rubric.metric_trait_confusion_lists
-        model.metric_trait_metrics = rubric.metric_trait_scores  # DB uses old name
-
-    # Update deep-judgment fields
-    if deep_judgment:
-        model.deep_judgment_enabled = deep_judgment.deep_judgment_enabled
-        model.deep_judgment_performed = deep_judgment.deep_judgment_performed
-        model.extracted_excerpts = deep_judgment.extracted_excerpts
-        model.attribute_reasoning = deep_judgment.attribute_reasoning
-        model.deep_judgment_stages_completed = deep_judgment.deep_judgment_stages_completed
-        model.deep_judgment_model_calls = deep_judgment.deep_judgment_model_calls
-        model.deep_judgment_excerpt_retry_count = deep_judgment.deep_judgment_excerpt_retry_count
-        model.attributes_without_excerpts = deep_judgment.attributes_without_excerpts
-        model.deep_judgment_search_enabled = deep_judgment.deep_judgment_search_enabled
-        model.hallucination_risk_assessment = deep_judgment.hallucination_risk_assessment
+    # Use auto-converter to reconstruct nested Pydantic model from flat ORM
+    return orm_to_pydantic(model, VerificationResult, FLATTEN_CONFIG)
 
 
-def _model_to_verification_result(model: VerificationResultModel) -> "VerificationResult":
-    """Convert VerificationResultModel to VerificationResult."""
-    from karenina.schemas.workflow import (
-        VerificationResult,
-        VerificationResultDeepJudgment,
-        VerificationResultMetadata,
-        VerificationResultRubric,
-        VerificationResultTemplate,
-    )
+def import_verification_results(
+    json_data: dict[str, Any],
+    db_config: DBConfig,
+    benchmark_name: str,
+    run_name: str | None = None,
+    source_filename: str | None = None,
+) -> tuple[str, int, int]:
+    """Import verification results from JSON export format.
 
-    # Create metadata subclass
-    metadata = VerificationResultMetadata(
-        question_id=model.question_id,
-        template_id=model.template_id,
-        completed_without_errors=model.completed_without_errors,
-        error=model.error,
-        question_text=model.question_text,
-        raw_answer=model.raw_answer,
-        keywords=model.keywords,
-        answering_model=model.answering_model,
-        parsing_model=model.parsing_model,
-        answering_system_prompt=model.answering_system_prompt,
-        parsing_system_prompt=model.parsing_system_prompt,
-        execution_time=model.execution_time,
-        timestamp=model.timestamp,
-        run_name=model.run.run_name if model.run else None,
-        answering_replicate=model.answering_replicate,
-        parsing_replicate=model.parsing_replicate,
-    )
+    Supports:
+    - v2.x format: {format_version: "2.0"/"2.1", metadata, shared_data, results}
+    - Legacy unified format: {metadata, results}
+    - Legacy array format: [result1, result2, ...]
 
-    # Create template subclass
-    template = VerificationResultTemplate(
-        raw_llm_response=model.raw_llm_response,
-        parsed_gt_response=model.parsed_gt_response,
-        parsed_llm_response=model.parsed_llm_response,
-        template_verification_performed=model.template_verification_performed,
-        verify_result=model.verify_result,
-        verify_granular_result=model.verify_granular_result,
-        embedding_check_performed=model.embedding_check_performed,
-        embedding_similarity_score=model.embedding_similarity_score,
-        embedding_override_applied=model.embedding_override_applied,
-        embedding_model_used=model.embedding_model_used,
-        regex_validations_performed=model.regex_validations_performed,
-        regex_validation_results=model.regex_validation_results,
-        regex_validation_details=model.regex_validation_details,
-        regex_overall_success=model.regex_overall_success,
-        regex_extraction_results=model.regex_extraction_results,
-        recursion_limit_reached=model.recursion_limit_reached,
-        abstention_check_performed=model.abstention_check_performed,
-        abstention_detected=model.abstention_detected,
-        abstention_override_applied=model.abstention_override_applied,
-        abstention_reasoning=model.abstention_reasoning,
-        answering_mcp_servers=model.answering_mcp_servers,
-        usage_metadata=model.usage_metadata,
-        agent_metrics=model.agent_metrics,
-    )
+    Args:
+        json_data: Parsed JSON data from export file
+        db_config: Database configuration
+        benchmark_name: Target benchmark name (must exist in database)
+        run_name: Optional name for the import run (auto-generated if not provided)
+        source_filename: Optional source filename for audit
 
-    # Create rubric subclass (if rubric evaluation was performed)
-    rubric = None
-    if model.rubric_evaluation_performed:
-        rubric = VerificationResultRubric(
-            rubric_evaluation_performed=model.rubric_evaluation_performed,
-            llm_trait_scores=model.llm_trait_scores,
-            regex_trait_scores=model.regex_trait_scores,
-            callable_trait_scores=model.callable_trait_scores,
-            metric_trait_scores=model.metric_trait_scores,  # Use metric_trait_metrics from DB
-            # Note: evaluation_rubric removed in v2.0 format - stored in shared_data instead
-            metric_trait_confusion_lists=model.metric_trait_confusion_lists,
+    Returns:
+        Tuple of (run_id, imported_count, skipped_count)
+
+    Raises:
+        ValueError: If benchmark not found or JSON format unrecognized
+    """
+    from karenina.schemas.workflow import VerificationResult
+
+    # Initialize database if auto_create is enabled
+    if db_config.auto_create:
+        init_database(db_config)
+
+    # Detect format version
+    format_version = json_data.get("format_version", "1.0")
+
+    # Extract results and metadata based on format
+    if format_version in ("2.0", "2.1"):
+        results_list = json_data.get("results", [])
+        metadata = json_data.get("metadata", {})
+        shared_data = json_data.get("shared_data", {})
+    elif "metadata" in json_data and "results" in json_data:
+        # Legacy unified format
+        results_list = json_data.get("results", [])
+        metadata = json_data.get("metadata", {})
+        shared_data = {}
+        format_version = "1.0"
+    elif isinstance(json_data, list):
+        # Legacy array format
+        results_list = json_data
+        metadata = {}
+        shared_data = {}
+        format_version = "legacy"
+    else:
+        raise ValueError(
+            "Unrecognized JSON format. Expected v2.0 format with 'format_version' key, "
+            "legacy unified format with 'metadata' and 'results' keys, "
+            "or legacy array format."
         )
 
-    # Create deep-judgment subclass (if deep-judgment was performed)
-    deep_judgment = None
-    if model.deep_judgment_enabled:
-        deep_judgment = VerificationResultDeepJudgment(
-            deep_judgment_enabled=model.deep_judgment_enabled,
-            deep_judgment_performed=model.deep_judgment_performed,
-            extracted_excerpts=model.extracted_excerpts,
-            attribute_reasoning=model.attribute_reasoning,
-            deep_judgment_stages_completed=model.deep_judgment_stages_completed,
-            deep_judgment_model_calls=model.deep_judgment_model_calls,
-            deep_judgment_excerpt_retry_count=model.deep_judgment_excerpt_retry_count,
-            attributes_without_excerpts=model.attributes_without_excerpts,
-            deep_judgment_search_enabled=model.deep_judgment_search_enabled,
-            hallucination_risk_assessment=model.hallucination_risk_assessment,
-        )
+    if not results_list:
+        raise ValueError("No results found in JSON data")
 
-    # Create main VerificationResult with nested composition
-    return VerificationResult(metadata=metadata, template=template, rubric=rubric, deep_judgment=deep_judgment)
+    # Generate run_id
+    run_id = str(uuid4())
+
+    with get_session(db_config) as session:
+        # Verify benchmark exists
+        benchmark_model = session.execute(
+            select(BenchmarkModel).where(BenchmarkModel.name == benchmark_name)
+        ).scalar_one_or_none()
+
+        if not benchmark_model:
+            raise ValueError(f"Benchmark '{benchmark_name}' not found in database")
+
+        # Create verification run record
+        auto_run_name = run_name or f"import_{run_id[:8]}"
+        run_model = VerificationRunModel(
+            id=run_id,
+            benchmark_id=benchmark_model.id,
+            run_name=auto_run_name,
+            status="completed",
+            config=metadata.get("verification_config", {}),
+            total_questions=len(
+                {r.get("metadata", {}).get("question_id") for r in results_list if isinstance(r, dict)}
+            ),
+            processed_count=len(results_list),
+            successful_count=0,  # Will be updated below
+            failed_count=0,  # Will be updated below
+            start_time=None,
+            end_time=datetime.now(UTC),
+        )
+        session.add(run_model)
+        session.commit()  # Commit run to satisfy foreign key constraints
+
+        # Build a lookup map for questions by ID and by text hash
+        # This allows matching results even when IDs differ between export and DB
+        question_id_map: dict[str, str] = {}  # Maps various ID forms -> DB question_id
+        all_questions = session.execute(select(QuestionModel)).scalars().all()
+        for q in all_questions:
+            # Map by actual DB ID
+            question_id_map[q.id] = q.id
+            # Map by URN-wrapped ID
+            question_id_map[f"urn:uuid:{q.id}"] = q.id
+            # Map by MD5 hash of question text (common alternative ID scheme)
+            text_hash = hashlib.md5(q.question_text.encode("utf-8")).hexdigest()
+            question_id_map[text_hash] = q.id
+            question_id_map[f"urn:uuid:{text_hash}"] = q.id
+
+        # Import results
+        imported_count = 0
+        skipped_count = 0
+        successful_count = 0
+        failed_count = 0
+
+        for result_data in results_list:
+            try:
+                # Parse result with Pydantic validation
+                result = VerificationResult.model_validate(result_data)
+
+                # Resolve question_id to DB ID
+                original_qid = result.metadata.question_id
+                resolved_qid = question_id_map.get(original_qid)
+
+                if not resolved_qid and result.metadata.question_text:
+                    # Try matching by question text as last resort
+                    text_hash = hashlib.md5(result.metadata.question_text.encode("utf-8")).hexdigest()
+                    resolved_qid = question_id_map.get(text_hash)
+
+                if not resolved_qid:
+                    print(f"Warning: Question not found in DB for ID '{original_qid}', skipping")
+                    skipped_count += 1
+                    continue
+
+                # Update the result's question_id to match DB
+                result.metadata.question_id = resolved_qid
+
+                # Create ORM model using auto-converter
+                result_model = _create_result_model(run_id, result)
+                session.add(result_model)
+
+                imported_count += 1
+                if result.metadata.completed_without_errors:
+                    successful_count += 1
+                else:
+                    failed_count += 1
+
+            except Exception as e:
+                # Log warning but continue with other results
+                print(f"Warning: Failed to import result: {e}")
+                skipped_count += 1
+
+        # Update run counts
+        run_model.successful_count = successful_count
+        run_model.failed_count = failed_count
+
+        # Create import metadata record for audit
+        import_metadata = ImportMetadataModel(
+            run_id=run_id,
+            import_source="json_file",
+            source_format_version=format_version,
+            source_filename=source_filename,
+            source_job_id=metadata.get("job_id"),
+            source_export_timestamp=metadata.get("timestamp"),
+            source_karenina_version=metadata.get("karenina_version"),
+            results_count=imported_count,
+            shared_rubric_definition=shared_data.get("rubric"),
+        )
+        session.add(import_metadata)
+
+        if db_config.auto_commit:
+            session.commit()
+
+    return run_id, imported_count, skipped_count

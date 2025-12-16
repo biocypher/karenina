@@ -12,8 +12,8 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from .base import Base
 from .db_config import DBConfig
-from .models import Base
 from .views import create_all_views
 
 # Global cache for engines (one per storage URL)
