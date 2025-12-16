@@ -401,6 +401,12 @@ def execute_sequential(
         # Call progress callback BEFORE starting task (with preview result)
         if progress_callback:
             # Create a minimal result-like object for progress tracking
+            preview_result_id = VerificationResultMetadata.compute_result_id(
+                question_id=task["question_id"],
+                answering_model=task["answering_model"].id,
+                parsing_model=task["parsing_model"].id,
+                timestamp="",  # Empty timestamp indicates "starting" event
+            )
             preview_result = VerificationResult(
                 metadata=VerificationResultMetadata(
                     question_id=task["question_id"],
@@ -411,6 +417,7 @@ def execute_sequential(
                     parsing_model=task["parsing_model"].id,
                     execution_time=0.0,
                     timestamp="",  # Empty timestamp indicates "starting" event
+                    result_id=preview_result_id,
                 )
             )
             progress_callback(idx, total, preview_result)
@@ -541,6 +548,12 @@ def execute_parallel(
                 # Status is MISS or HIT - ready to execute
                 # Call preview progress callback
                 if progress_callback:
+                    preview_result_id = VerificationResultMetadata.compute_result_id(
+                        question_id=task["question_id"],
+                        answering_model=task["answering_model"].id,
+                        parsing_model=task["parsing_model"].id,
+                        timestamp="",  # Empty timestamp indicates "starting" event
+                    )
                     preview_result = VerificationResult(
                         metadata=VerificationResultMetadata(
                             question_id=task["question_id"],
@@ -551,6 +564,7 @@ def execute_parallel(
                             parsing_model=task["parsing_model"].id,
                             execution_time=0.0,
                             timestamp="",  # Empty timestamp indicates "starting" event
+                            result_id=preview_result_id,
                         )
                     )
                     with progress_lock:
@@ -825,13 +839,15 @@ def run_verification_batch(
     # Auto-save if configured
     autosave_enabled = os.getenv("AUTOSAVE_DATABASE", "true").lower() in ("true", "1", "yes")
     if autosave_enabled and storage_url and benchmark_name:
+        # Use mode='json' to serialize SecretStr and other non-JSON types properly
+        config_dict = config.model_dump(mode="json")
         auto_save_results(
             results=results,
             templates=templates,
             storage_url=storage_url,
             benchmark_name=benchmark_name,
             run_name=run_name,
-            config_dict=config.model_dump(),
+            config_dict=config_dict,
             run_id=run_name,
         )
 

@@ -976,7 +976,7 @@ class VerificationResultSet(BaseModel):
                     name: {
                         "total_calls": tool_total_calls[name],
                         "traces_using": tool_trace_counts[name],
-                        "avg_calls_per_trace": tool_total_calls[name] / tool_trace_counts[name],
+                        "avg_calls_per_trace": tool_total_calls[name] / results_with_tools,
                     }
                     for name in sorted(tool_total_calls.keys())
                 },

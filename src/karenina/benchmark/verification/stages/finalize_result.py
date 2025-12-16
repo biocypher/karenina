@@ -124,6 +124,20 @@ class FinalizeResultStage(BaseVerificationStage):
             VerificationResultTemplate,
         )
 
+        # Get MCP servers for result_id computation (also used in template below)
+        answering_mcp_servers = context.get_result_field("answering_mcp_servers")
+
+        # Compute deterministic result_id
+        result_id = VerificationResultMetadata.compute_result_id(
+            question_id=context.question_id,
+            answering_model=answering_model_str,
+            parsing_model=parsing_model_str,
+            timestamp=timestamp,
+            answering_replicate=context.answering_replicate,
+            parsing_replicate=context.parsing_replicate,
+            answering_mcp_servers=answering_mcp_servers,
+        )
+
         # Create metadata subclass
         metadata = VerificationResultMetadata(
             question_id=context.question_id,
@@ -139,6 +153,7 @@ class FinalizeResultStage(BaseVerificationStage):
             parsing_system_prompt=context.parsing_model.system_prompt,
             execution_time=execution_time,
             timestamp=timestamp,
+            result_id=result_id,
             run_name=context.run_name,
             answering_replicate=context.answering_replicate,
             parsing_replicate=context.parsing_replicate,
@@ -168,7 +183,7 @@ class FinalizeResultStage(BaseVerificationStage):
             abstention_detected=context.get_result_field("abstention_detected"),
             abstention_override_applied=context.get_result_field("abstention_override_applied", False),
             abstention_reasoning=context.get_result_field("abstention_reasoning"),
-            answering_mcp_servers=context.get_result_field("answering_mcp_servers"),
+            answering_mcp_servers=answering_mcp_servers,
             usage_metadata=usage_metadata,
             agent_metrics=agent_metrics,
         )

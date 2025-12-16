@@ -1014,27 +1014,15 @@ class RubricResults(BaseModel):
 
     def _get_result_id(self, result: VerificationResult) -> str:
         """
-        Generate a unique identifier for a result.
+        Get the unique identifier for a result.
 
         Args:
             result: VerificationResult to identify
 
         Returns:
-            Unique string identifier
+            The result's deterministic hash ID
         """
-        parts = [
-            result.metadata.question_id,
-            result.metadata.answering_model,
-            result.metadata.parsing_model,
-        ]
-
-        if result.metadata.answering_replicate is not None:
-            parts.append(f"rep{result.metadata.answering_replicate}")
-
-        if result.metadata.timestamp:
-            parts.append(str(result.metadata.timestamp))
-
-        return "_".join(parts)
+        return result.metadata.result_id
 
     # ========================================================================
     # Special Methods

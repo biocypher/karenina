@@ -2,16 +2,18 @@
 
 This module defines the database schema including tables for benchmarks,
 questions, verification runs, and results.
+
+Note: VerificationResultModel is auto-generated from Pydantic schemas
+and is defined in generated_models.py to keep it in sync with domain models.
 """
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
     JSON,
     Boolean,
     DateTime,
-    Float,
     ForeignKey,
     Index,
     Integer,
@@ -19,13 +21,13 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from .base import Base
 
-class Base(DeclarativeBase):
-    """Base class for all ORM models."""
-
-    pass
+if TYPE_CHECKING:
+    # VerificationResultModel is dynamically generated, so we import it for type checking
+    from .generated_models import VerificationResultModel  # type: ignore[misc]
 
 
 class BenchmarkModel(Base):
@@ -194,126 +196,33 @@ class VerificationRunModel(Base):
         return f"<VerificationRun(id='{self.id}', run_name='{self.run_name}', status='{self.status}')>"
 
 
-class VerificationResultModel(Base):
-    """Database model for verification results.
+class ImportMetadataModel(Base):
+    """Database model for tracking verification result imports.
 
-    Stores comprehensive verification result data for each question-model combination.
+    Records audit information about imports for traceability.
     """
 
-    __tablename__ = "verification_results"
+    __tablename__ = "import_metadata"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     run_id: Mapped[str] = mapped_column(ForeignKey("verification_runs.id", ondelete="CASCADE"), nullable=False)
-    question_id: Mapped[str] = mapped_column(ForeignKey("questions.id", ondelete="CASCADE"), nullable=False)
-    template_id: Mapped[str] = mapped_column(String(32), nullable=False)  # MD5 of template or "no_template"
-
-    # Basic result information
-    completed_without_errors: Mapped[bool] = mapped_column(Boolean, nullable=False)
-    error: Mapped[str | None] = mapped_column(Text, nullable=True)
-
-    # Raw data
-    question_text: Mapped[str] = mapped_column(Text, nullable=False)
-    raw_answer: Mapped[str | None] = mapped_column(Text, nullable=True, comment="Ground truth answer from checkpoint")
-    raw_llm_response: Mapped[str] = mapped_column(Text, nullable=False)
-    parsed_gt_response: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    parsed_llm_response: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-
-    # Verification outcomes
-    template_verification_performed: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False, comment="Whether template verification was executed"
-    )
-    verify_result: Mapped[Any | None] = mapped_column(JSON, nullable=True)
-    verify_granular_result: Mapped[Any | None] = mapped_column(JSON, nullable=True)
-    rubric_evaluation_performed: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False, comment="Whether rubric evaluation was executed"
-    )
-    # Split rubric trait scores by type (replaces verify_rubric)
-    llm_trait_scores: Mapped[dict[str, int] | None] = mapped_column(JSON, nullable=True)
-    regex_trait_scores: Mapped[dict[str, bool] | None] = mapped_column(JSON, nullable=True)
-    callable_trait_scores: Mapped[dict[str, bool | int] | None] = mapped_column(JSON, nullable=True)
-    metric_trait_scores: Mapped[dict[str, dict[str, float]] | None] = mapped_column(JSON, nullable=True)
-    evaluation_rubric: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-
-    # Question metadata
-    keywords: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
-
-    # Model information
-    answering_model: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    parsing_model: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    answering_system_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
-    parsing_system_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
-
-    # Execution metadata
-    execution_time: Mapped[float] = mapped_column(Float, nullable=False)
-    timestamp: Mapped[str] = mapped_column(String(50), nullable=False)
-    job_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
-
-    # Replicate tracking
-    answering_replicate: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    parsing_replicate: Mapped[int | None] = mapped_column(Integer, nullable=True)
-
-    # Embedding check metadata
-    embedding_check_performed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    embedding_similarity_score: Mapped[float | None] = mapped_column(Float, nullable=True)
-    embedding_override_applied: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    embedding_model_used: Mapped[str | None] = mapped_column(String(255), nullable=True)
-
-    # Regex validation metadata
-    regex_validations_performed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    regex_validation_results: Mapped[dict[str, bool] | None] = mapped_column(JSON, nullable=True)
-    regex_validation_details: Mapped[dict[str, dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
-    regex_overall_success: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
-    regex_extraction_results: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-
-    # Recursion limit metadata
-    recursion_limit_reached: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-
-    # MCP server metadata
-    answering_mcp_servers: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
-
-    # Abstention detection metadata
-    abstention_check_performed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    abstention_detected: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
-    abstention_override_applied: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    abstention_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
-
-    # Deep-judgment metadata (multi-stage parsing with excerpts and reasoning)
-    deep_judgment_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    deep_judgment_performed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    extracted_excerpts: Mapped[dict[str, list[dict[str, Any]]] | None] = mapped_column(JSON, nullable=True)
-    attribute_reasoning: Mapped[dict[str, str] | None] = mapped_column(JSON, nullable=True)
-    deep_judgment_stages_completed: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
-    deep_judgment_model_calls: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    deep_judgment_excerpt_retry_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    attributes_without_excerpts: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
-
-    # Search-enhanced deep-judgment metadata
-    deep_judgment_search_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    hallucination_risk_assessment: Mapped[dict[str, str] | None] = mapped_column(JSON, nullable=True)
-
-    # Metric trait evaluation metadata (confusion-matrix analysis)
-    metric_trait_confusion_lists: Mapped[dict[str, dict[str, list[str]]] | None] = mapped_column(JSON, nullable=True)
-    metric_trait_metrics: Mapped[dict[str, dict[str, float]] | None] = mapped_column(JSON, nullable=True)
-
-    # LLM usage tracking metadata
-    usage_metadata: Mapped[dict[str, dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
-    agent_metrics: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-
-    # Timestamps
+    import_source: Mapped[str] = mapped_column(String(50), nullable=False)  # 'json_file', 'api', etc.
+    source_format_version: Mapped[str] = mapped_column(String(20), nullable=False)  # '2.0', '1.0', 'legacy'
+    source_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source_job_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    source_export_timestamp: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    source_karenina_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    results_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    shared_rubric_definition: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
 
     # Relationships
-    run: Mapped["VerificationRunModel"] = relationship("VerificationRunModel", back_populates="results")
-    question: Mapped["QuestionModel"] = relationship("QuestionModel", back_populates="verification_results")
-
-    # Indexes for common queries
-    __table_args__ = (
-        Index("idx_result_run_question", "run_id", "question_id"),
-        Index("idx_result_completed_without_errors", "completed_without_errors"),
-        Index("idx_result_models", "answering_model", "parsing_model"),
-        Index("idx_result_timestamp", "timestamp"),
-    )
+    run: Mapped["VerificationRunModel"] = relationship("VerificationRunModel")
 
     def __repr__(self) -> str:
         """String representation."""
-        return f"<VerificationResult(id={self.id}, run_id='{self.run_id}', question_id='{self.question_id}', completed_without_errors={self.completed_without_errors})>"
+        return f"<ImportMetadata(id={self.id}, run_id='{self.run_id}', source='{self.import_source}')>"
+
+
+# Note: VerificationResultModel is auto-generated from Pydantic schemas
+# Import it from generated_models.py when needed
