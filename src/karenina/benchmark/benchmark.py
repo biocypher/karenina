@@ -904,8 +904,8 @@ class Benchmark:
             for i, result in enumerate(results):
                 # Create a key similar to the old format
                 key = f"{result.metadata.question_id}_{result.metadata.answering_model}_{result.metadata.parsing_model}"
-                if result.metadata.answering_replicate is not None:
-                    key += f"_rep{result.metadata.answering_replicate}"
+                if result.metadata.replicate is not None:
+                    key += f"_rep{result.metadata.replicate}"
                 if result.metadata.timestamp:
                     key += f"_{result.metadata.timestamp}"
                 # Handle potential duplicates by appending index

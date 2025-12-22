@@ -219,7 +219,7 @@ class TestTemplateResultsAggregation:
                 question_text="Test question",
                 answering_model=model,
                 parsing_model="parsing1",
-                answering_replicate=replicate,
+                replicate=replicate,
                 completed_without_errors=True,
                 execution_time=1.0,
                 timestamp="2023-01-01T00:00:00",

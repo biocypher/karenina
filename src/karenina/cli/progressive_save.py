@@ -147,7 +147,7 @@ class TaskIdentifier:
             answering_model_id=answering_model_id,
             mcp_hash=mcp_hash,
             parsing_model_id=parsing_model_id,
-            replicate=result.metadata.answering_replicate,
+            replicate=result.metadata.replicate,
         )
 
     @staticmethod

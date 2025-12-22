@@ -27,8 +27,7 @@ def test_to_dataframe_basic_field_explosion():
         execution_time=2.5,
         timestamp="2024-01-15T10:30:00",
         run_name="test_run",
-        answering_replicate=1,
-        parsing_replicate=None,
+        replicate=1,
     )
 
     template = VerificationResultTemplate(
@@ -108,7 +107,7 @@ def test_to_dataframe_empty_parsed_responses():
         parsing_model="gpt-4-mini",
         execution_time=1.0,
         timestamp="2024-01-15T10:30:00",
-        answering_replicate=1,
+        replicate=1,
     )
 
     template = VerificationResultTemplate(
@@ -145,7 +144,7 @@ def test_to_dataframe_no_template_data():
         parsing_model="gpt-4-mini",
         execution_time=30.0,
         timestamp="2024-01-15T10:32:00",
-        answering_replicate=1,
+        replicate=1,
     )
 
     result = VerificationResult(metadata=metadata, template=None)
@@ -177,7 +176,7 @@ def test_to_dataframe_multiple_results():
             parsing_model="gpt-4-mini",
             execution_time=2.0,
             timestamp="2024-01-15T10:30:00",
-            answering_replicate=1,
+            replicate=1,
         )
 
         template = VerificationResultTemplate(
@@ -212,7 +211,7 @@ def test_to_dataframe_field_match_comparison():
         parsing_model="gpt-4-mini",
         execution_time=2.0,
         timestamp="2024-01-15T10:30:00",
-        answering_replicate=1,
+        replicate=1,
     )
 
     template = VerificationResultTemplate(
@@ -284,7 +283,7 @@ def test_to_regex_dataframe_basic():
         parsing_model="gpt-4-mini",
         execution_time=2.0,
         timestamp="2024-01-15T10:30:00",
-        answering_replicate=1,
+        replicate=1,
     )
 
     template = VerificationResultTemplate(
@@ -364,7 +363,7 @@ def test_to_regex_dataframe_no_patterns():
         parsing_model="gpt-4-mini",
         execution_time=1.0,
         timestamp="2024-01-15T10:30:00",
-        answering_replicate=1,
+        replicate=1,
     )
 
     template = VerificationResultTemplate(
@@ -398,7 +397,7 @@ def test_to_usage_dataframe_exploded():
         parsing_model="gpt-4-mini",
         execution_time=5.0,
         timestamp="2024-01-15T10:30:00",
-        answering_replicate=1,
+        replicate=1,
     )
 
     template = VerificationResultTemplate(
@@ -476,7 +475,7 @@ def test_to_usage_dataframe_totals_only():
         parsing_model="gpt-4-mini",
         execution_time=5.0,
         timestamp="2024-01-15T10:30:00",
-        answering_replicate=1,
+        replicate=1,
     )
 
     template = VerificationResultTemplate(
@@ -518,7 +517,7 @@ def test_to_usage_dataframe_no_usage_data():
         parsing_model="gpt-4-mini",
         execution_time=1.0,
         timestamp="2024-01-15T10:30:00",
-        answering_replicate=1,
+        replicate=1,
     )
 
     template = VerificationResultTemplate(

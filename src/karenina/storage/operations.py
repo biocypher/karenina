@@ -614,8 +614,7 @@ def save_verification_results(
                     VerificationResultModel.metadata_template_id == result.metadata.template_id,  # type: ignore[attr-defined]
                     VerificationResultModel.metadata_answering_model == result.metadata.answering_model,  # type: ignore[attr-defined]
                     VerificationResultModel.metadata_parsing_model == result.metadata.parsing_model,  # type: ignore[attr-defined]
-                    VerificationResultModel.metadata_answering_replicate == result.metadata.answering_replicate,  # type: ignore[attr-defined]
-                    VerificationResultModel.metadata_parsing_replicate == result.metadata.parsing_replicate,  # type: ignore[attr-defined]
+                    VerificationResultModel.metadata_replicate == result.metadata.replicate,  # type: ignore[attr-defined]
                 )
             ).scalar_one_or_none()
 

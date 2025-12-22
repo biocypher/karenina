@@ -43,7 +43,7 @@ class TestCacheOptimizationIntegration:
                         "question_id": kwargs["question_id"],
                         "answering_model": kwargs["answering_model"].id,
                         "parsing_model": kwargs["parsing_model"].id,
-                        "replicate": kwargs.get("answering_replicate"),
+                        "replicate": kwargs.get("replicate"),
                         "cached": kwargs.get("cached_answer_data") is not None,
                         "timestamp": time.time(),
                     }
@@ -65,7 +65,7 @@ class TestCacheOptimizationIntegration:
                     timestamp="2025-01-01",
                 ),
                 template=VerificationResultTemplate(
-                    raw_llm_response=f"Answer for rep {kwargs.get('answering_replicate', 1)}",
+                    raw_llm_response=f"Answer for rep {kwargs.get('replicate', 1)}",
                 ),
                 rubric=VerificationResultRubric(rubric_evaluation_performed=False),
             )

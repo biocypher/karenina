@@ -224,11 +224,6 @@ class RubricResults(BaseModel):
         """Create DataFrame row for LLM trait."""
         metadata = result.metadata
 
-        # Unified replicate
-        replicate = metadata.answering_replicate
-        if replicate is None:
-            replicate = metadata.parsing_replicate
-
         row: dict[str, Any] = {
             # === Status ===
             "completed_without_errors": metadata.completed_without_errors,
@@ -238,7 +233,7 @@ class RubricResults(BaseModel):
             "template_id": metadata.template_id,
             "question_text": metadata.question_text,
             "keywords": metadata.keywords,
-            "replicate": replicate,
+            "replicate": metadata.replicate,
             # === Model Configuration ===
             "answering_model": metadata.answering_model,
             "parsing_model": metadata.parsing_model,
@@ -293,11 +288,6 @@ class RubricResults(BaseModel):
         """Create DataFrame row for regex trait."""
         metadata = result.metadata
 
-        # Unified replicate
-        replicate = metadata.answering_replicate
-        if replicate is None:
-            replicate = metadata.parsing_replicate
-
         return {
             # === Status ===
             "completed_without_errors": metadata.completed_without_errors,
@@ -307,7 +297,7 @@ class RubricResults(BaseModel):
             "template_id": metadata.template_id,
             "question_text": metadata.question_text,
             "keywords": metadata.keywords,
-            "replicate": replicate,
+            "replicate": metadata.replicate,
             # === Model Configuration ===
             "answering_model": metadata.answering_model,
             "parsing_model": metadata.parsing_model,
@@ -334,11 +324,6 @@ class RubricResults(BaseModel):
         """Create DataFrame row for callable trait."""
         metadata = result.metadata
 
-        # Unified replicate
-        replicate = metadata.answering_replicate
-        if replicate is None:
-            replicate = metadata.parsing_replicate
-
         return {
             # === Status ===
             "completed_without_errors": metadata.completed_without_errors,
@@ -348,7 +333,7 @@ class RubricResults(BaseModel):
             "template_id": metadata.template_id,
             "question_text": metadata.question_text,
             "keywords": metadata.keywords,
-            "replicate": replicate,
+            "replicate": metadata.replicate,
             # === Model Configuration ===
             "answering_model": metadata.answering_model,
             "parsing_model": metadata.parsing_model,
@@ -377,11 +362,6 @@ class RubricResults(BaseModel):
         """Create DataFrame row for metric trait (EXPLODED by metric)."""
         metadata = result.metadata
 
-        # Unified replicate
-        replicate = metadata.answering_replicate
-        if replicate is None:
-            replicate = metadata.parsing_replicate
-
         return {
             # === Status ===
             "completed_without_errors": metadata.completed_without_errors,
@@ -391,7 +371,7 @@ class RubricResults(BaseModel):
             "template_id": metadata.template_id,
             "question_text": metadata.question_text,
             "keywords": metadata.keywords,
-            "replicate": replicate,
+            "replicate": metadata.replicate,
             # === Model Configuration ===
             "answering_model": metadata.answering_model,
             "parsing_model": metadata.parsing_model,
@@ -419,11 +399,6 @@ class RubricResults(BaseModel):
         """Create empty DataFrame row for results without rubric data."""
         metadata = result.metadata
 
-        # Unified replicate
-        replicate = metadata.answering_replicate
-        if replicate is None:
-            replicate = metadata.parsing_replicate
-
         return {
             # === Status ===
             "completed_without_errors": metadata.completed_without_errors,
@@ -433,7 +408,7 @@ class RubricResults(BaseModel):
             "template_id": metadata.template_id,
             "question_text": metadata.question_text,
             "keywords": metadata.keywords,
-            "replicate": replicate,
+            "replicate": metadata.replicate,
             # === Model Configuration ===
             "answering_model": metadata.answering_model,
             "parsing_model": metadata.parsing_model,
@@ -921,11 +896,7 @@ class RubricResults(BaseModel):
             filtered = [r for r in filtered if r.metadata.parsing_model in parsing_models]
 
         if replicates:
-            filtered = [
-                r
-                for r in filtered
-                if r.metadata.answering_replicate in replicates or r.metadata.parsing_replicate in replicates
-            ]
+            filtered = [r for r in filtered if r.metadata.replicate in replicates]
 
         return RubricResults(results=filtered)
 

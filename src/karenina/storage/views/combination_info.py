@@ -43,7 +43,7 @@ def create_combination_info_view(engine: Engine) -> None:
                 THEN 1
                 ELSE 0
             END) as has_mcp,
-            COUNT(DISTINCT vr.metadata_answering_replicate) as replicate_count
+            COUNT(DISTINCT vr.metadata_replicate) as replicate_count
         FROM verification_results vr
         JOIN verification_runs run ON vr.run_id = run.id
         GROUP BY run.id, run.run_name, vr.metadata_answering_model, vr.metadata_parsing_model
@@ -62,7 +62,7 @@ def create_combination_info_view(engine: Engine) -> None:
                 THEN 1
                 ELSE 0
             END) as has_mcp,
-            COUNT(DISTINCT vr.metadata_answering_replicate) as replicate_count
+            COUNT(DISTINCT vr.metadata_replicate) as replicate_count
         FROM verification_results vr
         JOIN verification_runs run ON vr.run_id = run.id
         GROUP BY run.id, run.run_name, vr.metadata_answering_model, vr.metadata_parsing_model

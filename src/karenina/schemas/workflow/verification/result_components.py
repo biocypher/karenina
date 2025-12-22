@@ -29,8 +29,7 @@ class VerificationResultMetadata(BaseModel):
         description="Deterministic hash ID computed from verification parameters",
     )
     run_name: str | None = None
-    answering_replicate: int | None = None  # Replicate number for answering model (1, 2, 3, ...)
-    parsing_replicate: int | None = None  # Replicate number for parsing model (1, 2, 3, ...)
+    replicate: int | None = None  # Replicate number (1, 2, 3, ...) for repeated runs of the same question
 
     @staticmethod
     def compute_result_id(
@@ -38,8 +37,7 @@ class VerificationResultMetadata(BaseModel):
         answering_model: str,
         parsing_model: str,
         timestamp: str,
-        answering_replicate: int | None = None,
-        parsing_replicate: int | None = None,
+        replicate: int | None = None,
         answering_mcp_servers: list[str] | None = None,
     ) -> str:
         """
@@ -53,8 +51,7 @@ class VerificationResultMetadata(BaseModel):
             answering_model: Full answering model string (e.g., "anthropic/claude-haiku-4-5")
             parsing_model: Full parsing model string
             timestamp: ISO timestamp string
-            answering_replicate: Answering replicate number (None for single run)
-            parsing_replicate: Parsing replicate number (None for single run)
+            replicate: Replicate number (None for single run)
             answering_mcp_servers: List of MCP server names (None or empty for no MCP)
 
         Returns:
@@ -67,10 +64,9 @@ class VerificationResultMetadata(BaseModel):
         data = {
             "answering_mcp_servers": sorted(answering_mcp_servers or []),
             "answering_model": answering_model,
-            "answering_replicate": answering_replicate,
             "parsing_model": parsing_model,
-            "parsing_replicate": parsing_replicate,
             "question_id": question_id,
+            "replicate": replicate,
             "timestamp": timestamp,
         }
 

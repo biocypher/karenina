@@ -451,8 +451,7 @@ class ResultsManager:
             "rubric_summary",
             "answering_model",
             "parsing_model",
-            "answering_replicate",
-            "parsing_replicate",
+            "replicate",
             "answering_system_prompt",
             "parsing_system_prompt",
             "success",
@@ -532,8 +531,7 @@ class ResultsManager:
                 self._escape_csv_field(rubric_summary),
                 self._escape_csv_field(result.metadata.answering_model),
                 self._escape_csv_field(result.metadata.parsing_model),
-                self._escape_csv_field(result.metadata.answering_replicate or ""),
-                self._escape_csv_field(result.metadata.parsing_replicate or ""),
+                self._escape_csv_field(result.metadata.replicate or ""),
                 self._escape_csv_field(result.metadata.answering_system_prompt or ""),
                 self._escape_csv_field(result.metadata.parsing_system_prompt or ""),
                 self._escape_csv_field(
@@ -686,7 +684,7 @@ class ResultsManager:
                             processed_row[field] = True
                         else:
                             processed_row[field] = value.lower() in ("true", "1", "yes")
-                    elif field in ["answering_replicate", "parsing_replicate"] and value:
+                    elif field == "replicate" and value:
                         try:
                             processed_row[field] = int(value)
                         except ValueError:
