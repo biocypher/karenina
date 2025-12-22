@@ -124,11 +124,6 @@ class RubricJudgmentResults(BaseModel):
             rubric_dj = result.deep_judgment_rubric
             metadata = result.metadata
 
-            # Unified replicate
-            replicate = metadata.answering_replicate
-            if replicate is None:
-                replicate = metadata.parsing_replicate
-
             # Process each deep judgment trait
             if rubric_dj.deep_judgment_rubric_scores:
                 for trait_name, trait_score in rubric_dj.deep_judgment_rubric_scores.items():
@@ -162,7 +157,7 @@ class RubricJudgmentResults(BaseModel):
                         "template_id": metadata.template_id,
                         "question_text": metadata.question_text,
                         "keywords": metadata.keywords,
-                        "replicate": replicate,
+                        "replicate": metadata.replicate,
                         # === Model Configuration ===
                         "answering_model": metadata.answering_model,
                         "parsing_model": metadata.parsing_model,

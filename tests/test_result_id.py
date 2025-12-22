@@ -99,8 +99,7 @@ class TestComputeResultId:
             answering_model="anthropic/claude-haiku-4-5",
             parsing_model="anthropic/claude-haiku-4-5",
             timestamp="2025-12-15 10:30:00",
-            answering_replicate=None,
-            parsing_replicate=None,
+            replicate=None,
         )
         # Should produce a valid 16-char hex string
         assert len(id1) == 16
@@ -119,14 +118,14 @@ class TestComputeResultId:
             answering_model="anthropic/claude-haiku-4-5",
             parsing_model="anthropic/claude-haiku-4-5",
             timestamp="2025-12-15 10:30:00",
-            answering_replicate=1,
+            replicate=1,
         )
         id_rep2 = VerificationResultMetadata.compute_result_id(
             question_id="q123",
             answering_model="anthropic/claude-haiku-4-5",
             parsing_model="anthropic/claude-haiku-4-5",
             timestamp="2025-12-15 10:30:00",
-            answering_replicate=2,
+            replicate=2,
         )
         assert id_no_rep != id_rep1
         assert id_rep1 != id_rep2

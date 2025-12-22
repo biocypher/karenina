@@ -158,11 +158,6 @@ class TemplateResults(BaseModel):
         elif llm_value is not None:
             field_type = type(llm_value).__name__
 
-        # Unified replicate (prefer answering_replicate, fallback to parsing_replicate)
-        replicate = metadata.answering_replicate
-        if replicate is None:
-            replicate = metadata.parsing_replicate
-
         row = {
             # === Status (FIRST COLUMN) ===
             "completed_without_errors": metadata.completed_without_errors,
@@ -173,7 +168,7 @@ class TemplateResults(BaseModel):
             "template_id": metadata.template_id,
             "question_text": metadata.question_text,
             "keywords": metadata.keywords,
-            "replicate": replicate,
+            "replicate": metadata.replicate,
             "answering_mcp_servers": template.answering_mcp_servers if template else None,
             # === Model Configuration ===
             "answering_model": metadata.answering_model,
@@ -220,11 +215,6 @@ class TemplateResults(BaseModel):
         """
         metadata = result.metadata
 
-        # Unified replicate
-        replicate = metadata.answering_replicate
-        if replicate is None:
-            replicate = metadata.parsing_replicate
-
         return {
             # === Status ===
             "completed_without_errors": metadata.completed_without_errors,
@@ -235,7 +225,7 @@ class TemplateResults(BaseModel):
             "template_id": metadata.template_id,
             "question_text": metadata.question_text,
             "keywords": metadata.keywords,
-            "replicate": replicate,
+            "replicate": metadata.replicate,
             "answering_mcp_servers": None,
             # === Model Configuration ===
             "answering_model": metadata.answering_model,
@@ -330,11 +320,6 @@ class TemplateResults(BaseModel):
             template = result.template
             metadata = result.metadata
 
-            # Unified replicate
-            replicate = metadata.answering_replicate
-            if replicate is None:
-                replicate = metadata.parsing_replicate
-
             # Get regex data
             validation_results = template.regex_validation_results or {}
             validation_details = template.regex_validation_details or {}
@@ -364,7 +349,7 @@ class TemplateResults(BaseModel):
                         # === Identification ===
                         "question_id": metadata.question_id,
                         "template_id": metadata.template_id,
-                        "replicate": replicate,
+                        "replicate": metadata.replicate,
                         # === Model Configuration ===
                         "answering_model": metadata.answering_model,
                         "parsing_model": metadata.parsing_model,
@@ -432,11 +417,6 @@ class TemplateResults(BaseModel):
             template = result.template
             metadata = result.metadata
 
-            # Unified replicate
-            replicate = metadata.answering_replicate
-            if replicate is None:
-                replicate = metadata.parsing_replicate
-
             # Get agent metrics (apply to all stages)
             agent_metrics = template.agent_metrics or {}
 
@@ -478,7 +458,7 @@ class TemplateResults(BaseModel):
                         # === Identification ===
                         "question_id": metadata.question_id,
                         "template_id": metadata.template_id,
-                        "replicate": replicate,
+                        "replicate": metadata.replicate,
                         # === Model Configuration ===
                         "answering_model": metadata.answering_model,
                         "parsing_model": metadata.parsing_model,
@@ -968,11 +948,7 @@ class TemplateResults(BaseModel):
             filtered = [r for r in filtered if r.metadata.parsing_model in parsing_models]
 
         if replicates:
-            filtered = [
-                r
-                for r in filtered
-                if r.metadata.answering_replicate in replicates or r.metadata.parsing_replicate in replicates
-            ]
+            filtered = [r for r in filtered if r.metadata.replicate in replicates]
 
         if passed_only:
             filtered = [r for r in filtered if r.template and r.template.verify_result is True]

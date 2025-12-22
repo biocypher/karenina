@@ -35,7 +35,7 @@ class TestRubricResultsStandardExport:
             answering_model="gpt-4",
             parsing_model="gpt-4-mini",
             timestamp="2024-01-15T10:30:00",
-            answering_replicate=1,
+            replicate=1,
         )
         return VerificationResultMetadata(
             question_id="q1",
@@ -49,7 +49,7 @@ class TestRubricResultsStandardExport:
             execution_time=2.5,
             timestamp="2024-01-15T10:30:00",
             result_id=result_id,
-            answering_replicate=1,
+            replicate=1,
         )
 
     def test_get_rubrics_default_no_deep_judgment(self, basic_metadata):
@@ -179,7 +179,7 @@ class TestRubricJudgmentResultsCreation:
             answering_model="gpt-4",
             parsing_model="gpt-4-mini",
             timestamp="2024-01-15T10:30:00",
-            answering_replicate=1,
+            replicate=1,
         )
         return VerificationResultMetadata(
             question_id="q1",
@@ -193,7 +193,7 @@ class TestRubricJudgmentResultsCreation:
             execution_time=1.0,
             timestamp="2024-01-15T10:30:00",
             result_id=result_id,
-            answering_replicate=1,
+            replicate=1,
         )
 
     def test_rubric_judgment_results_creation(self, basic_metadata):
@@ -230,7 +230,7 @@ class TestRubricJudgmentResultsExcerptExplosion:
             answering_model="gpt-4",
             parsing_model="gpt-4-mini",
             timestamp="2024-01-15T10:30:00",
-            answering_replicate=1,
+            replicate=1,
         )
         return VerificationResultMetadata(
             question_id="q1",
@@ -244,7 +244,7 @@ class TestRubricJudgmentResultsExcerptExplosion:
             execution_time=1.0,
             timestamp="2024-01-15T10:30:00",
             result_id=result_id,
-            answering_replicate=1,
+            replicate=1,
         )
 
     def test_rubric_judgment_results_excerpt_explosion(self, basic_metadata):
@@ -352,7 +352,7 @@ class TestRubricJudgmentResultsMetadata:
             answering_model="gpt-4",
             parsing_model="gpt-4-mini",
             timestamp="2024-01-15T10:30:00",
-            answering_replicate=1,
+            replicate=1,
         )
         return VerificationResultMetadata(
             question_id="q1",
@@ -366,7 +366,7 @@ class TestRubricJudgmentResultsMetadata:
             execution_time=1.0,
             timestamp="2024-01-15T10:30:00",
             result_id=result_id,
-            answering_replicate=1,
+            replicate=1,
         )
 
     def test_rubric_judgment_results_metadata(self, basic_metadata):
@@ -429,7 +429,7 @@ class TestRubricJudgmentResultsMixedTraits:
             answering_model="gpt-4",
             parsing_model="gpt-4-mini",
             timestamp="2024-01-15T10:30:00",
-            answering_replicate=1,
+            replicate=1,
         )
         return VerificationResultMetadata(
             question_id="q1",
@@ -443,7 +443,7 @@ class TestRubricJudgmentResultsMixedTraits:
             execution_time=1.0,
             timestamp="2024-01-15T10:30:00",
             result_id=result_id,
-            answering_replicate=1,
+            replicate=1,
         )
 
     def test_mixed_dj_and_standard_traits(self, basic_metadata):
@@ -496,7 +496,7 @@ class TestJSONSerializationComplexFields:
             answering_model="gpt-4",
             parsing_model="gpt-4-mini",
             timestamp="2024-01-15T10:30:00",
-            answering_replicate=1,
+            replicate=1,
         )
         return VerificationResultMetadata(
             question_id="q1",
@@ -510,7 +510,7 @@ class TestJSONSerializationComplexFields:
             execution_time=1.0,
             timestamp="2024-01-15T10:30:00",
             result_id=result_id,
-            answering_replicate=1,
+            replicate=1,
         )
 
     def test_json_serialization_excerpts_list(self, basic_metadata):

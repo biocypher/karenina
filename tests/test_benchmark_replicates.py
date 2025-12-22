@@ -118,8 +118,7 @@ class Answer(BaseAnswer):
 
             # Extract replicate number from key
             replicate_num = int(key.split("_rep")[1])
-            assert result.metadata.answering_replicate == replicate_num
-            assert result.metadata.parsing_replicate == replicate_num
+            assert result.metadata.replicate == replicate_num
 
 
 @patch("karenina.infrastructure.llm.interface.init_chat_model")
@@ -199,8 +198,7 @@ class Answer(BaseAnswer):
         assert result.question_id == "test_id"
 
         # Replicate fields should be None for single replicate
-        assert result.metadata.answering_replicate is None
-        assert result.metadata.parsing_replicate is None
+        assert result.metadata.replicate is None
 
 
 def test_verification_config_default_replicate_count() -> None:

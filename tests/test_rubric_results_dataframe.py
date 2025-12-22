@@ -23,7 +23,7 @@ def test_to_dataframe_llm_score_traits():
         parsing_model="gpt-4-mini",
         execution_time=2.5,
         timestamp="2024-01-15T10:30:00",
-        answering_replicate=1,
+        replicate=1,
     )
 
     rubric = VerificationResultRubric(
@@ -67,7 +67,7 @@ def test_to_dataframe_llm_binary_traits():
         parsing_model="gpt-4-mini",
         execution_time=1.0,
         timestamp="2024-01-15T10:30:00",
-        answering_replicate=1,
+        replicate=1,
     )
 
     rubric = VerificationResultRubric(
@@ -106,7 +106,7 @@ def test_to_dataframe_regex_traits():
         parsing_model="gpt-4-mini",
         execution_time=1.5,
         timestamp="2024-01-15T10:30:00",
-        answering_replicate=1,
+        replicate=1,
     )
 
     rubric = VerificationResultRubric(
@@ -144,7 +144,7 @@ def test_to_dataframe_metric_traits_explosion():
         parsing_model="gpt-4-mini",
         execution_time=2.0,
         timestamp="2024-01-15T10:30:00",
-        answering_replicate=1,
+        replicate=1,
     )
 
     rubric = VerificationResultRubric(
@@ -210,7 +210,7 @@ def test_to_dataframe_all_trait_types():
         parsing_model="gpt-4-mini",
         execution_time=3.0,
         timestamp="2024-01-15T10:30:00",
-        answering_replicate=1,
+        replicate=1,
     )
 
     rubric = VerificationResultRubric(
@@ -259,7 +259,7 @@ def test_to_dataframe_no_rubric_data():
         parsing_model="gpt-4-mini",
         execution_time=1.0,
         timestamp="2024-01-15T10:30:00",
-        answering_replicate=1,
+        replicate=1,
     )
 
     result = VerificationResult(metadata=metadata, rubric=None)
@@ -291,7 +291,7 @@ def test_to_dataframe_multiple_results():
             parsing_model="gpt-4-mini",
             execution_time=2.0,
             timestamp="2024-01-15T10:30:00",
-            answering_replicate=1,
+            replicate=1,
         )
 
         rubric = VerificationResultRubric(
@@ -326,7 +326,7 @@ def test_to_dataframe_mixed_llm_types():
         parsing_model="gpt-4-mini",
         execution_time=2.0,
         timestamp="2024-01-15T10:30:00",
-        answering_replicate=1,
+        replicate=1,
     )
 
     rubric = VerificationResultRubric(
@@ -373,7 +373,7 @@ def test_to_dataframe_column_ordering():
         execution_time=2.5,
         timestamp="2024-01-15T10:30:00",
         run_name="test_run",
-        answering_replicate=1,
+        replicate=1,
     )
 
     rubric = VerificationResultRubric(

@@ -278,11 +278,7 @@ class VerificationResultSet(BaseModel):
             filtered = [r for r in filtered if r.metadata.parsing_model in parsing_models]
 
         if replicates:
-            filtered = [
-                r
-                for r in filtered
-                if r.metadata.answering_replicate in replicates or r.metadata.parsing_replicate in replicates
-            ]
+            filtered = [r for r in filtered if r.metadata.replicate in replicates]
 
         if completed_only:
             filtered = [r for r in filtered if r.metadata.completed_without_errors]
@@ -413,7 +409,7 @@ class VerificationResultSet(BaseModel):
         """
         grouped: dict[int, list[VerificationResult]] = {}
         for result in self.results:
-            rep = result.metadata.answering_replicate or 0
+            rep = result.metadata.replicate or 0
             if rep not in grouped:
                 grouped[rep] = []
             grouped[rep].append(result)
@@ -510,8 +506,8 @@ class VerificationResultSet(BaseModel):
             questions.add(result.metadata.question_id)
             models.add(result.metadata.answering_model)
             parsing_models.add(result.metadata.parsing_model)
-            if result.metadata.answering_replicate is not None:
-                replicates.add(result.metadata.answering_replicate)
+            if result.metadata.replicate is not None:
+                replicates.add(result.metadata.replicate)
 
         # Execution time
         total_execution_time = sum(
@@ -916,7 +912,7 @@ class VerificationResultSet(BaseModel):
 
             for result in self.results:
                 if result.template and result.template.template_verification_performed:
-                    rep_num = result.metadata.answering_replicate
+                    rep_num = result.metadata.replicate
                     if rep_num is not None:
                         rep_stats_dict[rep_num]["total"] += 1
                         if result.template.verify_result:
@@ -1370,8 +1366,8 @@ class VerificationResultSet(BaseModel):
             ]
 
             # Add replicate if present
-            if result.metadata.answering_replicate is not None:
-                key_parts.append(f"rep{result.metadata.answering_replicate}")
+            if result.metadata.replicate is not None:
+                key_parts.append(f"rep{result.metadata.replicate}")
 
             # Use the result's timestamp if available, otherwise current time
             if result.metadata.timestamp:

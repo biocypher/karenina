@@ -24,7 +24,7 @@ def test_to_dataframe_basic_explosion():
         parsing_model="gpt-4-mini",
         execution_time=2.5,
         timestamp="2024-01-15T10:30:00",
-        answering_replicate=1,
+        replicate=1,
     )
 
     template = VerificationResultTemplate(
@@ -89,7 +89,7 @@ def test_to_dataframe_with_search_enhancement():
         parsing_model="gpt-4-mini",
         execution_time=3.0,
         timestamp="2024-01-15T10:32:00",
-        answering_replicate=1,
+        replicate=1,
     )
 
     template = VerificationResultTemplate(
@@ -149,7 +149,7 @@ def test_to_dataframe_no_judgment_data():
         parsing_model="gpt-4-mini",
         execution_time=1.0,
         timestamp="2024-01-15T10:35:00",
-        answering_replicate=1,
+        replicate=1,
     )
 
     result = VerificationResult(metadata=metadata, template=None, deep_judgment=None)
@@ -181,7 +181,7 @@ def test_to_dataframe_multiple_results():
             parsing_model="gpt-4-mini",
             execution_time=2.0,
             timestamp="2024-01-15T10:30:00",
-            answering_replicate=1,
+            replicate=1,
         )
 
         template = VerificationResultTemplate(
@@ -224,7 +224,7 @@ def test_to_dataframe_attribute_match():
         parsing_model="gpt-4-mini",
         execution_time=2.0,
         timestamp="2024-01-15T10:30:00",
-        answering_replicate=1,
+        replicate=1,
     )
 
     template = VerificationResultTemplate(
@@ -286,7 +286,7 @@ def test_to_dataframe_column_ordering():
         execution_time=2.5,
         timestamp="2024-01-15T10:30:00",
         run_name="test_run",
-        answering_replicate=1,
+        replicate=1,
     )
 
     template = VerificationResultTemplate(

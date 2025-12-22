@@ -17,8 +17,7 @@ def _create_verification_task(
     answering_model: ModelConfig,
     parsing_model: ModelConfig,
     run_name: str | None,
-    answering_replicate: int | None,
-    parsing_replicate: int | None,
+    replicate: int | None,
     rubric: Rubric | None,
     keywords: list[str] | None = None,
     few_shot_examples: list[dict[str, str]] | None = None,
@@ -49,8 +48,7 @@ def _create_verification_task(
         "answering_model": answering_model,
         "parsing_model": parsing_model,
         "run_name": run_name,
-        "answering_replicate": answering_replicate,
-        "parsing_replicate": parsing_replicate,
+        "replicate": replicate,
         "rubric": rubric,
         "keywords": keywords,
         "few_shot_examples": few_shot_examples,
@@ -81,11 +79,11 @@ def _execute_verification_task(task: dict[str, Any]) -> tuple[str, VerificationR
     question_id = task["question_id"]
     answering_model = task["answering_model"]
     parsing_model = task["parsing_model"]
-    answering_replicate = task["answering_replicate"]
+    replicate = task["replicate"]
 
     # Generate result key
-    if answering_replicate is not None:
-        result_key = f"{question_id}_{answering_model.id}_{parsing_model.id}_rep{answering_replicate}"
+    if replicate is not None:
+        result_key = f"{question_id}_{answering_model.id}_{parsing_model.id}_rep{replicate}"
     else:
         result_key = f"{question_id}_{answering_model.id}_{parsing_model.id}"
 
@@ -97,8 +95,7 @@ def _execute_verification_task(task: dict[str, Any]) -> tuple[str, VerificationR
         answering_model=task["answering_model"],
         parsing_model=task["parsing_model"],
         run_name=task["run_name"],
-        answering_replicate=task["answering_replicate"],
-        parsing_replicate=task["parsing_replicate"],
+        replicate=task["replicate"],
         rubric=task["rubric"],
         keywords=task.get("keywords"),
         raw_answer=task.get("raw_answer"),
@@ -186,10 +183,9 @@ def run_question_verification(
 
     for answering_model in answering_models:
         for parsing_model in parsing_models:
-            for replicate in range(1, replicate_count + 1):
+            for replicate_num in range(1, replicate_count + 1):
                 # For single replicate, don't include replicate numbers
-                answering_replicate = None if replicate_count == 1 else replicate
-                parsing_replicate = None if replicate_count == 1 else replicate
+                replicate = None if replicate_count == 1 else replicate_num
 
                 task = _create_verification_task(
                     question_id=question_id,
@@ -198,8 +194,7 @@ def run_question_verification(
                     answering_model=answering_model,
                     parsing_model=parsing_model,
                     run_name=getattr(config, "run_name", None),
-                    answering_replicate=answering_replicate,
-                    parsing_replicate=parsing_replicate,
+                    replicate=replicate,
                     rubric=rubric,
                     keywords=keywords,
                     few_shot_examples=few_shot_examples,

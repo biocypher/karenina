@@ -37,8 +37,7 @@ class VerificationContext:
 
         # Run Metadata
         run_name: Optional run name for tracking
-        answering_replicate: Replicate number for answering (1, 2, 3, ...)
-        parsing_replicate: Replicate number for parsing (1, 2, 3, ...)
+        replicate: Replicate number (1, 2, 3, ...) for repeated runs of the same question
 
         # Feature Flags
         few_shot_enabled: Whether few-shot prompting is enabled
@@ -89,8 +88,7 @@ class VerificationContext:
 
     # Run Metadata
     run_name: str | None = None
-    answering_replicate: int | None = None
-    parsing_replicate: int | None = None
+    replicate: int | None = None
 
     # Feature Flags
     few_shot_enabled: bool = False

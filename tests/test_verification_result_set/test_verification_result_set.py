@@ -31,8 +31,7 @@ class TestHelpers:
         question_id: str = "q1",
         answering_model: str = "model1",
         parsing_model: str = "parser1",
-        answering_replicate: int = 1,
-        parsing_replicate: int = 1,
+        replicate: int = 1,
         completed: bool = True,
         has_template: bool = True,
         has_rubric: bool = True,
@@ -50,8 +49,7 @@ class TestHelpers:
             question_text=f"Question text for {question_id}",
             answering_model=answering_model,
             parsing_model=parsing_model,
-            answering_replicate=answering_replicate,
-            parsing_replicate=parsing_replicate,
+            replicate=replicate,
             completed_without_errors=completed,
             execution_time=1.5,
             timestamp=timestamp or "2024-01-01T00:00:00Z",
@@ -197,18 +195,16 @@ class TestVerificationResultSetFiltering:
     def test_filter_by_replicates(self):
         """Test filtering by replicate numbers."""
         results = [
-            TestHelpers.create_sample_result(question_id="q1", answering_replicate=1, parsing_replicate=1),
-            TestHelpers.create_sample_result(question_id="q2", answering_replicate=2, parsing_replicate=2),
-            TestHelpers.create_sample_result(question_id="q3", answering_replicate=3, parsing_replicate=3),
+            TestHelpers.create_sample_result(question_id="q1", replicate=1),
+            TestHelpers.create_sample_result(question_id="q2", replicate=2),
+            TestHelpers.create_sample_result(question_id="q3", replicate=3),
         ]
         result_set = VerificationResultSet(results=results)
 
         filtered = result_set.filter(replicates=[1, 2])
 
         assert len(filtered) == 2
-        assert all(
-            r.metadata.answering_replicate in [1, 2] or r.metadata.parsing_replicate in [1, 2] for r in filtered.results
-        )
+        assert all(r.metadata.replicate in [1, 2] for r in filtered.results)
 
     def test_filter_completed_only(self):
         """Test filtering for only completed results."""
@@ -350,10 +346,10 @@ class TestVerificationResultSetGrouping:
     def test_group_by_replicate(self):
         """Test grouping results by replicate number."""
         results = [
-            TestHelpers.create_sample_result(question_id="q1", answering_replicate=1),
-            TestHelpers.create_sample_result(question_id="q2", answering_replicate=1),
-            TestHelpers.create_sample_result(question_id="q1", answering_replicate=2),
-            TestHelpers.create_sample_result(question_id="q2", answering_replicate=2),
+            TestHelpers.create_sample_result(question_id="q1", replicate=1),
+            TestHelpers.create_sample_result(question_id="q2", replicate=1),
+            TestHelpers.create_sample_result(question_id="q1", replicate=2),
+            TestHelpers.create_sample_result(question_id="q2", replicate=2),
         ]
         result_set = VerificationResultSet(results=results)
 
@@ -369,11 +365,11 @@ class TestVerificationResultSetGrouping:
     def test_group_by_replicate_with_none(self):
         """Test grouping by replicate when some results have None replicate."""
         results = [
-            TestHelpers.create_sample_result(question_id="q1", answering_replicate=1),
-            TestHelpers.create_sample_result(question_id="q2", answering_replicate=None),
+            TestHelpers.create_sample_result(question_id="q1", replicate=1),
+            TestHelpers.create_sample_result(question_id="q2", replicate=None),
         ]
-        # Manually set answering_replicate to None for the second result
-        results[1].metadata.answering_replicate = None
+        # Manually set replicate to None for the second result
+        results[1].metadata.replicate = None
 
         result_set = VerificationResultSet(results=results)
 
@@ -410,7 +406,7 @@ class TestVerificationResultSetSummary:
             TestHelpers.create_sample_result(
                 question_id="q1",
                 answering_model="model1",
-                answering_replicate=1,
+                replicate=1,
                 completed=True,
                 has_template=True,
                 has_rubric=True,
@@ -419,7 +415,7 @@ class TestVerificationResultSetSummary:
             TestHelpers.create_sample_result(
                 question_id="q2",
                 answering_model="model2",
-                answering_replicate=2,
+                replicate=2,
                 completed=False,
                 has_template=False,
                 has_rubric=True,
@@ -428,7 +424,7 @@ class TestVerificationResultSetSummary:
             TestHelpers.create_sample_result(
                 question_id="q1",
                 answering_model="model1",
-                answering_replicate=2,
+                replicate=2,
                 completed=True,
                 has_template=True,
                 has_rubric=False,
@@ -574,7 +570,7 @@ class TestVerificationResultSetLegacy:
                 question_id="q1",
                 answering_model="gpt-4",
                 parsing_model="parser1",
-                answering_replicate=1,
+                replicate=1,
                 timestamp="2024-01-01T12:00:00Z",
             ),
         ]
@@ -600,13 +596,13 @@ class TestVerificationResultSetLegacy:
                 question_id="q1",
                 answering_model="model1",
                 parsing_model="parser1",
-                answering_replicate=1,
+                replicate=1,
             ),
             TestHelpers.create_sample_result(
                 question_id="q2",
                 answering_model="model2",
                 parsing_model="parser2",
-                answering_replicate=2,
+                replicate=2,
             ),
         ]
         result_set = VerificationResultSet(results=results)
@@ -627,11 +623,11 @@ class TestVerificationResultSetLegacy:
                 question_id="q1",
                 answering_model="model1",
                 parsing_model="parser1",
-                answering_replicate=None,
+                replicate=None,
             ),
         ]
         # Manually set replicate to None
-        results[0].metadata.answering_replicate = None
+        results[0].metadata.replicate = None
 
         result_set = VerificationResultSet(results=results)
 
@@ -712,28 +708,28 @@ class TestVerificationResultSetIntegration:
             TestHelpers.create_sample_result(
                 question_id="q1",
                 answering_model="gpt-4",
-                answering_replicate=1,
+                replicate=1,
                 llm_scores={"trait1": 5},
                 verify_result=True,
             ),
             TestHelpers.create_sample_result(
                 question_id="q1",
                 answering_model="gpt-4",
-                answering_replicate=2,
+                replicate=2,
                 llm_scores={"trait1": 4},
                 verify_result=True,
             ),
             TestHelpers.create_sample_result(
                 question_id="q1",
                 answering_model="claude-3",
-                answering_replicate=1,
+                replicate=1,
                 llm_scores={"trait1": 3},
                 verify_result=False,
             ),
             TestHelpers.create_sample_result(
                 question_id="q2",
                 answering_model="gpt-4",
-                answering_replicate=1,
+                replicate=1,
                 llm_scores={"trait1": 5},
                 verify_result=True,
             ),

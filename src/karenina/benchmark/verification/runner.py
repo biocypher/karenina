@@ -19,8 +19,7 @@ def run_single_model_verification(
     answering_model: ModelConfig,
     parsing_model: ModelConfig,
     run_name: str | None = None,
-    answering_replicate: int | None = None,
-    parsing_replicate: int | None = None,
+    replicate: int | None = None,
     rubric: Rubric | None = None,
     keywords: list[str] | None = None,
     raw_answer: str | None = None,
@@ -64,8 +63,7 @@ def run_single_model_verification(
         answering_model: Configuration for the answering model
         parsing_model: Configuration for the parsing model
         run_name: Optional run name for tracking
-        answering_replicate: Optional replicate number for answering model
-        parsing_replicate: Optional replicate number for parsing model
+        replicate: Optional replicate number for repeated runs of the same question
         rubric: Optional rubric for qualitative evaluation
         keywords: Optional keywords associated with the question
         few_shot_examples: Optional list of question-answer pairs for few-shot prompting
@@ -113,8 +111,7 @@ def run_single_model_verification(
         raw_answer=raw_answer,
         # Run Metadata
         run_name=run_name,
-        answering_replicate=answering_replicate,
-        parsing_replicate=parsing_replicate,
+        replicate=replicate,
         # Feature Flags
         few_shot_enabled=few_shot_enabled,
         abstention_enabled=abstention_enabled,

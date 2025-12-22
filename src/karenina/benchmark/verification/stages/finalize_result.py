@@ -133,8 +133,7 @@ class FinalizeResultStage(BaseVerificationStage):
             answering_model=answering_model_str,
             parsing_model=parsing_model_str,
             timestamp=timestamp,
-            answering_replicate=context.answering_replicate,
-            parsing_replicate=context.parsing_replicate,
+            replicate=context.replicate,
             answering_mcp_servers=answering_mcp_servers,
         )
 
@@ -155,8 +154,7 @@ class FinalizeResultStage(BaseVerificationStage):
             timestamp=timestamp,
             result_id=result_id,
             run_name=context.run_name,
-            answering_replicate=context.answering_replicate,
-            parsing_replicate=context.parsing_replicate,
+            replicate=context.replicate,
         )
 
         # Create template subclass

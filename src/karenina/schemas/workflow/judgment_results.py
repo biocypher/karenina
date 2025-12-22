@@ -193,11 +193,6 @@ class JudgmentResults(BaseModel):
         template = result.template
         deep_judgment = result.deep_judgment
 
-        # Unified replicate
-        replicate = metadata.answering_replicate
-        if replicate is None:
-            replicate = metadata.parsing_replicate
-
         # Determine attribute match
         attribute_match = None
         if gt_value is not None or llm_value is not None:
@@ -229,7 +224,7 @@ class JudgmentResults(BaseModel):
             "template_id": metadata.template_id,
             "question_text": metadata.question_text,
             "keywords": metadata.keywords,
-            "replicate": replicate,
+            "replicate": metadata.replicate,
             "answering_mcp_servers": template.answering_mcp_servers if template else None,
             # === Model Configuration ===
             "answering_model": metadata.answering_model,
@@ -278,11 +273,6 @@ class JudgmentResults(BaseModel):
         template = result.template
         deep_judgment = result.deep_judgment
 
-        # Unified replicate
-        replicate = metadata.answering_replicate
-        if replicate is None:
-            replicate = metadata.parsing_replicate
-
         return {
             # === Status ===
             "completed_without_errors": metadata.completed_without_errors,
@@ -293,7 +283,7 @@ class JudgmentResults(BaseModel):
             "template_id": metadata.template_id,
             "question_text": metadata.question_text,
             "keywords": metadata.keywords,
-            "replicate": replicate,
+            "replicate": metadata.replicate,
             "answering_mcp_servers": template.answering_mcp_servers if template else None,
             # === Model Configuration ===
             "answering_model": metadata.answering_model,
@@ -794,11 +784,7 @@ class JudgmentResults(BaseModel):
             filtered = [r for r in filtered if r.metadata.parsing_model in parsing_models]
 
         if replicates:
-            filtered = [
-                r
-                for r in filtered
-                if r.metadata.answering_replicate in replicates or r.metadata.parsing_replicate in replicates
-            ]
+            filtered = [r for r in filtered if r.metadata.replicate in replicates]
 
         if with_search_only:
             filtered = [r for r in filtered if r.deep_judgment and r.deep_judgment.deep_judgment_search_enabled]

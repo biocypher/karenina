@@ -16,7 +16,7 @@ class TestTaskIdentifierFromResult:
         question_id: str = "q1",
         answering_model: str = "anthropic/claude-haiku-4-5",
         parsing_model: str = "anthropic/claude-haiku-4-5",
-        answering_replicate: int = 1,
+        replicate: int = 1,
         mcp_servers: list[str] | None = None,
     ) -> VerificationResult:
         """Create a mock VerificationResult for testing."""
@@ -25,7 +25,7 @@ class TestTaskIdentifierFromResult:
         metadata.question_id = question_id
         metadata.answering_model = answering_model
         metadata.parsing_model = parsing_model
-        metadata.answering_replicate = answering_replicate
+        metadata.replicate = replicate
 
         result = MagicMock()
         result.metadata = metadata
@@ -225,7 +225,7 @@ class TestTaskIdentifierFromResult:
         result = self._create_mock_result(
             question_id="urn:uuid:abc123",
             answering_model="anthropic/claude-haiku-4-5",
-            answering_replicate=2,
+            replicate=2,
             mcp_servers=["otar-official"],
         )
 

@@ -398,7 +398,7 @@ class TestBothDataframeExportMethods:
             parsing_model="gpt-4-mini",
             execution_time=3.5,
             timestamp="2024-01-15T10:30:00",
-            answering_replicate=1,
+            replicate=1,
         )
 
         rubric = VerificationResultRubric(
@@ -510,7 +510,7 @@ class TestDataframeStructureValidation:
             parsing_model="gpt-4-mini",
             execution_time=1.0,
             timestamp="2024-01-15T10:30:00",
-            answering_replicate=1,
+            replicate=1,
         )
 
         rubric = VerificationResultRubric(
@@ -561,7 +561,7 @@ class TestDataframeStructureValidation:
             parsing_model="gpt-4-mini",
             execution_time=1.0,
             timestamp="2024-01-15T10:30:00",
-            answering_replicate=1,
+            replicate=1,
         )
 
         rubric = VerificationResultRubric(

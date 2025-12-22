@@ -46,7 +46,7 @@ def create_template_results_view(engine: Engine) -> None:
             vr.question_id,
             vr.metadata_question_text as question_text,
             vr.template_verify_result as verify_result,
-            vr.metadata_answering_replicate as replicate
+            vr.metadata_replicate as replicate
         FROM verification_results vr
         JOIN verification_runs run ON vr.run_id = run.id
         JOIN benchmarks b ON run.benchmark_id = b.id
