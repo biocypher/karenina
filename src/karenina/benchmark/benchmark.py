@@ -459,6 +459,8 @@ class Benchmark:
         temperature: float = 0,
         interface: str = "langchain",
         force_regenerate: bool = False,
+        endpoint_base_url: str | None = None,
+        endpoint_api_key: str | None = None,
     ) -> dict[str, Any]:
         """
         Generate an answer template for a specific question using LLM.
@@ -470,6 +472,8 @@ class Benchmark:
             temperature: The temperature for generation (default: 0)
             interface: The interface to use (default: langchain)
             force_regenerate: If True, regenerate even if template exists (default: False)
+            endpoint_base_url: Base URL for openai_endpoint interface (e.g., http://localhost:11434/v1)
+            endpoint_api_key: API key for openai_endpoint interface (required, not read from env)
 
         Returns:
             Dict with 'success', 'template_code', 'error', and 'raw_response' keys
@@ -504,6 +508,8 @@ class Benchmark:
                 model_provider=model_provider,
                 temperature=temperature,
                 interface=interface,
+                endpoint_base_url=endpoint_base_url,
+                endpoint_api_key=endpoint_api_key,
             )
 
             # Template code is now returned directly from the generator
@@ -549,6 +555,8 @@ class Benchmark:
         interface: str = "langchain",
         force_regenerate: bool = False,
         progress_callback: Callable[[float, str], None] | None = None,
+        endpoint_base_url: str | None = None,
+        endpoint_api_key: str | None = None,
     ) -> dict[str, dict[str, Any]]:
         """
         Generate templates for multiple questions using LLM.
@@ -561,6 +569,8 @@ class Benchmark:
             interface: The interface to use
             force_regenerate: If True, regenerate even if templates exist
             progress_callback: Optional callback for progress updates (percentage, message)
+            endpoint_base_url: Base URL for openai_endpoint interface (e.g., http://localhost:11434/v1)
+            endpoint_api_key: API key for openai_endpoint interface (required, not read from env)
 
         Returns:
             Dict mapping question_id to generation result dict
@@ -592,6 +602,8 @@ class Benchmark:
                 temperature=temperature,
                 interface=interface,
                 force_regenerate=force_regenerate,
+                endpoint_base_url=endpoint_base_url,
+                endpoint_api_key=endpoint_api_key,
             )
             results[question_id] = result
 
@@ -610,6 +622,8 @@ class Benchmark:
         force_regenerate: bool = False,
         progress_callback: Callable[[float, str], None] | None = None,
         only_missing: bool = True,
+        endpoint_base_url: str | None = None,
+        endpoint_api_key: str | None = None,
     ) -> dict[str, dict[str, Any]]:
         """
         Generate templates for all questions in the benchmark using LLM.
@@ -622,6 +636,8 @@ class Benchmark:
             force_regenerate: If True, regenerate even if templates exist
             progress_callback: Optional callback for progress updates
             only_missing: If True, only generate for questions without templates
+            endpoint_base_url: Base URL for openai_endpoint interface (e.g., http://localhost:11434/v1)
+            endpoint_api_key: API key for openai_endpoint interface (required, not read from env)
 
         Returns:
             Dict mapping question_id to generation result dict
@@ -646,6 +662,8 @@ class Benchmark:
             interface=interface,
             force_regenerate=force_regenerate,
             progress_callback=progress_callback,
+            endpoint_base_url=endpoint_base_url,
+            endpoint_api_key=endpoint_api_key,
         )
 
     def export_generated_templates(self, file_path: Path) -> None:
