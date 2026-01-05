@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Union
 
 if TYPE_CHECKING:
+    from ..integrations.gepa import KareninaOutput, OptimizationRun
     from ..schemas.checkpoint import SchemaOrgQuestion
     from ..schemas.domain import Question
 
@@ -994,6 +995,238 @@ class Benchmark:
     def get_results_statistics_by_run(self) -> dict[str, dict[str, Any]]:
         """Get verification statistics for each run."""
         return self._results_manager.get_results_statistics_by_run()
+
+    # GEPA optimization methods
+    def optimize(
+        self,
+        targets: list[str],
+        config: VerificationConfig | None = None,
+        train_ratio: float = 0.8,
+        val_ratio: float = 0.2,
+        test_ratio: float | None = None,
+        seed: int | None = None,
+        reflection_model: str = "openai/gpt-4o",
+        max_metric_calls: int = 150,
+        template_weight: float = 0.7,
+        rubric_weight: float = 0.3,
+        seed_prompts: dict[str, str] | None = None,
+        tracker_path: Path | str | None = None,
+        export_preset_path: Path | str | None = None,
+        progress_callback: Callable[[float, str], None] | None = None,
+    ) -> "KareninaOutput":
+        """
+        Optimize text components using GEPA with karenina verification as the metric.
+
+        This high-level method handles the full optimization workflow:
+        1. Splits the benchmark into train/val (and optional test) sets
+        2. Creates a KareninaAdapter for GEPA
+        3. Runs GEPA optimization
+        4. Tracks results and optionally exports preset
+
+        Requires the 'gepa' optional dependency: pip install karenina[gepa]
+
+        Args:
+            targets: List of components to optimize. Valid values:
+                     "answering_system_prompt", "parsing_instructions", "mcp_tool_descriptions"
+            config: Base VerificationConfig to use. If None, uses default minimal config.
+            train_ratio: Fraction of questions for training (default 0.8)
+            val_ratio: Fraction of questions for validation (default 0.2)
+            test_ratio: Optional fraction for testing. If None, no test set created.
+            seed: Random seed for reproducibility
+            reflection_model: Model for GEPA's reflection LLM (default: openai/gpt-4o)
+            max_metric_calls: Maximum GEPA optimization iterations (default: 150)
+            template_weight: Weight for template pass/fail in scoring (default 0.7)
+            rubric_weight: Weight for rubric scores in scoring (default 0.3)
+            seed_prompts: Optional initial prompts. If None, uses empty strings.
+            tracker_path: Optional path to SQLite file for tracking optimization history
+            export_preset_path: Optional path to export optimized config as preset
+            progress_callback: Optional callback for progress updates (percentage, message)
+
+        Returns:
+            KareninaOutput with optimized prompts and metrics
+
+        Raises:
+            ImportError: If GEPA is not installed
+            ValueError: If invalid targets or split ratios
+
+        Example:
+            >>> result = benchmark.optimize(
+            ...     targets=["answering_system_prompt"],
+            ...     reflection_model="openai/gpt-4o",
+            ...     max_metric_calls=100,
+            ... )
+            >>> print(f"Improvement: {result.improvement:.1%}")
+            >>> print(f"Optimized prompt: {result.answering_system_prompt}")
+        """
+        # Import GEPA integration components
+        try:
+            from karenina.integrations.gepa import (
+                GEPA_AVAILABLE,
+                KareninaAdapter,
+                KareninaOutput,
+                OptimizationRun,
+                OptimizationTarget,
+                OptimizationTracker,
+                export_to_preset,
+                split_benchmark,
+            )
+        except ImportError as e:
+            raise ImportError(
+                "GEPA integration components not available. Install with: pip install karenina[gepa]"
+            ) from e
+
+        if not GEPA_AVAILABLE:
+            raise ImportError("gepa package is required for optimization. Install with: pip install gepa")
+
+        # Import GEPA
+        try:
+            import gepa
+        except ImportError as e:
+            raise ImportError("gepa package is required for optimization. Install with: pip install gepa") from e
+
+        # Validate targets
+        valid_targets = {t.value for t in OptimizationTarget}
+        for target in targets:
+            if target not in valid_targets:
+                raise ValueError(f"Invalid target '{target}'. Valid targets: {valid_targets}")
+
+        # Convert string targets to OptimizationTarget enum
+        opt_targets = [OptimizationTarget(t) for t in targets]
+
+        # Create default config if not provided
+        if config is None:
+            from karenina.schemas.workflow import ModelConfig
+
+            config = VerificationConfig(
+                answering_models=[ModelConfig(model_name="gpt-4o", model_provider="openai")],
+                parsing_models=[ModelConfig(model_name="gpt-4o-mini", model_provider="openai")],
+                evaluation_mode="template_only",
+            )
+
+        # Split benchmark
+        split = split_benchmark(
+            self,
+            train_ratio=train_ratio,
+            val_ratio=val_ratio,
+            test_ratio=test_ratio,
+            seed=seed,
+        )
+
+        if progress_callback:
+            progress_callback(5.0, f"Split benchmark: {len(split.train)} train, {len(split.val)} val")
+
+        # Create adapter
+        adapter = KareninaAdapter(
+            benchmark=self,
+            base_config=config,
+            targets=opt_targets,
+            template_weight=template_weight,
+            rubric_weight=rubric_weight,
+        )
+
+        # Prepare seed candidate
+        seed_candidate = seed_prompts or {}
+        for target in targets:
+            if target not in seed_candidate:
+                seed_candidate[target] = ""
+
+        if progress_callback:
+            progress_callback(10.0, "Starting GEPA optimization...")
+
+        # Run GEPA optimization
+        result = gepa.optimize(
+            seed_candidate=seed_candidate,
+            trainset=split.train,
+            valset=split.val,
+            adapter=adapter,
+            reflection_lm=reflection_model,
+            max_metric_calls=max_metric_calls,
+        )
+
+        # Build output
+        optimized_prompts = result.candidate if hasattr(result, "candidate") else {}
+        train_score = result.train_score if hasattr(result, "train_score") else 0.0
+        val_score = result.val_score if hasattr(result, "val_score") else 0.0
+
+        # Calculate improvement
+        baseline_score_raw = seed_candidate.get("_baseline_score", 0.0) if isinstance(seed_candidate, dict) else 0.0
+        baseline_score = float(baseline_score_raw) if baseline_score_raw else 0.0
+        improvement = (val_score - baseline_score) / baseline_score if baseline_score > 0 else val_score
+
+        # Run test set evaluation if available
+        test_score: float | None = None
+        if split.test:
+            if progress_callback:
+                progress_callback(90.0, "Evaluating on test set...")
+
+            test_results = adapter.evaluate(split.test, optimized_prompts, capture_traces=False)
+            test_score = sum(test_results.scores) / len(test_results.scores) if test_results.scores else 0.0
+
+        output = KareninaOutput(
+            answering_system_prompt=optimized_prompts.get("answering_system_prompt"),
+            parsing_instructions=optimized_prompts.get("parsing_instructions"),
+            mcp_tool_descriptions={k[9:]: v for k, v in optimized_prompts.items() if k.startswith("mcp_tool_")} or None,
+            train_score=train_score,
+            val_score=val_score,
+            test_score=test_score,
+            improvement=improvement,
+        )
+
+        # Track results if path provided
+        if tracker_path:
+            tracker = OptimizationTracker(tracker_path)
+            run = OptimizationRun(
+                benchmark_name=self.name,
+                targets=targets,
+                seed_prompts=seed_prompts or {},
+                optimized_prompts=optimized_prompts,
+                train_score=train_score,
+                val_score=val_score,
+                test_score=test_score,
+                improvement=improvement,
+                reflection_model=reflection_model,
+                metric_calls=max_metric_calls,
+                best_generation=getattr(result, "best_generation", 0),
+                total_generations=getattr(result, "total_generations", 0),
+            )
+            tracker.log_run(run)
+
+        # Export preset if path provided
+        if export_preset_path:
+            export_to_preset(
+                optimized_prompts,
+                config,
+                Path(export_preset_path),
+                opt_targets,
+            )
+
+        if progress_callback:
+            progress_callback(100.0, f"Optimization complete. Improvement: {improvement:.1%}")
+
+        return output
+
+    def optimization_history(
+        self,
+        tracker_path: Path | str = "~/.karenina/optimization_history.db",
+        limit: int = 20,
+    ) -> list["OptimizationRun"]:
+        """
+        Get optimization history for this benchmark.
+
+        Args:
+            tracker_path: Path to SQLite database with optimization history
+            limit: Maximum number of runs to return
+
+        Returns:
+            List of OptimizationRun records for this benchmark
+        """
+        try:
+            from karenina.integrations.gepa import OptimizationTracker
+        except ImportError:
+            return []
+
+        tracker = OptimizationTracker(tracker_path)
+        return tracker.list_runs(benchmark_name=self.name, limit=limit)
 
     # Metadata management methods - delegate to MetadataManager
     def get_custom_property(self, name: str) -> Any:
