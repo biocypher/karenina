@@ -80,6 +80,9 @@ webapp = [
 embeddings = [
     "sentence-transformers>=5.1.0",  # For embedding similarity checks
 ]
+gepa = [
+    "gepa>=0.0.24",  # For GEPA prompt optimization integration
+]
 
 [project.scripts]
 karenina = "karenina.cli:app"

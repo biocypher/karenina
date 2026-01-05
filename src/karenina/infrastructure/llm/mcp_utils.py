@@ -266,8 +266,33 @@ def _extract_agent_trace(messages: list[Any], original_question: str | None = No
     return "\n\n".join(trace_parts) if trace_parts else ""
 
 
+def _apply_tool_description_overrides(
+    tools: list[Any],
+    overrides: dict[str, str],
+) -> list[Any]:
+    """Apply description overrides to MCP tools.
+
+    Used by GEPA optimization to test different tool descriptions.
+
+    Args:
+        tools: List of LangChain tool objects
+        overrides: Dict mapping tool names to new descriptions
+
+    Returns:
+        Modified tools list with updated descriptions
+    """
+    for tool in tools:
+        tool_name = getattr(tool, "name", None)
+        if tool_name and tool_name in overrides:
+            # Update the tool's description attribute
+            tool.description = overrides[tool_name]
+    return tools
+
+
 async def create_mcp_client_and_tools(
-    mcp_urls_dict: dict[str, str], tool_filter: list[str] | None = None
+    mcp_urls_dict: dict[str, str],
+    tool_filter: list[str] | None = None,
+    tool_description_overrides: dict[str, str] | None = None,
 ) -> tuple[Any, list[Any]]:
     """
     Create an MCP client and fetch tools from the specified servers.
@@ -278,6 +303,9 @@ async def create_mcp_client_and_tools(
         tool_filter: Optional list of tool names to include. If provided,
                     only tools with names in this list will be returned.
                     Converted to set internally for efficiency.
+        tool_description_overrides: Optional dict mapping tool names to custom
+                    descriptions. Used by GEPA optimization to test different
+                    tool descriptions.
 
     Returns:
         Tuple of (client, tools) where:
@@ -297,6 +325,10 @@ async def create_mcp_client_and_tools(
         >>> # Filter to specific tools
         >>> client, tools = await create_mcp_client_and_tools(mcp_urls, ["search_proteins", "get_interactions"])
         >>> print(f"Loaded {len(tools)} filtered tools")
+
+        >>> # Override tool descriptions (for GEPA optimization)
+        >>> overrides = {"search_proteins": "Search for protein information by name or ID."}
+        >>> client, tools = await create_mcp_client_and_tools(mcp_urls, tool_description_overrides=overrides)
     """
     try:
         from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -328,6 +360,10 @@ async def create_mcp_client_and_tools(
                     filtered_tools.append(tool)
             tools = filtered_tools
 
+        # Apply tool description overrides if provided (for GEPA optimization)
+        if tool_description_overrides:
+            tools = _apply_tool_description_overrides(tools, tool_description_overrides)
+
         return client, tools
 
     except TimeoutError as e:
@@ -339,7 +375,9 @@ async def create_mcp_client_and_tools(
 
 
 def sync_create_mcp_client_and_tools(
-    mcp_urls_dict: dict[str, str], tool_filter: list[str] | None = None
+    mcp_urls_dict: dict[str, str],
+    tool_filter: list[str] | None = None,
+    tool_description_overrides: dict[str, str] | None = None,
 ) -> tuple[Any, list[Any]]:
     """
     Synchronous wrapper for creating MCP client and fetching tools.
@@ -352,6 +390,8 @@ def sync_create_mcp_client_and_tools(
         mcp_urls_dict: Dictionary mapping tool names to MCP server URLs
         tool_filter: Optional list of tool names to include. If provided,
                     only tools with names in this list will be returned.
+        tool_description_overrides: Optional dict mapping tool names to custom
+                    descriptions. Used by GEPA optimization.
 
     Returns:
         Tuple of (client, tools) as in create_mcp_client_and_tools
@@ -370,7 +410,9 @@ def sync_create_mcp_client_and_tools(
         portal = get_async_portal()
         if portal is not None:
             # Use the shared BlockingPortal for proper event loop management
-            portal_result = portal.call(create_mcp_client_and_tools, mcp_urls_dict, tool_filter)
+            portal_result = portal.call(
+                create_mcp_client_and_tools, mcp_urls_dict, tool_filter, tool_description_overrides
+            )
             return cast(tuple[Any, list[Any]], portal_result)
     except ImportError:
         # batch_runner not available, fall back to asyncio.run()
@@ -382,7 +424,7 @@ def sync_create_mcp_client_and_tools(
         if current_loop:
             # We're in an async context, need to run in a separate thread
             def run_in_thread() -> tuple[Any, list[Any]]:
-                return asyncio.run(create_mcp_client_and_tools(mcp_urls_dict, tool_filter))
+                return asyncio.run(create_mcp_client_and_tools(mcp_urls_dict, tool_filter, tool_description_overrides))
 
             result: list[tuple[Any, list[Any]] | None] = [None]
             exception: list[Exception | None] = [None]
@@ -412,7 +454,7 @@ def sync_create_mcp_client_and_tools(
         pass
 
     # Create new event loop and run the async function
-    return asyncio.run(create_mcp_client_and_tools(mcp_urls_dict, tool_filter))
+    return asyncio.run(create_mcp_client_and_tools(mcp_urls_dict, tool_filter, tool_description_overrides))
 
 
 def extract_final_ai_message_from_response(response: Any) -> tuple[str | None, str | None]:
