@@ -4,8 +4,11 @@ This module implements the GEPAAdapter interface using karenina's
 verification pipeline as the evaluation metric.
 """
 
+import logging
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
+
+logger = logging.getLogger(__name__)
 
 try:
     from gepa import EvaluationBatch, GEPAAdapter
@@ -21,10 +24,11 @@ except ImportError:
 
     GEPA_AVAILABLE = False
 
-from karenina.integrations.gepa.config import OptimizationTarget
-from karenina.integrations.gepa.data_types import KareninaDataInst, KareninaTrajectory
-from karenina.integrations.gepa.feedback import LLMFeedbackGenerator
-from karenina.integrations.gepa.scoring import (
+# Imports after optional dependency handling
+from karenina.integrations.gepa.config import OptimizationTarget  # noqa: E402
+from karenina.integrations.gepa.data_types import KareninaDataInst, KareninaTrajectory  # noqa: E402
+from karenina.integrations.gepa.feedback import LLMFeedbackGenerator  # noqa: E402
+from karenina.integrations.gepa.scoring import (  # noqa: E402
     compute_single_score,
     extract_failed_fields,
 )
@@ -73,6 +77,8 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[misc]
         rubric_weight: float = 0.3,
         feedback_model_config: "ModelConfig | None" = None,
         enable_differential_analysis: bool = True,
+        seed_mcp_tool_descriptions: dict[str, str] | None = None,
+        auto_fetch_tool_descriptions: bool = True,
     ):
         """Initialize the adapter.
 
@@ -88,6 +94,12 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[misc]
                 If None, falls back to programmatic feedback.
             enable_differential_analysis: When True and feedback_model_config is set,
                 performs differential analysis comparing successful vs failed traces.
+            seed_mcp_tool_descriptions: Optional dict of seed tool descriptions.
+                If provided, uses these as initial values for MCP tool optimization.
+                If None and auto_fetch_tool_descriptions is True, fetches from MCP servers.
+            auto_fetch_tool_descriptions: If True and MCP_TOOL_DESCRIPTIONS is in targets
+                and seed_mcp_tool_descriptions is None, automatically fetch descriptions
+                from configured MCP servers.
         """
         if not GEPA_AVAILABLE:
             raise ImportError("gepa package is required for KareninaAdapter. Install with: pip install gepa")
@@ -109,6 +121,70 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[misc]
         for model in base_config.answering_models:
             if model.model_name:
                 self._model_configs[model.model_name] = model
+
+        # Store seed tool descriptions
+        self._seed_tool_descriptions = seed_mcp_tool_descriptions
+
+        # Auto-fetch tool descriptions if targeting MCP tools and no seed provided
+        if (
+            OptimizationTarget.MCP_TOOL_DESCRIPTIONS in targets
+            and self._seed_tool_descriptions is None
+            and auto_fetch_tool_descriptions
+        ):
+            try:
+                self._seed_tool_descriptions = self.fetch_seed_tool_descriptions()
+                logger.info(
+                    f"Auto-fetched seed tool descriptions for {len(self._seed_tool_descriptions)} tools: "
+                    f"{list(self._seed_tool_descriptions.keys())}"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to auto-fetch tool descriptions: {e}. "
+                    f"Provide seed_mcp_tool_descriptions manually or ensure MCP servers are available."
+                )
+
+    @property
+    def seed_tool_descriptions(self) -> dict[str, str] | None:
+        """Get the seed tool descriptions (auto-fetched or manually provided)."""
+        return self._seed_tool_descriptions
+
+    def fetch_seed_tool_descriptions(self) -> dict[str, str]:
+        """Fetch tool descriptions from configured MCP servers.
+
+        Connects to MCP servers configured in answering_models and retrieves
+        the current tool descriptions. Useful for initializing GEPA optimization
+        with actual tool docstrings as seeds.
+
+        Returns:
+            Dict mapping tool names to descriptions.
+
+        Raises:
+            ValueError: If no MCP servers are configured.
+            RuntimeError: If fetching fails.
+        """
+        from karenina.infrastructure.llm.mcp_utils import sync_fetch_tool_descriptions
+
+        # Find first model with MCP configuration
+        mcp_urls_dict = None
+        mcp_tool_filter = None
+
+        for model in self.base_config.answering_models:
+            if model.mcp_urls_dict:
+                mcp_urls_dict = model.mcp_urls_dict
+                mcp_tool_filter = model.mcp_tool_filter
+                break
+
+        if not mcp_urls_dict:
+            raise ValueError("No MCP servers configured in answering_models. Cannot fetch tool descriptions.")
+
+        logger.info(f"Fetching tool descriptions from MCP servers: {list(mcp_urls_dict.keys())}")
+
+        try:
+            descriptions = sync_fetch_tool_descriptions(mcp_urls_dict, mcp_tool_filter)
+            logger.info(f"Fetched descriptions for {len(descriptions)} tools")
+            return descriptions
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch tool descriptions: {e}") from e
 
     def evaluate(
         self,

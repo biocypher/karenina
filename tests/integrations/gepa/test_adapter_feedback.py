@@ -12,7 +12,6 @@ from karenina.integrations.gepa.config import OptimizationTarget
 from karenina.integrations.gepa.data_types import KareninaDataInst, KareninaTrajectory
 from karenina.schemas.workflow.models import ModelConfig
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -418,7 +417,7 @@ def test_differential_analysis_one_success_one_failure(
     mock_eval_batch = MagicMock()
     mock_eval_batch.trajectories = [failed_traj, passed_traj]
 
-    result = adapter.make_reflective_dataset(
+    adapter.make_reflective_dataset(
         candidate={},
         eval_batch=mock_eval_batch,
         components_to_update=["answering_system_prompt"],
