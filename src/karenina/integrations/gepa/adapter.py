@@ -8,8 +8,7 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
 try:
-    from gepa.adapters import GEPAAdapter
-    from gepa.adapters.base import EvaluationBatch
+    from gepa import EvaluationBatch, GEPAAdapter
 
     GEPA_AVAILABLE = True
 except ImportError:
@@ -24,6 +23,7 @@ except ImportError:
 
 from karenina.integrations.gepa.config import OptimizationTarget
 from karenina.integrations.gepa.data_types import KareninaDataInst, KareninaTrajectory
+from karenina.integrations.gepa.feedback import LLMFeedbackGenerator
 from karenina.integrations.gepa.scoring import (
     compute_single_score,
     extract_failed_fields,
@@ -71,6 +71,8 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[misc]
         targets: list[OptimizationTarget],
         template_weight: float = 0.7,
         rubric_weight: float = 0.3,
+        feedback_model_config: "ModelConfig | None" = None,
+        enable_differential_analysis: bool = True,
     ):
         """Initialize the adapter.
 
@@ -81,6 +83,11 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[misc]
             targets: List of OptimizationTarget specifying what to optimize
             template_weight: Weight for template pass/fail in scoring (0.0-1.0)
             rubric_weight: Weight for rubric scores in scoring (0.0-1.0)
+            feedback_model_config: Optional ModelConfig for LLM-generated feedback.
+                If provided, uses an LLM to generate rich diagnostic feedback.
+                If None, falls back to programmatic feedback.
+            enable_differential_analysis: When True and feedback_model_config is set,
+                performs differential analysis comparing successful vs failed traces.
         """
         if not GEPA_AVAILABLE:
             raise ImportError("gepa package is required for KareninaAdapter. Install with: pip install gepa")
@@ -90,6 +97,12 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[misc]
         self.targets = targets
         self.template_weight = template_weight
         self.rubric_weight = rubric_weight
+        self.enable_differential_analysis = enable_differential_analysis
+
+        # Initialize feedback generator if model config provided
+        self.feedback_generator: LLMFeedbackGenerator | None = None
+        if feedback_model_config is not None:
+            self.feedback_generator = LLMFeedbackGenerator(feedback_model_config)
 
         # Cache model configs for quick lookup
         self._model_configs: dict[str, ModelConfig] = {}
@@ -132,7 +145,8 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[misc]
         outputs: list[dict[str, VerificationResult]] = []
         scores: list[float] = []
         trajectories: list[KareninaTrajectory] | None = [] if capture_traces else None
-        objective_scores: dict[str, list[float]] = defaultdict(list)
+        # objective_scores is per-example: list of dicts mapping model_name -> score for Pareto optimization
+        objective_scores: list[dict[str, float]] = []
 
         for inst in batch:
             # Collect results for this question across all models
@@ -140,12 +154,14 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[misc]
 
             # Aggregate score across models (average)
             model_scores_for_question: list[float] = []
+            # Per-question objective scores for multi-model Pareto optimization
+            per_question_objectives: dict[str, float] = {}
             for model_name, result in question_results.items():
                 score = compute_single_score(result, self.template_weight, self.rubric_weight)
                 model_scores_for_question.append(score)
 
-                # Track per-model objective scores for Pareto optimization
-                objective_scores[model_name].append(score)
+                # Track per-model objective scores for this question
+                per_question_objectives[model_name] = score
 
                 # Capture trajectory for reflection
                 if capture_traces and trajectories is not None:
@@ -170,12 +186,14 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[misc]
             )
             scores.append(avg_score)
             outputs.append(question_results)
+            # Append per-question objective scores
+            objective_scores.append(per_question_objectives)
 
         return EvaluationBatch(
             outputs=outputs,
             scores=scores,
             trajectories=trajectories,
-            objective_scores=dict(objective_scores) if objective_scores else None,
+            objective_scores=objective_scores if objective_scores else None,
         )
 
     def make_reflective_dataset(
@@ -187,8 +205,12 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[misc]
         """Build JSON-serializable feedback for GEPA's reflection LLM.
 
         This method extracts actionable feedback from verification failures
-        to guide GEPA's prompt mutation. It includes knowledge distillation
-        from successful models when stronger models pass but weaker ones fail.
+        to guide GEPA's prompt mutation. When an LLM feedback generator is
+        configured, it produces rich diagnostic feedback including:
+        - Differential analysis (comparing successful vs failed traces)
+        - Rubric-specific feedback (when rubrics are attached)
+
+        Falls back to programmatic feedback when no feedback generator is set.
 
         Args:
             candidate: The evaluated candidate text components
@@ -209,33 +231,18 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[misc]
             successes = [t for t in question_trajs if t.passed()]
             failures = [t for t in question_trajs if not t.passed()]
 
-            # Extract successful patterns for distillation
-            successful_patterns: dict[str, Any] | None = None
-            if successes and failures:
-                successful_patterns = self._extract_successful_patterns(successes)
-
             # Create feedback for each failed trajectory
             for traj in failures:
-                feedback_parts: list[str] = []
-
-                if traj.parsing_error:
-                    feedback_parts.append(f"Parsing error: {traj.parsing_error}")
-
-                if traj.failed_fields:
-                    feedback_parts.append(f"Failed fields: {', '.join(traj.failed_fields)}")
-
-                feedback_parts.append(f"Expected answer: {traj.data_inst.raw_answer}")
-
-                # Knowledge distillation insight
-                if successful_patterns:
-                    successful_models = successful_patterns.get("successful_models", [])
-                    response_sample = successful_patterns.get("response_structures", [""])[0]
-                    feedback_parts.append(
-                        f"Note: Models {successful_models} succeeded on this question. "
-                        f"Their responses included: {response_sample[:100]}..."
+                if self.feedback_generator:
+                    # Use LLM-generated feedback with optional differential analysis
+                    feedback_str = self.feedback_generator.generate_complete_feedback(
+                        failed_trajectory=traj,
+                        successful_trajectories=successes if self.enable_differential_analysis else None,
+                        rubric_scores=traj.rubric_scores,
                     )
-
-                feedback_str = "\n".join(feedback_parts)
+                else:
+                    # Fallback to programmatic feedback
+                    feedback_str = self._build_programmatic_feedback(traj, successes)
 
                 # Add to each component being optimized
                 for comp in components_to_update:
@@ -252,6 +259,42 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[misc]
                     )
 
         return result
+
+    def _build_programmatic_feedback(
+        self,
+        traj: KareninaTrajectory,
+        successes: list[KareninaTrajectory],
+    ) -> str:
+        """Build programmatic feedback without LLM (fallback).
+
+        Args:
+            traj: The failed trajectory
+            successes: List of successful trajectories for the same question
+
+        Returns:
+            Feedback string with parsing errors, failed fields, and knowledge distillation.
+        """
+        feedback_parts: list[str] = []
+
+        if traj.parsing_error:
+            feedback_parts.append(f"Parsing error: {traj.parsing_error}")
+
+        if traj.failed_fields:
+            feedback_parts.append(f"Failed fields: {', '.join(traj.failed_fields)}")
+
+        feedback_parts.append(f"Expected answer: {traj.data_inst.raw_answer}")
+
+        # Knowledge distillation insight
+        if successes:
+            successful_patterns = self._extract_successful_patterns(successes)
+            successful_models = successful_patterns.get("successful_models", [])
+            response_sample = successful_patterns.get("response_structures", [""])[0]
+            feedback_parts.append(
+                f"Note: Models {successful_models} succeeded on this question. "
+                f"Their responses included: {response_sample[:100]}..."
+            )
+
+        return "\n".join(feedback_parts)
 
     def _inject_candidate(self, candidate: dict[str, str]) -> "VerificationConfig":
         """Create config with candidate's optimized text injected.

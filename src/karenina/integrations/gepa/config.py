@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, Field, model_validator
 
 if TYPE_CHECKING:
-    pass
+    from karenina.schemas.workflow.models import ModelConfig
 
 
 class OptimizationTarget(str, Enum):
@@ -83,6 +83,16 @@ class OptimizationConfig(BaseModel):
     candidate_selection_strategy: str = Field(
         default="pareto",
         description="GEPA candidate selection strategy: 'pareto', 'current_best', 'epsilon_greedy'",
+    )
+
+    # Feedback generation
+    feedback_model: "ModelConfig | None" = Field(
+        default=None,
+        description="Model config for generating LLM feedback. If None, uses programmatic feedback.",
+    )
+    enable_differential_analysis: bool = Field(
+        default=True,
+        description="When True, performs differential analysis between successful and failed traces.",
     )
 
     # Data splitting (used when not providing explicit train/val sets)

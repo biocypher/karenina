@@ -28,6 +28,7 @@ from karenina.integrations.gepa.export import (
     export_to_preset,
     load_prompts_json,
 )
+from karenina.integrations.gepa.feedback import LLMFeedbackGenerator
 from karenina.integrations.gepa.scoring import (
     compute_improvement,
     compute_multi_model_score,
@@ -60,6 +61,8 @@ __all__ = [
     "KareninaTrajectory",
     "KareninaOutput",
     "BenchmarkSplit",
+    # Feedback generation
+    "LLMFeedbackGenerator",
     # Splitting
     "split_benchmark",
     "split_by_attribute",
