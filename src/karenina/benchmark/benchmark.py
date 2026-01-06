@@ -1098,8 +1098,12 @@ class Benchmark:
             from karenina.schemas.workflow import ModelConfig
 
             config = VerificationConfig(
-                answering_models=[ModelConfig(model_name="gpt-4o", model_provider="openai")],
-                parsing_models=[ModelConfig(model_name="gpt-4o-mini", model_provider="openai")],
+                answering_models=[
+                    ModelConfig(id="answerer-gpt4o", model_name="gpt-4o", model_provider="openai")
+                ],
+                parsing_models=[
+                    ModelConfig(id="parser-gpt4o-mini", model_name="gpt-4o-mini", model_provider="openai")
+                ],
                 evaluation_mode="template_only",
             )
 
@@ -1143,14 +1147,17 @@ class Benchmark:
             max_metric_calls=max_metric_calls,
         )
 
-        # Build output
-        optimized_prompts = result.candidate if hasattr(result, "candidate") else {}
-        train_score = result.train_score if hasattr(result, "train_score") else 0.0
-        val_score = result.val_score if hasattr(result, "val_score") else 0.0
+        # Build output from GEPAResult
+        optimized_prompts = result.best_candidate if hasattr(result, "best_candidate") else {}
+        # GEPAResult tracks val_aggregate_scores; best_idx gives the best candidate index
+        best_idx = result.best_idx if hasattr(result, "best_idx") else 0
+        val_score = result.val_aggregate_scores[best_idx] if result.val_aggregate_scores else 0.0
+        # Get baseline (seed) score - it's the first candidate's score
+        baseline_score = result.val_aggregate_scores[0] if result.val_aggregate_scores else 0.0
+        # Train score not directly available from GEPAResult; use val_score as proxy
+        train_score = val_score
 
-        # Calculate improvement
-        baseline_score_raw = seed_candidate.get("_baseline_score", 0.0) if isinstance(seed_candidate, dict) else 0.0
-        baseline_score = float(baseline_score_raw) if baseline_score_raw else 0.0
+        # Calculate improvement relative to baseline
         improvement = (val_score - baseline_score) / baseline_score if baseline_score > 0 else val_score
 
         # Run test set evaluation if available
