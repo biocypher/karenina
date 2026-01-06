@@ -44,10 +44,12 @@ dependencies = [
     "alembic>=1.12.0",
     "tavily-python>=0.7.12",
     "langchain-community>=0.3.27",
-    "typer>=0.9.0",  # CLI framework
-    "rich>=13.0.0",  # Beautiful terminal output
-    "cloudpickle>=3.0.0",  # For CallableTrait serialization
-    "json-repair>=0.30.0",  # For fixing malformed JSON in LLM responses
+    "typer>=0.9.0", # CLI framework
+    "rich>=13.0.0", # Beautiful terminal output
+    "cloudpickle>=3.0.0", # For CallableTrait serialization
+    "json-repair>=0.30.0", # For fixing malformed JSON in LLM responses
+    "gepa>=0.0.24",
+    "litellm>=1.80.11",
 ]
 
 [project.optional-dependencies]
