@@ -117,20 +117,13 @@ def optimize(
             help="Optional fraction for test set (0-1). If set, will evaluate final prompts on held-out test set.",
         ),
     ] = None,
-    template_weight: Annotated[
-        float,
+    frontier_type: Annotated[
+        str,
         typer.Option(
-            "--template-weight",
-            help="Weight for template pass/fail in scoring (0-1)",
+            "--frontier-type",
+            help="Pareto frontier tracking: 'instance', 'objective' (recommended), 'hybrid', 'cartesian'",
         ),
-    ] = 0.7,
-    rubric_weight: Annotated[
-        float,
-        typer.Option(
-            "--rubric-weight",
-            help="Weight for rubric scores in scoring (0-1)",
-        ),
-    ] = 0.3,
+    ] = "objective",
     seed: Annotated[
         int | None,
         typer.Option(
@@ -254,8 +247,7 @@ def optimize(
             seed=seed,
             reflection_model=reflection_model,
             max_metric_calls=max_calls,
-            template_weight=template_weight,
-            rubric_weight=rubric_weight,
+            frontier_type=frontier_type,  # type: ignore[arg-type]
             seed_prompts=seed_prompts if seed_prompts else None,
             tracker_path=tracker_path,
             export_preset_path=output,

@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Union
 
 if TYPE_CHECKING:
-    from ..integrations.gepa import KareninaOutput, OptimizationRun
+    from ..integrations.gepa import FrontierType, KareninaOutput, ObjectiveConfig, OptimizationRun
     from ..schemas.checkpoint import SchemaOrgQuestion
     from ..schemas.domain import Question
 
@@ -1007,8 +1007,8 @@ class Benchmark:
         seed: int | None = None,
         reflection_model: str = "openai/gpt-4o",
         max_metric_calls: int = 150,
-        template_weight: float = 0.7,
-        rubric_weight: float = 0.3,
+        objective_config: "ObjectiveConfig | None" = None,
+        frontier_type: "FrontierType" = "objective",
         seed_prompts: dict[str, str] | None = None,
         tracker_path: Path | str | None = None,
         export_preset_path: Path | str | None = None,
@@ -1020,7 +1020,7 @@ class Benchmark:
         This high-level method handles the full optimization workflow:
         1. Splits the benchmark into train/val (and optional test) sets
         2. Creates a KareninaAdapter for GEPA
-        3. Runs GEPA optimization
+        3. Runs GEPA optimization with multi-objective Pareto tracking
         4. Tracks results and optionally exports preset
 
         Requires the 'gepa' optional dependency: pip install karenina[gepa]
@@ -1035,8 +1035,11 @@ class Benchmark:
             seed: Random seed for reproducibility
             reflection_model: Model for GEPA's reflection LLM (default: openai/gpt-4o)
             max_metric_calls: Maximum GEPA optimization iterations (default: 150)
-            template_weight: Weight for template pass/fail in scoring (default 0.7)
-            rubric_weight: Weight for rubric scores in scoring (default 0.3)
+            objective_config: Configuration for multi-objective optimization dimensions.
+                If None, uses default (template + all rubric traits as objectives).
+            frontier_type: GEPA Pareto frontier tracking strategy:
+                'instance' (per example), 'objective' (per metric - recommended),
+                'hybrid' (both), or 'cartesian' (per example × metric).
             seed_prompts: Optional initial prompts. If None, uses empty strings.
             tracker_path: Optional path to SQLite file for tracking optimization history
             export_preset_path: Optional path to export optimized config as preset
@@ -1064,6 +1067,7 @@ class Benchmark:
                 GEPA_AVAILABLE,
                 KareninaAdapter,
                 KareninaOutput,
+                ObjectiveConfig,
                 OptimizationRun,
                 OptimizationTarget,
                 OptimizationTracker,
@@ -1098,12 +1102,8 @@ class Benchmark:
             from karenina.schemas.workflow import ModelConfig
 
             config = VerificationConfig(
-                answering_models=[
-                    ModelConfig(id="answerer-gpt4o", model_name="gpt-4o", model_provider="openai")
-                ],
-                parsing_models=[
-                    ModelConfig(id="parser-gpt4o-mini", model_name="gpt-4o-mini", model_provider="openai")
-                ],
+                answering_models=[ModelConfig(id="answerer-gpt4o", model_name="gpt-4o", model_provider="openai")],
+                parsing_models=[ModelConfig(id="parser-gpt4o-mini", model_name="gpt-4o-mini", model_provider="openai")],
                 evaluation_mode="template_only",
             )
 
@@ -1119,13 +1119,14 @@ class Benchmark:
         if progress_callback:
             progress_callback(5.0, f"Split benchmark: {len(split.train)} train, {len(split.val)} val")
 
-        # Create adapter
+        # Create adapter with multi-objective config
+        if objective_config is None:
+            objective_config = ObjectiveConfig()  # Default: template + all rubric traits
         adapter = KareninaAdapter(
             benchmark=self,
             base_config=config,
             targets=opt_targets,
-            template_weight=template_weight,
-            rubric_weight=rubric_weight,
+            objective_config=objective_config,
         )
 
         # Prepare seed candidate
@@ -1137,7 +1138,7 @@ class Benchmark:
         if progress_callback:
             progress_callback(10.0, "Starting GEPA optimization...")
 
-        # Run GEPA optimization
+        # Run GEPA optimization with multi-objective Pareto tracking
         result = gepa.optimize(
             seed_candidate=seed_candidate,
             trainset=split.train,
@@ -1145,6 +1146,7 @@ class Benchmark:
             adapter=adapter,
             reflection_lm=reflection_model,
             max_metric_calls=max_metric_calls,
+            frontier_type=frontier_type,
         )
 
         # Build output from GEPAResult
