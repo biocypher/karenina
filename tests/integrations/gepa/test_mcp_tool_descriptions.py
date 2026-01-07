@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from karenina.infrastructure.llm.mcp_utils import _apply_tool_description_overrides
-from karenina.integrations.gepa import OptimizationTarget
+from karenina.integrations.gepa import ObjectiveConfig, OptimizationTarget
 
 
 class TestApplyToolDescriptionOverrides:
@@ -239,6 +239,7 @@ class TestAdapterInjectCandidate:
                 benchmark=mock_benchmark,
                 base_config=mock_config,
                 targets=[OptimizationTarget.MCP_TOOL_DESCRIPTIONS],
+                objective_config=ObjectiveConfig(),
             )
 
         # Test candidate with mcp_tool_* keys
@@ -287,6 +288,7 @@ class TestAdapterInjectCandidate:
                 benchmark=mock_benchmark,
                 base_config=mock_config,
                 targets=[OptimizationTarget.MCP_TOOL_DESCRIPTIONS],
+                objective_config=ObjectiveConfig(),
             )
 
         # Candidate without mcp_tool_* keys

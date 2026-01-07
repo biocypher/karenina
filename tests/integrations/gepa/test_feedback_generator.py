@@ -11,7 +11,6 @@ import pytest
 from karenina.integrations.gepa.data_types import KareninaDataInst, KareninaTrajectory
 from karenina.schemas.workflow.models import ModelConfig
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -262,9 +261,7 @@ def test_build_differential_feedback_prompt_multiple_successes(
         raw_llm_response="BCL2 is the official symbol for the gene.",
     )
 
-    prompt = generator._build_differential_feedback_prompt(
-        failed_trajectory, [passed_trajectory, passed_trajectory_2]
-    )
+    prompt = generator._build_differential_feedback_prompt(failed_trajectory, [passed_trajectory, passed_trajectory_2])
 
     # Both successful models should be included
     assert "claude-sonnet-4-5" in prompt
@@ -461,9 +458,7 @@ def test_generate_complete_feedback_no_rubrics(
 
 
 @patch("karenina.integrations.gepa.feedback.init_chat_model_unified")
-def test_generate_complete_feedback_empty_rubric_scores(
-    mock_init_model, feedback_model_config, failed_trajectory
-):
+def test_generate_complete_feedback_empty_rubric_scores(mock_init_model, feedback_model_config, failed_trajectory):
     """Handles empty rubric_scores dict."""
     from karenina.integrations.gepa.feedback import LLMFeedbackGenerator
 

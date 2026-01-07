@@ -30,38 +30,41 @@ def test_gepa_available():
 # =============================================================================
 
 
-def test_compute_single_score_template_only():
+def test_compute_objective_scores_template_only():
     """Test scoring with template pass (no rubric)."""
-    from karenina.integrations.gepa import compute_single_score
+    from karenina.integrations.gepa import ObjectiveConfig, TraitSelectionMode, compute_objective_scores
 
-    # Mock a passing VerificationResult
+    config = ObjectiveConfig(include_template=True, trait_mode=TraitSelectionMode.NONE)
+
     mock_result = MagicMock()
     mock_result.template = MagicMock()
     mock_result.template.verify_result = True
     mock_result.rubric = None
 
-    score = compute_single_score(mock_result, template_weight=0.7, rubric_weight=0.3)
-    assert score == 1.0, f"Expected 1.0 for passing template, got {score}"
+    scores = compute_objective_scores(mock_result, "test-model", config)
+    assert scores == {"test-model:template": 1.0}
 
 
-def test_compute_single_score_template_fail():
+def test_compute_objective_scores_template_fail():
     """Test scoring with template fail."""
-    from karenina.integrations.gepa import compute_single_score
+    from karenina.integrations.gepa import ObjectiveConfig, TraitSelectionMode, compute_objective_scores
+
+    config = ObjectiveConfig(include_template=True, trait_mode=TraitSelectionMode.NONE)
 
     mock_result = MagicMock()
     mock_result.template = MagicMock()
     mock_result.template.verify_result = False
     mock_result.rubric = None
 
-    score = compute_single_score(mock_result, template_weight=0.7, rubric_weight=0.3)
-    assert score == 0.0, f"Expected 0.0 for failing template, got {score}"
+    scores = compute_objective_scores(mock_result, "test-model", config)
+    assert scores == {"test-model:template": 0.0}
 
 
 def test_compute_improvement_positive():
     """Test improvement calculation with positive improvement."""
     from karenina.integrations.gepa import compute_improvement
 
-    improvement = compute_improvement(baseline=0.5, optimized=0.6)
+    improvement = compute_improvement(baseline_score=0.5, optimized_score=0.6)
     expected = (0.6 - 0.5) / 0.5  # 0.2 = 20%
     assert abs(improvement - expected) < 1e-6, f"Expected {expected}, got {improvement}"
 
@@ -70,7 +73,7 @@ def test_compute_improvement_zero_baseline():
     """Test improvement calculation with zero baseline."""
     from karenina.integrations.gepa import compute_improvement
 
-    improvement = compute_improvement(baseline=0.0, optimized=0.5)
+    improvement = compute_improvement(baseline_score=0.0, optimized_score=0.5)
     assert improvement == 0.5, f"Expected 0.5 for zero baseline, got {improvement}"
 
 
@@ -82,11 +85,15 @@ def test_compute_improvement_zero_baseline():
 @pytest.fixture
 def benchmark_path():
     """Path to test benchmark."""
-    return Path("/Users/carli/Projects/karenina-monorepo/local_data/data/checkpoints/karenina_checkpoint_ot_bench_v5.4.jsonld")
+    return Path(
+        "/Users/carli/Projects/karenina-monorepo/local_data/data/checkpoints/karenina_checkpoint_ot_bench_v5.4.jsonld"
+    )
 
 
 @pytest.mark.skipif(
-    not Path("/Users/carli/Projects/karenina-monorepo/local_data/data/checkpoints/karenina_checkpoint_ot_bench_v5.4.jsonld").exists(),
+    not Path(
+        "/Users/carli/Projects/karenina-monorepo/local_data/data/checkpoints/karenina_checkpoint_ot_bench_v5.4.jsonld"
+    ).exists(),
     reason="Test benchmark not found",
 )
 def test_split_benchmark_default(benchmark_path):
@@ -98,14 +105,19 @@ def test_split_benchmark_default(benchmark_path):
     split = split_benchmark(benchmark, seed=42)
 
     total = len(split.train) + len(split.val)
-    assert total == 129, f"Expected 129 total, got {total}"
-    assert len(split.train) >= 100, f"Expected ~103 train, got {len(split.train)}"
-    assert len(split.val) >= 24, f"Expected ~26 val, got {len(split.val)}"
+    # Use actual benchmark question count (may vary as benchmark is updated)
+    expected_total = benchmark.question_count
+    assert total == expected_total, f"Expected {expected_total} total, got {total}"
+    # Check approximate 80/20 split ratio
+    assert len(split.train) >= int(expected_total * 0.75), f"Expected ~80% train, got {len(split.train)}"
+    assert len(split.val) >= int(expected_total * 0.15), f"Expected ~20% val, got {len(split.val)}"
     assert split.test is None, "Test set should be None for default split"
 
 
 @pytest.mark.skipif(
-    not Path("/Users/carli/Projects/karenina-monorepo/local_data/data/checkpoints/karenina_checkpoint_ot_bench_v5.4.jsonld").exists(),
+    not Path(
+        "/Users/carli/Projects/karenina-monorepo/local_data/data/checkpoints/karenina_checkpoint_ot_bench_v5.4.jsonld"
+    ).exists(),
     reason="Test benchmark not found",
 )
 def test_split_benchmark_reproducibility(benchmark_path):
@@ -123,7 +135,9 @@ def test_split_benchmark_reproducibility(benchmark_path):
 
 
 @pytest.mark.skipif(
-    not Path("/Users/carli/Projects/karenina-monorepo/local_data/data/checkpoints/karenina_checkpoint_ot_bench_v5.4.jsonld").exists(),
+    not Path(
+        "/Users/carli/Projects/karenina-monorepo/local_data/data/checkpoints/karenina_checkpoint_ot_bench_v5.4.jsonld"
+    ).exists(),
     reason="Test benchmark not found",
 )
 def test_split_benchmark_with_test_set(benchmark_path):
@@ -140,7 +154,9 @@ def test_split_benchmark_with_test_set(benchmark_path):
 
 
 @pytest.mark.skipif(
-    not Path("/Users/carli/Projects/karenina-monorepo/local_data/data/checkpoints/karenina_checkpoint_ot_bench_v5.4.jsonld").exists(),
+    not Path(
+        "/Users/carli/Projects/karenina-monorepo/local_data/data/checkpoints/karenina_checkpoint_ot_bench_v5.4.jsonld"
+    ).exists(),
     reason="Test benchmark not found",
 )
 def test_data_inst_fields_populated(benchmark_path):
@@ -275,6 +291,10 @@ def test_tracker_list_runs():
             train_score=0.85,
             val_score=0.82,
             improvement=0.15,
+            reflection_model="openai/gpt-4o",
+            metric_calls=100,
+            best_generation=5,
+            total_generations=10,
         )
         tracker.log_run(run)
 
@@ -298,6 +318,10 @@ def test_tracker_export_json():
             train_score=0.85,
             val_score=0.82,
             improvement=0.15,
+            reflection_model="openai/gpt-4o",
+            metric_calls=100,
+            best_generation=5,
+            total_generations=10,
         )
         tracker.log_run(run)
 
@@ -321,6 +345,10 @@ def test_tracker_export_csv():
             train_score=0.85,
             val_score=0.82,
             improvement=0.15,
+            reflection_model="openai/gpt-4o",
+            metric_calls=100,
+            best_generation=5,
+            total_generations=10,
         )
         tracker.log_run(run)
 
@@ -361,7 +389,7 @@ def test_adapter_inject_candidate():
     if not GEPA_AVAILABLE:
         pytest.skip("GEPA not available")
 
-    from karenina.integrations.gepa import KareninaAdapter, OptimizationTarget
+    from karenina.integrations.gepa import KareninaAdapter, ObjectiveConfig, OptimizationTarget
 
     # Setup mock benchmark and config
     mock_benchmark = MagicMock()
@@ -376,6 +404,7 @@ def test_adapter_inject_candidate():
         benchmark=mock_benchmark,
         base_config=mock_config,
         targets=[OptimizationTarget.ANSWERING_SYSTEM_PROMPT],
+        objective_config=ObjectiveConfig(),
     )
 
     candidate = {"answering_system_prompt": "You are an expert bioinformatician."}
@@ -391,13 +420,15 @@ def test_adapter_inject_candidate():
 
 @pytest.mark.slow
 @pytest.mark.skipif(
-    not Path("/Users/carli/Projects/karenina-monorepo/local_data/data/checkpoints/karenina_checkpoint_ot_bench_v5.4.jsonld").exists(),
+    not Path(
+        "/Users/carli/Projects/karenina-monorepo/local_data/data/checkpoints/karenina_checkpoint_ot_bench_v5.4.jsonld"
+    ).exists(),
     reason="Test benchmark not found",
 )
 def test_e2e_single_verification_run(benchmark_path):
     """Step 8: E2E test - single verification run with real API."""
     from karenina.benchmark import Benchmark
-    from karenina.integrations.gepa import KareninaAdapter, OptimizationTarget, split_benchmark
+    from karenina.integrations.gepa import KareninaAdapter, ObjectiveConfig, OptimizationTarget, split_benchmark
     from karenina.schemas.workflow.models import ModelConfig
     from karenina.schemas.workflow.verification.config import VerificationConfig
 
@@ -429,6 +460,7 @@ def test_e2e_single_verification_run(benchmark_path):
         benchmark=benchmark,
         base_config=config,
         targets=[OptimizationTarget.ANSWERING_SYSTEM_PROMPT],
+        objective_config=ObjectiveConfig(),
     )
 
     candidate = {"answering_system_prompt": "You are a helpful bioinformatics assistant."}
@@ -440,7 +472,9 @@ def test_e2e_single_verification_run(benchmark_path):
 
 @pytest.mark.slow
 @pytest.mark.skipif(
-    not Path("/Users/carli/Projects/karenina-monorepo/local_data/data/checkpoints/karenina_checkpoint_ot_bench_v5.4.jsonld").exists(),
+    not Path(
+        "/Users/carli/Projects/karenina-monorepo/local_data/data/checkpoints/karenina_checkpoint_ot_bench_v5.4.jsonld"
+    ).exists(),
     reason="Test benchmark not found",
 )
 def test_e2e_full_gepa_optimization(benchmark_path):
@@ -448,7 +482,7 @@ def test_e2e_full_gepa_optimization(benchmark_path):
     import gepa
 
     from karenina.benchmark import Benchmark
-    from karenina.integrations.gepa import KareninaAdapter, OptimizationTarget, questions_to_data_insts
+    from karenina.integrations.gepa import KareninaAdapter, ObjectiveConfig, OptimizationTarget, questions_to_data_insts
     from karenina.schemas.workflow.models import ModelConfig
     from karenina.schemas.workflow.verification.config import VerificationConfig
 
@@ -480,6 +514,7 @@ def test_e2e_full_gepa_optimization(benchmark_path):
         benchmark=benchmark,
         base_config=config,
         targets=[OptimizationTarget.ANSWERING_SYSTEM_PROMPT],
+        objective_config=ObjectiveConfig(),
     )
 
     seed = {"answering_system_prompt": "You are a helpful assistant."}
@@ -499,7 +534,9 @@ def test_e2e_full_gepa_optimization(benchmark_path):
 
 @pytest.mark.slow
 @pytest.mark.skipif(
-    not Path("/Users/carli/Projects/karenina-monorepo/local_data/data/checkpoints/karenina_checkpoint_ot_bench_v5.4.jsonld").exists(),
+    not Path(
+        "/Users/carli/Projects/karenina-monorepo/local_data/data/checkpoints/karenina_checkpoint_ot_bench_v5.4.jsonld"
+    ).exists(),
     reason="Test benchmark not found",
 )
 def test_e2e_benchmark_optimize_api(benchmark_path):
@@ -550,13 +587,20 @@ def test_e2e_benchmark_optimize_api(benchmark_path):
 
 @pytest.mark.slow
 @pytest.mark.skipif(
-    not Path("/Users/carli/Projects/karenina-monorepo/local_data/data/checkpoints/karenina_checkpoint_ot_bench_v5.4.jsonld").exists(),
+    not Path(
+        "/Users/carli/Projects/karenina-monorepo/local_data/data/checkpoints/karenina_checkpoint_ot_bench_v5.4.jsonld"
+    ).exists(),
     reason="Test benchmark not found",
 )
 def test_e2e_feedback_generator_single_model(benchmark_path):
     """E2E test - feedback generation with single model (no differential)."""
     from karenina.benchmark import Benchmark
-    from karenina.integrations.gepa import LLMFeedbackGenerator, KareninaAdapter, OptimizationTarget, questions_to_data_insts
+    from karenina.integrations.gepa import (
+        KareninaAdapter,
+        ObjectiveConfig,
+        OptimizationTarget,
+        questions_to_data_insts,
+    )
     from karenina.schemas.workflow.models import ModelConfig
     from karenina.schemas.workflow.verification.config import VerificationConfig
 
@@ -595,6 +639,7 @@ def test_e2e_feedback_generator_single_model(benchmark_path):
         benchmark=benchmark,
         base_config=config,
         targets=[OptimizationTarget.ANSWERING_SYSTEM_PROMPT],
+        objective_config=ObjectiveConfig(),
         feedback_model_config=feedback_model,
         enable_differential_analysis=False,  # Single model, no differential
     )
@@ -630,13 +675,15 @@ def test_e2e_feedback_generator_single_model(benchmark_path):
 
 @pytest.mark.slow
 @pytest.mark.skipif(
-    not Path("/Users/carli/Projects/karenina-monorepo/local_data/data/checkpoints/karenina_checkpoint_ot_bench_v5.4.jsonld").exists(),
+    not Path(
+        "/Users/carli/Projects/karenina-monorepo/local_data/data/checkpoints/karenina_checkpoint_ot_bench_v5.4.jsonld"
+    ).exists(),
     reason="Test benchmark not found",
 )
 def test_e2e_feedback_generator_differential_analysis(benchmark_path):
     """E2E test - differential analysis with two models (haiku vs sonnet)."""
     from karenina.benchmark import Benchmark
-    from karenina.integrations.gepa import KareninaAdapter, OptimizationTarget, questions_to_data_insts
+    from karenina.integrations.gepa import KareninaAdapter, ObjectiveConfig, OptimizationTarget, questions_to_data_insts
     from karenina.schemas.workflow.models import ModelConfig
     from karenina.schemas.workflow.verification.config import VerificationConfig
 
@@ -679,6 +726,7 @@ def test_e2e_feedback_generator_differential_analysis(benchmark_path):
         benchmark=benchmark,
         base_config=config,
         targets=[OptimizationTarget.ANSWERING_SYSTEM_PROMPT],
+        objective_config=ObjectiveConfig(),
         feedback_model_config=feedback_model,
         enable_differential_analysis=True,  # Enable differential
     )
@@ -711,13 +759,15 @@ def test_e2e_feedback_generator_differential_analysis(benchmark_path):
 
 @pytest.mark.slow
 @pytest.mark.skipif(
-    not Path("/Users/carli/Projects/karenina-monorepo/local_data/data/checkpoints/karenina_checkpoint_ot_bench_v5.4.jsonld").exists(),
+    not Path(
+        "/Users/carli/Projects/karenina-monorepo/local_data/data/checkpoints/karenina_checkpoint_ot_bench_v5.4.jsonld"
+    ).exists(),
     reason="Test benchmark not found",
 )
 def test_e2e_feedback_generator_with_rubrics(benchmark_path):
     """E2E test - feedback generation with rubric evaluation enabled."""
     from karenina.benchmark import Benchmark
-    from karenina.integrations.gepa import KareninaAdapter, OptimizationTarget, questions_to_data_insts
+    from karenina.integrations.gepa import KareninaAdapter, ObjectiveConfig, OptimizationTarget, questions_to_data_insts
     from karenina.schemas.workflow.models import ModelConfig
     from karenina.schemas.workflow.verification.config import VerificationConfig
 
@@ -754,6 +804,7 @@ def test_e2e_feedback_generator_with_rubrics(benchmark_path):
         benchmark=benchmark,
         base_config=config,
         targets=[OptimizationTarget.ANSWERING_SYSTEM_PROMPT],
+        objective_config=ObjectiveConfig(),
         feedback_model_config=feedback_model,
     )
 

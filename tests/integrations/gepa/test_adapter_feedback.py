@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-from karenina.integrations.gepa.config import OptimizationTarget
+from karenina.integrations.gepa.config import ObjectiveConfig, OptimizationTarget
 from karenina.integrations.gepa.data_types import KareninaDataInst, KareninaTrajectory
 from karenina.schemas.workflow.models import ModelConfig
 
@@ -56,6 +56,12 @@ def mock_verification_config(answering_model_config):
     config.answering_models = [answering_model_config]
     config.model_copy = MagicMock(return_value=config)
     return config
+
+
+@pytest.fixture
+def objective_config():
+    """Default ObjectiveConfig for tests."""
+    return ObjectiveConfig()
 
 
 @pytest.fixture
@@ -120,7 +126,7 @@ def mock_trajectory_passed(mock_data_inst, answering_model_config):
 
 @patch("karenina.integrations.gepa.adapter.LLMFeedbackGenerator")
 def test_adapter_init_with_feedback_model(
-    mock_generator_class, mock_benchmark, mock_verification_config, feedback_model_config
+    mock_generator_class, mock_benchmark, mock_verification_config, feedback_model_config, objective_config
 ):
     """Adapter creates LLMFeedbackGenerator when config provided."""
     from karenina.integrations.gepa.adapter import KareninaAdapter
@@ -132,6 +138,7 @@ def test_adapter_init_with_feedback_model(
         benchmark=mock_benchmark,
         base_config=mock_verification_config,
         targets=[OptimizationTarget.ANSWERING_SYSTEM_PROMPT],
+        objective_config=objective_config,
         feedback_model_config=feedback_model_config,
     )
 
@@ -139,7 +146,7 @@ def test_adapter_init_with_feedback_model(
     mock_generator_class.assert_called_once_with(feedback_model_config)
 
 
-def test_adapter_init_without_feedback_model(mock_benchmark, mock_verification_config):
+def test_adapter_init_without_feedback_model(mock_benchmark, mock_verification_config, objective_config):
     """Adapter.feedback_generator is None when no config."""
     from karenina.integrations.gepa.adapter import KareninaAdapter
 
@@ -147,6 +154,7 @@ def test_adapter_init_without_feedback_model(mock_benchmark, mock_verification_c
         benchmark=mock_benchmark,
         base_config=mock_verification_config,
         targets=[OptimizationTarget.ANSWERING_SYSTEM_PROMPT],
+        objective_config=objective_config,
         feedback_model_config=None,
     )
 
@@ -155,7 +163,7 @@ def test_adapter_init_without_feedback_model(mock_benchmark, mock_verification_c
 
 @patch("karenina.integrations.gepa.adapter.LLMFeedbackGenerator")
 def test_adapter_differential_analysis_flag(
-    mock_generator_class, mock_benchmark, mock_verification_config, feedback_model_config
+    mock_generator_class, mock_benchmark, mock_verification_config, feedback_model_config, objective_config
 ):
     """enable_differential_analysis is respected."""
     from karenina.integrations.gepa.adapter import KareninaAdapter
@@ -166,6 +174,7 @@ def test_adapter_differential_analysis_flag(
         benchmark=mock_benchmark,
         base_config=mock_verification_config,
         targets=[OptimizationTarget.ANSWERING_SYSTEM_PROMPT],
+        objective_config=objective_config,
         feedback_model_config=feedback_model_config,
         enable_differential_analysis=False,
     )
@@ -185,6 +194,7 @@ def test_make_reflective_dataset_uses_llm_feedback(
     mock_verification_config,
     feedback_model_config,
     mock_trajectory_failed,
+    objective_config,
 ):
     """When feedback_generator set, uses LLM-generated feedback."""
     from karenina.integrations.gepa.adapter import KareninaAdapter
@@ -198,6 +208,7 @@ def test_make_reflective_dataset_uses_llm_feedback(
         benchmark=mock_benchmark,
         base_config=mock_verification_config,
         targets=[OptimizationTarget.ANSWERING_SYSTEM_PROMPT],
+        objective_config=objective_config,
         feedback_model_config=feedback_model_config,
     )
 
@@ -217,7 +228,7 @@ def test_make_reflective_dataset_uses_llm_feedback(
 
 
 def test_make_reflective_dataset_fallback_programmatic(
-    mock_benchmark, mock_verification_config, mock_trajectory_failed
+    mock_benchmark, mock_verification_config, mock_trajectory_failed, objective_config
 ):
     """When no feedback_generator, uses programmatic feedback."""
     from karenina.integrations.gepa.adapter import KareninaAdapter
@@ -226,6 +237,7 @@ def test_make_reflective_dataset_fallback_programmatic(
         benchmark=mock_benchmark,
         base_config=mock_verification_config,
         targets=[OptimizationTarget.ANSWERING_SYSTEM_PROMPT],
+        objective_config=objective_config,
         feedback_model_config=None,  # No feedback generator
     )
 
@@ -252,6 +264,7 @@ def test_make_reflective_dataset_differential_enabled(
     feedback_model_config,
     mock_trajectory_failed,
     mock_trajectory_passed,
+    objective_config,
 ):
     """Passes successful trajectories when differential enabled."""
     from karenina.integrations.gepa.adapter import KareninaAdapter
@@ -264,6 +277,7 @@ def test_make_reflective_dataset_differential_enabled(
         benchmark=mock_benchmark,
         base_config=mock_verification_config,
         targets=[OptimizationTarget.ANSWERING_SYSTEM_PROMPT],
+        objective_config=objective_config,
         feedback_model_config=feedback_model_config,
         enable_differential_analysis=True,
     )
@@ -291,6 +305,7 @@ def test_make_reflective_dataset_differential_disabled(
     feedback_model_config,
     mock_trajectory_failed,
     mock_trajectory_passed,
+    objective_config,
 ):
     """Passes None for successes when differential disabled."""
     from karenina.integrations.gepa.adapter import KareninaAdapter
@@ -303,6 +318,7 @@ def test_make_reflective_dataset_differential_disabled(
         benchmark=mock_benchmark,
         base_config=mock_verification_config,
         targets=[OptimizationTarget.ANSWERING_SYSTEM_PROMPT],
+        objective_config=objective_config,
         feedback_model_config=feedback_model_config,
         enable_differential_analysis=False,  # Disabled
     )
@@ -328,6 +344,7 @@ def test_make_reflective_dataset_includes_rubric_scores(
     mock_verification_config,
     feedback_model_config,
     mock_trajectory_failed,
+    objective_config,
 ):
     """Passes rubric_scores from trajectory to generator."""
     from karenina.integrations.gepa.adapter import KareninaAdapter
@@ -340,6 +357,7 @@ def test_make_reflective_dataset_includes_rubric_scores(
         benchmark=mock_benchmark,
         base_config=mock_verification_config,
         targets=[OptimizationTarget.ANSWERING_SYSTEM_PROMPT],
+        objective_config=objective_config,
         feedback_model_config=feedback_model_config,
     )
 
@@ -370,6 +388,7 @@ def test_differential_analysis_one_success_one_failure(
     feedback_model_config,
     mock_data_inst,
     answering_model_config,
+    objective_config,
 ):
     """Differential feedback generated when models differ."""
     from karenina.integrations.gepa.adapter import KareninaAdapter
@@ -382,6 +401,7 @@ def test_differential_analysis_one_success_one_failure(
         benchmark=mock_benchmark,
         base_config=mock_verification_config,
         targets=[OptimizationTarget.ANSWERING_SYSTEM_PROMPT],
+        objective_config=objective_config,
         feedback_model_config=feedback_model_config,
         enable_differential_analysis=True,
     )
@@ -438,6 +458,7 @@ def test_differential_analysis_all_fail(
     feedback_model_config,
     mock_data_inst,
     answering_model_config,
+    objective_config,
 ):
     """Single feedback when all models fail (no differential)."""
     from karenina.integrations.gepa.adapter import KareninaAdapter
@@ -450,6 +471,7 @@ def test_differential_analysis_all_fail(
         benchmark=mock_benchmark,
         base_config=mock_verification_config,
         targets=[OptimizationTarget.ANSWERING_SYSTEM_PROMPT],
+        objective_config=objective_config,
         feedback_model_config=feedback_model_config,
         enable_differential_analysis=True,
     )
@@ -495,7 +517,7 @@ def test_differential_analysis_all_fail(
 
 
 def test_differential_analysis_all_pass(
-    mock_benchmark, mock_verification_config, mock_data_inst, answering_model_config
+    mock_benchmark, mock_verification_config, mock_data_inst, answering_model_config, objective_config
 ):
     """No feedback generated when all pass (no failures)."""
     from karenina.integrations.gepa.adapter import KareninaAdapter
@@ -504,6 +526,7 @@ def test_differential_analysis_all_pass(
         benchmark=mock_benchmark,
         base_config=mock_verification_config,
         targets=[OptimizationTarget.ANSWERING_SYSTEM_PROMPT],
+        objective_config=objective_config,
         feedback_model_config=None,
     )
 
@@ -550,7 +573,7 @@ def test_differential_analysis_all_pass(
 
 
 def test_programmatic_feedback_includes_knowledge_distillation(
-    mock_benchmark, mock_verification_config, mock_data_inst, answering_model_config
+    mock_benchmark, mock_verification_config, mock_data_inst, answering_model_config, objective_config
 ):
     """Programmatic fallback includes knowledge distillation from successes."""
     from karenina.integrations.gepa.adapter import KareninaAdapter
@@ -559,6 +582,7 @@ def test_programmatic_feedback_includes_knowledge_distillation(
         benchmark=mock_benchmark,
         base_config=mock_verification_config,
         targets=[OptimizationTarget.ANSWERING_SYSTEM_PROMPT],
+        objective_config=objective_config,
         feedback_model_config=None,  # No LLM feedback
     )
 
