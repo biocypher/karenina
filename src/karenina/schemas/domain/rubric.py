@@ -497,6 +497,25 @@ class Rubric(BaseModel):
         """Get list of metric trait names only."""
         return [trait.name for trait in self.metric_traits]
 
+    def get_trait_max_scores(self) -> dict[str, int]:
+        """Get max_score for all score-based traits (LLM and callable).
+
+        Returns:
+            Dict mapping trait name to max_score for traits with kind='score'.
+            Boolean traits and metric traits are not included.
+        """
+        max_scores: dict[str, int] = {}
+
+        for llm_trait in self.llm_traits:
+            if llm_trait.kind == "score" and llm_trait.max_score is not None:
+                max_scores[llm_trait.name] = llm_trait.max_score
+
+        for callable_trait in self.callable_traits:
+            if callable_trait.kind == "score" and callable_trait.max_score is not None:
+                max_scores[callable_trait.name] = callable_trait.max_score
+
+        return max_scores
+
     def validate_evaluation(self, evaluation: dict[str, int | bool]) -> bool:
         """
         Validate that an evaluation result matches this rubric structure.
