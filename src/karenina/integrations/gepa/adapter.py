@@ -2,13 +2,26 @@
 
 This module implements the GEPAAdapter interface using karenina's
 verification pipeline as the evaluation metric.
+
+Supports parallel feedback generation controlled by environment variables:
+- KARENINA_ASYNC_ENABLED: Enable/disable parallel execution (default: true)
+- KARENINA_ASYNC_MAX_WORKERS: Maximum parallel workers (default: 8)
 """
 
 import logging
+import os
+import queue
+import threading
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
+from anyio.from_thread import start_blocking_portal
+
 logger = logging.getLogger(__name__)
+
+# Default settings for parallel execution
+DEFAULT_ASYNC_ENABLED = True
+DEFAULT_MAX_WORKERS = 8
 
 try:
     from gepa import EvaluationBatch, GEPAAdapter
@@ -289,6 +302,8 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[misc]
         candidate: dict[str, str],
         eval_batch: EvaluationBatch,
         components_to_update: list[str],
+        async_enabled: bool | None = None,
+        max_workers: int | None = None,
     ) -> dict[str, list[dict[str, Any]]]:
         """Build JSON-serializable feedback for GEPA's reflection LLM.
 
@@ -300,53 +315,200 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[misc]
 
         Falls back to programmatic feedback when no feedback generator is set.
 
+        Supports parallel LLM feedback generation when async_enabled is True
+        (controlled by KARENINA_ASYNC_ENABLED env var, default: true).
+
         Args:
             candidate: The evaluated candidate text components
             eval_batch: EvaluationBatch from evaluate()
             components_to_update: List of component names being optimized
+            async_enabled: Whether to run feedback generation in parallel.
+                Defaults to KARENINA_ASYNC_ENABLED env var (default: true).
+            max_workers: Maximum parallel workers for feedback generation.
+                Defaults to KARENINA_ASYNC_MAX_WORKERS env var (default: 8).
 
         Returns:
             Dict mapping component names to lists of feedback examples.
             Each example has "Inputs", "Generated Outputs", "Feedback" keys.
         """
-        result: dict[str, list[dict[str, Any]]] = {comp: [] for comp in components_to_update}
+        # Determine async mode from env var if not specified
+        if async_enabled is None:
+            async_enabled = os.getenv("KARENINA_ASYNC_ENABLED", "true").lower() == "true"
+
+        if max_workers is None:
+            max_workers = int(os.getenv("KARENINA_ASYNC_MAX_WORKERS", str(DEFAULT_MAX_WORKERS)))
+
         trajectories = eval_batch.trajectories or []
 
         # Group trajectories by question for cross-model analysis
         by_question = self._group_by_question(trajectories)
 
+        # Build list of feedback tasks: (traj, successes) pairs
+        feedback_tasks: list[tuple[KareninaTrajectory, list[KareninaTrajectory]]] = []
         for _question_id, question_trajs in by_question.items():
             successes = [t for t in question_trajs if t.passed()]
             failures = [t for t in question_trajs if not t.passed()]
-
-            # Create feedback for each failed trajectory
             for traj in failures:
-                if self.feedback_generator:
-                    # Use LLM-generated feedback with optional differential analysis
-                    feedback_str = self.feedback_generator.generate_complete_feedback(
-                        failed_trajectory=traj,
-                        successful_trajectories=successes if self.enable_differential_analysis else None,
-                        rubric_scores=traj.rubric_scores,
-                    )
-                else:
-                    # Fallback to programmatic feedback
-                    feedback_str = self._build_programmatic_feedback(traj, successes)
+                feedback_tasks.append((traj, successes))
 
-                # Add to each component being optimized
-                for comp in components_to_update:
-                    result[comp].append(
-                        {
-                            "Inputs": {
-                                "question": traj.data_inst.question_text,
-                                "model": traj.model_name,
-                                "current_prompt": candidate.get(comp, ""),
-                            },
-                            "Generated Outputs": traj.raw_llm_response or "(no response)",
-                            "Feedback": feedback_str,
-                        }
-                    )
+        # Generate feedback (parallel or sequential)
+        if async_enabled and self.feedback_generator and len(feedback_tasks) > 1:
+            logger.info(
+                f"Generating feedback in parallel for {len(feedback_tasks)} failures (max_workers={max_workers})"
+            )
+            feedback_results = self._generate_feedback_parallel(feedback_tasks, max_workers)
+        else:
+            logger.debug(f"Generating feedback sequentially for {len(feedback_tasks)} failures")
+            feedback_results = self._generate_feedback_sequential(feedback_tasks)
+
+        # Build result structure
+        result: dict[str, list[dict[str, Any]]] = {comp: [] for comp in components_to_update}
+        for (traj, _successes), feedback_str in zip(feedback_tasks, feedback_results, strict=True):
+            for comp in components_to_update:
+                result[comp].append(
+                    {
+                        "Inputs": {
+                            "question": traj.data_inst.question_text,
+                            "model": traj.model_name,
+                            "current_prompt": candidate.get(comp, ""),
+                        },
+                        "Generated Outputs": traj.raw_llm_response or "(no response)",
+                        "Feedback": feedback_str,
+                    }
+                )
 
         return result
+
+    def _generate_feedback_sequential(
+        self,
+        tasks: list[tuple[KareninaTrajectory, list[KareninaTrajectory]]],
+    ) -> list[str]:
+        """Generate feedback for all tasks sequentially.
+
+        Args:
+            tasks: List of (failed_trajectory, successful_trajectories) tuples
+
+        Returns:
+            List of feedback strings in same order as tasks
+        """
+        results: list[str] = []
+        for traj, successes in tasks:
+            if self.feedback_generator:
+                feedback_str = self.feedback_generator.generate_complete_feedback(
+                    failed_trajectory=traj,
+                    successful_trajectories=successes if self.enable_differential_analysis else None,
+                    rubric_scores=traj.rubric_scores,
+                )
+            else:
+                feedback_str = self._build_programmatic_feedback(traj, successes)
+            results.append(feedback_str)
+        return results
+
+    def _generate_feedback_parallel(
+        self,
+        tasks: list[tuple[KareninaTrajectory, list[KareninaTrajectory]]],
+        max_workers: int,
+    ) -> list[str]:
+        """Generate feedback for all tasks in parallel using threading.
+
+        Uses the same pattern as batch_runner.py with BlockingPortal for
+        async LLM invocations from worker threads.
+
+        Args:
+            tasks: List of (failed_trajectory, successful_trajectories) tuples
+            max_workers: Maximum number of parallel workers
+
+        Returns:
+            List of feedback strings in same order as tasks
+        """
+        if not self.feedback_generator:
+            # Fallback to sequential for programmatic feedback (fast anyway)
+            return self._generate_feedback_sequential(tasks)
+
+        # Create indexed task list
+        indexed_tasks = list(enumerate(tasks))
+        total = len(indexed_tasks)
+
+        # Create work queue
+        work_queue: queue.Queue[tuple[int, KareninaTrajectory, list[KareninaTrajectory]] | None] = queue.Queue()
+        for idx, (traj, successes) in indexed_tasks:
+            work_queue.put((idx, traj, successes))
+
+        # Thread-safe storage for results
+        results_lock = threading.Lock()
+        results_by_index: dict[int, str] = {}
+
+        # Completion tracking
+        tasks_completed_event = threading.Event()
+
+        def worker(portal: Any) -> None:
+            """Worker function that processes feedback tasks from queue."""
+            while True:
+                try:
+                    item = work_queue.get(timeout=1.0)
+                except queue.Empty:
+                    # Check if all tasks are completed
+                    with results_lock:
+                        if len(results_by_index) == total:
+                            tasks_completed_event.set()
+                    continue
+
+                # Check for shutdown signal
+                if item is None:
+                    work_queue.task_done()
+                    break
+
+                idx, traj, successes = item
+
+                try:
+                    # Use async feedback generation via portal
+                    feedback_str = portal.call(
+                        self.feedback_generator.generate_complete_feedback_async,  # type: ignore[union-attr]
+                        traj,
+                        successes if self.enable_differential_analysis else None,
+                        traj.rubric_scores,
+                    )
+
+                    # Store result
+                    with results_lock:
+                        results_by_index[idx] = feedback_str
+                        if len(results_by_index) == total:
+                            tasks_completed_event.set()
+
+                except Exception as e:
+                    logger.error(f"Feedback generation failed for task {idx}: {e}")
+                    # Store error message as feedback
+                    with results_lock:
+                        results_by_index[idx] = f"Error generating feedback: {e}"
+                        if len(results_by_index) == total:
+                            tasks_completed_event.set()
+
+                finally:
+                    work_queue.task_done()
+
+        # Use BlockingPortal for async operations from worker threads
+        with start_blocking_portal(backend="asyncio") as portal:
+            # Start worker threads
+            workers = []
+            effective_workers = min(max_workers, total)
+            for _ in range(effective_workers):
+                t = threading.Thread(target=worker, args=(portal,), daemon=True)
+                t.start()
+                workers.append(t)
+
+            # Wait for all tasks to complete
+            tasks_completed_event.wait()
+
+            # Send shutdown signal to workers
+            for _ in range(effective_workers):
+                work_queue.put(None)
+
+            # Wait for workers to finish
+            for t in workers:
+                t.join(timeout=5.0)
+
+        # Return results in original order
+        return [results_by_index[i] for i in range(total)]
 
     def _build_programmatic_feedback(
         self,

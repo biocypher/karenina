@@ -5,8 +5,10 @@ verification failures. It supports:
 - Single trajectory analysis (when only one model fails)
 - Differential analysis (comparing successful vs failed traces)
 - Rubric-specific feedback (when rubrics are attached to questions)
+- Async/parallel feedback generation for improved performance
 """
 
+import asyncio
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -225,6 +227,131 @@ class LLMFeedbackGenerator:
         if rubric_scores:
             parts.append("\n--- RUBRIC EVALUATION FEEDBACK ---")
             parts.append(self.generate_rubric_feedback(failed_trajectory, rubric_scores))
+
+        return "\n".join(parts)
+
+    # =========================================================================
+    # Async Methods for Parallel Feedback Generation
+    # =========================================================================
+
+    async def generate_single_feedback_async(
+        self,
+        trajectory: "KareninaTrajectory",
+    ) -> str:
+        """Async version of generate_single_feedback.
+
+        Args:
+            trajectory: The failed trajectory to analyze.
+
+        Returns:
+            LLM-generated feedback explaining the failure and suggesting improvements.
+        """
+        prompt = self._build_single_feedback_prompt(trajectory)
+
+        messages = [
+            SystemMessage(content=SINGLE_FEEDBACK_SYSTEM_PROMPT),
+            HumanMessage(content=prompt),
+        ]
+
+        response = await self.llm.ainvoke(messages)
+        return response.content if hasattr(response, "content") else str(response)
+
+    async def generate_differential_feedback_async(
+        self,
+        failed_trajectory: "KareninaTrajectory",
+        successful_trajectories: list["KareninaTrajectory"],
+    ) -> str:
+        """Async version of generate_differential_feedback.
+
+        Args:
+            failed_trajectory: The trajectory that failed verification.
+            successful_trajectories: List of trajectories that passed verification.
+
+        Returns:
+            LLM-generated feedback with differential analysis.
+        """
+        prompt = self._build_differential_feedback_prompt(failed_trajectory, successful_trajectories)
+
+        messages = [
+            SystemMessage(content=DIFFERENTIAL_FEEDBACK_SYSTEM_PROMPT),
+            HumanMessage(content=prompt),
+        ]
+
+        response = await self.llm.ainvoke(messages)
+        return response.content if hasattr(response, "content") else str(response)
+
+    async def generate_rubric_feedback_async(
+        self,
+        trajectory: "KareninaTrajectory",
+        rubric_scores: dict[str, Any],
+    ) -> str:
+        """Async version of generate_rubric_feedback.
+
+        Args:
+            trajectory: The trajectory with rubric evaluation.
+            rubric_scores: Per-trait rubric scores.
+
+        Returns:
+            LLM-generated feedback explaining rubric failures.
+        """
+        prompt = self._build_rubric_feedback_prompt(trajectory, rubric_scores)
+
+        messages = [
+            SystemMessage(content=RUBRIC_FEEDBACK_SYSTEM_PROMPT),
+            HumanMessage(content=prompt),
+        ]
+
+        response = await self.llm.ainvoke(messages)
+        return response.content if hasattr(response, "content") else str(response)
+
+    async def generate_complete_feedback_async(
+        self,
+        failed_trajectory: "KareninaTrajectory",
+        successful_trajectories: list["KareninaTrajectory"] | None,
+        rubric_scores: dict[str, Any] | None,
+    ) -> str:
+        """Async version of generate_complete_feedback with parallel LLM calls.
+
+        This method runs template and rubric feedback generation in parallel
+        when both are needed, providing significant speedup.
+
+        Args:
+            failed_trajectory: The trajectory that failed verification.
+            successful_trajectories: Optional list of trajectories that passed.
+            rubric_scores: Optional per-trait rubric scores.
+
+        Returns:
+            Combined feedback string with both template and rubric analysis.
+        """
+        # Build tasks for parallel execution
+        tasks: list[asyncio.Task[str]] = []
+
+        # Template verification feedback task
+        if successful_trajectories:
+            template_task = asyncio.create_task(
+                self.generate_differential_feedback_async(failed_trajectory, successful_trajectories)
+            )
+        else:
+            template_task = asyncio.create_task(self.generate_single_feedback_async(failed_trajectory))
+        tasks.append(template_task)
+
+        # Rubric feedback task (if rubrics present)
+        rubric_task: asyncio.Task[str] | None = None
+        if rubric_scores:
+            rubric_task = asyncio.create_task(self.generate_rubric_feedback_async(failed_trajectory, rubric_scores))
+            tasks.append(rubric_task)
+
+        # Wait for all tasks to complete
+        await asyncio.gather(*tasks)
+
+        # Build result
+        parts: list[str] = []
+        parts.append("--- TEMPLATE VERIFICATION FEEDBACK ---")
+        parts.append(template_task.result())
+
+        if rubric_task:
+            parts.append("\n--- RUBRIC EVALUATION FEEDBACK ---")
+            parts.append(rubric_task.result())
 
         return "\n".join(parts)
 
