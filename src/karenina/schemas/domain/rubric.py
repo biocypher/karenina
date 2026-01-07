@@ -61,7 +61,21 @@ class LLMRubricTrait(BaseModel):
         description="Enable search-enhanced hallucination detection for excerpts (only if excerpt_enabled=True)",
     )
 
+    # Directionality field
+    higher_is_better: bool = Field(
+        ...,
+        description="Whether higher values indicate better performance. True: higher = better. False: lower = better.",
+    )
+
     model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="before")
+    @classmethod
+    def set_legacy_defaults(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """Set default for higher_is_better when loading legacy data."""
+        if isinstance(values, dict) and ("higher_is_better" not in values or values.get("higher_is_better") is None):
+            values["higher_is_better"] = True
+        return values
 
     def validate_score(self, value: int | bool) -> bool:
         """Validate that a given score is valid for this trait."""
@@ -98,7 +112,21 @@ class RegexTrait(BaseModel):
     case_sensitive: bool = Field(True, description="Whether pattern matching should be case sensitive")
     invert_result: bool = Field(False, description="Whether to invert the boolean result (for negative matching)")
 
+    # Directionality field
+    higher_is_better: bool = Field(
+        ...,
+        description="Whether a regex match indicates a positive outcome. True: match = good. False: match = bad.",
+    )
+
     model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="before")
+    @classmethod
+    def set_legacy_defaults(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """Set default for higher_is_better when loading legacy data."""
+        if isinstance(values, dict) and ("higher_is_better" not in values or values.get("higher_is_better") is None):
+            values["higher_is_better"] = True
+        return values
 
     @field_validator("pattern")
     @classmethod
@@ -165,7 +193,22 @@ class CallableTrait(BaseModel):
     max_score: int | None = Field(None, description="Maximum score value (required if kind='score')")
     invert_result: bool = Field(False, description="Whether to invert the boolean result (only for kind='boolean')")
 
+    # Directionality field
+    higher_is_better: bool = Field(
+        ...,
+        description="Whether higher return values indicate better performance. "
+        "True: high value = good. False: high value = bad.",
+    )
+
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def set_legacy_defaults(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """Set default for higher_is_better when loading legacy data."""
+        if isinstance(values, dict) and ("higher_is_better" not in values or values.get("higher_is_better") is None):
+            values["higher_is_better"] = True
+        return values
 
     @field_serializer("callable_code")
     def serialize_callable_code(self, value: bytes, _info: Any) -> str:
@@ -192,6 +235,7 @@ class CallableTrait(BaseModel):
         min_score: int | None = None,
         max_score: int | None = None,
         invert_result: bool = False,
+        higher_is_better: bool = True,
     ) -> "CallableTrait":
         """
         Create a CallableTrait from a callable function.
@@ -204,6 +248,7 @@ class CallableTrait(BaseModel):
             min_score: Minimum score (required if kind='score')
             max_score: Maximum score (required if kind='score')
             invert_result: Whether to invert boolean result (only for kind='boolean')
+            higher_is_better: Whether higher return values indicate better performance
 
         Returns:
             CallableTrait instance with serialized function
@@ -241,6 +286,7 @@ class CallableTrait(BaseModel):
             min_score=min_score,
             max_score=max_score,
             invert_result=invert_result,
+            higher_is_better=higher_is_better,
         )
 
     def deserialize_callable(self) -> Callable[[str], bool | int]:
@@ -515,6 +561,32 @@ class Rubric(BaseModel):
                 max_scores[callable_trait.name] = callable_trait.max_score
 
         return max_scores
+
+    def get_trait_directionalities(self) -> dict[str, bool]:
+        """Get higher_is_better for LLM, regex, and callable traits.
+
+        Note: MetricRubricTraits are excluded as metrics (precision/recall/F1)
+        are inherently 'higher is better'.
+
+        Returns:
+            Dict mapping trait name to higher_is_better value.
+        """
+        directionalities: dict[str, bool] = {}
+
+        llm_trait: LLMRubricTrait
+        for llm_trait in self.llm_traits:
+            directionalities[llm_trait.name] = llm_trait.higher_is_better
+
+        regex_trait: RegexTrait
+        for regex_trait in self.regex_traits:
+            directionalities[regex_trait.name] = regex_trait.higher_is_better
+
+        callable_trait: CallableTrait
+        for callable_trait in self.callable_traits:
+            directionalities[callable_trait.name] = callable_trait.higher_is_better
+
+        # MetricRubricTraits always have higher_is_better=True (implicit)
+        return directionalities
 
     def validate_evaluation(self, evaluation: dict[str, int | bool]) -> bool:
         """

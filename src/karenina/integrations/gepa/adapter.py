@@ -128,11 +128,13 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[misc]
         # Store seed tool descriptions
         self._seed_tool_descriptions = seed_mcp_tool_descriptions
 
-        # Cache trait max_scores from global rubric for proper normalization
+        # Cache trait max_scores and directionalities from global rubric for proper normalization
         self._trait_max_scores: dict[str, int] = {}
+        self._trait_directionalities: dict[str, bool] = {}
         global_rubric = benchmark.get_global_rubric()
         if global_rubric:
             self._trait_max_scores = global_rubric.get_trait_max_scores()
+            self._trait_directionalities = global_rubric.get_trait_directionalities()
 
         # Auto-fetch tool descriptions if targeting MCP tools and no seed provided
         if (
@@ -243,7 +245,11 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[misc]
             for model_name, result in question_results.items():
                 # Compute multi-objective scores for this model
                 model_objectives = compute_objective_scores(
-                    result, model_name, self.objective_config, self._trait_max_scores
+                    result,
+                    model_name,
+                    self.objective_config,
+                    self._trait_max_scores,
+                    self._trait_directionalities,
                 )
                 per_question_objectives.update(model_objectives)
 
@@ -265,8 +271,7 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[misc]
 
             # scores field: average of all objectives for simple ranking
             avg_score = (
-                sum(per_question_objectives.values()) / len(per_question_objectives)
-                if per_question_objectives else 0.0
+                sum(per_question_objectives.values()) / len(per_question_objectives) if per_question_objectives else 0.0
             )
             scores.append(avg_score)
             outputs.append(question_results)

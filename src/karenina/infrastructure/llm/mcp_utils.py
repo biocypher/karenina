@@ -548,8 +548,6 @@ def sync_fetch_tool_descriptions(
 
     # Try to use the shared portal if available
     try:
-        from typing import cast
-
         from karenina.benchmark.verification.batch_runner import get_async_portal
 
         portal = get_async_portal()

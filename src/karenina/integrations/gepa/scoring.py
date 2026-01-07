@@ -16,6 +16,7 @@ def compute_objective_scores(
     model_name: str,
     config: "ObjectiveConfig",
     trait_max_scores: dict[str, int] | None = None,
+    trait_directionalities: dict[str, bool] | None = None,
 ) -> dict[str, float]:
     """Compute per-dimension objective scores for Pareto optimization.
 
@@ -29,6 +30,9 @@ def compute_objective_scores(
         trait_max_scores: Optional dict mapping trait names to their max_score.
             Used for proper normalization of score-based traits. If not provided,
             defaults to 5 for backwards compatibility.
+        trait_directionalities: Optional dict mapping trait names to higher_is_better.
+            Used to invert scores for traits where lower is better. If not provided
+            or trait not found, defaults to True (higher is better).
 
     Returns:
         Dict mapping 'model:dimension' to float scores (0.0-1.0)
@@ -41,6 +45,7 @@ def compute_objective_scores(
 
     objectives: dict[str, float] = {}
     trait_max_scores = trait_max_scores or {}
+    trait_directionalities = trait_directionalities or {}
 
     # Template objective
     if config.include_template:
@@ -50,27 +55,33 @@ def compute_objective_scores(
         objectives[f"{model_name}:template"] = template_score
 
     # Rubric trait objectives
-    if (
-        config.trait_mode != TraitSelectionMode.NONE
-        and result.rubric
-        and result.rubric.rubric_evaluation_performed
-    ):
+    if config.trait_mode != TraitSelectionMode.NONE and result.rubric and result.rubric.rubric_evaluation_performed:
         all_scores = result.rubric.get_all_trait_scores()
 
         for trait_name, trait_result in all_scores.items():
             if not config.should_include_trait(trait_name):
                 continue
 
+            # Check if this trait should be inverted (lower is better)
+            higher_is_better = trait_directionalities.get(trait_name, True)
+
             if isinstance(trait_result, bool):
-                objectives[f"{model_name}:{trait_name}"] = 1.0 if trait_result else 0.0
+                raw_score = 1.0 if trait_result else 0.0
+                # Invert for lower-is-better traits
+                score = raw_score if higher_is_better else 1.0 - raw_score
+                objectives[f"{model_name}:{trait_name}"] = score
 
             elif isinstance(trait_result, int | float):
                 # Normalize using trait's max_score, defaulting to 5 for backwards compatibility
                 max_score = trait_max_scores.get(trait_name, 5)
-                objectives[f"{model_name}:{trait_name}"] = float(trait_result) / float(max_score)
+                raw_score = float(trait_result) / float(max_score)
+                # Invert for lower-is-better traits
+                score = raw_score if higher_is_better else 1.0 - raw_score
+                objectives[f"{model_name}:{trait_name}"] = score
 
             elif isinstance(trait_result, dict):
                 # Metric trait - expand based on metric_config
+                # Note: Metric traits (precision/recall/F1) are inherently higher-is-better
                 enabled_metrics = config.metric_config.get_enabled_metrics()
                 for metric_name in enabled_metrics:
                     if metric_name in trait_result:
