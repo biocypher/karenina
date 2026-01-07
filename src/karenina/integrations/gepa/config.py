@@ -1,12 +1,118 @@
 """Configuration models for GEPA optimization."""
 
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
 if TYPE_CHECKING:
     from karenina.schemas.workflow.models import ModelConfig
+
+# Type alias for GEPA frontier tracking strategies
+FrontierType = Literal["instance", "objective", "hybrid", "cartesian"]
+
+
+class TraitSelectionMode(str, Enum):
+    """Mode for selecting which rubric traits become optimization objectives."""
+
+    ALL = "all"
+    """Include all rubric traits as separate objectives."""
+
+    NONE = "none"
+    """Do not include rubric traits as objectives."""
+
+    CUSTOM = "custom"
+    """Include only specified traits as objectives."""
+
+
+class MetricObjectiveConfig(BaseModel):
+    """Configuration for how metric traits are converted to objectives.
+
+    Metric traits (e.g., entity extraction) produce precision, recall, and f1.
+    This config controls which of those metrics become optimization objectives.
+    """
+
+    include_precision: bool = Field(
+        default=False,
+        description="Include precision as a separate objective",
+    )
+    include_recall: bool = Field(
+        default=False,
+        description="Include recall as a separate objective",
+    )
+    include_f1: bool = Field(
+        default=True,
+        description="Include f1 as a separate objective",
+    )
+
+    def get_enabled_metrics(self) -> list[str]:
+        """Return list of metric names to include as objectives."""
+        metrics = []
+        if self.include_precision:
+            metrics.append("precision")
+        if self.include_recall:
+            metrics.append("recall")
+        if self.include_f1:
+            metrics.append("f1")
+        return metrics
+
+
+class ObjectiveConfig(BaseModel):
+    """Configuration for multi-objective optimization dimensions.
+
+    Controls which verification dimensions become separate Pareto objectives.
+    Each objective is keyed as 'model:dimension' for cross-model optimization.
+
+    Example:
+        >>> config = ObjectiveConfig(
+        ...     include_template=True,
+        ...     trait_mode=TraitSelectionMode.CUSTOM,
+        ...     selected_traits=["clarity", "safety"],
+        ... )
+        # Produces keys: "claude-haiku:template", "claude-haiku:clarity", etc.
+    """
+
+    include_template: bool = Field(
+        default=True,
+        description="Include template verification as an objective dimension",
+    )
+    trait_mode: TraitSelectionMode = Field(
+        default=TraitSelectionMode.ALL,
+        description="Mode for rubric trait selection",
+    )
+    selected_traits: list[str] | None = Field(
+        default=None,
+        description="Trait names to include (required when trait_mode=CUSTOM)",
+    )
+    metric_config: MetricObjectiveConfig = Field(
+        default_factory=MetricObjectiveConfig,
+        description="Configuration for metric trait objectives",
+    )
+
+    @model_validator(mode="after")
+    def validate_custom_requires_traits(self) -> "ObjectiveConfig":
+        """Ensure selected_traits is provided when mode is CUSTOM."""
+        if self.trait_mode == TraitSelectionMode.CUSTOM and not self.selected_traits:
+            raise ValueError("selected_traits must be provided when trait_mode is CUSTOM")
+        return self
+
+    @model_validator(mode="after")
+    def validate_has_objectives(self) -> "ObjectiveConfig":
+        """Warn if configuration would result in no objectives."""
+        if not self.include_template and self.trait_mode == TraitSelectionMode.NONE:
+            raise ValueError(
+                "ObjectiveConfig must include at least one objective dimension. "
+                "Set include_template=True or trait_mode to ALL/CUSTOM."
+            )
+        return self
+
+    def should_include_trait(self, trait_name: str) -> bool:
+        """Check if a specific trait should be included as an objective."""
+        if self.trait_mode == TraitSelectionMode.NONE:
+            return False
+        if self.trait_mode == TraitSelectionMode.ALL:
+            return True
+        return trait_name in (self.selected_traits or [])
 
 
 class OptimizationTarget(str, Enum):
@@ -26,14 +132,17 @@ class OptimizationConfig(BaseModel):
     """Configuration for a GEPA optimization run.
 
     This configures how GEPA optimizes text components used in karenina's
-    verification pipeline.
+    verification pipeline with multi-objective Pareto optimization.
 
     Example:
         >>> config = OptimizationConfig(
         ...     targets=[OptimizationTarget.ANSWERING_SYSTEM_PROMPT],
         ...     seed_answering_prompt="You are a helpful assistant.",
-        ...     template_weight=0.7,
-        ...     rubric_weight=0.3,
+        ...     objective_config=ObjectiveConfig(
+        ...         include_template=True,
+        ...         trait_mode=TraitSelectionMode.ALL,
+        ...     ),
+        ...     frontier_type="objective",  # Use multi-objective Pareto
         ...     reflection_model="openai/gpt-4o",
         ...     max_metric_calls=150,
         ... )
@@ -56,18 +165,19 @@ class OptimizationConfig(BaseModel):
         description="Initial MCP tool descriptions (tool_name -> description)",
     )
 
-    # Scoring weights
-    template_weight: float = Field(
-        default=0.7,
-        ge=0.0,
-        le=1.0,
-        description="Weight for template verification result (pass/fail)",
+    # Multi-objective configuration
+    objective_config: ObjectiveConfig = Field(
+        default_factory=ObjectiveConfig,
+        description="Configuration for multi-objective optimization dimensions",
     )
-    rubric_weight: float = Field(
-        default=0.3,
-        ge=0.0,
-        le=1.0,
-        description="Weight for rubric evaluation scores",
+    frontier_type: FrontierType = Field(
+        default="objective",
+        description=(
+            "GEPA Pareto frontier tracking strategy: "
+            "'instance' (per validation example), "
+            "'objective' (per objective metric - recommended for multi-objective), "
+            "'hybrid' (both), or 'cartesian' (per example × objective)"
+        ),
     )
 
     # GEPA parameters
@@ -132,14 +242,6 @@ class OptimizationConfig(BaseModel):
         default=None,
         description="Explicit list of question IDs for testing",
     )
-
-    @model_validator(mode="after")
-    def validate_weights_sum(self) -> "OptimizationConfig":
-        """Ensure template_weight + rubric_weight == 1.0."""
-        total = self.template_weight + self.rubric_weight
-        if abs(total - 1.0) > 1e-6:
-            raise ValueError(f"template_weight + rubric_weight must equal 1.0, got {total}")
-        return self
 
     @model_validator(mode="after")
     def validate_split_ratios(self) -> "OptimizationConfig":

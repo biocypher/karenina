@@ -109,11 +109,17 @@ def _random_split(
 
     n = len(shuffled)
     train_end = int(n * train_ratio)
-    val_end = train_end + int(n * val_ratio)
 
     train = shuffled[:train_end]
-    val = shuffled[train_end:val_end]
-    test = shuffled[val_end:] if test_ratio is not None else None
+    if test_ratio is not None:
+        # With test set: use calculated boundaries
+        val_end = train_end + int(n * val_ratio)
+        val = shuffled[train_end:val_end]
+        test = shuffled[val_end:]
+    else:
+        # No test set: validation gets all remaining (avoids rounding drops)
+        val = shuffled[train_end:]
+        test = None
 
     # Ensure no empty sets
     if not train:

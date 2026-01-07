@@ -91,10 +91,7 @@ class LLMFeedbackGenerator:
         if not model_config.model_name:
             raise ValueError("model_name is required in model configuration")
 
-        if (
-            model_config.interface not in INTERFACES_NO_PROVIDER_REQUIRED
-            and not model_config.model_provider
-        ):
+        if model_config.interface not in INTERFACES_NO_PROVIDER_REQUIRED and not model_config.model_provider:
             raise ValueError(f"model_provider is required for {model_config.interface} interface")
 
         self.model_config = model_config
@@ -220,9 +217,7 @@ class LLMFeedbackGenerator:
         # 1. Template verification feedback
         parts.append("--- TEMPLATE VERIFICATION FEEDBACK ---")
         if successful_trajectories:
-            parts.append(
-                self.generate_differential_feedback(failed_trajectory, successful_trajectories)
-            )
+            parts.append(self.generate_differential_feedback(failed_trajectory, successful_trajectories))
         else:
             parts.append(self.generate_single_feedback(failed_trajectory))
 
@@ -259,11 +254,13 @@ class LLMFeedbackGenerator:
         if not trajectory.parsing_error and not trajectory.failed_fields:
             parts.append("Verification failed (no specific error details available)")
 
-        parts.extend([
-            "",
-            "## Task",
-            "Analyze why this response failed verification and suggest prompt improvements.",
-        ])
+        parts.extend(
+            [
+                "",
+                "## Task",
+                "Analyze why this response failed verification and suggest prompt improvements.",
+            ]
+        )
 
         return "\n".join(parts)
 
@@ -285,28 +282,34 @@ class LLMFeedbackGenerator:
 
         # Include full traces from successful models
         for i, success in enumerate(successful_trajectories, 1):
-            parts.extend([
-                f"### Successful Trace {i}: {success.model_name}",
-                "",
-                success.raw_llm_response or "(no response)",
-                "",
-            ])
+            parts.extend(
+                [
+                    f"### Successful Trace {i}: {success.model_name}",
+                    "",
+                    success.raw_llm_response or "(no response)",
+                    "",
+                ]
+            )
 
             # Include parsed fields if available
             if success.verification_result.template and success.verification_result.template.parsed_llm_response:
-                parts.extend([
-                    "Parsed Fields:",
-                    str(success.verification_result.template.parsed_llm_response),
-                    "",
-                ])
+                parts.extend(
+                    [
+                        "Parsed Fields:",
+                        str(success.verification_result.template.parsed_llm_response),
+                        "",
+                    ]
+                )
 
-        parts.extend([
-            "## FAILED TRACE (model that failed)",
-            f"Model: {failed_trajectory.model_name}",
-            "",
-            failed_trajectory.raw_llm_response or "(no response)",
-            "",
-        ])
+        parts.extend(
+            [
+                "## FAILED TRACE (model that failed)",
+                f"Model: {failed_trajectory.model_name}",
+                "",
+                failed_trajectory.raw_llm_response or "(no response)",
+                "",
+            ]
+        )
 
         if failed_trajectory.parsing_error:
             parts.append(f"Parsing Error: {failed_trajectory.parsing_error}")
@@ -314,12 +317,14 @@ class LLMFeedbackGenerator:
         if failed_trajectory.failed_fields:
             parts.append(f"Failed Fields: {', '.join(failed_trajectory.failed_fields)}")
 
-        parts.extend([
-            "",
-            "## Task",
-            "Compare the successful and failed traces. Identify what the successful models",
-            "did differently and suggest specific prompt improvements for the failing model.",
-        ])
+        parts.extend(
+            [
+                "",
+                "## Task",
+                "Compare the successful and failed traces. Identify what the successful models",
+                "did differently and suggest specific prompt improvements for the failing model.",
+            ]
+        )
 
         return "\n".join(parts)
 
@@ -355,23 +360,28 @@ class LLMFeedbackGenerator:
 
         # Identify failed traits for focus
         failed_traits = [
-            name for name, score in rubric_scores.items()
+            name
+            for name, score in rubric_scores.items()
             if (isinstance(score, bool) and not score)
             or (isinstance(score, int | float) and score < 0.5)
             or (isinstance(score, dict) and score.get("f1", 1.0) < 0.5)
         ]
 
         if failed_traits:
-            parts.extend([
-                "",
-                f"## Failed/Low-Scoring Traits: {', '.join(failed_traits)}",
-            ])
+            parts.extend(
+                [
+                    "",
+                    f"## Failed/Low-Scoring Traits: {', '.join(failed_traits)}",
+                ]
+            )
 
-        parts.extend([
-            "",
-            "## Task",
-            "Analyze why the failed rubric traits didn't meet criteria.",
-            "Suggest specific improvements to the response.",
-        ])
+        parts.extend(
+            [
+                "",
+                "## Task",
+                "Analyze why the failed rubric traits didn't meet criteria.",
+                "Suggest specific improvements to the response.",
+            ]
+        )
 
         return "\n".join(parts)

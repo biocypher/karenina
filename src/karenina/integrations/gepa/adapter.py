@@ -25,11 +25,11 @@ except ImportError:
     GEPA_AVAILABLE = False
 
 # Imports after optional dependency handling
-from karenina.integrations.gepa.config import OptimizationTarget  # noqa: E402
+from karenina.integrations.gepa.config import ObjectiveConfig, OptimizationTarget  # noqa: E402
 from karenina.integrations.gepa.data_types import KareninaDataInst, KareninaTrajectory  # noqa: E402
 from karenina.integrations.gepa.feedback import LLMFeedbackGenerator  # noqa: E402
 from karenina.integrations.gepa.scoring import (  # noqa: E402
-    compute_single_score,
+    compute_objective_scores,
     extract_failed_fields,
 )
 
@@ -50,15 +50,19 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[misc]
 
     Features:
     - Multi-model combinatorial testing (all models × all questions)
-    - Per-model objective scores for Pareto optimization
+    - Multi-objective Pareto optimization (template + rubric traits as separate objectives)
     - Knowledge distillation from successful to failed models in reflection
-    - Configurable template/rubric weighting
+    - Configurable objective dimensions via ObjectiveConfig
 
     Example:
         >>> adapter = KareninaAdapter(
         ...     benchmark=benchmark,
         ...     base_config=verification_config,
         ...     targets=[OptimizationTarget.ANSWERING_SYSTEM_PROMPT],
+        ...     objective_config=ObjectiveConfig(
+        ...         include_template=True,
+        ...         trait_mode=TraitSelectionMode.ALL,
+        ...     ),
         ... )
         >>> result = gepa.optimize(
         ...     seed_candidate={"answering_system_prompt": "You are helpful."},
@@ -73,8 +77,7 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[misc]
         benchmark: "Benchmark",
         base_config: "VerificationConfig",
         targets: list[OptimizationTarget],
-        template_weight: float = 0.7,
-        rubric_weight: float = 0.3,
+        objective_config: ObjectiveConfig,
         feedback_model_config: "ModelConfig | None" = None,
         enable_differential_analysis: bool = True,
         seed_mcp_tool_descriptions: dict[str, str] | None = None,
@@ -87,8 +90,9 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[misc]
             base_config: Base VerificationConfig to use (will be modified with
                          optimized components for each candidate)
             targets: List of OptimizationTarget specifying what to optimize
-            template_weight: Weight for template pass/fail in scoring (0.0-1.0)
-            rubric_weight: Weight for rubric scores in scoring (0.0-1.0)
+            objective_config: Configuration for multi-objective optimization.
+                Controls which dimensions (template, rubric traits) become
+                separate Pareto objectives.
             feedback_model_config: Optional ModelConfig for LLM-generated feedback.
                 If provided, uses an LLM to generate rich diagnostic feedback.
                 If None, falls back to programmatic feedback.
@@ -107,8 +111,7 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[misc]
         self.benchmark = benchmark
         self.base_config = base_config
         self.targets = targets
-        self.template_weight = template_weight
-        self.rubric_weight = rubric_weight
+        self.objective_config = objective_config
         self.enable_differential_analysis = enable_differential_analysis
 
         # Initialize feedback generator if model config provided
@@ -124,6 +127,12 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[misc]
 
         # Store seed tool descriptions
         self._seed_tool_descriptions = seed_mcp_tool_descriptions
+
+        # Cache trait max_scores from global rubric for proper normalization
+        self._trait_max_scores: dict[str, int] = {}
+        global_rubric = benchmark.get_global_rubric()
+        if global_rubric:
+            self._trait_max_scores = global_rubric.get_trait_max_scores()
 
         # Auto-fetch tool descriptions if targeting MCP tools and no seed provided
         if (
@@ -197,7 +206,7 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[misc]
         This is the main GEPA interface method. For each candidate, it:
         1. Injects optimized text into the verification config
         2. Runs verification on all questions × all models
-        3. Computes scores and collects trajectories
+        3. Computes multi-objective scores and collects trajectories
 
         Args:
             batch: List of KareninaDataInst to evaluate
@@ -221,23 +230,22 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[misc]
         outputs: list[dict[str, VerificationResult]] = []
         scores: list[float] = []
         trajectories: list[KareninaTrajectory] | None = [] if capture_traces else None
-        # objective_scores is per-example: list of dicts mapping model_name -> score for Pareto optimization
+        # objective_scores: list of dicts with compound 'model:dimension' keys for Pareto optimization
         objective_scores: list[dict[str, float]] = []
 
         for inst in batch:
             # Collect results for this question across all models
             question_results = self._get_results_for_question(results, inst.question_id)
 
-            # Aggregate score across models (average)
-            model_scores_for_question: list[float] = []
-            # Per-question objective scores for multi-model Pareto optimization
+            # Per-question objective scores with compound keys
             per_question_objectives: dict[str, float] = {}
-            for model_name, result in question_results.items():
-                score = compute_single_score(result, self.template_weight, self.rubric_weight)
-                model_scores_for_question.append(score)
 
-                # Track per-model objective scores for this question
-                per_question_objectives[model_name] = score
+            for model_name, result in question_results.items():
+                # Compute multi-objective scores for this model
+                model_objectives = compute_objective_scores(
+                    result, model_name, self.objective_config, self._trait_max_scores
+                )
+                per_question_objectives.update(model_objectives)
 
                 # Capture trajectory for reflection
                 if capture_traces and trajectories is not None:
@@ -248,7 +256,6 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[misc]
                             model_config=self._get_model_config(model_name),
                             optimized_components=candidate,
                             verification_result=result,
-                            score=score,
                             raw_llm_response=(result.template.raw_llm_response if result.template else None),
                             parsing_error=result.metadata.error,
                             failed_fields=extract_failed_fields(result),
@@ -256,13 +263,13 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[misc]
                         )
                     )
 
-            # Average score across models for this question
+            # scores field: average of all objectives for simple ranking
             avg_score = (
-                sum(model_scores_for_question) / len(model_scores_for_question) if model_scores_for_question else 0.0
+                sum(per_question_objectives.values()) / len(per_question_objectives)
+                if per_question_objectives else 0.0
             )
             scores.append(avg_score)
             outputs.append(question_results)
-            # Append per-question objective scores
             objective_scores.append(per_question_objectives)
 
         return EvaluationBatch(

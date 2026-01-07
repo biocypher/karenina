@@ -15,7 +15,14 @@ Example usage:
     >>> # ... configure and run optimization
 """
 
-from karenina.integrations.gepa.config import OptimizationConfig, OptimizationTarget
+from karenina.integrations.gepa.config import (
+    FrontierType,
+    MetricObjectiveConfig,
+    ObjectiveConfig,
+    OptimizationConfig,
+    OptimizationTarget,
+    TraitSelectionMode,
+)
 from karenina.integrations.gepa.data_types import (
     BenchmarkSplit,
     KareninaDataInst,
@@ -31,9 +38,7 @@ from karenina.integrations.gepa.export import (
 from karenina.integrations.gepa.feedback import LLMFeedbackGenerator
 from karenina.integrations.gepa.scoring import (
     compute_improvement,
-    compute_multi_model_score,
-    compute_single_score,
-    compute_weighted_score,
+    compute_objective_scores,
     extract_failed_fields,
 )
 from karenina.integrations.gepa.splitting import (
@@ -56,6 +61,10 @@ __all__ = [
     # Config
     "OptimizationConfig",
     "OptimizationTarget",
+    "ObjectiveConfig",
+    "TraitSelectionMode",
+    "MetricObjectiveConfig",
+    "FrontierType",
     # Data types
     "KareninaDataInst",
     "KareninaTrajectory",
@@ -68,9 +77,7 @@ __all__ = [
     "split_by_attribute",
     "questions_to_data_insts",
     # Scoring
-    "compute_single_score",
-    "compute_weighted_score",
-    "compute_multi_model_score",
+    "compute_objective_scores",
     "extract_failed_fields",
     "compute_improvement",
     # Tracking

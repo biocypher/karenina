@@ -82,9 +82,6 @@ class KareninaTrajectory:
     verification_result: "VerificationResult"
     """Complete verification result from karenina."""
 
-    score: float
-    """Computed score (0.0-1.0) for this result."""
-
     # Detailed feedback for reflection
     raw_llm_response: str | None = None
     """Raw text response from the answering model."""
