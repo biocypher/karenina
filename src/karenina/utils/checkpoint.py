@@ -117,6 +117,7 @@ def convert_rubric_trait_to_rating(
             SchemaOrgPropertyValue(name="pattern", value=trait.pattern),
             SchemaOrgPropertyValue(name="case_sensitive", value=trait.case_sensitive),
             SchemaOrgPropertyValue(name="invert_result", value=trait.invert_result),
+            SchemaOrgPropertyValue(name="higher_is_better", value=trait.higher_is_better),
         ]
 
         return SchemaOrgRating(
@@ -137,6 +138,7 @@ def convert_rubric_trait_to_rating(
             SchemaOrgPropertyValue(name="callable_code", value=base64.b64encode(trait.callable_code).decode("utf-8")),
             SchemaOrgPropertyValue(name="kind", value=trait.kind),
             SchemaOrgPropertyValue(name="invert_result", value=trait.invert_result),
+            SchemaOrgPropertyValue(name="higher_is_better", value=trait.higher_is_better),
         ]
 
         # Add score fields if score-based
@@ -189,6 +191,9 @@ def convert_rubric_trait_to_rating(
                 name="deep_judgment_excerpt_retry_attempts", value=trait.deep_judgment_excerpt_retry_attempts
             )
         )
+
+    # Add directionality field
+    additional_props.append(SchemaOrgPropertyValue(name="higher_is_better", value=trait.higher_is_better))
 
     if trait.kind == "boolean":
         return SchemaOrgRating(
@@ -275,6 +280,7 @@ def convert_rating_to_rubric_trait(
         pattern = ""
         case_sensitive = True
         invert_result = False
+        higher_is_better = True  # Legacy default
 
         if rating.additionalProperty:
             for prop in rating.additionalProperty:
@@ -284,6 +290,8 @@ def convert_rating_to_rubric_trait(
                     case_sensitive = prop.value
                 elif prop.name == "invert_result":
                     invert_result = prop.value
+                elif prop.name == "higher_is_better":
+                    higher_is_better = prop.value
 
         return RegexTrait(
             name=rating.name,
@@ -291,6 +299,7 @@ def convert_rating_to_rubric_trait(
             pattern=pattern,
             case_sensitive=case_sensitive,
             invert_result=invert_result,
+            higher_is_better=higher_is_better,
         )
 
     # Handle CallableTrait
@@ -303,6 +312,7 @@ def convert_rating_to_rubric_trait(
         invert_result = False
         min_score = None
         max_score = None
+        higher_is_better = True  # Legacy default
 
         if rating.additionalProperty:
             for prop in rating.additionalProperty:
@@ -316,6 +326,8 @@ def convert_rating_to_rubric_trait(
                     min_score = prop.value
                 elif prop.name == "max_score":
                     max_score = prop.value
+                elif prop.name == "higher_is_better":
+                    higher_is_better = prop.value
 
         return CallableTrait(
             name=rating.name,
@@ -325,6 +337,7 @@ def convert_rating_to_rubric_trait(
             min_score=min_score,
             max_score=max_score,
             invert_result=invert_result,
+            higher_is_better=higher_is_better,
         )
 
     # Unsupported trait type - raise error (no backward compatibility)
@@ -345,6 +358,7 @@ def convert_rating_to_rubric_trait(
     deep_judgment_max_excerpts = None
     deep_judgment_fuzzy_match_threshold = None
     deep_judgment_excerpt_retry_attempts = None
+    higher_is_better = True  # Legacy default
 
     if rating.additionalProperty:
         for prop in rating.additionalProperty:
@@ -360,6 +374,8 @@ def convert_rating_to_rubric_trait(
                 deep_judgment_fuzzy_match_threshold = prop.value
             elif prop.name == "deep_judgment_excerpt_retry_attempts":
                 deep_judgment_excerpt_retry_attempts = prop.value
+            elif prop.name == "higher_is_better":
+                higher_is_better = prop.value
 
     return LLMRubricTrait(
         name=rating.name,
@@ -373,6 +389,7 @@ def convert_rating_to_rubric_trait(
         deep_judgment_fuzzy_match_threshold=deep_judgment_fuzzy_match_threshold,
         deep_judgment_excerpt_retry_attempts=deep_judgment_excerpt_retry_attempts,
         deep_judgment_search_enabled=deep_judgment_search_enabled,
+        higher_is_better=higher_is_better,
     )
 
 

@@ -598,6 +598,7 @@ def init_chat_model_unified(
     question_hash: str | None = None,
     mcp_urls_dict: dict[str, str] | None = None,
     mcp_tool_filter: list[str] | None = None,
+    mcp_tool_description_overrides: dict[str, str] | None = None,
     endpoint_base_url: str | None = None,
     endpoint_api_key: str | SecretStr | None = None,
     agent_middleware_config: AgentMiddlewareConfig | None = None,
@@ -625,6 +626,9 @@ def init_chat_model_unified(
         mcp_tool_filter: Optional list of tool names to include from MCP servers.
                         If provided, only tools with names in this list will be used.
                         Ignored if mcp_urls_dict is None.
+        mcp_tool_description_overrides: Optional dict mapping tool names to custom
+                        descriptions. Used by GEPA optimization to test different
+                        tool descriptions. Ignored if mcp_urls_dict is None.
         endpoint_base_url: Custom base URL for openai_endpoint interface.
                           Required for openai_endpoint interface.
                           Used to connect to OpenAI-compatible endpoints (vLLM, Ollama, etc.)
@@ -734,7 +738,7 @@ def init_chat_model_unified(
 
     try:
         # Get MCP client and tools
-        _, tools = sync_create_mcp_client_and_tools(mcp_urls_dict, mcp_tool_filter)
+        _, tools = sync_create_mcp_client_and_tools(mcp_urls_dict, mcp_tool_filter, mcp_tool_description_overrides)
 
         # Build middleware list from configuration
         # Pass base_model so summarization uses the same model by default
