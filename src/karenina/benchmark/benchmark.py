@@ -1013,6 +1013,7 @@ class Benchmark:
         tracker_path: Path | str | None = None,
         export_preset_path: Path | str | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
+        verbose: bool = False,
     ) -> "KareninaOutput":
         """
         Optimize text components using GEPA with karenina verification as the metric.
@@ -1044,6 +1045,8 @@ class Benchmark:
             tracker_path: Optional path to SQLite file for tracking optimization history
             export_preset_path: Optional path to export optimized config as preset
             progress_callback: Optional callback for progress updates (percentage, message)
+            verbose: If True, display detailed progress during optimization including
+                     iteration updates, score improvements, and a final summary
 
         Returns:
             KareninaOutput with optimized prompts and metrics
@@ -1071,6 +1074,7 @@ class Benchmark:
                 OptimizationRun,
                 OptimizationTarget,
                 OptimizationTracker,
+                VerboseLogger,
                 export_to_preset,
                 split_benchmark,
             )
@@ -1138,6 +1142,11 @@ class Benchmark:
         if progress_callback:
             progress_callback(10.0, "Starting GEPA optimization...")
 
+        # Create verbose logger if enabled
+        verbose_logger: VerboseLogger | None = None
+        if verbose:
+            verbose_logger = VerboseLogger(max_iterations=max_metric_calls)
+
         # Run GEPA optimization with multi-objective Pareto tracking
         result = gepa.optimize(
             seed_candidate=seed_candidate,
@@ -1147,7 +1156,13 @@ class Benchmark:
             reflection_lm=reflection_model,
             max_metric_calls=max_metric_calls,
             frontier_type=frontier_type,
+            logger=verbose_logger,
+            display_progress_bar=verbose,
         )
+
+        # Print verbose summary if enabled
+        if verbose_logger:
+            verbose_logger.print_summary()
 
         # Build output from GEPAResult
         optimized_prompts = result.best_candidate if hasattr(result, "best_candidate") else {}

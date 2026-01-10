@@ -47,6 +47,7 @@ from karenina.integrations.gepa.splitting import (
     split_by_attribute,
 )
 from karenina.integrations.gepa.tracking import OptimizationRun, OptimizationTracker
+from karenina.integrations.gepa.verbose import SimpleLogger, VerboseLogger, create_verbose_logger
 
 # Adapter requires gepa to be installed
 try:
@@ -91,4 +92,8 @@ __all__ = [
     # Adapter (requires gepa)
     "KareninaAdapter",
     "GEPA_AVAILABLE",
+    # Logging
+    "SimpleLogger",
+    "VerboseLogger",
+    "create_verbose_logger",
 ]

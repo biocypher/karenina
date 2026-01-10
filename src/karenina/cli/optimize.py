@@ -143,7 +143,7 @@ def optimize(
         typer.Option(
             "--verbose",
             "-v",
-            help="Show detailed progress output",
+            help="Show detailed progress: iteration updates, score improvements, Pareto frontier changes, and final summary",
         ),
     ] = False,
 ) -> None:
@@ -252,6 +252,7 @@ def optimize(
             tracker_path=tracker_path,
             export_preset_path=output,
             progress_callback=progress_callback if verbose else None,
+            verbose=verbose,
         )
 
         progress.update(task, description="Complete!")
