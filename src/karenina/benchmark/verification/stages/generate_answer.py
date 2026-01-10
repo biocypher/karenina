@@ -184,6 +184,7 @@ class GenerateAnswerStage(BaseVerificationStage):
                 "interface": answering_model.interface,
                 "mcp_urls_dict": answering_model.mcp_urls_dict,
                 "mcp_tool_filter": answering_model.mcp_tool_filter,
+                "mcp_tool_description_overrides": answering_model.mcp_tool_description_overrides,
             }
 
             # Add interface-specific parameters

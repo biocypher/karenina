@@ -542,6 +542,9 @@ class ModelConfig(BaseModel):
     max_retries: int = 2  # Optional max retries for template generation
     mcp_urls_dict: dict[str, str] | None = None  # Optional MCP server URLs
     mcp_tool_filter: list[str] | None = None  # Optional list of MCP tools to include
+    mcp_tool_description_overrides: dict[str, str] | None = (
+        None  # Optional tool description overrides for GEPA optimization
+    )
     # OpenAI Endpoint configuration (for openai_endpoint interface)
     endpoint_base_url: str | None = None  # Custom endpoint base URL
     endpoint_api_key: SecretStr | None = None  # User-provided API key

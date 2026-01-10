@@ -49,6 +49,22 @@ except ImportError:
     # Commands not yet implemented
     pass
 
+# Import GEPA optimization commands (optional - requires gepa package)
+try:
+    from .optimize import optimize, optimize_compare, optimize_history
+
+    # Register optimize command directly on main app
+    app.command(name="optimize")(optimize)
+
+    # Register optimize-history command for viewing past runs
+    app.command(name="optimize-history")(optimize_history)
+
+    # Register optimize-compare command for comparing runs
+    app.command(name="optimize-compare")(optimize_compare)
+except ImportError:
+    # GEPA optimization not available
+    pass
+
 
 def main() -> None:
     """Main entry point for the CLI."""
