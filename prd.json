@@ -883,4 +883,19 @@
         "status": "completed",
         "additional notes": "Created tests/unit/benchmark/test_edge_cases.py with 42 new tests covering: Unicode/special characters (14 parametrized cases including Chinese, Cyrillic, Arabic, emoji, math symbols, XSS, SQL injection), long content handling (10KB-100KB), question count boundaries (0-1000 questions), malformed JSON-LD (6 cases), checkpoint I/O recovery (8 cases), and additional robustness tests (5 cases). All 1632 tests passing.",
     },
+    {
+        "id": "task-050",
+        "category": "Polish",
+        "description": "Continue parametrization across top 5 test files",
+        "depends_on": ["task-048"],
+        "steps": [
+            "Implement: Parametrize test_questions.py metadata update tests (5→1)",
+            "Implement: Parametrize test_questions.py finished status tests (7→3)",
+            "Implement: Parametrize test_callable_trait.py score validation tests (6→1)",
+            "Implement: Continue with test_verification_config.py, test_metadata.py, test_verification_result.py",
+            "Verify: Run 'uv run pytest tests/ -v' confirms all tests still pass",
+        ],
+        "status": "in_progress",
+        "additional notes": "Parametrized test_questions.py: 5 metadata update tests→1, 4 mark finished tests→2, 3 toggle tests→1, 4 get finished/unfinished tests→2. Parametrized test_callable_trait.py: 6 score validation tests→1. All 1632 tests passing.",
+    },
 ]

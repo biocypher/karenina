@@ -438,113 +438,43 @@ def test_from_callable_two_parameters_raises_error() -> None:
 
 
 @pytest.mark.unit
-def test_from_callable_score_without_min_max_raises_error() -> None:
-    """Test that score kind without min/max scores raises ValueError."""
+@pytest.mark.parametrize(
+    "kind,min_score,max_score,error_msg",
+    [
+        ("score", None, None, "min_score and max_score are required"),
+        ("score", 0, None, "min_score and max_score are required"),
+        ("score", None, 100, "min_score and max_score are required"),
+        ("score", 50, 50, "must be less than max_score"),
+        ("score", 100, 50, "must be less than max_score"),
+        ("boolean", 0, 1, "min_score and max_score should not be set when kind='boolean'"),
+    ],
+    ids=[
+        "score_no_bounds",
+        "score_only_min",
+        "score_only_max",
+        "min_equals_max",
+        "min_greater_than_max",
+        "boolean_with_scores",
+    ],
+)
+def test_from_callable_score_validation_errors(
+    kind: str, min_score: int | None, max_score: int | None, error_msg: str
+) -> None:
+    """Test score parameter validation errors."""
 
     def func(text):
-        return len(text)
+        return len(text) if kind == "score" else True
+
+    kwargs: dict = {"name": "bad", "func": func, "kind": kind}
+    if min_score is not None:
+        kwargs["min_score"] = min_score
+    if max_score is not None:
+        kwargs["max_score"] = max_score
 
     with pytest.raises(ValueError) as exc_info:
-        CallableTrait.from_callable(
-            name="bad",
-            func=func,
-            kind="score",
-        )
+        CallableTrait.from_callable(**kwargs)
 
-    assert "min_score and max_score are required" in str(exc_info.value)
-
-
-@pytest.mark.unit
-def test_from_callable_score_only_min_raises_error() -> None:
-    """Test that score kind with only min_score raises ValueError."""
-
-    def func(text):
-        return len(text)
-
-    with pytest.raises(ValueError) as exc_info:
-        CallableTrait.from_callable(
-            name="bad",
-            func=func,
-            kind="score",
-            min_score=0,
-        )
-
-    assert "min_score and max_score are required" in str(exc_info.value)
-
-
-@pytest.mark.unit
-def test_from_callable_score_only_max_raises_error() -> None:
-    """Test that score kind with only max_score raises ValueError."""
-
-    def func(text):
-        return len(text)
-
-    with pytest.raises(ValueError) as exc_info:
-        CallableTrait.from_callable(
-            name="bad",
-            func=func,
-            kind="score",
-            max_score=100,
-        )
-
-    assert "min_score and max_score are required" in str(exc_info.value)
-
-
-@pytest.mark.unit
-def test_from_callable_min_equals_max_raises_error() -> None:
-    """Test that min_score == max_score raises ValueError."""
-
-    def func(text):
-        return 50
-
-    with pytest.raises(ValueError) as exc_info:
-        CallableTrait.from_callable(
-            name="bad",
-            func=func,
-            kind="score",
-            min_score=50,
-            max_score=50,
-        )
-
-    assert "must be less than max_score" in str(exc_info.value)
-
-
-@pytest.mark.unit
-def test_from_callable_min_greater_than_max_raises_error() -> None:
-    """Test that min_score > max_score raises ValueError."""
-
-    def func(text):
-        return 50
-
-    with pytest.raises(ValueError) as exc_info:
-        CallableTrait.from_callable(
-            name="bad",
-            func=func,
-            kind="score",
-            min_score=100,
-            max_score=50,
-        )
-
-    assert "must be less than max_score" in str(exc_info.value)
-
-
-@pytest.mark.unit
-def test_from_callable_boolean_with_scores_raises_error() -> None:
-    """Test that boolean kind with scores raises ValueError."""
-
-    def func(text):
-        return True
-
-    with pytest.raises(ValueError) as exc_info:
-        CallableTrait.from_callable(
-            name="bad",
-            func=func,
-            kind="boolean",
-            min_score=0,
-            max_score=1,
-        )
-
-    assert "min_score and max_score should not be set when kind='boolean'" in str(exc_info.value)
+    assert error_msg in str(exc_info.value)
 
 
 # =============================================================================

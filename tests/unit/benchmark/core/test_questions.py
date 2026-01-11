@@ -504,58 +504,28 @@ class TestAddQuestionFromObject:
 class TestUpdateQuestionMetadata:
     """Tests for update_question_metadata method."""
 
-    def test_update_question_text(self) -> None:
-        """Test updating question text."""
-        benchmark = Benchmark.create(name="test")
-        manager = QuestionManager(benchmark._base)
-
-        q_id = manager.add_question("Old question?", "Old answer")
-        manager.update_question_metadata(q_id, question="New question?")
-
-        assert manager.base._questions_cache[q_id]["question"] == "New question?"
-
-    def test_update_raw_answer(self) -> None:
-        """Test updating raw answer."""
-        benchmark = Benchmark.create(name="test")
-        manager = QuestionManager(benchmark._base)
-
-        q_id = manager.add_question("Question?", "Old answer")
-        manager.update_question_metadata(q_id, raw_answer="New answer")
-
-        assert manager.base._questions_cache[q_id]["raw_answer"] == "New answer"
-
-    def test_update_author(self) -> None:
-        """Test updating author."""
+    @pytest.mark.parametrize(
+        "field_name,field_value,cache_key",
+        [
+            ("question", "New question?", "question"),
+            ("raw_answer", "New answer", "raw_answer"),
+            ("author", {"name": "Test Author"}, "author"),
+            ("sources", [{"title": "Source 1"}], "sources"),
+            ("custom_metadata", {"difficulty": "hard", "category": "math"}, "custom_metadata"),
+        ],
+        ids=["question", "raw_answer", "author", "sources", "custom_metadata"],
+    )
+    def test_update_metadata_field(
+        self, field_name: str, field_value: object, cache_key: str
+    ) -> None:
+        """Test updating various metadata fields."""
         benchmark = Benchmark.create(name="test")
         manager = QuestionManager(benchmark._base)
 
         q_id = manager.add_question("Q?", "A")
-        author = {"name": "Test Author"}
-        manager.update_question_metadata(q_id, author=author)
+        manager.update_question_metadata(q_id, **{field_name: field_value})
 
-        assert manager.base._questions_cache[q_id]["author"] == author
-
-    def test_update_sources(self) -> None:
-        """Test updating sources."""
-        benchmark = Benchmark.create(name="test")
-        manager = QuestionManager(benchmark._base)
-
-        q_id = manager.add_question("Q?", "A")
-        sources = [{"title": "Source 1"}]
-        manager.update_question_metadata(q_id, sources=sources)
-
-        assert manager.base._questions_cache[q_id]["sources"] == sources
-
-    def test_update_custom_metadata(self) -> None:
-        """Test updating custom metadata."""
-        benchmark = Benchmark.create(name="test")
-        manager = QuestionManager(benchmark._base)
-
-        q_id = manager.add_question("Q?", "A")
-        custom_meta = {"difficulty": "hard", "category": "math"}
-        manager.update_question_metadata(q_id, custom_metadata=custom_meta)
-
-        assert manager.base._questions_cache[q_id]["custom_metadata"] == custom_meta
+        assert manager.base._questions_cache[q_id][cache_key] == field_value
 
     def test_update_nonexistent_question_raises(self) -> None:
         """Test that updating nonexistent question raises ValueError."""
@@ -806,78 +776,74 @@ class TestAddQuestionsBatch:
 class TestMarkFinished:
     """Tests for mark_finished/mark_unfinished methods."""
 
-    def test_mark_finished(self) -> None:
-        """Test marking question as finished."""
+    @pytest.mark.parametrize(
+        "initial_status,method_name,expected_status",
+        [
+            (False, "mark_finished", True),
+            (True, "mark_unfinished", False),
+        ],
+        ids=["mark_finished", "mark_unfinished"],
+    )
+    def test_mark_finished_status(
+        self, initial_status: bool, method_name: str, expected_status: bool
+    ) -> None:
+        """Test marking question as finished/unfinished."""
         benchmark = Benchmark.create(name="test")
         manager = QuestionManager(benchmark._base)
 
-        q_id = manager.add_question("Q?", "A", finished=False)
-        manager.mark_finished(q_id)
+        q_id = manager.add_question("Q?", "A", finished=initial_status)
+        getattr(manager, method_name)(q_id)
 
-        assert manager.base._questions_cache[q_id]["finished"] is True
+        assert manager.base._questions_cache[q_id]["finished"] is expected_status
 
-    def test_mark_unfinished(self) -> None:
-        """Test marking question as unfinished."""
+    @pytest.mark.parametrize(
+        "initial_status,method_name,expected_status",
+        [
+            (False, "mark_finished_batch", True),
+            (True, "mark_unfinished_batch", False),
+        ],
+        ids=["mark_finished_batch", "mark_unfinished_batch"],
+    )
+    def test_mark_batch_status(
+        self, initial_status: bool, method_name: str, expected_status: bool
+    ) -> None:
+        """Test marking multiple questions as finished/unfinished."""
         benchmark = Benchmark.create(name="test")
         manager = QuestionManager(benchmark._base)
 
-        q_id = manager.add_question("Q?", "A", finished=True)
-        manager.mark_unfinished(q_id)
+        q_id1 = manager.add_question("Q1?", "A1", finished=initial_status)
+        q_id2 = manager.add_question("Q2?", "A2", finished=initial_status)
 
-        assert manager.base._questions_cache[q_id]["finished"] is False
+        getattr(manager, method_name)([q_id1, q_id2])
 
-    def test_mark_finished_batch(self) -> None:
-        """Test marking multiple questions as finished."""
-        benchmark = Benchmark.create(name="test")
-        manager = QuestionManager(benchmark._base)
-
-        q_id1 = manager.add_question("Q1?", "A1", finished=False)
-        q_id2 = manager.add_question("Q2?", "A2", finished=False)
-
-        manager.mark_finished_batch([q_id1, q_id2])
-
-        assert manager.base._questions_cache[q_id1]["finished"] is True
-        assert manager.base._questions_cache[q_id2]["finished"] is True
-
-    def test_mark_unfinished_batch(self) -> None:
-        """Test marking multiple questions as unfinished."""
-        benchmark = Benchmark.create(name="test")
-        manager = QuestionManager(benchmark._base)
-
-        q_id1 = manager.add_question("Q1?", "A1", finished=True)
-        q_id2 = manager.add_question("Q2?", "A2", finished=True)
-
-        manager.mark_unfinished_batch([q_id1, q_id2])
-
-        assert manager.base._questions_cache[q_id1]["finished"] is False
-        assert manager.base._questions_cache[q_id2]["finished"] is False
+        assert manager.base._questions_cache[q_id1]["finished"] is expected_status
+        assert manager.base._questions_cache[q_id2]["finished"] is expected_status
 
 
 @pytest.mark.unit
 class TestToggleFinished:
     """Tests for toggle_finished method."""
 
-    def test_toggle_from_false_to_true(self) -> None:
-        """Test toggling from unfinished to finished."""
+    @pytest.mark.parametrize(
+        "initial_status,expected_status",
+        [
+            (False, True),
+            (True, False),
+        ],
+        ids=["false_to_true", "true_to_false"],
+    )
+    def test_toggle_finished_status(
+        self, initial_status: bool, expected_status: bool
+    ) -> None:
+        """Test toggling finished status."""
         benchmark = Benchmark.create(name="test")
         manager = QuestionManager(benchmark._base)
 
-        q_id = manager.add_question("Q?", "A", finished=False)
+        q_id = manager.add_question("Q?", "A", finished=initial_status)
         new_status = manager.toggle_finished(q_id)
 
-        assert new_status is True
-        assert manager.base._questions_cache[q_id]["finished"] is True
-
-    def test_toggle_from_true_to_false(self) -> None:
-        """Test toggling from finished to unfinished."""
-        benchmark = Benchmark.create(name="test")
-        manager = QuestionManager(benchmark._base)
-
-        q_id = manager.add_question("Q?", "A", finished=True)
-        new_status = manager.toggle_finished(q_id)
-
-        assert new_status is False
-        assert manager.base._questions_cache[q_id]["finished"] is False
+        assert new_status is expected_status
+        assert manager.base._questions_cache[q_id]["finished"] is expected_status
 
     def test_toggle_nonexistent_raises(self) -> None:
         """Test that toggling nonexistent question raises ValueError."""
@@ -892,55 +858,46 @@ class TestToggleFinished:
 class TestGetFinishedQuestions:
     """Tests for get_finished/get_unfinished methods."""
 
-    def test_get_finished_questions(self) -> None:
-        """Test getting finished questions."""
+    @pytest.mark.parametrize(
+        "method_name,target_status",
+        [
+            ("get_finished_questions", True),
+            ("get_unfinished_questions", False),
+        ],
+        ids=["finished", "unfinished"],
+    )
+    def test_get_questions_by_status(self, method_name: str, target_status: bool) -> None:
+        """Test getting finished/unfinished questions."""
         benchmark = Benchmark.create(name="test")
         manager = QuestionManager(benchmark._base)
 
-        q_id1 = manager.add_question("Q1?", "A1", finished=True)
-        manager.add_question("Q2?", "A2", finished=False)
+        q_id_target = manager.add_question("Q1?", "A1", finished=target_status)
+        manager.add_question("Q2?", "A2", finished=not target_status)
 
-        finished = manager.get_finished_questions()
+        results = getattr(manager, method_name)()
 
-        assert len(finished) == 1
-        assert finished[0]["id"] == q_id1
+        assert len(results) == 1
+        assert results[0]["id"] == q_id_target
 
-    def test_get_finished_ids_only(self) -> None:
-        """Test getting finished question IDs only."""
+    @pytest.mark.parametrize(
+        "method_name,target_status",
+        [
+            ("get_finished_questions", True),
+            ("get_unfinished_questions", False),
+        ],
+        ids=["finished_ids", "unfinished_ids"],
+    )
+    def test_get_questions_ids_only(self, method_name: str, target_status: bool) -> None:
+        """Test getting finished/unfinished question IDs only."""
         benchmark = Benchmark.create(name="test")
         manager = QuestionManager(benchmark._base)
 
-        q_id1 = manager.add_question("Q1?", "A1", finished=True)
-        manager.add_question("Q2?", "A2", finished=False)
+        q_id_target = manager.add_question("Q1?", "A1", finished=target_status)
+        manager.add_question("Q2?", "A2", finished=not target_status)
 
-        ids = manager.get_finished_questions(ids_only=True)
+        ids = getattr(manager, method_name)(ids_only=True)
 
-        assert ids == [q_id1]
-
-    def test_get_unfinished_questions(self) -> None:
-        """Test getting unfinished questions."""
-        benchmark = Benchmark.create(name="test")
-        manager = QuestionManager(benchmark._base)
-
-        manager.add_question("Q1?", "A1", finished=True)
-        q_id2 = manager.add_question("Q2?", "A2", finished=False)
-
-        unfinished = manager.get_unfinished_questions()
-
-        assert len(unfinished) == 1
-        assert unfinished[0]["id"] == q_id2
-
-    def test_get_unfinished_ids_only(self) -> None:
-        """Test getting unfinished question IDs only."""
-        benchmark = Benchmark.create(name="test")
-        manager = QuestionManager(benchmark._base)
-
-        manager.add_question("Q1?", "A1", finished=True)
-        q_id2 = manager.add_question("Q2?", "A2", finished=False)
-
-        ids = manager.get_unfinished_questions(ids_only=True)
-
-        assert ids == [q_id2]
+        assert ids == [q_id_target]
 
 
 @pytest.mark.unit

@@ -2026,3 +2026,54 @@ missing. Key patterns used:
 - pytest.raises with tuple of exception types for flexible error handling
 - contextlib.suppress for cases where any behavior is acceptable
 - tmp_path fixture for filesystem tests
+
+2025-01-11 - Iteration 43 (Extended Parametrization)
+=====================================================
+
+COMPLETED TASKS:
+-----------------
+* task-050 (in progress): Continue parametrization across top 5 test files
+
+  Files refactored so far:
+  
+  1. test_questions.py:
+     - Metadata update tests: 5 functions → 1 parametrized (5 test cases)
+     - Mark finished/unfinished tests: 4 functions → 2 parametrized
+     - Toggle finished tests: 3 functions → 2 (1 parametrized + 1 error case)
+     - Get finished/unfinished tests: 4 functions → 2 parametrized
+     Total: Consolidated ~16 test functions into ~6 parametrized tests
+
+  2. test_callable_trait.py:
+     - Score validation tests: 6 functions → 1 parametrized (6 test cases)
+     Total: Consolidated 6 test functions into 1 parametrized test
+
+LLM FIXTURE GAP IDENTIFIED:
+----------------------------
+The tests/fixtures/llm_responses/claude-haiku-4-5/generation/ directory is empty.
+However, the scripts/capture_fixtures.py doesn't have a "generation" scenario defined.
+This would need the script to be extended to support answer generation fixture capture.
+
+TEST RESULTS:
+-------------
+- test_questions.py: 98 tests passing
+- test_callable_trait.py: 59 tests passing
+- Full suite: 1632 tests passing
+- Linting: ruff checks passing
+
+FILES MODIFIED:
+---------------
+- tests/unit/benchmark/core/test_questions.py (parametrized 4 test classes)
+- tests/unit/schemas/test_callable_trait.py (parametrized score validation)
+- prd.json (added task-050 in progress)
+
+NOTES FOR NEXT DEVELOPER:
+--------------------------
+Remaining files to parametrize (from plan):
+- tests/unit/schemas/test_verification_config.py (55 tests, ~25-30 consolidation potential)
+- tests/unit/benchmark/core/test_metadata.py (56 tests, ~15-20 consolidation potential)
+- tests/unit/schemas/test_verification_result.py (42 tests, ~15-20 consolidation potential)
+
+Key patterns for parametrization:
+1. Use getattr(manager, method_name) for method variants
+2. Use ids parameter for readable test output
+3. Keep error/exception tests separate from happy path parametrized tests
