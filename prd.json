@@ -223,8 +223,8 @@
       "Verify: Run 'uv run pytest tests/unit/schemas/test_rubric_schemas.py -v'",
       "Verify: All 4 trait types have schema validation tests"
     ],
-    "status": "pending",
-    "additional notes": "Each trait type has different required fields. Test that missing required fields raise ValidationError with clear messages."
+    "status": "completed",
+    "additional notes": "Created 34 tests covering MetricRubricTrait (tp_only/full_matrix modes, validation), Rubric class (trait management, validation), RubricEvaluation, and merge_rubrics function. All tests passing."
   },
   {
     "id": "task-014",
