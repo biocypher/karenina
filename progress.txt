@@ -1612,3 +1612,48 @@ Total unit tests added in iterations 31-35: 142 tests
 - Answer Cache (utils/answer_cache.py): 29 tests
 - capture_answer_source (schemas/domain): 4 tests
 - MetadataManager (benchmark/core/metadata.py): 56 tests
+
+
+2025-01-11 - Ralph Loop Iteration 36
+======================================
+
+COMPLETED TASKS:
+-----------------
+* Added unit tests for TemplateManager (benchmark/core/templates.py)
+  - Created tests/unit/benchmark/core/test_templates.py with 40 comprehensive tests
+  - Test coverage for all TemplateManager methods (14 methods):
+    - Basic operations: add_answer_template, get_template, has_template, update_template
+    - Template copying: copy_template
+    - Finished templates: get_finished_templates
+    - Missing templates: get_missing_templates
+    - Global operations: apply_global_template
+    - Validation: validate_templates, validate_template_with_verification_system
+    - Statistics: get_template_statistics
+    - Private helpers: _is_default_template, _create_default_template
+  - Tests use Benchmark.create() instead of BenchmarkBase for proper question management
+  - All tests account for default template behavior
+
+TEST RESULTS:
+-------------
+- Unit tests: 906 passing (was 866, +40 new tests for TemplateManager)
+- E2E tests: 58 passing
+- Total: 964 tests passing (was 924, +40)
+
+FILES CREATED/MODIFIED:
+-----------------------
+- tests/unit/benchmark/core/test_templates.py (NEW, 40 tests)
+
+NOTES:
+------
+This was not a PRD task but added to improve coverage of a low-coverage
+module (benchmark/core/templates.py had minimal coverage). TemplateManager
+is a pure Python module with no external dependencies, making it ideal
+for unit testing.
+
+Total unit tests added in iterations 31-36: 182 tests
+- AnswerBuilder (domain/answers/builder.py): 43 tests
+- Answer Template Reader (domain/answers/reader.py): 14 tests
+- Answer Cache (utils/answer_cache.py): 29 tests
+- capture_answer_source (schemas/domain): 4 tests
+- MetadataManager (benchmark/core/metadata.py): 56 tests
+- TemplateManager (benchmark/core/templates.py): 40 tests
