@@ -9,7 +9,6 @@ Tests cover:
 - capture_answer_source function
 """
 
-
 import pytest
 from pydantic import ValidationError
 
@@ -70,9 +69,7 @@ def test_question_different_text_different_id() -> None:
 @pytest.mark.unit
 def test_question_with_tags() -> None:
     """Test Question with tags."""
-    q = Question(
-        question="Test?", raw_answer="Answer", tags=["math", "easy"]
-    )
+    q = Question(question="Test?", raw_answer="Answer", tags=["math", "easy"])
 
     assert q.tags == ["math", "easy"]
 
@@ -84,9 +81,7 @@ def test_question_with_few_shot_examples() -> None:
         {"question": "2+2?", "answer": "4"},
         {"question": "3+3?", "answer": "6"},
     ]
-    q = Question(
-        question="Test?", raw_answer="Answer", few_shot_examples=examples
-    )
+    q = Question(question="Test?", raw_answer="Answer", few_shot_examples=examples)
 
     assert q.few_shot_examples == examples
 

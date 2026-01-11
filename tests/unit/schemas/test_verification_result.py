@@ -10,7 +10,6 @@ Tests cover:
 - Pass/fail determination via completed_without_errors
 """
 
-
 import pytest
 
 from karenina.schemas.workflow.verification.result import VerificationResult
@@ -320,9 +319,7 @@ def test_rubric_construction() -> None:
         llm_trait_scores={"clarity": 4, "completeness": 3},
         regex_trait_scores={"has_citation": True},
         callable_trait_scores={"is_concise": True},
-        metric_trait_scores={
-            "feature_identification": {"precision": 1.0, "recall": 0.8, "f1": 0.89}
-        },
+        metric_trait_scores={"feature_identification": {"precision": 1.0, "recall": 0.8, "f1": 0.89}},
     )
 
     assert rubric.rubric_evaluation_performed is True

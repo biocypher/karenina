@@ -35,22 +35,26 @@ from karenina.schemas.workflow.verification.config import (
 def test_verification_config_default_values() -> None:
     """Test VerificationConfig default field values."""
     config = VerificationConfig(
-        answering_models=[ModelConfig(
-            id="answering",
-            model_name="gpt-4",
-            model_provider="openai",
-            interface="langchain",
-            system_prompt="test",
-            temperature=0.1,
-        )],
-        parsing_models=[ModelConfig(
-            id="parsing",
-            model_name="gpt-4",
-            model_provider="openai",
-            interface="langchain",
-            system_prompt="test",
-            temperature=0.1,
-        )],
+        answering_models=[
+            ModelConfig(
+                id="answering",
+                model_name="gpt-4",
+                model_provider="openai",
+                interface="langchain",
+                system_prompt="test",
+                temperature=0.1,
+            )
+        ],
+        parsing_models=[
+            ModelConfig(
+                id="parsing",
+                model_name="gpt-4",
+                model_provider="openai",
+                interface="langchain",
+                system_prompt="test",
+                temperature=0.1,
+            )
+        ],
     )
 
     assert len(config.answering_models) == 1
@@ -106,14 +110,16 @@ def test_validation_requires_answering_model_when_not_parsing_only() -> None:
     """Test that validation requires answering models unless parsing_only=True."""
     with pytest.raises(ValueError, match="At least one answering model"):
         VerificationConfig(
-            parsing_models=[ModelConfig(
-                id="parsing",
-                model_name="gpt-4",
-                model_provider="openai",
-                interface="langchain",
-                system_prompt="test",
-                temperature=0.1,
-            )],
+            parsing_models=[
+                ModelConfig(
+                    id="parsing",
+                    model_name="gpt-4",
+                    model_provider="openai",
+                    interface="langchain",
+                    system_prompt="test",
+                    temperature=0.1,
+                )
+            ],
             answering_models=[],
         )
 
@@ -123,14 +129,16 @@ def test_validation_allows_no_answering_model_when_parsing_only() -> None:
     """Test that parsing_only mode allows empty answering_models."""
     # Should not raise
     config = VerificationConfig(
-        parsing_models=[ModelConfig(
-            id="parsing",
-            model_name="gpt-4",
-            model_provider="openai",
-            interface="langchain",
-            system_prompt="test",
-            temperature=0.1,
-        )],
+        parsing_models=[
+            ModelConfig(
+                id="parsing",
+                model_name="gpt-4",
+                model_provider="openai",
+                interface="langchain",
+                system_prompt="test",
+                temperature=0.1,
+            )
+        ],
         answering_models=[],
         parsing_only=True,
     )
@@ -187,14 +195,16 @@ def test_validation_rubric_only_mode_requires_rubric_enabled() -> None:
     """Test that rubric_only evaluation mode requires rubric_enabled=True."""
     with pytest.raises(ValueError, match="evaluation_mode='rubric_only' requires rubric_enabled=True"):
         VerificationConfig(
-            parsing_models=[ModelConfig(
-                id="parsing",
-                model_name="gpt-4",
-                model_provider="openai",
-                interface="langchain",
-                system_prompt="test",
-                temperature=0.1,
-            )],
+            parsing_models=[
+                ModelConfig(
+                    id="parsing",
+                    model_name="gpt-4",
+                    model_provider="openai",
+                    interface="langchain",
+                    system_prompt="test",
+                    temperature=0.1,
+                )
+            ],
             answering_models=[],
             evaluation_mode="rubric_only",
             rubric_enabled=False,
@@ -207,14 +217,16 @@ def test_validation_template_and_rubric_mode_requires_rubric_enabled() -> None:
     """Test that template_and_rubric mode requires rubric_enabled=True."""
     with pytest.raises(ValueError, match="evaluation_mode='template_and_rubric' requires rubric_enabled=True"):
         VerificationConfig(
-            parsing_models=[ModelConfig(
-                id="parsing",
-                model_name="gpt-4",
-                model_provider="openai",
-                interface="langchain",
-                system_prompt="test",
-                temperature=0.1,
-            )],
+            parsing_models=[
+                ModelConfig(
+                    id="parsing",
+                    model_name="gpt-4",
+                    model_provider="openai",
+                    interface="langchain",
+                    system_prompt="test",
+                    temperature=0.1,
+                )
+            ],
             answering_models=[],
             evaluation_mode="template_and_rubric",
             rubric_enabled=False,
@@ -227,14 +239,16 @@ def test_validation_template_only_incompatible_with_rubric_enabled() -> None:
     """Test that template_only mode is incompatible with rubric_enabled=True."""
     with pytest.raises(ValueError, match="evaluation_mode='template_only' is incompatible with rubric_enabled=True"):
         VerificationConfig(
-            parsing_models=[ModelConfig(
-                id="parsing",
-                model_name="gpt-4",
-                model_provider="openai",
-                interface="langchain",
-                system_prompt="test",
-                temperature=0.1,
-            )],
+            parsing_models=[
+                ModelConfig(
+                    id="parsing",
+                    model_name="gpt-4",
+                    model_provider="openai",
+                    interface="langchain",
+                    system_prompt="test",
+                    temperature=0.1,
+                )
+            ],
             answering_models=[],
             evaluation_mode="template_only",
             rubric_enabled=True,
@@ -247,14 +261,16 @@ def test_validation_invalid_search_tool_name() -> None:
     """Test that validation rejects unknown search tool names."""
     with pytest.raises(ValueError, match="Unknown search tool"):
         VerificationConfig(
-            parsing_models=[ModelConfig(
-                id="parsing",
-                model_name="gpt-4",
-                model_provider="openai",
-                interface="langchain",
-                system_prompt="test",
-                temperature=0.1,
-            )],
+            parsing_models=[
+                ModelConfig(
+                    id="parsing",
+                    model_name="gpt-4",
+                    model_provider="openai",
+                    interface="langchain",
+                    system_prompt="test",
+                    temperature=0.1,
+                )
+            ],
             answering_models=[],
             deep_judgment_search_enabled=True,
             deep_judgment_search_tool="unknown_tool",
@@ -267,14 +283,16 @@ def test_validation_search_tool_must_be_string_or_callable() -> None:
     """Test that validation rejects invalid search tool types."""
     with pytest.raises(ValueError, match="Search tool must be either a supported tool name"):
         VerificationConfig(
-            parsing_models=[ModelConfig(
-                id="parsing",
-                model_name="gpt-4",
-                model_provider="openai",
-                interface="langchain",
-                system_prompt="test",
-                temperature=0.1,
-            )],
+            parsing_models=[
+                ModelConfig(
+                    id="parsing",
+                    model_name="gpt-4",
+                    model_provider="openai",
+                    interface="langchain",
+                    system_prompt="test",
+                    temperature=0.1,
+                )
+            ],
             answering_models=[],
             deep_judgment_search_enabled=True,
             deep_judgment_search_tool=123,  # Invalid type
@@ -296,14 +314,16 @@ def test_backward_compat_legacy_answering_fields() -> None:
         answering_temperature=0.5,
         answering_interface="langchain",
         answering_system_prompt="Custom prompt",
-        parsing_models=[ModelConfig(
-            id="parsing",
-            model_name="gpt-4",
-            model_provider="openai",
-            interface="langchain",
-            system_prompt="test",
-            temperature=0.1,
-        )],
+        parsing_models=[
+            ModelConfig(
+                id="parsing",
+                model_name="gpt-4",
+                model_provider="openai",
+                interface="langchain",
+                system_prompt="test",
+                temperature=0.1,
+            )
+        ],
     )
 
     assert len(config.answering_models) == 1
@@ -324,14 +344,16 @@ def test_backward_compat_legacy_parsing_fields() -> None:
         parsing_temperature=0.3,
         parsing_interface="langchain",
         parsing_system_prompt="Parse this",
-        answering_models=[ModelConfig(
-            id="answering",
-            model_name="gpt-4",
-            model_provider="openai",
-            interface="langchain",
-            system_prompt="test",
-            temperature=0.1,
-        )],
+        answering_models=[
+            ModelConfig(
+                id="answering",
+                model_name="gpt-4",
+                model_provider="openai",
+                interface="langchain",
+                system_prompt="test",
+                temperature=0.1,
+            )
+        ],
     )
 
     assert len(config.parsing_models) == 1
@@ -349,14 +371,16 @@ def test_backward_compat_legacy_few_shot_fields() -> None:
         few_shot_enabled=True,
         few_shot_mode="k-shot",
         few_shot_k=5,
-        parsing_models=[ModelConfig(
-            id="parsing",
-            model_name="gpt-4",
-            model_provider="openai",
-            interface="langchain",
-            system_prompt="test",
-            temperature=0.1,
-        )],
+        parsing_models=[
+            ModelConfig(
+                id="parsing",
+                model_name="gpt-4",
+                model_provider="openai",
+                interface="langchain",
+                system_prompt="test",
+                temperature=0.1,
+            )
+        ],
         answering_models=[],
         parsing_only=True,
     )
@@ -410,14 +434,16 @@ def test_env_var_embedding_check_enabled() -> None:
     """Test that EMBEDDING_CHECK env var is read."""
     with patch.dict("os.environ", {"EMBEDDING_CHECK": "true"}):
         config = VerificationConfig(
-            parsing_models=[ModelConfig(
-                id="parsing",
-                model_name="gpt-4",
-                model_provider="openai",
-                interface="langchain",
-                system_prompt="test",
-                temperature=0.1,
-            )],
+            parsing_models=[
+                ModelConfig(
+                    id="parsing",
+                    model_name="gpt-4",
+                    model_provider="openai",
+                    interface="langchain",
+                    system_prompt="test",
+                    temperature=0.1,
+                )
+            ],
             answering_models=[],
             parsing_only=True,
         )
@@ -429,14 +455,16 @@ def test_env_var_embedding_check_model() -> None:
     """Test that EMBEDDING_CHECK_MODEL env var is read."""
     with patch.dict("os.environ", {"EMBEDDING_CHECK_MODEL": "custom-model"}):
         config = VerificationConfig(
-            parsing_models=[ModelConfig(
-                id="parsing",
-                model_name="gpt-4",
-                model_provider="openai",
-                interface="langchain",
-                system_prompt="test",
-                temperature=0.1,
-            )],
+            parsing_models=[
+                ModelConfig(
+                    id="parsing",
+                    model_name="gpt-4",
+                    model_provider="openai",
+                    interface="langchain",
+                    system_prompt="test",
+                    temperature=0.1,
+                )
+            ],
             answering_models=[],
             parsing_only=True,
         )
@@ -448,14 +476,16 @@ def test_env_var_embedding_check_threshold() -> None:
     """Test that EMBEDDING_CHECK_THRESHOLD env var is read."""
     with patch.dict("os.environ", {"EMBEDDING_CHECK_THRESHOLD": "0.95"}):
         config = VerificationConfig(
-            parsing_models=[ModelConfig(
-                id="parsing",
-                model_name="gpt-4",
-                model_provider="openai",
-                interface="langchain",
-                system_prompt="test",
-                temperature=0.1,
-            )],
+            parsing_models=[
+                ModelConfig(
+                    id="parsing",
+                    model_name="gpt-4",
+                    model_provider="openai",
+                    interface="langchain",
+                    system_prompt="test",
+                    temperature=0.1,
+                )
+            ],
             answering_models=[],
             parsing_only=True,
         )
@@ -467,14 +497,16 @@ def test_env_var_async_enabled() -> None:
     """Test that KARENINA_ASYNC_ENABLED env var is read."""
     with patch.dict("os.environ", {"KARENINA_ASYNC_ENABLED": "false"}):
         config = VerificationConfig(
-            parsing_models=[ModelConfig(
-                id="parsing",
-                model_name="gpt-4",
-                model_provider="openai",
-                interface="langchain",
-                system_prompt="test",
-                temperature=0.1,
-            )],
+            parsing_models=[
+                ModelConfig(
+                    id="parsing",
+                    model_name="gpt-4",
+                    model_provider="openai",
+                    interface="langchain",
+                    system_prompt="test",
+                    temperature=0.1,
+                )
+            ],
             answering_models=[],
             parsing_only=True,
         )
@@ -486,14 +518,16 @@ def test_env_var_async_max_workers() -> None:
     """Test that KARENINA_ASYNC_MAX_WORKERS env var is read."""
     with patch.dict("os.environ", {"KARENINA_ASYNC_MAX_WORKERS": "4"}):
         config = VerificationConfig(
-            parsing_models=[ModelConfig(
-                id="parsing",
-                model_name="gpt-4",
-                model_provider="openai",
-                interface="langchain",
-                system_prompt="test",
-                temperature=0.1,
-            )],
+            parsing_models=[
+                ModelConfig(
+                    id="parsing",
+                    model_name="gpt-4",
+                    model_provider="openai",
+                    interface="langchain",
+                    system_prompt="test",
+                    temperature=0.1,
+                )
+            ],
             answering_models=[],
             parsing_only=True,
         )
@@ -505,14 +539,16 @@ def test_env_var_invalid_embedding_threshold_ignored() -> None:
     """Test that invalid EMBEDDING_CHECK_THRESHOLD is ignored (uses default)."""
     with patch.dict("os.environ", {"EMBEDDING_CHECK_THRESHOLD": "not-a-number"}):
         config = VerificationConfig(
-            parsing_models=[ModelConfig(
-                id="parsing",
-                model_name="gpt-4",
-                model_provider="openai",
-                interface="langchain",
-                system_prompt="test",
-                temperature=0.1,
-            )],
+            parsing_models=[
+                ModelConfig(
+                    id="parsing",
+                    model_name="gpt-4",
+                    model_provider="openai",
+                    interface="langchain",
+                    system_prompt="test",
+                    temperature=0.1,
+                )
+            ],
             answering_models=[],
             parsing_only=True,
         )
@@ -525,14 +561,16 @@ def test_explicit_value_overrides_env_var() -> None:
     """Test that explicit values override environment variables."""
     with patch.dict("os.environ", {"EMBEDDING_CHECK": "true"}):
         config = VerificationConfig(
-            parsing_models=[ModelConfig(
-                id="parsing",
-                model_name="gpt-4",
-                model_provider="openai",
-                interface="langchain",
-                system_prompt="test",
-                temperature=0.1,
-            )],
+            parsing_models=[
+                ModelConfig(
+                    id="parsing",
+                    model_name="gpt-4",
+                    model_provider="openai",
+                    interface="langchain",
+                    system_prompt="test",
+                    temperature=0.1,
+                )
+            ],
             answering_models=[],
             parsing_only=True,
             embedding_check_enabled=False,  # Explicit value
@@ -585,14 +623,16 @@ def test_repr_shows_models() -> None:
 def test_repr_shows_execution_settings() -> None:
     """Test that __repr__ shows execution settings."""
     config = VerificationConfig(
-        parsing_models=[ModelConfig(
-            id="parsing",
-            model_name="gpt-4",
-            model_provider="openai",
-            interface="langchain",
-            system_prompt="test",
-            temperature=0.1,
-        )],
+        parsing_models=[
+            ModelConfig(
+                id="parsing",
+                model_name="gpt-4",
+                model_provider="openai",
+                interface="langchain",
+                system_prompt="test",
+                temperature=0.1,
+            )
+        ],
         answering_models=[],
         parsing_only=True,
         replicate_count=3,
@@ -609,22 +649,26 @@ def test_repr_shows_execution_settings() -> None:
 def test_repr_shows_features() -> None:
     """Test that __repr__ shows enabled features."""
     config = VerificationConfig(
-        answering_models=[ModelConfig(
-            id="answering",
-            model_name="gpt-4",
-            model_provider="openai",
-            interface="langchain",
-            system_prompt="test",
-            temperature=0.1,
-        )],
-        parsing_models=[ModelConfig(
-            id="parsing",
-            model_name="gpt-4",
-            model_provider="openai",
-            interface="langchain",
-            system_prompt="test",
-            temperature=0.1,
-        )],
+        answering_models=[
+            ModelConfig(
+                id="answering",
+                model_name="gpt-4",
+                model_provider="openai",
+                interface="langchain",
+                system_prompt="test",
+                temperature=0.1,
+            )
+        ],
+        parsing_models=[
+            ModelConfig(
+                id="parsing",
+                model_name="gpt-4",
+                model_provider="openai",
+                interface="langchain",
+                system_prompt="test",
+                temperature=0.1,
+            )
+        ],
         evaluation_mode="template_and_rubric",
         rubric_enabled=True,
         abstention_enabled=True,
@@ -647,14 +691,16 @@ def test_get_few_shot_config_returns_new_config() -> None:
     """Test get_few_shot_config returns new FewShotConfig when present."""
 
     config = VerificationConfig(
-        parsing_models=[ModelConfig(
-            id="parsing",
-            model_name="gpt-4",
-            model_provider="openai",
-            interface="langchain",
-            system_prompt="test",
-            temperature=0.1,
-        )],
+        parsing_models=[
+            ModelConfig(
+                id="parsing",
+                model_name="gpt-4",
+                model_provider="openai",
+                interface="langchain",
+                system_prompt="test",
+                temperature=0.1,
+            )
+        ],
         answering_models=[],
         parsing_only=True,
         few_shot_config=FewShotConfig(enabled=True, global_mode="all", global_k=3),
@@ -671,14 +717,16 @@ def test_get_few_shot_config_returns_none_when_disabled() -> None:
     """Test get_few_shot_config returns None when few-shot is disabled."""
     # When no few_shot fields are set at all, get_few_shot_config returns None
     config = VerificationConfig(
-        parsing_models=[ModelConfig(
-            id="parsing",
-            model_name="gpt-4",
-            model_provider="openai",
-            interface="langchain",
-            system_prompt="test",
-            temperature=0.1,
-        )],
+        parsing_models=[
+            ModelConfig(
+                id="parsing",
+                model_name="gpt-4",
+                model_provider="openai",
+                interface="langchain",
+                system_prompt="test",
+                temperature=0.1,
+            )
+        ],
         answering_models=[],
         parsing_only=True,
     )
@@ -692,14 +740,16 @@ def test_is_few_shot_enabled_true() -> None:
     """Test is_few_shot_enabled returns True when enabled."""
 
     config = VerificationConfig(
-        parsing_models=[ModelConfig(
-            id="parsing",
-            model_name="gpt-4",
-            model_provider="openai",
-            interface="langchain",
-            system_prompt="test",
-            temperature=0.1,
-        )],
+        parsing_models=[
+            ModelConfig(
+                id="parsing",
+                model_name="gpt-4",
+                model_provider="openai",
+                interface="langchain",
+                system_prompt="test",
+                temperature=0.1,
+            )
+        ],
         answering_models=[],
         parsing_only=True,
         few_shot_config=FewShotConfig(enabled=True, global_mode="all", global_k=3),
@@ -712,14 +762,16 @@ def test_is_few_shot_enabled_true() -> None:
 def test_is_few_shot_enabled_false() -> None:
     """Test is_few_shot_enabled returns False when disabled."""
     config = VerificationConfig(
-        parsing_models=[ModelConfig(
-            id="parsing",
-            model_name="gpt-4",
-            model_provider="openai",
-            interface="langchain",
-            system_prompt="test",
-            temperature=0.1,
-        )],
+        parsing_models=[
+            ModelConfig(
+                id="parsing",
+                model_name="gpt-4",
+                model_provider="openai",
+                interface="langchain",
+                system_prompt="test",
+                temperature=0.1,
+            )
+        ],
         answering_models=[],
         parsing_only=True,
     )
@@ -978,14 +1030,16 @@ def test_save_preset_generates_safe_filename(tmp_path: Path) -> None:
     from karenina.schemas.workflow.models import ModelConfig
 
     config = VerificationConfig(
-        parsing_models=[ModelConfig(
-            id="parsing",
-            model_name="gpt-4",
-            model_provider="openai",
-            interface="langchain",
-            system_prompt="test",
-            temperature=0.1,
-        )],
+        parsing_models=[
+            ModelConfig(
+                id="parsing",
+                model_name="gpt-4",
+                model_provider="openai",
+                interface="langchain",
+                system_prompt="test",
+                temperature=0.1,
+            )
+        ],
         answering_models=[],
         parsing_only=True,
     )
@@ -1009,14 +1063,16 @@ def test_save_perset_existing_file_raises(tmp_path: Path) -> None:
     (tmp_path / "test-preset.json").write_text("{}")
 
     config = VerificationConfig(
-        parsing_models=[ModelConfig(
-            id="parsing",
-            model_name="gpt-4",
-            model_provider="openai",
-            interface="langchain",
-            system_prompt="test",
-            temperature=0.1,
-        )],
+        parsing_models=[
+            ModelConfig(
+                id="parsing",
+                model_name="gpt-4",
+                model_provider="openai",
+                interface="langchain",
+                system_prompt="test",
+                temperature=0.1,
+            )
+        ],
         answering_models=[],
         parsing_only=True,
     )
@@ -1101,14 +1157,16 @@ def test_from_preset_missing_config_raises(tmp_path: Path) -> None:
 def test_deep_judgment_rubric_mode_default() -> None:
     """Test default deep_judgment_rubric_mode is 'disabled'."""
     config = VerificationConfig(
-        parsing_models=[ModelConfig(
-            id="parsing",
-            model_name="gpt-4",
-            model_provider="openai",
-            interface="langchain",
-            system_prompt="test",
-            temperature=0.1,
-        )],
+        parsing_models=[
+            ModelConfig(
+                id="parsing",
+                model_name="gpt-4",
+                model_provider="openai",
+                interface="langchain",
+                system_prompt="test",
+                temperature=0.1,
+            )
+        ],
         answering_models=[],
         parsing_only=True,
     )
@@ -1120,14 +1178,16 @@ def test_deep_judgment_rubric_mode_default() -> None:
 def test_deep_judgment_rubric_enable_all_mode() -> None:
     """Test deep_judgment_rubric_mode='enable_all' setting."""
     config = VerificationConfig(
-        parsing_models=[ModelConfig(
-            id="parsing",
-            model_name="gpt-4",
-            model_provider="openai",
-            interface="langchain",
-            system_prompt="test",
-            temperature=0.1,
-        )],
+        parsing_models=[
+            ModelConfig(
+                id="parsing",
+                model_name="gpt-4",
+                model_provider="openai",
+                interface="langchain",
+                system_prompt="test",
+                temperature=0.1,
+            )
+        ],
         answering_models=[],
         parsing_only=True,
         deep_judgment_rubric_mode="enable_all",
@@ -1149,18 +1209,20 @@ def test_deep_judgment_rubric_custom_mode() -> None:
             "q-123": {
                 "Completeness": {"enabled": False},
             }
-        }
+        },
     }
 
     config = VerificationConfig(
-        parsing_models=[ModelConfig(
-            id="parsing",
-            model_name="gpt-4",
-            model_provider="openai",
-            interface="langchain",
-            system_prompt="test",
-            temperature=0.1,
-        )],
+        parsing_models=[
+            ModelConfig(
+                id="parsing",
+                model_name="gpt-4",
+                model_provider="openai",
+                interface="langchain",
+                system_prompt="test",
+                temperature=0.1,
+            )
+        ],
         answering_models=[],
         parsing_only=True,
         deep_judgment_rubric_mode="custom",

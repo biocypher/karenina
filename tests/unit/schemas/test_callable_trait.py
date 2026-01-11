@@ -29,8 +29,10 @@ from karenina.schemas.domain import CallableTrait
 @pytest.mark.unit
 def test_callable_trait_minimal_boolean() -> None:
     """Test CallableTrait with minimal boolean fields."""
+
     def func(text):
         return len(text) > 10
+
     code = cloudpickle.dumps(func)
 
     trait = CallableTrait(
@@ -51,8 +53,10 @@ def test_callable_trait_minimal_boolean() -> None:
 @pytest.mark.unit
 def test_callable_trait_minimal_score() -> None:
     """Test CallableTrait with minimal score fields."""
+
     def func(text):
         return min(len(text), 100)
+
     code = cloudpickle.dumps(func)
 
     trait = CallableTrait(
@@ -73,8 +77,10 @@ def test_callable_trait_minimal_score() -> None:
 @pytest.mark.unit
 def test_callable_trait_with_all_fields() -> None:
     """Test CallableTrait with all fields."""
+
     def func(text):
         return len(text.split())
+
     code = cloudpickle.dumps(func)
 
     trait = CallableTrait(
@@ -95,8 +101,10 @@ def test_callable_trait_with_all_fields() -> None:
 @pytest.mark.unit
 def test_callable_trait_default_invert_result() -> None:
     """Test invert_result defaults to False."""
+
     def func(text):
         return True
+
     code = cloudpickle.dumps(func)
 
     trait = CallableTrait(
@@ -112,8 +120,10 @@ def test_callable_trait_default_invert_result() -> None:
 @pytest.mark.unit
 def test_callable_trait_extra_fields_forbidden() -> None:
     """Test that extra fields are rejected."""
+
     def func(text):
         return True
+
     code = cloudpickle.dumps(func)
 
     with pytest.raises(ValidationError):
@@ -129,8 +139,10 @@ def test_callable_trait_extra_fields_forbidden() -> None:
 @pytest.mark.unit
 def test_callable_trait_kind_must_be_valid() -> None:
     """Test that kind must be 'boolean' or 'score'."""
+
     def func(text):
         return True
+
     code = cloudpickle.dumps(func)
 
     with pytest.raises(ValidationError):
@@ -150,8 +162,10 @@ def test_callable_trait_kind_must_be_valid() -> None:
 @pytest.mark.unit
 def test_callable_trait_code_from_bytes() -> None:
     """Test callable_code can be provided as bytes."""
+
     def func(text):
         return "keyword" in text
+
     code = cloudpickle.dumps(func)
 
     trait = CallableTrait(
@@ -167,8 +181,10 @@ def test_callable_trait_code_from_bytes() -> None:
 @pytest.mark.unit
 def test_callable_trait_code_from_base64_string() -> None:
     """Test callable_code can be provided as base64 string."""
+
     def func(text):
         return "test" in text
+
     code = cloudpickle.dumps(func)
     code_b64 = base64.b64encode(code).decode("ascii")
 
@@ -186,8 +202,10 @@ def test_callable_trait_code_from_base64_string() -> None:
 @pytest.mark.unit
 def test_callable_trait_serializes_to_base64() -> None:
     """Test that callable_code serializes to base64 string for JSON."""
+
     def func(text):
         return len(text)
+
     code = cloudpickle.dumps(func)
 
     trait = CallableTrait(
@@ -228,6 +246,7 @@ def test_callable_trait_invalid_code_type_raises_error() -> None:
 @pytest.mark.unit
 def test_from_callable_boolean_simple() -> None:
     """Test from_callable() with simple boolean function."""
+
     def func(text):
         return len(text) > 50
 
@@ -246,6 +265,7 @@ def test_from_callable_boolean_simple() -> None:
 @pytest.mark.unit
 def test_from_callable_boolean_with_description() -> None:
     """Test from_callable() with description."""
+
     def func(text):
         return "important" in text.lower()
 
@@ -262,6 +282,7 @@ def test_from_callable_boolean_with_description() -> None:
 @pytest.mark.unit
 def test_from_callable_boolean_with_invert() -> None:
     """Test from_callable() with invert_result."""
+
     def func(text):
         return "error" in text.lower()
 
@@ -279,6 +300,7 @@ def test_from_callable_boolean_with_invert() -> None:
 @pytest.mark.unit
 def test_from_callable_score_simple() -> None:
     """Test from_callable() with score function."""
+
     def func(text):
         return min(len(text), 100)
 
@@ -298,6 +320,7 @@ def test_from_callable_score_simple() -> None:
 @pytest.mark.unit
 def test_from_callable_score_with_bounds() -> None:
     """Test from_callable() with score bounds."""
+
     def func(text):
         return min(len(text.split()), 10)
 
@@ -317,6 +340,7 @@ def test_from_callable_score_with_bounds() -> None:
 @pytest.mark.unit
 def test_from_callable_lower_is_better() -> None:
     """Test from_callable() with higher_is_better=False."""
+
     def func(text):
         return text.count("error")
 
@@ -353,6 +377,7 @@ def test_from_callable_function_with_closure() -> None:
 @pytest.mark.unit
 def test_from_callable_lambda_with_expression() -> None:
     """Test from_callable() with complex lambda."""
+
     def func(text):
         return sum(1 for c in text if c.isupper())
 
@@ -376,6 +401,7 @@ def test_from_callable_lambda_with_expression() -> None:
 @pytest.mark.unit
 def test_from_callable_no_parameters_raises_error() -> None:
     """Test that function with no parameters raises ValueError."""
+
     def no_params() -> bool:
         return True
 
@@ -392,6 +418,7 @@ def test_from_callable_no_parameters_raises_error() -> None:
 @pytest.mark.unit
 def test_from_callable_two_parameters_raises_error() -> None:
     """Test that function with two parameters raises ValueError."""
+
     def two_params(text: str, extra: int) -> bool:
         return True
 
@@ -413,6 +440,7 @@ def test_from_callable_two_parameters_raises_error() -> None:
 @pytest.mark.unit
 def test_from_callable_score_without_min_max_raises_error() -> None:
     """Test that score kind without min/max scores raises ValueError."""
+
     def func(text):
         return len(text)
 
@@ -429,6 +457,7 @@ def test_from_callable_score_without_min_max_raises_error() -> None:
 @pytest.mark.unit
 def test_from_callable_score_only_min_raises_error() -> None:
     """Test that score kind with only min_score raises ValueError."""
+
     def func(text):
         return len(text)
 
@@ -446,6 +475,7 @@ def test_from_callable_score_only_min_raises_error() -> None:
 @pytest.mark.unit
 def test_from_callable_score_only_max_raises_error() -> None:
     """Test that score kind with only max_score raises ValueError."""
+
     def func(text):
         return len(text)
 
@@ -463,6 +493,7 @@ def test_from_callable_score_only_max_raises_error() -> None:
 @pytest.mark.unit
 def test_from_callable_min_equals_max_raises_error() -> None:
     """Test that min_score == max_score raises ValueError."""
+
     def func(text):
         return 50
 
@@ -481,6 +512,7 @@ def test_from_callable_min_equals_max_raises_error() -> None:
 @pytest.mark.unit
 def test_from_callable_min_greater_than_max_raises_error() -> None:
     """Test that min_score > max_score raises ValueError."""
+
     def func(text):
         return 50
 
@@ -499,6 +531,7 @@ def test_from_callable_min_greater_than_max_raises_error() -> None:
 @pytest.mark.unit
 def test_from_callable_boolean_with_scores_raises_error() -> None:
     """Test that boolean kind with scores raises ValueError."""
+
     def func(text):
         return True
 
@@ -522,6 +555,7 @@ def test_from_callable_boolean_with_scores_raises_error() -> None:
 @pytest.mark.unit
 def test_deserialize_callable_returns_function() -> None:
     """Test deserialize_callable() returns the original function."""
+
     def original_func(text):
         return text.count("word")
 
@@ -539,6 +573,7 @@ def test_deserialize_callable_returns_function() -> None:
 @pytest.mark.unit
 def test_deserialize_callable_preserves_function_logic() -> None:
     """Test deserialized function preserves original logic."""
+
     def complex_func(text: str) -> int:
         words = text.split()
         return len([w for w in words if len(w) > 5])
@@ -647,6 +682,7 @@ def test_evaluate_boolean_invert_result() -> None:
 @pytest.mark.unit
 def test_evaluate_boolean_with_complex_logic() -> None:
     """Test evaluate() with complex boolean logic."""
+
     def has_both_keywords(text: str) -> bool:
         lower = text.lower()
         return "apple" in lower and "banana" in lower
@@ -798,6 +834,7 @@ def test_evaluate_score_at_upper_bound() -> None:
 @pytest.mark.unit
 def test_evaluate_score_complex_calculation() -> None:
     """Test evaluate() with complex score calculation."""
+
     def calculate_score(text: str) -> int:
         words = text.split()
         avg_length = sum(len(w) for w in words) / len(words) if words else 0
@@ -870,7 +907,7 @@ def test_evaluate_score_returns_non_numeric_raises_error() -> None:
     """Test that score trait returning non-numeric raises RuntimeError."""
     trait = CallableTrait.from_callable(
         name="bad",
-        func=lambda text: "not a number",  # type: ignore[return-value]
+        func=lambda _text: "not a number",  # type: ignore[return-value]
         kind="score",
         min_score=0,
         max_score=10,
@@ -888,7 +925,7 @@ def test_evaluate_score_below_min_raises_error() -> None:
     """Test that score below min_score raises RuntimeError."""
     trait = CallableTrait.from_callable(
         name="bad",
-        func=lambda text: -1,
+        func=lambda _text: -1,
         kind="score",
         min_score=0,
         max_score=10,
@@ -906,7 +943,7 @@ def test_evaluate_score_above_max_raises_error() -> None:
     """Test that score above max_score raises RuntimeError."""
     trait = CallableTrait.from_callable(
         name="bad",
-        func=lambda text: 15,
+        func=lambda _text: 15,
         kind="score",
         min_score=0,
         max_score=10,
@@ -922,6 +959,7 @@ def test_evaluate_score_above_max_raises_error() -> None:
 @pytest.mark.unit
 def test_evaluate_runtime_error_propagates() -> None:
     """Test that runtime errors in callable are wrapped in RuntimeError."""
+
     def buggy_func(text: str) -> int:
         raise ValueError("Something went wrong!")
 
@@ -979,7 +1017,7 @@ def test_callable_trait_default_higher_is_better() -> None:
     """Test that higher_is_better defaults to True."""
     trait = CallableTrait.from_callable(
         name="default",
-        func=lambda text: True,
+        func=lambda _text: True,
         kind="boolean",
     )
 
@@ -994,6 +1032,7 @@ def test_callable_trait_default_higher_is_better() -> None:
 @pytest.mark.unit
 def test_callable_trait_roundtrip() -> None:
     """Test that CallableTrait survives serialize/deserialize roundtrip."""
+
     def original_func(text: str) -> bool:
         return "success" in text.lower()
 
@@ -1017,6 +1056,7 @@ def test_callable_trait_roundtrip() -> None:
 @pytest.mark.unit
 def test_callable_trait_json_roundtrip() -> None:
     """Test CallableTrait through JSON serialize/deserialize."""
+
     def score_func(text: str) -> int:
         return len(text.split())
 
@@ -1043,7 +1083,7 @@ def test_callable_trait_description_preserved() -> None:
     """Test that description is preserved through roundtrip."""
     trait = CallableTrait.from_callable(
         name="test",
-        func=lambda text: True,
+        func=lambda _text: True,
         kind="boolean",
         description="This is a test trait",
     )
@@ -1059,7 +1099,7 @@ def test_callable_trait_invert_result_preserved() -> None:
     """Test that invert_result is preserved through roundtrip."""
     trait = CallableTrait.from_callable(
         name="test",
-        func=lambda text: True,
+        func=lambda _text: True,
         kind="boolean",
         invert_result=True,
     )
@@ -1082,7 +1122,7 @@ def test_callable_trait_legacy_default_higher_is_better() -> None:
     trait = CallableTrait(
         name="test",
         kind="boolean",
-        callable_code=cloudpickle.dumps(lambda t: True),
+        callable_code=cloudpickle.dumps(lambda _t: True),
         higher_is_better=None,  # type: ignore[arg-type]
     )
 

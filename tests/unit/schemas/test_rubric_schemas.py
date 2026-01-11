@@ -187,12 +187,8 @@ def test_rubric_empty() -> None:
 @pytest.mark.unit
 def test_rubric_with_llm_traits() -> None:
     """Test Rubric with LLM traits."""
-    trait1 = LLMRubricTrait(
-        name="clarity", kind="boolean", higher_is_better=True, description="Response clarity"
-    )
-    trait2 = LLMRubricTrait(
-        name="quality", kind="score", higher_is_better=True, min_score=1, max_score=5
-    )
+    trait1 = LLMRubricTrait(name="clarity", kind="boolean", higher_is_better=True, description="Response clarity")
+    trait2 = LLMRubricTrait(name="quality", kind="score", higher_is_better=True, min_score=1, max_score=5)
 
     rubric = Rubric(llm_traits=[trait1, trait2])
 
@@ -257,9 +253,7 @@ def test_rubric_with_metric_traits() -> None:
 @pytest.mark.unit
 def test_rubric_get_trait_names() -> None:
     """Test get_trait_names returns all trait names."""
-    llm_trait = LLMRubricTrait(
-        name="clarity", kind="boolean", higher_is_better=True
-    )
+    llm_trait = LLMRubricTrait(name="clarity", kind="boolean", higher_is_better=True)
     regex_trait = RegexTrait(
         name="has_email",
         pattern=r"\S+@\S+",
@@ -330,9 +324,7 @@ def test_rubric_get_trait_max_scores() -> None:
 @pytest.mark.unit
 def test_rubric_get_trait_directionalities() -> None:
     """Test get_trait_directionalities returns higher_is_better values."""
-    llm_trait = LLMRubricTrait(
-        name="clarity", kind="boolean", higher_is_better=True
-    )
+    llm_trait = LLMRubricTrait(name="clarity", kind="boolean", higher_is_better=True)
     regex_trait = RegexTrait(
         name="no_profanity",
         pattern=r"\bbadword\b",
@@ -363,9 +355,7 @@ def test_rubric_get_trait_directionalities() -> None:
 @pytest.mark.unit
 def test_rubric_validate_evaluation_success() -> None:
     """Test validate_evaluation with valid evaluation."""
-    llm_trait = LLMRubricTrait(
-        name="clarity", kind="boolean", higher_is_better=True
-    )
+    llm_trait = LLMRubricTrait(name="clarity", kind="boolean", higher_is_better=True)
     score_trait = LLMRubricTrait(
         name="quality",
         kind="score",
@@ -406,9 +396,7 @@ def test_rubric_validate_evaluation_success() -> None:
 @pytest.mark.unit
 def test_rubric_validate_evaluation_missing_trait() -> None:
     """Test validate_evaluation fails when trait is missing."""
-    trait = LLMRubricTrait(
-        name="clarity", kind="boolean", higher_is_better=True
-    )
+    trait = LLMRubricTrait(name="clarity", kind="boolean", higher_is_better=True)
 
     rubric = Rubric(llm_traits=[trait])
 
@@ -421,9 +409,7 @@ def test_rubric_validate_evaluation_missing_trait() -> None:
 @pytest.mark.unit
 def test_rubric_validate_evaluation_extra_trait() -> None:
     """Test validate_evaluation fails when extra trait present."""
-    trait = LLMRubricTrait(
-        name="clarity", kind="boolean", higher_is_better=True
-    )
+    trait = LLMRubricTrait(name="clarity", kind="boolean", higher_is_better=True)
 
     rubric = Rubric(llm_traits=[trait])
 
@@ -489,9 +475,7 @@ def test_rubric_extra_fields_forbidden() -> None:
 @pytest.mark.unit
 def test_rubric_evaluation_creation() -> None:
     """Test RubricEvaluation creation."""
-    evaluation = RubricEvaluation(
-        trait_scores={"clarity": True, "quality": 4}
-    )
+    evaluation = RubricEvaluation(trait_scores={"clarity": True, "quality": 4})
 
     assert evaluation.trait_scores == {"clarity": True, "quality": 4}
 
@@ -522,9 +506,7 @@ def test_merge_rubrics_both_none() -> None:
 @pytest.mark.unit
 def test_merge_rubrics_global_only() -> None:
     """Test merge_rubrics with only global rubric."""
-    global_trait = LLMRubricTrait(
-        name="clarity", kind="boolean", higher_is_better=True
-    )
+    global_trait = LLMRubricTrait(name="clarity", kind="boolean", higher_is_better=True)
     global_rubric = Rubric(llm_traits=[global_trait])
 
     result = merge_rubrics(global_rubric, None)
@@ -535,9 +517,7 @@ def test_merge_rubrics_global_only() -> None:
 @pytest.mark.unit
 def test_merge_rubrics_question_only() -> None:
     """Test merge_rubrics with only question rubric."""
-    question_trait = LLMRubricTrait(
-        name="specificity", kind="boolean", higher_is_better=True
-    )
+    question_trait = LLMRubricTrait(name="specificity", kind="boolean", higher_is_better=True)
     question_rubric = Rubric(llm_traits=[question_trait])
 
     result = merge_rubrics(None, question_rubric)
@@ -548,12 +528,8 @@ def test_merge_rubrics_question_only() -> None:
 @pytest.mark.unit
 def test_merge_rubrics_no_conflicts() -> None:
     """Test merge_rubrics with no trait name conflicts."""
-    global_trait = LLMRubricTrait(
-        name="clarity", kind="boolean", higher_is_better=True
-    )
-    question_trait = LLMRubricTrait(
-        name="specificity", kind="boolean", higher_is_better=True
-    )
+    global_trait = LLMRubricTrait(name="clarity", kind="boolean", higher_is_better=True)
+    question_trait = LLMRubricTrait(name="specificity", kind="boolean", higher_is_better=True)
 
     global_rubric = Rubric(llm_traits=[global_trait])
     question_rubric = Rubric(llm_traits=[question_trait])
@@ -567,12 +543,8 @@ def test_merge_rubrics_no_conflicts() -> None:
 @pytest.mark.unit
 def test_merge_rubrics_with_conflict_raises_error() -> None:
     """Test merge_rubrics raises ValueError on trait name conflict."""
-    global_trait = LLMRubricTrait(
-        name="clarity", kind="boolean", higher_is_better=True
-    )
-    question_trait = LLMRubricTrait(
-        name="clarity", kind="score", min_score=1, max_score=5, higher_is_better=True
-    )
+    global_trait = LLMRubricTrait(name="clarity", kind="boolean", higher_is_better=True)
+    question_trait = LLMRubricTrait(name="clarity", kind="score", min_score=1, max_score=5, higher_is_better=True)
 
     global_rubric = Rubric(llm_traits=[global_trait])
     question_rubric = Rubric(llm_traits=[question_trait])
@@ -587,18 +559,14 @@ def test_merge_rubrics_with_conflict_raises_error() -> None:
 @pytest.mark.unit
 def test_merge_rubrics_all_trait_types() -> None:
     """Test merge_rubrics merges all trait types."""
-    global_llm = LLMRubricTrait(
-        name="clarity", kind="boolean", higher_is_better=True
-    )
+    global_llm = LLMRubricTrait(name="clarity", kind="boolean", higher_is_better=True)
     global_regex = RegexTrait(
         name="has_email",
         pattern=r"\S+@\S+",
         higher_is_better=True,
     )
 
-    question_llm = LLMRubricTrait(
-        name="specificity", kind="boolean", higher_is_better=True
-    )
+    question_llm = LLMRubricTrait(name="specificity", kind="boolean", higher_is_better=True)
     question_regex = RegexTrait(
         name="has_citation",
         pattern=r"\[\d+\]",
