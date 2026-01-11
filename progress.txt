@@ -987,3 +987,37 @@ All checks passed!
 - Modified: `prd.json` (task-040 status: pending → completed)
 
 **No linting issues** (README.md is documentation, excluded from linting)
+
+## Iteration 21 (2025-01-11)
+
+**Task Completed**: task-035 - Create E2E test conftest.py with CLI runner fixtures
+
+**Work Done**:
+- Created `tests/e2e/conftest.py` with comprehensive fixtures for E2E testing
+- Added `runner` fixture returning Typer's CliRunner for invoking CLI commands
+- Added `minimal_checkpoint`, `checkpoint_with_results`, `large_checkpoint` path fixtures
+- Added `loaded_minimal_checkpoint` and `loaded_large_checkpoint` returning Benchmark objects
+- Added `preset_dict`, `preset_with_manual`, `preset_with_claude` config dictionaries
+- Added `tmp_preset_file`, `tmp_preset_file_claude`, `tmp_presets_dir` temporary preset fixtures
+- Added `env_with_api_key` fixture for setting mock API keys via monkeypatch
+- Added `clean_env` fixture to remove KARENINA_* environment variables
+- Added `output_json`, `output_csv` output path fixtures
+- Added `tmp_traces_file` fixture for manual traces JSON
+- Added `workspace_dir` fixture creating complete working directory structure
+
+**Test Results**:
+- All 754 unit tests pass
+- Linting passed (2 auto-fixes applied)
+
+**Files Created/Modified**:
+- Created: `tests/e2e/conftest.py` (319 lines with 15+ fixtures)
+- Modified: `prd.json` (task-035 status: pending → completed)
+
+**Fixture Coverage**:
+- CLI runner (Typer CliRunner)
+- Checkpoint fixtures (minimal, with_results, large + loaded variants)
+- Preset fixtures (dict, manual, claude, tmp files, presets directory)
+- Environment fixtures (API keys, clean environment)
+- Output fixtures (JSON, CSV paths)
+- Trace fixtures (manual traces file)
+- Workspace fixture (complete directory structure)
