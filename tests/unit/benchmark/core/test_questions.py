@@ -10,7 +10,6 @@ Tests cover:
 - Helper functions
 """
 
-
 import pytest
 
 from karenina import Benchmark

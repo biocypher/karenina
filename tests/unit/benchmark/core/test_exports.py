@@ -8,7 +8,6 @@ Tests cover:
 - Cloning functionality
 """
 
-
 import pytest
 
 from karenina import Benchmark
@@ -32,11 +31,7 @@ class TestExportManagerInit:
     def test_init_components(self) -> None:
         """Test ExportManager initialization with components."""
         benchmark = Benchmark.create(name="test")
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
 
         assert manager.base is benchmark._base
         assert manager.templates_manager is not None
@@ -50,11 +45,7 @@ class TestToDict:
     def test_to_dict_structure(self) -> None:
         """Test that to_dict returns correct structure."""
         benchmark = Benchmark.create(name="test-bench", description="Test description")
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
         result = manager.to_dict()
 
         assert "metadata" in result
@@ -65,16 +56,9 @@ class TestToDict:
     def test_to_dict_metadata(self) -> None:
         """Test that to_dict includes correct metadata."""
         benchmark = Benchmark.create(
-            name="test-bench",
-            description="Test description",
-            version="2.0.0",
-            creator="Test Creator"
+            name="test-bench", description="Test description", version="2.0.0", creator="Test Creator"
         )
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
         result = manager.to_dict()
 
         assert result["metadata"]["name"] == "test-bench"
@@ -89,11 +73,7 @@ class TestToDict:
         benchmark = Benchmark.create(name="test")
         benchmark.add_question("What is 2+2?", "4")
         benchmark.add_question("What is 3+3?", "6")
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
 
         result = manager.to_dict()
 
@@ -102,11 +82,7 @@ class TestToDict:
     def test_to_dict_global_rubric(self) -> None:
         """Test that to_dict includes global rubric if present."""
         benchmark = Benchmark.create(name="test")
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
         result = manager.to_dict()
 
         # No global rubric by default
@@ -120,11 +96,7 @@ class TestToMarkdown:
     def test_to_markdown_structure(self) -> None:
         """Test that to_markdown returns valid markdown."""
         benchmark = Benchmark.create(name="test-bench", description="Test desc")
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
         markdown = manager.to_markdown()
 
         assert "# test-bench" in markdown
@@ -134,17 +106,8 @@ class TestToMarkdown:
 
     def test_to_markdown_includes_metadata(self) -> None:
         """Test that markdown includes benchmark metadata."""
-        benchmark = Benchmark.create(
-            name="test",
-            description="Description",
-            version="1.5.0",
-            creator="Creator"
-        )
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        benchmark = Benchmark.create(name="test", description="Description", version="1.5.0", creator="Creator")
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
         markdown = manager.to_markdown()
 
         assert "**Version**: 1.5.0" in markdown
@@ -155,11 +118,7 @@ class TestToMarkdown:
         benchmark = Benchmark.create(name="test")
         benchmark.add_question("Question 1?", "Answer 1")
         benchmark.add_question("Question 2?", "Answer 2")
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
 
         markdown = manager.to_markdown()
 
@@ -176,11 +135,7 @@ class TestToMarkdown:
         # Add template to first question via template manager
         benchmark._template_manager.add_answer_template(q_id1, VALID_TEMPLATE)
 
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
         markdown = manager.to_markdown()
 
         # Check for status indicators (emoji)
@@ -195,11 +150,7 @@ class TestToCsv:
     def test_to_csv_header(self) -> None:
         """Test that CSV has correct header."""
         benchmark = Benchmark.create(name="test")
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
         csv = manager.to_csv()
 
         lines = csv.strip().split("\n")
@@ -213,11 +164,7 @@ class TestToCsv:
         """Test that CSV includes question data."""
         benchmark = Benchmark.create(name="test")
         benchmark.add_question("What is 2+2?", "4", finished=True)
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
 
         csv = manager.to_csv()
         lines = csv.strip().split("\n")
@@ -231,11 +178,7 @@ class TestToCsv:
         benchmark = Benchmark.create(name="test")
         benchmark.add_question("Q1?", "A1", finished=False)
         benchmark.add_question("Q2?", "A2", finished=True)
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
 
         csv = manager.to_csv()
         lines = csv.strip().split("\n")
@@ -250,11 +193,7 @@ class TestGetSummary:
     def test_get_summary_empty_benchmark(self) -> None:
         """Test summary for empty benchmark."""
         benchmark = Benchmark.create(name="test")
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
         summary = manager.get_summary()
 
         assert summary["name"] == "test"
@@ -271,11 +210,7 @@ class TestGetSummary:
         benchmark = Benchmark.create(name="test")
         benchmark.add_question("Q1?", "A1", finished=True)
         benchmark.add_question("Q2?", "A2", finished=False)
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
 
         summary = manager.get_summary()
 
@@ -291,11 +226,7 @@ class TestGetSummary:
 
         benchmark._template_manager.add_answer_template(q_id1, VALID_TEMPLATE)
 
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
         summary = manager.get_summary()
 
         assert summary["has_template_count"] == 1
@@ -308,11 +239,7 @@ class TestGetStatistics:
     def test_get_statistics_empty(self) -> None:
         """Test statistics for empty benchmark."""
         benchmark = Benchmark.create(name="test")
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
         stats = manager.get_statistics()
 
         assert stats["question_count"] == 0.0
@@ -327,11 +254,7 @@ class TestGetStatistics:
         q_id = benchmark.add_question("Q?", "A")
         benchmark._template_manager.add_answer_template(q_id, VALID_TEMPLATE)
 
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
         stats = manager.get_statistics()
 
         assert stats["avg_template_length"] > 0
@@ -347,11 +270,7 @@ class TestCheckReadiness:
     def test_readiness_empty_benchmark(self) -> None:
         """Test readiness check for empty benchmark."""
         benchmark = Benchmark.create(name="test")
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
         readiness = manager.check_readiness()
 
         assert readiness["ready_for_verification"] is False
@@ -365,11 +284,7 @@ class TestCheckReadiness:
         """Test readiness with questions but no templates."""
         benchmark = Benchmark.create(name="test")
         benchmark.add_question("Q?", "A", finished=False)
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
 
         readiness = manager.check_readiness()
 
@@ -384,11 +299,7 @@ class TestCheckReadiness:
         q_id = benchmark.add_question("Q?", "A", finished=True)
         benchmark._template_manager.add_answer_template(q_id, VALID_TEMPLATE)
 
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
         readiness = manager.check_readiness()
 
         assert readiness["ready_for_verification"] is True
@@ -404,11 +315,7 @@ class TestGetHealthReport:
     def test_health_report_empty_benchmark(self) -> None:
         """Test health report for empty benchmark."""
         benchmark = Benchmark.create(name="test")
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
         report = manager.get_health_report()
 
         assert report["health_score"] == 0.0
@@ -421,11 +328,7 @@ class TestGetHealthReport:
         """Test health report with questions."""
         benchmark = Benchmark.create(name="test")
         benchmark.add_question("Q?", "A", finished=True)
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
 
         report = manager.get_health_report()
 
@@ -437,11 +340,7 @@ class TestGetHealthReport:
         """Test health status classification."""
         benchmark = Benchmark.create(name="test")
         benchmark.add_question("Q?", "A", finished=True)
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
 
         report = manager.get_health_report()
         status = report["health_status"]
@@ -457,11 +356,7 @@ class TestGetRecommendations:
     def test_recommendations_empty_benchmark(self) -> None:
         """Test recommendations for empty benchmark."""
         benchmark = Benchmark.create(name="test")
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
         readiness = manager.check_readiness()
 
         recommendations = manager._get_recommendations(readiness)
@@ -478,11 +373,7 @@ class TestClone:
         """Test that clone creates a deep copy."""
         benchmark = Benchmark.create(name="original")
         benchmark.add_question("Q?", "A")
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
 
         cloned = manager.clone()
 
@@ -493,11 +384,7 @@ class TestClone:
         """Test that cloned benchmark is independent."""
         original = Benchmark.create(name="original")
         original.add_question("Q1?", "A1")
-        manager = ExportManager(
-            original._base,
-            original._template_manager,
-            original._rubric_manager
-        )
+        manager = ExportManager(original._base, original._template_manager, original._rubric_manager)
 
         cloned = manager.clone()
         # Clone returns BenchmarkBase, verify it has the same initial state
@@ -514,11 +401,7 @@ class TestExportToFile:
         """Test exporting to JSON file."""
         benchmark = Benchmark.create(name="test")
         benchmark.add_question("Q?", "A")
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
 
         output_path = tmp_path / "export.json"
         manager.export_to_file(output_path, format="json")
@@ -533,11 +416,7 @@ class TestExportToFile:
         """Test exporting to CSV file."""
         benchmark = Benchmark.create(name="test")
         benchmark.add_question("Q?", "A")
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
 
         output_path = tmp_path / "export.csv"
         manager.export_to_file(output_path, format="csv")
@@ -552,11 +431,7 @@ class TestExportToFile:
         """Test exporting to markdown file."""
         benchmark = Benchmark.create(name="test")
         benchmark.add_question("Q?", "A")
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
 
         output_path = tmp_path / "export.md"
         manager.export_to_file(output_path, format="markdown")
@@ -570,11 +445,7 @@ class TestExportToFile:
     def test_export_auto_detect_json(self, tmp_path) -> None:
         """Test auto format detection for JSON."""
         benchmark = Benchmark.create(name="test")
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
 
         output_path = tmp_path / "export.json"
         manager.export_to_file(output_path, format="auto")
@@ -584,11 +455,7 @@ class TestExportToFile:
     def test_export_auto_detect_csv(self, tmp_path) -> None:
         """Test auto format detection for CSV."""
         benchmark = Benchmark.create(name="test")
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
 
         output_path = tmp_path / "data.csv"
         manager.export_to_file(output_path, format="auto")
@@ -598,11 +465,7 @@ class TestExportToFile:
     def test_export_auto_detect_markdown(self, tmp_path) -> None:
         """Test auto format detection for markdown."""
         benchmark = Benchmark.create(name="test")
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
 
         output_path = tmp_path / "readme.md"
         manager.export_to_file(output_path, format="auto")
@@ -612,11 +475,7 @@ class TestExportToFile:
     def test_export_unsupported_format_raises(self, tmp_path) -> None:
         """Test that unsupported format raises error."""
         benchmark = Benchmark.create(name="test")
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
 
         output_path = tmp_path / "export.xyz"
 
@@ -631,11 +490,7 @@ class TestGetProgressReport:
     def test_progress_report_structure(self) -> None:
         """Test that progress report has correct structure."""
         benchmark = Benchmark.create(name="test-bench")
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
         report = manager.get_progress_report()
 
         assert "name" in report
@@ -651,11 +506,7 @@ class TestGetProgressReport:
         benchmark = Benchmark.create(name="test")
         benchmark.add_question("Q1?", "A1", finished=True)
         benchmark.add_question("Q2?", "A2", finished=False)
-        manager = ExportManager(
-            benchmark._base,
-            benchmark._template_manager,
-            benchmark._rubric_manager
-        )
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
 
         report = manager.get_progress_report()
 

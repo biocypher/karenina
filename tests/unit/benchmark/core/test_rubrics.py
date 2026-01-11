@@ -38,10 +38,7 @@ class TestAddGlobalRubricTrait:
         manager = RubricManager(benchmark)
 
         trait = LLMRubricTrait(
-            name="safety",
-            description="Is the response safe?",
-            kind="boolean",
-            higher_is_better=True
+            name="safety", description="Is the response safe?", kind="boolean", higher_is_better=True
         )
         manager.add_global_rubric_trait(trait)
 
@@ -59,7 +56,7 @@ class TestAddGlobalRubricTrait:
             pattern=r"\[\d+\]",
             case_sensitive=True,
             invert_result=False,
-            higher_is_better=True
+            higher_is_better=True,
         )
         manager.add_global_rubric_trait(trait)
 
@@ -75,10 +72,7 @@ class TestAddGlobalRubricTrait:
             return True
 
         trait = CallableTrait.from_callable(
-            name="simple_check",
-            func=simple_check,
-            kind="boolean",
-            description="Simple callable check"
+            name="simple_check", func=simple_check, kind="boolean", description="Simple callable check"
         )
         manager.add_global_rubric_trait(trait)
 
@@ -95,7 +89,7 @@ class TestAddGlobalRubricTrait:
             description="Entity extraction recall",
             evaluation_mode="tp_only",
             metrics=["recall"],
-            tp_instructions=["Entity A", "Entity B", "Entity C"]
+            tp_instructions=["Entity A", "Entity B", "Entity C"],
         )
         manager.add_global_rubric_trait(trait)
 
@@ -111,7 +105,14 @@ class TestAddGlobalRubricTrait:
             LLMRubricTrait(name="llm", description="LLM trait", kind="boolean", higher_is_better=True)
         )
         manager.add_global_rubric_trait(
-            RegexTrait(name="regex", description="Regex trait", pattern="test", case_sensitive=True, invert_result=False, higher_is_better=True)
+            RegexTrait(
+                name="regex",
+                description="Regex trait",
+                pattern="test",
+                case_sensitive=True,
+                invert_result=False,
+                higher_is_better=True,
+            )
         )
         manager.add_global_rubric_trait(
             CallableTrait.from_callable(
@@ -138,10 +139,7 @@ class TestAddQuestionRubricTrait:
         q_id = benchmark.add_question("What is 2+2?", "4")
 
         trait = LLMRubricTrait(
-            name="clarity",
-            description="Is the response clear?",
-            kind="boolean",
-            higher_is_better=True
+            name="clarity", description="Is the response clear?", kind="boolean", higher_is_better=True
         )
         manager.add_question_rubric_trait(q_id, trait)
 
@@ -153,12 +151,7 @@ class TestAddQuestionRubricTrait:
         benchmark = Benchmark.create(name="test")
         manager = RubricManager(benchmark)
 
-        trait = LLMRubricTrait(
-            name="test",
-            description="Test",
-            kind="boolean",
-            higher_is_better=True
-        )
+        trait = LLMRubricTrait(name="test", description="Test", kind="boolean", higher_is_better=True)
 
         with pytest.raises(ValueError, match="Question not found"):
             manager.add_question_rubric_trait("nonexistent", trait)
@@ -184,7 +177,14 @@ class TestGetGlobalRubric:
             LLMRubricTrait(name="llm", description="LLM", kind="boolean", higher_is_better=True)
         )
         manager.add_global_rubric_trait(
-            RegexTrait(name="regex", description="Regex", pattern="test", case_sensitive=True, invert_result=False, higher_is_better=True)
+            RegexTrait(
+                name="regex",
+                description="Regex",
+                pattern="test",
+                case_sensitive=True,
+                invert_result=False,
+                higher_is_better=True,
+            )
         )
 
         rubric = manager.get_global_rubric()
@@ -248,8 +248,7 @@ class TestGetMergedRubricForQuestion:
 
         q_id = benchmark.add_question("Question?", "Answer")
         manager.add_question_rubric_trait(
-            q_id,
-            LLMRubricTrait(name="question", description="Question trait", kind="boolean", higher_is_better=True)
+            q_id, LLMRubricTrait(name="question", description="Question trait", kind="boolean", higher_is_better=True)
         )
 
         merged = manager.get_merged_rubric_for_question(q_id)
@@ -266,8 +265,7 @@ class TestGetMergedRubricForQuestion:
         )
         q_id = benchmark.add_question("Question?", "Answer")
         manager.add_question_rubric_trait(
-            q_id,
-            LLMRubricTrait(name="question", description="Question trait", kind="boolean", higher_is_better=True)
+            q_id, LLMRubricTrait(name="question", description="Question trait", kind="boolean", higher_is_better=True)
         )
 
         merged = manager.get_merged_rubric_for_question(q_id)
@@ -280,12 +278,26 @@ class TestGetMergedRubricForQuestion:
         manager = RubricManager(benchmark)
 
         manager.add_global_rubric_trait(
-            RegexTrait(name="pattern", description="Global pattern", pattern=r"\d+", case_sensitive=True, invert_result=False, higher_is_better=True)
+            RegexTrait(
+                name="pattern",
+                description="Global pattern",
+                pattern=r"\d+",
+                case_sensitive=True,
+                invert_result=False,
+                higher_is_better=True,
+            )
         )
         q_id = benchmark.add_question("Question?", "Answer")
         manager.add_question_rubric_trait(
             q_id,
-            RegexTrait(name="pattern", description="Question pattern", pattern=r"[A-Z]+", case_sensitive=True, invert_result=False, higher_is_better=True)
+            RegexTrait(
+                name="pattern",
+                description="Question pattern",
+                pattern=r"[A-Z]+",
+                case_sensitive=True,
+                invert_result=False,
+                higher_is_better=True,
+            ),
         )
 
         merged = manager.get_merged_rubric_for_question(q_id)
@@ -333,8 +345,7 @@ class TestRemoveQuestionRubric:
 
         q_id = benchmark.add_question("Question?", "Answer")
         manager.add_question_rubric_trait(
-            q_id,
-            LLMRubricTrait(name="test", description="Test", kind="boolean", higher_is_better=True)
+            q_id, LLMRubricTrait(name="test", description="Test", kind="boolean", higher_is_better=True)
         )
 
         result = manager.remove_question_rubric(q_id)
@@ -365,8 +376,7 @@ class TestClearAllRubrics:
         )
         q_id = benchmark.add_question("Question?", "Answer")
         manager.add_question_rubric_trait(
-            q_id,
-            LLMRubricTrait(name="question", description="Question", kind="boolean", higher_is_better=True)
+            q_id, LLMRubricTrait(name="question", description="Question", kind="boolean", higher_is_better=True)
         )
 
         count = manager.clear_all_rubrics()
@@ -414,7 +424,9 @@ class TestValidateRubrics:
         manager = RubricManager(benchmark)
 
         manager.add_global_rubric_trait(
-            LLMRubricTrait(name="score", description="Score", kind="score", min_score=1, max_score=5, higher_is_better=True)
+            LLMRubricTrait(
+                name="score", description="Score", kind="score", min_score=1, max_score=5, higher_is_better=True
+            )
         )
 
         valid, errors = manager.validate_rubrics()
@@ -427,7 +439,14 @@ class TestValidateRubrics:
         manager = RubricManager(benchmark)
 
         manager.add_global_rubric_trait(
-            RegexTrait(name="pattern", description="Has pattern", pattern=r"\w+", case_sensitive=True, invert_result=False, higher_is_better=True)
+            RegexTrait(
+                name="pattern",
+                description="Has pattern",
+                pattern=r"\w+",
+                case_sensitive=True,
+                invert_result=False,
+                higher_is_better=True,
+            )
         )
 
         valid, errors = manager.validate_rubrics()
@@ -445,7 +464,7 @@ class TestValidateRubrics:
                 description="Has metrics",
                 evaluation_mode="tp_only",
                 metrics=["recall"],
-                tp_instructions=["A", "B"]
+                tp_instructions=["A", "B"],
             )
         )
 
@@ -479,7 +498,14 @@ class TestGetRubricStatistics:
             LLMRubricTrait(name="llm", description="LLM", kind="boolean", higher_is_better=True)
         )
         manager.add_global_rubric_trait(
-            RegexTrait(name="regex", description="Regex", pattern="test", case_sensitive=True, invert_result=False, higher_is_better=True)
+            RegexTrait(
+                name="regex",
+                description="Regex",
+                pattern="test",
+                case_sensitive=True,
+                invert_result=False,
+                higher_is_better=True,
+            )
         )
 
         stats = manager.get_rubric_statistics()
@@ -493,8 +519,7 @@ class TestGetRubricStatistics:
 
         q_id = benchmark.add_question("Question?", "Answer")
         manager.add_question_rubric_trait(
-            q_id,
-            LLMRubricTrait(name="trait", description="Trait", kind="boolean", higher_is_better=True)
+            q_id, LLMRubricTrait(name="trait", description="Trait", kind="boolean", higher_is_better=True)
         )
 
         stats = manager.get_rubric_statistics()
@@ -525,12 +550,10 @@ class TestGetQuestionsWithRubric:
         q_id3 = benchmark.add_question("Q3?", "A3")
 
         manager.add_question_rubric_trait(
-            q_id1,
-            LLMRubricTrait(name="trait", description="Trait", kind="boolean", higher_is_better=True)
+            q_id1, LLMRubricTrait(name="trait", description="Trait", kind="boolean", higher_is_better=True)
         )
         manager.add_question_rubric_trait(
-            q_id3,
-            LLMRubricTrait(name="trait", description="Trait", kind="boolean", higher_is_better=True)
+            q_id3, LLMRubricTrait(name="trait", description="Trait", kind="boolean", higher_is_better=True)
         )
 
         questions = manager.get_questions_with_rubric()
@@ -656,12 +679,17 @@ class TestGetRubricTraitNames:
             LLMRubricTrait(name="llm", description="LLM", kind="boolean", higher_is_better=True)
         )
         manager.add_global_rubric_trait(
-            RegexTrait(name="regex", description="Regex", pattern="test", case_sensitive=True, invert_result=False, higher_is_better=True)
+            RegexTrait(
+                name="regex",
+                description="Regex",
+                pattern="test",
+                case_sensitive=True,
+                invert_result=False,
+                higher_is_better=True,
+            )
         )
         manager.add_global_rubric_trait(
-            CallableTrait.from_callable(
-                name="callable", func=lambda _: True, kind="boolean", description="Callable"
-            )
+            CallableTrait.from_callable(name="callable", func=lambda _: True, kind="boolean", description="Callable")
         )
 
         names = manager.get_rubric_trait_names()
@@ -677,8 +705,7 @@ class TestGetRubricTraitNames:
         )
         q_id = benchmark.add_question("Question?", "Answer")
         manager.add_question_rubric_trait(
-            q_id,
-            LLMRubricTrait(name="question", description="Question", kind="boolean", higher_is_better=True)
+            q_id, LLMRubricTrait(name="question", description="Question", kind="boolean", higher_is_better=True)
         )
 
         names = manager.get_rubric_trait_names(q_id)
@@ -722,8 +749,7 @@ class TestHasRubric:
 
         q_id = benchmark.add_question("Question?", "Answer")
         manager.add_question_rubric_trait(
-            q_id,
-            LLMRubricTrait(name="test", description="Test", kind="boolean", higher_is_better=True)
+            q_id, LLMRubricTrait(name="test", description="Test", kind="boolean", higher_is_better=True)
         )
 
         assert manager.has_rubric(q_id) is True

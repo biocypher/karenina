@@ -9,7 +9,6 @@ Tests cover:
 - Edge cases and error handling
 """
 
-
 import pytest
 
 from karenina import Benchmark

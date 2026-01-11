@@ -548,12 +548,12 @@ class TestGetTemplateStatistics:
         q_id2 = benchmark.add_question("Q2?", "A2")
 
         template1 = VALID_TEMPLATE
-        template2 = '''class Answer(BaseAnswer):
+        template2 = """class Answer(BaseAnswer):
     x: str = Field(description="x")
 
     def verify(self) -> bool:
         return True
-'''
+"""
         manager.add_answer_template(q_id1, template1)
         manager.add_answer_template(q_id2, template2)
 

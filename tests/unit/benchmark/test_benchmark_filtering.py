@@ -553,10 +553,7 @@ def test_filter_questions_custom_filter() -> None:
     benchmark.add_question("Medium length?", "C", question_id="q3", finished=True)
 
     # Custom filter: only questions with text < 20 chars
-    results = benchmark.filter_questions(
-        finished=True,
-        custom_filter=lambda q: len(q.get("question", "")) < 20
-    )
+    results = benchmark.filter_questions(finished=True, custom_filter=lambda q: len(q.get("question", "")) < 20)
 
     assert len(results) == 2
     question_ids = {q["id"] for q in results}

@@ -273,11 +273,13 @@ class TestSetMultipleCustomProperties:
         base = BenchmarkBase(name="test")
         manager = MetadataManager(base)
 
-        manager.set_multiple_custom_properties({
-            "prop1": "value1",
-            "prop2": "value2",
-            "prop3": "value3",
-        })
+        manager.set_multiple_custom_properties(
+            {
+                "prop1": "value1",
+                "prop2": "value2",
+                "prop3": "value3",
+            }
+        )
 
         assert manager.get_custom_property("prop1") == "value1"
         assert manager.get_custom_property("prop2") == "value2"
@@ -289,10 +291,12 @@ class TestSetMultipleCustomProperties:
         manager = MetadataManager(base)
 
         manager.set_custom_property("prop1", "old_value")
-        manager.set_multiple_custom_properties({
-            "prop1": "new_value",
-            "prop2": "value2",
-        })
+        manager.set_multiple_custom_properties(
+            {
+                "prop1": "new_value",
+                "prop2": "value2",
+            }
+        )
 
         assert manager.get_custom_property("prop1") == "new_value"
         assert manager.get_custom_property("prop2") == "value2"

@@ -174,12 +174,8 @@ def test_get_summary_with_global_rubric() -> None:
     benchmark = Benchmark.create(name="test")
     benchmark.add_question("Q1?", "A1", question_id="q1", finished=True)
 
-    trait1 = LLMRubricTrait(
-        name="clarity", kind="boolean", higher_is_better=True, description="Response clarity"
-    )
-    trait2 = LLMRubricTrait(
-        name="safety", kind="boolean", higher_is_better=True, description="Safety check"
-    )
+    trait1 = LLMRubricTrait(name="clarity", kind="boolean", higher_is_better=True, description="Response clarity")
+    trait2 = LLMRubricTrait(name="safety", kind="boolean", higher_is_better=True, description="Safety check")
     rubric = Rubric(llm_traits=[trait1, trait2])
     benchmark.set_global_rubric(rubric)
 
@@ -250,9 +246,7 @@ def test_get_statistics_custom_metadata() -> None:
     author = {"name": "Alice"}
     benchmark.add_question("Q1?", "A1", question_id="q1", finished=True, author=author)
     benchmark.add_question("Q2?", "A2", question_id="q2", finished=True)
-    benchmark.add_question(
-        "Q3?", "A3", question_id="q3", finished=True, custom_metadata={"difficulty": "easy"}
-    )
+    benchmark.add_question("Q3?", "A3", question_id="q3", finished=True, custom_metadata={"difficulty": "easy"})
 
     stats = benchmark.get_statistics()
 
@@ -459,9 +453,7 @@ def test_to_markdown_with_global_rubric() -> None:
     benchmark = Benchmark.create(name="test")
     benchmark.add_question("Q1?", "A1", question_id="q1", finished=True)
 
-    trait = LLMRubricTrait(
-        name="clarity", kind="boolean", higher_is_better=True, description="Response clarity"
-    )
+    trait = LLMRubricTrait(name="clarity", kind="boolean", higher_is_better=True, description="Response clarity")
     rubric = Rubric(llm_traits=[trait])
     benchmark.set_global_rubric(rubric)
 

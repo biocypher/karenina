@@ -184,9 +184,7 @@ def test_fuzzy_match_with_context_custom_context_chars() -> None:
     trace = "The drug venetoclax targets BCL-2 protein and induces apoptosis."
     excerpt = "targets BCL-2"
 
-    match_found, similarity, context = fuzzy_match_excerpt_with_context(
-        excerpt, trace, context_chars=5
-    )
+    match_found, similarity, context = fuzzy_match_excerpt_with_context(excerpt, trace, context_chars=5)
 
     assert match_found is True
     # Context should be shorter with smaller context_chars
