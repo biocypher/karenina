@@ -238,9 +238,7 @@ class TestMetricComputation:
         fp = ["fp1"]  # 1
         fn = ["fn1"]  # 1
 
-        metrics = evaluator._compute_metrics(
-            tp, tn, fp, fn, ["precision", "recall", "specificity", "accuracy", "f1"]
-        )
+        metrics = evaluator._compute_metrics(tp, tn, fp, fn, ["precision", "recall", "specificity", "accuracy", "f1"])
 
         # Precision = 2 / (2 + 1) = 2/3
         assert abs(metrics["precision"] - (2 / 3)) < 0.0001

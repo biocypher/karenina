@@ -64,7 +64,7 @@ class Answer(BaseAnswer):
             if not synonym_set.issubset(correct_set):
                 return False
 
-        if self.omim_id is not None and self.omim_id != self.correct["omim_id"]:
+        if self.omim_id is not None and self.omim_id != self.correct["omim_id"]:  # noqa: SIM103
             return False
 
         return True
