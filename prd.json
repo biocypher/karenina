@@ -37,7 +37,9 @@
     "id": "task-003",
     "category": "Infrastructure",
     "description": "Implement FixtureBackedLLMClient for deterministic LLM test replay",
-    "depends_on": ["task-001"],
+    "depends_on": [
+      "task-001"
+    ],
     "steps": [
       "Implement: Analyze src/karenina/infrastructure/llm/ to understand LLM client interface",
       "Implement: Create tests/conftest.py with FixtureBackedLLMClient class",
@@ -56,7 +58,9 @@
     "id": "task-004",
     "category": "Infrastructure",
     "description": "Create shared pytest fixtures in root conftest.py",
-    "depends_on": ["task-003"],
+    "depends_on": [
+      "task-003"
+    ],
     "steps": [
       "Implement: Add fixtures_dir() fixture returning Path to tests/fixtures/",
       "Implement: Add llm_fixtures_dir(fixtures_dir) returning path to LLM response fixtures",
@@ -91,7 +95,10 @@
     "id": "task-006",
     "category": "Infrastructure",
     "description": "Implement fixture capture logic in capture script",
-    "depends_on": ["task-001", "task-005"],
+    "depends_on": [
+      "task-001",
+      "task-005"
+    ],
     "steps": [
       "Implement: Add capture logic that runs real pipeline stages and intercepts LLM calls",
       "Implement: Save fixtures with metadata (model, captured_at, prompt_hash, source_file, source_line)",
@@ -107,7 +114,9 @@
     "id": "task-007",
     "category": "Infrastructure",
     "description": "Create sample checkpoint fixtures for testing",
-    "depends_on": ["task-001"],
+    "depends_on": [
+      "task-001"
+    ],
     "steps": [
       "Implement: Analyze src/karenina/storage/ to understand checkpoint JSON-LD format",
       "Implement: Create tests/fixtures/checkpoints/minimal.jsonld with 1 simple question",
@@ -124,7 +133,9 @@
     "id": "task-008",
     "category": "Infrastructure",
     "description": "Create sample answer template fixtures for testing",
-    "depends_on": ["task-001"],
+    "depends_on": [
+      "task-001"
+    ],
     "steps": [
       "Implement: Analyze src/karenina/schemas/domain.py to understand BaseAnswer class",
       "Implement: Create tests/fixtures/templates/simple_extraction.py with single-field Answer",
@@ -141,7 +152,9 @@
     "id": "task-009",
     "category": "Unit Tests",
     "description": "Write unit tests for Benchmark class core functionality",
-    "depends_on": ["task-004"],
+    "depends_on": [
+      "task-004"
+    ],
     "steps": [
       "Implement: Analyze src/karenina/benchmark/__init__.py and benchmark.py thoroughly",
       "Implement: Create tests/unit/benchmark/test_benchmark_core.py",
@@ -159,7 +172,9 @@
     "id": "task-010",
     "category": "Unit Tests",
     "description": "Write unit tests for Benchmark filtering and querying",
-    "depends_on": ["task-009"],
+    "depends_on": [
+      "task-009"
+    ],
     "steps": [
       "Implement: Analyze filtering methods in Benchmark class",
       "Implement: Create tests/unit/benchmark/test_benchmark_filtering.py",
@@ -177,7 +192,9 @@
     "id": "task-011",
     "category": "Unit Tests",
     "description": "Write unit tests for Benchmark result aggregation and DataFrame export",
-    "depends_on": ["task-009"],
+    "depends_on": [
+      "task-009"
+    ],
     "steps": [
       "Implement: Analyze result aggregation and to_dataframe methods in Benchmark class",
       "Implement: Create tests/unit/benchmark/test_benchmark_aggregation.py",
@@ -195,7 +212,9 @@
     "id": "task-012",
     "category": "Unit Tests",
     "description": "Write unit tests for Pydantic schemas (BaseAnswer, answer templates)",
-    "depends_on": ["task-004"],
+    "depends_on": [
+      "task-004"
+    ],
     "steps": [
       "Implement: Analyze src/karenina/schemas/domain.py and related files",
       "Implement: Create tests/unit/schemas/test_answer_schemas.py",
@@ -212,7 +231,9 @@
     "id": "task-013",
     "category": "Unit Tests",
     "description": "Write unit tests for rubric trait schemas",
-    "depends_on": ["task-012"],
+    "depends_on": [
+      "task-012"
+    ],
     "steps": [
       "Implement: Analyze rubric trait schemas in src/karenina/schemas/",
       "Implement: Create tests/unit/schemas/test_rubric_schemas.py",
@@ -230,7 +251,9 @@
     "id": "task-014",
     "category": "Unit Tests",
     "description": "Write unit tests for checkpoint schemas and JSON-LD validation",
-    "depends_on": ["task-012"],
+    "depends_on": [
+      "task-012"
+    ],
     "steps": [
       "Implement: Analyze src/karenina/schemas/checkpoint.py",
       "Implement: Create tests/unit/schemas/test_checkpoint_schemas.py",
@@ -248,7 +271,9 @@
     "id": "task-015",
     "category": "Unit Tests",
     "description": "Write unit tests for domain verification logic (non-LLM parts)",
-    "depends_on": ["task-004"],
+    "depends_on": [
+      "task-004"
+    ],
     "steps": [
       "Implement: Analyze src/karenina/domain/verification/ for pure logic components",
       "Implement: Create tests/unit/domain/test_verification_logic.py",
@@ -266,7 +291,9 @@
     "id": "task-016",
     "category": "Unit Tests",
     "description": "Write unit tests for rubric trait evaluation rules (RegexTrait, CallableTrait)",
-    "depends_on": ["task-013"],
+    "depends_on": [
+      "task-013"
+    ],
     "steps": [
       "Implement: Analyze trait evaluation code in src/karenina/schemas/domain/rubric.py",
       "Implement: Create tests/unit/schemas/test_regex_trait.py",
@@ -285,7 +312,9 @@
     "id": "task-017",
     "category": "Unit Tests",
     "description": "Write unit tests for infrastructure module (LLM client utilities)",
-    "depends_on": ["task-004"],
+    "depends_on": [
+      "task-004"
+    ],
     "steps": [
       "Implement: Analyze src/karenina/infrastructure/llm/ module",
       "Implement: Create tests/unit/infrastructure/test_llm_client.py",
@@ -303,7 +332,9 @@
     "id": "task-018",
     "category": "Unit Tests",
     "description": "Write unit tests for integrations module",
-    "depends_on": ["task-004"],
+    "depends_on": [
+      "task-004"
+    ],
     "steps": [
       "Implement: Analyze src/karenina/integrations/gepa/ module",
       "Implement: Create tests/unit/integrations/test_gepa.py",
@@ -320,13 +351,16 @@
     "id": "task-019",
     "category": "Unit Tests",
     "description": "Write unit tests for storage serialization (JSON-LD)",
-    "depends_on": ["task-004", "task-007"],
+    "depends_on": [
+      "task-004",
+      "task-007"
+    ],
     "steps": [
       "Implement: Analyze src/karenina/storage/ serialization code",
       "Implement: Create tests/unit/storage/test_jsonld_serialization.py",
       "Implement: Write tests for Benchmark to JSON-LD conversion",
       "Implement: Write tests for JSON-LD to Benchmark parsing",
-      "Implement: Write tests for roundtrip consistency (serialize → deserialize → identical)",
+      "Implement: Write tests for roundtrip consistency (serialize \u2192 deserialize \u2192 identical)",
       "Implement: Write tests for malformed JSON-LD handling",
       "Verify: Run 'uv run pytest tests/unit/storage/ -v' with 0 failures",
       "Verify: Serialization preserves all data fields"
@@ -338,7 +372,9 @@
     "id": "task-020",
     "category": "Unit Tests",
     "description": "Write unit tests for utility functions",
-    "depends_on": ["task-004"],
+    "depends_on": [
+      "task-004"
+    ],
     "steps": [
       "Implement: Analyze src/karenina/utils/ directory - list all utility modules",
       "Implement: Create tests/unit/utils/test_code.py for code.py utilities",
@@ -348,13 +384,15 @@
       "Verify: Each utility function has comprehensive tests"
     ],
     "status": "completed",
-    "additional notes": "Created tests/unit/utils/test_code.py with 32 tests for extract_and_combine_codeblocks() function. Also created tests/unit/utils/test_checkpoint.py with 41 tests for checkpoint utilities: generate_question_id(), generate_template_id(), convert_rubric_trait_to_rating(), convert_rating_to_rubric_trait(), create_jsonld_benchmark(), validate_jsonld_benchmark(), BenchmarkConversionError. Coverage includes: MD5-based ID generation, trait↔rating conversion for all trait types (RegexTrait, CallableTrait, LLMRubricTrait, MetricRubricTrait), benchmark creation/validation, error handling. All 73 utils tests passing."
+    "additional notes": "Created tests/unit/utils/test_code.py with 32 tests for extract_and_combine_codeblocks() function. Also created tests/unit/utils/test_checkpoint.py with 41 tests for checkpoint utilities: generate_question_id(), generate_template_id(), convert_rubric_trait_to_rating(), convert_rating_to_rubric_trait(), create_jsonld_benchmark(), validate_jsonld_benchmark(), BenchmarkConversionError. Coverage includes: MD5-based ID generation, trait\u2194rating conversion for all trait types (RegexTrait, CallableTrait, LLMRubricTrait, MetricRubricTrait), benchmark creation/validation, error handling. All 73 utils tests passing."
   },
   {
     "id": "task-021",
     "category": "Unit Tests",
     "description": "Write unit tests for CLI utilities and argument parsing",
-    "depends_on": ["task-004"],
+    "depends_on": [
+      "task-004"
+    ],
     "steps": [
       "Implement: Analyze src/karenina/cli/ directory structure and utilities",
       "Implement: Create tests/unit/cli/test_cli_utils.py",
@@ -372,7 +410,9 @@
     "id": "task-022",
     "category": "LLM Fixtures",
     "description": "Capture LLM fixtures for template parsing scenarios",
-    "depends_on": ["task-006"],
+    "depends_on": [
+      "task-006"
+    ],
     "steps": [
       "Implement: Run capture script for template_parsing scenario",
       "Implement: Capture basic_extraction.json (single field, clean extraction)",
@@ -390,7 +430,9 @@
     "id": "task-023",
     "category": "LLM Fixtures",
     "description": "Capture LLM fixtures for rubric evaluation scenarios",
-    "depends_on": ["task-006"],
+    "depends_on": [
+      "task-006"
+    ],
     "steps": [
       "Implement: Run capture script for rubric_evaluation scenario",
       "Implement: Capture excerpt/found.json (relevant excerpts extracted)",
@@ -408,7 +450,9 @@
     "id": "task-024",
     "category": "LLM Fixtures",
     "description": "Capture LLM fixtures for abstention detection and error cases",
-    "depends_on": ["task-006"],
+    "depends_on": [
+      "task-006"
+    ],
     "steps": [
       "Implement: Capture abstention/detected.json (model says 'I don't know')",
       "Implement: Capture abstention/not_detected.json (definitive answer)",
@@ -426,7 +470,11 @@
     "id": "task-025",
     "category": "Integration Tests",
     "description": "Create integration test conftest.py with pipeline fixtures",
-    "depends_on": ["task-004", "task-008", "task-022"],
+    "depends_on": [
+      "task-004",
+      "task-008",
+      "task-022"
+    ],
     "steps": [
       "Implement: Create tests/integration/conftest.py",
       "Implement: Add pipeline fixture creating VerificationPipeline with FixtureBackedLLMClient",
@@ -444,12 +492,14 @@
     "id": "task-026",
     "category": "Integration Tests",
     "description": "Write integration tests for verification pipeline orchestration",
-    "depends_on": ["task-025"],
+    "depends_on": [
+      "task-025"
+    ],
     "steps": [
       "Implement: Analyze src/karenina/domain/verification/pipeline.py or equivalent",
       "Implement: Create tests/integration/verification/test_pipeline_orchestration.py",
       "Implement: Write test for successful full pipeline run",
-      "Implement: Write test for stage failure propagation (early stage fails → pipeline stops)",
+      "Implement: Write test for stage failure propagation (early stage fails \u2192 pipeline stops)",
       "Implement: Write test for context passing between stages",
       "Implement: Write test for partial completion and result collection",
       "Implement: Add @pytest.mark.integration and @pytest.mark.pipeline markers",
@@ -463,7 +513,10 @@
     "id": "task-027",
     "category": "Integration Tests",
     "description": "Write integration tests for template parsing and verification",
-    "depends_on": ["task-025", "task-022"],
+    "depends_on": [
+      "task-025",
+      "task-022"
+    ],
     "steps": [
       "Implement: Analyze template_evaluator.py for parsing flow",
       "Implement: Create tests/integration/templates/test_template_parsing.py",
@@ -482,7 +535,10 @@
     "id": "task-028",
     "category": "Integration Tests",
     "description": "Write integration tests for LLMRubricTrait evaluation",
-    "depends_on": ["task-025", "task-023"],
+    "depends_on": [
+      "task-025",
+      "task-023"
+    ],
     "steps": [
       "Implement: Analyze LLMRubricTrait class and evaluation flow",
       "Implement: Create tests/integration/rubrics/test_llm_rubric_trait.py",
@@ -501,7 +557,9 @@
     "id": "task-029",
     "category": "Integration Tests",
     "description": "Write integration tests for RegexTrait evaluation",
-    "depends_on": ["task-025"],
+    "depends_on": [
+      "task-025"
+    ],
     "steps": [
       "Implement: Create tests/integration/rubrics/test_regex_trait.py",
       "Implement: Write test_pattern_found using trace_with_citations fixture",
@@ -519,7 +577,9 @@
     "id": "task-030",
     "category": "Integration Tests",
     "description": "Write integration tests for CallableTrait evaluation",
-    "depends_on": ["task-025"],
+    "depends_on": [
+      "task-025"
+    ],
     "steps": [
       "Implement: Create tests/integration/rubrics/test_callable_trait.py",
       "Implement: Write test_callable_returns_true with various true conditions",
@@ -537,7 +597,10 @@
     "id": "task-031",
     "category": "Integration Tests",
     "description": "Write integration tests for MetricRubricTrait evaluation",
-    "depends_on": ["task-025", "task-023"],
+    "depends_on": [
+      "task-025",
+      "task-023"
+    ],
     "steps": [
       "Implement: Analyze MetricRubricTrait for precision/recall/F1 calculation",
       "Implement: Create tests/integration/rubrics/test_metric_rubric_trait.py",
@@ -556,7 +619,10 @@
     "id": "task-032",
     "category": "Integration Tests",
     "description": "Write integration tests for checkpoint I/O and storage",
-    "depends_on": ["task-025", "task-007"],
+    "depends_on": [
+      "task-025",
+      "task-007"
+    ],
     "steps": [
       "Implement: Analyze src/karenina/storage/ for I/O operations",
       "Implement: Create tests/integration/storage/test_checkpoint_io.py",
@@ -575,7 +641,10 @@
     "id": "task-033",
     "category": "Integration Tests",
     "description": "Write integration tests for CLI commands",
-    "depends_on": ["task-025", "task-007"],
+    "depends_on": [
+      "task-025",
+      "task-007"
+    ],
     "steps": [
       "Implement: Analyze src/karenina/cli/ for command structure",
       "Implement: Create tests/integration/cli/test_verify_command.py",
@@ -594,7 +663,12 @@
     "id": "task-034",
     "category": "Integration Tests",
     "description": "Write cross-component integration tests",
-    "depends_on": ["task-026", "task-027", "task-028", "task-032"],
+    "depends_on": [
+      "task-026",
+      "task-027",
+      "task-028",
+      "task-032"
+    ],
     "steps": [
       "Implement: Create tests/integration/test_cross_component.py",
       "Implement: Write test_template_passes_rubric_fails (correct answer but poor quality)",
@@ -611,7 +685,10 @@
     "id": "task-035",
     "category": "E2E Tests",
     "description": "Create E2E test conftest.py with CLI runner fixtures",
-    "depends_on": ["task-004", "task-007"],
+    "depends_on": [
+      "task-004",
+      "task-007"
+    ],
     "steps": [
       "Implement: Create tests/e2e/conftest.py",
       "Implement: Add runner fixture returning Click's CliRunner",
@@ -629,7 +706,9 @@
     "id": "task-036",
     "category": "E2E Tests",
     "description": "Write E2E tests for full verification workflow",
-    "depends_on": ["task-035"],
+    "depends_on": [
+      "task-035"
+    ],
     "steps": [
       "Implement: Analyze CLI entry point in src/karenina/cli/",
       "Implement: Create tests/e2e/test_full_verification.py",
@@ -648,7 +727,9 @@
     "id": "task-037",
     "category": "E2E Tests",
     "description": "Write E2E tests for checkpoint resume functionality",
-    "depends_on": ["task-035"],
+    "depends_on": [
+      "task-035"
+    ],
     "steps": [
       "Implement: Create tests/e2e/test_checkpoint_resume.py",
       "Implement: Write test_resume_from_partial_checkpoint",
@@ -665,7 +746,9 @@
     "id": "task-038",
     "category": "E2E Tests",
     "description": "Write E2E tests for error handling and edge cases",
-    "depends_on": ["task-035"],
+    "depends_on": [
+      "task-035"
+    ],
     "steps": [
       "Implement: Create tests/e2e/test_error_handling.py",
       "Implement: Write test_invalid_checkpoint_file (file not found)",
@@ -683,7 +766,9 @@
     "id": "task-039",
     "category": "E2E Tests",
     "description": "Write E2E tests for preset and configuration commands",
-    "depends_on": ["task-035"],
+    "depends_on": [
+      "task-035"
+    ],
     "steps": [
       "Implement: Create tests/e2e/test_preset_commands.py",
       "Implement: Write test_preset_list (shows available presets)",
@@ -700,7 +785,9 @@
     "id": "task-040",
     "category": "Documentation",
     "description": "Create tests/README.md with testing philosophy and quick start",
-    "depends_on": ["task-001"],
+    "depends_on": [
+      "task-001"
+    ],
     "steps": [
       "Implement: Create tests/README.md",
       "Implement: Document the 4 key testing principles from docs/testing/README.md",
@@ -710,14 +797,18 @@
       "Verify: README has working, copy-pasteable pytest commands",
       "Verify: Philosophy matches docs/testing/README.md"
     ],
-    "status": "pending",
+    "status": "completed",
     "additional notes": "This is a quick reference for developers. Keep it concise - point to docs for details."
   },
   {
     "id": "task-041",
     "category": "Documentation",
     "description": "Create tests/fixtures/MANIFEST.md documenting all fixtures",
-    "depends_on": ["task-022", "task-023", "task-024"],
+    "depends_on": [
+      "task-022",
+      "task-023",
+      "task-024"
+    ],
     "steps": [
       "Implement: Create tests/fixtures/MANIFEST.md",
       "Implement: List all LLM fixture files with scenario, prompt_hash, captured_at",
@@ -734,13 +825,27 @@
     "id": "task-042",
     "category": "Polish",
     "description": "Verify test coverage meets targets and fill gaps",
-    "depends_on": ["task-009", "task-010", "task-011", "task-012", "task-013", "task-014", "task-015", "task-016", "task-017", "task-018", "task-019", "task-020", "task-021"],
+    "depends_on": [
+      "task-009",
+      "task-010",
+      "task-011",
+      "task-012",
+      "task-013",
+      "task-014",
+      "task-015",
+      "task-016",
+      "task-017",
+      "task-018",
+      "task-019",
+      "task-020",
+      "task-021"
+    ],
     "steps": [
       "Implement: Run 'uv run pytest tests/unit/ --cov=src/karenina --cov-report=html'",
       "Implement: Identify modules with < 80% line coverage",
       "Implement: Add missing tests to reach coverage targets",
       "Implement: Run 'uv run pytest tests/ --cov=src/karenina --cov-report=term'",
-      "Verify: Unit tests achieve ≥ 80% line coverage",
+      "Verify: Unit tests achieve \u2265 80% line coverage",
       "Verify: All major code paths are exercised"
     ],
     "status": "pending",
@@ -750,7 +855,9 @@
     "id": "task-043",
     "category": "Polish",
     "description": "Update testing documentation with final implementation",
-    "depends_on": ["task-042"],
+    "depends_on": [
+      "task-042"
+    ],
     "steps": [
       "Implement: Update docs/testing/README.md with actual final directory structure",
       "Implement: Update docs/testing/ROADMAP.md marking all phases complete",
@@ -766,7 +873,9 @@
     "id": "task-044",
     "category": "Polish",
     "description": "Run full test suite and generate final report",
-    "depends_on": ["task-043"],
+    "depends_on": [
+      "task-043"
+    ],
     "steps": [
       "Implement: Run 'uv run pytest tests/ -v --tb=short'",
       "Implement: Capture final test count by category (unit, integration, e2e)",

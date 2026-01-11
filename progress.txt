@@ -964,3 +964,26 @@ $ uv run pytest tests/unit/cli/test_cli_utils.py -v
 
 $ uv run ruff check tests/unit/cli/test_cli_utils.py
 All checks passed!
+
+## Iteration 20 (2025-01-11)
+
+**Task Completed**: task-040 - Create tests/README.md with testing philosophy and quick start
+
+**Work Done**:
+- Created `tests/README.md` with quick reference for running and writing tests
+- Documented quick-start commands for unit, integration, and e2e tests
+- Included test organization structure with full directory tree
+- Documented pytest markers (@pytest.mark.unit, @pytest.mark.integration, @pytest.mark.e2e)
+- Explained LLM fixture philosophy (captured from real APIs, not hand-crafted)
+- Provided example test patterns for unit and integration tests
+- Listed important testing principles (real fixtures, challenge code, test failures, avoid brittleness)
+- Added coverage goals (≥80%) and links to detailed documentation
+
+**Test Results**:
+- All 754 unit tests pass
+
+**Files Created/Modified**:
+- Created: `tests/README.md` (182 lines)
+- Modified: `prd.json` (task-040 status: pending → completed)
+
+**No linting issues** (README.md is documentation, excluded from linting)
