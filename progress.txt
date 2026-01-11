@@ -403,3 +403,48 @@ $ uv run pytest tests/unit/test_fixture_backed_llm.py -v
 
 $ uv run ruff check scripts/capture_fixtures.py
 All checks passed!
+
+
+2025-01-11 - Ralph Loop Iteration 10
+=====================================
+
+COMPLETED TASKS:
+-----------------
+* task-006: Fixture capture logic implementation
+  - Implemented CaptureLLMClient wrapper class
+  - invoke() method intercepts real LLM calls and saves fixtures
+  - _hash_messages() matches FixtureBackedLLMClient for consistency
+  - _serialize_messages() converts BaseMessage to dict for JSON storage
+  - Fixtures saved with metadata (scenario, model, timestamp, prompt_hash)
+  - Fixtures include request (messages, kwargs) and response (content, id, model, usage)
+  - Scenario runners implemented:
+    - template_parsing: 3 LLM calls (simple, multi-field, nested extraction)
+    - rubric_evaluation: 3 LLM calls (boolean trait, score trait, deep judgment)
+    - abstention: 2 LLM calls (refusal detection, normal response)
+    - embedding: 1 LLM call (entity extraction for semantic similarity)
+    - generation: 1 LLM call (free-form answer generation)
+    - full_pipeline: runs all sub-scenarios in sequence
+  - CLI additions: --provider option, force mode check, skip existing fixtures
+  - Automatic fixture deduplication by hash (skip if already exists)
+
+FILES MODIFIED:
+---------------
+- scripts/capture_fixtures.py (added ~370 lines of capture logic)
+
+NEXT TASKS (Priority Order):
+-----------------------------
+* task-014: Write unit tests for checkpoint schemas and JSON-LD validation
+* task-015: Write unit tests for CLI commands
+* task-009+: Continue unit tests for remaining modules
+
+GIT COMMIT: (pending)
+
+TEST RESULTS:
+-------------
+$ uv run pytest tests/unit/test_fixture_backed_llm.py \
+              tests/unit/schemas/test_template_fixtures.py \
+              tests/unit/storage/test_checkpoint_fixtures.py -v
+27 passed in 0.79s
+
+$ uv run ruff check scripts/capture_fixtures.py --fix --unsafe-fixes
+All checks passed!

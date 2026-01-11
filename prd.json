@@ -100,8 +100,8 @@
       "Verify: Run 'python scripts/capture_fixtures.py --scenario template_parsing' creates fixture files",
       "Verify: Fixture JSON has metadata, request, response sections"
     ],
-    "status": "pending",
-    "additional notes": "Requires ANTHROPIC_API_KEY environment variable. Test with --dry-run first to verify call site detection works."
+    "status": "completed",
+    "additional notes": "Implemented CaptureLLMClient wrapper class with invoke() method that intercepts LLM calls. Captured fixtures saved as JSON with metadata (scenario, model, timestamp, prompt_hash), request (messages, kwargs), and response (content, id, model, usage). Scenario runners for: template_parsing (3 fixtures), rubric_evaluation (3 fixtures), abstention (2 fixtures), embedding (1 fixture), generation (1 fixture), full_pipeline (runs all scenarios). Hashing logic matches FixtureBackedLLMClient for consistency. Requires ANTHROPIC_API_KEY environment variable."
   },
   {
     "id": "task-007",
