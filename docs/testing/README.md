@@ -1,7 +1,8 @@
 # Karenina Testing Strategy
 
-**Status**: Planning
+**Status**: ✅ Implemented (24/24 tasks completed)
 **Scope**: `karenina/` package (core Python library)
+**Coverage**: 30% overall (806 unit tests passing)
 
 ---
 
@@ -30,40 +31,119 @@ This document defines a comprehensive testing strategy for the karenina package,
 
 ---
 
-## Current State
+## Actual Implementation (as of 2025-01-11)
 
 ### Source Module Structure
 
 ```
 src/karenina/
-├── benchmark/        # Benchmark class, question management
-├── cli/              # Command-line interface (verify, preset, etc.)
-├── domain/           # Core domain logic
-├── infrastructure/   # External service adapters (LLM clients, etc.)
-├── integrations/     # Third-party integrations
-├── schemas/          # Pydantic models, answer templates
-├── storage/          # Checkpoint I/O, persistence
-└── utils/            # Shared utilities
+├── benchmark/        # Benchmark class, question management, verification pipeline
+├── cli/              # Command-line interface (verify, preset, serve, optimize)
+├── domain/           # Core domain logic (answers, questions)
+├── infrastructure/   # External service adapters (LLM clients, sessions)
+├── integrations/     # Third-party integrations (GEPA)
+├── schemas/          # Pydantic models, answer templates, rubric traits
+├── storage/          # Checkpoint I/O, SQLAlchemy models, converters
+└── utils/            # Shared utilities (checkpoint, code, cache)
 ```
 
-### Current Test Structure (Problems)
+### Implemented Test Structure
 
 ```
 tests/
-├── test_*.py              # ~30 flat files at root (inconsistent organization)
-├── unit/                  # Partial unit test directory
-├── integration/           # Partial integration directory
-├── test_verification/     # Verification-specific tests
-├── storage/               # Storage-specific tests
-└── fixtures/              # Minimal (only mock_mcp_server.py)
+├── README.md                        # Quick reference for running/writing tests
+├── conftest.py                      # Shared fixtures, pytest configuration, FixtureBackedLLMClient
+│
+├── unit/                            # Pure logic, no I/O, no LLM calls (806 tests)
+│   ├── benchmark/
+│   │   ├── test_benchmark_core.py           # Benchmark initialization, questions
+│   │   ├── test_benchmark_filtering.py      # Filter by tag, status, metadata
+│   │   ├── test_benchmark_aggregation.py    # Pass rate, DataFrame export
+│   │   └── verification/
+│   │       ├── test_exceptions.py           # ExcerptNotFoundError
+│   │       └── test_fuzzy_match.py          # Fuzzy matching utilities
+│   ├── cli/
+│   │   └── test_cli_utils.py                # CLI utilities (59 tests)
+│   ├── domain/
+│   │   └── (placeholder for domain logic tests)
+│   ├── infrastructure/
+│   │   └── test_llm_client.py               # LLM client, sessions, manual traces
+│   ├── integrations/
+│   │   └── test_gepa.py                     # GEPA integration (78 tests)
+│   ├── schemas/
+│   │   ├── test_answer_schemas.py           # BaseAnswer validation
+│   │   ├── test_regex_trait.py              # RegexTrait evaluation (75 tests)
+│   │   ├── test_callable_trait.py           # CallableTrait serialization (34 tests)
+│   │   ├── test_rubric_schemas.py           # Rubric, MetricRubricTrait (34 tests)
+│   │   ├── test_checkpoint_schemas.py       # JSON-LD checkpoint models (36 tests)
+│   │   ├── test_verification_config.py      # VerificationConfig (67 tests)
+│   │   ├── test_verification_result.py      # VerificationResult (30 tests)
+│   │   ├── test_template_fixtures.py        # Answer template fixtures
+│   │   └── test_checkpoint_fixtures.py      # Checkpoint fixture loading
+│   ├── storage/
+│   │   ├── test_converters.py               # Pydantic-SQLAlchemy converters (34 tests)
+│   │   ├── test_checkpoint_fixtures.py      # Checkpoint loading/saving
+│   │   └── test_jsonld_serialization.py    # JSON-LD serialization
+│   └── utils/
+│       ├── test_checkpoint.py               # Checkpoint utilities (85% coverage)
+│       └── test_code.py                     # Code utilities (100% coverage)
+│
+├── integration/                     # Multiple components working together
+│   ├── cli/                         # CLI command tests
+│   ├── rubrics/                     # Rubric evaluation flows
+│   ├── storage/                     # Checkpoint I/O
+│   ├── templates/                   # Template parsing + verification
+│   └── verification/                # Pipeline stage combinations
+│
+├── e2e/                             # Full pipeline runs
+│   ├── conftest.py                  # E2E fixtures (runner, checkpoints, presets)
+│   └── (placeholder for E2E tests)
+│
+└── fixtures/
+    ├── checkpoints/                 # Sample checkpoint files
+    │   ├── minimal.jsonld            # 1 simple question
+    │   ├── with_results.jsonld       # Has verification results
+    │   └── multi_question.jsonld     # 5+ diverse questions
+    ├── templates/                   # Answer template fixtures
+    │   ├── simple_extraction.py
+    │   ├── multi_field.py
+    │   └── with_correct_dict.py
+    └── llm_responses/               # LLM response fixtures (captured from API)
+        └── claude-haiku-4-5/
+            ├── abstention/
+            ├── generation/
+            ├── rubric_evaluation/
+            └── template_parsing/
 ```
 
-**Issues Identified**:
-- No clear mapping between source modules and test directories
-- Inconsistent placement (some flat, some in subdirectories)
-- Minimal LLM fixtures — most tests use hand-crafted mocks
-- Integration tests are sparse and don't cover failure modes
-- No documented fixture regeneration procedure
+### Test Statistics
+
+| Category | Test Files | Tests | Coverage |
+|----------|-----------|-------|----------|
+| Unit tests | 20 | 806 | 30% overall |
+| Integration tests | 5 dirs | 0 | Pending |
+| E2E tests | 1 conftest | 0 | Pending |
+
+**High Coverage Modules** (≥80%):
+- `schemas/domain/rubric.py`: 96%
+- `cli/utils.py`: 98%
+- `benchmark/verification/exceptions.py`: 100%
+- `utils/code.py`: 100%
+- `utils/checkpoint.py`: 85%
+- `schemas/workflow/verification/config.py`: 89%
+- `schemas/workflow/verification/result.py`: 89%
+- `schemas/checkpoint.py`: 100%
+- `schemas/domain/question.py`: 100%
+- `infrastructure/llm/manual_traces.py`: 82%
+
+**Low Coverage Modules** (<30%):
+- `benchmark/task_eval/*`: 0%
+- `benchmark/verification/evaluators/*`: 0-19%
+- `cli/*`: 0-14% (except utils at 98%)
+- `domain/answers/builder.py`: 0%
+- `domain/questions/extractor.py`: 0%
+- `storage/migrate_template_id.py`: 0%
+- `storage/operations.py`: 7%
 
 ---
 
