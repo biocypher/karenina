@@ -270,10 +270,7 @@ class TestConcurrency:
                 status, _ = cache.get_or_reserve(f"key{thread_id}")
                 results.append((thread_id, status))
 
-        threads = [
-            threading.Thread(target=worker, args=(i,))
-            for i in range(5)
-        ]
+        threads = [threading.Thread(target=worker, args=(i,)) for i in range(5)]
 
         for t in threads:
             t.start()

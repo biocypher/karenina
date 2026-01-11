@@ -74,10 +74,12 @@ class TestAddAttribute:
 
     def test_add_multiple_attributes(self) -> None:
         """Test adding multiple attributes."""
-        builder = (AnswerBuilder()
-                   .add_attribute("name", "str", "Name", "Bob")
-                   .add_attribute("age", "int", "Age", 30)
-                   .add_attribute("active", "bool", "Active", True))
+        builder = (
+            AnswerBuilder()
+            .add_attribute("name", "str", "Name", "Bob")
+            .add_attribute("age", "int", "Age", 30)
+            .add_attribute("active", "bool", "Active", True)
+        )
         assert len(builder.attributes) == 3
         assert {attr.name for attr in builder.attributes} == {"name", "age", "active"}
 

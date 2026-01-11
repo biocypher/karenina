@@ -228,6 +228,7 @@ def test_convert_callable_trait_boolean_to_rating() -> None:
 
     def func(text):
         return "keyword" in text
+
     code = cloudpickle.dumps(func)
 
     trait = CallableTrait(
@@ -259,6 +260,7 @@ def test_convert_callable_trait_score_to_rating() -> None:
 
     def func(text):
         return len(text)
+
     code = cloudpickle.dumps(func)
 
     trait = CallableTrait(
@@ -463,6 +465,7 @@ def test_convert_rating_to_callable_trait_boolean() -> None:
 
     def func(text):
         return len(text) > 10
+
     code = cloudpickle.dumps(func)
     code_b64 = base64.b64encode(code).decode("utf-8")
 
@@ -501,6 +504,7 @@ def test_convert_rating_to_callable_trait_score() -> None:
 
     def func(text):
         return min(len(text), 100)
+
     code = cloudpickle.dumps(func)
     code_b64 = base64.b64encode(code).decode("utf-8")
 

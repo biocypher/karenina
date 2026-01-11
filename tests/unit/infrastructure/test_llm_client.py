@@ -451,7 +451,10 @@ def test_chat_openai_endpoint_requires_api_key() -> None:
 def test_chat_openai_endpoint_requires_explicit_api_key() -> None:
     """Test that ChatOpenAIEndpoint does NOT read from environment."""
     # Even with env var set, it should still fail if no explicit key
-    with patch.dict("os.environ", {"OPENAI_API_KEY": "env-key"}), pytest.raises(ValueError, match="API key is required"):
+    with (
+        patch.dict("os.environ", {"OPENAI_API_KEY": "env-key"}),
+        pytest.raises(ValueError, match="API key is required"),
+    ):
         ChatOpenAIEndpoint(base_url="http://localhost:8000")
 
 
@@ -1081,10 +1084,12 @@ def test_manual_traces_register_traces_batch() -> None:
     mock_benchmark._questions_cache = {}
     traces = ManualTraces(mock_benchmark)
 
-    traces.register_traces({
-        "d41d8cd98f00b204e9800998ecf8427e": "Trace 1",
-        "5d41402abc4b2a76b9719d911017c592": "Trace 2",
-    })
+    traces.register_traces(
+        {
+            "d41d8cd98f00b204e9800998ecf8427e": "Trace 1",
+            "5d41402abc4b2a76b9719d911017c592": "Trace 2",
+        }
+    )
 
     assert get_manual_trace_count() == 2
 

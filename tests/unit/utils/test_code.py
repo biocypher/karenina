@@ -215,7 +215,7 @@ code_with_backticks = "```"
 ```"""
     result = extract_and_combine_codeblocks(text)
     # The regex is non-greedy, so it captures the first closing backticks
-    assert 'code_with_backticks = "```"' in result or result.startswith('code_with_backticks')
+    assert 'code_with_backticks = "```"' in result or result.startswith("code_with_backticks")
 
 
 @pytest.mark.unit

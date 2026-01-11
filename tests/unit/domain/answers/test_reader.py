@@ -28,9 +28,7 @@ class Answer(BaseAnswer):
     def verify(self) -> bool:
         return self.value == self.correct["value"]
 '''
-        answers_data = {
-            "q1_hash": template_code
-        }
+        answers_data = {"q1_hash": template_code}
         answers_file.write_text(json.dumps(answers_data))
 
         # Read templates
@@ -46,22 +44,22 @@ class Answer(BaseAnswer):
     def test_read_multiple_templates(self, tmp_path) -> None:
         """Test reading a JSON file with multiple Answer templates."""
         answers_file = tmp_path / "answers.json"
-        template1 = '''
+        template1 = """
 class Answer(BaseAnswer):
     value1: str = Field(description="First value")
     def model_post_init(self, __context):
         self.correct = {"value1": "a"}
     def verify(self) -> bool:
         return self.value1 == self.correct["value1"]
-'''
-        template2 = '''
+"""
+        template2 = """
 class Answer(BaseAnswer):
     value2: int = Field(description="Second value")
     def model_post_init(self, __context):
         self.correct = {"value2": 42}
     def verify(self) -> bool:
         return self.value2 == self.correct["value2"]
-'''
+"""
         answers_data = {
             "hash1": template1,
             "hash2": template2,
@@ -89,7 +87,7 @@ class Answer(BaseAnswer):
     def test_read_with_complex_template(self, tmp_path) -> None:
         """Test reading a template with multiple fields and types."""
         answers_file = tmp_path / "answers.json"
-        template = '''
+        template = """
 class Answer(BaseAnswer):
     name: str = Field(description="Entity name")
     count: int = Field(description="Item count")
@@ -104,7 +102,7 @@ class Answer(BaseAnswer):
                 self.count == self.correct["count"] and
                 self.active == self.correct["active"] and
                 self.tags == self.correct["tags"])
-'''
+"""
         answers_data = {"complex_hash": template}
         answers_file.write_text(json.dumps(answers_data))
 
@@ -117,14 +115,14 @@ class Answer(BaseAnswer):
     def test_read_preserves_source_code(self, tmp_path) -> None:
         """Test that the original source code is preserved."""
         answers_file = tmp_path / "answers.json"
-        template = '''
+        template = """
 class Answer(BaseAnswer):
     value: str = Field(description="Value")
     def model_post_init(self, __context):
         self.correct = {"value": "test"}
     def verify(self) -> bool:
         return self.value == self.correct["value"]
-'''
+"""
         answers_data = {"hash1": template}
         answers_file.write_text(json.dumps(answers_data))
 
@@ -138,7 +136,7 @@ class Answer(BaseAnswer):
     def test_read_with_literal_type(self, tmp_path) -> None:
         """Test reading a template that uses Literal type."""
         answers_file = tmp_path / "answers.json"
-        template = '''
+        template = """
 from typing import Literal
 
 class Answer(BaseAnswer):
@@ -149,7 +147,7 @@ class Answer(BaseAnswer):
 
     def verify(self) -> bool:
         return self.choice == self.correct["choice"]
-'''
+"""
         answers_data = {"hash1": template}
         answers_file.write_text(json.dumps(answers_data))
 
@@ -162,7 +160,7 @@ class Answer(BaseAnswer):
     def test_read_with_list_type(self, tmp_path) -> None:
         """Test reading a template that uses List type."""
         answers_file = tmp_path / "answers.json"
-        template = '''
+        template = """
 from typing import List
 
 class Answer(BaseAnswer):
@@ -173,7 +171,7 @@ class Answer(BaseAnswer):
 
     def verify(self) -> bool:
         return self.items == self.correct["items"]
-'''
+"""
         answers_data = {"hash1": template}
         answers_file.write_text(json.dumps(answers_data))
 
@@ -208,28 +206,28 @@ class Answer(BaseAnswer):
     def test_read_with_invalid_syntax_raises(self, tmp_path) -> None:
         """Test reading a file with invalid Python syntax raises error."""
         answers_file = tmp_path / "answers.json"
-        invalid_template = '''
+        invalid_template = """
 class Answer(BaseAnswer)
     # Missing colon and body
-'''
+"""
         answers_data = {"hash1": invalid_template}
         answers_file.write_text(json.dumps(answers_data))
 
         # The exec() should raise a SyntaxError
-        with pytest.raises(Exception):  # Could be SyntaxError or other
+        with pytest.raises(Exception):  # noqa: B017 - Could be SyntaxError or other
             read_answer_templates(answers_file)
 
     def test_read_injects_question_id(self, tmp_path) -> None:
         """Test that question ID is injected into the Answer class."""
         answers_file = tmp_path / "answers.json"
-        template = '''
+        template = """
 class Answer(BaseAnswer):
     value: str = Field(description="Value")
     def model_post_init(self, __context):
         self.correct = {"value": "test"}
     def verify(self) -> bool:
         return self.value == self.correct["value"]
-'''
+"""
         question_id = "test_question_123"
         answers_data = {question_id: template}
         answers_file.write_text(json.dumps(answers_data))
@@ -245,14 +243,14 @@ class Answer(BaseAnswer):
     def test_read_multiple_classes_get_different_names(self, tmp_path) -> None:
         """Test that multiple Answer classes get unique names (Answer1, Answer2, etc.)."""
         answers_file = tmp_path / "answers.json"
-        template = '''
+        template = """
 class Answer(BaseAnswer):
     value: str = Field(description="Value")
     def model_post_init(self, __context):
         self.correct = {"value": "test"}
     def verify(self) -> bool:
         return self.value == self.correct["value"]
-'''
+"""
         answers_data = {
             "hash1": template,
             "hash2": template,
@@ -270,7 +268,7 @@ class Answer(BaseAnswer):
     def test_read_with_optional_field(self, tmp_path) -> None:
         """Test reading a template with optional fields."""
         answers_file = tmp_path / "answers.json"
-        template = '''
+        template = """
 from typing import Optional
 
 class Answer(BaseAnswer):
@@ -282,7 +280,7 @@ class Answer(BaseAnswer):
 
     def verify(self) -> bool:
         return self.required == self.correct["required"] and self.optional == self.correct["optional"]
-'''
+"""
         answers_data = {"hash1": template}
         answers_file.write_text(json.dumps(answers_data))
 
@@ -300,7 +298,7 @@ class Answer(BaseAnswer):
     def test_read_with_union_types(self, tmp_path) -> None:
         """Test reading a template with Union types."""
         answers_file = tmp_path / "answers.json"
-        template = '''
+        template = """
 from typing import Union
 
 class Answer(BaseAnswer):
@@ -314,7 +312,7 @@ class Answer(BaseAnswer):
         if isinstance(self.value, str):
             return int(self.value) == self.correct["value"]
         return self.value == self.correct["value"]
-'''
+"""
         answers_data = {"hash1": template}
         answers_file.write_text(json.dumps(answers_data))
 

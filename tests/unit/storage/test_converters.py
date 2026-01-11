@@ -28,18 +28,21 @@ from karenina.storage.converters import (
 
 class NestedModel(BaseModel):
     """Simple nested model for testing."""
+
     value: str
     count: int
 
 
 class OptionalNestedModel(BaseModel):
     """Nested model with optional field for testing."""
+
     value: str | None = None
     count: int
 
 
 class OuterModel(BaseModel):
     """Outer model with nested field."""
+
     name: str
     nested: NestedModel
     optional_nested: NestedModel | None = None
@@ -47,6 +50,7 @@ class OuterModel(BaseModel):
 
 class DoubleNestedModel(BaseModel):
     """Model with nested model that has another nested model."""
+
     data: str
     inner: NestedModel
 
@@ -133,10 +137,7 @@ def test_is_pydantic_model_false_for_instance() -> None:
 @pytest.mark.unit
 def test_pydantic_to_flat_dict_simple() -> None:
     """Test flattening a simple nested model."""
-    obj = OuterModel(
-        name="test",
-        nested=NestedModel(value="hello", count=42)
-    )
+    obj = OuterModel(name="test", nested=NestedModel(value="hello", count=42))
 
     config = {"nested": {"prefix": "nested_"}}
     result = pydantic_to_flat_dict(obj, config)
@@ -149,16 +150,9 @@ def test_pydantic_to_flat_dict_simple() -> None:
 @pytest.mark.unit
 def test_pydantic_to_flat_dict_with_none_nested() -> None:
     """Test flattening with None optional nested field."""
-    obj = OuterModel(
-        name="test",
-        nested=NestedModel(value="hello", count=42),
-        optional_nested=None
-    )
+    obj = OuterModel(name="test", nested=NestedModel(value="hello", count=42), optional_nested=None)
 
-    config = {
-        "nested": {"prefix": "nested_"},
-        "optional_nested": {"prefix": "opt_"}
-    }
+    config = {"nested": {"prefix": "nested_"}, "optional_nested": {"prefix": "opt_"}}
     result = pydantic_to_flat_dict(obj, config)
 
     assert result["name"] == "test"
@@ -170,10 +164,7 @@ def test_pydantic_to_flat_dict_with_none_nested() -> None:
 @pytest.mark.unit
 def test_pydantic_to_flat_dict_default_prefix() -> None:
     """Test that default prefix is field_name_ when not specified."""
-    obj = OuterModel(
-        name="test",
-        nested=NestedModel(value="hello", count=42)
-    )
+    obj = OuterModel(name="test", nested=NestedModel(value="hello", count=42))
 
     config = {}
     result = pydantic_to_flat_dict(obj, config)
@@ -215,11 +206,7 @@ def test_flatten_nested_model_with_none() -> None:
 @pytest.mark.unit
 def test_flat_dict_to_pydantic_simple() -> None:
     """Test reconstructing a nested model from flat dict."""
-    flat_data = {
-        "name": "test",
-        "nested_value": "hello",
-        "nested_count": 42
-    }
+    flat_data = {"name": "test", "nested_value": "hello", "nested_count": 42}
 
     config = {"nested": {"prefix": "nested_"}}
     result = flat_dict_to_pydantic(flat_data, OuterModel, config)
@@ -232,18 +219,9 @@ def test_flat_dict_to_pydantic_simple() -> None:
 @pytest.mark.unit
 def test_flat_dict_to_pydantic_with_none_nested() -> None:
     """Test reconstructing with None nested field."""
-    flat_data = {
-        "name": "test",
-        "nested_value": "hello",
-        "nested_count": 42,
-        "opt_value": None,
-        "opt_count": None
-    }
+    flat_data = {"name": "test", "nested_value": "hello", "nested_count": 42, "opt_value": None, "opt_count": None}
 
-    config = {
-        "nested": {"prefix": "nested_"},
-        "optional_nested": {"prefix": "opt_"}
-    }
+    config = {"nested": {"prefix": "nested_"}, "optional_nested": {"prefix": "opt_"}}
     result = flat_dict_to_pydantic(flat_data, OuterModel, config)
 
     assert result.name == "test"
@@ -254,16 +232,9 @@ def test_flat_dict_to_pydantic_with_none_nested() -> None:
 @pytest.mark.unit
 def test_flat_dict_to_pydantic_optional_missing() -> None:
     """Test reconstructing when optional fields are missing."""
-    flat_data = {
-        "name": "test",
-        "nested_value": "hello",
-        "nested_count": 42
-    }
+    flat_data = {"name": "test", "nested_value": "hello", "nested_count": 42}
 
-    config = {
-        "nested": {"prefix": "nested_"},
-        "optional_nested": {"prefix": "opt_"}
-    }
+    config = {"nested": {"prefix": "nested_"}, "optional_nested": {"prefix": "opt_"}}
     result = flat_dict_to_pydantic(flat_data, OuterModel, config)
 
     assert result.optional_nested is None
@@ -272,16 +243,9 @@ def test_flat_dict_to_pydantic_optional_missing() -> None:
 @pytest.mark.unit
 def test_flat_dict_to_pydantic_roundtrip() -> None:
     """Test roundtrip: pydantic -> flat -> pydantic."""
-    original = OuterModel(
-        name="test",
-        nested=NestedModel(value="hello", count=42),
-        optional_nested=None
-    )
+    original = OuterModel(name="test", nested=NestedModel(value="hello", count=42), optional_nested=None)
 
-    config = {
-        "nested": {"prefix": "nested_"},
-        "optional_nested": {"prefix": "opt_"}
-    }
+    config = {"nested": {"prefix": "nested_"}, "optional_nested": {"prefix": "opt_"}}
 
     # Flatten
     flat = pydantic_to_flat_dict(original, config)
@@ -303,11 +267,7 @@ def test_flat_dict_to_pydantic_roundtrip() -> None:
 @pytest.mark.unit
 def test_extract_nested_data_basic() -> None:
     """Test extracting nested data from flat dict."""
-    flat_data = {
-        "prefix_value": "hello",
-        "prefix_count": 42,
-        "other_field": "ignored"
-    }
+    flat_data = {"prefix_value": "hello", "prefix_count": 42, "other_field": "ignored"}
 
     result = _extract_nested_data(flat_data, "prefix_", NestedModel)
 
@@ -333,10 +293,7 @@ def test_extract_nested_data_missing_fields() -> None:
 @pytest.mark.unit
 def test_extract_nested_data_no_match() -> None:
     """Test extracting when no fields match prefix."""
-    flat_data = {
-        "other_value": "hello",
-        "other_count": 42
-    }
+    flat_data = {"other_value": "hello", "other_count": 42}
 
     result = _extract_nested_data(flat_data, "prefix_", NestedModel)
 
@@ -350,20 +307,24 @@ def test_extract_nested_data_no_match() -> None:
 
 class MockORMTable:
     """Mock SQLAlchemy table for testing."""
+
     def __init__(self):
         self.columns = []
 
     def add_column(self, name: str):
         """Add a column to the table."""
+
         class MockColumn:
             def __init__(self, name: str):
                 self.name = name
+
         col = MockColumn(name)
         self.columns.append(col)
 
 
 class MockORMClass:
     """Mock SQLAlchemy ORM class for testing."""
+
     __table__ = MockORMTable()
 
     def __init__(self, **kwargs):
@@ -377,10 +338,7 @@ class MockORMClass:
 @pytest.mark.unit
 def test_pydantic_to_orm_basic() -> None:
     """Test converting Pydantic model to ORM instance."""
-    obj = OuterModel(
-        name="test",
-        nested=NestedModel(value="hello", count=42)
-    )
+    obj = OuterModel(name="test", nested=NestedModel(value="hello", count=42))
 
     config = {"nested": {"prefix": "nested_"}}
 
@@ -397,10 +355,7 @@ def test_pydantic_to_orm_basic() -> None:
 @pytest.mark.unit
 def test_pydantic_to_orm_with_extra_values() -> None:
     """Test converting with extra values for ORM."""
-    obj = OuterModel(
-        name="test",
-        nested=NestedModel(value="hello", count=42)
-    )
+    obj = OuterModel(name="test", nested=NestedModel(value="hello", count=42))
 
     config = {"nested": {"prefix": "nested_"}}
     extra = {"run_id": "abc123", "timestamp": 1234567890}
@@ -417,10 +372,7 @@ def test_pydantic_to_orm_with_extra_values() -> None:
 @pytest.mark.unit
 def test_pydantic_to_orm_filters_invalid_columns() -> None:
     """Test that columns not in ORM are filtered out."""
-    obj = OuterModel(
-        name="test",
-        nested=NestedModel(value="hello", count=42)
-    )
+    obj = OuterModel(name="test", nested=NestedModel(value="hello", count=42))
 
     config = {"nested": {"prefix": "nested_"}}
 
@@ -451,11 +403,7 @@ def test_orm_to_pydantic_basic() -> None:
     MockORMClass.__table__.add_column("nested_value")
     MockORMClass.__table__.add_column("nested_count")
 
-    orm_obj = MockORMClass(
-        name="test",
-        nested_value="hello",
-        nested_count=42
-    )
+    orm_obj = MockORMClass(name="test", nested_value="hello", nested_count=42)
 
     config = {"nested": {"prefix": "nested_"}}
     result = orm_to_pydantic(orm_obj, OuterModel, config)
@@ -479,16 +427,9 @@ def test_update_orm_from_pydantic_basic() -> None:
     MockORMClass.__table__.add_column("nested_value")
     MockORMClass.__table__.add_column("nested_count")
 
-    orm_obj = MockORMClass(
-        name="old_name",
-        nested_value="old_value",
-        nested_count=1
-    )
+    orm_obj = MockORMClass(name="old_name", nested_value="old_value", nested_count=1)
 
-    pydantic_obj = OuterModel(
-        name="new_name",
-        nested=NestedModel(value="new_value", count=99)
-    )
+    pydantic_obj = OuterModel(name="new_name", nested=NestedModel(value="new_value", count=99))
 
     config = {"nested": {"prefix": "nested_"}}
     update_orm_from_pydantic(orm_obj, pydantic_obj, config)
@@ -507,16 +448,9 @@ def test_update_orm_from_pydantic_with_exclude() -> None:
     MockORMClass.__table__.add_column("nested_value")
     MockORMClass.__table__.add_column("nested_count")
 
-    orm_obj = MockORMClass(
-        name="old_name",
-        nested_value="old_value",
-        nested_count=1
-    )
+    orm_obj = MockORMClass(name="old_name", nested_value="old_value", nested_count=1)
 
-    pydantic_obj = OuterModel(
-        name="new_name",
-        nested=NestedModel(value="new_value", count=99)
-    )
+    pydantic_obj = OuterModel(name="new_name", nested=NestedModel(value="new_value", count=99))
 
     config = {"nested": {"prefix": "nested_"}}
     exclude = {"nested_count"}
@@ -539,10 +473,7 @@ def test_update_orm_from_pydantic_filters_invalid_columns() -> None:
 
     orm_obj = MockORMClass(name="old_name")
 
-    pydantic_obj = OuterModel(
-        name="new_name",
-        nested=NestedModel(value="new_value", count=99)
-    )
+    pydantic_obj = OuterModel(name="new_name", nested=NestedModel(value="new_value", count=99))
 
     config = {"nested": {"prefix": "nested_"}}
     update_orm_from_pydantic(orm_obj, pydantic_obj, config)

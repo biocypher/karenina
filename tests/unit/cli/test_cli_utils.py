@@ -169,6 +169,7 @@ def test_list_presets_skips_invalid_files(tmp_path: Path) -> None:
     # Create a file that will cause getmtime to fail (symlink to nowhere)
     invalid = tmp_path / "invalid.json"
     from contextlib import suppress
+
     with suppress(OSError):
         invalid.symlink_to("/nonexistent/target")
 
@@ -547,22 +548,26 @@ def test_create_export_job_basic() -> None:
         "q-2": _make_result("q-2", completed=True),
     }
     config = VerificationConfig(
-        parsing_models=[ModelConfig(
-            id="parsing",
-            model_name="gpt-4",
-            model_provider="openai",
-            interface="langchain",
-            system_prompt="test",
-            temperature=0.1,
-        )],
-        answering_models=[ModelConfig(
-            id="answering",
-            model_name="gpt-4",
-            model_provider="openai",
-            interface="langchain",
-            system_prompt="test",
-            temperature=0.1,
-        )],
+        parsing_models=[
+            ModelConfig(
+                id="parsing",
+                model_name="gpt-4",
+                model_provider="openai",
+                interface="langchain",
+                system_prompt="test",
+                temperature=0.1,
+            )
+        ],
+        answering_models=[
+            ModelConfig(
+                id="answering",
+                model_name="gpt-4",
+                model_provider="openai",
+                interface="langchain",
+                system_prompt="test",
+                temperature=0.1,
+            )
+        ],
     )
 
     job = create_export_job(
@@ -594,22 +599,26 @@ def test_create_export_job_with_failures() -> None:
         "q-3": _make_result("q-3", completed=False),
     }
     config = VerificationConfig(
-        parsing_models=[ModelConfig(
-            id="parsing",
-            model_name="gpt-4",
-            model_provider="openai",
-            interface="langchain",
-            system_prompt="test",
-            temperature=0.1,
-        )],
-        answering_models=[ModelConfig(
-            id="answering",
-            model_name="gpt-4",
-            model_provider="openai",
-            interface="langchain",
-            system_prompt="test",
-            temperature=0.1,
-        )],
+        parsing_models=[
+            ModelConfig(
+                id="parsing",
+                model_name="gpt-4",
+                model_provider="openai",
+                interface="langchain",
+                system_prompt="test",
+                temperature=0.1,
+            )
+        ],
+        answering_models=[
+            ModelConfig(
+                id="answering",
+                model_name="gpt-4",
+                model_provider="openai",
+                interface="langchain",
+                system_prompt="test",
+                temperature=0.1,
+            )
+        ],
     )
 
     job = create_export_job(
@@ -634,22 +643,26 @@ def test_create_export_job_default_run_name() -> None:
         "q-1": _make_result("q-1", completed=True),
     }
     config = VerificationConfig(
-        parsing_models=[ModelConfig(
-            id="parsing",
-            model_name="gpt-4",
-            model_provider="openai",
-            interface="langchain",
-            system_prompt="test",
-            temperature=0.1,
-        )],
-        answering_models=[ModelConfig(
-            id="answering",
-            model_name="gpt-4",
-            model_provider="openai",
-            interface="langchain",
-            system_prompt="test",
-            temperature=0.1,
-        )],
+        parsing_models=[
+            ModelConfig(
+                id="parsing",
+                model_name="gpt-4",
+                model_provider="openai",
+                interface="langchain",
+                system_prompt="test",
+                temperature=0.1,
+            )
+        ],
+        answering_models=[
+            ModelConfig(
+                id="answering",
+                model_name="gpt-4",
+                model_provider="openai",
+                interface="langchain",
+                system_prompt="test",
+                temperature=0.1,
+            )
+        ],
     )
 
     job = create_export_job(
@@ -673,22 +686,26 @@ def test_create_export_job_generates_uuid() -> None:
         "q-1": _make_result("q-1", completed=True),
     }
     config = VerificationConfig(
-        parsing_models=[ModelConfig(
-            id="parsing",
-            model_name="gpt-4",
-            model_provider="openai",
-            interface="langchain",
-            system_prompt="test",
-            temperature=0.1,
-        )],
-        answering_models=[ModelConfig(
-            id="answering",
-            model_name="gpt-4",
-            model_provider="openai",
-            interface="langchain",
-            system_prompt="test",
-            temperature=0.1,
-        )],
+        parsing_models=[
+            ModelConfig(
+                id="parsing",
+                model_name="gpt-4",
+                model_provider="openai",
+                interface="langchain",
+                system_prompt="test",
+                temperature=0.1,
+            )
+        ],
+        answering_models=[
+            ModelConfig(
+                id="answering",
+                model_name="gpt-4",
+                model_provider="openai",
+                interface="langchain",
+                system_prompt="test",
+                temperature=0.1,
+            )
+        ],
     )
 
     job1 = create_export_job(results, config, "", 0.0, 1.0)
@@ -738,7 +755,10 @@ def test_get_traces_path_not_found(tmp_path: Path) -> None:
     traces_dir = tmp_path / "traces"
     traces_dir.mkdir()
 
-    with patch("pathlib.Path.cwd", return_value=tmp_path), pytest.raises(FileNotFoundError, match="Trace file not found"):
+    with (
+        patch("pathlib.Path.cwd", return_value=tmp_path),
+        pytest.raises(FileNotFoundError, match="Trace file not found"),
+    ):
         get_traces_path("missing.json")
 
 
@@ -779,8 +799,12 @@ def test_load_manual_traces_from_file_valid(tmp_path: Path) -> None:
 
     mock_benchmark = MagicMock()
 
-    with patch("karenina.infrastructure.llm.manual_traces.load_manual_traces"), \
-         patch("karenina.infrastructure.llm.manual_traces.ManualTraces", return_value="mock_manual_traces") as MockManualTraces:
+    with (
+        patch("karenina.infrastructure.llm.manual_traces.load_manual_traces"),
+        patch(
+            "karenina.infrastructure.llm.manual_traces.ManualTraces", return_value="mock_manual_traces"
+        ) as MockManualTraces,
+    ):
         result = load_manual_traces_from_file(trace_file, mock_benchmark)
         assert result == "mock_manual_traces"
         MockManualTraces.assert_called_once_with(mock_benchmark)
