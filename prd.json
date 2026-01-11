@@ -528,8 +528,8 @@
             "Verify: Run 'uv run pytest tests/integration/templates/ -v' passes",
             "Verify: Tests use actual fixture files"
         ],
-        "status": "pending",
-        "additional notes": "Template parsing is LLM-dependent. Each test should reference which fixture it uses in its docstring."
+        "status": "completed",
+        "additional notes": "Created tests/integration/templates/test_template_parsing.py with 30 tests covering: TemplateEvaluator initialization (4 tests), prompt construction (6 tests), field verification (4 tests), answer template fixtures (4 tests), result dataclasses (4 tests), edge cases (4 tests), template verification integration (4 tests). Total: 1508 tests passing."
     },
     {
         "id": "task-028",
