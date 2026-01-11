@@ -117,7 +117,7 @@
       "Verify: Run python to load each checkpoint: 'from karenina import Benchmark; Benchmark.load(path)'",
       "Verify: Each checkpoint has expected question count and structure"
     ],
-    "status": "pending",
+    "status": "completed",
     "additional notes": "Study src/karenina/storage/checkpoint.py and existing .jsonld files in the repo to understand exact format requirements."
   },
   {
