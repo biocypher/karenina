@@ -929,5 +929,27 @@
     ],
     "status": "completed",
     "additional notes": "Created 43 unit tests for ResultsManager covering 15 public methods: store_verification_results, get_verification_results, get_verification_history, clear_verification_results, export_verification_results, get_verification_summary, get_results_by_question, get_results_by_run, get_latest_results, has_results, get_all_run_names, get_results_statistics_by_run, export_results_to_file, load_results_from_file, _escape_csv_field. All tests passing. Total test count now 1174."
+  },
+  {
+    "id": "task-047",
+    "category": "Unit Tests",
+    "description": "Write unit tests for QuestionManager class",
+    "depends_on": [
+      "task-012"
+    ],
+    "steps": [
+      "Implement: Analyze src/karenina/benchmark/core/questions.py thoroughly",
+      "Implement: Create tests/unit/benchmark/core/test_questions.py",
+      "Implement: Write tests for add_question with string input, Question object, Answer class",
+      "Implement: Write tests for question CRUD operations (get, remove, update)",
+      "Implement: Write tests for metadata operations (author, sources, custom properties)",
+      "Implement: Write tests for finished status management (mark, toggle, batch)",
+      "Implement: Write tests for filtering and searching questions",
+      "Implement: Write tests for batch operations and iteration",
+      "Verify: Run 'uv run pytest tests/unit/benchmark/core/test_questions.py -v'",
+      "Verify: All QuestionManager methods have test coverage"
+    ],
+    "status": "completed",
+    "additional notes": "Created 98 unit tests for QuestionManager covering all methods: add_question (string/Question/Answer class), remove_question, get_question_ids, get_question, get_all_questions, get_question_as_object, get_all_questions_as_objects, add_question_from_object, update_question_metadata, get_question_metadata, get/set/remove_question_custom_property, get/set_question_author, get/set_question_sources, get_question_timestamps, clear_questions, add_questions_batch, mark_finished/unfinished, toggle_finished, get_finished/unfinished_questions, filter_questions, filter_by_metadata, filter_by_custom_metadata, search_questions, count_by_field, __iter__, helper function _rename_answer_class_to_standard. All tests passing. Total test count now 1272."
   }
 ]

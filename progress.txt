@@ -1818,3 +1818,91 @@ Total unit tests added in iterations 31-39: 306 tests
 - ExportManager (benchmark/core/exports.py): 35 tests
 - RubricManager (benchmark/core/rubrics.py): 46 tests
 - ResultsManager (benchmark/core/results.py): 43 tests
+
+2025-01-11 - Ralph Loop Iteration 40
+======================================
+
+COMPLETED TASKS:
+-----------------
+* Added unit tests for QuestionManager (benchmark/core/questions.py)
+  - Created tests/unit/benchmark/core/test_questions.py with 98 comprehensive tests
+  - Test coverage for all QuestionManager methods:
+    - add_question: String input, Question object, Answer class input
+    - remove_question: Remove existing/nonexistent questions
+    - get_question_ids: List all question IDs
+    - get_question: Get specific question or raise ValueError
+    - get_all_questions: Get all with ids_only option
+    - get_question_as_object: Get as Question domain object
+    - get_all_questions_as_objects: Get all as Question objects
+    - add_question_from_object: Add Question with metadata
+    - update_question_metadata: Update question, raw_answer, author, sources, custom_metadata
+    - get_question_metadata: Get complete metadata dict
+    - get/set/remove_question_custom_property: Custom property CRUD
+    - get/set_question_author: Author management
+    - get/set_question_sources: Source management
+    - get_question_timestamps: Created/modified timestamps
+    - clear_questions: Remove all questions
+    - add_questions_batch: Bulk add with metadata
+    - mark_finished/unfinished: Set finished status
+    - mark_finished/unfinished_batch: Bulk status updates
+    - toggle_finished: Flip finished status
+    - get_finished/unfinished_questions: Filter by status with ids_only
+    - filter_questions: Multi-criteria filtering
+    - filter_by_metadata: Dot notation filtering with match modes
+    - filter_by_custom_metadata: AND/OR logic filtering
+    - search_questions: Single/multi-term search with regex/case options
+    - get_questions_by_author: Author-based filtering
+    - get_questions_with_rubric: Rubric filtering
+    - count_by_field: Group and count by field
+    - __iter__: Iterate over questions
+  - Tests for _rename_answer_class_to_standard helper function
+  - Tests cover auto-finished behavior when template provided
+  - Tests cover Answer class source code extraction and renaming
+
+TEST RESULTS:
+-------------
+- Unit tests: 1272 passing (was 1174, +98 new tests for QuestionManager)
+- E2E tests: 58 passing
+- Total: 1330 tests passing (was 1186, +144)
+
+FILES CREATED/MODIFIED:
+-----------------------
+- tests/unit/benchmark/core/test_questions.py (NEW, 98 tests)
+- prd.json (added task-047)
+
+NOTES:
+------
+QuestionManager is the largest core manager class with 35+ public methods.
+It handles all question CRUD operations, metadata management, filtering,
+searching, and batch operations. Tests verified the three input patterns:
+1. Traditional string + raw_answer kwargs
+2. Question object from domain schemas
+3. Answer class as template (with automatic class renaming to "Answer")
+
+Key findings:
+- Auto-finished flag is set to True when answer_template is provided
+- Class names are automatically renamed to "Answer" for verification compatibility
+- Custom properties require careful handling (None values cause AttributeError)
+- Search supports single/multiple terms with AND/OR logic
+- Filtering supports dot notation for nested fields with multiple match modes
+
+Total unit tests added in iterations 31-40: 404 tests
+- AnswerBuilder (domain/answers/builder.py): 43 tests
+- Answer Template Reader (domain/answers/reader.py): 14 tests
+- Answer Cache (utils/answer_cache.py): 29 tests
+- capture_answer_source (schemas/domain): 4 tests
+- MetadataManager (benchmark/core/metadata.py): 56 tests
+- TemplateManager (benchmark/core/templates.py): 40 tests
+- ExportManager (benchmark/core/exports.py): 35 tests
+- RubricManager (benchmark/core/rubrics.py): 46 tests
+- ResultsManager (benchmark/core/results.py): 43 tests
+- QuestionManager (benchmark/core/questions.py): 98 tests
+
+benchmark/core/ coverage: All 6 manager classes now have comprehensive unit tests
+- test_metadata.py: 56 tests
+- test_templates.py: 40 tests
+- test_exports.py: 35 tests
+- test_rubrics.py: 46 tests
+- test_results.py: 43 tests
+- test_questions.py: 98 tests
+Total: 318 tests for benchmark/core/
