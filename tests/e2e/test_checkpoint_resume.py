@@ -15,12 +15,15 @@ from karenina.cli import app
 @pytest.mark.e2e
 def test_progressive_save_requires_output(runner: CliRunner, minimal_checkpoint: Path) -> None:
     """Test that progressive save requires an output file to be specified."""
-    result = runner.invoke(app, [
-        "verify",
-        str(minimal_checkpoint),
-        "--progressive-save",
-        # Missing --output
-    ])
+    result = runner.invoke(
+        app,
+        [
+            "verify",
+            str(minimal_checkpoint),
+            "--progressive-save",
+            # Missing --output
+        ],
+    )
 
     # Should fail with error about output required
     assert result.exit_code != 0
@@ -46,22 +49,28 @@ def test_progressive_save_creates_state_file(
     import json
 
     traces_file = tmp_path / "traces.json"
-    traces_data = {
-        "936dbc8755f623c951d96ea2b03e13bc": "The answer is 4."
-    }
+    traces_data = {"936dbc8755f623c951d96ea2b03e13bc": "The answer is 4."}
     with traces_file.open("w") as f:
         json.dump(traces_data, f)
 
-    result = runner.invoke(app, [
-        "verify",
-        str(minimal_checkpoint),
-        "--progressive-save",
-        "--output", str(output_file),
-        "--interface", "manual",
-        "--manual-traces", str(traces_file),
-        "--parsing-model", "gpt-4.1-mini",
-        "--parsing-provider", "openai",
-    ])
+    result = runner.invoke(
+        app,
+        [
+            "verify",
+            str(minimal_checkpoint),
+            "--progressive-save",
+            "--output",
+            str(output_file),
+            "--interface",
+            "manual",
+            "--manual-traces",
+            str(traces_file),
+            "--parsing-model",
+            "gpt-4.1-mini",
+            "--parsing-provider",
+            "openai",
+        ],
+    )
 
     # Command should execute (may succeed or fail, but progressive save should be set up)
     # Exit codes 0 (success), 1 (verification failed), or 2 (typer error) are acceptable
@@ -74,10 +83,14 @@ def test_progressive_save_creates_state_file(
 @pytest.mark.e2e
 def test_resume_with_nonexistent_state_file(runner: CliRunner) -> None:
     """Test resume with a non-existent state file."""
-    result = runner.invoke(app, [
-        "verify",
-        "--resume", "/nonexistent/path/state.json",
-    ])
+    result = runner.invoke(
+        app,
+        [
+            "verify",
+            "--resume",
+            "/nonexistent/path/state.json",
+        ],
+    )
 
     # Should fail with clear error message
     assert result.exit_code != 0
@@ -104,13 +117,15 @@ def test_resume_without_benchmark_path_uses_state(
         "output_path": str(tmp_path / "output.json"),
         "benchmark_path": str(tmp_path / "checkpoint.jsonld"),
         "config": {
-            "parsing_models": [{
-                "id": "parsing-1",
-                "model_provider": "anthropic",
-                "model_name": "claude-haiku-4-5",
-                "interface": "langchain",
-                "temperature": 0.0,
-            }],
+            "parsing_models": [
+                {
+                    "id": "parsing-1",
+                    "model_provider": "anthropic",
+                    "model_name": "claude-haiku-4-5",
+                    "interface": "langchain",
+                    "temperature": 0.0,
+                }
+            ],
             "answering_models": [],
             "parsing_only": True,
             "replicate_count": 1,
@@ -137,10 +152,14 @@ def test_resume_without_benchmark_path_uses_state(
     with checkpoint_file.open("w") as f:
         json.dump(checkpoint_data, f)
 
-    result = runner.invoke(app, [
-        "verify",
-        "--resume", str(state_file),
-    ])
+    result = runner.invoke(
+        app,
+        [
+            "verify",
+            "--resume",
+            str(state_file),
+        ],
+    )
 
     # Should attempt to load the state (may fail later for other reasons)
     # Exit code 1 is acceptable (checkpoint has no questions)
@@ -162,13 +181,15 @@ def test_resume_shows_progress_message(
         "output_path": str(tmp_path / "output.json"),
         "benchmark_path": str(tmp_path / "checkpoint.jsonld"),
         "config": {
-            "parsing_models": [{
-                "id": "parsing-1",
-                "model_provider": "anthropic",
-                "model_name": "claude-haiku-4-5",
-                "interface": "langchain",
-                "temperature": 0.0,
-            }],
+            "parsing_models": [
+                {
+                    "id": "parsing-1",
+                    "model_provider": "anthropic",
+                    "model_name": "claude-haiku-4-5",
+                    "interface": "langchain",
+                    "temperature": 0.0,
+                }
+            ],
             "answering_models": [],
             "parsing_only": True,
             "replicate_count": 1,
@@ -199,10 +220,14 @@ def test_resume_shows_progress_message(
     with checkpoint_file.open("w") as f:
         json.dump(checkpoint_data, f)
 
-    result = runner.invoke(app, [
-        "verify",
-        "--resume", str(state_file),
-    ])
+    result = runner.invoke(
+        app,
+        [
+            "verify",
+            "--resume",
+            str(state_file),
+        ],
+    )
 
     # Resume message may appear even if checkpoint is empty
     assert result.exit_code in [0, 1]
@@ -220,13 +245,15 @@ def test_resume_all_completed_message(runner: CliRunner, tmp_path: Path) -> None
         "output_path": str(tmp_path / "output.json"),
         "benchmark_path": str(tmp_path / "checkpoint.jsonld"),
         "config": {
-            "parsing_models": [{
-                "id": "parsing-1",
-                "model_provider": "anthropic",
-                "model_name": "claude-haiku-4-5",
-                "interface": "langchain",
-                "temperature": 0.0,
-            }],
+            "parsing_models": [
+                {
+                    "id": "parsing-1",
+                    "model_provider": "anthropic",
+                    "model_name": "claude-haiku-4-5",
+                    "interface": "langchain",
+                    "temperature": 0.0,
+                }
+            ],
             "answering_models": [],
             "parsing_only": True,
             "replicate_count": 1,
@@ -256,10 +283,14 @@ def test_resume_all_completed_message(runner: CliRunner, tmp_path: Path) -> None
     with checkpoint_file.open("w") as f:
         json.dump(checkpoint_data, f)
 
-    result = runner.invoke(app, [
-        "verify",
-        "--resume", str(state_file),
-    ])
+    result = runner.invoke(
+        app,
+        [
+            "verify",
+            "--resume",
+            str(state_file),
+        ],
+    )
 
     # Should show message about all tasks already completed
     # Exit code 0 is acceptable (graceful handling of completed state)
@@ -278,13 +309,15 @@ def test_resume_uses_state_config_not_cli(runner: CliRunner, tmp_path: Path) -> 
         "output_path": str(tmp_path / "output.json"),
         "benchmark_path": str(tmp_path / "checkpoint.jsonld"),
         "config": {
-            "parsing_models": [{
-                "id": "parsing-1",
-                "model_provider": "anthropic",
-                "model_name": "claude-haiku-4-5",
-                "interface": "langchain",
-                "temperature": 0.0,
-            }],
+            "parsing_models": [
+                {
+                    "id": "parsing-1",
+                    "model_provider": "anthropic",
+                    "model_name": "claude-haiku-4-5",
+                    "interface": "langchain",
+                    "temperature": 0.0,
+                }
+            ],
             "answering_models": [],
             "parsing_only": True,
             "replicate_count": 5,  # Specific replicate count
@@ -311,12 +344,17 @@ def test_resume_uses_state_config_not_cli(runner: CliRunner, tmp_path: Path) -> 
     with checkpoint_file.open("w") as f:
         json.dump(checkpoint_data, f)
 
-    result = runner.invoke(app, [
-        "verify",
-        "--resume", str(state_file),
-        # These CLI options should be ignored when using --resume
-        "--replicate-count", "10",
-    ])
+    result = runner.invoke(
+        app,
+        [
+            "verify",
+            "--resume",
+            str(state_file),
+            # These CLI options should be ignored when using --resume
+            "--replicate-count",
+            "10",
+        ],
+    )
 
     # Should use config from state, not CLI
     # Exit code 0 or 1 is acceptable
@@ -334,11 +372,15 @@ def test_checkpoint_with_results_incremental(
     This tests that questions with existing results are skipped and only
     questions without results are processed.
     """
-    result = runner.invoke(app, [
-        "verify",
-        str(checkpoint_with_results),
-        "--preset", str(tmp_presets_dir / "default.json"),
-    ])
+    result = runner.invoke(
+        app,
+        [
+            "verify",
+            str(checkpoint_with_results),
+            "--preset",
+            str(tmp_presets_dir / "default.json"),
+        ],
+    )
 
     # Should process checkpoint with existing results
     # Exit codes 0 (success), 1 (verification failed), or 2 (typer error) are acceptable
@@ -358,10 +400,14 @@ def test_progressive_save_with_invalid_state_format(
     with state_file.open("w") as f:
         json.dump({"invalid": "structure", "missing": "fields"}, f)
 
-    result = runner.invoke(app, [
-        "verify",
-        "--resume", str(state_file),
-    ])
+    result = runner.invoke(
+        app,
+        [
+            "verify",
+            "--resume",
+            str(state_file),
+        ],
+    )
 
     # Should fail with error about invalid state file
     assert result.exit_code != 0
@@ -384,13 +430,15 @@ def test_verify_status_on_state_file(
         "output_path": str(tmp_path / "output.json"),
         "benchmark_path": str(tmp_path / "checkpoint.jsonld"),
         "config": {
-            "parsing_models": [{
-                "id": "parsing-1",
-                "model_provider": "anthropic",
-                "model_name": "claude-haiku-4-5",
-                "interface": "langchain",
-                "temperature": 0.0,
-            }],
+            "parsing_models": [
+                {
+                    "id": "parsing-1",
+                    "model_provider": "anthropic",
+                    "model_name": "claude-haiku-4-5",
+                    "interface": "langchain",
+                    "temperature": 0.0,
+                }
+            ],
             "answering_models": [],
             "parsing_only": True,
             "replicate_count": 1,
@@ -409,10 +457,13 @@ def test_verify_status_on_state_file(
     with state_file.open("w") as f:
         json.dump(state_data, f)
 
-    result = runner.invoke(app, [
-        "verify-status",
-        str(state_file),
-    ])
+    result = runner.invoke(
+        app,
+        [
+            "verify-status",
+            str(state_file),
+        ],
+    )
 
     # Should display status information
     # Exit codes 0 or 1 are acceptable (1 may occur if benchmark file doesn't exist)
@@ -424,10 +475,13 @@ def test_verify_status_on_state_file(
 @pytest.mark.e2e
 def test_verify_status_on_nonexistent_state(runner: CliRunner) -> None:
     """Test verify-status with non-existent state file."""
-    result = runner.invoke(app, [
-        "verify-status",
-        "/nonexistent/state.json",
-    ])
+    result = runner.invoke(
+        app,
+        [
+            "verify-status",
+            "/nonexistent/state.json",
+        ],
+    )
 
     # Should fail gracefully
     assert result.exit_code != 0
@@ -451,13 +505,15 @@ def test_resume_preserves_pending_tasks(runner: CliRunner, tmp_path: Path) -> No
         "output_path": str(tmp_path / "output.json"),
         "benchmark_path": str(tmp_path / "checkpoint.jsonld"),
         "config": {
-            "parsing_models": [{
-                "id": "parsing-1",
-                "model_provider": "anthropic",
-                "model_name": "claude-haiku-4-5",
-                "interface": "langchain",
-                "temperature": 0.0,
-            }],
+            "parsing_models": [
+                {
+                    "id": "parsing-1",
+                    "model_provider": "anthropic",
+                    "model_name": "claude-haiku-4-5",
+                    "interface": "langchain",
+                    "temperature": 0.0,
+                }
+            ],
             "answering_models": [],
             "parsing_only": True,
             "replicate_count": 1,
@@ -488,10 +544,14 @@ def test_resume_preserves_pending_tasks(runner: CliRunner, tmp_path: Path) -> No
     with checkpoint_file.open("w") as f:
         json.dump(checkpoint_data, f)
 
-    result = runner.invoke(app, [
-        "verify",
-        "--resume", str(state_file),
-    ])
+    result = runner.invoke(
+        app,
+        [
+            "verify",
+            "--resume",
+            str(state_file),
+        ],
+    )
 
     # Should show that it's resuming with 1/3 completed
     # Output should indicate progress

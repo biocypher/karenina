@@ -51,9 +51,7 @@ def test_preset_list_empty_presets_dir(runner: CliRunner, tmp_path: Path) -> Non
     empty_presets = tmp_path / "presets"
     empty_presets.mkdir()
 
-    result = runner.invoke(app, ["preset", "list"], env={
-        "KARENINA_PRESETS_DIR": str(empty_presets)
-    })
+    result = runner.invoke(app, ["preset", "list"], env={"KARENINA_PRESETS_DIR": str(empty_presets)})
 
     # Should succeed but show "no presets" message
     assert result.exit_code == 0
@@ -77,9 +75,7 @@ def test_preset_list_with_multiple_presets(runner: CliRunner, tmp_path: Path) ->
     with (presets_dir / "thorough.json").open("w") as f:
         json.dump(_make_valid_preset(name="thorough"), f)
 
-    result = runner.invoke(app, ["preset", "list"], env={
-        "KARENINA_PRESETS_DIR": str(presets_dir)
-    })
+    result = runner.invoke(app, ["preset", "list"], env={"KARENINA_PRESETS_DIR": str(presets_dir)})
 
     # Should show table with all presets
     assert result.exit_code == 0
@@ -96,9 +92,7 @@ def test_preset_list_nonexistent_directory(runner: CliRunner, tmp_path: Path) ->
     """Test preset list with non-existent presets directory."""
     nonexistent = tmp_path / "nonexistent_presets"
 
-    result = runner.invoke(app, ["preset", "list"], env={
-        "KARENINA_PRESETS_DIR": str(nonexistent)
-    })
+    result = runner.invoke(app, ["preset", "list"], env={"KARENINA_PRESETS_DIR": str(nonexistent)})
 
     # Should succeed but show no presets (dir doesn't exist)
     assert result.exit_code == 0
@@ -109,9 +103,7 @@ def test_preset_list_nonexistent_directory(runner: CliRunner, tmp_path: Path) ->
 @pytest.mark.e2e
 def test_preset_show_by_name(runner: CliRunner, tmp_presets_dir: Path) -> None:
     """Test preset show using preset name (not full path)."""
-    result = runner.invoke(app, ["preset", "show", "default"], env={
-        "KARENINA_PRESETS_DIR": str(tmp_presets_dir)
-    })
+    result = runner.invoke(app, ["preset", "show", "default"], env={"KARENINA_PRESETS_DIR": str(tmp_presets_dir)})
 
     # Should show preset details
     assert result.exit_code == 0
@@ -148,9 +140,7 @@ def test_preset_show_by_file_path(runner: CliRunner, tmp_path: Path) -> None:
 @pytest.mark.e2e
 def test_preset_show_with_json_extension(runner: CliRunner, tmp_presets_dir: Path) -> None:
     """Test preset show with .json extension included."""
-    result = runner.invoke(app, ["preset", "show", "default.json"], env={
-        "KARENINA_PRESETS_DIR": str(tmp_presets_dir)
-    })
+    result = runner.invoke(app, ["preset", "show", "default.json"], env={"KARENINA_PRESETS_DIR": str(tmp_presets_dir)})
 
     # Should work the same as without extension
     assert result.exit_code == 0
@@ -160,9 +150,7 @@ def test_preset_show_with_json_extension(runner: CliRunner, tmp_presets_dir: Pat
 @pytest.mark.e2e
 def test_preset_show_nonexistent_preset(runner: CliRunner, tmp_path: Path) -> None:
     """Test preset show with non-existent preset name."""
-    result = runner.invoke(app, ["preset", "show", "nonexistent_preset"], env={
-        "KARENINA_PRESETS_DIR": str(tmp_path)
-    })
+    result = runner.invoke(app, ["preset", "show", "nonexistent_preset"], env={"KARENINA_PRESETS_DIR": str(tmp_path)})
 
     # Should fail with error
     assert result.exit_code != 0
@@ -180,19 +168,14 @@ def test_preset_show_invalid_json(runner: CliRunner, tmp_path: Path) -> None:
     bad_preset = presets_dir / "bad.json"
     bad_preset.write_text("{invalid json content")
 
-    result = runner.invoke(app, ["preset", "show", "bad"], env={
-        "KARENINA_PRESETS_DIR": str(presets_dir)
-    })
+    result = runner.invoke(app, ["preset", "show", "bad"], env={"KARENINA_PRESETS_DIR": str(presets_dir)})
 
     # Should fail gracefully
     assert result.exit_code != 0
     output_lower = result.stdout.lower()
     # Should indicate error (json, parse, or error)
     has_error_indicator = (
-        "json" in output_lower or
-        "parse" in output_lower or
-        "invalid" in output_lower or
-        "error" in output_lower
+        "json" in output_lower or "parse" in output_lower or "invalid" in output_lower or "error" in output_lower
     )
     assert has_error_indicator
 
@@ -205,18 +188,22 @@ def test_preset_show_displays_summary_fields(runner: CliRunner, tmp_path: Path) 
     preset_file = tmp_path / "detailed.json"
     preset_data = _make_valid_preset(
         name="detailed",
-        parsing_models=[{
-            "id": "parsing-1",
-            "model_provider": "anthropic",
-            "model_name": "claude-haiku-4-5",
-            "interface": "langchain",
-        }],
-        answering_models=[{
-            "id": "answering-1",
-            "model_provider": "anthropic",
-            "model_name": "claude-haiku-4-5",
-            "interface": "langchain",
-        }],
+        parsing_models=[
+            {
+                "id": "parsing-1",
+                "model_provider": "anthropic",
+                "model_name": "claude-haiku-4-5",
+                "interface": "langchain",
+            }
+        ],
+        answering_models=[
+            {
+                "id": "answering-1",
+                "model_provider": "anthropic",
+                "model_name": "claude-haiku-4-5",
+                "interface": "langchain",
+            }
+        ],
         replicate_count=5,
         rubric_enabled=True,
         evaluation_mode="template_and_rubric",  # Required when rubric_enabled=True
@@ -261,9 +248,9 @@ def test_preset_delete_with_confirmation(runner: CliRunner, tmp_path: Path) -> N
     assert preset_file.exists()
 
     # Invoke delete with 'y' input to confirm
-    result = runner.invoke(app, ["preset", "delete", "to_delete"], env={
-        "KARENINA_PRESETS_DIR": str(presets_dir)
-    }, input="y\n")
+    result = runner.invoke(
+        app, ["preset", "delete", "to_delete"], env={"KARENINA_PRESETS_DIR": str(presets_dir)}, input="y\n"
+    )
 
     # Should succeed
     assert result.exit_code == 0
@@ -287,9 +274,9 @@ def test_preset_delete_cancelled(runner: CliRunner, tmp_path: Path) -> None:
         json.dump(_make_valid_preset(name="keep_me"), f)
 
     # Invoke delete with 'n' input to cancel
-    result = runner.invoke(app, ["preset", "delete", "keep_me"], env={
-        "KARENINA_PRESETS_DIR": str(presets_dir)
-    }, input="n\n")
+    result = runner.invoke(
+        app, ["preset", "delete", "keep_me"], env={"KARENINA_PRESETS_DIR": str(presets_dir)}, input="n\n"
+    )
 
     # Should succeed (cancellation is not an error)
     assert result.exit_code == 0
@@ -321,9 +308,9 @@ def test_preset_delete_by_full_path(runner: CliRunner, tmp_path: Path) -> None:
 @pytest.mark.e2e
 def test_preset_delete_nonexistent(runner: CliRunner, tmp_path: Path) -> None:
     """Test preset delete with non-existent preset."""
-    result = runner.invoke(app, ["preset", "delete", "nonexistent"], env={
-        "KARENINA_PRESETS_DIR": str(tmp_path)
-    }, input="y\n")
+    result = runner.invoke(
+        app, ["preset", "delete", "nonexistent"], env={"KARENINA_PRESETS_DIR": str(tmp_path)}, input="y\n"
+    )
 
     # Should fail with error
     assert result.exit_code != 0
@@ -334,9 +321,7 @@ def test_preset_delete_nonexistent(runner: CliRunner, tmp_path: Path) -> None:
 @pytest.mark.e2e
 def test_preset_list_with_env_var(runner: CliRunner, tmp_presets_dir: Path) -> None:
     """Test preset list respects KARENINA_PRESETS_DIR environment variable."""
-    result = runner.invoke(app, ["preset", "list"], env={
-        "KARENINA_PRESETS_DIR": str(tmp_presets_dir)
-    })
+    result = runner.invoke(app, ["preset", "list"], env={"KARENINA_PRESETS_DIR": str(tmp_presets_dir)})
 
     # Should find the preset from tmp_presets_dir
     assert result.exit_code == 0
@@ -346,9 +331,7 @@ def test_preset_list_with_env_var(runner: CliRunner, tmp_presets_dir: Path) -> N
 @pytest.mark.e2e
 def test_preset_show_with_env_var(runner: CliRunner, tmp_presets_dir: Path) -> None:
     """Test preset show respects KARENINA_PRESETS_DIR environment variable."""
-    result = runner.invoke(app, ["preset", "show", "default"], env={
-        "KARENINA_PRESETS_DIR": str(tmp_presets_dir)
-    })
+    result = runner.invoke(app, ["preset", "show", "default"], env={"KARENINA_PRESETS_DIR": str(tmp_presets_dir)})
 
     # Should find preset from the custom directory
     assert result.exit_code == 0
@@ -373,9 +356,7 @@ def test_preset_list_ignores_non_json_files(runner: CliRunner, tmp_path: Path) -
     (presets_dir / "config.txt").write_text("not a preset")
     (presets_dir / ".hidden").write_text("hidden file")
 
-    result = runner.invoke(app, ["preset", "list"], env={
-        "KARENINA_PRESETS_DIR": str(presets_dir)
-    })
+    result = runner.invoke(app, ["preset", "list"], env={"KARENINA_PRESETS_DIR": str(presets_dir)})
 
     # Should only show the valid preset
     assert result.exit_code == 0
@@ -400,9 +381,7 @@ def test_preset_list_sorts_alphabetically(runner: CliRunner, tmp_path: Path) -> 
         with (presets_dir / f"{name}.json").open("w") as f:
             json.dump(_make_valid_preset(name=name), f)
 
-    result = runner.invoke(app, ["preset", "list"], env={
-        "KARENINA_PRESETS_DIR": str(presets_dir)
-    })
+    result = runner.invoke(app, ["preset", "list"], env={"KARENINA_PRESETS_DIR": str(presets_dir)})
 
     # Should succeed
     assert result.exit_code == 0

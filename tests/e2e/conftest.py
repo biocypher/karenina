@@ -335,9 +335,7 @@ def tmp_traces_file(tmp_path: Path) -> Path:
 
     traces_path = tmp_path / "traces.json"
     # Create a minimal traces file
-    traces_data = {
-        "936dbc8755f623c951d96ea2b03e13bc": "The answer is 4."
-    }
+    traces_data = {"936dbc8755f623c951d96ea2b03e13bc": "The answer is 4."}
     with traces_path.open("w") as f:
         json.dump(traces_data, f)
     return traces_path
