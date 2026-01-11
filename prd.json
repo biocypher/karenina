@@ -818,8 +818,8 @@
       "Verify: Every file in fixtures/ is documented",
       "Verify: MANIFEST is kept in sync with actual files"
     ],
-    "status": "pending",
-    "additional notes": "This manifest helps developers understand what fixtures exist and when to regenerate them."
+    "status": "completed",
+    "additional notes": "Created tests/fixtures/MANIFEST.md documenting all fixtures. Documented 3 checkpoint fixtures (minimal.jsonld, multi_question.jsonld, with_results.jsonld) and 3 template fixtures (simple_extraction.py, multi_field.py, with_correct_dict.py). LLM response fixtures are noted as pending API key access - directory structure exists but no JSON fixtures captured yet. MANIFEST includes usage examples, fixture format specifications, and instructions for adding new fixtures and keeping MANIFEST in sync."
   },
   {
     "id": "task-042",
