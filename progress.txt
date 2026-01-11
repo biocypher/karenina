@@ -1762,3 +1762,59 @@ Total unit tests added in iterations 31-38: 263 tests
 - TemplateManager (benchmark/core/templates.py): 40 tests
 - ExportManager (benchmark/core/exports.py): 35 tests
 - RubricManager (benchmark/core/rubrics.py): 46 tests
+
+2025-01-11 - Ralph Loop Iteration 39
+======================================
+
+COMPLETED TASKS:
+-----------------
+* Added unit tests for ResultsManager (benchmark/core/results.py)
+  - Created tests/unit/benchmark/core/test_results.py with 43 comprehensive tests
+  - Test coverage for all ResultsManager methods (15 public methods):
+    - store_verification_results: Store results in memory by run name
+    - get_verification_results: Get results with optional filtering
+    - get_verification_history: Get history organized by run
+    - clear_verification_results: Clear results from memory
+    - export_verification_results: Export as JSON or CSV string
+    - get_verification_summary: Get statistics and success rates
+    - get_results_by_question: Get results for specific question
+    - get_results_by_run: Get results for specific run
+    - get_latest_results: Get most recent results
+    - has_results: Check if results exist
+    - get_all_run_names: Get sorted list of run names
+    - get_results_statistics_by_run: Get stats per run
+    - export_results_to_file: Export to file with auto format detection
+    - load_results_from_file: Load from JSON or CSV files
+    - _escape_csv_field: Private method for CSV field escaping
+  - Tests cover in-memory results management (no checkpoint storage)
+  - Tests cover JSON and CSV export/import formats
+
+TEST RESULTS:
+-------------
+- Unit tests: 1128 passing (was 1085, +43 new tests for ResultsManager)
+- E2E tests: 58 passing
+- Total: 1186 tests passing (was 1143, +43)
+
+FILES CREATED/MODIFIED:
+-----------------------
+- tests/unit/benchmark/core/test_results.py (NEW, 43 tests)
+- prd.json (added task-046)
+
+NOTES:
+------
+ResultsManager is a pure Python module with no external dependencies,
+making it ideal for unit testing. The module handles in-memory storage
+of verification results (not saved to checkpoint), export to JSON/CSV,
+and import from files. Tests verified proper run management, filtering,
+and statistics calculation.
+
+Total unit tests added in iterations 31-39: 306 tests
+- AnswerBuilder (domain/answers/builder.py): 43 tests
+- Answer Template Reader (domain/answers/reader.py): 14 tests
+- Answer Cache (utils/answer_cache.py): 29 tests
+- capture_answer_source (schemas/domain): 4 tests
+- MetadataManager (benchmark/core/metadata.py): 56 tests
+- TemplateManager (benchmark/core/templates.py): 40 tests
+- ExportManager (benchmark/core/exports.py): 35 tests
+- RubricManager (benchmark/core/rubrics.py): 46 tests
+- ResultsManager (benchmark/core/results.py): 43 tests

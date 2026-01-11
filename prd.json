@@ -907,5 +907,27 @@
     ],
     "status": "completed",
     "additional notes": "Created 46 unit tests for RubricManager covering all methods: add_global_rubric_trait, add_question_rubric_trait, get_global_rubric, get_question_rubric, get_merged_rubric_for_question, clear_global_rubric, remove_question_rubric, clear_all_rubrics, validate_rubrics, get_rubric_statistics, get_questions_with_rubric, set_global_rubric, update_global_rubric_trait, remove_global_rubric_trait, get_rubric_trait_names, has_rubric. All tests passing. Total test count now 1131."
+  },
+  {
+    "id": "task-046",
+    "category": "Unit Tests",
+    "description": "Write unit tests for ResultsManager class",
+    "depends_on": [
+      "task-012"
+    ],
+    "steps": [
+      "Implement: Analyze src/karenina/benchmark/core/results.py thoroughly",
+      "Implement: Create tests/unit/benchmark/core/test_results.py",
+      "Implement: Write tests for results storage and retrieval",
+      "Implement: Write tests for run management",
+      "Implement: Write tests for export functionality (JSON, CSV)",
+      "Implement: Write tests for import functionality",
+      "Implement: Write tests for statistics and summary",
+      "Implement: Write tests for results filtering and querying",
+      "Verify: Run 'uv run pytest tests/unit/benchmark/core/test_results.py -v'",
+      "Verify: All ResultsManager methods have test coverage"
+    ],
+    "status": "completed",
+    "additional notes": "Created 43 unit tests for ResultsManager covering 15 public methods: store_verification_results, get_verification_results, get_verification_history, clear_verification_results, export_verification_results, get_verification_summary, get_results_by_question, get_results_by_run, get_latest_results, has_results, get_all_run_names, get_results_statistics_by_run, export_results_to_file, load_results_from_file, _escape_csv_field. All tests passing. Total test count now 1174."
   }
 ]
