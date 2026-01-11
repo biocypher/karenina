@@ -587,8 +587,8 @@
             "Verify: Run 'uv run pytest tests/integration/cli/ -v' passes",
             "Verify: Commands use fixture-backed LLM where needed",
         ],
-        "status": "pending",
-        "additional notes": "CLI integration tests the command structure, not full workflows. Full workflows go in e2e tests.",
+        "status": "completed",
+        "additional notes": "Created 33 CLI integration tests using Typer's CliRunner (not Click). test_preset_command.py (14 tests): preset list (3), show (4), delete (3), main CLI (4). test_verify_command.py (19 tests): help (5), errors (4), options (5), verify-status (3), integration (2). Total: 1586 tests passing.",
     },
     {
         "id": "task-034",
