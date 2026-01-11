@@ -1386,3 +1386,55 @@ The testing infrastructure is complete and ready for fixture capture.
 
 Testing progress: 30/44 PRD tasks completed (68%)
 
+
+2025-01-11 - Ralph Loop Iteration 31
+======================================
+
+COMPLETED TASKS:
+-----------------
+* Added unit tests for AnswerBuilder (domain/answers/builder.py)
+  - Created tests/unit/domain/answers/test_builder.py with 43 comprehensive tests
+  - Test coverage for all AnswerBuilder methods:
+    - __init__: Empty builder initialization
+    - add_attribute: String, int, bool, list types with validation
+    - remove_attribute: Removal with error handling
+    - add_regex: All match types (exact, contains, count, all) with validation
+    - remove_regex: Pattern removal with error handling
+    - compile: Single/multiple attributes, regex-only, combined, custom class names
+    - __repr__: String representation for debugging
+  - Tests verify:
+    - Method chaining behavior
+    - Name validation (Python identifier check)
+    - Duplicate detection (attributes and regex patterns)
+    - Name conflict detection between attributes and regex
+    - Invalid regex pattern detection
+    - Invalid match_type validation
+    - Empty builder compilation error
+    - Field description preservation
+    - Source code attachment to compiled classes
+
+TEST RESULTS:
+-------------
+- Unit tests: 849 passing (was 806, +43 new tests)
+- E2E tests: 58 passing
+- Total: 907 tests passing (was 864, +43)
+
+FILES CREATED/MODIFIED:
+-----------------------
+- tests/unit/domain/answers/test_builder.py (NEW, 43 tests)
+- tests/unit/domain/answers/__init__.py (NEW)
+
+NOTES:
+------
+This was not a PRD task but added to improve coverage of a low-coverage
+module (domain/answers/builder.py had 0% coverage). AnswerBuilder is
+pure Python code with no external dependencies, making it ideal for
+unit testing without requiring LLM fixtures.
+
+Remaining low-coverage modules that could benefit from tests:
+- benchmark/task_eval/* (0%)
+- benchmark/verification/evaluators/* (0-19%)
+- cli/verify.py (5%)
+- domain/answers/generator.py
+- domain/answers/reader.py
+
