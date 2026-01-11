@@ -241,8 +241,8 @@
       "Verify: Run 'uv run pytest tests/unit/schemas/test_checkpoint_schemas.py -v'",
       "Verify: Both valid and invalid schemas are tested"
     ],
-    "status": "pending",
-    "additional notes": "JSON-LD has specific structure requirements. Ensure @context and @type are validated correctly."
+    "status": "completed",
+    "additional notes": "Created 36 tests in tests/unit/schemas/test_checkpoint_schemas.py covering all JSON-LD schema types: SchemaOrgPerson, SchemaOrgCreativeWork, SchemaOrgPropertyValue, SchemaOrgRating, SchemaOrgSoftwareSourceCode, SchemaOrgAnswer, SchemaOrgQuestion, SchemaOrgDataFeedItem, SchemaOrgDataFeed, JsonLdCheckpoint, and SCHEMA_ORG_CONTEXT constant. Tests cover minimal and full field sets, @type/@id/@context alias handling, serialization with by_alias, and validation constraints."
   },
   {
     "id": "task-015",

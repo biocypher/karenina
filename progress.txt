@@ -448,3 +448,42 @@ $ uv run pytest tests/unit/test_fixture_backed_llm.py \
 
 $ uv run ruff check scripts/capture_fixtures.py --fix --unsafe-fixes
 All checks passed!
+
+
+2025-01-11 - Ralph Loop Iteration 11
+=====================================
+
+COMPLETED TASKS:
+-----------------
+* task-014: Unit tests for checkpoint schemas and JSON-LD validation
+  - Created tests/unit/schemas/test_checkpoint_schemas.py with 36 tests
+  - Tests for SchemaOrgPerson (minimal, full, @type alias serialization)
+  - Tests for SchemaOrgCreativeWork (minimal, full fields)
+  - Tests for SchemaOrgPropertyValue (string, number, dict values)
+  - Tests for SchemaOrgRating (minimal, evaluation results, all 8 additionalType values, additionalProperty)
+  - Tests for SchemaOrgSoftwareSourceCode (minimal, @id, custom repository)
+  - Tests for SchemaOrgAnswer (minimal, @id)
+  - Tests for SchemaOrgQuestion (minimal, with ratings, with custom properties)
+  - Tests for SchemaOrgDataFeedItem (minimal, with keywords)
+  - Tests for SchemaOrgDataFeed (minimal, with elements, global ratings, string/Person creator)
+  - Tests for JsonLdCheckpoint (minimal, full structure, serialization, roundtrip)
+  - Tests for SCHEMA_ORG_CONTEXT constant (structure, mappings, @set containers)
+
+FILES CREATED:
+--------------
+- tests/unit/schemas/test_checkpoint_schemas.py (36 tests, all passing)
+
+NEXT TASKS (Priority Order):
+-----------------------------
+* task-015: Write unit tests for CLI commands
+* task-016+: Continue unit tests for remaining modules
+
+GIT COMMIT: (pending)
+
+TEST RESULTS:
+-------------
+$ uv run pytest tests/unit/schemas/test_checkpoint_schemas.py -v
+36 passed in 0.73s
+
+$ uv run ruff check tests/unit/schemas/test_checkpoint_schemas.py --fix
+Found 1 error (1 fixed, 0 remaining).
