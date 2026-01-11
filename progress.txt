@@ -1142,3 +1142,34 @@ All checks passed!
 - Integration tests: ⏳ Directories ready, tests pending
 - E2E tests: ⏳ Fixtures ready, tests pending
 - Documentation: ✅ Complete
+
+## Iteration 25 (2025-01-11)
+
+**Task Completed**: task-036 - Write E2E tests for full verification workflow
+
+**Work Done**:
+- Created tests/e2e/test_full_verification.py with 12 E2E tests
+- Tests invoke CLI directly via Typer's CliRunner (not subprocess)
+- Tests use manual interface to avoid requiring API keys
+- Tests cover key CLI workflows:
+  - test_verify_help_displays: Verify help text
+  - test_verify_minimal_checkpoint_with_manual_interface: Manual interface workflow
+  - test_verify_with_preset: Preset configuration loading
+  - test_verify_checkpoint_not_found: Error handling for missing files
+  - test_verify_with_output_file: JSON output file generation
+  - test_verify_with_csv_output: CSV export functionality
+  - test_verify_with_question_indices: Question filtering by index
+  - test_verify_with_invalid_indices: Error handling for invalid indices
+  - test_checkpoint_resume_functionality: Resume verification with existing results
+  - test_preset_list_command: Preset listing
+  - test_preset_show_command: Preset details display
+  - test_verify_status_command: Progressive save status inspection
+
+**Test Results**:
+- All 12 E2E tests pass
+- All 806 unit tests still pass
+- Total: 818 tests passing
+
+**Files Created/Modified**:
+- Created: tests/e2e/test_full_verification.py (252 lines, 12 tests)
+- Modified: prd.json (task-036 status: pending → completed)

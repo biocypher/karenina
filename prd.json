@@ -720,7 +720,7 @@
       "Verify: Run 'uv run pytest tests/e2e/test_full_verification.py -v'",
       "Verify: Tests invoke main() directly, not subprocess"
     ],
-    "status": "pending",
+    "status": "completed",
     "additional notes": "E2E tests use fixture-backed LLM for speed. They test complete CLI workflows."
   },
   {
