@@ -487,3 +487,55 @@ $ uv run pytest tests/unit/schemas/test_checkpoint_schemas.py -v
 
 $ uv run ruff check tests/unit/schemas/test_checkpoint_schemas.py --fix
 Found 1 error (1 fixed, 0 remaining).
+
+
+2025-01-11 - Ralph Loop Iteration 12
+=====================================
+
+COMPLETED TASKS:
+-----------------
+* task-016: Unit tests for rubric trait evaluation rules (RegexTrait, CallableTrait)
+  - Created tests/unit/schemas/test_regex_trait.py with 75 tests
+  - Created tests/unit/schemas/test_callable_trait.py with 34 tests
+  - Total 109 tests, all passing
+  - RegexTrait coverage:
+    - Pattern validation (valid/invalid regex patterns)
+    - Case sensitive and insensitive matching
+    - Invert result functionality
+    - evaluate() method with various inputs
+    - Word boundaries, quantifiers, anchors, lookaheads/lookbehinds
+    - Unicode, special characters, multiline text
+    - Error handling for invalid patterns
+  - CallableTrait coverage:
+    - from_callable() classmethod for boolean and score traits
+    - Function signature validation (parameter count)
+    - Score parameter validation (min/max required for score, not for boolean)
+    - Serialization (cloudpickle to bytes, base64 for JSON)
+    - deserialize_callable() method with security warnings
+    - evaluate() method for boolean and score traits
+    - Invert result for boolean traits
+    - Score clamping to min/max range
+    - Error handling (RuntimeError wrapping ValueError for type/range errors)
+    - Round-trip serialization (JSON)
+
+FILES CREATED:
+--------------
+- tests/unit/schemas/test_regex_trait.py (75 tests, all passing)
+- tests/unit/schemas/test_callable_trait.py (34 tests, all passing)
+
+NEXT TASKS (Priority Order):
+-----------------------------
+* task-015: Write unit tests for domain verification logic (non-LLM parts)
+* task-017: Write unit tests for infrastructure module (LLM client utilities)
+* task-018+: Continue with remaining unit test modules
+
+GIT COMMIT: (pending)
+
+TEST RESULTS:
+-------------
+$ uv run pytest tests/unit/schemas/test_regex_trait.py tests/unit/schemas/test_callable_trait.py -v
+109 passed, 30 warnings in 0.59s
+
+$ uv run ruff check tests/unit/schemas/test_regex_trait.py tests/unit/schemas/test_callable_trait.py --fix --unsafe-fixes
+Found 38 errors (36 fixed, 2 remaining).
+Note: Remaining 2 errors are False positives (ARG005 - unused lambda arguments in test code, acceptable)

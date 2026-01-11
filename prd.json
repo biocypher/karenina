@@ -268,17 +268,18 @@
     "description": "Write unit tests for rubric trait evaluation rules (RegexTrait, CallableTrait)",
     "depends_on": ["task-013"],
     "steps": [
-      "Implement: Analyze trait evaluation code in src/karenina/domain/",
-      "Implement: Create tests/unit/domain/test_trait_rules.py",
+      "Implement: Analyze trait evaluation code in src/karenina/schemas/domain/rubric.py",
+      "Implement: Create tests/unit/schemas/test_regex_trait.py",
+      "Implement: Create tests/unit/schemas/test_callable_trait.py",
       "Implement: Write tests for RegexTrait pattern matching (match found, not found, multiple matches)",
       "Implement: Write tests for CallableTrait invocation and return handling",
       "Implement: Write tests for score normalization and clamping to range",
       "Implement: Write tests for trait result aggregation",
-      "Verify: Run 'uv run pytest tests/unit/domain/test_trait_rules.py -v'",
+      "Verify: Run 'uv run pytest tests/unit/schemas/test_regex_trait.py tests/unit/schemas/test_callable_trait.py -v'",
       "Verify: Edge cases covered (empty input, boundary scores, exceptions)"
     ],
-    "status": "pending",
-    "additional notes": "RegexTrait and CallableTrait are pure logic - no LLM needed. LLMRubricTrait and MetricRubricTrait evaluation needs integration tests."
+    "status": "completed",
+    "additional notes": "Created 75 tests for RegexTrait (test_regex_trait.py) and 34 tests for CallableTrait (test_callable_trait.py). Total 109 tests all passing. Coverage includes: pattern validation, case sensitivity, invert_result, evaluate() method, error handling for RegexTrait; from_callable(), serialization, deserialization, boolean/score evaluation, error handling for CallableTrait. Pure logic tests - no LLM needed."
   },
   {
     "id": "task-017",
