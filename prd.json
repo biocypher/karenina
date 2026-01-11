@@ -313,8 +313,8 @@
       "Verify: Run 'uv run pytest tests/unit/integrations/ -v' with 0 failures",
       "Verify: Integration utilities tested without external dependencies"
     ],
-    "status": "pending",
-    "additional notes": "The gepa integration may have specific data formats. Test converters and utilities without calling external services."
+    "status": "completed",
+    "additional notes": "Created tests/unit/integrations/test_gepa.py with 78 tests. Coverage includes: config.py (TraitSelectionMode enum, MetricObjectiveConfig, ObjectiveConfig with validators, OptimizationTarget enum, OptimizationConfig with split ratio validation and seed auto-filling), data_types.py (KareninaDataInst with to_dict(), KareninaTrajectory with passed() and to_feedback_dict(), KareninaOutput with get_optimized_prompts(), BenchmarkSplit with validation and properties), scoring.py (compute_objective_scores with all trait types and directionalities, extract_failed_fields, compute_improvement). All tests use mocks and avoid external dependencies."
   },
   {
     "id": "task-019",

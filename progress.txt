@@ -838,3 +838,62 @@ $ uv run pytest tests/unit/schemas/test_verification_config.py tests/unit/schema
 
 $ uv run ruff check tests/unit/schemas/test_verification_config.py tests/unit/schemas/test_verification_result.py
 All checks passed!
+
+
+2025-01-11 - Ralph Loop Iteration 18
+=====================================
+
+COMPLETED TASKS:
+-----------------
+* task-018: Write unit tests for integrations module
+  - Created tests/unit/integrations/test_gepa.py (78 tests)
+  
+  test_gepa.py coverage:
+  - config.py: TraitSelectionMode enum, MetricObjectiveConfig with get_enabled_metrics(), 
+    ObjectiveConfig with validators (custom_requires_traits, has_objectives), 
+    OptimizationTarget enum, OptimizationConfig with split ratio validation, 
+    seed auto-filling for targets, get_seed_candidate() method
+  - data_types.py: KareninaDataInst construction and to_dict(), KareninaTrajectory 
+    construction, passed() method, to_feedback_dict() method, KareninaOutput construction 
+    and get_optimized_prompts(), BenchmarkSplit construction, validation, properties, summary()
+  - scoring.py: compute_objective_scores() with template, boolean traits, int traits, 
+    custom max_scores, inverted traits (lower-is-better), metric traits, 
+    CUSTOM trait selection, extract_failed_fields(), compute_improvement()
+
+FILES CREATED:
+--------------
+- tests/unit/integrations/test_gepa.py (78 tests)
+
+TOTAL INTEGRATION TESTS: 78
+
+KEY INSIGHTS:
+--------------
+- OptimizationConfig has forward reference to ModelConfig requiring model_rebuild() after import
+- Split ratio validation: train_ratio + val_ratio (+ test_ratio if present) must equal 1.0
+- BenchmarkSplit validates non-empty train and val sets in __post_init__
+- compute_objective_scores() produces compound keys like 'model:dimension' for Pareto optimization
+- Metric traits (precision/recall/F1) are expanded as separate objective dimensions
+- Trait directionalities (higher_is_better) control score inversion for lower-is-better traits
+- OptimizationConfig auto-fills seed prompts (answering="You are a helpful assistant.", parsing="Extract...")
+
+FIXES MADE:
+------------
+- Imported ModelConfig and called OptimizationConfig.model_rebuild() to resolve forward reference
+- Used pytest.approx() for floating point comparisons in compute_improvement tests
+- Removed test for CUSTOM mode with empty selected_traits (invalid per validation)
+
+NEXT TASKS (Priority Order):
+-----------------------------
+* task-019: Write unit tests for CLI utilities
+* task-021: Write unit tests for CLI utilities
+* task-022+: LLM fixtures and integration tests
+
+GIT COMMIT: (pending)
+
+TEST RESULTS:
+-------------
+$ uv run pytest tests/unit/integrations/test_gepa.py -v
+78 passed in 0.56s
+
+$ uv run ruff check tests/unit/integrations/test_gepa.py
+All checks passed!
