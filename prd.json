@@ -331,8 +331,8 @@
       "Verify: Run 'uv run pytest tests/unit/storage/ -v' with 0 failures",
       "Verify: Serialization preserves all data fields"
     ],
-    "status": "pending",
-    "additional notes": "Focus on in-memory serialization. File I/O goes in integration tests."
+    "status": "completed",
+    "additional notes": "Created tests/unit/storage/test_jsonld_serialization.py with 28 tests for Benchmark.save() and Benchmark.load() methods. Coverage includes: save to file with .jsonld/.json extensions, dateModified updates, save_deep_judgment_config flag behavior (strips/preserves deep judgment), load from file, error handling (nonexistent file, invalid JSON, invalid JSON-LD structure), roundtrip consistency (name, description, version, creator, questions, templates, rubrics, keywords, author/sources, custom metadata, few-shot examples), empty benchmarks, malformed JSON-LD handling (extra fields, invalid dates, missing text, invalid rating types), Schema.org structure validation. All 38 storage tests passing (10 checkpoint_fixtures + 28 jsonld_serialization)."
   },
   {
     "id": "task-020",
