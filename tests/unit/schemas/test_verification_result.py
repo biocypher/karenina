@@ -359,52 +359,31 @@ def test_rubric_get_all_trait_scores_empty() -> None:
 
 
 @pytest.mark.unit
-def test_rubric_get_trait_by_name_llm_trait() -> None:
-    """Test get_trait_by_name for LLM trait."""
-    rubric = VerificationResultRubric(
-        llm_trait_scores={"clarity": 4},
-    )
+@pytest.mark.parametrize(
+    "trait_type,scores_field,trait_name,expected_value,expected_type",
+    [
+        ("llm", "llm_trait_scores", "clarity", 4, "llm"),
+        ("regex", "regex_trait_scores", "has_brackets", True, "regex"),
+        ("callable", "callable_trait_scores", "is_short", False, "callable"),
+        ("metric", "metric_trait_scores", "recall", {"precision": 0.9, "recall": 0.8, "f1": 0.85}, "metric"),
+    ],
+    ids=["llm_trait", "regex_trait", "callable_trait", "metric_trait"],
+)
+def test_rubric_get_trait_by_name(
+    trait_type: str,
+    scores_field: str,
+    trait_name: str,
+    expected_value: object,
+    expected_type: str,
+) -> None:
+    """Test get_trait_by_name for various trait types."""
+    rubric = VerificationResultRubric(**{scores_field: {trait_name: expected_value}})
 
-    result = rubric.get_trait_by_name("clarity")
+    result = rubric.get_trait_by_name(trait_name)
 
-    assert result == (4, "llm")
-
-
-@pytest.mark.unit
-def test_rubric_get_trait_by_name_regex_trait() -> None:
-    """Test get_trait_by_name for regex trait."""
-    rubric = VerificationResultRubric(
-        regex_trait_scores={"has_brackets": True},
-    )
-
-    result = rubric.get_trait_by_name("has_brackets")
-
-    assert result == (True, "regex")
-
-
-@pytest.mark.unit
-def test_rubric_get_trait_by_name_callable_trait() -> None:
-    """Test get_trait_by_name for callable trait."""
-    rubric = VerificationResultRubric(
-        callable_trait_scores={"is_short": False},
-    )
-
-    result = rubric.get_trait_by_name("is_short")
-
-    assert result == (False, "callable")
-
-
-@pytest.mark.unit
-def test_rubric_get_trait_by_name_metric_trait() -> None:
-    """Test get_trait_by_name for metric trait."""
-    rubric = VerificationResultRubric(
-        metric_trait_scores={"recall": {"precision": 0.9, "recall": 0.8, "f1": 0.85}},
-    )
-
-    result = rubric.get_trait_by_name("recall")
-
-    assert result[0] == {"precision": 0.9, "recall": 0.8, "f1": 0.85}
-    assert result[1] == "metric"
+    assert result is not None
+    assert result[0] == expected_value
+    assert result[1] == expected_type
 
 
 @pytest.mark.unit

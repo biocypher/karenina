@@ -74,22 +74,25 @@ class TestGetCustomProperty:
 
         assert result is None
 
-    def test_get_property_with_various_types(self) -> None:
+    @pytest.mark.parametrize(
+        "prop_name,prop_value",
+        [
+            ("string_prop", "text"),
+            ("int_prop", 42),
+            ("bool_prop", True),
+            ("list_prop", [1, 2, 3]),
+            ("dict_prop", {"key": "value"}),
+        ],
+        ids=["string", "int", "bool", "list", "dict"],
+    )
+    def test_get_property_with_various_types(self, prop_name: str, prop_value: object) -> None:
         """Test getting properties with different value types."""
         base = BenchmarkBase(name="test")
         manager = MetadataManager(base)
 
-        manager.set_custom_property("string_prop", "text")
-        manager.set_custom_property("int_prop", 42)
-        manager.set_custom_property("bool_prop", True)
-        manager.set_custom_property("list_prop", [1, 2, 3])
-        manager.set_custom_property("dict_prop", {"key": "value"})
+        manager.set_custom_property(prop_name, prop_value)
 
-        assert manager.get_custom_property("string_prop") == "text"
-        assert manager.get_custom_property("int_prop") == 42
-        assert manager.get_custom_property("bool_prop") is True
-        assert manager.get_custom_property("list_prop") == [1, 2, 3]
-        assert manager.get_custom_property("dict_prop") == {"key": "value"}
+        assert manager.get_custom_property(prop_name) == prop_value
 
 
 @pytest.mark.unit
@@ -350,32 +353,25 @@ class TestClearAllCustomProperties:
 class TestHasCustomProperty:
     """Tests for has_custom_property method."""
 
-    def test_has_property_true(self) -> None:
-        """Test has_property returns True for existing property."""
+    @pytest.mark.parametrize(
+        "prop_name,prop_value,expected",
+        [
+            ("prop", "value", True),
+            ("nonexistent", None, False),
+            ("none_prop", None, False),  # None is a valid value but has_property returns False
+        ],
+        ids=["existing_property", "nonexistent_property", "none_value_property"],
+    )
+    def test_has_property(self, prop_name: str, prop_value: object, expected: bool) -> None:
+        """Test has_property returns correct boolean for various scenarios."""
         base = BenchmarkBase(name="test")
         manager = MetadataManager(base)
 
-        manager.set_custom_property("prop", "value")
+        # Only set property if value is not None (for the nonexistent case)
+        if prop_value is not None or prop_name == "none_prop":
+            manager.set_custom_property(prop_name, prop_value)
 
-        assert manager.has_custom_property("prop") is True
-
-    def test_has_property_false(self) -> None:
-        """Test has_property returns False for nonexistent property."""
-        base = BenchmarkBase(name="test")
-        manager = MetadataManager(base)
-
-        assert manager.has_custom_property("nonexistent") is False
-
-    def test_has_property_with_none_value(self) -> None:
-        """Test has_property with None value (stored but None)."""
-        base = BenchmarkBase(name="test")
-        manager = MetadataManager(base)
-
-        manager.set_custom_property("none_prop", None)
-
-        # None is a valid value, so has_property should return False
-        # because get_custom_property returns None
-        assert manager.has_custom_property("none_prop") is False
+        assert manager.has_custom_property(prop_name) is expected
 
 
 @pytest.mark.unit
@@ -816,24 +812,25 @@ class TestGetPropertyWithTimestamp:
         assert timestamp is not None
         assert "T" in timestamp
 
-    def test_get_nontimestamped_property(self) -> None:
-        """Test getting a property without timestamp."""
+    @pytest.mark.parametrize(
+        "setup_type,expected_value,has_timestamp",
+        [
+            ("regular", "value", False),
+            ("nonexistent", None, False),
+        ],
+        ids=["nontimestamped_property", "nonexistent_property"],
+    )
+    def test_get_property_without_timestamp(
+        self, setup_type: str, expected_value: str | None, has_timestamp: bool
+    ) -> None:
+        """Test getting properties without timestamps."""
         base = BenchmarkBase(name="test")
         manager = MetadataManager(base)
 
-        manager.set_custom_property("prop", "value")
+        if setup_type == "regular":
+            manager.set_custom_property("prop", "value")
 
-        value, timestamp = manager.get_property_with_timestamp("prop")
+        value, timestamp = manager.get_property_with_timestamp("prop" if setup_type == "regular" else "nonexistent")
 
-        assert value == "value"
-        assert timestamp is None
-
-    def test_get_nonexistent_timestamped_property(self) -> None:
-        """Test getting a nonexistent timestamped property."""
-        base = BenchmarkBase(name="test")
-        manager = MetadataManager(base)
-
-        value, timestamp = manager.get_property_with_timestamp("nonexistent")
-
-        assert value is None
-        assert timestamp is None
+        assert value == expected_value
+        assert (timestamp is not None) == has_timestamp

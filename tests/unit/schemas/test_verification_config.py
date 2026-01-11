@@ -191,9 +191,24 @@ def test_validation_allows_empty_provider_for_openrouter() -> None:
 
 
 @pytest.mark.unit
-def test_validation_rubric_only_mode_requires_rubric_enabled() -> None:
-    """Test that rubric_only evaluation mode requires rubric_enabled=True."""
-    with pytest.raises(ValueError, match="evaluation_mode='rubric_only' requires rubric_enabled=True"):
+@pytest.mark.parametrize(
+    "evaluation_mode,rubric_enabled,error_match",
+    [
+        ("rubric_only", False, "evaluation_mode='rubric_only' requires rubric_enabled=True"),
+        ("template_and_rubric", False, "evaluation_mode='template_and_rubric' requires rubric_enabled=True"),
+        ("template_only", True, "evaluation_mode='template_only' is incompatible with rubric_enabled=True"),
+    ],
+    ids=[
+        "rubric_only_requires_rubric",
+        "template_and_rubric_requires_rubric",
+        "template_only_incompatible_with_rubric",
+    ],
+)
+def test_validation_evaluation_mode_rubric_consistency(
+    evaluation_mode: str, rubric_enabled: bool, error_match: str
+) -> None:
+    """Test that evaluation_mode and rubric_enabled settings are consistent."""
+    with pytest.raises(ValueError, match=error_match):
         VerificationConfig(
             parsing_models=[
                 ModelConfig(
@@ -206,52 +221,8 @@ def test_validation_rubric_only_mode_requires_rubric_enabled() -> None:
                 )
             ],
             answering_models=[],
-            evaluation_mode="rubric_only",
-            rubric_enabled=False,
-            parsing_only=True,
-        )
-
-
-@pytest.mark.unit
-def test_validation_template_and_rubric_mode_requires_rubric_enabled() -> None:
-    """Test that template_and_rubric mode requires rubric_enabled=True."""
-    with pytest.raises(ValueError, match="evaluation_mode='template_and_rubric' requires rubric_enabled=True"):
-        VerificationConfig(
-            parsing_models=[
-                ModelConfig(
-                    id="parsing",
-                    model_name="gpt-4",
-                    model_provider="openai",
-                    interface="langchain",
-                    system_prompt="test",
-                    temperature=0.1,
-                )
-            ],
-            answering_models=[],
-            evaluation_mode="template_and_rubric",
-            rubric_enabled=False,
-            parsing_only=True,
-        )
-
-
-@pytest.mark.unit
-def test_validation_template_only_incompatible_with_rubric_enabled() -> None:
-    """Test that template_only mode is incompatible with rubric_enabled=True."""
-    with pytest.raises(ValueError, match="evaluation_mode='template_only' is incompatible with rubric_enabled=True"):
-        VerificationConfig(
-            parsing_models=[
-                ModelConfig(
-                    id="parsing",
-                    model_name="gpt-4",
-                    model_provider="openai",
-                    interface="langchain",
-                    system_prompt="test",
-                    temperature=0.1,
-                )
-            ],
-            answering_models=[],
-            evaluation_mode="template_only",
-            rubric_enabled=True,
+            evaluation_mode=evaluation_mode,
+            rubric_enabled=rubric_enabled,
             parsing_only=True,
         )
 
@@ -430,9 +401,26 @@ def test_backward_compat_default_system_prompts() -> None:
 
 
 @pytest.mark.unit
-def test_env_var_embedding_check_enabled() -> None:
-    """Test that EMBEDDING_CHECK env var is read."""
-    with patch.dict("os.environ", {"EMBEDDING_CHECK": "true"}):
+@pytest.mark.parametrize(
+    "env_var,env_value,config_attr,expected_value",
+    [
+        ("EMBEDDING_CHECK", "true", "embedding_check_enabled", True),
+        ("EMBEDDING_CHECK_MODEL", "custom-model", "embedding_check_model", "custom-model"),
+        ("EMBEDDING_CHECK_THRESHOLD", "0.95", "embedding_check_threshold", 0.95),
+        ("KARENINA_ASYNC_ENABLED", "false", "async_enabled", False),
+        ("KARENINA_ASYNC_MAX_WORKERS", "4", "async_max_workers", 4),
+    ],
+    ids=[
+        "embedding_check_enabled",
+        "embedding_check_model",
+        "embedding_check_threshold",
+        "async_enabled",
+        "async_max_workers",
+    ],
+)
+def test_env_var_sets_config_value(env_var: str, env_value: str, config_attr: str, expected_value: object) -> None:
+    """Test that environment variables correctly set config values."""
+    with patch.dict("os.environ", {env_var: env_value}):
         config = VerificationConfig(
             parsing_models=[
                 ModelConfig(
@@ -447,91 +435,7 @@ def test_env_var_embedding_check_enabled() -> None:
             answering_models=[],
             parsing_only=True,
         )
-        assert config.embedding_check_enabled is True
-
-
-@pytest.mark.unit
-def test_env_var_embedding_check_model() -> None:
-    """Test that EMBEDDING_CHECK_MODEL env var is read."""
-    with patch.dict("os.environ", {"EMBEDDING_CHECK_MODEL": "custom-model"}):
-        config = VerificationConfig(
-            parsing_models=[
-                ModelConfig(
-                    id="parsing",
-                    model_name="gpt-4",
-                    model_provider="openai",
-                    interface="langchain",
-                    system_prompt="test",
-                    temperature=0.1,
-                )
-            ],
-            answering_models=[],
-            parsing_only=True,
-        )
-        assert config.embedding_check_model == "custom-model"
-
-
-@pytest.mark.unit
-def test_env_var_embedding_check_threshold() -> None:
-    """Test that EMBEDDING_CHECK_THRESHOLD env var is read."""
-    with patch.dict("os.environ", {"EMBEDDING_CHECK_THRESHOLD": "0.95"}):
-        config = VerificationConfig(
-            parsing_models=[
-                ModelConfig(
-                    id="parsing",
-                    model_name="gpt-4",
-                    model_provider="openai",
-                    interface="langchain",
-                    system_prompt="test",
-                    temperature=0.1,
-                )
-            ],
-            answering_models=[],
-            parsing_only=True,
-        )
-        assert config.embedding_check_threshold == 0.95
-
-
-@pytest.mark.unit
-def test_env_var_async_enabled() -> None:
-    """Test that KARENINA_ASYNC_ENABLED env var is read."""
-    with patch.dict("os.environ", {"KARENINA_ASYNC_ENABLED": "false"}):
-        config = VerificationConfig(
-            parsing_models=[
-                ModelConfig(
-                    id="parsing",
-                    model_name="gpt-4",
-                    model_provider="openai",
-                    interface="langchain",
-                    system_prompt="test",
-                    temperature=0.1,
-                )
-            ],
-            answering_models=[],
-            parsing_only=True,
-        )
-        assert config.async_enabled is False
-
-
-@pytest.mark.unit
-def test_env_var_async_max_workers() -> None:
-    """Test that KARENINA_ASYNC_MAX_WORKERS env var is read."""
-    with patch.dict("os.environ", {"KARENINA_ASYNC_MAX_WORKERS": "4"}):
-        config = VerificationConfig(
-            parsing_models=[
-                ModelConfig(
-                    id="parsing",
-                    model_name="gpt-4",
-                    model_provider="openai",
-                    interface="langchain",
-                    system_prompt="test",
-                    temperature=0.1,
-                )
-            ],
-            answering_models=[],
-            parsing_only=True,
-        )
-        assert config.async_max_workers == 4
+        assert getattr(config, config_attr) == expected_value
 
 
 @pytest.mark.unit
@@ -867,27 +771,20 @@ def test_sanitize_model_config_excludes_endpoint_fields_for_non_openai_endpoint(
 
 
 @pytest.mark.unit
-def test_sanitize_preset_name_basic() -> None:
-    """Test sanitize_preset_name with basic name."""
-    result = VerificationConfig.sanitize_preset_name("My Test Preset")
-
-    assert result == "my-test-preset.json"
-
-
-@pytest.mark.unit
-def test_sanitize_preset_name_removes_special_chars() -> None:
-    """Test sanitize_preset_name removes special characters."""
-    result = VerificationConfig.sanitize_preset_name("Test@#$% Config!")
-
-    assert result == "test-config.json"
-
-
-@pytest.mark.unit
-def test_sanitize_preset_name_collapses_hyphens() -> None:
-    """Test sanitize_preset_name collapses consecutive hyphens."""
-    result = VerificationConfig.sanitize_preset_name("Test---Config")
-
-    assert result == "test-config.json"
+@pytest.mark.parametrize(
+    "input_name,expected_output",
+    [
+        ("My Test Preset", "my-test-preset.json"),
+        ("Test@#$% Config!", "test-config.json"),
+        ("Test---Config", "test-config.json"),
+        ("   ", "preset.json"),
+    ],
+    ids=["basic", "special_chars", "consecutive_hyphens", "empty_defaults"],
+)
+def test_sanitize_preset_name(input_name: str, expected_output: str) -> None:
+    """Test sanitize_preset_name with various inputs."""
+    result = VerificationConfig.sanitize_preset_name(input_name)
+    assert result == expected_output
 
 
 @pytest.mark.unit
@@ -901,14 +798,6 @@ def test_sanitize_preset_name_limits_length() -> None:
 
 
 @pytest.mark.unit
-def test_sanitize_preset_name_empty_defaults_to_preset() -> None:
-    """Test sanitize_preset_name defaults to 'preset' for empty input."""
-    result = VerificationConfig.sanitize_preset_name("   ")
-
-    assert result == "preset.json"
-
-
-@pytest.mark.unit
 def test_validate_preset_metadata_success() -> None:
     """Test validate_preset_metadata with valid input."""
     # Should not raise
@@ -916,31 +805,20 @@ def test_validate_preset_metadata_success() -> None:
 
 
 @pytest.mark.unit
-def test_validate_preset_metadata_empty_name_raises() -> None:
-    """Test validate_preset_metadata rejects empty name."""
-    with pytest.raises(ValueError, match="Preset name cannot be empty"):
-        VerificationConfig.validate_preset_metadata("")
-
-
-@pytest.mark.unit
-def test_validate_preset_metadata_whitespace_name_raises() -> None:
-    """Test validate_preset_metadata rejects whitespace-only name."""
-    with pytest.raises(ValueError, match="Preset name cannot be empty"):
-        VerificationConfig.validate_preset_metadata("   ")
-
-
-@pytest.mark.unit
-def test_validate_preset_metadata_name_too_long_raises() -> None:
-    """Test validate_preset_metadata rejects name over 100 chars."""
-    with pytest.raises(ValueError, match="Preset name cannot exceed 100 characters"):
-        VerificationConfig.validate_preset_metadata("a" * 101)
-
-
-@pytest.mark.unit
-def test_validate_preset_metadata_description_too_long_raises() -> None:
-    """Test validate_preset_metadata rejects description over 500 chars."""
-    with pytest.raises(ValueError, match="Description cannot exceed 500 characters"):
-        VerificationConfig.validate_preset_metadata("Test", "a" * 501)
+@pytest.mark.parametrize(
+    "name,description,error_match",
+    [
+        ("", None, "Preset name cannot be empty"),
+        ("   ", None, "Preset name cannot be empty"),
+        ("a" * 101, None, "Preset name cannot exceed 100 characters"),
+        ("Test", "a" * 501, "Description cannot exceed 500 characters"),
+    ],
+    ids=["empty_name", "whitespace_name", "name_too_long", "description_too_long"],
+)
+def test_validate_preset_metadata_errors(name: str, description: str | None, error_match: str) -> None:
+    """Test validate_preset_metadata rejects invalid inputs."""
+    with pytest.raises(ValueError, match=error_match):
+        VerificationConfig.validate_preset_metadata(name, description)
 
 
 @pytest.mark.unit
