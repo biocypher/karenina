@@ -867,4 +867,20 @@
         "status": "completed",
         "additional notes": "Refactored test_regex_trait.py: Replaced 21 repetitive test functions with 3 parametrized tests covering quantifiers (star/plus/exact/lazy/dot), range quantifiers (5 cases), pattern types (or/set/negated_set), and advanced patterns (lookahead/lookbehind/groups). Reduced test function count from 75 to 54 while maintaining full coverage. All 1590 tests pass.",
     },
+    {
+        "id": "task-049",
+        "category": "Unit Tests",
+        "description": "Add edge case tests for robustness",
+        "depends_on": ["task-044"],
+        "steps": [
+            "Implement: Test unicode/special characters in question text",
+            "Implement: Test very long template code (performance limits)",
+            "Implement: Test malformed JSON-LD files beyond current coverage",
+            "Implement: Test maximum question count boundaries",
+            "Implement: Test interrupted checkpoint I/O recovery",
+            "Verify: Run 'uv run pytest tests/unit/ -v' confirms all tests pass",
+        ],
+        "status": "completed",
+        "additional notes": "Created tests/unit/benchmark/test_edge_cases.py with 42 new tests covering: Unicode/special characters (14 parametrized cases including Chinese, Cyrillic, Arabic, emoji, math symbols, XSS, SQL injection), long content handling (10KB-100KB), question count boundaries (0-1000 questions), malformed JSON-LD (6 cases), checkpoint I/O recovery (8 cases), and additional robustness tests (5 cases). All 1632 tests passing.",
+    },
 ]
