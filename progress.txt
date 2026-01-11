@@ -897,3 +897,70 @@ $ uv run pytest tests/unit/integrations/test_gepa.py -v
 
 $ uv run ruff check tests/unit/integrations/test_gepa.py
 All checks passed!
+
+
+2025-01-11 - Ralph Loop Iteration 19
+=====================================
+
+COMPLETED TASKS:
+-----------------
+* task-021: Write unit tests for CLI utilities and argument parsing
+  - Created tests/unit/cli/test_cli_utils.py (59 tests)
+  
+  test_cli_utils.py coverage:
+  - _get_presets_directory(): default, explicit, env var, override
+  - list_presets(): empty directory, single/multiple files, sorted, non-JSON ignored, invalid files skipped
+  - get_preset_path(): absolute path, relative path, by name in directory, with .json extension, not found
+  - parse_question_indices(): single index, multiple indices, ranges, mixed formats, whitespace handling, 
+    negative indices (reported as "Invalid range format"), out of range, invalid format, empty string (returns [])
+  - validate_output_path(): json/csv extensions, uppercase extension, invalid extension raises, missing parent raises
+  - filter_templates_by_indices() and filter_templates_by_ids(): filtering and order preservation
+  - create_export_job(): basic job creation, success/failure counts, default run_name ("cli-verification"), UUID generation
+  - get_traces_path(): absolute path, relative path, finds in traces/ directory, not found error, direct path priority
+  - load_manual_traces_from_file(): valid JSON, file not found, invalid JSON, not-a-dict validation
+
+FILES CREATED:
+--------------
+- tests/unit/cli/test_cli_utils.py (59 tests)
+
+TOTAL CLI UTILITIES TESTS: 59
+
+KEY INSIGHTS:
+--------------
+- Preset directory resolution: explicit path > KARENINA_PRESETS_DIR env var > "presets" default
+- list_presets() returns empty list for non-existent directories (graceful degradation)
+- parse_question_indices() treats "-1" as a range format (not a single negative index), returning "Invalid range format"
+- Empty strings and comma-only strings return empty lists instead of raising errors (graceful behavior)
+- create_export_job() defaults run_name to "cli-verification" when empty string is passed
+- get_traces_path() checks direct path existence before falling back to traces/ directory
+- get_preset_path() requires presets directory to exist unless direct path is provided
+
+FIXES MADE:
+------------
+- Created helper functions _make_template() and _make_result() for proper Pydantic model construction
+- Fixed FinishedTemplate to use all required fields (question_text, question_preview, template_code, last_modified)
+- Fixed VerificationResult to use proper VerificationResultMetadata instead of MagicMock
+- Fixed VerificationConfig to use actual ModelConfig instances
+- Cleared environment variables in tests that check default behavior
+- Updated error expectations to match actual implementation ("Invalid range format" vs "Negative")
+- Changed empty string/comma-only tests to expect empty list instead of ValueError
+- Updated test_get_preset_path_direct_relative_path to use tempfile.mkstemp() for actual file
+- Fixed SIM105 (try/except/pass) with contextlib.suppress(OSError)
+- Fixed SIM117 (nested with) by combining into single with statement
+- Fixed SIM117 with pytest.raises by combining patch and pytest.raises contexts
+
+NEXT TASKS (Priority Order):
+-----------------------------
+* task-022+: LLM fixtures for template parsing, rubric evaluation, abstention detection
+* task-025+: Integration tests (conftest, pipeline orchestration, templates, rubrics, storage, CLI)
+* task-035+: E2E tests (conftest, full verification, checkpoint resume, error handling, preset commands)
+
+GIT COMMIT: (pending)
+
+TEST RESULTS:
+-------------
+$ uv run pytest tests/unit/cli/test_cli_utils.py -v
+59 passed in 0.53s
+
+$ uv run ruff check tests/unit/cli/test_cli_utils.py
+All checks passed!

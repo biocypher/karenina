@@ -365,8 +365,8 @@
       "Verify: Run 'uv run pytest tests/unit/cli/ -v' with 0 failures",
       "Verify: CLI utilities work independently of Click commands"
     ],
-    "status": "pending",
-    "additional notes": "Test utility functions, not Click commands directly. Command integration goes in e2e tests."
+    "status": "completed",
+    "additional notes": "Created tests/unit/cli/test_cli_utils.py with 59 tests. Coverage includes: _get_presets_directory() (default, explicit, env var, override), list_presets() (empty, single, multiple, sorted, non-JSON, invalid files), get_preset_path() (absolute path, relative path, by name, not found), parse_question_indices() (single, multiple, range, mixed, whitespace, negatives, out of range, invalid format), validate_output_path() (json, csv, invalid extension, missing parent), filter_templates_by_indices() and filter_templates_by_ids(), create_export_job() (basic, with failures, UUID generation), get_traces_path() (absolute, relative, traces/ dir, not found, priority), load_manual_traces_from_file() (valid, not found, invalid JSON, not dict). All tests use temp directories and mocks, avoiding external dependencies."
   },
   {
     "id": "task-022",
