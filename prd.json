@@ -205,8 +205,8 @@
       "Implement: Write tests for invalid inputs triggering ValidationError",
       "Verify: Run 'uv run pytest tests/unit/schemas/test_answer_schemas.py -v' with 0 failures"
     ],
-    "status": "pending",
-    "additional notes": "Pydantic v2 validation. Test that ValidationError messages are helpful for debugging."
+    "status": "completed",
+    "additional notes": "Created 38 tests covering Question, LLMRubricTrait, RegexTrait, CallableTrait, BaseAnswer, TraitKind. All tests passing. Pydantic v2 validation working correctly."
   },
   {
     "id": "task-013",
