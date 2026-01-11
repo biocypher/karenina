@@ -152,7 +152,7 @@
       "Implement: Add @pytest.mark.unit to all tests, include docstrings",
       "Verify: Run 'uv run pytest tests/unit/benchmark/test_benchmark_core.py -v' with 0 failures"
     ],
-    "status": "pending",
+    "status": "completed",
     "additional notes": "Focus on pure logic - no file I/O, no LLM calls. Test edge cases: empty inputs, None values, duplicate IDs, invalid types. Each test function must have a docstring explaining what it tests."
   },
   {
