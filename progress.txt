@@ -1021,3 +1021,41 @@ All checks passed!
 - Output fixtures (JSON, CSV paths)
 - Trace fixtures (manual traces file)
 - Workspace fixture (complete directory structure)
+
+## Iteration 22 (2025-01-11)
+
+**Task Completed**: task-042 - Verify test coverage meets targets and fill gaps
+
+**Work Done**:
+- Ran coverage analysis: 29% overall coverage (10505 of 15073 lines uncovered)
+- Created 3 new test files to improve coverage of low-coverage modules:
+  - `tests/unit/benchmark/verification/test_exceptions.py` (8 tests)
+    - Tests ExcerptNotFoundError exception class
+    - Coverage: exceptions.py 0% → 100%
+  - `tests/unit/benchmark/verification/test_fuzzy_match.py` (26 tests)
+    - Tests fuzzy_match_excerpt and fuzzy_match_excerpt_with_context
+    - Coverage: fuzzy_match.py 9% → 91%
+  - `tests/unit/storage/test_converters.py` (34 tests)
+    - Tests Pydantic-SQLAlchemy bidirectional converters
+    - Coverage: converters.py 11% → 77%
+- Fixed linting issues (type comparisons with `is`, Optional syntax with noqa)
+- All 806 unit tests pass (52 new tests added)
+
+**Coverage Improvements**:
+- exceptions.py: 6/6 statements covered (100%)
+- fuzzy_match.py: 30/33 statements covered (91%)
+- storage/converters.py: 103/133 statements covered (77%)
+- Overall coverage: 29% → 30% (+122 statements covered)
+
+**Remaining gaps** (modules with <20% coverage):
+- benchmark/task_eval/*: 0% (helpers, models, task_eval)
+- benchmark/verification/evaluators/*: 0-19% (rubric_parsing, template_parsing, deep_judgment, rubric_evaluator)
+- cli/*: 0-14% (interactive, verify, optimize, serve, status)
+- domain/*: 0-25% (answers/builder, answers/reader, questions/extractor)
+- storage/*: 7-14% (migrate_template_id, operations, queries, converters at 77% now)
+
+**Files Created/Modified**:
+- Created: `tests/unit/benchmark/verification/test_exceptions.py` (69 lines)
+- Created: `tests/unit/benchmark/verification/test_fuzzy_match.py` (245 lines)
+- Created: `tests/unit/storage/test_converters.py` (559 lines)
+- Modified: `prd.json` (task-042 status: pending → completed)
