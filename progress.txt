@@ -368,3 +368,38 @@ $ uv run pytest tests/unit/schemas/test_rubric_schemas.py -v
 
 $ uv run ruff check tests/unit/schemas/test_rubric_schemas.py
 All checks passed!
+
+
+2025-01-11 - Ralph Loop Iteration 9
+=====================================
+
+COMPLETED TASKS:
+-----------------
+* task-005: Fixture capture script CLI structure
+  - Created scripts/capture_fixtures.py with argparse CLI
+  - 6 capture scenarios: template_parsing, rubric_evaluation, abstention, embedding, generation, full_pipeline
+  - CLI options: --scenario, --all, --list, --force, --dry-run, --model
+  - Each scenario has description, source_files, and llm_calls metadata
+  - --list flag shows available scenarios with descriptions
+  - --dry-run flag shows what would be captured without calling APIs
+  - CLI structure ready for capture logic implementation (task-006)
+
+FILES CREATED:
+--------------
+- scripts/capture_fixtures.py (CLI structure complete, awaiting capture logic)
+
+NEXT TASKS (Priority Order):
+-----------------------------
+* task-006: Implement fixture capture logic in capture script
+* task-014: Write unit tests for checkpoint schemas and JSON-LD validation
+* task-015: Write unit tests for CLI commands
+
+GIT COMMIT: (pending)
+
+TEST RESULTS:
+-------------
+$ uv run pytest tests/unit/test_fixture_backed_llm.py -v
+7 passed in 0.05s
+
+$ uv run ruff check scripts/capture_fixtures.py
+All checks passed!

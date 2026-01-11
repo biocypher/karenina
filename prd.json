@@ -84,8 +84,8 @@
       "Verify: Run 'python scripts/capture_fixtures.py --help' shows all options",
       "Verify: Run 'python scripts/capture_fixtures.py --list' shows scenario descriptions"
     ],
-    "status": "pending",
-    "additional notes": "This task creates CLI structure only. Capture logic implementation is task-006. Analyze src/karenina/domain/verification/ to find all LLM call sites using 'grep -rn \".invoke(\" src/karenina'."
+    "status": "completed",
+    "additional notes": "Created scripts/capture_fixtures.py with argparse CLI. Supports 6 scenarios (template_parsing, rubric_evaluation, abstention, embedding, generation, full_pipeline). All CLI options working (--scenario, --all, --list, --force, --dry-run, --model). Capture logic implementation is task-006."
   },
   {
     "id": "task-006",
