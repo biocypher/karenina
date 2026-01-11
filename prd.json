@@ -485,8 +485,8 @@
       "Verify: Import all fixtures in test file without errors",
       "Verify: pipeline fixture can instantiate successfully"
     ],
-    "status": "pending",
-    "additional notes": "Analyze actual class constructors in src/karenina/domain/verification/ to ensure correct fixture setup."
+    "status": "completed",
+    "additional notes": "Created comprehensive integration conftest.py with: parsing_model_config, template_evaluator (fixture-backed), rubric_evaluator (fixture-backed), trace_with_citations, trace_without_citations, trace_with_abstention, trace_with_hedging, simple_answer, multi_field_answer, answer_with_correct_dict, answer_templates dict, boolean_rubric, scored_rubric, multi_trait_rubric, citation_regex_rubric, checkpoint fixtures (minimal, multi_question, with_results). Added 22 tests to verify all fixtures work correctly. Total: 1342 tests passing."
   },
   {
     "id": "task-026",
