@@ -578,3 +578,47 @@ $ uv run pytest tests/unit/utils/test_code.py -v
 
 $ uv run ruff check tests/unit/utils/test_code.py --fix
 Found 1 error (1 fixed, 0 remaining).
+
+
+2025-01-11 - Ralph Loop Iteration 14
+=====================================
+
+COMPLETED TASKS:
+-----------------
+* task-020 (continued): Unit tests for checkpoint.py utilities
+  - Created tests/unit/utils/test_checkpoint.py with 41 tests
+  - Tests for generate_question_id(): MD5-based ID generation, deterministic, different questions
+  - Tests for generate_template_id(): 32-char MD5 hash, None/empty returns 'no_template'
+  - Tests for convert_rubric_trait_to_rating(): all trait types (RegexTrait, CallableTrait, LLMRubricTrait, MetricRubricTrait)
+  - Tests for convert_rating_to_rubric_trait(): SchemaOrgRating back to traits (all types)
+  - Tests for create_jsonld_benchmark(): empty benchmark with defaults
+  - Tests for validate_jsonld_benchmark(): validation logic for benchmark structure
+  - Tests for BenchmarkConversionError: exception class
+  - Coverage includes:
+    - MD5 hashing for deterministic IDs
+    - Base64 encoding for callable_code in JSON
+    - Cloudpickle serialization/deserialization
+    - Global vs QuestionSpecific trait type handling
+    - SchemaOrgRating with additionalProperty serialization
+
+FILES CREATED:
+--------------
+- tests/unit/utils/test_checkpoint.py (41 tests, all passing)
+
+TOTAL UTILS TESTS: 73 (32 test_code.py + 41 test_checkpoint.py)
+
+NEXT TASKS (Priority Order):
+-----------------------------
+* task-015: Write unit tests for domain verification logic (non-LLM parts)
+* task-017: Write unit tests for infrastructure module (LLM client utilities)
+* task-018+: Continue with remaining unit test modules
+
+GIT COMMIT: (pending)
+
+TEST RESULTS:
+-------------
+$ uv run pytest tests/unit/utils/ -v
+73 passed in 0.55s
+
+$ uv run ruff check tests/unit/utils/test_checkpoint.py --fix --unsafe-fixes
+All checks passed!

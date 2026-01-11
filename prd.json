@@ -348,7 +348,7 @@
       "Verify: Each utility function has comprehensive tests"
     ],
     "status": "completed",
-    "additional notes": "Created tests/unit/utils/test_code.py with 32 tests for extract_and_combine_codeblocks() function. Coverage includes: single/multiple code blocks, language identifiers, empty inputs, whitespace handling, Unix/Windows line endings, unicode, special characters, edge cases (incomplete blocks, four backticks, etc.). All 32 tests passing. Remaining utils modules (answer_cache.py, checkpoint.py) to be tested in future tasks."
+    "additional notes": "Created tests/unit/utils/test_code.py with 32 tests for extract_and_combine_codeblocks() function. Also created tests/unit/utils/test_checkpoint.py with 41 tests for checkpoint utilities: generate_question_id(), generate_template_id(), convert_rubric_trait_to_rating(), convert_rating_to_rubric_trait(), create_jsonld_benchmark(), validate_jsonld_benchmark(), BenchmarkConversionError. Coverage includes: MD5-based ID generation, trait↔rating conversion for all trait types (RegexTrait, CallableTrait, LLMRubricTrait, MetricRubricTrait), benchmark creation/validation, error handling. All 73 utils tests passing."
   },
   {
     "id": "task-021",
