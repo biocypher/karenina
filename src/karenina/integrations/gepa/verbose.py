@@ -26,30 +26,16 @@ class SimpleLogger:
         # Patterns for parsing GEPA messages
         # Use (\d+(?:\.\d+)?) to match floats without capturing trailing periods
         self._patterns = {
-            "base_score": re.compile(
-                r"Iteration 0: Base program.*score: (\d+(?:\.\d+)?)"
-            ),
-            "selected": re.compile(
-                r"Iteration (\d+): Selected program (\d+) score: (\d+(?:\.\d+)?)"
-            ),
-            "proposed": re.compile(
-                r"Iteration (\d+): Proposed new text for (\w+)"
-            ),
+            "base_score": re.compile(r"Iteration 0: Base program.*score: (\d+(?:\.\d+)?)"),
+            "selected": re.compile(r"Iteration (\d+): Selected program (\d+) score: (\d+(?:\.\d+)?)"),
+            "proposed": re.compile(r"Iteration (\d+): Proposed new text for (\w+)"),
             "subsample": re.compile(
                 r"Iteration (\d+): New subsample score (\d+(?:\.\d+)?) is (better|not better) than old score (\d+(?:\.\d+)?)"
             ),
-            "better": re.compile(
-                r"Iteration (\d+): Found a better program.*score (\d+(?:\.\d+)?)"
-            ),
-            "val_scores": re.compile(
-                r"Iteration (\d+): Individual valset scores.*: ({.*})"
-            ),
-            "objective_scores": re.compile(
-                r"Iteration (\d+): Objective aggregate scores.*: ({.*})"
-            ),
-            "no_proposal": re.compile(
-                r"Iteration (\d+): Reflective mutation did not propose"
-            ),
+            "better": re.compile(r"Iteration (\d+): Found a better program.*score (\d+(?:\.\d+)?)"),
+            "val_scores": re.compile(r"Iteration (\d+): Individual valset scores.*: ({.*})"),
+            "objective_scores": re.compile(r"Iteration (\d+): Objective aggregate scores.*: ({.*})"),
+            "no_proposal": re.compile(r"Iteration (\d+): Reflective mutation did not propose"),
         }
 
     def log(self, message: str) -> None:

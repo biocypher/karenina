@@ -134,7 +134,7 @@ verification_config = VerificationConfig(
 )
 
 print("Verification Config:")
-print(f"  Answering models:")
+print("  Answering models:")
 for model in verification_config.answering_models:
     print(f"    - {model.id}: {model.model_name}")
 print(f"  Parsing model: {PARSING_MODEL}")
@@ -164,7 +164,7 @@ adapter = KareninaAdapter(
     targets=[OptimizationTarget.ANSWERING_SYSTEM_PROMPT],
     objective_config=ObjectiveConfig(
         include_template=True,  # Optimize for template correctness
-        include_rubric=False,   # AIME doesn't use rubrics
+        include_rubric=False,  # AIME doesn't use rubrics
     ),
     # Enable LLM-generated feedback for richer diagnostics
     feedback_model_config=feedback_model_config,
