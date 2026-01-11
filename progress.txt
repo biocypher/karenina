@@ -1207,3 +1207,45 @@ All checks passed!
 **Files Created/Modified**:
 - Created: tests/e2e/test_error_handling.py (290 lines, 17 tests)
 - Modified: prd.json (task-038 status: pending → completed)
+
+2025-01-11 - Ralph Loop Iteration 27
+======================================
+
+COMPLETED TASKS:
+-----------------
+* task-039: E2E tests for preset commands
+  - Created tests/e2e/test_preset_commands.py with 17 comprehensive tests
+  - Tests cover: preset list (empty, multiple, nonexistent), preset show (by name, path, extension), 
+    preset delete (confirm, cancel, full path, nonexistent), env var handling, file filtering, sorting
+  - Fixed preset fixture format in tests/e2e/conftest.py:
+    - Added config wrapper structure (preset = {name, config: {...}})
+    - Fixed model config fields (model_provider, model_name instead of provider, name)
+    - Added required id field for non-manual interfaces
+    - Used langchain interface to avoid manual_traces requirement
+  - Created _make_valid_preset() helper for consistent preset generation
+
+TEST RESULTS:
+-------------
+- Unit tests: 806 passing
+- E2E tests: 46 passing (12 full verification + 17 error handling + 17 preset commands)
+- Total: 852 tests passing
+- Linting: ruff checks passing
+
+FILES CREATED/MODIFIED:
+-----------------------
+- tests/e2e/test_preset_commands.py (NEW, 17 tests)
+- tests/e2e/conftest.py (MODIFIED - fixed preset format)
+- prd.json (UPDATED - task-039 marked completed)
+
+LESSONS LEARNED:
+-----------------
+- Preset files require: top-level "config" key, model_provider/model_name fields, id for non-manual interfaces
+- Preset show command validates full VerificationConfig, so tests must create valid configs
+- evaluation_mode='template_only' is incompatible with rubric_enabled=True
+
+NEXT TASKS (Priority Order):
+-----------------------------
+* task-037: E2E tests for checkpoint resume functionality
+* task-022/023/024: LLM fixture capture (requires API keys)
+* task-025-034: Integration tests (pending)
+

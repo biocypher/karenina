@@ -194,7 +194,7 @@ def tmp_preset_file_claude(tmp_path: Path, preset_with_claude: dict[str, Any]) -
 
 
 @pytest.fixture
-def tmp_presets_dir(tmp_path: Path, preset_dict: dict[str, Any]) -> Path:
+def tmp_presets_dir(tmp_path: Path) -> Path:
     """Create a temporary presets directory with a default.json preset.
 
     Use for testing preset discovery and listing commands.
@@ -210,8 +210,30 @@ def tmp_presets_dir(tmp_path: Path, preset_dict: dict[str, Any]) -> Path:
     presets_dir.mkdir()
 
     default_preset = presets_dir / "default.json"
+    # Preset files require a top-level "config" wrapper
+    # Use langchain interface to avoid manual_traces requirement
+    preset_with_wrapper = {
+        "name": "default",
+        "config": {
+            "parsing_models": [
+                {
+                    "id": "parsing-1",
+                    "model_provider": "anthropic",
+                    "model_name": "claude-haiku-4-5",
+                    "interface": "langchain",
+                    "temperature": 0.0,
+                }
+            ],
+            "answering_models": [],
+            "parsing_only": True,
+            "replicate_count": 1,
+            "rubric_enabled": False,
+            "evaluation_mode": "template_only",
+            "async_enabled": False,
+        },
+    }
     with default_preset.open("w") as f:
-        json.dump(preset_dict, f, indent=2)
+        json.dump(preset_with_wrapper, f, indent=2)
 
     return presets_dir
 
@@ -345,10 +367,17 @@ def workspace_dir(tmp_path: Path) -> Path:
     presets_dir = tmp_path / "presets"
     presets_dir.mkdir()
 
-    # Add a default preset
-    default_preset = {
+    # Add a default preset with proper structure
+    # Use langchain interface to avoid manual_traces requirement
+    default_preset_config = {
         "parsing_models": [
-            {"provider": "manual", "name": "manual", "interface": "manual"}
+            {
+                "id": "parsing-1",
+                "model_provider": "anthropic",
+                "model_name": "claude-haiku-4-5",
+                "interface": "langchain",
+                "temperature": 0.0,
+            }
         ],
         "answering_models": [],
         "parsing_only": True,
@@ -356,6 +385,10 @@ def workspace_dir(tmp_path: Path) -> Path:
         "rubric_enabled": False,
         "evaluation_mode": "template_only",
         "async_enabled": False,
+    }
+    default_preset = {
+        "name": "default",
+        "config": default_preset_config,
     }
     with (presets_dir / "default.json").open("w") as f:
         json.dump(default_preset, f, indent=2)

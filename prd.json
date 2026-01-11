@@ -778,8 +778,8 @@
       "Verify: Run 'uv run pytest tests/e2e/test_preset_commands.py -v'",
       "Verify: Commands produce expected output"
     ],
-    "status": "pending",
-    "additional notes": "Preset commands are non-LLM functionality. Test CLI UX thoroughly."
+    "status": "completed",
+    "additional notes": "Created 17 E2E tests for preset commands (list, show, delete). Tests cover: empty presets directory, multiple presets, nonexistent directory, show by name/path/extension, nonexistent preset, invalid JSON, summary fields display, delete with confirmation/cancelled/full path/nonexistent, env var handling, non-JSON file filtering, alphabetical sorting. Fixed preset fixture format in conftest.py to use valid VerificationConfig structure with config wrapper, model_provider/model_name fields, and id for non-manual interfaces. All 17 tests passing."
   },
   {
     "id": "task-040",
