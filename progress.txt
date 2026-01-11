@@ -767,3 +767,74 @@ $ uv run pytest tests/unit/infrastructure/ -v
 
 $ uv run ruff check tests/unit/infrastructure/test_llm_client.py
 All checks passed!
+
+
+2025-01-11 - Ralph Loop Iteration 17
+=====================================
+
+COMPLETED TASKS:
+-----------------
+* task-015: Write unit tests for domain verification logic (non-LLM parts)
+  - Created tests/unit/schemas/test_verification_config.py (67 tests)
+  - Created tests/unit/schemas/test_verification_result.py (30 tests)
+  
+  test_verification_config.py coverage:
+  - VerificationConfig field validation and defaults
+  - Backward compatibility (legacy single-model fields)
+  - Environment variable handling (EMBEDDING_CHECK, KARENINA_ASYNC_*)
+  - _validate_config() method with all error conditions
+  - __repr__() output formatting
+  - get_few_shot_config() and is_few_shot_enabled()
+  - Preset utility class methods (sanitize_model_config, sanitize_preset_name, validate_preset_metadata, create_preset_structure)
+  - save_preset() and from_preset() with temp directories
+  - DeepJudgmentTraitConfig validation
+  
+  test_verification_result.py coverage:
+  - VerificationResultMetadata fields and compute_result_id()
+  - VerificationResultTemplate fields
+  - VerificationResultRubric fields and get_all_trait_scores()
+  - VerificationResultDeepJudgment fields
+  - VerificationResultDeepJudgmentRubric fields
+  - VerificationResult construction
+  - Backward compatibility properties
+  - Pass/fail determination via completed_without_errors
+
+FILES CREATED:
+--------------
+- tests/unit/schemas/test_verification_config.py (67 tests)
+- tests/unit/schemas/test_verification_result.py (30 tests)
+
+TOTAL VERIFICATION LOGIC TESTS: 97
+
+KEY INSIGHTS:
+--------------
+- VerificationConfig requires at least one parsing model, answering models unless parsing_only=True
+- Model provider requirement varies by interface (langchain requires it, openrouter doesn't)
+- Few-shot config is auto-created from legacy fields (few_shot_enabled, few_shot_mode, few_shot_k)
+- Default embedding model: sentence-transformers/embeddinggemma-300m-medical
+- Default embedding threshold: 0.3
+- Default async_max_workers: 12
+- VerificationResultDeepJudgmentRubric uses different field names than expected (extracted_rubric_excerpts, rubric_trait_reasoning, etc.)
+
+FIXES MADE:
+------------
+- Replaced MagicMock with ModelConfig for proper Pydantic validation
+- Removed tests for model_name/system_prompt validation (handled by ModelConfig itself)
+- Fixed field names in VerificationResultDeepJudgmentRubric tests
+- Updated default values to match actual implementation
+
+NEXT TASKS (Priority Order):
+-----------------------------
+* task-018: Write unit tests for integrations module
+* task-021: Write unit tests for CLI utilities
+* task-022+: LLM fixtures and integration tests
+
+GIT COMMIT: (pending)
+
+TEST RESULTS:
+-------------
+$ uv run pytest tests/unit/schemas/test_verification_config.py tests/unit/schemas/test_verification_result.py -v
+97 passed in 0.56s
+
+$ uv run ruff check tests/unit/schemas/test_verification_config.py tests/unit/schemas/test_verification_result.py
+All checks passed!
