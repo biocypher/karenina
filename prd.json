@@ -590,7 +590,7 @@
       "Verify: Run 'uv run pytest tests/integration/rubrics/test_callable_trait.py -v'",
       "Verify: Exception handling test confirms no propagation"
     ],
-    "status": "pending",
+    "status": "completed",
     "additional notes": "CallableTrait is deterministic but tests trait + evaluator integration. Cover callable behavior edge cases."
   },
   {
