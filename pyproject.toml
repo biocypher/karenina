@@ -105,12 +105,22 @@ filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::PendingDeprecationWarning",
 ]
-addopts = "-v --tb=short -m 'not integration'"
+addopts = "-v --tb=short"
 markers = [
-    "integration: marks tests as integration tests (slow, requires real resources)",
+    # By test layer
+    "unit: Pure logic tests - no I/O, no LLM calls",
+    "integration: Multiple components working together - may use fixture-backed LLM",
+    "e2e: End-to-end workflow tests - full CLI workflows",
+    # By speed
+    "slow: Tests taking > 1 second to run",
+    # By feature area
+    "pipeline: Verification pipeline tests",
+    "rubric: Rubric evaluation tests",
+    "storage: Checkpoint I/O and storage tests",
+    "cli: CLI command tests",
+    # Legacy markers (for backward compatibility)
     "requires_api: marks tests that require API keys (OpenAI, etc.)",
     "deep_judgment: marks tests that use deep judgment verification mode",
-    "rubric: marks tests that use rubric evaluation mode",
 ]
 
 [tool.coverage.run]

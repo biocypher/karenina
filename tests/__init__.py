@@ -1,1 +1,1 @@
-"""Tests for the karenina package."""
+# Tests package
