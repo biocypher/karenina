@@ -6,6 +6,7 @@ Tests cover:
 - LLMRubricTrait schema validation
 - RegexTrait schema validation and pattern evaluation
 - CallableTrait schema validation
+- capture_answer_source function
 """
 
 
@@ -19,6 +20,7 @@ from karenina.schemas.domain import (
     Question,
     RegexTrait,
     TraitKind,
+    capture_answer_source,
 )
 
 # =============================================================================
@@ -598,3 +600,86 @@ def test_regex_trait_serialization_roundtrip() -> None:
     assert restored.name == original.name
     assert restored.pattern == original.pattern
     assert restored.case_sensitive == original.case_sensitive
+
+
+# =============================================================================
+# capture_answer_source Tests
+# =============================================================================
+
+
+@pytest.mark.unit
+def test_capture_answer_source_returns_class() -> None:
+    """Test that capture_answer_source returns the same class."""
+    from karenina.schemas.domain.answer import BaseAnswer
+
+    class CustomAnswer(BaseAnswer):
+        value: str
+
+        def verify(self) -> bool:
+            return True
+
+    # Should return the same class
+    result = capture_answer_source(CustomAnswer)
+    assert result is CustomAnswer
+
+
+@pytest.mark.unit
+def test_capture_answer_source_calls_method_when_exists() -> None:
+    """Test that capture_answer_source calls set_source_code_from_notebook if present."""
+    from karenina.schemas.domain.answer import BaseAnswer
+
+    # Track if method was called
+    method_called = {"called": False}
+
+    class CustomAnswer(BaseAnswer):
+        value: str
+
+        @classmethod
+        def set_source_code_from_notebook(cls) -> None:
+            method_called["called"] = True
+
+        def verify(self) -> bool:
+            return True
+
+    # Method should be called
+    capture_answer_source(CustomAnswer)
+    assert method_called["called"] is True
+
+
+@pytest.mark.unit
+def test_capture_answer_source_no_error_without_method() -> None:
+    """Test that capture_answer_source doesn't error when method is missing."""
+    from karenina.schemas.domain.answer import BaseAnswer
+
+    class PlainAnswer(BaseAnswer):
+        value: str
+
+        def verify(self) -> bool:
+            return True
+
+    # Should not raise error even though method doesn't exist
+    result = capture_answer_source(PlainAnswer)
+    assert result is PlainAnswer
+
+
+@pytest.mark.unit
+def test_capture_answer_source_as_decorator() -> None:
+    """Test that capture_answer_source works as a decorator."""
+    from karenina.schemas.domain.answer import BaseAnswer
+
+    method_called = {"called": False}
+
+    @capture_answer_source
+    class DecoratedAnswer(BaseAnswer):
+        value: str
+
+        @classmethod
+        def set_source_code_from_notebook(cls) -> None:
+            method_called["called"] = True
+
+        def verify(self) -> bool:
+            return True
+
+    # Method should have been called during decoration
+    assert method_called["called"] is True
+    assert DecoratedAnswer.__name__ == "DecoratedAnswer"

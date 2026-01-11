@@ -3,10 +3,8 @@
 Tests for thread-safe answer caching used in verification pipeline.
 """
 
-import time
 import threading
-
-import pytest
+import time
 
 from karenina.utils.answer_cache import AnswerTraceCache, CacheEntry
 

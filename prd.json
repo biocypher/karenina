@@ -225,7 +225,7 @@
       "Verify: Run 'uv run pytest tests/unit/schemas/test_answer_schemas.py -v' with 0 failures"
     ],
     "status": "completed",
-    "additional notes": "Created 38 tests covering Question, LLMRubricTrait, RegexTrait, CallableTrait, BaseAnswer, TraitKind. All tests passing. Pydantic v2 validation working correctly."
+    "additional notes": "Created 42 tests covering Question, LLMRubricTrait, RegexTrait, CallableTrait, BaseAnswer, TraitKind, capture_answer_source function. All tests passing. Pydantic v2 validation working correctly."
   },
   {
     "id": "task-013",
