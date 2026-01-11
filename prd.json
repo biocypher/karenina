@@ -612,7 +612,7 @@
       "Verify: Run 'uv run pytest tests/integration/rubrics/test_metric_rubric_trait.py -v'",
       "Verify: Metric calculations are mathematically verified"
     ],
-    "status": "pending",
+    "status": "completed",
     "additional notes": "MetricRubricTrait uses LLM for extraction, then calculates metrics. Verify formulas match sklearn or standard definitions."
   },
   {
