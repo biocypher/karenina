@@ -685,3 +685,85 @@ $ uv run pytest tests/unit/storage/ -v
 
 $ uv run ruff check tests/unit/storage/test_jsonld_serialization.py --fix
 Found 2 errors (2 fixed, 0 remaining).
+
+
+2025-01-11 - Ralph Loop Iteration 16
+=====================================
+
+COMPLETED TASKS:
+-----------------
+* task-017: Unit tests for infrastructure module (LLM client utilities)
+  - Created tests/unit/infrastructure/test_llm_client.py with 78 tests
+  - Tests for Exception classes:
+    - LLMError, LLMNotAvailableError, SessionError (interface.py)
+    - ManualTraceError, ManualTraceNotFoundError (manual_llm.py, manual_traces.py)
+  - Tests for Pydantic models:
+    - ChatRequest: model, provider, message, session_id, system_message, temperature, interface, endpoint params
+    - ChatResponse: session_id, message, model, provider, timestamp
+  - Tests for ChatSession class:
+    - Initialization with all parameters and defaults
+    - add_message() for human/AI messages
+    - add_system_message() inserts at beginning or updates existing
+    - MCP URLs dict sets agent flag (verified after initialize_llm)
+  - Tests for Session management functions:
+    - clear_all_sessions(), get_session(), delete_session(), list_sessions()
+    - Fixed global state issues by accessing module's chat_sessions directly
+  - Tests for Custom OpenAI clients:
+    - ChatOpenRouter: initialization, lc_secrets property
+    - ChatOpenAIEndpoint: requires API key, does NOT read from environment, lc_secrets empty
+  - Tests for ManualLLM class:
+    - Initialization (question_hash, ignores extra kwargs)
+    - invoke() returns precomputed trace, raises ManualTraceNotFoundError if not found
+    - with_structured_output() returns self (compatibility)
+    - content property returns trace
+    - get_agent_metrics() returns metrics dict or None
+  - Tests for ManualTraceManager class:
+    - set_trace(), get_trace(), has_trace(), get_trace_with_metrics()
+    - Invalid hash raises ManualTraceError (requires 32-char MD5)
+    - get_all_traces() returns copy (not internal dict)
+    - clear_traces(), get_trace_count()
+    - get_memory_usage_info() returns trace_count, total_characters, estimated_memory_bytes
+    - load_traces_from_json() validates structure and MD5 hash format
+  - Tests for Manual trace utilities (module functions):
+    - load_manual_traces(), get_manual_trace(), has_manual_trace()
+    - get_manual_trace_count(), get_manual_trace_with_metrics()
+    - get_memory_usage_info(), set_manual_trace()
+  - Tests for init_chat_model_unified():
+    - Raises ValueError for unsupported interface
+    - Manual interface requires question_hash
+    - openai_endpoint requires endpoint_base_url and endpoint_api_key
+    - MCP with manual interface raises ValueError
+  - Tests for ManualTraces class:
+    - Initialization with benchmark
+    - register_trace() with string and message list
+    - register_traces() for batch registration
+
+FILES CREATED:
+--------------
+- tests/unit/infrastructure/test_llm_client.py (78 tests, all passing)
+
+TOTAL INFRASTRUCTURE TESTS: 78
+
+KEY INSIGHTS:
+--------------
+- Manual trace system requires 32-character hexadecimal MD5 hashes
+- Session management uses module-level global variable, requiring careful test isolation
+- ManualLLM enables fixture-based testing without actual API calls
+- ManualTraceManager provides session-based storage with automatic cleanup
+
+NEXT TASKS (Priority Order):
+-----------------------------
+* task-015: Write unit tests for domain verification logic (non-LLM parts)
+* task-018: Write unit tests for integrations module
+* task-021: Write unit tests for CLI utilities
+* task-022+: LLM fixtures and integration tests
+
+GIT COMMIT: (pending)
+
+TEST RESULTS:
+-------------
+$ uv run pytest tests/unit/infrastructure/ -v
+78 passed in 0.67s
+
+$ uv run ruff check tests/unit/infrastructure/test_llm_client.py
+All checks passed!
