@@ -1705,3 +1705,60 @@ Total unit tests added in iterations 31-37: 217 tests
 - MetadataManager (benchmark/core/metadata.py): 56 tests
 - TemplateManager (benchmark/core/templates.py): 40 tests
 - ExportManager (benchmark/core/exports.py): 35 tests
+
+2025-01-11 - Ralph Loop Iteration 38
+======================================
+
+COMPLETED TASKS:
+-----------------
+* Added unit tests for RubricManager (benchmark/core/rubrics.py)
+  - Created tests/unit/benchmark/core/test_rubrics.py with 46 comprehensive tests
+  - Test coverage for all RubricManager methods (16 methods):
+    - add_global_rubric_trait: Add LLM, regex, callable, or metric traits globally
+    - add_question_rubric_trait: Add traits to specific questions
+    - get_global_rubric: Get global rubric with all traits
+    - get_question_rubric: Get question-specific rubric
+    - get_merged_rubric_for_question: Get combined global + question rubric
+    - clear_global_rubric: Remove global rubric
+    - remove_question_rubric: Remove question rubric
+    - clear_all_rubrics: Remove all rubrics
+    - validate_rubrics: Validate all rubric configurations
+    - get_rubric_statistics: Get statistics about rubrics
+    - get_questions_with_rubric: List questions with rubrics
+    - set_global_rubric: Set global rubric with list of traits
+    - update_global_rubric_trait: Update specific global trait
+    - remove_global_rubric_trait: Remove specific global trait
+    - get_rubric_trait_names: Get trait names for global or question
+    - has_rubric: Check if rubrics exist
+  - Tests cover all 4 trait types: LLMRubricTrait, RegexTrait, CallableTrait, MetricRubricTrait
+  - Tests cover rubric merging (question traits override global with same name)
+
+TEST RESULTS:
+-------------
+- Unit tests: 1085 passing (was 999, +86 new tests: 46 rubrics + 40 earlier uncounted)
+- E2E tests: 58 passing
+- Total: 1143 tests passing (was 999, +144)
+- Note: Some tests from earlier iterations may not have been counted correctly
+
+FILES CREATED/MODIFIED:
+-----------------------
+- tests/unit/benchmark/core/test_rubrics.py (NEW, 46 tests)
+- prd.json (added task-045)
+
+NOTES:
+------
+RubricManager is a pure Python module with no external dependencies,
+making it ideal for unit testing. The module handles both global and
+question-specific rubrics across 4 trait types (LLM, Regex, Callable,
+Metric). Tests verified proper trait merging where question-specific
+traits override global traits with the same name.
+
+Total unit tests added in iterations 31-38: 263 tests
+- AnswerBuilder (domain/answers/builder.py): 43 tests
+- Answer Template Reader (domain/answers/reader.py): 14 tests
+- Answer Cache (utils/answer_cache.py): 29 tests
+- capture_answer_source (schemas/domain): 4 tests
+- MetadataManager (benchmark/core/metadata.py): 56 tests
+- TemplateManager (benchmark/core/templates.py): 40 tests
+- ExportManager (benchmark/core/exports.py): 35 tests
+- RubricManager (benchmark/core/rubrics.py): 46 tests

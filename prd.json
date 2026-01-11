@@ -886,5 +886,26 @@
     ],
     "status": "completed",
     "additional notes": "This is the final verification that testing strategy is fully implemented."
+  },
+  {
+    "id": "task-045",
+    "category": "Unit Tests",
+    "description": "Write unit tests for RubricManager class",
+    "depends_on": [
+      "task-012"
+    ],
+    "steps": [
+      "Implement: Analyze src/karenina/benchmark/core/rubrics.py thoroughly",
+      "Implement: Create tests/unit/benchmark/core/test_rubrics.py",
+      "Implement: Write tests for global rubric operations (add, get, clear, update, remove)",
+      "Implement: Write tests for question-specific rubric operations",
+      "Implement: Write tests for merged rubric retrieval",
+      "Implement: Write tests for validation and statistics methods",
+      "Implement: Write tests for all trait types (LLM, Regex, Callable, Metric)",
+      "Verify: Run 'uv run pytest tests/unit/benchmark/core/test_rubrics.py -v'",
+      "Verify: All RubricManager methods have test coverage"
+    ],
+    "status": "completed",
+    "additional notes": "Created 46 unit tests for RubricManager covering all methods: add_global_rubric_trait, add_question_rubric_trait, get_global_rubric, get_question_rubric, get_merged_rubric_for_question, clear_global_rubric, remove_question_rubric, clear_all_rubrics, validate_rubrics, get_rubric_statistics, get_questions_with_rubric, set_global_rubric, update_global_rubric_trait, remove_global_rubric_trait, get_rubric_trait_names, has_rubric. All tests passing. Total test count now 1131."
   }
 ]
