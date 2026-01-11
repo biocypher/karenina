@@ -1173,3 +1173,37 @@ All checks passed!
 **Files Created/Modified**:
 - Created: tests/e2e/test_full_verification.py (252 lines, 12 tests)
 - Modified: prd.json (task-036 status: pending → completed)
+
+## Iteration 26 (2025-01-11)
+
+**Task Completed**: task-038 - Write E2E tests for error handling and edge cases
+
+**Work Done**:
+- Created tests/e2e/test_error_handling.py with 17 E2E tests
+- Tests ensure CLI fails gracefully with helpful messages (not Python tracebacks)
+- Tests cover:
+  - test_invalid_checkpoint_file: Non-existent checkpoint
+  - test_malformed_checkpoint: Invalid JSON
+  - test_invalid_preset_file: Non-existent preset
+  - test_malformed_preset_file: Invalid preset JSON
+  - test_invalid_option: Unknown CLI option
+  - test_invalid_output_directory: Output in non-existent directory
+  - test_invalid_model_name_without_preset: Model without provider
+  - test_missing_manual_traces_file: Manual interface without traces
+  - test_empty_checkpoint: Empty checkpoint file
+  - test_checkpoint_without_questions: No questions in checkpoint
+  - test_preset_show_nonexistent: Non-existent preset name
+  - test_csv_without_questions: CSV export with no results
+  - test_verify_status_on_nonexistent_checkpoint: Status on missing file
+  - test_mutually_exclusive_options_error: Conflicting options
+  - test_invalid_evaluation_mode: Invalid mode value
+  - test_negative_replicate_count: Negative replicate count
+  - test_zero_replicate_count: Zero replicate count
+
+**Test Results**:
+- All 17 error handling E2E tests pass
+- All 835 total tests passing (806 unit + 12 full verification + 17 error handling)
+
+**Files Created/Modified**:
+- Created: tests/e2e/test_error_handling.py (290 lines, 17 tests)
+- Modified: prd.json (task-038 status: pending → completed)
