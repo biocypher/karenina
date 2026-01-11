@@ -1,0 +1,60 @@
+=== Karenina Testing Strategy - Progress Log ===
+
+2025-01-11 - Ralph Loop Iteration 1
+=====================================
+
+COMPLETED TASKS:
+-----------------
+* task-001: Directory structure created
+  - Created tests/unit/ with subdirectories (benchmark/, schemas/, domain/, infrastructure/, integrations/, storage/, utils/, cli/)
+  - Created tests/integration/ with subdirectories (verification/, templates/, rubrics/, storage/, cli/)
+  - Created tests/e2e/
+  - Created tests/fixtures/ with subdirectories (llm_responses/claude-haiku-4-5/, checkpoints/, templates/)
+  - Deleted ~80 old test files (clean slate)
+
+* task-002: Pytest markers configured
+  - Added [tool.pytest.ini_options] to pyproject.toml
+  - Markers: unit, integration, e2e, slow, pipeline, rubric, storage, cli
+  - Enables subset execution: pytest -m unit, pytest -m "not slow"
+
+* task-003: FixtureBackedLLMClient implemented
+  - Created tests/conftest.py with FixtureBackedLLMClient class
+  - invoke(messages, **kwargs) method matching real LLM interface
+  - _hash_messages(messages) using SHA256 on JSON-serialized content
+  - _load_fixture(prompt_hash) for recursive fixture search
+  - ValueError raised when fixture not found (with regeneration hint)
+  - MockResponse class with .content, .id, .model, .usage attributes
+  - 7 tests written and passing
+
+* task-004: Shared pytest fixtures in root conftest.py
+  - fixtures_dir() -> Path to tests/fixtures/
+  - llm_fixtures_dir(fixtures_dir) -> Path to LLM response fixtures
+  - llm_client(llm_fixtures_dir) -> FixtureBackedLLMClient instance
+  - sample_trace() -> Realistic LLM response text
+  - tmp_benchmark(tmp_path) -> Minimal Benchmark with 1 question
+
+FILES CREATED:
+--------------
+- tests/conftest.py (FixtureBackedLLMClient + shared fixtures)
+- tests/unit/test_fixture_backed_llm.py (7 tests, all passing)
+- docs/testing/*.md (README, ROADMAP, UNIT_TESTS, INTEGRATION_TESTS, E2E_TESTS, FIXTURES, CONFTEST)
+- prd.json (Product Requirements Document)
+
+NEXT TASKS (Priority Order):
+-----------------------------
+* task-005: Create fixture capture script CLI structure
+* task-006: Implement fixture capture logic
+* task-007: Create sample checkpoint fixtures
+* task-008: Create sample answer template fixtures
+* task-009+: Write unit tests for each module
+
+GIT COMMIT: e18833b
+"test(restructure): implement test directory structure and pytest markers"
+
+TEST RESULTS:
+-------------
+$ uv run pytest tests/unit/test_fixture_backed_llm.py -v
+7 passed in 0.06s
+
+$ uv run ruff check tests/conftest.py tests/unit/test_fixture_backed_llm.py
+All checks passed!

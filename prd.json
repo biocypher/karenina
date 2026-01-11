@@ -14,7 +14,7 @@
       "Verify: Run 'find tests -name \"test_*.py\"' returns empty (all old tests deleted)",
       "Verify: Run 'ls -R tests/' confirms new directory structure exists"
     ],
-    "status": "pending",
+    "status": "completed",
     "additional notes": "This is a destructive operation that removes all existing tests. The old tests were inconsistently organized and will be replaced with properly structured tests written from scratch based on source code analysis."
   },
   {
@@ -30,7 +30,7 @@
       "Verify: Run 'uv run pytest --markers' shows all custom markers with descriptions",
       "Verify: Run 'uv run pytest --collect-only tests/' completes without errors"
     ],
-    "status": "pending",
+    "status": "completed",
     "additional notes": "Markers enable running subsets of tests (e.g., 'pytest -m unit' for fast CI, 'pytest -m \"not slow\"' for local dev)."
   },
   {
@@ -49,7 +49,7 @@
       "Verify: Write test that FixtureBackedLLMClient raises ValueError for unknown prompt",
       "Verify: Create dummy fixture, verify invoke() returns correct MockResponse"
     ],
-    "status": "pending",
+    "status": "completed",
     "additional notes": "The client must match how template_evaluator.py and rubric_evaluator.py call the LLM. Check actual method signatures in the infrastructure module."
   },
   {
@@ -66,7 +66,7 @@
       "Verify: Create test file using each fixture, confirm all work",
       "Verify: Run 'uv run pytest tests/test_fixtures_work.py -v' passes"
     ],
-    "status": "pending",
+    "status": "completed",
     "additional notes": "These fixtures are imported by all test layers. Keep them minimal. Analyze src/karenina/benchmark/__init__.py to understand Benchmark creation API."
   },
   {
