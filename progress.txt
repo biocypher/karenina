@@ -1906,3 +1906,51 @@ benchmark/core/ coverage: All 6 manager classes now have comprehensive unit test
 - test_results.py: 43 tests
 - test_questions.py: 98 tests
 Total: 318 tests for benchmark/core/
+
+2025-01-11 - Iteration 41 (Parametrization)
+=============================================
+
+COMPLETED TASKS:
+-----------------
+* task-048: Add pytest.mark.parametrize to reduce test duplication
+  - Identified test_regex_trait.py as best candidate (75 tests, many repetitive)
+  - Refactored 21 repetitive test functions into 3 parametrized tests:
+    1. test_regex_trait_quantifiers: Covers star, plus, exact, lazy, dot quantifiers
+    2. test_regex_trait_range_quantifier: Covers 5 digit range cases (1-5 digits)
+    3. test_regex_trait_pattern_types: Covers or, character set, negated set patterns
+    4. test_regex_trait_advanced_patterns: Covers lookahead, lookbehind, non-capturing/capturing groups
+  - Used descriptive ids for clear test naming in output
+  - Reduced function count from 75 to 54 while maintaining full coverage
+
+TEST RESULTS:
+-------------
+- test_regex_trait.py: 54 tests passing (down from 75 functions, same coverage)
+- Full suite: 1590 tests passing
+- Linting: ruff checks passing
+
+FILES CREATED/MODIFIED:
+-----------------------
+- tests/unit/schemas/test_regex_trait.py (MODIFIED - added parametrization)
+- prd.json (MODIFIED - added task-048, marked completed)
+
+NOTES FOR NEXT DEVELOPER:
+--------------------------
+This is the first use of @pytest.mark.parametrize in the test suite. The pattern
+established here can be applied to other test files with repetitive tests:
+- test_callable_trait.py: Has many similar evaluate_* tests
+- test_benchmark_filtering.py: Has repetitive filter tests
+- test_cli_utils.py: Has many similar validation tests
+
+Key pattern:
+```python
+@pytest.mark.parametrize(
+    "name,pattern,match_text,no_match_text",
+    [
+        ("test_name", r"pattern", "matches", "no_match"),
+        ...
+    ],
+    ids=["descriptive_id", ...],  # For readable test output
+)
+def test_parametrized(name, pattern, match_text, no_match_text):
+    ...
+```

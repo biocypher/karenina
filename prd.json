@@ -851,4 +851,20 @@
         "status": "completed",
         "additional notes": "Created 98 unit tests for QuestionManager covering all methods: add_question (string/Question/Answer class), remove_question, get_question_ids, get_question, get_all_questions, get_question_as_object, get_all_questions_as_objects, add_question_from_object, update_question_metadata, get_question_metadata, get/set/remove_question_custom_property, get/set_question_author, get/set_question_sources, get_question_timestamps, clear_questions, add_questions_batch, mark_finished/unfinished, toggle_finished, get_finished/unfinished_questions, filter_questions, filter_by_metadata, filter_by_custom_metadata, search_questions, count_by_field, __iter__, helper function _rename_answer_class_to_standard. All tests passing. Total test count now 1272.",
     },
+    {
+        "id": "task-048",
+        "category": "Polish",
+        "description": "Add pytest.mark.parametrize to reduce test duplication",
+        "depends_on": ["task-044"],
+        "steps": [
+            "Implement: Identify test file with most duplication (test_regex_trait.py has many similar tests)",
+            "Implement: Refactor repetitive test functions to use @pytest.mark.parametrize",
+            "Implement: Consolidate test data into parametrized tuples",
+            "Implement: Ensure test names remain descriptive with ids parameter",
+            "Verify: Run 'uv run pytest <file> -v' confirms all tests still pass",
+            "Verify: Test count may decrease but coverage remains same",
+        ],
+        "status": "completed",
+        "additional notes": "Refactored test_regex_trait.py: Replaced 21 repetitive test functions with 3 parametrized tests covering quantifiers (star/plus/exact/lazy/dot), range quantifiers (5 cases), pattern types (or/set/negated_set), and advanced patterns (lookahead/lookbehind/groups). Reduced test function count from 75 to 54 while maintaining full coverage. All 1590 tests pass.",
+    },
 ]

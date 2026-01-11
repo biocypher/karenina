@@ -75,7 +75,7 @@ def test_regex_trait_extra_fields_forbidden() -> None:
             name="test",
             pattern=r"\w+",
             higher_is_better=True,
-            extra_field="not_allowed",  # type: ignore[arg-type]
+            extra_field="not_allowed",
         )
 
 
@@ -526,58 +526,32 @@ def test_regex_trait_case_insensitive_with_uppercase_pattern() -> None:
     assert trait.evaluate("ERROR") is True
 
 
-@pytest.mark.unit
-def test_regex_trait_lookahead_pattern() -> None:
-    """Test RegexTrait with lookahead pattern."""
-    trait = RegexTrait(
-        name="word_not_followed_by_another",
-        pattern=r"start(?!.*end)",
-        higher_is_better=True,
-    )
-
-    # "start" is not followed by "end" in the same line
-    assert trait.evaluate("start here") is True
-    # "start" is followed by "end" later
-    assert trait.evaluate("start and then end") is False
+# =============================================================================
+# Parametrized Advanced Pattern Tests (lookahead, lookbehind, groups)
+# =============================================================================
 
 
 @pytest.mark.unit
-def test_regex_trait_lookbehind_pattern() -> None:
-    """Test RegexTrait with lookbehind pattern."""
+@pytest.mark.parametrize(
+    "name,pattern,match_text,no_match_text",
+    [
+        ("lookahead", r"start(?!.*end)", "start here", "start and then end"),
+        ("lookbehind", r"(?<=:)\s*\w+", "Key: value", "Key value"),
+        ("non_capturing_group", r"(?:hello|world)", "hello there", "foo there"),
+        ("capturing_group", r"(hello|world)", "hello there", "foo there"),
+    ],
+    ids=["lookahead", "lookbehind", "non_capturing", "capturing"],
+)
+def test_regex_trait_advanced_patterns(name: str, pattern: str, match_text: str, no_match_text: str) -> None:
+    """Test RegexTrait with advanced regex patterns."""
     trait = RegexTrait(
-        name="after_colon",
-        pattern=r"(?<=:)\s*\w+",
+        name=name,
+        pattern=pattern,
         higher_is_better=True,
     )
 
-    assert trait.evaluate("Key: value") is True
-    assert trait.evaluate("Key value") is False
-
-
-@pytest.mark.unit
-def test_regex_trait_non_capturing_group() -> None:
-    """Test RegexTrait with non-capturing group."""
-    trait = RegexTrait(
-        name="has_pattern",
-        pattern=r"(?:hello|world)",
-        higher_is_better=True,
-    )
-
-    assert trait.evaluate("hello there") is True
-    assert trait.evaluate("world there") is True
-    assert trait.evaluate("foo there") is False
-
-
-@pytest.mark.unit
-def test_regex_trait_capturing_group() -> None:
-    """Test RegexTrait with capturing group."""
-    trait = RegexTrait(
-        name="has_pattern",
-        pattern=r"(hello|world)",
-        higher_is_better=True,
-    )
-
-    assert trait.evaluate("hello there") is True
+    assert trait.evaluate(match_text) is True
+    assert trait.evaluate(no_match_text) is False
 
 
 @pytest.mark.unit
@@ -594,126 +568,83 @@ def test_regex_trait_zero_quantifier() -> None:
     assert trait.evaluate("3.14") is True
 
 
+# =============================================================================
+# Parametrized Quantifier Tests
+# =============================================================================
+
+
 @pytest.mark.unit
-def test_regex_trait_star_quantifier() -> None:
-    """Test RegexTrait with star quantifier."""
+@pytest.mark.parametrize(
+    "name,pattern,match_text,no_match_text",
+    [
+        ("star_quantifier", r"a.*b", "aXXXb", "aXXX"),
+        ("plus_quantifier", r"\d+", "123", "abc"),
+        ("exact_quantifier", r"\d{4}", "Code: 1234", "Code: 123"),
+        ("lazy_quantifier", r"<.*?>", "<a><b>", "no tags"),
+        ("dot_pattern", r".{3}", "abc", "ab"),
+    ],
+    ids=["star", "plus", "exact", "lazy", "dot"],
+)
+def test_regex_trait_quantifiers(name: str, pattern: str, match_text: str, no_match_text: str) -> None:
+    """Test RegexTrait with various quantifiers."""
     trait = RegexTrait(
-        name="greedy_match",
-        pattern=r"a.*b",
+        name=name,
+        pattern=pattern,
         higher_is_better=True,
     )
 
-    assert trait.evaluate("aXXXb") is True
-    assert trait.evaluate("aXXX") is False
+    assert trait.evaluate(match_text) is True
+    assert trait.evaluate(no_match_text) is False
 
 
 @pytest.mark.unit
-def test_regex_trait_plus_quantifier() -> None:
-    """Test RegexTrait with plus quantifier."""
-    trait = RegexTrait(
-        name="one_or_more_digits",
-        pattern=r"\d+",
-        higher_is_better=True,
-    )
-
-    assert trait.evaluate("123") is True
-    assert trait.evaluate("abc") is False
-
-
-@pytest.mark.unit
-def test_regex_trait_exact_quantifier() -> None:
-    """Test RegexTrait with exact quantifier."""
-    trait = RegexTrait(
-        name="four_digit_code",
-        pattern=r"\d{4}",
-        higher_is_better=True,
-    )
-
-    assert trait.evaluate("Code: 1234") is True
-    assert trait.evaluate("Code: 123") is False
-    assert trait.evaluate("Code: 12345") is True  # Matches 1234 within 12345
-
-
-@pytest.mark.unit
-def test_regex_trait_range_quantifier() -> None:
-    """Test RegexTrait with range quantifier."""
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("12", True),
+        ("123", True),
+        ("1234", True),
+        ("1", False),
+        ("12345", False),
+    ],
+    ids=["two_digits", "three_digits", "four_digits", "one_digit", "five_digits"],
+)
+def test_regex_trait_range_quantifier(text: str, expected: bool) -> None:
+    """Test RegexTrait with range quantifier {2,4}."""
     trait = RegexTrait(
         name="two_to_four_digits",
         pattern=r"^\d{2,4}$",
         higher_is_better=True,
     )
 
-    assert trait.evaluate("12") is True
-    assert trait.evaluate("123") is True
-    assert trait.evaluate("1234") is True
-    assert trait.evaluate("1") is False
-    assert trait.evaluate("12345") is False
+    assert trait.evaluate(text) is expected
+
+
+# =============================================================================
+# Parametrized Pattern Type Tests
+# =============================================================================
 
 
 @pytest.mark.unit
-def test_regex_trait_or_pattern() -> None:
-    """Test RegexTrait with OR pattern."""
+@pytest.mark.parametrize(
+    "name,pattern,match_text,no_match_text",
+    [
+        ("or_pattern", r"apple|banana|cherry", "I like apple pie", "I like grape"),
+        ("character_set", r"[aeiou]", "hello", "rhythm"),
+        ("negated_set", r"[^a-z]", "123", "abc"),
+    ],
+    ids=["or", "set", "negated_set"],
+)
+def test_regex_trait_pattern_types(name: str, pattern: str, match_text: str, no_match_text: str) -> None:
+    """Test RegexTrait with various pattern types."""
     trait = RegexTrait(
-        name="has_keyword",
-        pattern=r"apple|banana|cherry",
+        name=name,
+        pattern=pattern,
         higher_is_better=True,
     )
 
-    assert trait.evaluate("I like apple pie") is True
-    assert trait.evaluate("I like banana bread") is True
-    assert trait.evaluate("I like cherry tart") is True
-    assert trait.evaluate("I like grape") is False
-
-
-@pytest.mark.unit
-def test_regex_trait_set_pattern() -> None:
-    """Test RegexTrait with character set."""
-    trait = RegexTrait(
-        name="has_vowel",
-        pattern=r"[aeiou]",
-        higher_is_better=True,
-    )
-
-    assert trait.evaluate("hello") is True
-    assert trait.evaluate("rhythm") is False
-
-
-@pytest.mark.unit
-def test_regex_trait_negated_set_pattern() -> None:
-    """Test RegexTrait with negated character set."""
-    trait = RegexTrait(
-        name="no_lowercase",
-        pattern=r"[^a-z]",
-        higher_is_better=True,
-    )
-
-    assert trait.evaluate("123") is True
-    assert trait.evaluate("abc") is False
-
-
-@pytest.mark.unit
-def test_regex_trait_dot_matches_anything() -> None:
-    """Test RegexTrait with dot pattern."""
-    trait = RegexTrait(
-        name="three_chars",
-        pattern=r".{3}",
-        higher_is_better=True,
-    )
-
-    assert trait.evaluate("abc") is True
-    assert trait.evaluate("ab") is False
-
-
-@pytest.mark.unit
-def test_regex_trait_lazy_quantifier() -> None:
-    """Test RegexTrait with lazy quantifier."""
-    trait = RegexTrait(
-        name="lazy_match",
-        pattern=r"<.*?>",
-        higher_is_better=True,
-    )
-
-    assert trait.evaluate("<a><b>") is True  # Matches <a>
+    assert trait.evaluate(match_text) is True
+    assert trait.evaluate(no_match_text) is False
 
 
 # =============================================================================
@@ -728,7 +659,7 @@ def test_regex_trait_legacy_default_higher_is_better() -> None:
     trait = RegexTrait(
         name="test",
         pattern=r"\w+",
-        higher_is_better=None,  # type: ignore[arg-type]
+        higher_is_better=None,
     )
 
     # Should default to True for legacy compatibility
