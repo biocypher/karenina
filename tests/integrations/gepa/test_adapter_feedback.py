@@ -89,7 +89,6 @@ def mock_trajectory_failed(mock_data_inst, answering_model_config):
         model_config=answering_model_config,
         optimized_components={"answering_system_prompt": "You are helpful."},
         verification_result=mock_result,
-        score=0.0,
         raw_llm_response="The gene is B-cell lymphoma 2.",
         parsing_error=None,
         failed_fields=["gene_symbol"],
@@ -111,7 +110,6 @@ def mock_trajectory_passed(mock_data_inst, answering_model_config):
         model_config=answering_model_config,
         optimized_components={"answering_system_prompt": "You are helpful."},
         verification_result=mock_result,
-        score=1.0,
         raw_llm_response="The gene symbol is BCL2.",
         parsing_error=None,
         failed_fields=None,
@@ -420,7 +418,6 @@ def test_differential_analysis_one_success_one_failure(
         model_config=answering_model_config,
         optimized_components={},
         verification_result=failed_result,
-        score=0.0,
         raw_llm_response="Wrong answer",
     )
 
@@ -430,7 +427,6 @@ def test_differential_analysis_one_success_one_failure(
         model_config=answering_model_config,
         optimized_components={},
         verification_result=passed_result,
-        score=1.0,
         raw_llm_response="Correct answer: BCL2",
     )
 
@@ -486,7 +482,6 @@ def test_differential_analysis_all_fail(
         model_config=answering_model_config,
         optimized_components={},
         verification_result=failed_result,
-        score=0.0,
         raw_llm_response="Wrong 1",
     )
 
@@ -496,7 +491,6 @@ def test_differential_analysis_all_fail(
         model_config=answering_model_config,
         optimized_components={},
         verification_result=failed_result,
-        score=0.0,
         raw_llm_response="Wrong 2",
     )
 
@@ -507,6 +501,7 @@ def test_differential_analysis_all_fail(
         candidate={},
         eval_batch=mock_eval_batch,
         components_to_update=["answering_system_prompt"],
+        async_enabled=False,  # Disable async to ensure mock is called synchronously
     )
 
     # Verify no successful trajectories (empty list, not differential)
@@ -540,7 +535,6 @@ def test_differential_analysis_all_pass(
         model_config=answering_model_config,
         optimized_components={},
         verification_result=passed_result,
-        score=1.0,
         raw_llm_response="Correct 1",
     )
 
@@ -550,7 +544,6 @@ def test_differential_analysis_all_pass(
         model_config=answering_model_config,
         optimized_components={},
         verification_result=passed_result,
-        score=1.0,
         raw_llm_response="Correct 2",
     )
 
@@ -598,7 +591,6 @@ def test_programmatic_feedback_includes_knowledge_distillation(
         model_config=answering_model_config,
         optimized_components={},
         verification_result=failed_result,
-        score=0.0,
         raw_llm_response="Wrong answer",
         failed_fields=["gene"],
     )
@@ -609,7 +601,6 @@ def test_programmatic_feedback_includes_knowledge_distillation(
         model_config=answering_model_config,
         optimized_components={},
         verification_result=passed_result,
-        score=1.0,
         raw_llm_response="The gene symbol is BCL2 which is involved in apoptosis.",
     )
 

@@ -87,7 +87,6 @@ def failed_trajectory(mock_data_inst, mock_model_config, mock_verification_resul
         model_config=mock_model_config,
         optimized_components={"answering_system_prompt": "You are helpful."},
         verification_result=mock_verification_result_failed,
-        score=0.0,
         raw_llm_response="The gene is B-cell lymphoma 2, which is involved in apoptosis regulation.",
         parsing_error=None,
         failed_fields=["gene_symbol"],
@@ -104,7 +103,6 @@ def passed_trajectory(mock_data_inst, mock_model_config, mock_verification_resul
         model_config=mock_model_config,
         optimized_components={"answering_system_prompt": "You are helpful."},
         verification_result=mock_verification_result_passed,
-        score=1.0,
         raw_llm_response="The gene symbol is BCL2.",
         parsing_error=None,
         failed_fields=None,
@@ -257,7 +255,6 @@ def test_build_differential_feedback_prompt_multiple_successes(
         model_config=mock_model_config,
         optimized_components={},
         verification_result=mock_result2,
-        score=1.0,
         raw_llm_response="BCL2 is the official symbol for the gene.",
     )
 
@@ -537,7 +534,6 @@ def test_trajectory_with_parsing_error(mock_init_model, feedback_model_config, m
         model_config=mock_model_config,
         optimized_components={},
         verification_result=mock_result,
-        score=0.0,
         raw_llm_response="Invalid response",
         parsing_error="Failed to parse JSON: Unexpected token",
         failed_fields=None,

@@ -43,6 +43,14 @@ class TestHelpers:
     ) -> VerificationResult:
         """Create a sample VerificationResult with configurable data."""
         # Create metadata
+        ts = timestamp or "2024-01-01T00:00:00Z"
+        result_id = VerificationResultMetadata.compute_result_id(
+            question_id=question_id,
+            answering_model=answering_model,
+            parsing_model=parsing_model,
+            timestamp=ts,
+            replicate=replicate,
+        )
         metadata = VerificationResultMetadata(
             question_id=question_id,
             template_id="test_template_id",
@@ -52,7 +60,8 @@ class TestHelpers:
             replicate=replicate,
             completed_without_errors=completed,
             execution_time=1.5,
-            timestamp=timestamp or "2024-01-01T00:00:00Z",
+            timestamp=ts,
+            result_id=result_id,
         )
 
         # Create template data
@@ -555,9 +564,9 @@ class TestVerificationResultSetCollectionOps:
         repr_str = repr(result_set)
 
         assert "VerificationResultSet" in repr_str
-        assert "results=3" in repr_str
-        assert "questions=2" in repr_str
-        assert "models=2" in repr_str
+        assert "Total Results: 3" in repr_str
+        assert "Questions: 2" in repr_str
+        assert "Models: 2" in repr_str
 
 
 class TestVerificationResultSetLegacy:

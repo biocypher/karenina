@@ -430,7 +430,7 @@ def test_chat_openrouter_initialization() -> None:
 @pytest.mark.unit
 def test_chat_openrouter_lc_secrets() -> None:
     """Test ChatOpenRouter lc_secrets property."""
-    model = ChatOpenRouter(model="gpt-4")
+    model = ChatOpenRouter(model="gpt-4", openai_api_key="test-key")
     secrets = model.lc_secrets
     assert secrets == {"openai_api_key": "OPENROUTER_API_KEY"}
 
