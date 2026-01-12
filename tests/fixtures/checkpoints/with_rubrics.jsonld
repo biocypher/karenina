@@ -1,0 +1,177 @@
+{
+  "@context": {
+    "@version": 1.1,
+    "@vocab": "http://schema.org/",
+    "DataFeed": "DataFeed",
+    "DataFeedItem": "DataFeedItem",
+    "Question": "Question",
+    "Answer": "Answer",
+    "SoftwareSourceCode": "SoftwareSourceCode",
+    "Rating": "Rating",
+    "PropertyValue": "PropertyValue",
+    "text": "text",
+    "acceptedAnswer": {"@id": "acceptedAnswer", "@type": "@id"},
+    "hasPart": {"@id": "hasPart", "@type": "@id"},
+    "dataFeedElement": {"@id": "dataFeedElement", "@container": "@set"},
+    "item": {"@id": "item", "@type": "@id"},
+    "rating": {"@id": "rating", "@container": "@set"},
+    "additionalProperty": {"@id": "additionalProperty", "@container": "@set"},
+    "keywords": {"@id": "keywords", "@container": "@set"}
+  },
+  "@type": "DataFeed",
+  "@id": "test-with-rubrics",
+  "name": "with-rubrics-test",
+  "description": "A benchmark with global rubric containing all trait types for comprehensive testing",
+  "version": "0.1.0",
+  "creator": "Karenina Test Suite",
+  "dateCreated": "2025-01-12T00:00:00Z",
+  "dateModified": "2025-01-12T00:00:00Z",
+  "globalRubric": {
+    "name": "Test Rubric",
+    "description": "A comprehensive rubric for testing all trait types",
+    "llm_traits": [
+      {
+        "name": "Clarity",
+        "description": "The response is clear, well-organized, and easy to understand",
+        "kind": "score",
+        "min_score": 1,
+        "max_score": 5
+      },
+      {
+        "name": "Accuracy",
+        "description": "The response contains factually correct information",
+        "kind": "boolean"
+      },
+      {
+        "name": "Completeness",
+        "description": "The response thoroughly addresses all aspects of the question",
+        "kind": "score",
+        "min_score": 1,
+        "max_score": 5
+      }
+    ],
+    "regex_traits": [
+      {
+        "name": "HasCitations",
+        "pattern": "\\[\\d+\\]",
+        "description": "Response includes numeric citations like [1], [2]"
+      },
+      {
+        "name": "HasNumbers",
+        "pattern": "\\d+",
+        "description": "Response includes numeric values"
+      }
+    ],
+    "callable_traits": [
+      {
+        "name": "ContainsCitations",
+        "callable_code": "import re\ndef evaluate(trace: str) -> bool:\n    return bool(re.search(r'\\[\\d+\\]', trace))",
+        "kind": "boolean",
+        "description": "Check if response contains citation markers"
+      },
+      {
+        "name": "ResponseLength",
+        "callable_code": "def evaluate(trace: str) -> int:\n    words = len(trace.split())\n    if words < 20:\n        return 1\n    elif words < 50:\n        return 2\n    elif words < 100:\n        return 3\n    elif words < 200:\n        return 4\n    else:\n        return 5",
+        "kind": "score",
+        "min_score": 1,
+        "max_score": 5,
+        "description": "Score based on response length"
+      }
+    ]
+  },
+  "dataFeedElement": [
+    {
+      "@type": "DataFeedItem",
+      "@id": "rq001",
+      "dateCreated": "2025-01-12T00:00:00Z",
+      "dateModified": "2025-01-12T00:00:00Z",
+      "item": {
+        "@type": "Question",
+        "@id": "rq001-question",
+        "text": "What is BCL2 and what role does it play in cancer?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "@id": "rq001-answer",
+          "text": "BCL2 is a proto-oncogene that encodes an anti-apoptotic protein"
+        },
+        "hasPart": {
+          "@type": "SoftwareSourceCode",
+          "@id": "rq001-template",
+          "name": "Gene Answer Template",
+          "text": "from karenina.schemas.domain import BaseAnswer\nfrom pydantic import Field\n\nclass Answer(BaseAnswer):\n    gene_name: str = Field(description=\"The gene symbol\")\n    gene_function: str = Field(description=\"Description of gene function\")\n\n    def model_post_init(self, __context):\n        self.correct = {\"gene_name\": \"BCL2\", \"gene_function\": \"anti-apoptotic\"}\n\n    def verify(self) -> bool:\n        name_match = self.gene_name.upper() == self.correct[\"gene_name\"]\n        func_match = self.correct[\"gene_function\"].lower() in self.gene_function.lower()\n        return name_match and func_match\n",
+          "programmingLanguage": "Python"
+        },
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "finished",
+            "value": true
+          }
+        ]
+      },
+      "keywords": ["biology", "genetics", "cancer"]
+    },
+    {
+      "@type": "DataFeedItem",
+      "@id": "rq002",
+      "dateCreated": "2025-01-12T00:00:00Z",
+      "dateModified": "2025-01-12T00:00:00Z",
+      "item": {
+        "@type": "Question",
+        "@id": "rq002-question",
+        "text": "What is the boiling point of water at sea level?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "@id": "rq002-answer",
+          "text": "100 degrees Celsius or 212 degrees Fahrenheit"
+        },
+        "hasPart": {
+          "@type": "SoftwareSourceCode",
+          "@id": "rq002-template",
+          "name": "Temperature Answer Template",
+          "text": "from karenina.schemas.domain import BaseAnswer\nfrom pydantic import Field\n\nclass Answer(BaseAnswer):\n    celsius: int = Field(description=\"Temperature in Celsius\")\n    fahrenheit: int = Field(description=\"Temperature in Fahrenheit\")\n\n    def model_post_init(self, __context):\n        self.correct = {\"celsius\": 100, \"fahrenheit\": 212}\n\n    def verify(self) -> bool:\n        return self.celsius == 100 or self.fahrenheit == 212\n",
+          "programmingLanguage": "Python"
+        },
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "finished",
+            "value": true
+          }
+        ]
+      },
+      "keywords": ["science", "physics", "temperature"]
+    },
+    {
+      "@type": "DataFeedItem",
+      "@id": "rq003",
+      "dateCreated": "2025-01-12T00:00:00Z",
+      "dateModified": "2025-01-12T00:00:00Z",
+      "item": {
+        "@type": "Question",
+        "@id": "rq003-question",
+        "text": "What is the capital of France?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "@id": "rq003-answer",
+          "text": "Paris"
+        },
+        "hasPart": {
+          "@type": "SoftwareSourceCode",
+          "@id": "rq003-template",
+          "name": "Capital City Template",
+          "text": "from karenina.schemas.domain import BaseAnswer\nfrom pydantic import Field\n\nclass Answer(BaseAnswer):\n    capital: str = Field(description=\"The capital city name\")\n\n    def model_post_init(self, __context):\n        self.correct = {\"capital\": \"Paris\"}\n\n    def verify(self) -> bool:\n        return self.capital.lower().strip() == self.correct[\"capital\"].lower()\n",
+          "programmingLanguage": "Python"
+        },
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "finished",
+            "value": true
+          }
+        ]
+      },
+      "keywords": ["geography", "europe", "france"]
+    }
+  ]
+}

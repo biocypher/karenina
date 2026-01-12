@@ -134,5 +134,4 @@ SEMANTIC_VERSIONING.md
 # Local test scripts
 scripts/
 
-src/karenina/integrations/gepa/README.md# Ralph loop local state
-.claude/ralph-loop.local.md
+src/karenina/integrations/gepa/README.md

@@ -1,0 +1,391 @@
+"""Tests for RubricEvaluationStage and FinalizeResultStage."""
+
+from unittest.mock import Mock, patch
+
+from pydantic import Field
+
+from karenina.benchmark.verification.stage import VerificationContext
+from karenina.benchmark.verification.stages.finalize_result import FinalizeResultStage
+from karenina.benchmark.verification.stages.rubric_evaluation import RubricEvaluationStage
+from karenina.schemas import VerificationResult
+from karenina.schemas.domain import BaseAnswer
+
+
+class MockAnswer(BaseAnswer):
+    """Mock answer class for testing."""
+
+    result: int = Field(description="The result")
+    correct: dict = Field(description="Correct answer")
+
+    def verify(self) -> bool:
+        """Verify the answer."""
+        return self.result == 4
+
+
+class TestRubricEvaluationStage:
+    """Test suite for RubricEvaluationStage."""
+
+    def test_should_run_with_rubric_and_traits(self, basic_context: VerificationContext, sample_rubric) -> None:
+        """Test that stage runs when rubric has traits."""
+        basic_context.rubric = sample_rubric
+        basic_context.set_artifact("raw_llm_response", "The answer is 4")
+
+        stage = RubricEvaluationStage()
+        assert stage.should_run(basic_context) is True
+
+    def test_should_not_run_without_rubric(self, basic_context: VerificationContext) -> None:
+        """Test that stage skips when rubric is None."""
+        basic_context.rubric = None
+
+        stage = RubricEvaluationStage()
+        assert stage.should_run(basic_context) is False
+
+    def test_should_not_run_with_empty_rubric(self, basic_context: VerificationContext) -> None:
+        """Test that stage skips when rubric has no traits."""
+        from karenina.schemas.domain import Rubric
+
+        basic_context.rubric = Rubric(llm_traits=[])
+
+        stage = RubricEvaluationStage()
+        assert stage.should_run(basic_context) is False
+
+    @patch("karenina.benchmark.verification.stages.rubric_evaluation.RubricEvaluator")
+    def test_rubric_evaluation_success(
+        self,
+        mock_evaluator_class: Mock,
+        basic_context: VerificationContext,
+        sample_rubric,
+    ) -> None:
+        """Test successful rubric evaluation."""
+        basic_context.rubric = sample_rubric
+        basic_context.set_artifact("raw_llm_response", "The answer is 4")
+
+        # Mock RubricEvaluator
+        mock_evaluator = Mock()
+        mock_evaluator_class.return_value = mock_evaluator
+
+        # Mock evaluation result
+        mock_result = Mock()
+        mock_result.overall_score = 8.5
+        mock_result.trait_scores = {"Accuracy": 9, "Completeness": 8}
+        mock_evaluator.evaluate_rubric.return_value = mock_result
+
+        stage = RubricEvaluationStage()
+        stage.execute(basic_context)
+
+        # Verify evaluation was performed
+        assert basic_context.error is None
+        assert basic_context.has_artifact("rubric_result")
+
+    @patch("karenina.benchmark.verification.stages.rubric_evaluation.RubricEvaluator")
+    def test_metric_trait_evaluation(
+        self,
+        mock_evaluator_class: Mock,
+        basic_context: VerificationContext,
+    ) -> None:
+        """Test evaluation of metric traits."""
+        from karenina.schemas.domain import MetricRubricTrait, Rubric
+
+        # Create rubric with metric traits
+        metric_trait = MetricRubricTrait(
+            name="Accuracy Check",
+            description="Check accuracy metric",
+            evaluation_mode="tp_only",
+            tp_instructions=["State the answer is 'four'", "Provide reasoning"],
+            metrics=["precision", "recall"],
+        )
+        basic_context.rubric = Rubric(metric_traits=[metric_trait])
+        basic_context.set_artifact("raw_llm_response", "The answer is four")
+
+        # Mock evaluator
+        mock_evaluator = Mock()
+        mock_evaluator_class.return_value = mock_evaluator
+        mock_evaluator.evaluate_metric_traits.return_value = (
+            {"Accuracy Check": {"tp": ["State the answer is 'four'"], "fn": [], "fp": []}},  # confusion lists
+            {"Accuracy Check": {"precision": 1.0, "recall": 0.5}},  # metric results
+        )
+
+        stage = RubricEvaluationStage()
+        stage.execute(basic_context)
+
+        # Verify metric evaluation
+        assert basic_context.has_artifact("metric_confusion_lists")
+        assert basic_context.has_artifact("metric_results")
+        assert basic_context.get_artifact("metric_results")["Accuracy Check"]["precision"] == 1.0
+
+    @patch("karenina.benchmark.verification.stages.rubric_evaluation.RubricEvaluator")
+    def test_rubric_evaluation_with_error(
+        self,
+        mock_evaluator_class: Mock,
+        basic_context: VerificationContext,
+        sample_rubric,
+    ) -> None:
+        """Test rubric evaluation continues even if main verification has error."""
+        basic_context.rubric = sample_rubric
+        basic_context.set_artifact("raw_llm_response", "The answer is 4")
+        # Note: rubric evaluation runs independently of template verification errors
+
+        # Mock evaluator
+        mock_evaluator = Mock()
+        mock_evaluator_class.return_value = mock_evaluator
+        mock_result = Mock()
+        mock_result.overall_score = 5.0
+        mock_evaluator.evaluate_rubric.return_value = mock_result
+
+        stage = RubricEvaluationStage()
+        # Even though context might have errors elsewhere, rubric runs independently
+        assert stage.should_run(basic_context) is True
+
+    def test_stage_metadata(self) -> None:
+        """Test stage name and artifact declarations."""
+        stage = RubricEvaluationStage()
+
+        assert stage.name == "RubricEvaluation"
+        assert "raw_llm_response" in stage.requires
+        assert "rubric_result" in stage.produces
+        assert "metric_confusion_lists" in stage.produces
+        assert "metric_results" in stage.produces
+
+
+class TestFinalizeResultStage:
+    """Test suite for FinalizeResultStage."""
+
+    def test_should_run_always(self, basic_context: VerificationContext) -> None:
+        """Test that finalize stage always runs."""
+        stage = FinalizeResultStage()
+        assert stage.should_run(basic_context) is True
+
+    def test_finalize_with_all_fields(self, basic_context: VerificationContext) -> None:
+        """Test finalization with complete successful verification."""
+        # Set up all artifacts for successful run
+        parsed = MockAnswer(result=4, correct={"value": 4}, question_id="test_q123")
+        basic_context.set_artifact("parsed_answer", parsed)
+        basic_context.set_artifact("raw_llm_response", "The answer is 4")
+        basic_context.set_artifact("field_verification_result", True)
+        basic_context.set_artifact("regex_overall_success", True)
+        basic_context.set_artifact("answering_model_str", "openai/gpt-4.1-mini")
+        basic_context.set_artifact("parsing_model_str", "openai/gpt-4.1-mini")
+        basic_context.set_artifact("deep_judgment_performed", False)
+        basic_context.set_artifact("embedding_check_performed", False)
+        basic_context.set_artifact("abstention_detected", False)
+
+        stage = FinalizeResultStage()
+        stage.execute(basic_context)
+        result = basic_context.get_artifact("final_result")
+
+        # Verify result is a VerificationResult
+        assert isinstance(result, VerificationResult)
+        assert result.completed_without_errors is True
+        assert result.question_id == "test_q123"
+        assert result.metadata.template_id == "test_t456"
+        assert result.answering_model == "openai/gpt-4.1-mini"
+
+    def test_finalize_with_errors(self, basic_context: VerificationContext) -> None:
+        """Test finalization when errors occurred during verification."""
+        # Set up error state
+        basic_context.mark_error("Template validation failed")
+        basic_context.set_artifact("raw_llm_response", "Some response")
+        basic_context.set_artifact("answering_model_str", "openai/gpt-4.1-mini")
+        basic_context.set_artifact("parsing_model_str", "openai/gpt-4.1-mini")
+
+        stage = FinalizeResultStage()
+        stage.execute(basic_context)
+        result = basic_context.get_artifact("final_result")
+
+        # Verify result reflects error
+        assert isinstance(result, VerificationResult)
+        assert result.completed_without_errors is False
+        assert result.error == "Template validation failed"
+
+    def test_finalize_with_partial_results(self, basic_context: VerificationContext) -> None:
+        """Test finalization with partial verification results."""
+        # Set up partial verification
+        parsed = MockAnswer(result=5, correct={"value": 5}, question_id="test_q123")
+        basic_context.set_artifact("parsed_answer", parsed)
+        basic_context.set_artifact("raw_llm_response", "The answer is 5")
+        basic_context.set_artifact("field_verification_result", False)
+        basic_context.set_artifact("embedding_check_performed", True)
+        basic_context.set_artifact("embedding_check_passed", False)
+        basic_context.set_artifact("answering_model_str", "openai/gpt-4.1-mini")
+        basic_context.set_artifact("parsing_model_str", "openai/gpt-4.1-mini")
+
+        # Set verify_result to capture the verification failure
+        basic_context.set_result_field("verify_result", False)
+        basic_context.set_result_field("embedding_check_performed", True)
+
+        stage = FinalizeResultStage()
+        stage.execute(basic_context)
+        result = basic_context.get_artifact("final_result")
+
+        # Verify result captures partial verification
+        assert isinstance(result, VerificationResult)
+        assert result.completed_without_errors is True  # Pipeline completed successfully
+        assert result.verify_result is False  # But verification determined answer was wrong
+        assert result.parsed_llm_response is not None
+        assert result.embedding_check_performed is True
+
+    def test_finalize_with_rubric_results(self, basic_context: VerificationContext, sample_rubric) -> None:
+        """Test finalization includes rubric evaluation results."""
+        basic_context.rubric = sample_rubric
+
+        # Set up basic verification
+        parsed = MockAnswer(result=4, correct={"value": 4}, question_id="test_q123")
+        basic_context.set_artifact("parsed_answer", parsed)
+        basic_context.set_artifact("raw_llm_response", "The answer is 4")
+        basic_context.set_artifact("field_verification_result", True)
+        basic_context.set_artifact("answering_model_str", "openai/gpt-4.1-mini")
+        basic_context.set_artifact("parsing_model_str", "openai/gpt-4.1-mini")
+
+        # Set up rubric results
+        mock_rubric_result = Mock()
+        mock_rubric_result.overall_score = 8.5
+        basic_context.set_artifact("rubric_result", mock_rubric_result)
+
+        stage = FinalizeResultStage()
+        stage.execute(basic_context)
+        result = basic_context.get_artifact("final_result")
+
+        # Verify rubric results are included
+        assert isinstance(result, VerificationResult)
+
+    def test_finalize_with_deep_judgment(self, basic_context: VerificationContext) -> None:
+        """Test finalization includes deep-judgment metadata."""
+        # Set up deep-judgment verification
+        parsed = MockAnswer(result=4, correct={"value": 4}, question_id="test_q123")
+        basic_context.set_artifact("parsed_answer", parsed)
+        basic_context.set_artifact("answering_model_str", "openai/gpt-4.1-mini")
+        basic_context.set_artifact("parsing_model_str", "openai/gpt-4.1-mini")
+
+        # Set result fields for deep-judgment metadata
+        basic_context.set_result_field("raw_llm_response", "The answer is 4")
+        basic_context.set_result_field("verify_result", True)
+        basic_context.set_result_field("deep_judgment_performed", True)
+        basic_context.set_result_field(
+            "extracted_excerpts", {"result": [{"text": "The answer is 4", "confidence": "high"}]}
+        )
+        basic_context.set_result_field("deep_judgment_model_calls", 3)
+
+        stage = FinalizeResultStage()
+        stage.execute(basic_context)
+        result = basic_context.get_artifact("final_result")
+
+        # Verify deep-judgment metadata is included
+        assert isinstance(result, VerificationResult)
+        assert result.deep_judgment_performed is True
+        assert result.extracted_excerpts is not None
+
+    def test_finalize_with_abstention(self, basic_context: VerificationContext) -> None:
+        """Test finalization handles abstention detection."""
+        # Set up abstention
+        basic_context.set_artifact("answering_model_str", "openai/gpt-4.1-mini")
+        basic_context.set_artifact("parsing_model_str", "openai/gpt-4.1-mini")
+
+        # Set result fields for abstention metadata
+        basic_context.set_result_field("raw_llm_response", "I cannot answer this")
+        basic_context.set_result_field("abstention_detected", True)
+        basic_context.set_result_field("abstention_reasoning", "Explicit refusal")
+
+        stage = FinalizeResultStage()
+        stage.execute(basic_context)
+        result = basic_context.get_artifact("final_result")
+
+        # Verify abstention is captured
+        assert isinstance(result, VerificationResult)
+        assert result.abstention_detected is True
+        assert result.abstention_reasoning == "Explicit refusal"
+
+    def test_stage_metadata(self) -> None:
+        """Test stage name and artifact declarations."""
+        stage = FinalizeResultStage()
+
+        assert stage.name == "FinalizeResult"
+        assert "final_result" in stage.produces
+
+    def test_template_only_mode_flags(self, basic_context: VerificationContext) -> None:
+        """Test that template_only mode sets correct flags."""
+        # Set up template verification (but no rubric)
+        parsed = MockAnswer(result=4, correct={"value": 4}, question_id="test_q123")
+        basic_context.set_artifact("parsed_answer", parsed)
+        basic_context.set_artifact("field_verification_result", True)  # Template verification ran
+        basic_context.set_artifact("answering_model_str", "openai/gpt-4.1-mini")
+        basic_context.set_artifact("parsing_model_str", "openai/gpt-4.1-mini")
+        basic_context.set_result_field("verify_result", True)
+        # No rubric results set
+
+        stage = FinalizeResultStage()
+        stage.execute(basic_context)
+        result = basic_context.get_artifact("final_result")
+
+        # Verify flags are set correctly
+        assert result.template_verification_performed is True
+        assert result.verify_result is True
+        assert result.rubric_evaluation_performed is False
+        assert result.verify_rubric is None
+
+    def test_template_and_rubric_mode_flags(self, basic_context: VerificationContext) -> None:
+        """Test that template_and_rubric mode sets correct flags."""
+        # Set up template verification
+        parsed = MockAnswer(result=4, correct={"value": 4}, question_id="test_q123")
+        basic_context.set_artifact("parsed_answer", parsed)
+        basic_context.set_artifact("field_verification_result", True)  # Template verification ran
+        basic_context.set_artifact("answering_model_str", "openai/gpt-4.1-mini")
+        basic_context.set_artifact("parsing_model_str", "openai/gpt-4.1-mini")
+        basic_context.set_result_field("verify_result", True)
+
+        # Set up rubric evaluation
+        basic_context.set_result_field("verify_rubric", {"Clarity": 5, "Accuracy": 4})  # Rubric ran
+        basic_context.set_result_field(
+            "evaluation_rubric",
+            {
+                "llm_traits": [
+                    {"name": "Clarity", "kind": "score", "min_score": 1, "max_score": 5},
+                    {"name": "Accuracy", "kind": "score", "min_score": 1, "max_score": 5},
+                ],
+                "regex_traits": [],
+                "callable_traits": [],
+                "metric_traits": [],
+            },
+        )
+
+        stage = FinalizeResultStage()
+        stage.execute(basic_context)
+        result = basic_context.get_artifact("final_result")
+
+        # Verify both flags are set
+        assert result.template_verification_performed is True
+        assert result.verify_result is True
+        assert result.rubric_evaluation_performed is True
+        assert result.verify_rubric is not None
+
+    def test_rubric_only_mode_flags(self, basic_context: VerificationContext) -> None:
+        """Test that rubric_only mode sets correct flags (no template verification)."""
+        # No template verification artifacts - template stages were skipped
+        # Only raw response and rubric evaluation
+        basic_context.set_artifact("answering_model_str", "openai/gpt-4.1-mini")
+        basic_context.set_artifact("parsing_model_str", "openai/gpt-4.1-mini")
+        basic_context.set_result_field("raw_llm_response", "The answer is comprehensive...")
+        basic_context.set_result_field("verify_rubric", {"Clarity": 5, "Depth": 4})  # Rubric ran
+        basic_context.set_result_field(
+            "evaluation_rubric",
+            {
+                "llm_traits": [
+                    {"name": "Clarity", "kind": "score", "min_score": 1, "max_score": 5},
+                    {"name": "Depth", "kind": "score", "min_score": 1, "max_score": 5},
+                ],
+                "regex_traits": [],
+                "callable_traits": [],
+                "metric_traits": [],
+            },
+        )
+        # No field_verification_result artifact (template stages skipped)
+        # No verify_result set (template verification not performed)
+
+        stage = FinalizeResultStage()
+        stage.execute(basic_context)
+        result = basic_context.get_artifact("final_result")
+
+        # Verify flags show template was skipped, rubric was done
+        assert result.template_verification_performed is False
+        assert result.verify_result is None  # Should be None when template verification skipped
+        assert result.rubric_evaluation_performed is True
+        assert result.verify_rubric is not None
