@@ -87,24 +87,32 @@ class TestTemplateEvaluatorInitialization:
 
     def test_model_string_formats(self, simple_answer: type[BaseAnswer]):
         """Verify model string formats correctly for different interfaces."""
-        # Standard langchain interface
-        config = ModelConfig(
-            id="test",
-            model_provider="anthropic",
-            model_name="claude-haiku-4-5",
-            interface="langchain",
-        )
-        evaluator = TemplateEvaluator(model_config=config, answer_class=simple_answer)
-        assert evaluator.model_str == "anthropic/claude-haiku-4-5"
+        from unittest.mock import patch, MagicMock
 
-        # OpenRouter interface (no provider in string)
-        config_openrouter = ModelConfig(
-            id="test",
-            model_name="anthropic/claude-haiku-4-5",
-            interface="openrouter",
-        )
-        evaluator_or = TemplateEvaluator(model_config=config_openrouter, answer_class=simple_answer)
-        assert evaluator_or.model_str == "anthropic/claude-haiku-4-5"
+        # Mock the LLM initialization to avoid API key requirements
+        with patch(
+            "karenina.benchmark.verification.evaluators.template_evaluator.init_chat_model_unified"
+        ) as mock_init:
+            mock_init.return_value = MagicMock()
+
+            # Standard langchain interface
+            config = ModelConfig(
+                id="test",
+                model_provider="anthropic",
+                model_name="claude-haiku-4-5",
+                interface="langchain",
+            )
+            evaluator = TemplateEvaluator(model_config=config, answer_class=simple_answer)
+            assert evaluator.model_str == "anthropic/claude-haiku-4-5"
+
+            # OpenRouter interface (no provider in string)
+            config_openrouter = ModelConfig(
+                id="test",
+                model_name="anthropic/claude-haiku-4-5",
+                interface="openrouter",
+            )
+            evaluator_or = TemplateEvaluator(model_config=config_openrouter, answer_class=simple_answer)
+            assert evaluator_or.model_str == "anthropic/claude-haiku-4-5"
 
 
 # =============================================================================
