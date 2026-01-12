@@ -38,6 +38,13 @@ class TestJudgmentResultsDataAccess:
                 deep_judgment_search_enabled=search_enabled,
             )
 
+        timestamp = "2023-01-01T00:00:00"
+        result_id = VerificationResultMetadata.compute_result_id(
+            question_id=question_id,
+            answering_model=model,
+            parsing_model="parsing1",
+            timestamp=timestamp,
+        )
         return VerificationResult(
             metadata=VerificationResultMetadata(
                 question_id=question_id,
@@ -47,7 +54,8 @@ class TestJudgmentResultsDataAccess:
                 parsing_model="parsing1",
                 completed_without_errors=True,
                 execution_time=1.0,
-                timestamp="2023-01-01T00:00:00",
+                timestamp=timestamp,
+                result_id=result_id,
             ),
             deep_judgment=judgment_data,
         )
@@ -177,6 +185,14 @@ class TestJudgmentResultsAggregation:
             deep_judgment_model_calls=model_calls,
         )
 
+        timestamp = "2023-01-01T00:00:00"
+        result_id = VerificationResultMetadata.compute_result_id(
+            question_id=question_id,
+            answering_model=model,
+            parsing_model="parsing1",
+            timestamp=timestamp,
+            replicate=replicate,
+        )
         return VerificationResult(
             metadata=VerificationResultMetadata(
                 question_id=question_id,
@@ -187,7 +203,8 @@ class TestJudgmentResultsAggregation:
                 replicate=replicate,
                 completed_without_errors=True,
                 execution_time=1.0,
-                timestamp="2023-01-01T00:00:00",
+                timestamp=timestamp,
+                result_id=result_id,
             ),
             deep_judgment=judgment_data,
         )
@@ -286,6 +303,13 @@ class TestJudgmentResultsExtensibility:
             extracted_excerpts=excerpts or {},
         )
 
+        timestamp = "2023-01-01T00:00:00"
+        result_id = VerificationResultMetadata.compute_result_id(
+            question_id=question_id,
+            answering_model="model1",
+            parsing_model="parsing1",
+            timestamp=timestamp,
+        )
         return VerificationResult(
             metadata=VerificationResultMetadata(
                 question_id=question_id,
@@ -295,7 +319,8 @@ class TestJudgmentResultsExtensibility:
                 parsing_model="parsing1",
                 completed_without_errors=True,
                 execution_time=1.0,
-                timestamp="2023-01-01T00:00:00",
+                timestamp=timestamp,
+                result_id=result_id,
             ),
             deep_judgment=judgment_data,
         )
@@ -338,6 +363,13 @@ class TestJudgmentResultsFiltering:
             extracted_excerpts=excerpts or {},
         )
 
+        timestamp = "2023-01-01T00:00:00"
+        result_id = VerificationResultMetadata.compute_result_id(
+            question_id=question_id,
+            answering_model=model,
+            parsing_model="parsing1",
+            timestamp=timestamp,
+        )
         return VerificationResult(
             metadata=VerificationResultMetadata(
                 question_id=question_id,
@@ -347,7 +379,8 @@ class TestJudgmentResultsFiltering:
                 parsing_model="parsing1",
                 completed_without_errors=True,
                 execution_time=1.0,
-                timestamp="2023-01-01T00:00:00",
+                timestamp=timestamp,
+                result_id=result_id,
             ),
             deep_judgment=judgment_data,
         )
@@ -433,6 +466,13 @@ class TestJudgmentResultsSummary:
             deep_judgment_search_enabled=search_enabled,
         )
 
+        timestamp = "2023-01-01T00:00:00"
+        result_id = VerificationResultMetadata.compute_result_id(
+            question_id="q1",
+            answering_model="model1",
+            parsing_model="parsing1",
+            timestamp=timestamp,
+        )
         return VerificationResult(
             metadata=VerificationResultMetadata(
                 question_id="q1",
@@ -442,7 +482,8 @@ class TestJudgmentResultsSummary:
                 parsing_model="parsing1",
                 completed_without_errors=True,
                 execution_time=1.0,
-                timestamp="2023-01-01T00:00:00",
+                timestamp=timestamp,
+                result_id=result_id,
             ),
             deep_judgment=judgment_data,
         )
@@ -478,6 +519,13 @@ class TestJudgmentResultsCollectionOperations:
             extracted_excerpts={"attr1": [{"text": "excerpt"}]},
         )
 
+        timestamp = "2023-01-01T00:00:00"
+        result_id = VerificationResultMetadata.compute_result_id(
+            question_id=question_id,
+            answering_model="model1",
+            parsing_model="parsing1",
+            timestamp=timestamp,
+        )
         return VerificationResult(
             metadata=VerificationResultMetadata(
                 question_id=question_id,
@@ -487,7 +535,8 @@ class TestJudgmentResultsCollectionOperations:
                 parsing_model="parsing1",
                 completed_without_errors=True,
                 execution_time=1.0,
-                timestamp="2023-01-01T00:00:00",
+                timestamp=timestamp,
+                result_id=result_id,
             ),
             deep_judgment=judgment_data,
         )

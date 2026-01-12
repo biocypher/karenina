@@ -38,6 +38,13 @@ class TestRubricResultsDataAccess:
                 metric_trait_confusion_lists=confusion_matrix,
             )
 
+        timestamp = "2023-01-01T00:00:00"
+        result_id = VerificationResultMetadata.compute_result_id(
+            question_id=question_id,
+            answering_model=model,
+            parsing_model="parsing1",
+            timestamp=timestamp,
+        )
         return VerificationResult(
             metadata=VerificationResultMetadata(
                 question_id=question_id,
@@ -47,7 +54,8 @@ class TestRubricResultsDataAccess:
                 parsing_model="parsing1",
                 completed_without_errors=True,
                 execution_time=1.0,
-                timestamp="2023-01-01T00:00:00",
+                timestamp=timestamp,
+                result_id=result_id,
             ),
             rubric=rubric_eval,
         )
@@ -187,6 +195,14 @@ class TestRubricResultsAggregation:
             metric_trait_scores=metric_traits,
         )
 
+        timestamp = "2023-01-01T00:00:00"
+        result_id = VerificationResultMetadata.compute_result_id(
+            question_id=question_id,
+            answering_model=model,
+            parsing_model="parsing1",
+            timestamp=timestamp,
+            replicate=replicate,
+        )
         return VerificationResult(
             metadata=VerificationResultMetadata(
                 question_id=question_id,
@@ -197,7 +213,8 @@ class TestRubricResultsAggregation:
                 replicate=replicate,
                 completed_without_errors=True,
                 execution_time=1.0,
-                timestamp="2023-01-01T00:00:00",
+                timestamp=timestamp,
+                result_id=result_id,
             ),
             rubric=rubric_eval,
         )
@@ -281,6 +298,13 @@ class TestRubricResultsExtensibility:
             confusion_matrices={},
         )
 
+        timestamp = "2023-01-01T00:00:00"
+        result_id = VerificationResultMetadata.compute_result_id(
+            question_id=question_id,
+            answering_model="model1",
+            parsing_model="parsing1",
+            timestamp=timestamp,
+        )
         return VerificationResult(
             metadata=VerificationResultMetadata(
                 question_id=question_id,
@@ -290,7 +314,8 @@ class TestRubricResultsExtensibility:
                 parsing_model="parsing1",
                 completed_without_errors=True,
                 execution_time=1.0,
-                timestamp="2023-01-01T00:00:00",
+                timestamp=timestamp,
+                result_id=result_id,
             ),
             rubric=rubric_eval,
         )
@@ -338,6 +363,13 @@ class TestRubricResultsFiltering:
             confusion_matrices={},
         )
 
+        timestamp = "2023-01-01T00:00:00"
+        result_id = VerificationResultMetadata.compute_result_id(
+            question_id=question_id,
+            answering_model=model,
+            parsing_model="parsing1",
+            timestamp=timestamp,
+        )
         return VerificationResult(
             metadata=VerificationResultMetadata(
                 question_id=question_id,
@@ -347,7 +379,8 @@ class TestRubricResultsFiltering:
                 parsing_model="parsing1",
                 completed_without_errors=True,
                 execution_time=1.0,
-                timestamp="2023-01-01T00:00:00",
+                timestamp=timestamp,
+                result_id=result_id,
             ),
             rubric=rubric_eval,
         )
@@ -428,6 +461,13 @@ class TestRubricResultsSummary:
             confusion_matrices={},
         )
 
+        timestamp = "2023-01-01T00:00:00"
+        result_id = VerificationResultMetadata.compute_result_id(
+            question_id="q1",
+            answering_model="model1",
+            parsing_model="parsing1",
+            timestamp=timestamp,
+        )
         return VerificationResult(
             metadata=VerificationResultMetadata(
                 question_id="q1",
@@ -437,7 +477,8 @@ class TestRubricResultsSummary:
                 parsing_model="parsing1",
                 completed_without_errors=True,
                 execution_time=1.0,
-                timestamp="2023-01-01T00:00:00",
+                timestamp=timestamp,
+                result_id=result_id,
             ),
             rubric=rubric_eval,
         )
@@ -471,6 +512,13 @@ class TestRubricResultsCollectionOperations:
             confusion_matrices={},
         )
 
+        timestamp = "2023-01-01T00:00:00"
+        result_id = VerificationResultMetadata.compute_result_id(
+            question_id=question_id,
+            answering_model="model1",
+            parsing_model="parsing1",
+            timestamp=timestamp,
+        )
         return VerificationResult(
             metadata=VerificationResultMetadata(
                 question_id=question_id,
@@ -480,7 +528,8 @@ class TestRubricResultsCollectionOperations:
                 parsing_model="parsing1",
                 completed_without_errors=True,
                 execution_time=1.0,
-                timestamp="2023-01-01T00:00:00",
+                timestamp=timestamp,
+                result_id=result_id,
             ),
             rubric=rubric_eval,
         )

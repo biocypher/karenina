@@ -46,6 +46,13 @@ class TestTemplateResultsDataAccess:
                 abstention_detected=abstention_detected,
             )
 
+        timestamp = "2023-01-01T00:00:00"
+        result_id = VerificationResultMetadata.compute_result_id(
+            question_id=question_id,
+            answering_model=model,
+            parsing_model="parsing1",
+            timestamp=timestamp,
+        )
         metadata = VerificationResultMetadata(
             question_id=question_id,
             template_id="template1",
@@ -54,7 +61,8 @@ class TestTemplateResultsDataAccess:
             parsing_model="parsing1",
             completed_without_errors=True,
             execution_time=1.0,
-            timestamp="2023-01-01T00:00:00",
+            timestamp=timestamp,
+            result_id=result_id,
         )
 
         return VerificationResult(
@@ -212,6 +220,14 @@ class TestTemplateResultsAggregation:
             abstention_detected=abstention_detected,
         )
 
+        timestamp = "2023-01-01T00:00:00"
+        result_id = VerificationResultMetadata.compute_result_id(
+            question_id=question_id,
+            answering_model=model,
+            parsing_model="parsing1",
+            timestamp=timestamp,
+            replicate=replicate,
+        )
         return VerificationResult(
             metadata=VerificationResultMetadata(
                 question_id=question_id,
@@ -222,7 +238,8 @@ class TestTemplateResultsAggregation:
                 replicate=replicate,
                 completed_without_errors=True,
                 execution_time=1.0,
-                timestamp="2023-01-01T00:00:00",
+                timestamp=timestamp,
+                result_id=result_id,
             ),
             template=template_data,
         )
@@ -329,6 +346,13 @@ class TestTemplateResultsExtensibility:
             embedding_similarity_score=embedding_score,
         )
 
+        timestamp = "2023-01-01T00:00:00"
+        result_id = VerificationResultMetadata.compute_result_id(
+            question_id=question_id,
+            answering_model="model1",
+            parsing_model="parsing1",
+            timestamp=timestamp,
+        )
         return VerificationResult(
             metadata=VerificationResultMetadata(
                 question_id=question_id,
@@ -338,7 +362,8 @@ class TestTemplateResultsExtensibility:
                 parsing_model="parsing1",
                 completed_without_errors=True,
                 execution_time=1.0,
-                timestamp="2023-01-01T00:00:00",
+                timestamp=timestamp,
+                result_id=result_id,
             ),
             template=template_data,
         )
@@ -381,6 +406,13 @@ class TestTemplateResultsFiltering:
             verify_result=verify_result,
         )
 
+        timestamp = "2023-01-01T00:00:00"
+        result_id = VerificationResultMetadata.compute_result_id(
+            question_id=question_id,
+            answering_model=model,
+            parsing_model="parsing1",
+            timestamp=timestamp,
+        )
         return VerificationResult(
             metadata=VerificationResultMetadata(
                 question_id=question_id,
@@ -390,7 +422,8 @@ class TestTemplateResultsFiltering:
                 parsing_model="parsing1",
                 completed_without_errors=True,
                 execution_time=1.0,
-                timestamp="2023-01-01T00:00:00",
+                timestamp=timestamp,
+                result_id=result_id,
             ),
             template=template_data,
         )
@@ -471,6 +504,13 @@ class TestTemplateResultsSummary:
             embedding_similarity_score=embedding_score,
         )
 
+        timestamp = "2023-01-01T00:00:00"
+        result_id = VerificationResultMetadata.compute_result_id(
+            question_id="q1",
+            answering_model="model1",
+            parsing_model="parsing1",
+            timestamp=timestamp,
+        )
         return VerificationResult(
             metadata=VerificationResultMetadata(
                 question_id="q1",
@@ -480,7 +520,8 @@ class TestTemplateResultsSummary:
                 parsing_model="parsing1",
                 completed_without_errors=True,
                 execution_time=1.0,
-                timestamp="2023-01-01T00:00:00",
+                timestamp=timestamp,
+                result_id=result_id,
             ),
             template=template_data,
         )
@@ -512,6 +553,13 @@ class TestTemplateResultsCollectionOperations:
             verify_result=True,
         )
 
+        timestamp = "2023-01-01T00:00:00"
+        result_id = VerificationResultMetadata.compute_result_id(
+            question_id=question_id,
+            answering_model="model1",
+            parsing_model="parsing1",
+            timestamp=timestamp,
+        )
         return VerificationResult(
             metadata=VerificationResultMetadata(
                 question_id=question_id,
@@ -521,7 +569,8 @@ class TestTemplateResultsCollectionOperations:
                 parsing_model="parsing1",
                 completed_without_errors=True,
                 execution_time=1.0,
-                timestamp="2023-01-01T00:00:00",
+                timestamp=timestamp,
+                result_id=result_id,
             ),
             template=template_data,
         )
