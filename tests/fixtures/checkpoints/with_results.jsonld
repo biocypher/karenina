@@ -1,0 +1,106 @@
+{
+  "@context": {
+    "@version": 1.1,
+    "@vocab": "http://schema.org/",
+    "DataFeed": "DataFeed",
+    "DataFeedItem": "DataFeedItem",
+    "Question": "Question",
+    "Answer": "Answer",
+    "SoftwareSourceCode": "SoftwareSourceCode",
+    "Rating": "Rating",
+    "PropertyValue": "PropertyValue",
+    "text": "text",
+    "acceptedAnswer": {"@id": "acceptedAnswer", "@type": "@id"},
+    "hasPart": {"@id": "hasPart", "@type": "@id"},
+    "dataFeedElement": {"@id": "dataFeedElement", "@container": "@set"},
+    "item": {"@id": "item", "@type": "@id"},
+    "rating": {"@id": "rating", "@container": "@set"},
+    "additionalProperty": {"@id": "additionalProperty", "@container": "@set"}
+  },
+  "@type": "DataFeed",
+  "@id": "test-with-results",
+  "name": "with-results-test",
+  "description": "A benchmark with existing verification results for testing",
+  "version": "0.1.0",
+  "creator": "Karenina Test Suite",
+  "dateCreated": "2025-01-11T00:00:00Z",
+  "dateModified": "2025-01-11T12:00:00Z",
+  "rating": [
+    {
+      "@type": "Rating",
+      "@id": "global-rubric-1",
+      "name": "Conciseness",
+      "description": "Response should be concise and to the point",
+      "bestRating": 5,
+      "worstRating": 1,
+      "additionalType": "GlobalCallableTrait"
+    }
+  ],
+  "dataFeedElement": [
+    {
+      "@type": "DataFeedItem",
+      "@id": "q002",
+      "dateCreated": "2025-01-11T00:00:00Z",
+      "dateModified": "2025-01-11T12:00:00Z",
+      "item": {
+        "@type": "Question",
+        "@id": "q002-question",
+        "text": "What is the capital of France?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "@id": "q002-answer",
+          "text": "Paris"
+        },
+        "hasPart": {
+          "@type": "SoftwareSourceCode",
+          "@id": "q002-template",
+          "name": "Capital City Answer Template",
+          "text": "from karenina.schemas.domain import BaseAnswer\nfrom pydantic import Field\n\nclass Answer(BaseAnswer):\n    capital: str = Field(description=\"The capital city name\")\n\n    def model_post_init(self, __context):\n        self.correct = {\"capital\": \"Paris\"}\n\n    def verify(self) -> bool:\n        return self.capital.strip().lower() == self.correct[\"capital\"].strip().lower()\n",
+          "programmingLanguage": "Python"
+        },
+        "rating": [
+          {
+            "@type": "Rating",
+            "@id": "rubric-1",
+            "name": "Citations",
+            "description": "Response should include citation markers",
+            "bestRating": 1,
+            "worstRating": 0,
+            "additionalType": "QuestionSpecificRegexTrait"
+          }
+        ],
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "finished",
+            "value": true
+          },
+          {
+            "@type": "PropertyValue",
+            "name": "custom_verification_results",
+            "value": {
+              "template_result": {
+                "passed": true,
+                "parsed_value": "Paris"
+              },
+              "rubric_results": {
+                "Citations": {
+                  "passed": true,
+                  "score": 1
+                }
+              }
+            }
+          }
+        ]
+      },
+      "keywords": ["geography", "capitals"]
+    }
+  ],
+  "additionalProperty": [
+    {
+      "@type": "PropertyValue",
+      "name": "last_verification_run",
+      "value": "2025-01-11T12:00:00Z"
+    }
+  ]
+}

@@ -76,9 +76,10 @@ examples = [
     "jupyter>=1.0.0",  # For running example notebooks
     "ipykernel>=6.0.0",  # Jupyter kernel support
 ]
-webapp = [
-    "karenina-server>=0.1.0",  # Webapp server with bundled GUI
-]
+# webapp extra disabled until karenina-server is published to PyPI
+# webapp = [
+#     "karenina-server>=0.1.0",  # Webapp server with bundled GUI
+# ]
 embeddings = [
     "sentence-transformers>=5.1.0",  # For embedding similarity checks
 ]
@@ -105,12 +106,22 @@ filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::PendingDeprecationWarning",
 ]
-addopts = "-v --tb=short -m 'not integration'"
+addopts = "-v --tb=short"
 markers = [
-    "integration: marks tests as integration tests (slow, requires real resources)",
+    # By test layer
+    "unit: Pure logic tests - no I/O, no LLM calls",
+    "integration: Multiple components working together - may use fixture-backed LLM",
+    "e2e: End-to-end workflow tests - full CLI workflows",
+    # By speed
+    "slow: Tests taking > 1 second to run",
+    # By feature area
+    "pipeline: Verification pipeline tests",
+    "rubric: Rubric evaluation tests",
+    "storage: Checkpoint I/O and storage tests",
+    "cli: CLI command tests",
+    # Legacy markers (for backward compatibility)
     "requires_api: marks tests that require API keys (OpenAI, etc.)",
     "deep_judgment: marks tests that use deep judgment verification mode",
-    "rubric: marks tests that use rubric evaluation mode",
 ]
 
 [tool.coverage.run]
@@ -200,10 +211,6 @@ min_confidence = 80
 ignore_decorators = ["@pytest.fixture", "@property", "@abstractmethod"]
 ignore_names = ["test_*", "setUp", "tearDown"]
 make_whitelist = true
-
-[tool.uv.sources]
-# Local development: resolve karenina-server from sibling directory
-karenina-server = { path = "../karenina-server", editable = true }
 
 [dependency-groups]
 dev = [

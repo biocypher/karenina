@@ -1,0 +1,208 @@
+{
+  "@context": {
+    "@version": 1.1,
+    "@vocab": "http://schema.org/",
+    "DataFeed": "DataFeed",
+    "DataFeedItem": "DataFeedItem",
+    "Question": "Question",
+    "Answer": "Answer",
+    "SoftwareSourceCode": "SoftwareSourceCode",
+    "Rating": "Rating",
+    "PropertyValue": "PropertyValue",
+    "text": "text",
+    "acceptedAnswer": {"@id": "acceptedAnswer", "@type": "@id"},
+    "hasPart": {"@id": "hasPart", "@type": "@id"},
+    "dataFeedElement": {"@id": "dataFeedElement", "@container": "@set"},
+    "item": {"@id": "item", "@type": "@id"},
+    "rating": {"@id": "rating", "@container": "@set"},
+    "additionalProperty": {"@id": "additionalProperty", "@container": "@set"},
+    "keywords": {"@id": "keywords", "@container": "@set"}
+  },
+  "@type": "DataFeed",
+  "@id": "test-multi-question",
+  "name": "multi-question-test",
+  "description": "A benchmark with 5 diverse questions for comprehensive testing",
+  "version": "0.1.0",
+  "creator": "Karenina Test Suite",
+  "dateCreated": "2025-01-11T00:00:00Z",
+  "dateModified": "2025-01-11T00:00:00Z",
+  "rating": [
+    {
+      "@type": "Rating",
+      "@id": "global-rubric-1",
+      "name": "Completeness",
+      "description": "Response should fully address the question",
+      "bestRating": 5,
+      "worstRating": 1,
+      "additionalType": "GlobalCallableTrait"
+    }
+  ],
+  "dataFeedElement": [
+    {
+      "@type": "DataFeedItem",
+      "@id": "mq001",
+      "dateCreated": "2025-01-11T00:00:00Z",
+      "dateModified": "2025-01-11T00:00:00Z",
+      "item": {
+        "@type": "Question",
+        "@id": "mq001-question",
+        "text": "What is the boiling point of water in Celsius?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "@id": "mq001-answer",
+          "text": "100"
+        },
+        "hasPart": {
+          "@type": "SoftwareSourceCode",
+          "@id": "mq001-template",
+          "name": "Temperature Answer Template",
+          "text": "from karenina.schemas.domain import BaseAnswer\nfrom pydantic import Field\n\nclass Answer(BaseAnswer):\n    temperature: int = Field(description=\"Temperature in Celsius\")\n\n    def model_post_init(self, __context):\n        self.correct = {\"temperature\": 100}\n\n    def verify(self) -> bool:\n        return self.temperature == self.correct[\"temperature\"]\n",
+          "programmingLanguage": "Python"
+        },
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "finished",
+            "value": true
+          }
+        ]
+      },
+      "keywords": ["science", "physics", "temperature"]
+    },
+    {
+      "@type": "DataFeedItem",
+      "@id": "mq002",
+      "dateCreated": "2025-01-11T00:00:00Z",
+      "dateModified": "2025-01-11T00:00:00Z",
+      "item": {
+        "@type": "Question",
+        "@id": "mq002-question",
+        "text": "List three primary colors.",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "@id": "mq002-answer",
+          "text": "Red, green, and blue"
+        },
+        "hasPart": {
+          "@type": "SoftwareSourceCode",
+          "@id": "mq002-template",
+          "name": "List Answer Template",
+          "text": "from karenina.schemas.domain import BaseAnswer\nfrom pydantic import Field\n\nclass Answer(BaseAnswer):\n    colors: list[str] = Field(description=\"List of color names\")\n\n    def model_post_init(self, __context):\n        self.correct = {\"colors\": [\"red\", \"green\", \"blue\"]}\n\n    def verify(self) -> bool:\n        return [c.lower() for c in self.colors] == self.correct[\"colors\"]\n",
+          "programmingLanguage": "Python"
+        },
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "finished",
+            "value": true
+          }
+        ]
+      },
+      "keywords": ["art", "colors"]
+    },
+    {
+      "@type": "DataFeedItem",
+      "@id": "mq003",
+      "dateCreated": "2025-01-11T00:00:00Z",
+      "dateModified": "2025-01-11T00:00:00Z",
+      "item": {
+        "@type": "Question",
+        "@id": "mq003-question",
+        "text": "Who wrote Romeo and Juliet?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "@id": "mq003-answer",
+          "text": "William Shakespeare"
+        },
+        "hasPart": {
+          "@type": "SoftwareSourceCode",
+          "@id": "mq003-template",
+          "name": "Author Answer Template",
+          "text": "from karenina.schemas.domain import BaseAnswer\nfrom pydantic import Field\n\nclass Answer(BaseAnswer):\n    author: str = Field(description=\"The author's name\")\n\n    def model_post_init(self, __context):\n        self.correct = {\"author\": \"William Shakespeare\"}\n\n    def verify(self) -> bool:\n        return self.author.lower().replace(\".\", \"\") == self.correct[\"author\"].lower().replace(\".\", \"\")\n",
+          "programmingLanguage": "Python"
+        },
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "finished",
+            "value": true
+          }
+        ]
+      },
+      "keywords": ["literature", "shakespeare"]
+    },
+    {
+      "@type": "DataFeedItem",
+      "@id": "mq004",
+      "dateCreated": "2025-01-11T00:00:00Z",
+      "dateModified": "2025-01-11T00:00:00Z",
+      "item": {
+        "@type": "Question",
+        "@id": "mq004-question",
+        "text": "What is the chemical symbol for gold?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "@id": "mq004-answer",
+          "text": "Au"
+        },
+        "hasPart": {
+          "@type": "SoftwareSourceCode",
+          "@id": "mq004-template",
+          "name": "Chemical Symbol Template",
+          "text": "from karenina.schemas.domain import BaseAnswer\nfrom pydantic import Field\n\nclass Answer(BaseAnswer):\n    symbol: str = Field(description=\"Chemical element symbol\")\n\n    def model_post_init(self, __context):\n        self.correct = {\"symbol\": \"Au\"}\n\n    def verify(self) -> bool:\n        return self.symbol == self.correct[\"symbol\"]\n",
+          "programmingLanguage": "Python"
+        },
+        "rating": [
+          {
+            "@type": "Rating",
+            "@id": "rubric-case-sensitive",
+            "name": "Case Sensitivity",
+            "description": "Chemical symbols are case-sensitive",
+            "bestRating": 1,
+            "worstRating": 0,
+            "additionalType": "QuestionSpecificCallableTrait"
+          }
+        ],
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "finished",
+            "value": true
+          }
+        ]
+      },
+      "keywords": ["chemistry", "elements"]
+    },
+    {
+      "@type": "DataFeedItem",
+      "@id": "mq005",
+      "dateCreated": "2025-01-11T00:00:00Z",
+      "dateModified": "2025-01-11T00:00:00Z",
+      "item": {
+        "@type": "Question",
+        "@id": "mq005-question",
+        "text": "Calculate: 15 * 7",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "@id": "mq005-answer",
+          "text": "105"
+        },
+        "hasPart": {
+          "@type": "SoftwareSourceCode",
+          "@id": "mq005-template",
+          "name": "Math Calculation Template",
+          "text": "from karenina.schemas.domain import BaseAnswer\nfrom pydantic import Field\n\nclass Answer(BaseAnswer):\n    result: int = Field(description=\"Calculation result\")\n\n    def model_post_init(self, __context):\n        self.correct = {\"result\": 105}\n\n    def verify(self) -> bool:\n        return self.result == self.correct[\"result\"]\n",
+          "programmingLanguage": "Python"
+        },
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "finished",
+            "value": false
+          }
+        ]
+      },
+      "keywords": ["math", "arithmetic", "multiplication"]
+    }
+  ]
+}

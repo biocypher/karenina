@@ -1,273 +1,571 @@
-"""
-Integration test for the new trait system (RegexTrait + CallableTrait).
+"""Integration test for the new trait system (RegexTrait + CallableTrait).
 
-This test verifies that the refactored trait system works end-to-end:
-- Loading checkpoints with RegexTrait and CallableTrait
-- Running verification with all four trait types (LLM, Regex, Callable, Metric)
+This test verifies that the refactored trait system works correctly:
+- Rubric trait evaluation (LLM, Regex, Callable)
 - Results properly split into regex_trait_scores and callable_trait_scores
-- Database storage and retrieval works correctly
 - Export functionality handles all trait types
+
+Tests are marked with:
+- @pytest.mark.integration: Tests that combine multiple components
+- @pytest.mark.rubric: Tests specific to rubric trait evaluation
+
+Run with: pytest tests/integration/test_new_trait_system.py -v
 """
 
-from pathlib import Path
+import csv
+import re
+from datetime import datetime, timezone
 
+import pandas as pd
 import pytest
 
-from karenina.benchmark import Benchmark
-from karenina.schemas import VerificationConfig
+from karenina.schemas.domain.rubric import CallableTrait, LLMRubricTrait, RegexTrait, Rubric
+from karenina.schemas.workflow import (
+    RubricResults,
+    VerificationResult,
+    VerificationResultMetadata,
+    VerificationResultRubric,
+    VerificationResultTemplate,
+)
 
 
-@pytest.fixture
-def enriched_checkpoint_path():
-    """Path to the enriched checkpoint with all trait types."""
-    return Path("/Users/carli/Projects/karenina_dev/checkpoints/latest_rubric_advanced_with_callables.jsonld")
+# =============================================================================
+# Helper Functions
+# =============================================================================
 
 
-@pytest.fixture
-def rubric_config_path():
-    """Path to the rubric verification config."""
-    return Path("/Users/carli/Projects/karenina_dev/presets/gpt-oss-003-8000-rubrics.json")
-
-
-@pytest.fixture
-def benchmark(enriched_checkpoint_path):
-    """Load the enriched benchmark."""
-    return Benchmark.load(enriched_checkpoint_path)
-
-
-def test_checkpoint_loads_with_all_trait_types(benchmark):
-    """Verify checkpoint loads correctly with all four trait types."""
-    global_rubric = benchmark.get_global_rubric()
-
-    assert global_rubric is not None, "Global rubric should exist"
-
-    # Check all trait types are present
-    assert len(global_rubric.llm_traits) == 4, "Should have 4 LLM traits"
-    assert len(global_rubric.regex_traits) == 2, "Should have 2 Regex traits"
-    assert len(global_rubric.callable_traits) == 2, "Should have 2 Callable traits"
-    assert len(global_rubric.metric_traits) == 0, "Should have 0 Metric traits"
-
-    # Verify callable trait details
-    callable_names = {t.name for t in global_rubric.callable_traits}
-    assert "Contains Citations" in callable_names
-    assert "Response Quality" in callable_names
-
-    # Check boolean vs score
-    citation_trait = next(t for t in global_rubric.callable_traits if t.name == "Contains Citations")
-    quality_trait = next(t for t in global_rubric.callable_traits if t.name == "Response Quality")
-
-    assert citation_trait.kind == "boolean"
-    assert quality_trait.kind == "score"
-    assert quality_trait.min_score == 1
-    assert quality_trait.max_score == 5
-
-
-def test_callable_trait_evaluation(benchmark):
-    """Verify callable traits can evaluate text correctly."""
-    global_rubric = benchmark.get_global_rubric()
-
-    # Test boolean callable
-    citation_trait = next(t for t in global_rubric.callable_traits if t.name == "Contains Citations")
-
-    assert citation_trait.evaluate("This is a fact [1].") is True
-    assert citation_trait.evaluate("No citations here.") is False
-
-    # Test score callable
-    quality_trait = next(t for t in global_rubric.callable_traits if t.name == "Response Quality")
-
-    short_score = quality_trait.evaluate("Short.")
-    long_score = quality_trait.evaluate(
-        "This is a comprehensive answer that provides extensive detail. "
-        "It covers multiple aspects thoroughly. Each point is clear. "
-        "The response demonstrates understanding. Multiple perspectives are considered."
+def _create_metadata(
+    question_id: str,
+    answering_model: str = "claude-haiku-4-5",
+    completed: bool = True,
+    error: str | None = None,
+) -> VerificationResultMetadata:
+    """Helper to create metadata with computed result_id."""
+    timestamp = datetime.now(timezone.utc).isoformat()
+    return VerificationResultMetadata(
+        question_id=question_id,
+        template_id="test-template-id",
+        completed_without_errors=completed,
+        error=error,
+        question_text=f"Question text for {question_id}",
+        raw_answer="Expected answer",
+        answering_model=answering_model,
+        parsing_model="claude-haiku-4-5",
+        execution_time=1.5,
+        timestamp=timestamp,
+        result_id=VerificationResultMetadata.compute_result_id(
+            question_id=question_id,
+            answering_model=answering_model,
+            parsing_model="claude-haiku-4-5",
+            timestamp=timestamp,
+        ),
     )
 
-    assert isinstance(short_score, int)
-    assert isinstance(long_score, int)
-    assert 1 <= short_score <= 5
-    assert 1 <= long_score <= 5
-    assert long_score > short_score, "Longer answer should score higher"
+
+# =============================================================================
+# Rubric Trait Fixtures
+# =============================================================================
 
 
-def test_verification_with_all_trait_types(benchmark, rubric_config_path):
-    """Run verification and verify all trait types are evaluated."""
-    # Load config
-    config = VerificationConfig.from_preset(rubric_config_path)
+@pytest.fixture
+def llm_traits() -> list[LLMRubricTrait]:
+    """Create LLM rubric traits."""
+    return [
+        LLMRubricTrait(
+            name="Clarity",
+            description="The response is clear and well-organized",
+            kind="score",
+            min_score=1,
+            max_score=5,
+            higher_is_better=True,
+        ),
+        LLMRubricTrait(
+            name="Accuracy",
+            description="The response is factually correct",
+            kind="boolean",
+            higher_is_better=True,
+        ),
+        LLMRubricTrait(
+            name="Completeness",
+            description="The response addresses all aspects",
+            kind="score",
+            min_score=1,
+            max_score=5,
+            higher_is_better=True,
+        ),
+    ]
 
-    # Get first question only for quick test
-    questions = benchmark.get_all_questions(ids_only=False)
-    finished_questions = [q for q in questions if q.get("finished") and q.get("answer_template")]
 
-    if not finished_questions:
-        pytest.skip("No finished questions with templates available")
+@pytest.fixture
+def regex_traits() -> list[RegexTrait]:
+    """Create regex rubric traits."""
+    return [
+        RegexTrait(
+            name="HasCitations",
+            description="Response includes citations like [1], [2]",
+            pattern=r"\[\d+\]",
+            higher_is_better=True,
+        ),
+        RegexTrait(
+            name="HasNumbers",
+            description="Response includes numeric values",
+            pattern=r"\d+",
+            higher_is_better=True,
+        ),
+    ]
 
-    test_question_id = finished_questions[0]["id"]
 
-    # Run verification on one question
-    print(f"\nRunning verification on question: {test_question_id}")
-    result_set = benchmark.run_verification(config, question_ids=[test_question_id])
+@pytest.fixture
+def callable_traits() -> list[CallableTrait]:
+    """Create callable rubric traits."""
 
-    assert len(result_set.results) > 0, "Should have at least one result"
+    def contains_citations(text: str) -> bool:
+        return bool(re.search(r"\[\d+\]", text))
 
-    # Get the first result from the set
-    result = result_set.results[0]
+    def response_length_score(text: str) -> int:
+        words = len(text.split())
+        if words < 20:
+            return 1
+        elif words < 50:
+            return 2
+        elif words < 100:
+            return 3
+        elif words < 200:
+            return 4
+        else:
+            return 5
 
-    # Verify result has rubric evaluation
-    assert result.rubric is not None, "Result should have rubric evaluation"
-    assert result.rubric.rubric_evaluation_performed is True
+    return [
+        CallableTrait.from_callable(
+            name="ContainsCitations",
+            func=contains_citations,
+            kind="boolean",
+            description="Check if response contains citation markers",
+            higher_is_better=True,
+        ),
+        CallableTrait.from_callable(
+            name="ResponseLength",
+            func=response_length_score,
+            kind="score",
+            min_score=1,
+            max_score=5,
+            description="Score based on response length",
+            higher_is_better=True,
+        ),
+    ]
 
-    # Verify trait scores are split correctly
-    print("\nVerifying trait score separation:")
 
-    # Check LLM trait scores
-    if result.rubric.llm_trait_scores:
-        print(f"  ✅ LLM trait scores: {len(result.rubric.llm_trait_scores)} traits")
-        assert isinstance(result.rubric.llm_trait_scores, dict)
+@pytest.fixture
+def rubric(
+    llm_traits: list[LLMRubricTrait],
+    regex_traits: list[RegexTrait],
+    callable_traits: list[CallableTrait],
+) -> Rubric:
+    """Create a complete rubric with all trait types."""
+    return Rubric(
+        llm_traits=llm_traits,
+        regex_traits=regex_traits,
+        callable_traits=callable_traits,
+        metric_traits=[],
+    )
 
-    # Check Regex trait scores
-    if result.rubric.regex_trait_scores:
-        print(f"  ✅ Regex trait scores: {len(result.rubric.regex_trait_scores)} traits")
-        assert isinstance(result.rubric.regex_trait_scores, dict)
+
+# =============================================================================
+# VerificationResult Fixtures
+# =============================================================================
+
+
+@pytest.fixture
+def template_result_success() -> VerificationResultTemplate:
+    """Create a successful template result."""
+    return VerificationResultTemplate(
+        raw_llm_response="BCL2 is an anti-apoptotic gene located on chromosome 18.",
+        parsed_gt_response={"gene_name": "BCL2", "gene_function": "anti-apoptotic"},
+        parsed_llm_response={"gene_name": "BCL2", "gene_function": "anti-apoptotic"},
+        template_verification_performed=True,
+        verify_result=True,
+        verify_granular_result={"gene_name": True, "gene_function": True},
+    )
+
+
+@pytest.fixture
+def rubric_result_with_all_traits() -> VerificationResultRubric:
+    """Create a rubric result with all trait types."""
+    return VerificationResultRubric(
+        rubric_evaluation_performed=True,
+        rubric_evaluation_strategy="batch",
+        llm_trait_scores={
+            "Clarity": 4,
+            "Accuracy": True,
+            "Completeness": 5,
+        },
+        regex_trait_scores={
+            "HasCitations": True,
+            "HasNumbers": True,
+        },
+        callable_trait_scores={
+            "ContainsCitations": True,
+            "ResponseLength": 3,
+        },
+        metric_trait_scores={},
+    )
+
+
+@pytest.fixture
+def verification_result_with_all_traits(
+    template_result_success: VerificationResultTemplate,
+    rubric_result_with_all_traits: VerificationResultRubric,
+) -> VerificationResult:
+    """Create a verification result with all trait types."""
+    return VerificationResult(
+        metadata=_create_metadata("rq001", "gpt-4"),
+        template=template_result_success,
+        rubric=rubric_result_with_all_traits,
+    )
+
+
+@pytest.fixture
+def verification_results_list(
+    verification_result_with_all_traits: VerificationResult,
+) -> list[VerificationResult]:
+    """Create a list of verification results."""
+    second_result = VerificationResult(
+        metadata=_create_metadata("rq002", "claude-sonnet-4"),
+        template=VerificationResultTemplate(
+            raw_llm_response="100 degrees Celsius",
+            parsed_gt_response={"celsius": 100, "fahrenheit": 212},
+            parsed_llm_response={"celsius": 100, "fahrenheit": 212},
+            template_verification_performed=True,
+            verify_result=True,
+            verify_granular_result={"celsius": True, "fahrenheit": True},
+        ),
+        rubric=VerificationResultRubric(
+            rubric_evaluation_performed=True,
+            rubric_evaluation_strategy="batch",
+            llm_trait_scores={
+                "Clarity": 5,
+                "Accuracy": True,
+                "Completeness": 4,
+            },
+            regex_trait_scores={
+                "HasCitations": False,
+                "HasNumbers": True,
+            },
+            callable_trait_scores={
+                "ContainsCitations": False,
+                "ResponseLength": 2,
+            },
+            metric_trait_scores={},
+        ),
+    )
+    return [verification_result_with_all_traits, second_result]
+
+
+# =============================================================================
+# Rubric Structure Tests
+# =============================================================================
+
+
+@pytest.mark.integration
+@pytest.mark.rubric
+class TestRubricStructure:
+    """Test rubric structure and trait organization."""
+
+    def test_rubric_has_all_trait_types(self, rubric: Rubric):
+        """Verify rubric contains all trait types."""
+        assert len(rubric.llm_traits) == 3, "Should have 3 LLM traits"
+        assert len(rubric.regex_traits) == 2, "Should have 2 Regex traits"
+        assert len(rubric.callable_traits) == 2, "Should have 2 Callable traits"
+        assert len(rubric.metric_traits) == 0, "Should have 0 Metric traits"
+
+    def test_llm_trait_properties(self, llm_traits: list[LLMRubricTrait]):
+        """Verify LLM traits have correct properties."""
+        trait_names = {t.name for t in llm_traits}
+        assert "Clarity" in trait_names
+        assert "Accuracy" in trait_names
+        assert "Completeness" in trait_names
+
+        # Check score vs boolean kinds
+        clarity_trait = next(t for t in llm_traits if t.name == "Clarity")
+        accuracy_trait = next(t for t in llm_traits if t.name == "Accuracy")
+
+        assert clarity_trait.kind == "score"
+        assert clarity_trait.min_score == 1
+        assert clarity_trait.max_score == 5
+
+        assert accuracy_trait.kind == "boolean"
+
+    def test_regex_trait_properties(self, regex_traits: list[RegexTrait]):
+        """Verify regex traits have correct properties."""
+        trait_names = {t.name for t in regex_traits}
+        assert "HasCitations" in trait_names
+        assert "HasNumbers" in trait_names
+
+        # Verify pattern exists
+        citation_trait = next(t for t in regex_traits if t.name == "HasCitations")
+        assert citation_trait.pattern is not None
+        assert len(citation_trait.pattern) > 0
+
+    def test_callable_trait_properties(self, callable_traits: list[CallableTrait]):
+        """Verify callable traits have correct properties."""
+        trait_names = {t.name for t in callable_traits}
+        assert "ContainsCitations" in trait_names
+        assert "ResponseLength" in trait_names
+
+        # Check boolean vs score kinds
+        citation_trait = next(t for t in callable_traits if t.name == "ContainsCitations")
+        length_trait = next(t for t in callable_traits if t.name == "ResponseLength")
+
+        assert citation_trait.kind == "boolean"
+        assert length_trait.kind == "score"
+        assert length_trait.min_score == 1
+        assert length_trait.max_score == 5
+
+
+# =============================================================================
+# Trait Evaluation Tests
+# =============================================================================
+
+
+@pytest.mark.integration
+@pytest.mark.rubric
+class TestTraitEvaluation:
+    """Test trait evaluation functionality."""
+
+    def test_regex_trait_evaluation(self, regex_traits: list[RegexTrait]):
+        """Verify regex traits evaluate correctly."""
+        citation_trait = next(t for t in regex_traits if t.name == "HasCitations")
+        numbers_trait = next(t for t in regex_traits if t.name == "HasNumbers")
+
+        # Test citation detection
+        assert citation_trait.evaluate("This is a fact [1].") is True
+        assert citation_trait.evaluate("No citations here.") is False
+
+        # Test number detection
+        assert numbers_trait.evaluate("There are 42 items.") is True
+        assert numbers_trait.evaluate("No numbers here.") is False
+
+    def test_boolean_callable_evaluation(self, callable_traits: list[CallableTrait]):
+        """Verify boolean callable traits evaluate correctly."""
+        citation_trait = next(t for t in callable_traits if t.name == "ContainsCitations")
+
+        # Test with citation
+        assert citation_trait.evaluate("This is a fact [1].") is True
+
+        # Test without citation
+        assert citation_trait.evaluate("No citations here.") is False
+
+    def test_score_callable_evaluation(self, callable_traits: list[CallableTrait]):
+        """Verify score callable traits evaluate correctly."""
+        length_trait = next(t for t in callable_traits if t.name == "ResponseLength")
+
+        short_score = length_trait.evaluate("Short.")
+        long_score = length_trait.evaluate(
+            "This is a comprehensive answer that provides extensive detail. "
+            "It covers multiple aspects thoroughly. Each point is clear. "
+            "The response demonstrates understanding. Multiple perspectives are considered."
+        )
+
+        assert isinstance(short_score, int)
+        assert isinstance(long_score, int)
+        assert 1 <= short_score <= 5
+        assert 1 <= long_score <= 5
+        assert long_score > short_score, "Longer answer should score higher"
+
+
+# =============================================================================
+# Trait Score Separation Tests
+# =============================================================================
+
+
+@pytest.mark.integration
+@pytest.mark.rubric
+class TestTraitScoreSeparation:
+    """Test that trait scores are properly separated by type."""
+
+    def test_trait_scores_separated_by_type(
+        self, verification_result_with_all_traits: VerificationResult
+    ):
+        """Verify trait scores are split correctly into separate dictionaries."""
+        result = verification_result_with_all_traits
+
+        assert result.rubric is not None
+        assert result.rubric.rubric_evaluation_performed is True
+
+        # Check LLM trait scores
+        assert result.rubric.llm_trait_scores is not None
+        assert len(result.rubric.llm_trait_scores) == 3
+        assert "Clarity" in result.rubric.llm_trait_scores
+        assert "Accuracy" in result.rubric.llm_trait_scores
+        assert "Completeness" in result.rubric.llm_trait_scores
+
+        # Check Regex trait scores
+        assert result.rubric.regex_trait_scores is not None
+        assert len(result.rubric.regex_trait_scores) == 2
         for trait_name, score in result.rubric.regex_trait_scores.items():
             assert isinstance(score, bool), f"Regex trait {trait_name} should return bool"
 
-    # Check Callable trait scores
-    if result.rubric.callable_trait_scores:
-        print(f"  ✅ Callable trait scores: {len(result.rubric.callable_trait_scores)} traits")
-        assert isinstance(result.rubric.callable_trait_scores, dict)
-
+        # Check Callable trait scores
+        assert result.rubric.callable_trait_scores is not None
+        assert len(result.rubric.callable_trait_scores) == 2
         for trait_name, score in result.rubric.callable_trait_scores.items():
-            # Score can be bool or int depending on trait kind
-            assert isinstance(score, bool | int), f"Callable trait {trait_name} should return bool or int"
-            print(f"     - {trait_name}: {score} ({type(score).__name__})")
+            assert isinstance(score, bool | int), f"Callable {trait_name} should return bool/int"
 
-    # Verify get_all_trait_scores() includes all types
-    all_scores = result.rubric.get_all_trait_scores()
-    print(f"\n  Total traits in get_all_trait_scores(): {len(all_scores)}")
-    assert len(all_scores) > 0, "Should have aggregated trait scores"
+    def test_get_all_trait_scores_includes_all_types(
+        self, verification_result_with_all_traits: VerificationResult
+    ):
+        """Verify get_all_trait_scores() includes all trait types."""
+        result = verification_result_with_all_traits
 
+        all_scores = result.rubric.get_all_trait_scores()
 
-def test_database_storage_with_new_traits(benchmark, rubric_config_path, tmp_path):
-    """Verify results can store and retrieve results with new trait types."""
-    # Get first question
-    questions = benchmark.get_all_questions(ids_only=False)
-    finished_questions = [q for q in questions if q.get("finished") and q.get("answer_template")]
+        # Should have all traits combined
+        expected_traits = {
+            "Clarity",
+            "Accuracy",
+            "Completeness",  # LLM
+            "HasCitations",
+            "HasNumbers",  # Regex
+            "ContainsCitations",
+            "ResponseLength",  # Callable
+        }
 
-    if not finished_questions:
-        pytest.skip("No finished questions with templates available")
-
-    test_question_id = finished_questions[0]["id"]
-
-    # Load config
-    config = VerificationConfig.from_preset(rubric_config_path)
-
-    # Run verification
-    result_set = benchmark.run_verification(config, question_ids=[test_question_id])
-
-    # Store results in memory
-    benchmark.store_verification_results(result_set, run_name="test_trait_storage")
-
-    # Retrieve results
-    loaded_results = benchmark.get_verification_results(question_ids=[test_question_id], run_name="test_trait_storage")
-
-    assert len(loaded_results) > 0, "Should have stored results"
-
-    # Verify trait scores persisted correctly
-    original_result = result_set.results[0]
-    loaded_result = list(loaded_results.values())[0]
-
-    if original_result.rubric:
-        assert loaded_result.rubric is not None
-
-        # Compare regex trait scores
-        if original_result.rubric.regex_trait_scores:
-            assert loaded_result.rubric.regex_trait_scores == original_result.rubric.regex_trait_scores
-            print("  ✅ Regex trait scores stored correctly")
-
-        # Compare callable trait scores
-        if original_result.rubric.callable_trait_scores:
-            assert loaded_result.rubric.callable_trait_scores == original_result.rubric.callable_trait_scores
-            print("  ✅ Callable trait scores stored correctly")
+        actual_traits = set(all_scores.keys())
+        assert expected_traits == actual_traits, f"Missing traits: {expected_traits - actual_traits}"
 
 
-def test_export_with_all_trait_types(benchmark, rubric_config_path, tmp_path):
-    """Verify export functionality handles all trait types."""
-    # Get first question
-    questions = benchmark.get_all_questions(ids_only=False)
-    finished_questions = [q for q in questions if q.get("finished") and q.get("answer_template")]
+# =============================================================================
+# DataFrame Export Tests
+# =============================================================================
 
-    if not finished_questions:
-        pytest.skip("No finished questions with templates available")
 
-    test_question_id = finished_questions[0]["id"]
+@pytest.mark.integration
+@pytest.mark.rubric
+class TestRubricDataFrameExport:
+    """Test RubricResults DataFrame export with all trait types."""
 
-    # Load config
-    config = VerificationConfig.from_preset(rubric_config_path)
+    def test_dataframe_export_all_traits(
+        self, verification_results_list: list[VerificationResult]
+    ):
+        """Test DataFrame export includes all trait types."""
+        rubric_results = RubricResults(results=verification_results_list)
+        df = rubric_results.to_dataframe(trait_type="all")
 
-    # Run verification
-    result_set = benchmark.run_verification(config, question_ids=[test_question_id])
+        assert len(df) > 0
 
-    # Store results so we can export them
-    benchmark.store_verification_results(result_set, run_name="test_export")
+        # Should have rows for each trait type
+        trait_types = df["trait_type"].unique()
+        assert "llm_score" in trait_types or "llm_boolean" in trait_types
+        assert "regex" in trait_types
+        assert "callable" in trait_types
 
-    # Export to CSV
-    csv_path = tmp_path / "results.csv"
-    global_rubric = benchmark.get_global_rubric()
-    benchmark.export_verification_results_to_file(
-        file_path=csv_path,
-        question_ids=[test_question_id],
-        run_name="test_export",
-        format="csv",
-        global_rubric=global_rubric,
-    )
+    def test_dataframe_export_llm_traits(
+        self, verification_results_list: list[VerificationResult]
+    ):
+        """Test DataFrame export with LLM traits only."""
+        rubric_results = RubricResults(results=verification_results_list)
+        df = rubric_results.to_dataframe(trait_type="llm")
 
-    assert csv_path.exists(), "CSV file should be created"
+        # Should only have LLM trait rows
+        assert all(df["trait_type"].str.startswith("llm"))
 
-    # Read CSV and verify trait columns exist
-    import csv
+        # Check LLM trait names present
+        trait_names = set(df["trait_name"].unique())
+        assert "Clarity" in trait_names
+        assert "Accuracy" in trait_names
+        assert "Completeness" in trait_names
 
-    with open(csv_path) as f:
-        reader = csv.DictReader(f)
-        rows = list(reader)
+    def test_dataframe_export_regex_traits(
+        self, verification_results_list: list[VerificationResult]
+    ):
+        """Test DataFrame export with regex traits only."""
+        rubric_results = RubricResults(results=verification_results_list)
+        df = rubric_results.to_dataframe(trait_type="regex")
 
-        assert len(rows) > 0, "Should have at least one row"
+        # Should only have regex trait rows
+        assert all(df["trait_type"] == "regex")
 
-        # Check that rubric trait columns exist
-        headers = reader.fieldnames
+        # Check regex trait names
+        trait_names = set(df["trait_name"].unique())
+        assert "HasCitations" in trait_names
+        assert "HasNumbers" in trait_names
 
-        # Should have columns for all trait types
-        rubric_columns = [h for h in headers if h.startswith("rubric_")]
-        assert len(rubric_columns) > 0, "Should have rubric trait columns"
+        # Regex scores should be boolean
+        assert all(df["trait_score"].isin([True, False]))
 
-        print(f"\n  CSV export created with {len(rubric_columns)} rubric columns")
+    def test_dataframe_export_callable_traits(
+        self, verification_results_list: list[VerificationResult]
+    ):
+        """Test DataFrame export with callable traits only."""
+        rubric_results = RubricResults(results=verification_results_list)
+        df = rubric_results.to_dataframe(trait_type="callable")
+
+        # Should only have callable trait rows
+        assert all(df["trait_type"] == "callable")
+
+        # Check callable trait names
+        trait_names = set(df["trait_name"].unique())
+        assert "ContainsCitations" in trait_names
+        assert "ResponseLength" in trait_names
+
+
+# =============================================================================
+# CSV Export Tests
+# =============================================================================
+
+
+@pytest.mark.integration
+@pytest.mark.rubric
+class TestCSVExport:
+    """Test CSV export functionality with all trait types."""
+
+    def test_csv_export_with_all_traits(
+        self, verification_results_list: list[VerificationResult], tmp_path
+    ):
+        """Test CSV export includes all trait type columns."""
+        rubric_results = RubricResults(results=verification_results_list)
+        df = rubric_results.to_dataframe(trait_type="all")
+
+        # Export to CSV
+        csv_path = tmp_path / "results.csv"
+        df.to_csv(csv_path, index=False)
+
+        assert csv_path.exists(), "CSV file should be created"
+
+        # Read CSV and verify structure
+        with open(csv_path) as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+
+            assert len(rows) > 0, "Should have at least one row"
+
+            # Check column presence
+            headers = list(rows[0].keys()) if rows else []
+            assert "trait_name" in headers
+            assert "trait_score" in headers
+            assert "trait_type" in headers
+            assert "question_id" in headers
+
+    def test_csv_roundtrip_preserves_data(
+        self, verification_results_list: list[VerificationResult], tmp_path
+    ):
+        """Test that CSV export and import preserves data."""
+        rubric_results = RubricResults(results=verification_results_list)
+        df_original = rubric_results.to_dataframe(trait_type="all")
+
+        # Export to CSV
+        csv_path = tmp_path / "results.csv"
+        df_original.to_csv(csv_path, index=False)
+
+        # Read back
+        df_loaded = pd.read_csv(csv_path)
+
+        # Compare row counts
+        assert len(df_loaded) == len(df_original)
+
+        # Compare columns
+        assert set(df_loaded.columns) == set(df_original.columns)
 
 
 if __name__ == "__main__":
-    # Run tests manually for debugging
-
-    checkpoint_path = Path(
-        "/Users/carli/Projects/karenina_dev/checkpoints/latest_rubric_advanced_with_callables.jsonld"
-    )
-    config_path = Path("/Users/carli/Projects/karenina_dev/presets/gpt-oss-003-8000-rubrics.json")
-
-    benchmark = Benchmark.load(checkpoint_path)
-
-    print("=" * 80)
-    print("Integration Test: New Trait System")
-    print("=" * 80)
-
-    print("\n1. Testing checkpoint loading...")
-    test_checkpoint_loads_with_all_trait_types(benchmark)
-    print("   ✅ Checkpoint loaded with all trait types")
-
-    print("\n2. Testing callable trait evaluation...")
-    test_callable_trait_evaluation(benchmark)
-    print("   ✅ Callable traits evaluate correctly")
-
-    print("\n3. Testing verification with all trait types...")
-    test_verification_with_all_trait_types(benchmark, config_path)
-    print("   ✅ Verification works with all trait types")
-
-    print("\n" + "=" * 80)
-    print("All integration tests passed! ✅")
-    print("=" * 80)
+    pytest.main([__file__, "-v"])
