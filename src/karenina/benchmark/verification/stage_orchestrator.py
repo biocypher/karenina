@@ -19,6 +19,7 @@ from .stages import (
     ParseTemplateStage,
     RecursionLimitAutoFailStage,
     RubricEvaluationStage,
+    SufficiencyCheckStage,
     TraceValidationAutoFailStage,
     ValidateTemplateStage,
     VerifyTemplateStage,
@@ -51,13 +52,14 @@ class StageOrchestrator:
         3. RecursionLimitAutoFailStage (auto-fail if recursion limit hit)
         4. TraceValidationAutoFailStage (auto-fail if trace doesn't end with AI message)
         5. AbstentionCheckStage (optional, before parse - skips parsing if detected)
-        6. ParseTemplateStage (requires raw_answer)
-        7. VerifyTemplateStage (requires parsed_answer)
-        8. EmbeddingCheckStage (optional, after verify)
-        9. DeepJudgmentAutoFailStage (optional, after verify)
-        10. RubricEvaluationStage (optional, after generate)
-        11. DeepJudgmentRubricAutoFailStage (optional, after rubric)
-        12. FinalizeResultStage (always last)
+        6. SufficiencyCheckStage (optional, before parse - skips parsing if insufficient)
+        7. ParseTemplateStage (requires raw_answer)
+        8. VerifyTemplateStage (requires parsed_answer)
+        9. EmbeddingCheckStage (optional, after verify)
+        10. DeepJudgmentAutoFailStage (optional, after verify)
+        11. RubricEvaluationStage (optional, after generate)
+        12. DeepJudgmentRubricAutoFailStage (optional, after rubric)
+        13. FinalizeResultStage (always last)
     """
 
     def __init__(self, stages: StageList) -> None:
@@ -81,6 +83,7 @@ class StageOrchestrator:
         parsing_model: ModelConfig,  # noqa: ARG003
         rubric: Rubric | None = None,
         abstention_enabled: bool = False,
+        sufficiency_enabled: bool = False,
         deep_judgment_enabled: bool = False,
         evaluation_mode: str = "template_only",
     ) -> "StageOrchestrator":
@@ -95,6 +98,7 @@ class StageOrchestrator:
             parsing_model: Parsing model configuration (reserved for future use)
             rubric: Optional rubric for evaluation
             abstention_enabled: Whether abstention detection is enabled
+            sufficiency_enabled: Whether trace sufficiency detection is enabled
             deep_judgment_enabled: Whether deep-judgment parsing is enabled
             evaluation_mode: Evaluation mode determining which stages run:
                 - "template_only": Template verification only (default)
@@ -150,6 +154,11 @@ class StageOrchestrator:
             # when model refused to answer
             if abstention_enabled:
                 stages.append(AbstentionCheckStage())
+
+            # Sufficiency check runs before parsing to skip expensive LLM calls
+            # when response lacks information to populate the template
+            if sufficiency_enabled:
+                stages.append(SufficiencyCheckStage())
 
             # Template parsing and verification
             stages.extend(

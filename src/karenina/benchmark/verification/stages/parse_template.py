@@ -77,7 +77,7 @@ class ParseTemplateStage(BaseVerificationStage):
         ]
 
     def should_run(self, context: VerificationContext) -> bool:
-        """Run if we have raw LLM response, no errors, no recursion limit, no trace validation failure, and no abstention."""
+        """Run if we have raw LLM response, no errors, no recursion limit, no trace validation failure, no abstention, and sufficient info."""
         # Skip parsing if recursion limit was reached (response is truncated/unreliable)
         if context.get_artifact("recursion_limit_reached", False):
             return False
@@ -86,6 +86,10 @@ class ParseTemplateStage(BaseVerificationStage):
             return False
         # Skip parsing if abstention was detected (model refused to answer)
         if context.get_artifact("abstention_detected", False):
+            return False
+        # Skip parsing if sufficiency check ran and detected insufficient info
+        # Note: sufficiency_detected=True means sufficient, False means insufficient
+        if context.get_artifact("sufficiency_detected") is False:
             return False
         return context.has_artifact("raw_llm_response") and context.has_artifact("Answer") and not context.error
 
