@@ -515,9 +515,7 @@ class TestUpdateQuestionMetadata:
         ],
         ids=["question", "raw_answer", "author", "sources", "custom_metadata"],
     )
-    def test_update_metadata_field(
-        self, field_name: str, field_value: object, cache_key: str
-    ) -> None:
+    def test_update_metadata_field(self, field_name: str, field_value: object, cache_key: str) -> None:
         """Test updating various metadata fields."""
         benchmark = Benchmark.create(name="test")
         manager = QuestionManager(benchmark._base)
@@ -784,9 +782,7 @@ class TestMarkFinished:
         ],
         ids=["mark_finished", "mark_unfinished"],
     )
-    def test_mark_finished_status(
-        self, initial_status: bool, method_name: str, expected_status: bool
-    ) -> None:
+    def test_mark_finished_status(self, initial_status: bool, method_name: str, expected_status: bool) -> None:
         """Test marking question as finished/unfinished."""
         benchmark = Benchmark.create(name="test")
         manager = QuestionManager(benchmark._base)
@@ -804,9 +800,7 @@ class TestMarkFinished:
         ],
         ids=["mark_finished_batch", "mark_unfinished_batch"],
     )
-    def test_mark_batch_status(
-        self, initial_status: bool, method_name: str, expected_status: bool
-    ) -> None:
+    def test_mark_batch_status(self, initial_status: bool, method_name: str, expected_status: bool) -> None:
         """Test marking multiple questions as finished/unfinished."""
         benchmark = Benchmark.create(name="test")
         manager = QuestionManager(benchmark._base)
@@ -832,9 +826,7 @@ class TestToggleFinished:
         ],
         ids=["false_to_true", "true_to_false"],
     )
-    def test_toggle_finished_status(
-        self, initial_status: bool, expected_status: bool
-    ) -> None:
+    def test_toggle_finished_status(self, initial_status: bool, expected_status: bool) -> None:
         """Test toggling finished status."""
         benchmark = Benchmark.create(name="test")
         manager = QuestionManager(benchmark._base)

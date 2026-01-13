@@ -10,7 +10,7 @@ Tests are marked with:
 Run with: pytest tests/integration/test_dataframe_integration_deep_judgment.py -v
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pandas as pd
 import pytest
@@ -24,7 +24,6 @@ from karenina.schemas.workflow import (
     VerificationResultTemplate,
 )
 
-
 # =============================================================================
 # Helper Functions
 # =============================================================================
@@ -37,7 +36,7 @@ def _create_metadata(
     error: str | None = None,
 ) -> VerificationResultMetadata:
     """Helper to create metadata with computed result_id."""
-    timestamp = datetime.now(timezone.utc).isoformat()
+    timestamp = datetime.now(UTC).isoformat()
     return VerificationResultMetadata(
         question_id=question_id,
         template_id="test-template-id",
@@ -145,9 +144,7 @@ def verification_results_list(
 class TestJudgmentResultsDataFrame:
     """Test JudgmentResults DataFrame conversion."""
 
-    def test_to_dataframe_with_deep_judgment(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_to_dataframe_with_deep_judgment(self, verification_results_list: list[VerificationResult]):
         """Test DataFrame export with deep judgment data."""
         judgment_results = JudgmentResults(results=verification_results_list)
         df = judgment_results.to_dataframe()
@@ -164,9 +161,7 @@ class TestJudgmentResultsDataFrame:
         for col in core_columns:
             assert col in df.columns
 
-    def test_dataframe_has_excerpt_columns(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_dataframe_has_excerpt_columns(self, verification_results_list: list[VerificationResult]):
         """Test that DataFrame has excerpt-related columns."""
         judgment_results = JudgmentResults(results=verification_results_list)
         df = judgment_results.to_dataframe()
@@ -176,9 +171,7 @@ class TestJudgmentResultsDataFrame:
         assert "excerpt_index" in df.columns
         assert "excerpt_text" in df.columns
 
-    def test_dataframe_excerpt_explosion(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_dataframe_excerpt_explosion(self, verification_results_list: list[VerificationResult]):
         """Test that excerpts are exploded into separate rows."""
         judgment_results = JudgmentResults(results=verification_results_list)
         df = judgment_results.to_dataframe()
@@ -194,9 +187,7 @@ class TestJudgmentResultsDataFrame:
             assert 0 in indices
             assert 1 in indices
 
-    def test_dataframe_has_reasoning(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_dataframe_has_reasoning(self, verification_results_list: list[VerificationResult]):
         """Test that DataFrame includes reasoning columns."""
         judgment_results = JudgmentResults(results=verification_results_list)
         df = judgment_results.to_dataframe()
@@ -216,9 +207,7 @@ class TestJudgmentResultsDataFrame:
 class TestJudgmentResultsAggregation:
     """Test JudgmentResults aggregation methods."""
 
-    def test_aggregate_excerpt_counts_by_question(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_aggregate_excerpt_counts_by_question(self, verification_results_list: list[VerificationResult]):
         """Test aggregating excerpt counts by question."""
         judgment_results = JudgmentResults(results=verification_results_list)
         counts = judgment_results.aggregate_excerpt_counts(strategy="mean", by="question_id")
@@ -236,9 +225,7 @@ class TestJudgmentResultsAggregation:
                 assert isinstance(count_data, int | float)
                 assert count_data >= 0
 
-    def test_aggregate_excerpt_counts_by_model(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_aggregate_excerpt_counts_by_model(self, verification_results_list: list[VerificationResult]):
         """Test aggregating excerpt counts by model."""
         judgment_results = JudgmentResults(results=verification_results_list)
         counts = judgment_results.aggregate_excerpt_counts(strategy="mean", by="answering_model")
@@ -255,9 +242,7 @@ class TestJudgmentResultsAggregation:
 class TestDeepJudgmentConsistency:
     """Test consistency between JudgmentResults and TemplateResults."""
 
-    def test_common_columns_with_template_results(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_common_columns_with_template_results(self, verification_results_list: list[VerificationResult]):
         """Test that common columns are consistent between result types."""
         template_results = TemplateResults(results=verification_results_list)
         judgment_results = JudgmentResults(results=verification_results_list)
@@ -272,9 +257,7 @@ class TestDeepJudgmentConsistency:
             assert col in template_df.columns
             assert col in judgment_df.columns
 
-    def test_status_column_first(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_status_column_first(self, verification_results_list: list[VerificationResult]):
         """Test that status column appears first."""
         judgment_results = JudgmentResults(results=verification_results_list)
         df = judgment_results.to_dataframe()
@@ -287,9 +270,7 @@ class TestDeepJudgmentConsistency:
 class TestDeepJudgmentPandasOperations:
     """Test pandas operations on JudgmentResults DataFrames."""
 
-    def test_groupby_operations(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_groupby_operations(self, verification_results_list: list[VerificationResult]):
         """Test pandas groupby operations."""
         judgment_results = JudgmentResults(results=verification_results_list)
         df = judgment_results.to_dataframe()
@@ -298,9 +279,7 @@ class TestDeepJudgmentPandasOperations:
         grouped = df.groupby("question_id")
         assert len(grouped) > 0
 
-    def test_filtering_operations(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_filtering_operations(self, verification_results_list: list[VerificationResult]):
         """Test pandas filtering operations."""
         judgment_results = JudgmentResults(results=verification_results_list)
         df = judgment_results.to_dataframe()
@@ -309,9 +288,7 @@ class TestDeepJudgmentPandasOperations:
         gene_df = df[df["attribute_name"] == "gene_name"]
         assert len(gene_df) > 0
 
-    def test_pivot_operations_on_attributes(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_pivot_operations_on_attributes(self, verification_results_list: list[VerificationResult]):
         """Test pandas pivot operations on attributes."""
         judgment_results = JudgmentResults(results=verification_results_list)
         df = judgment_results.to_dataframe()

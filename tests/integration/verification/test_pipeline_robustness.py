@@ -17,14 +17,11 @@ BUGS DISCOVERED:
    is hit, the response is truncated and abstention check would be unreliable.
 """
 
-import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-from pydantic import Field
+import pytest
 
 from karenina.benchmark.verification.stage import (
-    BaseVerificationStage,
     VerificationContext,
 )
 from karenina.benchmark.verification.stage_orchestrator import StageOrchestrator
@@ -39,17 +36,13 @@ from karenina.benchmark.verification.stages import (
     ValidateTemplateStage,
     VerifyTemplateStage,
 )
-from karenina.schemas.domain import BaseAnswer, LLMRubricTrait, RegexTrait, Rubric
+from karenina.schemas.domain import LLMRubricTrait, RegexTrait, Rubric
 from karenina.schemas.workflow import (
     ModelConfig,
-    VerificationResult,
-    VerificationResultMetadata,
-    VerificationResultTemplate,
 )
 
 # Import fixture infrastructure
 from tests.conftest import FixtureBackedLLMClient
-
 
 # =============================================================================
 # Test Fixtures
@@ -70,7 +63,7 @@ def minimal_model_config() -> ModelConfig:
 @pytest.fixture
 def valid_template_code() -> str:
     """Return a valid template code string."""
-    return '''
+    return """
 from pydantic import Field
 from karenina.schemas.domain import BaseAnswer
 
@@ -82,7 +75,7 @@ class Answer(BaseAnswer):
 
     def verify(self) -> bool:
         return self.capital.strip().lower() == self.correct["capital"]
-'''
+"""
 
 
 @pytest.fixture
@@ -303,8 +296,7 @@ class TestStageExecutionOrder:
 
             last_stage = orchestrator.stages[-1]
             assert last_stage.name == "FinalizeResult", (
-                f"FinalizeResult must be last, but got {last_stage.name} "
-                f"for config: {config}"
+                f"FinalizeResult must be last, but got {last_stage.name} for config: {config}"
             )
 
     def test_validate_template_always_first_in_template_modes(self, minimal_model_config: ModelConfig):
@@ -580,9 +572,7 @@ class TestArtifactDependencies:
         ValidateTemplateStage().execute(minimal_context)
 
         # Mock the unified LLM initialization to use fixture client
-        with patch(
-            "karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified"
-        ) as mock_init:
+        with patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified") as mock_init:
             mock_llm = MagicMock()
             mock_llm.invoke.return_value = MagicMock(content="The capital is Paris.")
             mock_init.return_value = mock_llm
@@ -640,11 +630,10 @@ class TestPipelineIntegration:
         parsed_answer = Answer(capital="Paris")
 
         # Mock LLM for answer generation and template parsing
-        with patch(
-            "karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified"
-        ) as mock_gen, patch(
-            "karenina.benchmark.verification.stages.parse_template.TemplateEvaluator"
-        ) as MockEvaluator:
+        with (
+            patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified") as mock_gen,
+            patch("karenina.benchmark.verification.stages.parse_template.TemplateEvaluator") as MockEvaluator,
+        ):
             # Answer generation mock
             mock_gen_llm = MagicMock()
             mock_gen_llm.invoke.return_value = MagicMock(content="The capital of France is Paris.")
@@ -715,11 +704,10 @@ class TestPipelineIntegration:
                         context.mark_error(f"{stage.name} failed: {e}")
             return context.get_artifact("final_result")
 
-        with patch(
-            "karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified"
-        ) as mock_gen, patch(
-            "karenina.benchmark.verification.stages.abstention_check.detect_abstention"
-        ) as mock_abstention:
+        with (
+            patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified") as mock_gen,
+            patch("karenina.benchmark.verification.stages.abstention_check.detect_abstention") as mock_abstention,
+        ):
             # Generate a refusal response
             mock_gen_llm = MagicMock()
             mock_gen_llm.invoke.return_value = MagicMock(
@@ -741,16 +729,10 @@ class TestPipelineIntegration:
         # ParseTemplate and VerifyTemplate should NOT be in executed stages
         # (they should skip due to abstention)
         assert "AbstentionCheck" in executed_stages
-        assert "ParseTemplate" not in executed_stages, (
-            "ParseTemplate should skip when abstention detected"
-        )
-        assert "VerifyTemplate" not in executed_stages, (
-            "VerifyTemplate should skip when abstention detected"
-        )
+        assert "ParseTemplate" not in executed_stages, "ParseTemplate should skip when abstention detected"
+        assert "VerifyTemplate" not in executed_stages, "VerifyTemplate should skip when abstention detected"
 
-    def test_rubric_only_mode_skips_template_stages(
-        self, minimal_context: VerificationContext, sample_rubric: Rubric
-    ):
+    def test_rubric_only_mode_skips_template_stages(self, minimal_context: VerificationContext, sample_rubric: Rubric):
         """Test rubric_only mode doesn't include template verification stages."""
         minimal_context.rubric = sample_rubric
 
@@ -826,8 +808,7 @@ class TestEdgeCases:
         """Test handling of Unicode characters in response."""
         ValidateTemplateStage().execute(minimal_context)
         minimal_context.set_artifact(
-            "raw_llm_response",
-            "La capitale de la France est Paris 🇫🇷. C'est une belle ville!"
+            "raw_llm_response", "La capitale de la France est Paris 🇫🇷. C'est une belle ville!"
         )
 
         stage = ParseTemplateStage()

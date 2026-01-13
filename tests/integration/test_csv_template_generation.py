@@ -101,9 +101,7 @@ def test_csv_has_required_columns(csv_file_path: Path):
 
 
 @pytest.mark.integration
-def test_template_generation_with_openai_endpoint(
-    csv_file_path: Path, openai_endpoint_config, mock_structured_output
-):
+def test_template_generation_with_openai_endpoint(csv_file_path: Path, openai_endpoint_config, mock_structured_output):
     """Test template generation using mocked OpenAI-compatible endpoint."""
     # Extract questions from CSV
     questions_with_metadata = extract_questions_from_file(
@@ -118,9 +116,7 @@ def test_template_generation_with_openai_endpoint(
     first_question, _ = questions_with_metadata[0]
 
     # Mock the structured output generation (bypasses LLM calls)
-    with patch(
-        "karenina.domain.answers.generator._generate_structured_outputs"
-    ) as mock_gen:
+    with patch("karenina.domain.answers.generator._generate_structured_outputs") as mock_gen:
         mock_gen.return_value = mock_structured_output
 
         # Generate template using the mocked endpoint
@@ -138,9 +134,7 @@ def test_template_generation_with_openai_endpoint(
 
 @pytest.mark.slow
 @pytest.mark.integration
-def test_batch_template_generation(
-    csv_file_path: Path, openai_endpoint_config, mock_structured_output
-):
+def test_batch_template_generation(csv_file_path: Path, openai_endpoint_config, mock_structured_output):
     """Test template generation for multiple questions using mocked endpoint."""
     # Extract questions from CSV
     questions_with_metadata = extract_questions_from_file(
@@ -154,9 +148,7 @@ def test_batch_template_generation(
 
     templates = {}
     # Mock the structured output generation (bypasses LLM calls)
-    with patch(
-        "karenina.domain.answers.generator._generate_structured_outputs"
-    ) as mock_gen:
+    with patch("karenina.domain.answers.generator._generate_structured_outputs") as mock_gen:
         mock_gen.return_value = mock_structured_output
 
         for i in range(num_questions):

@@ -10,7 +10,7 @@ Tests are marked with:
 Run with: pytest tests/integration/test_deep_judgment_rubric_real_api.py -v
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -38,7 +38,7 @@ def _create_metadata(
     error: str | None = None,
 ) -> VerificationResultMetadata:
     """Helper to create metadata with computed result_id."""
-    timestamp = datetime.now(timezone.utc).isoformat()
+    timestamp = datetime.now(UTC).isoformat()
     return VerificationResultMetadata(
         question_id=question_id,
         template_id="test-template-id",
@@ -174,9 +174,7 @@ def deep_judgment_rubric_for_export() -> VerificationResultDeepJudgmentRubric:
     return VerificationResultDeepJudgmentRubric(
         deep_judgment_rubric_performed=True,
         deep_judgment_rubric_scores={"MentionsAntiApoptotic": True},
-        rubric_trait_reasoning={
-            "MentionsAntiApoptotic": "The answer explicitly mentions BCL-2's anti-apoptotic role."
-        },
+        rubric_trait_reasoning={"MentionsAntiApoptotic": "The answer explicitly mentions BCL-2's anti-apoptotic role."},
         extracted_rubric_excerpts={
             "MentionsAntiApoptotic": [
                 {
@@ -228,17 +226,13 @@ def verification_result_for_export(
 class TestDeepJudgmentRubricStructure:
     """Test the structure and content of deep judgment rubric results."""
 
-    def test_deep_judgment_performed_flag(
-        self, verification_result_full_dj: VerificationResult
-    ):
+    def test_deep_judgment_performed_flag(self, verification_result_full_dj: VerificationResult):
         """Test that deep judgment performed flag is set correctly."""
         dj_rubric = verification_result_full_dj.deep_judgment_rubric
         assert dj_rubric is not None, "Deep judgment rubric data missing"
         assert dj_rubric.deep_judgment_rubric_performed is True, "Deep judgment not performed"
 
-    def test_all_traits_have_scores(
-        self, verification_result_full_dj: VerificationResult
-    ):
+    def test_all_traits_have_scores(self, verification_result_full_dj: VerificationResult):
         """Test that all LLM traits have deep judgment scores."""
         dj_rubric = verification_result_full_dj.deep_judgment_rubric
         expected_traits = ["Clarity", "Completeness", "Accuracy"]
@@ -250,9 +244,7 @@ class TestDeepJudgmentRubricStructure:
             score = dj_rubric.deep_judgment_rubric_scores[trait_name]
             assert isinstance(score, int | bool), f"Expected int/bool score for {trait_name}, got {type(score)}"
 
-    def test_all_traits_have_reasoning(
-        self, verification_result_full_dj: VerificationResult
-    ):
+    def test_all_traits_have_reasoning(self, verification_result_full_dj: VerificationResult):
         """Test that all traits have reasoning generated."""
         dj_rubric = verification_result_full_dj.deep_judgment_rubric
         expected_traits = ["Clarity", "Completeness", "Accuracy"]
@@ -264,9 +256,7 @@ class TestDeepJudgmentRubricStructure:
             reasoning = dj_rubric.rubric_trait_reasoning[trait_name]
             assert len(reasoning) > 0, f"Empty reasoning for {trait_name}"
 
-    def test_excerpts_structure(
-        self, verification_result_full_dj: VerificationResult
-    ):
+    def test_excerpts_structure(self, verification_result_full_dj: VerificationResult):
         """Test that excerpts have the expected structure."""
         dj_rubric = verification_result_full_dj.deep_judgment_rubric
 
@@ -283,9 +273,7 @@ class TestDeepJudgmentRubricStructure:
                 assert "confidence" in excerpt, "Excerpt missing 'confidence' field"
                 assert "similarity_score" in excerpt, "Excerpt missing 'similarity_score' field"
 
-    def test_trait_metadata_structure(
-        self, verification_result_full_dj: VerificationResult
-    ):
+    def test_trait_metadata_structure(self, verification_result_full_dj: VerificationResult):
         """Test that trait metadata has expected fields."""
         dj_rubric = verification_result_full_dj.deep_judgment_rubric
 
@@ -297,9 +285,7 @@ class TestDeepJudgmentRubricStructure:
         assert "stages_completed" in metadata, "stages_completed missing from metadata"
         assert metadata["model_calls"] >= 1, f"Expected >= 1 model calls, got {metadata['model_calls']}"
 
-    def test_no_standard_scores_in_enable_all_mode(
-        self, verification_result_full_dj: VerificationResult
-    ):
+    def test_no_standard_scores_in_enable_all_mode(self, verification_result_full_dj: VerificationResult):
         """Test that enable_all mode produces no standard scores."""
         dj_rubric = verification_result_full_dj.deep_judgment_rubric
 
@@ -308,16 +294,12 @@ class TestDeepJudgmentRubricStructure:
             "Expected no standard scores with enable_all mode"
         )
 
-    def test_no_auto_fail_for_valid_excerpts(
-        self, verification_result_full_dj: VerificationResult
-    ):
+    def test_no_auto_fail_for_valid_excerpts(self, verification_result_full_dj: VerificationResult):
         """Test that traits with valid excerpts don't trigger auto-fail."""
         dj_rubric = verification_result_full_dj.deep_judgment_rubric
 
         if dj_rubric.traits_without_valid_excerpts:
-            assert "Clarity" not in dj_rubric.traits_without_valid_excerpts, (
-                "Clarity should not have failed validation"
-            )
+            assert "Clarity" not in dj_rubric.traits_without_valid_excerpts, "Clarity should not have failed validation"
 
 
 # =============================================================================
@@ -330,9 +312,7 @@ class TestDeepJudgmentRubricStructure:
 class TestDeepJudgmentDataframeExport:
     """Test DataFrame export with deep judgment rubric data."""
 
-    def test_standard_export_with_results(
-        self, verification_result_for_export: VerificationResult
-    ):
+    def test_standard_export_with_results(self, verification_result_for_export: VerificationResult):
         """Test standard RubricResults export with deep judgment data."""
         rubric_results = RubricResults(results=[verification_result_for_export])
         # Use "llm" to include both score and binary traits (fixture has boolean trait)
@@ -346,9 +326,7 @@ class TestDeepJudgmentDataframeExport:
         assert "trait_score" in df.columns
         assert "question_id" in df.columns
 
-    def test_detailed_export_structure(
-        self, verification_result_for_export: VerificationResult
-    ):
+    def test_detailed_export_structure(self, verification_result_for_export: VerificationResult):
         """Test detailed RubricJudgmentResults export structure."""
         judgment_results = RubricJudgmentResults(results=[verification_result_for_export])
         df = judgment_results.to_dataframe()
@@ -366,9 +344,7 @@ class TestDeepJudgmentDataframeExport:
         for col in expected_cols:
             assert col in df.columns, f"Missing column: {col}"
 
-    def test_excerpt_explosion(
-        self, verification_result_for_export: VerificationResult
-    ):
+    def test_excerpt_explosion(self, verification_result_for_export: VerificationResult):
         """Test that excerpts are exploded into separate rows."""
         judgment_results = RubricJudgmentResults(results=[verification_result_for_export])
         df = judgment_results.to_dataframe()
@@ -381,9 +357,7 @@ class TestDeepJudgmentDataframeExport:
         assert trait_rows.iloc[0]["excerpt_index"] == 0
         assert trait_rows.iloc[1]["excerpt_index"] == 1
 
-    def test_excerpt_content_preserved(
-        self, verification_result_for_export: VerificationResult
-    ):
+    def test_excerpt_content_preserved(self, verification_result_for_export: VerificationResult):
         """Test that excerpt content is preserved in export."""
         judgment_results = RubricJudgmentResults(results=[verification_result_for_export])
         df = judgment_results.to_dataframe()
@@ -401,9 +375,7 @@ class TestDeepJudgmentDataframeExport:
             # Check specific content
             assert "anti-apoptotic" in first_row["excerpt_text"].lower()
 
-    def test_reasoning_preserved_in_export(
-        self, verification_result_for_export: VerificationResult
-    ):
+    def test_reasoning_preserved_in_export(self, verification_result_for_export: VerificationResult):
         """Test that reasoning is preserved in detailed export."""
         judgment_results = RubricJudgmentResults(results=[verification_result_for_export])
         df = judgment_results.to_dataframe()
@@ -427,9 +399,7 @@ class TestDeepJudgmentDataframeExport:
 class TestMultiTraitDeepJudgment:
     """Test deep judgment with multiple traits."""
 
-    def test_all_traits_evaluated(
-        self, verification_result_full_dj: VerificationResult
-    ):
+    def test_all_traits_evaluated(self, verification_result_full_dj: VerificationResult):
         """Test that all traits are evaluated with deep judgment."""
         dj_rubric = verification_result_full_dj.deep_judgment_rubric
 
@@ -447,9 +417,7 @@ class TestMultiTraitDeepJudgment:
         for trait in expected_traits:
             assert trait in dj_rubric.trait_metadata
 
-    def test_multiple_excerpts_per_trait(
-        self, verification_result_full_dj: VerificationResult
-    ):
+    def test_multiple_excerpts_per_trait(self, verification_result_full_dj: VerificationResult):
         """Test that traits can have multiple excerpts."""
         dj_rubric = verification_result_full_dj.deep_judgment_rubric
 
@@ -461,9 +429,7 @@ class TestMultiTraitDeepJudgment:
         accuracy_excerpts = dj_rubric.extracted_rubric_excerpts.get("Accuracy", [])
         assert len(accuracy_excerpts) == 2, f"Expected 2 excerpts for Accuracy, got {len(accuracy_excerpts)}"
 
-    def test_trait_count_in_export(
-        self, verification_result_full_dj: VerificationResult
-    ):
+    def test_trait_count_in_export(self, verification_result_full_dj: VerificationResult):
         """Test that export has correct number of trait entries."""
         rubric_results = RubricResults(results=[verification_result_full_dj])
         df = rubric_results.to_dataframe(trait_type="llm_score")

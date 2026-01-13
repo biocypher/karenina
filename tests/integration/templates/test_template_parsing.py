@@ -87,7 +87,7 @@ class TestTemplateEvaluatorInitialization:
 
     def test_model_string_formats(self, simple_answer: type[BaseAnswer]):
         """Verify model string formats correctly for different interfaces."""
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
 
         # Mock the LLM initialization to avoid API key requirements
         with patch(
