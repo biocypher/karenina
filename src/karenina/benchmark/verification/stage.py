@@ -42,6 +42,7 @@ class VerificationContext:
         # Feature Flags
         few_shot_enabled: Whether few-shot prompting is enabled
         abstention_enabled: Whether abstention detection is enabled
+        sufficiency_enabled: Whether trace sufficiency detection is enabled
         deep_judgment_enabled: Whether deep-judgment parsing is enabled
 
         # Rubric Configuration
@@ -93,6 +94,7 @@ class VerificationContext:
     # Feature Flags
     few_shot_enabled: bool = False
     abstention_enabled: bool = False
+    sufficiency_enabled: bool = False
     deep_judgment_enabled: bool = False
 
     # Rubric Configuration

@@ -13,6 +13,7 @@ Available Stages:
 - VerifyTemplateStage: Field and regex validation
 - EmbeddingCheckStage: Semantic similarity fallback
 - AbstentionCheckStage: Refusal detection
+- SufficiencyCheckStage: Trace sufficiency detection
 - DeepJudgmentAutoFailStage: Excerpt validation (templates)
 - DeepJudgmentRubricAutoFailStage: Excerpt validation (rubric traits)
 - RubricEvaluationStage: Qualitative evaluation
@@ -28,6 +29,7 @@ from .generate_answer import GenerateAnswerStage
 from .parse_template import ParseTemplateStage
 from .recursion_limit_autofail import RecursionLimitAutoFailStage
 from .rubric_evaluation import RubricEvaluationStage
+from .sufficiency_check import SufficiencyCheckStage
 from .trace_validation_autofail import TraceValidationAutoFailStage
 from .validate_template import ValidateTemplateStage
 from .verify_template import VerifyTemplateStage
@@ -41,6 +43,7 @@ __all__ = [
     "VerifyTemplateStage",
     "EmbeddingCheckStage",
     "AbstentionCheckStage",
+    "SufficiencyCheckStage",
     "DeepJudgmentAutoFailStage",
     "DeepJudgmentRubricAutoFailStage",
     "RubricEvaluationStage",

@@ -77,6 +77,9 @@ class VerificationConfig(BaseModel):
     # Abstention detection settings
     abstention_enabled: bool = False  # Enable abstention/refusal detection
 
+    # Sufficiency detection settings
+    sufficiency_enabled: bool = False  # Enable trace sufficiency detection
+
     # Embedding check settings (semantic similarity fallback)
     embedding_check_enabled: bool = False  # Enable semantic similarity fallback
     embedding_check_model: str = "all-MiniLM-L6-v2"  # SentenceTransformer model for embeddings
@@ -453,6 +456,11 @@ class VerificationConfig(BaseModel):
         if self.abstention_enabled:
             features_shown = True
             lines.append("  Abstention: enabled")
+
+        # Sufficiency
+        if self.sufficiency_enabled:
+            features_shown = True
+            lines.append("  Sufficiency: enabled")
 
         # Embedding Check
         if self.embedding_check_enabled:

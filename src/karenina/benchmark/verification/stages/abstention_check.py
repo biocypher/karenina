@@ -38,9 +38,9 @@ class AbstentionCheckStage(BaseVerificationStage):
         - In rubric_only mode, this may be the first stage to set verification_result
 
     Note:
-        In template modes, abstention detection runs after template verification
-        and can override the result. In rubric_only mode, it may run before any
-        verification result is set.
+        Abstention detection runs before template parsing. If abstention is detected,
+        subsequent parsing and verification stages are skipped. This prevents wasted
+        LLM calls when the model refused to answer.
     """
 
     @property
@@ -66,7 +66,10 @@ class AbstentionCheckStage(BaseVerificationStage):
         ]
 
     def should_run(self, context: VerificationContext) -> bool:
-        """Run only if abstention detection is enabled and no errors."""
+        """Run only if abstention detection is enabled, no errors, and no recursion limit hit."""
+        # Skip if recursion limit was reached (response is truncated/unreliable)
+        if context.get_artifact("recursion_limit_reached", False):
+            return False
         return context.abstention_enabled and not context.error
 
     def execute(self, context: VerificationContext) -> None:

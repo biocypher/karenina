@@ -52,6 +52,7 @@ def _build_config_from_cli_args(
     interface: str | None,
     replicate_count: int,
     abstention: bool,
+    sufficiency: bool,
     embedding_check: bool,
     deep_judgment: bool,
     deep_judgment_rubric_mode: str,
@@ -94,6 +95,7 @@ def _build_config_from_cli_args(
 
     # Override feature flags (always override since they have defaults)
     config_dict["abstention_enabled"] = abstention
+    config_dict["sufficiency_enabled"] = sufficiency
     config_dict["embedding_check_enabled"] = embedding_check
     config_dict["deep_judgment_enabled"] = deep_judgment
 
@@ -258,6 +260,7 @@ def verify(
     replicate_count: Annotated[int, typer.Option(help="Number of replicates per verification")] = 1,
     # Feature flags
     abstention: Annotated[bool, typer.Option("--abstention", help="Enable abstention detection")] = False,
+    sufficiency: Annotated[bool, typer.Option("--sufficiency", help="Enable trace sufficiency detection")] = False,
     embedding_check: Annotated[bool, typer.Option("--embedding-check", help="Enable embedding check")] = False,
     deep_judgment: Annotated[bool, typer.Option("--deep-judgment", help="Enable deep judgment for templates")] = False,
     # Deep judgment rubric settings
@@ -552,6 +555,7 @@ def verify(
                     interface=interface,
                     replicate_count=replicate_count,
                     abstention=abstention,
+                    sufficiency=sufficiency,
                     embedding_check=embedding_check,
                     deep_judgment=deep_judgment,
                     deep_judgment_rubric_mode=deep_judgment_rubric_mode,
