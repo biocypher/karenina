@@ -169,6 +169,26 @@ class VerificationResult(BaseModel):
         return self.template.abstention_reasoning if self.template else None
 
     @property
+    def sufficiency_detected(self) -> bool | None:
+        """Backward compatibility accessor for sufficiency_detected."""
+        return self.template.sufficiency_detected if self.template else None
+
+    @property
+    def sufficiency_override_applied(self) -> bool:
+        """Backward compatibility accessor for sufficiency_override_applied."""
+        return self.template.sufficiency_override_applied if self.template else False
+
+    @property
+    def sufficiency_check_performed(self) -> bool:
+        """Backward compatibility accessor for sufficiency_check_performed."""
+        return self.template.sufficiency_check_performed if self.template else False
+
+    @property
+    def sufficiency_reasoning(self) -> str | None:
+        """Backward compatibility accessor for sufficiency_reasoning."""
+        return self.template.sufficiency_reasoning if self.template else None
+
+    @property
     def regex_validations_performed(self) -> bool:
         """Backward compatibility accessor for regex_validations_performed."""
         return self.template.regex_validations_performed if self.template else False

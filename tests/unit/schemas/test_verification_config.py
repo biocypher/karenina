@@ -1110,3 +1110,98 @@ def test_deep_judgment_rubric_custom_mode() -> None:
 
     assert config.deep_judgment_rubric_mode == "custom"
     assert config.deep_judgment_rubric_config == custom_config
+
+
+# =============================================================================
+# VerificationConfig Sufficiency Detection Tests
+# =============================================================================
+
+
+@pytest.mark.unit
+def test_sufficiency_enabled_default_false() -> None:
+    """Test that sufficiency_enabled defaults to False."""
+    config = VerificationConfig(
+        parsing_models=[
+            ModelConfig(
+                id="parsing",
+                model_name="gpt-4",
+                model_provider="openai",
+                interface="langchain",
+                system_prompt="test",
+                temperature=0.1,
+            )
+        ],
+        answering_models=[],
+        parsing_only=True,
+    )
+
+    assert config.sufficiency_enabled is False
+
+
+@pytest.mark.unit
+def test_sufficiency_enabled_can_be_set_true() -> None:
+    """Test that sufficiency_enabled can be set to True."""
+    config = VerificationConfig(
+        parsing_models=[
+            ModelConfig(
+                id="parsing",
+                model_name="gpt-4",
+                model_provider="openai",
+                interface="langchain",
+                system_prompt="test",
+                temperature=0.1,
+            )
+        ],
+        answering_models=[],
+        parsing_only=True,
+        sufficiency_enabled=True,
+    )
+
+    assert config.sufficiency_enabled is True
+
+
+@pytest.mark.unit
+def test_sufficiency_and_abstention_can_both_be_enabled() -> None:
+    """Test that sufficiency_enabled and abstention_enabled can both be True."""
+    config = VerificationConfig(
+        parsing_models=[
+            ModelConfig(
+                id="parsing",
+                model_name="gpt-4",
+                model_provider="openai",
+                interface="langchain",
+                system_prompt="test",
+                temperature=0.1,
+            )
+        ],
+        answering_models=[],
+        parsing_only=True,
+        abstention_enabled=True,
+        sufficiency_enabled=True,
+    )
+
+    assert config.abstention_enabled is True
+    assert config.sufficiency_enabled is True
+
+
+@pytest.mark.unit
+def test_repr_shows_sufficiency_when_enabled() -> None:
+    """Test that __repr__ shows sufficiency when enabled."""
+    config = VerificationConfig(
+        parsing_models=[
+            ModelConfig(
+                id="parsing",
+                model_name="gpt-4",
+                model_provider="openai",
+                interface="langchain",
+                system_prompt="test",
+                temperature=0.1,
+            )
+        ],
+        answering_models=[],
+        parsing_only=True,
+        sufficiency_enabled=True,
+    )
+
+    repr_str = repr(config)
+    assert "Sufficiency: enabled" in repr_str

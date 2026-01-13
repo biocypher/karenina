@@ -959,3 +959,143 @@ def test_error_property_accessible() -> None:
     )
 
     assert result.error == "Parsing failed"
+
+
+# =============================================================================
+# VerificationResultTemplate Sufficiency Tests
+# =============================================================================
+
+
+@pytest.mark.unit
+def test_template_with_sufficiency_check() -> None:
+    """Test template with sufficiency check fields."""
+    template = VerificationResultTemplate(
+        raw_llm_response="The answer is Paris.",
+        parsed_llm_response={"value": "Paris"},
+        sufficiency_check_performed=True,
+        sufficiency_detected=True,  # True = sufficient
+        sufficiency_override_applied=False,
+        sufficiency_reasoning="Response contains the requested information.",
+    )
+
+    assert template.sufficiency_check_performed is True
+    assert template.sufficiency_detected is True
+    assert template.sufficiency_override_applied is False
+    assert template.sufficiency_reasoning == "Response contains the requested information."
+
+
+@pytest.mark.unit
+def test_template_with_insufficiency_detected() -> None:
+    """Test template when response is insufficient."""
+    template = VerificationResultTemplate(
+        raw_llm_response="I don't know.",
+        parsed_llm_response=None,
+        sufficiency_check_performed=True,
+        sufficiency_detected=False,  # False = insufficient
+        sufficiency_override_applied=True,
+        sufficiency_reasoning="Response lacks the required information.",
+    )
+
+    assert template.sufficiency_check_performed is True
+    assert template.sufficiency_detected is False
+    assert template.sufficiency_override_applied is True
+    assert template.sufficiency_reasoning is not None
+
+
+@pytest.mark.unit
+def test_template_sufficiency_defaults() -> None:
+    """Test template sufficiency field defaults."""
+    template = VerificationResultTemplate(
+        raw_llm_response="Some answer",
+        parsed_llm_response={"value": "test"},
+    )
+
+    assert template.sufficiency_check_performed is False
+    assert template.sufficiency_detected is None
+    assert template.sufficiency_override_applied is False
+    assert template.sufficiency_reasoning is None
+
+
+# =============================================================================
+# VerificationResult Backward Compatibility Sufficiency Tests
+# =============================================================================
+
+
+@pytest.mark.unit
+def test_backward_compat_sufficiency_properties() -> None:
+    """Test backward compatibility properties for sufficiency fields."""
+    result = VerificationResult(
+        metadata=VerificationResultMetadata(
+            question_id="q-123",
+            template_id="t-456",
+            completed_without_errors=True,
+            question_text="What is 2+2?",
+            answering_model="gpt-4",
+            parsing_model="claude-haiku-4-5",
+            execution_time=1.5,
+            timestamp="2025-01-11T12:00:00Z",
+            result_id="abc123",
+        ),
+        template=VerificationResultTemplate(
+            raw_llm_response="4",
+            parsed_llm_response={"value": "4"},
+            sufficiency_check_performed=True,
+            sufficiency_detected=True,
+            sufficiency_override_applied=False,
+            sufficiency_reasoning="Response contains the answer.",
+        ),
+    )
+
+    assert result.sufficiency_check_performed is True
+    assert result.sufficiency_detected is True
+    assert result.sufficiency_override_applied is False
+    assert result.sufficiency_reasoning == "Response contains the answer."
+
+
+@pytest.mark.unit
+def test_backward_compat_sufficiency_properties_return_defaults_when_no_template() -> None:
+    """Test that sufficiency properties return defaults when template is None."""
+    result = VerificationResult(
+        metadata=VerificationResultMetadata(
+            question_id="q-123",
+            template_id="t-456",
+            completed_without_errors=False,
+            error="Failed",
+            question_text="What is 2+2?",
+            answering_model="gpt-4",
+            parsing_model="claude-haiku-4-5",
+            execution_time=0.1,
+            timestamp="2025-01-11T12:00:00Z",
+            result_id="abc123",
+        ),
+        template=None,
+    )
+
+    assert result.sufficiency_check_performed is False
+    assert result.sufficiency_detected is None
+    assert result.sufficiency_override_applied is False
+    assert result.sufficiency_reasoning is None
+
+
+@pytest.mark.unit
+def test_sufficiency_and_abstention_can_coexist() -> None:
+    """Test that sufficiency and abstention fields can coexist in template."""
+    template = VerificationResultTemplate(
+        raw_llm_response="I cannot provide that information.",
+        parsed_llm_response=None,
+        # Abstention check
+        abstention_check_performed=True,
+        abstention_detected=True,
+        abstention_override_applied=True,
+        abstention_reasoning="Model refused to answer.",
+        # Sufficiency check (not performed if abstention detected first)
+        sufficiency_check_performed=False,
+        sufficiency_detected=None,
+        sufficiency_override_applied=False,
+        sufficiency_reasoning=None,
+    )
+
+    assert template.abstention_check_performed is True
+    assert template.abstention_detected is True
+    assert template.sufficiency_check_performed is False
+    assert template.sufficiency_detected is None
