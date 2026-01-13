@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from tests.conftest import FixtureBackedLLMClient, MockResponse, MockUsage
+from karenina.utils.testing import FixtureBackedLLMClient, MockResponse, MockUsage
 
 
 @pytest.mark.unit
