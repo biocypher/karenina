@@ -410,16 +410,16 @@ While templates excel at verifying **factual correctness**, many evaluation scen
 | Aspect | Answer Templates | Rubrics |
 |--------|-----------------|---------|
 | **Purpose** | Verify factual correctness | Assess qualitative traits, format, and metrics |
-| **Evaluation Method** | Programmatic field comparison | Three approaches:<br>• LLM judgment<br>• Regex patterns<br>• Term extraction + metrics |
-| **Best for** | Precise, unambiguous answers | Subjective qualities, format validation, quantitative analysis |
-| **Trait Types** | Single verification method | **Three types:**<br>• LLM-based (qualitative)<br>• Regex-based (format)<br>• Metric-based (term extraction) |
+| **Evaluation Method** | Programmatic field comparison | Four approaches:<br>• LLM judgment<br>• Regex patterns<br>• Custom Python functions<br>• Term extraction + metrics |
+| **Best for** | Precise, unambiguous answers | Subjective qualities, format validation, custom logic, quantitative analysis |
+| **Trait Types** | Single verification method | **Four types:**<br>• LLM-based (qualitative)<br>• Regex-based (format)<br>• Callable (custom Python)<br>• Metric-based (term extraction) |
 | **Output** | Pass/fail per field | • Boolean (binary traits)<br>• Scores 1-5 (score traits)<br>• Precision/Recall/F1 (metric traits) |
 | **Examples** | `"BCL2"`, `"46 chromosomes"` | • "Is the answer concise?" (LLM)<br>• Match email pattern (regex)<br>• Extract diseases for F1 score (metric) |
 | **Scope** | Per question | Global or per question |
 
 ### Rubric Types
 
-Karenina supports **three types of rubric traits**, each suited for different evaluation needs:
+Karenina supports **four types of rubric traits**, each suited for different evaluation needs:
 
 **1. LLM-Based Traits**
 
@@ -435,19 +435,28 @@ Deterministic validation using regular expressions for format compliance:
 - "Answer must contain a DNA sequence (pattern: `[ATCG]+`)"
 - "Response must include enzyme names (pattern: `\w+ase\b`)"
 
-**3. Metric-Based Traits**
+**3. Callable Traits**
+
+Custom Python functions for domain-specific evaluation logic:
+
+- Word count validation: "Is the response between 50-500 words?"
+- Custom scoring: "Count technical terms from a predefined list"
+- Complex business rules that can't be expressed as regex
+
+**4. Metric-Based Traits**
 
 Quantitative evaluation using confusion matrix metrics:
 
 - Define terms that SHOULD appear (True Positives)
 - Define terms that SHOULD NOT appear (False Positives)
-- System computes precision, recall, and F1 scores
+- System computes precision, recall, F1, and optionally specificity/accuracy
 
 **When to use what:**
 
 - Use **templates** when you need to verify specific factual content or structured data
 - Use **LLM-based rubrics** for subjective quality assessment (clarity, conciseness, tone)
 - Use **regex rubrics** for format compliance and deterministic keyword checks
+- Use **callable rubrics** for custom logic that requires programmatic evaluation
 - Use **metric rubrics** when evaluating classification accuracy by extracting and measuring term coverage
 - Use **both together** for comprehensive evaluation covering correctness AND quality
 
@@ -461,9 +470,10 @@ Karenina provides comprehensive tools for every stage of the benchmarking workfl
 
 - **Question Management**: Extract questions from files (Excel, CSV, TSV) with rich metadata support
 - **Answer Templates**: Pydantic-based templates for structured evaluation and programmatic verification
-- **Rubric Evaluation**: Assess qualitative traits using three types:
+- **Rubric Evaluation**: Assess qualitative traits using four types:
   - LLM-based traits (binary pass/fail or 1-5 scale)
   - Regex-based traits (pattern matching for format validation)
+  - Callable traits (custom Python functions)
   - Metric-based traits (precision, recall, F1, accuracy)
 - **Benchmark Verification**: Run evaluations with four supported interfaces:
   - `langchain` (OpenAI, Google Gemini, Anthropic Claude)
@@ -473,13 +483,19 @@ Karenina provides comprehensive tools for every stage of the benchmarking workfl
 
 ### Advanced Features
 
-- **Deep-Judgment Parsing**: Extract verbatim excerpts, reasoning traces, and confidence scores
+- **Deep-Judgment Parsing**: Extract verbatim excerpts, reasoning traces, and confidence scores with configurable modes (disabled, enable_all, per-trait custom)
 - **Abstention Detection**: Identify when models refuse to answer questions
-- **Embedding Check**: Semantic similarity fallback for false negatives
-- **Few-Shot Prompting**: Configure examples globally or per question
-- **Database Persistence**: SQLite storage with versioning
-- **Export & Reporting**: CSV and JSON formats for analysis
-- **Preset Management**: Save and reuse verification configurations
+- **Embedding Check**: Semantic similarity fallback using SentenceTransformers to reduce false negatives
+- **Few-Shot Prompting**: Configure examples globally or per question with flexible selection modes
+- **Task-Centric Evaluation (TaskEval)**: Attach verification criteria to existing agent traces for evaluation without re-running
+- **Multi-Model Comparison**: Run evaluations across multiple answering models in a single batch
+- **Async Execution**: Parallel processing with configurable worker pools for faster batch runs
+- **GEPA Integration**: Prompt optimization framework with train/test splitting, feedback generation, and improvement tracking
+- **MCP Integration**: Support for Model Context Protocol servers and tool use tracking
+- **Search-Enhanced Validation**: Tavily search integration for hallucination detection and evidence cross-referencing
+- **Database Persistence**: SQLite storage with versioning and 10+ analytical views
+- **Export & Reporting**: CSV and JSON formats for analysis with selective column export
+- **Preset Management**: Save and reuse verification configurations with full hierarchy support
 
 [View complete feature catalog →](docs/features.md)
 
