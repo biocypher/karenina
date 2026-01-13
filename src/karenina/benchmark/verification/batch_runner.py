@@ -159,6 +159,7 @@ def _extract_feature_flags(config: VerificationConfig) -> dict[str, Any]:
     return {
         "few_shot_enabled": config.is_few_shot_enabled(),
         "abstention_enabled": getattr(config, "abstention_enabled", False),
+        "sufficiency_enabled": getattr(config, "sufficiency_enabled", False),
         "deep_judgment_enabled": getattr(config, "deep_judgment_enabled", False),
         "evaluation_mode": getattr(config, "evaluation_mode", "template_only"),
         "rubric_evaluation_strategy": getattr(config, "rubric_evaluation_strategy", "batch"),
@@ -334,6 +335,7 @@ def execute_task(
             few_shot_examples=task.get("few_shot_examples"),
             few_shot_enabled=task.get("few_shot_enabled", False),
             abstention_enabled=task.get("abstention_enabled", False),
+            sufficiency_enabled=task.get("sufficiency_enabled", False),
             deep_judgment_enabled=task.get("deep_judgment_enabled", False),
             evaluation_mode=task.get("evaluation_mode", "template_only"),
             rubric_evaluation_strategy=task.get("rubric_evaluation_strategy", "batch"),

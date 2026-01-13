@@ -26,6 +26,7 @@ def run_single_model_verification(
     few_shot_examples: list[dict[str, str]] | None = None,
     few_shot_enabled: bool = False,
     abstention_enabled: bool = False,
+    sufficiency_enabled: bool = False,
     deep_judgment_enabled: bool = False,
     rubric_evaluation_strategy: str = "batch",
     deep_judgment_max_excerpts_per_attribute: int = 3,
@@ -69,6 +70,7 @@ def run_single_model_verification(
         few_shot_examples: Optional list of question-answer pairs for few-shot prompting
         few_shot_enabled: Whether to use few-shot prompting (disabled by default)
         abstention_enabled: Whether to enable abstention detection
+        sufficiency_enabled: Whether to enable trace sufficiency detection
         deep_judgment_enabled: Whether to enable deep-judgment parsing
         rubric_evaluation_strategy: Strategy for evaluating LLM rubric traits:
             - "batch": All traits evaluated in single LLM call (default, efficient)
@@ -115,6 +117,7 @@ def run_single_model_verification(
         # Feature Flags
         few_shot_enabled=few_shot_enabled,
         abstention_enabled=abstention_enabled,
+        sufficiency_enabled=sufficiency_enabled,
         deep_judgment_enabled=deep_judgment_enabled,
         # Rubric Configuration
         rubric_evaluation_strategy=rubric_evaluation_strategy,
@@ -183,6 +186,7 @@ def run_single_model_verification(
         parsing_model=parsing_model,
         rubric=rubric,
         abstention_enabled=abstention_enabled,
+        sufficiency_enabled=sufficiency_enabled,
         deep_judgment_enabled=deep_judgment_enabled,
         evaluation_mode=evaluation_mode,
     )

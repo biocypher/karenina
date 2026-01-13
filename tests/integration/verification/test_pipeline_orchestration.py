@@ -376,6 +376,77 @@ class TestStageOrchestratorConfiguration:
         stage_names = [s.name for s in orchestrator.stages]
         assert "TraceValidationAutoFail" in stage_names
 
+    def test_sufficiency_enabled_adds_stage(self, minimal_model_config: ModelConfig):
+        """Verify sufficiency_enabled=True adds SufficiencyCheckStage."""
+        orchestrator = StageOrchestrator.from_config(
+            answering_model=minimal_model_config,
+            parsing_model=minimal_model_config,
+            sufficiency_enabled=True,
+            evaluation_mode="template_only",
+        )
+
+        stage_names = [s.name for s in orchestrator.stages]
+        assert "SufficiencyCheck" in stage_names
+
+    def test_sufficiency_disabled_no_stage(self, minimal_model_config: ModelConfig):
+        """Verify sufficiency_enabled=False does not add SufficiencyCheckStage."""
+        orchestrator = StageOrchestrator.from_config(
+            answering_model=minimal_model_config,
+            parsing_model=minimal_model_config,
+            sufficiency_enabled=False,
+            evaluation_mode="template_only",
+        )
+
+        stage_names = [s.name for s in orchestrator.stages]
+        assert "SufficiencyCheck" not in stage_names
+
+    def test_sufficiency_and_abstention_both_enabled(self, minimal_model_config: ModelConfig):
+        """Verify both sufficiency and abstention stages can be enabled together."""
+        orchestrator = StageOrchestrator.from_config(
+            answering_model=minimal_model_config,
+            parsing_model=minimal_model_config,
+            abstention_enabled=True,
+            sufficiency_enabled=True,
+            evaluation_mode="template_only",
+        )
+
+        stage_names = [s.name for s in orchestrator.stages]
+        assert "AbstentionCheck" in stage_names
+        assert "SufficiencyCheck" in stage_names
+
+    def test_sufficiency_stage_position_after_abstention(self, minimal_model_config: ModelConfig):
+        """Verify SufficiencyCheck comes after AbstentionCheck in pipeline."""
+        orchestrator = StageOrchestrator.from_config(
+            answering_model=minimal_model_config,
+            parsing_model=minimal_model_config,
+            abstention_enabled=True,
+            sufficiency_enabled=True,
+            evaluation_mode="template_only",
+        )
+
+        stage_names = [s.name for s in orchestrator.stages]
+        abstention_idx = stage_names.index("AbstentionCheck")
+        sufficiency_idx = stage_names.index("SufficiencyCheck")
+
+        # Sufficiency should come after abstention
+        assert sufficiency_idx > abstention_idx
+
+    def test_sufficiency_stage_position_before_parse_template(self, minimal_model_config: ModelConfig):
+        """Verify SufficiencyCheck comes before ParseTemplate in pipeline."""
+        orchestrator = StageOrchestrator.from_config(
+            answering_model=minimal_model_config,
+            parsing_model=minimal_model_config,
+            sufficiency_enabled=True,
+            evaluation_mode="template_only",
+        )
+
+        stage_names = [s.name for s in orchestrator.stages]
+        sufficiency_idx = stage_names.index("SufficiencyCheck")
+        parse_idx = stage_names.index("ParseTemplate")
+
+        # Sufficiency should come before parsing
+        assert sufficiency_idx < parse_idx
+
 
 # =============================================================================
 # StageRegistry Tests

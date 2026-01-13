@@ -114,6 +114,7 @@ def build_config_interactively(
     rubric_enabled = evaluation_mode in ["template_and_rubric", "rubric_only"]
 
     abstention_enabled = Confirm.ask("Enable abstention detection?", default=False)
+    sufficiency_enabled = Confirm.ask("Enable trace sufficiency detection?", default=False)
 
     # Embedding check
     embedding_check_enabled = Confirm.ask("Enable embedding check?", default=False)
@@ -333,6 +334,7 @@ def build_config_interactively(
         rubric_trait_names=rubric_trait_names,
         evaluation_mode=evaluation_mode,
         abstention_enabled=abstention_enabled,
+        sufficiency_enabled=sufficiency_enabled,
         embedding_check_enabled=embedding_check_enabled,
         embedding_check_model=embedding_check_model,
         embedding_check_threshold=embedding_check_threshold,
@@ -362,6 +364,7 @@ def build_config_interactively(
     console.print(f"  Replicates: {replicate_count}")
     console.print(f"  Evaluation mode: {evaluation_mode}")
     console.print(f"  Abstention: {'enabled' if abstention_enabled else 'disabled'}")
+    console.print(f"  Sufficiency: {'enabled' if sufficiency_enabled else 'disabled'}")
     console.print(f"  Embedding check: {'enabled' if embedding_check_enabled else 'disabled'}")
     console.print(f"  Deep judgment: {'enabled' if deep_judgment_enabled else 'disabled'}")
 
