@@ -50,10 +50,10 @@ class StageOrchestrator:
         2. GenerateAnswerStage (always after validate)
         3. RecursionLimitAutoFailStage (auto-fail if recursion limit hit)
         4. TraceValidationAutoFailStage (auto-fail if trace doesn't end with AI message)
-        5. ParseTemplateStage (requires raw_answer)
-        6. VerifyTemplateStage (requires parsed_answer)
-        7. EmbeddingCheckStage (optional, after verify)
-        8. AbstentionCheckStage (optional, after verify)
+        5. AbstentionCheckStage (optional, before parse - skips parsing if detected)
+        6. ParseTemplateStage (requires raw_answer)
+        7. VerifyTemplateStage (requires parsed_answer)
+        8. EmbeddingCheckStage (optional, after verify)
         9. DeepJudgmentAutoFailStage (optional, after verify)
         10. RubricEvaluationStage (optional, after generate)
         11. DeepJudgmentRubricAutoFailStage (optional, after rubric)
@@ -143,6 +143,17 @@ class StageOrchestrator:
                     GenerateAnswerStage(),
                     RecursionLimitAutoFailStage(),  # Auto-fail if recursion limit hit
                     TraceValidationAutoFailStage(),  # Auto-fail if trace doesn't end with AI message
+                ]
+            )
+
+            # Abstention check runs before parsing to skip expensive LLM calls
+            # when model refused to answer
+            if abstention_enabled:
+                stages.append(AbstentionCheckStage())
+
+            # Template parsing and verification
+            stages.extend(
+                [
                     ParseTemplateStage(),
                     VerifyTemplateStage(),
                 ]
@@ -152,9 +163,6 @@ class StageOrchestrator:
             # Note: Embedding check stage has its own should_run() logic
             # It only runs if field verification failed
             stages.append(EmbeddingCheckStage())
-
-            if abstention_enabled:
-                stages.append(AbstentionCheckStage())
 
             if deep_judgment_enabled:
                 stages.append(DeepJudgmentAutoFailStage())
