@@ -12,40 +12,17 @@ These functions handle:
 
 import json
 import logging
-import re
 from typing import Any, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
+from ..utils.shared import extract_json_from_text as _extract_json_from_text
+from ..utils.shared import is_openai_endpoint_llm as _is_openai_endpoint_llm
+from ..utils.shared import strip_markdown_fences as _strip_markdown_fences
+
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
-
-
-def _is_openai_endpoint_llm(llm: Any) -> bool:
-    """Check if the LLM is a ChatOpenAIEndpoint (custom OpenAI-compatible endpoint).
-
-    These endpoints often don't support native structured output (json_schema method)
-    and can hang indefinitely when attempting to use it.
-    """
-    # Check by class name to avoid circular imports
-    llm_class_name = type(llm).__name__
-    # Also check the module path for more robust detection
-    llm_module = type(llm).__module__
-
-    is_endpoint = (
-        llm_class_name == "ChatOpenAIEndpoint"
-        or "ChatOpenAIEndpoint" in str(type(llm).__mro__)
-        or (llm_module and "interface" in llm_module and llm_class_name == "ChatOpenAI")
-    )
-
-    # Also check if it has a custom base_url that's not OpenAI's
-    if hasattr(llm, "openai_api_base") and llm.openai_api_base:
-        base_url = str(llm.openai_api_base)
-        if base_url and not base_url.startswith("https://api.openai.com"):
-            is_endpoint = True
-
-    return bool(is_endpoint)
 
 
 def invoke_with_structured_output_for_template(
@@ -193,160 +170,3 @@ def parse_template_response(response: str | Any, answer_class: type[T]) -> T:
     # All strategies failed
     preview = response[:200] if len(response) > 200 else response
     raise ValueError(f"Could not parse response into {answer_class.__name__}: {preview}")
-
-
-def _strip_markdown_fences(text: str | None) -> str | None:
-    """Remove markdown code fences from text and extract JSON from mixed content.
-
-    Handles multiple extraction strategies in order:
-    1. Triple backtick fences with optional language tags (```json ... ```)
-    2. JSON objects embedded in reasoning/explanation text
-    3. Partial fences (only opening or only closing)
-
-    The function is designed to handle cases where LLMs output reasoning text
-    before/after the actual JSON response, such as:
-    "Let me analyze this... the answer is { \"field\": \"value\" }"
-
-    Args:
-        text: Raw text potentially containing markdown fences or mixed content
-              (can be None or non-string)
-
-    Returns:
-        Extracted JSON string, text with markdown fences removed,
-        or original value if not a string
-
-    Example:
-        >>> _strip_markdown_fences("```json\\n{...}\\n```")
-        "{...}"
-        >>> _strip_markdown_fences("The answer is {\"field\": \"value\"}")
-        '{"field": "value"}'
-    """
-    # Handle non-string inputs
-    if not isinstance(text, str):
-        return text
-
-    # Strategy 1: Pattern matches: ```optional_language\nCONTENT\n```
-    pattern = r"```(?:\w+)?\s*\n?(.*?)\n?```"
-    match = re.search(pattern, text, re.DOTALL)
-    if match:
-        return match.group(1).strip()
-
-    # Strategy 2: Try to extract JSON object from mixed text
-    # This handles cases where LLM outputs reasoning + JSON
-    extracted_json = _extract_json_from_text(text)
-    if extracted_json:
-        return extracted_json
-
-    # Strategy 3: Handle partial fences - try to remove opening fence
-    text = re.sub(r"^```(?:\w+)?\s*\n?", "", text)
-    # Handle closing fence
-    text = re.sub(r"\n?```$", "", text)
-
-    return text.strip()
-
-
-def _extract_json_from_text(text: str) -> str | None:
-    """Extract a JSON object from text that may contain reasoning/explanation.
-
-    Tries multiple strategies to find valid JSON:
-    1. Find last JSON object (LLMs often reason first, then output JSON)
-    2. Find first JSON object (fallback)
-    3. Handle nested braces properly
-
-    Args:
-        text: Text that may contain JSON mixed with other content
-
-    Returns:
-        Extracted JSON string if found and valid, None otherwise
-
-    Example:
-        >>> _extract_json_from_text('The answer is {"field": "value"} as shown.')
-        '{"field": "value"}'
-        >>> _extract_json_from_text('Processing... Output: {"a": 1, "b": {"c": 2}}')
-        '{"a": 1, "b": {"c": 2}}'
-    """
-    # Find all potential JSON object boundaries
-    # We need to handle nested braces, so we can't use simple regex
-    json_candidates: list[str] = []
-
-    # Find all positions where JSON objects might start
-    i = 0
-    while i < len(text):
-        if text[i] == "{":
-            # Try to find matching closing brace
-            json_str = _extract_balanced_braces(text, i)
-            if json_str:
-                json_candidates.append(json_str)
-                i += len(json_str)
-            else:
-                i += 1
-        else:
-            i += 1
-
-    if not json_candidates:
-        return None
-
-    # Try candidates from last to first (LLMs often output JSON at the end)
-    for candidate in reversed(json_candidates):
-        try:
-            # Validate it's actually valid JSON
-            json.loads(candidate)
-            return candidate
-        except json.JSONDecodeError:
-            continue
-
-    return None
-
-
-def _extract_balanced_braces(text: str, start: int) -> str | None:
-    """Extract a balanced brace expression from text starting at given position.
-
-    Properly handles:
-    - Nested braces: {"a": {"b": 1}}
-    - Strings containing braces: {"text": "has { and }"}
-    - Escaped quotes in strings: {"text": "say \\"hello\\""}
-
-    Args:
-        text: The full text
-        start: Position of opening brace
-
-    Returns:
-        The balanced brace expression if found, None otherwise
-    """
-    if start >= len(text) or text[start] != "{":
-        return None
-
-    depth = 0
-    in_string = False
-    escape_next = False
-    i = start
-
-    while i < len(text):
-        char = text[i]
-
-        if escape_next:
-            escape_next = False
-            i += 1
-            continue
-
-        if char == "\\":
-            escape_next = True
-            i += 1
-            continue
-
-        if char == '"' and not escape_next:
-            in_string = not in_string
-            i += 1
-            continue
-
-        if not in_string:
-            if char == "{":
-                depth += 1
-            elif char == "}":
-                depth -= 1
-                if depth == 0:
-                    return text[start : i + 1]
-
-        i += 1
-
-    return None  # Unbalanced braces

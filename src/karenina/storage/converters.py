@@ -8,39 +8,15 @@ approach where nested structures are flattened into prefixed columns.
 from __future__ import annotations
 
 import contextlib
-import types
-from typing import TYPE_CHECKING, Any, Union, get_args, get_origin, get_type_hints
+from typing import TYPE_CHECKING, Any, get_type_hints
 
 from pydantic import BaseModel
 
+from .utils import is_pydantic_model as _is_pydantic_model
+from .utils import unwrap_optional as _unwrap_optional
+
 if TYPE_CHECKING:
     from sqlalchemy.orm import DeclarativeBase
-
-
-def _unwrap_optional(field_type: type) -> tuple[type, bool]:
-    """Unwrap Optional[T] or T | None to get the inner type."""
-    origin = get_origin(field_type)
-
-    # Handle both typing.Union (Optional[T]) and types.UnionType (T | None)
-    # Python 3.10+ uses types.UnionType for the T | None syntax
-    if origin is Union or origin is types.UnionType:
-        args = get_args(field_type)
-        non_none_args = [a for a in args if a is not type(None)]
-        if len(non_none_args) == 1:
-            return non_none_args[0], True
-        elif len(non_none_args) > 1:
-            return dict, True
-        else:
-            return type(None), True
-    return field_type, False
-
-
-def _is_pydantic_model(field_type: type) -> bool:
-    """Check if a type is a Pydantic BaseModel subclass."""
-    try:
-        return isinstance(field_type, type) and issubclass(field_type, BaseModel)
-    except TypeError:
-        return False
 
 
 def pydantic_to_flat_dict(

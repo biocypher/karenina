@@ -19,30 +19,27 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from pydantic import ValidationError
 
+from karenina.infrastructure.llm.exceptions import (
+    LLMError,
+    LLMNotAvailableError,
+    ManualTraceError,
+    ManualTraceNotFoundError,
+    SessionError,
+)
 from karenina.infrastructure.llm.interface import (
     ChatOpenAIEndpoint,
     ChatOpenRouter,
     ChatRequest,
     ChatResponse,
     ChatSession,
-    LLMError,
-    LLMNotAvailableError,
-    SessionError,
     clear_all_sessions,
     delete_session,
     get_session,
     init_chat_model_unified,
     list_sessions,
 )
-from karenina.infrastructure.llm.manual_llm import (
-    LLMError as ManualLLMError,
-)
-from karenina.infrastructure.llm.manual_llm import ManualLLM, ManualTraceNotFoundError, create_manual_llm
+from karenina.infrastructure.llm.manual_llm import ManualLLM, create_manual_llm
 from karenina.infrastructure.llm.manual_traces import (
-    LLMError as ManualTraceLLMError,
-)
-from karenina.infrastructure.llm.manual_traces import (
-    ManualTraceError,
     ManualTraceManager,
     ManualTraces,
     clear_manual_traces,
@@ -87,19 +84,17 @@ def test_session_error_is_llm_error() -> None:
 @pytest.mark.unit
 def test_manual_trace_not_found_error_inherits_from_llm_error() -> None:
     """Test that ManualTraceNotFoundError inherits from LLMError."""
-    # ManualTraceNotFoundError inherits from the module-level LLMError in manual_llm.py
-    assert issubclass(ManualTraceNotFoundError, ManualLLMError)
+    assert issubclass(ManualTraceNotFoundError, LLMError)
     error = ManualTraceNotFoundError("trace not found")
-    assert isinstance(error, ManualLLMError)
+    assert isinstance(error, LLMError)
 
 
 @pytest.mark.unit
 def test_manual_trace_error_is_llm_error() -> None:
     """Test that ManualTraceError inherits from LLMError."""
-    # ManualTraceError inherits from the module-level LLMError in manual_traces.py
-    assert issubclass(ManualTraceError, ManualTraceLLMError)
+    assert issubclass(ManualTraceError, LLMError)
     error = ManualTraceError("trace error")
-    assert isinstance(error, ManualTraceLLMError)
+    assert isinstance(error, LLMError)
 
 
 # =============================================================================

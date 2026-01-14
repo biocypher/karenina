@@ -13,35 +13,11 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
+from ..utils.shared import is_openai_endpoint_llm as _is_openai_endpoint_llm
+
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
-
-
-def _is_openai_endpoint_llm(llm: Any) -> bool:
-    """Check if the LLM is a ChatOpenAIEndpoint (custom OpenAI-compatible endpoint).
-
-    These endpoints often don't support native structured output (json_schema method)
-    and can hang indefinitely when attempting to use it.
-    """
-    # Check by class name to avoid circular imports
-    llm_class_name = type(llm).__name__
-    # Also check the module path for more robust detection
-    llm_module = type(llm).__module__
-
-    is_endpoint = (
-        llm_class_name == "ChatOpenAIEndpoint"
-        or "ChatOpenAIEndpoint" in str(type(llm).__mro__)
-        or (llm_module and "interface" in llm_module and llm_class_name == "ChatOpenAI")
-    )
-
-    # Also check if it has a custom base_url that's not OpenAI's
-    if hasattr(llm, "openai_api_base") and llm.openai_api_base:
-        base_url = str(llm.openai_api_base)
-        if base_url and not base_url.startswith("https://api.openai.com"):
-            is_endpoint = True
-
-    return bool(is_endpoint)
 
 
 def _normalize_response_data(data: Any, model_class: type[T]) -> Any:
@@ -191,9 +167,9 @@ def parse_raw_response(response: str | Any, model_class: type[T]) -> T:
         logger.debug(f"Direct JSON parse failed: {e}")
 
     # Strategy 2: Extract JSON from mixed text (handles markdown fences)
-    from ..utils.parsing import _extract_json_from_text, _strip_markdown_fences
+    from ..utils.shared import extract_json_from_text, strip_markdown_fences
 
-    cleaned = _strip_markdown_fences(response)
+    cleaned = strip_markdown_fences(response)
     if cleaned and cleaned != response:
         # Fences were stripped, try parsing the cleaned text
         try:
@@ -204,7 +180,7 @@ def parse_raw_response(response: str | Any, model_class: type[T]) -> T:
             logger.debug(f"Cleaned text parse failed: {e}")
 
     # Try extracting JSON object from text
-    json_str = _extract_json_from_text(response)
+    json_str = extract_json_from_text(response)
     if json_str:
         try:
             data = json.loads(json_str)

@@ -17,14 +17,11 @@ BUGS DISCOVERED:
    is hit, the response is truncated and abstention check would be unreliable.
 """
 
-import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-from pydantic import Field
+import pytest
 
 from karenina.benchmark.verification.stage import (
-    BaseVerificationStage,
     VerificationContext,
 )
 from karenina.benchmark.verification.stage_orchestrator import StageOrchestrator
@@ -39,17 +36,13 @@ from karenina.benchmark.verification.stages import (
     ValidateTemplateStage,
     VerifyTemplateStage,
 )
-from karenina.schemas.domain import BaseAnswer, LLMRubricTrait, RegexTrait, Rubric
+from karenina.schemas.domain import LLMRubricTrait, RegexTrait, Rubric
 from karenina.schemas.workflow import (
     ModelConfig,
-    VerificationResult,
-    VerificationResultMetadata,
-    VerificationResultTemplate,
 )
 
 # Import fixture infrastructure
 from tests.conftest import FixtureBackedLLMClient
-
 
 # =============================================================================
 # Test Fixtures

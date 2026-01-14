@@ -24,7 +24,6 @@ from karenina.benchmark.verification.evaluators.sufficiency_checker import (
 )
 from karenina.schemas.workflow import ModelConfig
 
-
 # =============================================================================
 # Helper Function Tests: _strip_markdown_fences
 # =============================================================================

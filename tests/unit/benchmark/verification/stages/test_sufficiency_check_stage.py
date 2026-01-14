@@ -10,7 +10,7 @@ Note: These tests use mocking for the detect_sufficiency evaluator.
 For fixture-backed tests with real LLM responses, see integration tests.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from pydantic import Field
@@ -21,7 +21,6 @@ from karenina.benchmark.verification.stages.sufficiency_check import (
 )
 from karenina.schemas.domain import BaseAnswer
 from karenina.schemas.workflow import ModelConfig
-
 
 # =============================================================================
 # Fixtures

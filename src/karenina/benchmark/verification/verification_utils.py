@@ -5,7 +5,7 @@ These functions handle common tasks like LLM invocation with retries,
 response parsing, and validation.
 
 Functions provided:
-- Error handling: is_retryable_error
+- Error handling: is_retryable_error (imported from utils.shared)
 - LLM invocation: _invoke_llm_with_retry
 - Agent metrics: _extract_agent_metrics, TOOL_FAILURE_PATTERNS
 - Response parsing: _split_parsed_response
@@ -27,6 +27,8 @@ from langchain_core.callbacks import get_usage_metadata_callback
 from langchain_core.callbacks.usage import UsageMetadataCallbackHandler
 from langchain_core.messages import BaseMessage, HumanMessage
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+
+from .utils.shared import is_retryable_error
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -64,43 +66,7 @@ TOOL_FAILURE_PATTERNS = [
 # Error Handling and Retry Logic
 # ============================================================================
 
-
-def is_retryable_error(exception: Exception) -> bool:
-    """Check if an exception is retryable (transient error)."""
-    exception_str = str(exception).lower()
-    exception_type = type(exception).__name__
-
-    # Connection-related errors
-    if any(
-        keyword in exception_str
-        for keyword in [
-            "connection",
-            "timeout",
-            "timed out",
-            "rate limit",
-            "429",
-            "503",
-            "502",
-            "500",
-            "network",
-            "temporary failure",
-        ]
-    ):
-        return True
-
-    # Common retryable exception types
-    retryable_types = [
-        "ConnectionError",
-        "TimeoutError",
-        "HTTPError",
-        "ReadTimeout",
-        "ConnectTimeout",
-        "APIConnectionError",
-        "APITimeoutError",
-        "RateLimitError",
-    ]
-
-    return exception_type in retryable_types
+# is_retryable_error is imported from utils.shared
 
 
 def _extract_agent_metrics(response: Any) -> dict[str, Any] | None:
@@ -693,7 +659,7 @@ def _retry_parse_with_null_feedback(
         Tuple of (parsed_answer, usage_metadata)
         parsed_answer is None if retry also fails
     """
-    from .utils.parsing import _strip_markdown_fences
+    from .utils.shared import strip_markdown_fences as _strip_markdown_fences
 
     # Try to extract JSON from error message
     failed_json = None
