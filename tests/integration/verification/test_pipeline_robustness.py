@@ -63,7 +63,7 @@ def minimal_model_config() -> ModelConfig:
 @pytest.fixture
 def valid_template_code() -> str:
     """Return a valid template code string."""
-    return '''
+    return """
 from pydantic import Field
 from karenina.schemas.domain import BaseAnswer
 
@@ -75,7 +75,7 @@ class Answer(BaseAnswer):
 
     def verify(self) -> bool:
         return self.capital.strip().lower() == self.correct["capital"]
-'''
+"""
 
 
 @pytest.fixture
@@ -144,8 +144,6 @@ class TestStageExecutionOrder:
         tokens on the parsing LLM call.
         """
         orchestrator = StageOrchestrator.from_config(
-            answering_model=minimal_model_config,
-            parsing_model=minimal_model_config,
             abstention_enabled=True,
             evaluation_mode="template_only",
         )
@@ -162,8 +160,6 @@ class TestStageExecutionOrder:
     def test_parse_template_before_verify_template(self, minimal_model_config: ModelConfig):
         """ParseTemplate must run before VerifyTemplate (dependency)."""
         orchestrator = StageOrchestrator.from_config(
-            answering_model=minimal_model_config,
-            parsing_model=minimal_model_config,
             evaluation_mode="template_only",
         )
 
@@ -183,8 +179,6 @@ class TestStageExecutionOrder:
         should_run() logic that only activates when field_verification_result=False.
         """
         orchestrator = StageOrchestrator.from_config(
-            answering_model=minimal_model_config,
-            parsing_model=minimal_model_config,
             evaluation_mode="template_only",
         )
 
@@ -200,8 +194,6 @@ class TestStageExecutionOrder:
     def test_generate_answer_before_abstention_check(self, minimal_model_config: ModelConfig):
         """GenerateAnswer must run before AbstentionCheck (needs raw response)."""
         orchestrator = StageOrchestrator.from_config(
-            answering_model=minimal_model_config,
-            parsing_model=minimal_model_config,
             abstention_enabled=True,
             evaluation_mode="template_only",
         )
@@ -218,8 +210,6 @@ class TestStageExecutionOrder:
     def test_recursion_limit_before_abstention_check(self, minimal_model_config: ModelConfig):
         """RecursionLimitAutoFail should run before AbstentionCheck."""
         orchestrator = StageOrchestrator.from_config(
-            answering_model=minimal_model_config,
-            parsing_model=minimal_model_config,
             abstention_enabled=True,
             evaluation_mode="template_only",
         )
@@ -236,8 +226,6 @@ class TestStageExecutionOrder:
     def test_trace_validation_before_abstention_check(self, minimal_model_config: ModelConfig):
         """TraceValidationAutoFail should run before AbstentionCheck."""
         orchestrator = StageOrchestrator.from_config(
-            answering_model=minimal_model_config,
-            parsing_model=minimal_model_config,
             abstention_enabled=True,
             evaluation_mode="template_only",
         )
@@ -256,8 +244,6 @@ class TestStageExecutionOrder:
     ):
         """RubricEvaluation runs after GenerateAnswer but independent of template stages."""
         orchestrator = StageOrchestrator.from_config(
-            answering_model=minimal_model_config,
-            parsing_model=minimal_model_config,
             rubric=sample_rubric,
             evaluation_mode="template_and_rubric",
         )
@@ -289,23 +275,18 @@ class TestStageExecutionOrder:
 
         for config in configs:
             orchestrator = StageOrchestrator.from_config(
-                answering_model=minimal_model_config,
-                parsing_model=minimal_model_config,
                 **config,
             )
 
             last_stage = orchestrator.stages[-1]
             assert last_stage.name == "FinalizeResult", (
-                f"FinalizeResult must be last, but got {last_stage.name} "
-                f"for config: {config}"
+                f"FinalizeResult must be last, but got {last_stage.name} for config: {config}"
             )
 
     def test_validate_template_always_first_in_template_modes(self, minimal_model_config: ModelConfig):
         """ValidateTemplate must be first in template evaluation modes."""
         for mode in ["template_only", "template_and_rubric"]:
             orchestrator = StageOrchestrator.from_config(
-                answering_model=minimal_model_config,
-                parsing_model=minimal_model_config,
                 evaluation_mode=mode,
             )
 
@@ -573,9 +554,7 @@ class TestArtifactDependencies:
         ValidateTemplateStage().execute(minimal_context)
 
         # Mock the unified LLM initialization to use fixture client
-        with patch(
-            "karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified"
-        ) as mock_init:
+        with patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified") as mock_init:
             mock_llm = MagicMock()
             mock_llm.invoke.return_value = MagicMock(content="The capital is Paris.")
             mock_init.return_value = mock_llm
@@ -617,8 +596,6 @@ class TestPipelineIntegration:
         """
         # Build pipeline
         orchestrator = StageOrchestrator.from_config(
-            answering_model=minimal_context.answering_model,
-            parsing_model=minimal_context.parsing_model,
             evaluation_mode="template_only",
         )
 
@@ -633,11 +610,10 @@ class TestPipelineIntegration:
         parsed_answer = Answer(capital="Paris")
 
         # Mock LLM for answer generation and template parsing
-        with patch(
-            "karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified"
-        ) as mock_gen, patch(
-            "karenina.benchmark.verification.stages.parse_template.TemplateEvaluator"
-        ) as MockEvaluator:
+        with (
+            patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified") as mock_gen,
+            patch("karenina.benchmark.verification.stages.parse_template.TemplateEvaluator") as MockEvaluator,
+        ):
             # Answer generation mock
             mock_gen_llm = MagicMock()
             mock_gen_llm.invoke.return_value = MagicMock(content="The capital of France is Paris.")
@@ -689,8 +665,6 @@ class TestPipelineIntegration:
         minimal_context.abstention_enabled = True
 
         orchestrator = StageOrchestrator.from_config(
-            answering_model=minimal_context.answering_model,
-            parsing_model=minimal_context.parsing_model,
             abstention_enabled=True,
             evaluation_mode="template_only",
         )
@@ -708,11 +682,10 @@ class TestPipelineIntegration:
                         context.mark_error(f"{stage.name} failed: {e}")
             return context.get_artifact("final_result")
 
-        with patch(
-            "karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified"
-        ) as mock_gen, patch(
-            "karenina.benchmark.verification.stages.abstention_check.detect_abstention"
-        ) as mock_abstention:
+        with (
+            patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified") as mock_gen,
+            patch("karenina.benchmark.verification.stages.abstention_check.detect_abstention") as mock_abstention,
+        ):
             # Generate a refusal response
             mock_gen_llm = MagicMock()
             mock_gen_llm.invoke.return_value = MagicMock(
@@ -734,22 +707,14 @@ class TestPipelineIntegration:
         # ParseTemplate and VerifyTemplate should NOT be in executed stages
         # (they should skip due to abstention)
         assert "AbstentionCheck" in executed_stages
-        assert "ParseTemplate" not in executed_stages, (
-            "ParseTemplate should skip when abstention detected"
-        )
-        assert "VerifyTemplate" not in executed_stages, (
-            "VerifyTemplate should skip when abstention detected"
-        )
+        assert "ParseTemplate" not in executed_stages, "ParseTemplate should skip when abstention detected"
+        assert "VerifyTemplate" not in executed_stages, "VerifyTemplate should skip when abstention detected"
 
-    def test_rubric_only_mode_skips_template_stages(
-        self, minimal_context: VerificationContext, sample_rubric: Rubric
-    ):
+    def test_rubric_only_mode_skips_template_stages(self, minimal_context: VerificationContext, sample_rubric: Rubric):
         """Test rubric_only mode doesn't include template verification stages."""
         minimal_context.rubric = sample_rubric
 
         orchestrator = StageOrchestrator.from_config(
-            answering_model=minimal_context.answering_model,
-            parsing_model=minimal_context.parsing_model,
             rubric=sample_rubric,
             evaluation_mode="rubric_only",
         )
@@ -819,8 +784,7 @@ class TestEdgeCases:
         """Test handling of Unicode characters in response."""
         ValidateTemplateStage().execute(minimal_context)
         minimal_context.set_artifact(
-            "raw_llm_response",
-            "La capitale de la France est Paris 🇫🇷. C'est une belle ville!"
+            "raw_llm_response", "La capitale de la France est Paris 🇫🇷. C'est une belle ville!"
         )
 
         stage = ParseTemplateStage()
@@ -894,8 +858,6 @@ class TestConfigurationCombinations:
     def test_all_features_enabled(self, minimal_model_config: ModelConfig, sample_rubric: Rubric):
         """Test pipeline with all optional features enabled."""
         orchestrator = StageOrchestrator.from_config(
-            answering_model=minimal_model_config,
-            parsing_model=minimal_model_config,
             rubric=sample_rubric,
             evaluation_mode="template_and_rubric",
             abstention_enabled=True,
@@ -923,8 +885,6 @@ class TestConfigurationCombinations:
         logic that only runs when field_verification_result=False.
         """
         orchestrator = StageOrchestrator.from_config(
-            answering_model=minimal_model_config,
-            parsing_model=minimal_model_config,
             evaluation_mode="template_only",
         )
 
@@ -947,8 +907,6 @@ class TestConfigurationCombinations:
     def test_rubric_with_deep_judgment(self, minimal_model_config: ModelConfig, sample_rubric: Rubric):
         """Test rubric evaluation with deep judgment enabled."""
         orchestrator = StageOrchestrator.from_config(
-            answering_model=minimal_model_config,
-            parsing_model=minimal_model_config,
             rubric=sample_rubric,
             evaluation_mode="template_and_rubric",
             deep_judgment_enabled=True,
@@ -966,8 +924,6 @@ class TestConfigurationCombinations:
         field_verification_result=False, providing semantic similarity fallback.
         """
         orchestrator = StageOrchestrator.from_config(
-            answering_model=minimal_model_config,
-            parsing_model=minimal_model_config,
             evaluation_mode="template_only",
             deep_judgment_enabled=False,
         )

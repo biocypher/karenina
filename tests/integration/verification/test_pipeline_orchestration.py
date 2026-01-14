@@ -259,8 +259,6 @@ class TestStageOrchestratorConfiguration:
     def test_template_only_mode_stages(self, minimal_model_config: ModelConfig):
         """Verify template_only mode includes template verification stages."""
         orchestrator = StageOrchestrator.from_config(
-            answering_model=minimal_model_config,
-            parsing_model=minimal_model_config,
             evaluation_mode="template_only",
         )
 
@@ -279,8 +277,6 @@ class TestStageOrchestratorConfiguration:
     def test_template_and_rubric_mode_stages(self, minimal_model_config: ModelConfig, sample_rubric: Rubric):
         """Verify template_and_rubric mode includes both template and rubric stages."""
         orchestrator = StageOrchestrator.from_config(
-            answering_model=minimal_model_config,
-            parsing_model=minimal_model_config,
             rubric=sample_rubric,
             evaluation_mode="template_and_rubric",
         )
@@ -299,8 +295,6 @@ class TestStageOrchestratorConfiguration:
     def test_rubric_only_mode_stages(self, minimal_model_config: ModelConfig, sample_rubric: Rubric):
         """Verify rubric_only mode skips template stages."""
         orchestrator = StageOrchestrator.from_config(
-            answering_model=minimal_model_config,
-            parsing_model=minimal_model_config,
             rubric=sample_rubric,
             evaluation_mode="rubric_only",
         )
@@ -320,8 +314,6 @@ class TestStageOrchestratorConfiguration:
     def test_abstention_enabled_adds_stage(self, minimal_model_config: ModelConfig):
         """Verify abstention_enabled=True adds AbstentionCheckStage."""
         orchestrator = StageOrchestrator.from_config(
-            answering_model=minimal_model_config,
-            parsing_model=minimal_model_config,
             abstention_enabled=True,
             evaluation_mode="template_only",
         )
@@ -332,8 +324,6 @@ class TestStageOrchestratorConfiguration:
     def test_deep_judgment_enabled_adds_stage(self, minimal_model_config: ModelConfig):
         """Verify deep_judgment_enabled=True adds DeepJudgmentAutoFailStage."""
         orchestrator = StageOrchestrator.from_config(
-            answering_model=minimal_model_config,
-            parsing_model=minimal_model_config,
             deep_judgment_enabled=True,
             evaluation_mode="template_only",
         )
@@ -345,8 +335,6 @@ class TestStageOrchestratorConfiguration:
         """Verify FinalizeResultStage is always the last stage."""
         for mode in ["template_only", "template_and_rubric", "rubric_only"]:
             orchestrator = StageOrchestrator.from_config(
-                answering_model=minimal_model_config,
-                parsing_model=minimal_model_config,
                 rubric=sample_rubric if mode != "template_only" else None,
                 evaluation_mode=mode,
             )
@@ -357,8 +345,6 @@ class TestStageOrchestratorConfiguration:
     def test_recursion_limit_stage_present(self, minimal_model_config: ModelConfig):
         """Verify RecursionLimitAutoFailStage is in the pipeline."""
         orchestrator = StageOrchestrator.from_config(
-            answering_model=minimal_model_config,
-            parsing_model=minimal_model_config,
             evaluation_mode="template_only",
         )
 
@@ -368,8 +354,6 @@ class TestStageOrchestratorConfiguration:
     def test_trace_validation_stage_present(self, minimal_model_config: ModelConfig):
         """Verify TraceValidationAutoFailStage is in the pipeline."""
         orchestrator = StageOrchestrator.from_config(
-            answering_model=minimal_model_config,
-            parsing_model=minimal_model_config,
             evaluation_mode="template_only",
         )
 
@@ -379,8 +363,6 @@ class TestStageOrchestratorConfiguration:
     def test_sufficiency_enabled_adds_stage(self, minimal_model_config: ModelConfig):
         """Verify sufficiency_enabled=True adds SufficiencyCheckStage."""
         orchestrator = StageOrchestrator.from_config(
-            answering_model=minimal_model_config,
-            parsing_model=minimal_model_config,
             sufficiency_enabled=True,
             evaluation_mode="template_only",
         )
@@ -391,8 +373,6 @@ class TestStageOrchestratorConfiguration:
     def test_sufficiency_disabled_no_stage(self, minimal_model_config: ModelConfig):
         """Verify sufficiency_enabled=False does not add SufficiencyCheckStage."""
         orchestrator = StageOrchestrator.from_config(
-            answering_model=minimal_model_config,
-            parsing_model=minimal_model_config,
             sufficiency_enabled=False,
             evaluation_mode="template_only",
         )
@@ -403,8 +383,6 @@ class TestStageOrchestratorConfiguration:
     def test_sufficiency_and_abstention_both_enabled(self, minimal_model_config: ModelConfig):
         """Verify both sufficiency and abstention stages can be enabled together."""
         orchestrator = StageOrchestrator.from_config(
-            answering_model=minimal_model_config,
-            parsing_model=minimal_model_config,
             abstention_enabled=True,
             sufficiency_enabled=True,
             evaluation_mode="template_only",
@@ -417,8 +395,6 @@ class TestStageOrchestratorConfiguration:
     def test_sufficiency_stage_position_after_abstention(self, minimal_model_config: ModelConfig):
         """Verify SufficiencyCheck comes after AbstentionCheck in pipeline."""
         orchestrator = StageOrchestrator.from_config(
-            answering_model=minimal_model_config,
-            parsing_model=minimal_model_config,
             abstention_enabled=True,
             sufficiency_enabled=True,
             evaluation_mode="template_only",
@@ -434,8 +410,6 @@ class TestStageOrchestratorConfiguration:
     def test_sufficiency_stage_position_before_parse_template(self, minimal_model_config: ModelConfig):
         """Verify SufficiencyCheck comes before ParseTemplate in pipeline."""
         orchestrator = StageOrchestrator.from_config(
-            answering_model=minimal_model_config,
-            parsing_model=minimal_model_config,
             sufficiency_enabled=True,
             evaluation_mode="template_only",
         )
