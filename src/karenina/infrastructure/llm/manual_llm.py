@@ -1,25 +1,11 @@
 """Manual LLM implementation that returns precomputed traces."""
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from langchain_core.messages import AIMessage, BaseMessage
 
+from .exceptions import ManualTraceNotFoundError
 from .manual_traces import get_manual_trace, get_manual_trace_with_metrics
-
-if TYPE_CHECKING:
-    from .interface import LLMError
-else:
-    # Avoid circular import at runtime
-    class LLMError(Exception):
-        """Base exception for LLM-related errors."""
-
-        pass
-
-
-class ManualTraceNotFoundError(LLMError):
-    """Raised when a manual trace is not found for a question."""
-
-    pass
 
 
 class ManualLLM:

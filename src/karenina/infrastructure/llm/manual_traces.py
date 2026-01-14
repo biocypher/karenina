@@ -5,17 +5,7 @@ import threading
 import time
 from typing import Any
 
-
-class LLMError(Exception):
-    """Base exception for LLM-related errors."""
-
-    pass
-
-
-class ManualTraceError(LLMError):
-    """Raised when there's an error with manual trace operations."""
-
-    pass
+from .exceptions import ManualTraceError
 
 
 class ManualTraceManager:

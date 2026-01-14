@@ -18,6 +18,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field, SecretStr
 
+from .exceptions import LLMError, SessionError
 from .manual_llm import create_manual_llm
 
 if TYPE_CHECKING:
@@ -26,24 +27,6 @@ if TYPE_CHECKING:
 load_dotenv()
 
 logger = logging.getLogger(__name__)
-
-
-class LLMError(Exception):
-    """Base exception for LLM-related errors."""
-
-    pass
-
-
-class LLMNotAvailableError(LLMError):
-    """Raised when LangChain is not available."""
-
-    pass
-
-
-class SessionError(LLMError):
-    """Raised when there's an error with session management."""
-
-    pass
 
 
 class ChatRequest(BaseModel):
