@@ -824,11 +824,8 @@ def verify(
         if output:
             console.print(f"\n[cyan]Exporting results to {output}...[/cyan]")
 
-            # Convert to legacy dict for job creation
-            results_dict = final_results.to_legacy_dict()
-
             # Create job for export (comprehensive backend format)
-            job = create_export_job(results_dict, config, "cli-verification", start_time, end_time)
+            job = create_export_job(final_results, config, "cli-verification", start_time, end_time)
 
             # Export using backend exporter (uses VerificationResultSet directly)
             global_rubric = benchmark.get_global_rubric()

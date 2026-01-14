@@ -13,7 +13,7 @@ This module contains helper functions for the Karenina CLI:
 from pathlib import Path
 from typing import Any
 
-from karenina.schemas import FinishedTemplate, VerificationConfig, VerificationJob, VerificationResult
+from karenina.schemas import FinishedTemplate, VerificationConfig, VerificationJob, VerificationResultSet
 
 
 def _get_presets_directory(presets_dir: Path | None = None) -> Path:
@@ -246,7 +246,7 @@ def filter_templates_by_ids(templates: list[FinishedTemplate], ids: list[str]) -
 
 
 def create_export_job(
-    results: dict[str, VerificationResult],
+    result_set: VerificationResultSet,
     config: VerificationConfig,
     run_name: str,
     start_time: float,
@@ -256,7 +256,7 @@ def create_export_job(
     Create VerificationJob object for export functions.
 
     Args:
-        results: Verification results dictionary
+        result_set: Verification result set
         config: Verification configuration
         run_name: Name of the verification run
         start_time: Start timestamp
@@ -268,9 +268,9 @@ def create_export_job(
     import uuid
 
     # Calculate counts
-    total = len(results)
-    successful = sum(1 for r in results.values() if r.metadata.completed_without_errors)
-    failed = sum(1 for r in results.values() if not r.metadata.completed_without_errors)
+    total = len(result_set)
+    successful = sum(1 for r in result_set if r.metadata.completed_without_errors)
+    failed = sum(1 for r in result_set if not r.metadata.completed_without_errors)
 
     # Create minimal job object
     job = VerificationJob(
