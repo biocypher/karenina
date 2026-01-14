@@ -11,48 +11,11 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 from ....infrastructure.llm.interface import init_chat_model_unified
 from ....schemas.workflow import ModelConfig
 from ..utils.prompts import SUFFICIENCY_DETECTION_SYS, SUFFICIENCY_DETECTION_USER
+from ..utils.shared import is_retryable_error
 from ..utils.shared import strip_markdown_fences as _strip_markdown_fences
 
 # Set up logger
 logger = logging.getLogger(__name__)
-
-
-def is_retryable_error(exception: Exception) -> bool:
-    """Check if an exception is retryable (transient error)."""
-    exception_str = str(exception).lower()
-    exception_type = type(exception).__name__
-
-    # Connection-related errors
-    if any(
-        keyword in exception_str
-        for keyword in [
-            "connection",
-            "timeout",
-            "timed out",
-            "rate limit",
-            "429",
-            "503",
-            "502",
-            "500",
-            "network",
-            "temporary failure",
-        ]
-    ):
-        return True
-
-    # Common retryable exception types
-    retryable_types = [
-        "ConnectionError",
-        "TimeoutError",
-        "HTTPError",
-        "ReadTimeout",
-        "ConnectTimeout",
-        "APIConnectionError",
-        "APITimeoutError",
-        "RateLimitError",
-    ]
-
-    return exception_type in retryable_types
 
 
 def detect_sufficiency(
