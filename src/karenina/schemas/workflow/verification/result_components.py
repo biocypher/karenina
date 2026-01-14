@@ -116,9 +116,7 @@ class VerificationResultTemplate(BaseModel):
 
     # Sufficiency
     sufficiency_check_performed: bool = False  # Whether sufficiency check was attempted
-    sufficiency_detected: bool | None = (
-        None  # Whether response has sufficient info (True=sufficient, False=insufficient)
-    )
+    sufficiency_detected: bool | None = None  # Whether response has sufficient info (True=sufficient, False=insufficient)
     sufficiency_override_applied: bool = False  # Whether sufficiency check overrode the result
     sufficiency_reasoning: str | None = None  # LLM's reasoning for sufficiency determination
 
