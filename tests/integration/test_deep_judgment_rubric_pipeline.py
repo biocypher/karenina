@@ -10,7 +10,7 @@ Tests are marked with:
 Run with: pytest tests/integration/test_deep_judgment_rubric_pipeline.py -v
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -38,7 +38,7 @@ def _create_metadata(
     error: str | None = None,
 ) -> VerificationResultMetadata:
     """Helper to create metadata with computed result_id."""
-    timestamp = datetime.now(timezone.utc).isoformat()
+    timestamp = datetime.now(UTC).isoformat()
     return VerificationResultMetadata(
         question_id=question_id,
         template_id="test-template-id",
@@ -83,9 +83,7 @@ def deep_judgment_rubric_result() -> VerificationResultDeepJudgmentRubric:
         deep_judgment_rubric_performed=True,
         deep_judgment_rubric_scores={"scientific_accuracy": 5},
         standard_rubric_scores={"completeness": 4},
-        rubric_trait_reasoning={
-            "scientific_accuracy": "The answer provides accurate scientific information."
-        },
+        rubric_trait_reasoning={"scientific_accuracy": "The answer provides accurate scientific information."},
         extracted_rubric_excerpts={
             "scientific_accuracy": [
                 {"text": "Excerpt 1", "confidence": "high", "similarity_score": 0.95},
@@ -134,9 +132,7 @@ def verification_results_list(
 class TestBothDataframeExportMethods:
     """Test both standard and detailed dataframe export methods."""
 
-    def test_both_dataframe_export_methods(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_both_dataframe_export_methods(self, verification_results_list: list[VerificationResult]):
         """Test both standard (RubricResults) and detailed (RubricJudgmentResults) exports."""
         results = verification_results_list
 
@@ -220,9 +216,7 @@ class TestDataframeStructureValidation:
             deep_judgment_rubric_performed=True,
             deep_judgment_rubric_scores={"clarity": 4},
             rubric_trait_reasoning={"clarity": "Clear."},
-            extracted_rubric_excerpts={
-                "clarity": [{"text": "Test", "confidence": "high", "similarity_score": 0.9}]
-            },
+            extracted_rubric_excerpts={"clarity": [{"text": "Test", "confidence": "high", "similarity_score": 0.9}]},
             trait_metadata={
                 "clarity": {
                     "stages_completed": ["excerpt_extraction"],
@@ -259,9 +253,7 @@ class TestDataframeStructureValidation:
 class TestDeepJudgmentRubricDataFrame:
     """Test DataFrame creation for deep judgment rubric results."""
 
-    def test_dataframe_has_dj_specific_columns(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_dataframe_has_dj_specific_columns(self, verification_results_list: list[VerificationResult]):
         """Test that DataFrame has deep judgment specific columns."""
         judgment_results = RubricJudgmentResults(results=verification_results_list)
 
@@ -272,9 +264,7 @@ class TestDeepJudgmentRubricDataFrame:
         assert "excerpt_confidence" in df.columns
         assert "trait_reasoning" in df.columns
 
-    def test_dataframe_excerpt_explosion(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_dataframe_excerpt_explosion(self, verification_results_list: list[VerificationResult]):
         """Test that excerpts are exploded into separate rows."""
         judgment_results = RubricJudgmentResults(results=verification_results_list)
 

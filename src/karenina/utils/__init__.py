@@ -20,6 +20,7 @@ from .checkpoint import (
     validate_jsonld_benchmark,
 )
 from .code import extract_and_combine_codeblocks
+from .testing import FixtureBackedLLMClient, MockResponse, MockUsage
 
 __all__ = [
     # Answer caching
@@ -39,4 +40,8 @@ __all__ = [
     "convert_rating_to_rubric_trait",
     # Code parsing
     "extract_and_combine_codeblocks",
+    # Testing utilities
+    "FixtureBackedLLMClient",
+    "MockResponse",
+    "MockUsage",
 ]

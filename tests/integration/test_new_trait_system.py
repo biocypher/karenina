@@ -14,7 +14,7 @@ Run with: pytest tests/integration/test_new_trait_system.py -v
 
 import csv
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pandas as pd
 import pytest
@@ -28,7 +28,6 @@ from karenina.schemas.workflow import (
     VerificationResultTemplate,
 )
 
-
 # =============================================================================
 # Helper Functions
 # =============================================================================
@@ -41,7 +40,7 @@ def _create_metadata(
     error: str | None = None,
 ) -> VerificationResultMetadata:
     """Helper to create metadata with computed result_id."""
-    timestamp = datetime.now(timezone.utc).isoformat()
+    timestamp = datetime.now(UTC).isoformat()
     return VerificationResultMetadata(
         question_id=question_id,
         template_id="test-template-id",
@@ -383,9 +382,7 @@ class TestTraitEvaluation:
 class TestTraitScoreSeparation:
     """Test that trait scores are properly separated by type."""
 
-    def test_trait_scores_separated_by_type(
-        self, verification_result_with_all_traits: VerificationResult
-    ):
+    def test_trait_scores_separated_by_type(self, verification_result_with_all_traits: VerificationResult):
         """Verify trait scores are split correctly into separate dictionaries."""
         result = verification_result_with_all_traits
 
@@ -411,9 +408,7 @@ class TestTraitScoreSeparation:
         for trait_name, score in result.rubric.callable_trait_scores.items():
             assert isinstance(score, bool | int), f"Callable {trait_name} should return bool/int"
 
-    def test_get_all_trait_scores_includes_all_types(
-        self, verification_result_with_all_traits: VerificationResult
-    ):
+    def test_get_all_trait_scores_includes_all_types(self, verification_result_with_all_traits: VerificationResult):
         """Verify get_all_trait_scores() includes all trait types."""
         result = verification_result_with_all_traits
 
@@ -444,9 +439,7 @@ class TestTraitScoreSeparation:
 class TestRubricDataFrameExport:
     """Test RubricResults DataFrame export with all trait types."""
 
-    def test_dataframe_export_all_traits(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_dataframe_export_all_traits(self, verification_results_list: list[VerificationResult]):
         """Test DataFrame export includes all trait types."""
         rubric_results = RubricResults(results=verification_results_list)
         df = rubric_results.to_dataframe(trait_type="all")
@@ -459,9 +452,7 @@ class TestRubricDataFrameExport:
         assert "regex" in trait_types
         assert "callable" in trait_types
 
-    def test_dataframe_export_llm_traits(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_dataframe_export_llm_traits(self, verification_results_list: list[VerificationResult]):
         """Test DataFrame export with LLM traits only."""
         rubric_results = RubricResults(results=verification_results_list)
         df = rubric_results.to_dataframe(trait_type="llm")
@@ -475,9 +466,7 @@ class TestRubricDataFrameExport:
         assert "Accuracy" in trait_names
         assert "Completeness" in trait_names
 
-    def test_dataframe_export_regex_traits(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_dataframe_export_regex_traits(self, verification_results_list: list[VerificationResult]):
         """Test DataFrame export with regex traits only."""
         rubric_results = RubricResults(results=verification_results_list)
         df = rubric_results.to_dataframe(trait_type="regex")
@@ -493,9 +482,7 @@ class TestRubricDataFrameExport:
         # Regex scores should be boolean
         assert all(df["trait_score"].isin([True, False]))
 
-    def test_dataframe_export_callable_traits(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_dataframe_export_callable_traits(self, verification_results_list: list[VerificationResult]):
         """Test DataFrame export with callable traits only."""
         rubric_results = RubricResults(results=verification_results_list)
         df = rubric_results.to_dataframe(trait_type="callable")
@@ -519,9 +506,7 @@ class TestRubricDataFrameExport:
 class TestCSVExport:
     """Test CSV export functionality with all trait types."""
 
-    def test_csv_export_with_all_traits(
-        self, verification_results_list: list[VerificationResult], tmp_path
-    ):
+    def test_csv_export_with_all_traits(self, verification_results_list: list[VerificationResult], tmp_path):
         """Test CSV export includes all trait type columns."""
         rubric_results = RubricResults(results=verification_results_list)
         df = rubric_results.to_dataframe(trait_type="all")
@@ -546,9 +531,7 @@ class TestCSVExport:
             assert "trait_type" in headers
             assert "question_id" in headers
 
-    def test_csv_roundtrip_preserves_data(
-        self, verification_results_list: list[VerificationResult], tmp_path
-    ):
+    def test_csv_roundtrip_preserves_data(self, verification_results_list: list[VerificationResult], tmp_path):
         """Test that CSV export and import preserves data."""
         rubric_results = RubricResults(results=verification_results_list)
         df_original = rubric_results.to_dataframe(trait_type="all")

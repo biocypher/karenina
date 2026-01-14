@@ -7,7 +7,7 @@ Tests use fixture-created results rather than running actual verification,
 following the fixture-based testing pattern.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pandas as pd
 import pytest
@@ -23,7 +23,6 @@ from karenina.schemas.workflow import (
     VerificationResultTemplate,
 )
 
-
 # =============================================================================
 # Fixtures for VerificationResult objects
 # =============================================================================
@@ -36,7 +35,7 @@ def _create_metadata(
     error: str | None = None,
 ) -> VerificationResultMetadata:
     """Helper to create metadata with computed result_id."""
-    timestamp = datetime.now(timezone.utc).isoformat()
+    timestamp = datetime.now(UTC).isoformat()
     return VerificationResultMetadata(
         question_id=question_id,
         template_id="test-template-id",
@@ -102,9 +101,7 @@ def sample_deep_judgment_result() -> VerificationResultDeepJudgment:
     return VerificationResultDeepJudgment(
         deep_judgment_enabled=True,
         deep_judgment_performed=True,
-        extracted_excerpts={
-            "capital": [{"text": "Paris is the capital", "confidence": "high"}]
-        },
+        extracted_excerpts={"capital": [{"text": "Paris is the capital", "confidence": "high"}]},
         attribute_reasoning={"capital": "Clearly stated in response"},
         deep_judgment_stages_completed=["excerpts", "reasoning"],
         deep_judgment_model_calls=2,
@@ -143,9 +140,7 @@ def verification_result_failed(
 def verification_result_error() -> VerificationResult:
     """Create a verification result with errors."""
     return VerificationResult(
-        metadata=_create_metadata(
-            "q003", "claude-haiku-4-5", completed=False, error="Connection timeout"
-        ),
+        metadata=_create_metadata("q003", "claude-haiku-4-5", completed=False, error="Connection timeout"),
         template=None,
         rubric=None,
         deep_judgment=None,
@@ -175,9 +170,7 @@ def verification_results_list(
 class TestTemplateResultsIntegration:
     """Integration tests for TemplateResults with verification data."""
 
-    def test_to_dataframe_with_results(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_to_dataframe_with_results(self, verification_results_list: list[VerificationResult]):
         """Test TemplateResults.to_dataframe() with verification results."""
         template_results = TemplateResults(results=verification_results_list)
 
@@ -202,9 +195,7 @@ class TestTemplateResultsIntegration:
         # Validate data types
         assert df["completed_without_errors"].dtype == bool
 
-    def test_aggregate_pass_rate_with_results(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_aggregate_pass_rate_with_results(self, verification_results_list: list[VerificationResult]):
         """Test aggregate_pass_rate() with verification results."""
         template_results = TemplateResults(results=verification_results_list)
 
@@ -219,9 +210,7 @@ class TestTemplateResultsIntegration:
         for question_id, pass_rate in pass_rates_by_question.items():
             assert 0.0 <= pass_rate <= 1.0, f"Invalid pass rate for {question_id}: {pass_rate}"
 
-    def test_aggregate_pass_rate_by_model(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_aggregate_pass_rate_by_model(self, verification_results_list: list[VerificationResult]):
         """Test aggregate_pass_rate() grouped by model."""
         template_results = TemplateResults(results=verification_results_list)
 
@@ -236,9 +225,7 @@ class TestTemplateResultsIntegration:
             assert isinstance(model_name, str)
             assert 0.0 <= pass_rate <= 1.0
 
-    def test_to_usage_dataframe_with_results(
-        self, verification_result_success: VerificationResult
-    ):
+    def test_to_usage_dataframe_with_results(self, verification_result_success: VerificationResult):
         """Test to_usage_dataframe() with verification results."""
         # Add usage metadata to the template
         verification_result_success.template.usage_metadata = {
@@ -270,9 +257,7 @@ class TestTemplateResultsIntegration:
 class TestRubricResultsIntegration:
     """Integration tests for RubricResults with verification data."""
 
-    def test_to_dataframe_with_results(
-        self, verification_result_success: VerificationResult
-    ):
+    def test_to_dataframe_with_results(self, verification_result_success: VerificationResult):
         """Test RubricResults.to_dataframe() with verification results."""
         # Use only the result with rubric data
         rubric_results = RubricResults(results=[verification_result_success])
@@ -293,9 +278,7 @@ class TestRubricResultsIntegration:
         for col in core_columns:
             assert col in df.columns, f"Missing core column: {col}"
 
-    def test_aggregate_llm_traits_with_results(
-        self, verification_result_success: VerificationResult
-    ):
+    def test_aggregate_llm_traits_with_results(self, verification_result_success: VerificationResult):
         """Test aggregate_llm_traits() with verification results."""
         rubric_results = RubricResults(results=[verification_result_success])
 
@@ -322,9 +305,7 @@ class TestRubricResultsIntegration:
 class TestJudgmentResultsIntegration:
     """Integration tests for JudgmentResults with verification data."""
 
-    def test_to_dataframe_with_results(
-        self, verification_result_success: VerificationResult
-    ):
+    def test_to_dataframe_with_results(self, verification_result_success: VerificationResult):
         """Test JudgmentResults.to_dataframe() with verification results."""
         # Use only the result with deep judgment data
         judgment_results = JudgmentResults(results=[verification_result_success])
@@ -345,9 +326,7 @@ class TestJudgmentResultsIntegration:
         for col in core_columns:
             assert col in df.columns, f"Missing core column: {col}"
 
-    def test_aggregate_excerpt_counts_with_results(
-        self, verification_result_success: VerificationResult
-    ):
+    def test_aggregate_excerpt_counts_with_results(self, verification_result_success: VerificationResult):
         """Test aggregate_excerpt_counts() with verification results."""
         judgment_results = JudgmentResults(results=[verification_result_success])
 
@@ -377,9 +356,7 @@ class TestJudgmentResultsIntegration:
 class TestDataFrameConsistency:
     """Integration tests for DataFrame consistency across result types."""
 
-    def test_common_columns_consistency(
-        self, verification_result_success: VerificationResult
-    ):
+    def test_common_columns_consistency(self, verification_result_success: VerificationResult):
         """Test that common columns are consistent across all DataFrame types."""
         results_list = [verification_result_success]
 
@@ -413,9 +390,7 @@ class TestDataFrameConsistency:
         for col in common_columns:
             assert col in judgment_df.columns, f"JudgmentResults missing common column: {col}"
 
-    def test_status_columns_first(
-        self, verification_result_success: VerificationResult
-    ):
+    def test_status_columns_first(self, verification_result_success: VerificationResult):
         """Test that status columns appear first in all DataFrames."""
         results_list = [verification_result_success]
 
@@ -446,9 +421,7 @@ class TestDataFrameConsistency:
 class TestPandasOperations:
     """Integration tests for pandas operations on DataFrames."""
 
-    def test_groupby_operations(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_groupby_operations(self, verification_results_list: list[VerificationResult]):
         """Test pandas groupby operations on TemplateResults DataFrame."""
         template_results = TemplateResults(results=verification_results_list)
         df = template_results.to_dataframe()
@@ -462,9 +435,7 @@ class TestPandasOperations:
         assert isinstance(pass_rates, pd.Series)
         assert len(pass_rates) > 0
 
-    def test_filtering_operations(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_filtering_operations(self, verification_results_list: list[VerificationResult]):
         """Test pandas filtering operations on DataFrames."""
         template_results = TemplateResults(results=verification_results_list)
         df = template_results.to_dataframe()
@@ -480,9 +451,7 @@ class TestPandasOperations:
             assert len(question_df) > 0
             assert (question_df["question_id"] == first_question).all()
 
-    def test_pivot_operations(
-        self, verification_result_success: VerificationResult
-    ):
+    def test_pivot_operations(self, verification_result_success: VerificationResult):
         """Test pandas pivot operations on RubricResults DataFrame."""
         rubric_results = RubricResults(results=[verification_result_success])
         df = rubric_results.to_dataframe(trait_type="llm")

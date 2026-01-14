@@ -10,7 +10,7 @@ Tests are marked with:
 Run with: pytest tests/integration/test_dataframe_integration_rubrics.py -v
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pandas as pd
 import pytest
@@ -24,7 +24,6 @@ from karenina.schemas.workflow import (
     VerificationResultTemplate,
 )
 
-
 # =============================================================================
 # Helper Functions
 # =============================================================================
@@ -37,7 +36,7 @@ def _create_metadata(
     error: str | None = None,
 ) -> VerificationResultMetadata:
     """Helper to create metadata with computed result_id."""
-    timestamp = datetime.now(timezone.utc).isoformat()
+    timestamp = datetime.now(UTC).isoformat()
     return VerificationResultMetadata(
         question_id=question_id,
         template_id="test-template-id",
@@ -150,9 +149,7 @@ def verification_results_list(
 class TestRubricResultsDataFrame:
     """Test RubricResults DataFrame conversion."""
 
-    def test_to_dataframe_all_traits(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_to_dataframe_all_traits(self, verification_results_list: list[VerificationResult]):
         """Test DataFrame export with all trait types."""
         rubric_results = RubricResults(results=verification_results_list)
         df = rubric_results.to_dataframe(trait_type="all")
@@ -165,9 +162,7 @@ class TestRubricResultsDataFrame:
         # 2 results = 20 rows total
         assert len(df) >= 10  # At least one result's traits
 
-    def test_to_dataframe_llm_traits_only(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_to_dataframe_llm_traits_only(self, verification_results_list: list[VerificationResult]):
         """Test DataFrame export with LLM traits only."""
         rubric_results = RubricResults(results=verification_results_list)
         df = rubric_results.to_dataframe(trait_type="llm")
@@ -181,9 +176,7 @@ class TestRubricResultsDataFrame:
         assert "trait_score" in df.columns
         assert "question_id" in df.columns
 
-    def test_to_dataframe_regex_traits_only(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_to_dataframe_regex_traits_only(self, verification_results_list: list[VerificationResult]):
         """Test DataFrame export with regex traits only."""
         rubric_results = RubricResults(results=verification_results_list)
         df = rubric_results.to_dataframe(trait_type="regex")
@@ -195,9 +188,7 @@ class TestRubricResultsDataFrame:
         # Should have 2 regex traits per result
         assert len(df) == 4  # 2 traits * 2 results
 
-    def test_to_dataframe_callable_traits_only(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_to_dataframe_callable_traits_only(self, verification_results_list: list[VerificationResult]):
         """Test DataFrame export with callable traits only."""
         rubric_results = RubricResults(results=verification_results_list)
         df = rubric_results.to_dataframe(trait_type="callable")
@@ -206,9 +197,7 @@ class TestRubricResultsDataFrame:
         assert len(df) > 0
         assert all(df["trait_type"] == "callable")
 
-    def test_to_dataframe_metric_traits_only(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_to_dataframe_metric_traits_only(self, verification_results_list: list[VerificationResult]):
         """Test DataFrame export with metric traits only (exploded by metric)."""
         rubric_results = RubricResults(results=verification_results_list)
         df = rubric_results.to_dataframe(trait_type="metric")
@@ -232,9 +221,7 @@ class TestRubricResultsDataFrame:
 class TestRubricResultsAggregation:
     """Test RubricResults aggregation methods."""
 
-    def test_aggregate_llm_traits_by_question(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_aggregate_llm_traits_by_question(self, verification_results_list: list[VerificationResult]):
         """Test aggregating LLM traits by question."""
         rubric_results = RubricResults(results=verification_results_list)
         aggregated = rubric_results.aggregate_llm_traits(strategy="mean", by="question_id")
@@ -248,9 +235,7 @@ class TestRubricResultsAggregation:
             # Should have the LLM traits we defined
             assert "Clarity" in traits or "Completeness" in traits
 
-    def test_aggregate_llm_traits_by_model(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_aggregate_llm_traits_by_model(self, verification_results_list: list[VerificationResult]):
         """Test aggregating LLM traits by model."""
         rubric_results = RubricResults(results=verification_results_list)
         aggregated = rubric_results.aggregate_llm_traits(strategy="mean", by="answering_model")
@@ -262,9 +247,7 @@ class TestRubricResultsAggregation:
             assert isinstance(model_name, str)
             assert isinstance(traits, dict)
 
-    def test_aggregate_regex_traits(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_aggregate_regex_traits(self, verification_results_list: list[VerificationResult]):
         """Test aggregating regex traits."""
         rubric_results = RubricResults(results=verification_results_list)
         aggregated = rubric_results.aggregate_regex_traits(strategy="majority_vote", by="question_id")
@@ -277,9 +260,7 @@ class TestRubricResultsAggregation:
             for trait_name, value in traits.items():
                 assert isinstance(value, bool)
 
-    def test_aggregate_callable_traits(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_aggregate_callable_traits(self, verification_results_list: list[VerificationResult]):
         """Test aggregating callable traits."""
         rubric_results = RubricResults(results=verification_results_list)
         aggregated = rubric_results.aggregate_callable_traits(strategy="majority_vote", by="question_id")
@@ -289,9 +270,7 @@ class TestRubricResultsAggregation:
         for question_id, traits in aggregated.items():
             assert isinstance(traits, dict)
 
-    def test_aggregate_metric_traits(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_aggregate_metric_traits(self, verification_results_list: list[VerificationResult]):
         """Test aggregating metric traits."""
         rubric_results = RubricResults(results=verification_results_list)
         aggregated = rubric_results.aggregate_metric_traits(
@@ -315,9 +294,7 @@ class TestRubricResultsAggregation:
 class TestRubricConsistency:
     """Test consistency between RubricResults and TemplateResults."""
 
-    def test_common_columns_with_template_results(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_common_columns_with_template_results(self, verification_results_list: list[VerificationResult]):
         """Test that common columns are consistent between result types."""
         template_results = TemplateResults(results=verification_results_list)
         rubric_results = RubricResults(results=verification_results_list)
@@ -332,9 +309,7 @@ class TestRubricConsistency:
             assert col in template_df.columns
             assert col in rubric_df.columns
 
-    def test_status_column_first(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_status_column_first(self, verification_results_list: list[VerificationResult]):
         """Test that status column appears first."""
         rubric_results = RubricResults(results=verification_results_list)
         df = rubric_results.to_dataframe(trait_type="all")
@@ -347,9 +322,7 @@ class TestRubricConsistency:
 class TestRubricPandasOperations:
     """Test pandas operations on RubricResults DataFrames."""
 
-    def test_groupby_operations(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_groupby_operations(self, verification_results_list: list[VerificationResult]):
         """Test pandas groupby operations."""
         rubric_results = RubricResults(results=verification_results_list)
         df = rubric_results.to_dataframe(trait_type="llm")
@@ -358,9 +331,7 @@ class TestRubricPandasOperations:
         grouped = df.groupby("question_id")
         assert len(grouped) > 0
 
-    def test_filtering_operations(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_filtering_operations(self, verification_results_list: list[VerificationResult]):
         """Test pandas filtering operations."""
         rubric_results = RubricResults(results=verification_results_list)
         df = rubric_results.to_dataframe(trait_type="all")
@@ -369,9 +340,7 @@ class TestRubricPandasOperations:
         clarity_df = df[df["trait_name"] == "Clarity"]
         assert len(clarity_df) > 0
 
-    def test_pivot_operations_on_traits(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_pivot_operations_on_traits(self, verification_results_list: list[VerificationResult]):
         """Test pandas pivot operations on traits."""
         rubric_results = RubricResults(results=verification_results_list)
         df = rubric_results.to_dataframe(trait_type="llm")
@@ -391,9 +360,7 @@ class TestRubricPandasOperations:
         except Exception as e:
             pytest.skip(f"Pivot not applicable: {e}")
 
-    def test_multi_level_groupby(
-        self, verification_results_list: list[VerificationResult]
-    ):
+    def test_multi_level_groupby(self, verification_results_list: list[VerificationResult]):
         """Test multi-level groupby operations."""
         rubric_results = RubricResults(results=verification_results_list)
         df = rubric_results.to_dataframe(trait_type="all")
