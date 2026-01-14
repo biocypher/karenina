@@ -1076,8 +1076,8 @@ class QuestionManager:
     response: str = Field(description="The answer response")
 
     def verify(self) -> bool:
-        # TODO: Implement verification logic
-        return True
+        # Default template: returns False to indicate custom verification needed
+        return False
 '''
 
     def _is_default_template(self, template: str, question: str) -> bool:
