@@ -8,6 +8,7 @@ Functions:
     extract_json_from_text: Extract JSON objects from mixed text content
     extract_balanced_braces: Extract balanced brace expressions from text
     is_retryable_error: Check if an exception is a transient/retryable error
+    is_openai_endpoint_llm: Check if LLM is a custom OpenAI-compatible endpoint
     parse_tool_output: Parse search tool output into SearchResultItem list
 """
 
@@ -26,6 +27,7 @@ __all__ = [
     "extract_json_from_text",
     "extract_balanced_braces",
     "is_retryable_error",
+    "is_openai_endpoint_llm",
     "parse_tool_output",
 ]
 
@@ -239,6 +241,50 @@ def is_retryable_error(exception: Exception) -> bool:
     ]
 
     return exception_type in retryable_types
+
+
+def is_openai_endpoint_llm(llm: Any) -> bool:
+    """Check if the LLM is a ChatOpenAIEndpoint (custom OpenAI-compatible endpoint).
+
+    These endpoints often don't support native structured output (json_schema method)
+    and can hang indefinitely when attempting to use it. This function helps callers
+    decide whether to skip structured output attempts.
+
+    Detection methods:
+    1. Class name is "ChatOpenAIEndpoint"
+    2. Class hierarchy includes ChatOpenAIEndpoint
+    3. Module path suggests interface wrapper with ChatOpenAI
+    4. Has custom base_url not pointing to api.openai.com
+
+    Args:
+        llm: LangChain chat model instance
+
+    Returns:
+        True if the LLM appears to be an OpenAI-compatible endpoint, False otherwise
+
+    Example:
+        >>> if is_openai_endpoint_llm(llm):
+        ...     # Skip json_schema method, use fallback parsing
+        ...     pass
+    """
+    # Check by class name to avoid circular imports
+    llm_class_name = type(llm).__name__
+    # Also check the module path for more robust detection
+    llm_module = type(llm).__module__
+
+    is_endpoint = (
+        llm_class_name == "ChatOpenAIEndpoint"
+        or "ChatOpenAIEndpoint" in str(type(llm).__mro__)
+        or (llm_module and "interface" in llm_module and llm_class_name == "ChatOpenAI")
+    )
+
+    # Also check if it has a custom base_url that's not OpenAI's
+    if hasattr(llm, "openai_api_base") and llm.openai_api_base:
+        base_url = str(llm.openai_api_base)
+        if base_url and not base_url.startswith("https://api.openai.com"):
+            is_endpoint = True
+
+    return bool(is_endpoint)
 
 
 def parse_tool_output(raw_result: Any) -> list["SearchResultItem"]:
