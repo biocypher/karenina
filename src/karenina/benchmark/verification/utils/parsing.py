@@ -420,37 +420,6 @@ def _extract_text_from_search_results(search_results: list[SearchResultItem] | l
     return "\n\n".join(texts)
 
 
-def _parse_tool_output(tool_output: Any) -> list[SearchResultItem]:
-    """Parse tool output into standardized SearchResultItem format.
-
-    Args:
-        tool_output: Raw output from search tool (can be various formats)
-
-    Returns:
-        List of SearchResultItem objects
-    """
-    result_items = []
-    if isinstance(tool_output, list):
-        for item in tool_output:
-            if isinstance(item, SearchResultItem):
-                result_items.append(item)
-            elif isinstance(item, dict):
-                result_items.append(
-                    SearchResultItem(
-                        title=item.get("title"),
-                        content=item.get("content", ""),
-                        url=item.get("url"),
-                    )
-                )
-    elif isinstance(tool_output, str):
-        # Simple string output - wrap in SearchResultItem
-        result_items.append(SearchResultItem(title=None, content=tool_output, url=None))
-    elif isinstance(tool_output, SearchResultItem):
-        result_items.append(tool_output)
-
-    return result_items
-
-
 # Template utilities
 
 
