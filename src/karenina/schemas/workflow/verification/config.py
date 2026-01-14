@@ -135,19 +135,6 @@ class VerificationConfig(BaseModel):
     # Database storage settings
     db_config: Any | None = None  # DBConfig instance for automatic result persistence
 
-    # Legacy model fields for backward compatibility (deprecated)
-    answering_model_provider: str | None = None
-    answering_model_name: str | None = None
-    answering_temperature: float | None = None
-    answering_interface: str | None = None
-    answering_system_prompt: str | None = None
-
-    parsing_model_provider: str | None = None
-    parsing_model_name: str | None = None
-    parsing_temperature: float | None = None
-    parsing_interface: str | None = None
-    parsing_system_prompt: str | None = None
-
     def __init__(self, **data: Any) -> None:
         """
         Initialize with backward compatibility for single model configs.
