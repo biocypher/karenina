@@ -17,6 +17,8 @@ from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 from sqlalchemy import JSON, Boolean, Column, Float, Index, Integer, String, Text
 
+from .utils import is_pydantic_model as _is_pydantic_model
+
 if TYPE_CHECKING:
     from sqlalchemy.orm import DeclarativeBase
 
@@ -67,14 +69,6 @@ def _unwrap_optional(field_type: type) -> tuple[type, bool]:
             return type(None), True
 
     return field_type, False
-
-
-def _is_pydantic_model(field_type: type) -> bool:
-    """Check if a type is a Pydantic BaseModel subclass."""
-    try:
-        return isinstance(field_type, type) and issubclass(field_type, BaseModel)
-    except TypeError:
-        return False
 
 
 def _get_sqlalchemy_type(python_type: type, metadata: dict[str, Any]) -> Any:
