@@ -202,14 +202,15 @@ class VerificationManager:
 
     def verify_dry_run(
         self,
-        config: VerificationConfig,  # noqa: ARG002
         question_ids: list[str] | None = None,
     ) -> dict[str, bool]:
         """
         Perform a dry run verification (validate without executing).
 
+        This validates that templates are syntactically correct and ready for
+        verification. It does not actually run the verification pipeline.
+
         Args:
-            config: Verification configuration to validate
             question_ids: Optional list of question IDs (default: all finished)
 
         Returns:

@@ -853,11 +853,10 @@ class Benchmark:
 
     def verify_dry_run(
         self,
-        config: VerificationConfig,
         question_ids: list[str] | None = None,
     ) -> dict[str, bool]:
         """Perform a dry run verification (validate without executing)."""
-        return self._verification_manager.verify_dry_run(config, question_ids)
+        return self._verification_manager.verify_dry_run(question_ids)
 
     def run_verification(
         self,
