@@ -1,0 +1,39 @@
+{
+  "metadata": {
+    "scenario": "e2e_rubric_sequential",
+    "model": "claude-haiku-4-5",
+    "timestamp": "2026-01-13T21:08:35.313040",
+    "prompt_hash": "bfcafb5727a13d0f7ca323d60a0ddf86fcd46c8b1da04d2a6ee96043583f9449"
+  },
+  "request": {
+    "messages": [
+      {
+        "content": "You are evaluating responses for the trait: **clarity**\n\n**Criteria:** The response is clear and easy to understand\n\n**RESPONSE FORMAT:**\nYou will receive a JSON Schema specifying the exact output structure. Your response MUST conform to this schema.\nReturn valid JSON: {\"result\": true} or {\"result\": false}\nKeep your response concise - the JSON is the primary output.\n\n**EVALUATION GUIDELINES:**\n- `true`: The criteria IS met - answer clearly satisfies the requirement\n- `false`: The criteria IS NOT met - answer fails to satisfy the requirement\n- When uncertain, choose the most conservative value based on the trait's nature:\n  - For positive traits (e.g., \"is accurate\"), lean toward `false`\n  - For negative traits (e.g., \"contains errors\"), lean toward `true`\n\n**PARSING NOTES:**\n- If JSON parsing fails, we also accept: \"true\", \"yes\", \"false\", \"no\"\n- Do NOT use string values like \"true\" with quotes - use the boolean\n- Avoid wrapping in markdown code blocks",
+        "additional_kwargs": {},
+        "response_metadata": {},
+        "type": "system",
+        "name": null,
+        "id": null
+      },
+      {
+        "content": "**QUESTION:**\nHow do I make a good cup of coffee?\n\n**ANSWER TO EVALUATE:**\nTo make good coffee: 1) Use fresh, quality beans. 2) Grind just before brewing. 3) Use water at 195-205\u00b0F. 4) Use a ratio of 1:16 coffee to water. 5) Brew for 4-5 minutes.\n\n**TRAIT:** clarity\n**CRITERIA:** The response is clear and easy to understand\n\n**JSON SCHEMA (your response MUST conform to this):**\n```json\n{\n  \"description\": \"Structured output for boolean trait evaluation.\\n\\nUsed for single-trait evaluation where the trait is binary (pass/fail).\",\n  \"properties\": {\n    \"result\": {\n      \"description\": \"True if the criteria is met, False otherwise\",\n      \"title\": \"Result\",\n      \"type\": \"boolean\"\n    }\n  },\n  \"required\": [\n    \"result\"\n  ],\n  \"title\": \"SingleBooleanScore\",\n  \"type\": \"object\"\n}\n```\n\nEvaluate this answer for the trait above and return your assessment as JSON: {\"result\": true} or {\"result\": false}",
+        "additional_kwargs": {},
+        "response_metadata": {},
+        "type": "human",
+        "name": null,
+        "id": null
+      }
+    ],
+    "kwargs": {}
+  },
+  "response": {
+    "content": "{\"result\": true}",
+    "id": "lc_run--fd520957-e86f-4127-82cd-c2194973bee6-0",
+    "model": "claude-haiku-4-5",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    }
+  }
+}

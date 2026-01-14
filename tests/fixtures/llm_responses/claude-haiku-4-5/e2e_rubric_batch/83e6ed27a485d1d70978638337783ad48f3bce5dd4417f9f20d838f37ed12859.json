@@ -1,0 +1,39 @@
+{
+  "metadata": {
+    "scenario": "e2e_rubric_batch",
+    "model": "claude-haiku-4-5",
+    "timestamp": "2026-01-13T21:08:34.276104",
+    "prompt_hash": "83e6ed27a485d1d70978638337783ad48f3bce5dd4417f9f20d838f37ed12859"
+  },
+  "request": {
+    "messages": [
+      {
+        "content": "You are an expert evaluator assessing the quality of responses using a structured rubric.\n\nYour task is to evaluate a given answer against multiple evaluation traits and return scores in JSON format.\n\n**RESPONSE FORMAT:**\nYou will receive a JSON Schema specifying the exact output structure. Your response MUST conform to this schema.\nReturn ONLY a JSON object - no explanations, no markdown, no surrounding text.\n\n**CRITICAL REQUIREMENTS:**\n1. **JSON ONLY**: Your entire response must be valid JSON conforming to the provided schema\n2. **Schema Compliance**: Follow the JSON Schema exactly - it defines the structure for parsing\n3. **Exact Trait Names**: Use the EXACT trait names provided - case-sensitive matching is required\n4. **Boolean Traits**: Use JSON `true` or `false` (lowercase, no quotes around the value)\n5. **Score Traits**: Use integers within the specified range\n6. **Score Clamping**: Scores outside the valid range will be automatically clamped to the nearest boundary\n7. **Missing Traits**: Any trait not included will be recorded as `null` (evaluation failure)\n\n**EVALUATION GUIDELINES:**\n- Evaluate each trait independently based on its specific criteria\n- When uncertain, choose the most conservative/defensive value based on the trait's intent:\n  - For positive traits (e.g., \"is accurate\"), lean toward `false` when uncertain\n  - For negative traits (e.g., \"contains errors\"), lean toward `true` when uncertain\n  - For scores, lean toward the middle of the scale when uncertain\n- Base assessments solely on the answer content, not assumptions about intent\n- Be consistent: similar answers should receive similar scores\n\n**WHAT NOT TO DO:**\n- Do NOT wrap JSON in markdown code blocks (no ```)\n- Do NOT add explanatory text before or after the JSON\n- Do NOT use string values like \"true\" - use the boolean `true`\n- Do NOT skip any traits - include ALL traits in your response",
+        "additional_kwargs": {},
+        "response_metadata": {},
+        "type": "system",
+        "name": null,
+        "id": null
+      },
+      {
+        "content": "Evaluate the following answer against these traits:\n\n**TRAITS TO EVALUATE:**\n- **clarity** (boolean): The response is clear and easy to understand\n  \u2192 Return `true` or `false`\n- **helpfulness** (score 1-5): The response is helpful and addresses the user's need\n  \u2192 Return integer from 1 to 5\n\n**QUESTION:**\nExplain what photosynthesis is in simple terms.\n\n**ANSWER TO EVALUATE:**\nPhotosynthesis is the process by which plants convert sunlight, water, and carbon dioxide into glucose and oxygen. Think of it as plants making their own food using sunlight as energy.\n\n**JSON SCHEMA (your response MUST conform to this):**\n```json\n{\n  \"description\": \"Structured output for batch trait evaluation.\\n\\nUsed when evaluating multiple rubric traits in a single LLM call.\\nThe LLM returns all trait scores in one response.\",\n  \"properties\": {\n    \"scores\": {\n      \"additionalProperties\": {\n        \"anyOf\": [\n          {\n            \"type\": \"integer\"\n          },\n          {\n            \"type\": \"boolean\"\n          }\n        ]\n      },\n      \"description\": \"Dictionary mapping trait names to scores (int for score traits, bool for binary)\",\n      \"title\": \"Scores\",\n      \"type\": \"object\"\n    }\n  },\n  \"required\": [\n    \"scores\"\n  ],\n  \"title\": \"BatchRubricScores\",\n  \"type\": \"object\"\n}\n```\n\n**REQUIRED OUTPUT FORMAT:**\nReturn a JSON object with a \"scores\" key. Use EXACT trait names as shown above.\n\nExample (using YOUR trait names):\n{\n  \"scores\": {\n    \"clarity\": true,\n    \"helpfulness\": 3\n  }\n}\n\n**YOUR JSON RESPONSE:**",
+        "additional_kwargs": {},
+        "response_metadata": {},
+        "type": "human",
+        "name": null,
+        "id": null
+      }
+    ],
+    "kwargs": {}
+  },
+  "response": {
+    "content": "```json\n{\n  \"scores\": {\n    \"clarity\": true,\n    \"helpfulness\": 5\n  }\n}\n```",
+    "id": "lc_run--6728372f-b9f3-4257-b61e-ca86d8ff95d8-0",
+    "model": "claude-haiku-4-5",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    }
+  }
+}
