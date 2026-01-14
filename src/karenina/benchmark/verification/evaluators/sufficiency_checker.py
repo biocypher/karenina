@@ -11,6 +11,7 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 from ....infrastructure.llm.interface import init_chat_model_unified
 from ....schemas.workflow import ModelConfig
 from ..utils.prompts import SUFFICIENCY_DETECTION_SYS, SUFFICIENCY_DETECTION_USER
+from ..utils.shared import strip_markdown_fences as _strip_markdown_fences
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -52,32 +53,6 @@ def is_retryable_error(exception: Exception) -> bool:
     ]
 
     return exception_type in retryable_types
-
-
-def _strip_markdown_fences(text: str) -> str:
-    """
-    Remove markdown JSON code fences from LLM response text.
-
-    Args:
-        text: Raw text response from LLM that may contain markdown fences
-
-    Returns:
-        Cleaned text with markdown fences removed
-    """
-    if not isinstance(text, str):
-        return text
-
-    # Strip leading and trailing markdown JSON fences
-    cleaned = text.strip()
-    if cleaned.startswith("```json"):
-        cleaned = cleaned[7:]  # Remove ```json
-    elif cleaned.startswith("```"):
-        cleaned = cleaned[3:]  # Remove ```
-
-    if cleaned.endswith("```"):
-        cleaned = cleaned[:-3]  # Remove trailing ```
-
-    return cleaned.strip()
 
 
 def detect_sufficiency(
@@ -181,7 +156,8 @@ def detect_sufficiency(
 
             # Parse the JSON response
             cleaned_response = _strip_markdown_fences(raw_response)
-            result = json.loads(cleaned_response)
+            # raw_response is always a str, so cleaned_response will be str
+            result = json.loads(cleaned_response)  # type: ignore[arg-type]
 
             # Extract the sufficiency determination
             sufficient = result.get("sufficient", True)  # Default to sufficient if missing
