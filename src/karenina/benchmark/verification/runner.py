@@ -182,8 +182,6 @@ def run_single_model_verification(
 
     # Build stage orchestrator from configuration
     orchestrator = StageOrchestrator.from_config(
-        answering_model=answering_model,
-        parsing_model=parsing_model,
         rubric=rubric,
         abstention_enabled=abstention_enabled,
         sufficiency_enabled=sufficiency_enabled,

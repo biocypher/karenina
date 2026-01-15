@@ -174,7 +174,7 @@ class TestAddQuestion:
 
         template = manager.base._questions_cache[q_id]["answer_template"]
         assert "class Answer(BaseAnswer):" in template
-        assert "TODO: Implement verification logic" in template
+        assert "return False" in template  # Default template returns False
 
     def test_add_question_with_invalid_type_raises(self) -> None:
         """Test that invalid question type raises TypeError."""

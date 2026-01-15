@@ -37,6 +37,7 @@ from karenina.schemas.workflow.verification.api_models import FinishedTemplate
 from karenina.schemas.workflow.verification.config import VerificationConfig
 from karenina.schemas.workflow.verification.result import VerificationResult
 from karenina.schemas.workflow.verification.result_components import VerificationResultMetadata
+from karenina.schemas.workflow.verification_result_set import VerificationResultSet
 
 
 # Helper function to create minimal FinishedTemplate
@@ -543,10 +544,12 @@ def test_create_export_job_basic() -> None:
     """Test creating basic export job."""
     from karenina.schemas.workflow.models import ModelConfig
 
-    results = {
-        "q-1": _make_result("q-1", completed=True),
-        "q-2": _make_result("q-2", completed=True),
-    }
+    result_set = VerificationResultSet(
+        results=[
+            _make_result("q-1", completed=True),
+            _make_result("q-2", completed=True),
+        ]
+    )
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
@@ -571,7 +574,7 @@ def test_create_export_job_basic() -> None:
     )
 
     job = create_export_job(
-        results=results,
+        result_set=result_set,
         config=config,
         run_name="test-run",
         start_time=1000.0,
@@ -593,11 +596,13 @@ def test_create_export_job_with_failures() -> None:
     """Test creating export job with some failures."""
     from karenina.schemas.workflow.models import ModelConfig
 
-    results = {
-        "q-1": _make_result("q-1", completed=True),
-        "q-2": _make_result("q-2", completed=False),
-        "q-3": _make_result("q-3", completed=False),
-    }
+    result_set = VerificationResultSet(
+        results=[
+            _make_result("q-1", completed=True),
+            _make_result("q-2", completed=False),
+            _make_result("q-3", completed=False),
+        ]
+    )
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
@@ -622,7 +627,7 @@ def test_create_export_job_with_failures() -> None:
     )
 
     job = create_export_job(
-        results=results,
+        result_set=result_set,
         config=config,
         run_name="test",
         start_time=0.0,
@@ -639,9 +644,11 @@ def test_create_export_job_default_run_name() -> None:
     """Test creating export job with empty run name uses default."""
     from karenina.schemas.workflow.models import ModelConfig
 
-    results = {
-        "q-1": _make_result("q-1", completed=True),
-    }
+    result_set = VerificationResultSet(
+        results=[
+            _make_result("q-1", completed=True),
+        ]
+    )
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
@@ -666,7 +673,7 @@ def test_create_export_job_default_run_name() -> None:
     )
 
     job = create_export_job(
-        results=results,
+        result_set=result_set,
         config=config,
         run_name="",
         start_time=0.0,
@@ -682,9 +689,11 @@ def test_create_export_job_generates_uuid() -> None:
     """Test creating export job generates UUID."""
     from karenina.schemas.workflow.models import ModelConfig
 
-    results = {
-        "q-1": _make_result("q-1", completed=True),
-    }
+    result_set = VerificationResultSet(
+        results=[
+            _make_result("q-1", completed=True),
+        ]
+    )
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
@@ -708,8 +717,8 @@ def test_create_export_job_generates_uuid() -> None:
         ],
     )
 
-    job1 = create_export_job(results, config, "", 0.0, 1.0)
-    job2 = create_export_job(results, config, "", 0.0, 1.0)
+    job1 = create_export_job(result_set, config, "", 0.0, 1.0)
+    job2 = create_export_job(result_set, config, "", 0.0, 1.0)
 
     assert job1.job_id != job2.job_id
 

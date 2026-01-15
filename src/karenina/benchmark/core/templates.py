@@ -276,6 +276,6 @@ class TemplateManager:
     response: str = Field(description="The answer response")
 
     def verify(self) -> bool:
-        # TODO: Implement verification logic
-        return True
+        # Default template: returns False to indicate custom verification needed
+        return False
 '''

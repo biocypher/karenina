@@ -135,24 +135,6 @@ class VerificationConfig(BaseModel):
     # Database storage settings
     db_config: Any | None = None  # DBConfig instance for automatic result persistence
 
-    # Legacy few-shot fields for backward compatibility (deprecated)
-    few_shot_enabled: bool | None = None
-    few_shot_mode: Literal["all", "k-shot", "custom"] | None = None
-    few_shot_k: int | None = None
-
-    # Legacy fields for backward compatibility (deprecated)
-    answering_model_provider: str | None = None
-    answering_model_name: str | None = None
-    answering_temperature: float | None = None
-    answering_interface: str | None = None
-    answering_system_prompt: str | None = None
-
-    parsing_model_provider: str | None = None
-    parsing_model_name: str | None = None
-    parsing_temperature: float | None = None
-    parsing_interface: str | None = None
-    parsing_system_prompt: str | None = None
-
     def __init__(self, **data: Any) -> None:
         """
         Initialize with backward compatibility for single model configs.
@@ -326,25 +308,12 @@ class VerificationConfig(BaseModel):
             )
 
         # Additional validation for few-shot prompting scenarios
-        # Handle both legacy and new few-shot configurations
-        few_shot_config = self.few_shot_config
-
-        # Check legacy fields for backward compatibility
-        if (
-            few_shot_config is None
-            and self.few_shot_enabled
-            and self.few_shot_mode == "k-shot"
-            and (self.few_shot_k is None or self.few_shot_k < 1)
-        ):
-            raise ValueError("Few-shot k value must be at least 1 when using k-shot mode")
-
-        # Validate new FewShotConfig if present
-        if few_shot_config is not None and few_shot_config.enabled:
-            if few_shot_config.global_mode == "k-shot" and few_shot_config.global_k < 1:
+        if self.few_shot_config is not None and self.few_shot_config.enabled:
+            if self.few_shot_config.global_mode == "k-shot" and self.few_shot_config.global_k < 1:
                 raise ValueError("Global few-shot k value must be at least 1 when using k-shot mode")
 
             # Validate question-specific k values
-            for question_id, question_config in few_shot_config.question_configs.items():
+            for question_id, question_config in self.few_shot_config.question_configs.items():
                 if question_config.mode == "k-shot" and question_config.k is not None and question_config.k < 1:
                     raise ValueError(
                         f"Question {question_id} few-shot k value must be at least 1 when using k-shot mode"
@@ -492,27 +461,12 @@ class VerificationConfig(BaseModel):
 
     def get_few_shot_config(self) -> FewShotConfig | None:
         """
-        Get the effective FewShotConfig, handling backward compatibility.
+        Get the FewShotConfig for this verification run.
 
         Returns:
             The FewShotConfig to use, or None if few-shot is disabled
         """
-        # Return new config if present
-        if self.few_shot_config is not None:
-            return self.few_shot_config
-
-        # Handle legacy configuration
-        if self.few_shot_enabled:
-            few_shot_mode = self.few_shot_mode or "all"
-            few_shot_k = self.few_shot_k or 3
-
-            return FewShotConfig(
-                enabled=True,
-                global_mode=few_shot_mode,
-                global_k=few_shot_k,
-            )
-
-        return None
+        return self.few_shot_config
 
     def is_few_shot_enabled(self) -> bool:
         """

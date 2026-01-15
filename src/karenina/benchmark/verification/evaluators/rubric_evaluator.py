@@ -1161,7 +1161,7 @@ Your JSON response:"""
         question: str,
         answer: str,
         trait: "LLMRubricTrait",
-        config: Any,  # noqa: ARG002
+        config: Any,  # noqa: ARG002 - Kept for method signature consistency
         metadata: dict[str, Any],
     ) -> dict[str, Any]:
         """
@@ -1617,7 +1617,7 @@ Compare excerpts against external search results to determine if the information
     def _build_trait_reasoning_prompt_with_excerpts(
         self,
         question: str,
-        answer: str,  # noqa: ARG002
+        answer: str,  # noqa: ARG002 - Excerpts already contain relevant answer portions
         trait: "LLMRubricTrait",
         excerpts: list[dict[str, Any]],
         hallucination_risk: dict[str, Any] | None = None,
@@ -1685,8 +1685,8 @@ This reasoning will be used in a follow-up step to determine the final score.
 
     def _extract_score_for_trait(
         self,
-        question: str,  # noqa: ARG002
-        answer: str,  # noqa: ARG002
+        question: str,  # noqa: ARG002 - Kept for API consistency with other trait methods
+        answer: str,  # noqa: ARG002 - Kept for API consistency with other trait methods
         trait: "LLMRubricTrait",
         reasoning: str,
     ) -> dict[str, Any]:

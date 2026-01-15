@@ -795,7 +795,7 @@ class Benchmark:
         config: VerificationConfig,
         run_name: str | None = None,
         async_enabled: bool | None = None,
-    ) -> dict[str, VerificationResult]:
+    ) -> VerificationResultSet:
         """Verify a single question."""
         return self._verification_manager.verify_question(question_id, config, run_name, async_enabled)
 
@@ -806,7 +806,7 @@ class Benchmark:
         run_name: str | None = None,
         async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
-    ) -> dict[str, VerificationResult]:
+    ) -> VerificationResultSet:
         """Verify multiple specific questions."""
         return self._verification_manager.verify_questions(
             question_ids, config, run_name, async_enabled, progress_callback
@@ -822,7 +822,7 @@ class Benchmark:
         run_name: str | None = None,
         async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
-    ) -> dict[str, VerificationResult]:
+    ) -> VerificationResultSet:
         """Verify questions matching specific criteria."""
         return self._verification_manager.verify_filtered(
             config, finished, has_template, has_rubric, author, run_name, async_enabled, progress_callback
@@ -834,7 +834,7 @@ class Benchmark:
         run_name: str | None = None,
         async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
-    ) -> dict[str, VerificationResult]:
+    ) -> VerificationResultSet:
         """Verify all finished questions in the benchmark."""
         return self._verification_manager.verify_all_finished(config, run_name, async_enabled, progress_callback)
 
@@ -845,7 +845,7 @@ class Benchmark:
         run_name: str | None = None,
         async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
-    ) -> dict[str, VerificationResult]:
+    ) -> VerificationResultSet:
         """Verify questions selected by a custom function."""
         return self._verification_manager.verify_custom(
             question_selector, config, run_name, async_enabled, progress_callback
@@ -853,11 +853,10 @@ class Benchmark:
 
     def verify_dry_run(
         self,
-        config: VerificationConfig,
         question_ids: list[str] | None = None,
     ) -> dict[str, bool]:
         """Perform a dry run verification (validate without executing)."""
-        return self._verification_manager.verify_dry_run(config, question_ids)
+        return self._verification_manager.verify_dry_run(question_ids)
 
     def run_verification(
         self,
@@ -876,7 +875,7 @@ class Benchmark:
         self,
         question_configs: dict[str, VerificationConfig],
         progress_callback: Callable[[float, str], None] | None = None,
-    ) -> dict[str, dict[str, VerificationResult]]:
+    ) -> dict[str, VerificationResultSet]:
         """Verify different questions with different configurations."""
         return self._verification_manager.verify_with_mixed_configs(question_configs, progress_callback)
 
@@ -886,7 +885,7 @@ class Benchmark:
         configs: list[VerificationConfig],
         run_names: list[str],
         progress_callback: Callable[[float, str], None] | None = None,
-    ) -> dict[str, dict[str, VerificationResult]]:
+    ) -> dict[str, VerificationResultSet]:
         """Run same questions with multiple configurations for comparison."""
         return self._verification_manager.verify_comparative(question_ids, configs, run_names, progress_callback)
 
@@ -897,7 +896,7 @@ class Benchmark:
         run_name: str | None = None,
         resume_from: str | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
-    ) -> dict[str, VerificationResult]:
+    ) -> VerificationResultSet:
         """Verify questions in batches with ability to resume from interruptions."""
         return self._verification_manager.verify_progressive(
             config, batch_size, run_name, resume_from, progress_callback

@@ -57,6 +57,7 @@ from .workflow import (
     VerificationJob,
     VerificationRequest,
     VerificationResult,
+    VerificationResultSet,
     VerificationStartResponse,
     VerificationStatusResponse,
 )
@@ -86,6 +87,7 @@ __all__ = [
     "DEFAULT_PARSING_SYSTEM_PROMPT",
     "VerificationConfig",
     "VerificationResult",
+    "VerificationResultSet",
     "VerificationJob",
     "FinishedTemplate",
     "VerificationRequest",

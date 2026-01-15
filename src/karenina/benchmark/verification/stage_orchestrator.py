@@ -7,7 +7,7 @@ import logging
 import time
 
 from ...schemas.domain import Rubric
-from ...schemas.workflow import ModelConfig, VerificationResult
+from ...schemas.workflow import VerificationResult
 from .stage import StageList, StageRegistry, VerificationContext
 from .stages import (
     AbstentionCheckStage,
@@ -79,8 +79,6 @@ class StageOrchestrator:
     @classmethod
     def from_config(
         cls,
-        answering_model: ModelConfig,  # noqa: ARG003
-        parsing_model: ModelConfig,  # noqa: ARG003
         rubric: Rubric | None = None,
         abstention_enabled: bool = False,
         sufficiency_enabled: bool = False,
@@ -94,8 +92,6 @@ class StageOrchestrator:
         configuration flags and evaluation mode.
 
         Args:
-            answering_model: Answering model configuration (reserved for future use)
-            parsing_model: Parsing model configuration (reserved for future use)
             rubric: Optional rubric for evaluation
             abstention_enabled: Whether abstention detection is enabled
             sufficiency_enabled: Whether trace sufficiency detection is enabled
@@ -107,10 +103,6 @@ class StageOrchestrator:
 
         Returns:
             Configured StageOrchestrator instance
-
-        Note:
-            answering_model and parsing_model parameters are currently unused
-            but reserved for future stage configuration needs.
         """
         stages: StageList = []
 

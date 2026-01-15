@@ -183,8 +183,6 @@ def export_verification_results_json(
     for result in results:
         # Use Pydantic's native JSON serialization - NO custom stringification
         # This preserves complex types (dicts, lists, booleans) for JSON export
-        # Note: The schema no longer includes per-result evaluation_rubric,
-        # duplicate trace filtering fields, etc. - they're in shared_data or root level
         result_dict = result.model_dump(mode="json")
         export_data["results"].append(result_dict)
 
@@ -641,7 +639,18 @@ def create_export_filename(job: VerificationJob, format: str) -> str:
         Suggested filename
     """
     timestamp = time.strftime("%Y%m%d_%H%M%S", time.gmtime())
-    answering_model = f"{job.config.answering_model_provider}_{job.config.answering_model_name}".replace("/", "_")
-    parsing_model = f"{job.config.parsing_model_provider}_{job.config.parsing_model_name}".replace("/", "_")
+
+    # Use first model from each list for filename
+    if job.config.answering_models:
+        answering = job.config.answering_models[0]
+        answering_model = f"{answering.model_provider or 'unknown'}_{answering.model_name}".replace("/", "_")
+    else:
+        answering_model = "no_answering"
+
+    if job.config.parsing_models:
+        parsing = job.config.parsing_models[0]
+        parsing_model = f"{parsing.model_provider or 'unknown'}_{parsing.model_name}".replace("/", "_")
+    else:
+        parsing_model = "no_parsing"
 
     return f"verification_results_{timestamp}_{answering_model}_to_{parsing_model}.{format}"

@@ -111,8 +111,8 @@ VerboseLogger = SimpleLogger
 
 
 def create_verbose_logger(
-    max_iterations: int = 150,  # Ignored, kept for compatibility
-    console=None,  # Ignored, kept for compatibility
+    max_iterations: int = 150,  # noqa: ARG001 - Kept for API compatibility
+    console: object | None = None,  # noqa: ARG001 - Kept for API compatibility
     show_all_messages: bool = False,
 ) -> SimpleLogger:
     """Create a SimpleLogger instance.

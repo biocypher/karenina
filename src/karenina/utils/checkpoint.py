@@ -6,6 +6,7 @@ and the JSON-LD format used by the frontend.
 
 import hashlib
 import json
+import logging
 from datetime import datetime
 from typing import Any, Literal, cast
 
@@ -20,6 +21,8 @@ from ..schemas.checkpoint import (
     SchemaOrgSoftwareSourceCode,
 )
 from ..schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
+
+logger = logging.getLogger(__name__)
 
 
 class BenchmarkConversionError(Exception):
@@ -220,7 +223,7 @@ def convert_rubric_trait_to_rating(
 
 def convert_rating_to_rubric_trait(
     rating: SchemaOrgRating,
-) -> LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait:
+) -> LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | None:
     """
     Convert a schema.org Rating back to a rubric trait.
 
@@ -228,7 +231,8 @@ def convert_rating_to_rubric_trait(
         rating: The SchemaOrgRating to convert
 
     Returns:
-        A LLMRubricTrait, RegexTrait, CallableTrait, or MetricRubricTrait object
+        A LLMRubricTrait, RegexTrait, CallableTrait, or MetricRubricTrait object,
+        or None if the trait type is unsupported (e.g., deprecated ManualRubricTrait)
     """
     # Check if it's a MetricRubricTrait
     if rating.additionalType in ["GlobalMetricRubricTrait", "QuestionSpecificMetricRubricTrait"]:
@@ -261,8 +265,6 @@ def convert_rating_to_rubric_trait(
                         tn_instructions = json.loads(prop.value)
                     except (json.JSONDecodeError, TypeError):
                         tn_instructions = prop.value if isinstance(prop.value, list) else []
-                # Note: fp_instructions and fn_instructions are no longer supported
-                # Old checkpoints with these fields will be ignored (backward compatibility)
 
         return MetricRubricTrait(
             name=rating.name,
@@ -340,12 +342,14 @@ def convert_rating_to_rubric_trait(
             higher_is_better=higher_is_better,
         )
 
-    # Unsupported trait type - raise error (no backward compatibility)
+    # Unsupported trait type - log warning and skip
     if rating.additionalType in ["GlobalManualRubricTrait", "QuestionSpecificManualRubricTrait"]:
-        raise ValueError(
-            f"ManualRubricTrait is no longer supported. Found trait '{rating.name}' with type "
-            f"'{rating.additionalType}'. Please migrate your checkpoint using the migration script."
+        logger.warning(
+            "Skipping unsupported trait '%s' (type: %s). ManualRubricTrait has been deprecated.",
+            rating.name,
+            rating.additionalType,
         )
+        return None
 
     # Handle LLMRubricTrait
     # Determine if it's a boolean trait (0-1 range)
@@ -653,9 +657,9 @@ def extract_questions_from_benchmark(
         # Extract question-specific rubric
         question_rubric = None
         if question.rating:
-            # Convert ratings to traits
+            # Convert ratings to traits (filtering out None for unsupported types)
             traits = [
-                convert_rating_to_rubric_trait(rating)
+                trait
                 for rating in question.rating
                 if rating.additionalType
                 in [
@@ -664,6 +668,7 @@ def extract_questions_from_benchmark(
                     "QuestionSpecificCallableTrait",
                     "QuestionSpecificMetricRubricTrait",
                 ]
+                and (trait := convert_rating_to_rubric_trait(rating)) is not None
             ]
 
             # Categorize traits by type to match Rubric schema
@@ -731,7 +736,9 @@ def extract_global_rubric_from_benchmark(
                 "GlobalCallableTrait",
                 "GlobalMetricRubricTrait",
             ]:
-                traits.append(convert_rating_to_rubric_trait(rating))
+                trait = convert_rating_to_rubric_trait(rating)
+                if trait is not None:
+                    traits.append(trait)
 
     # Extract from additionalProperty (legacy format from GUI checkpoint-converter)
     if benchmark.additionalProperty:

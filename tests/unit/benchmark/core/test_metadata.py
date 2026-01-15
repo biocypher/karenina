@@ -738,33 +738,6 @@ class TestBackupAndRestore:
 
 
 @pytest.mark.unit
-class TestGetPropertyHistory:
-    """Tests for get_property_history method."""
-
-    def test_history_for_existing_property(self) -> None:
-        """Test getting history for an existing property."""
-        base = BenchmarkBase(name="test")
-        manager = MetadataManager(base)
-
-        manager.set_custom_property("prop", "value")
-
-        history = manager.get_property_history("prop")
-
-        assert len(history) == 1
-        assert history[0]["action"] == "current"
-        assert history[0]["value"] == "value"
-
-    def test_history_for_nonexistent_property(self) -> None:
-        """Test getting history for a nonexistent property."""
-        base = BenchmarkBase(name="test")
-        manager = MetadataManager(base)
-
-        history = manager.get_property_history("nonexistent")
-
-        assert history == []
-
-
-@pytest.mark.unit
 class TestSetPropertyWithTimestamp:
     """Tests for set_property_with_timestamp method."""
 

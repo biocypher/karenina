@@ -37,7 +37,7 @@ class VerificationManager:
         config: VerificationConfig,
         run_name: str | None = None,
         async_enabled: bool | None = None,
-    ) -> dict[str, VerificationResult]:
+    ) -> VerificationResultSet:
         """
         Verify a single question.
 
@@ -48,18 +48,17 @@ class VerificationManager:
             async_enabled: Optional async control (overrides KARENINA_ASYNC_ENABLED env var if provided)
 
         Returns:
-            Dictionary mapping result keys to VerificationResult objects
+            VerificationResultSet containing the verification result
 
         Raises:
             ValueError: If question not found or not ready for verification
         """
-        result_set = self.run_verification(
+        return self.run_verification(
             config=config,
             question_ids=[question_id],
             run_name=run_name,
             async_enabled=async_enabled,
         )
-        return result_set.to_legacy_dict()
 
     def verify_questions(
         self,
@@ -68,7 +67,7 @@ class VerificationManager:
         run_name: str | None = None,
         async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
-    ) -> dict[str, VerificationResult]:
+    ) -> VerificationResultSet:
         """
         Verify multiple specific questions.
 
@@ -80,16 +79,15 @@ class VerificationManager:
             progress_callback: Optional callback for progress updates
 
         Returns:
-            Dictionary mapping result keys to VerificationResult objects
+            VerificationResultSet containing all verification results
         """
-        result_set = self.run_verification(
+        return self.run_verification(
             config=config,
             question_ids=question_ids,
             run_name=run_name,
             async_enabled=async_enabled,
             progress_callback=progress_callback,
         )
-        return result_set.to_legacy_dict()
 
     def verify_filtered(
         self,
@@ -101,7 +99,7 @@ class VerificationManager:
         run_name: str | None = None,
         async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
-    ) -> dict[str, VerificationResult]:
+    ) -> VerificationResultSet:
         """
         Verify questions matching specific criteria.
 
@@ -116,7 +114,7 @@ class VerificationManager:
             progress_callback: Optional callback for progress updates
 
         Returns:
-            Dictionary mapping result keys to VerificationResult objects
+            VerificationResultSet containing all verification results
         """
         # Use question manager to get filtered questions (assume it's available on base)
         from .questions import QuestionManager
@@ -132,14 +130,13 @@ class VerificationManager:
 
         question_ids = [q["id"] for q in filtered_questions]
 
-        result_set = self.run_verification(
+        return self.run_verification(
             config=config,
             question_ids=question_ids,
             run_name=run_name,
             async_enabled=async_enabled,
             progress_callback=progress_callback,
         )
-        return result_set.to_legacy_dict()
 
     def verify_all_finished(
         self,
@@ -147,7 +144,7 @@ class VerificationManager:
         run_name: str | None = None,
         async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
-    ) -> dict[str, VerificationResult]:
+    ) -> VerificationResultSet:
         """
         Verify all finished questions in the benchmark.
 
@@ -158,16 +155,15 @@ class VerificationManager:
             progress_callback: Optional callback for progress updates
 
         Returns:
-            Dictionary mapping result keys to VerificationResult objects
+            VerificationResultSet containing all verification results
         """
-        result_set = self.run_verification(
+        return self.run_verification(
             config=config,
             question_ids=None,  # This defaults to all finished questions
             run_name=run_name,
             async_enabled=async_enabled,
             progress_callback=progress_callback,
         )
-        return result_set.to_legacy_dict()
 
     def verify_custom(
         self,
@@ -176,7 +172,7 @@ class VerificationManager:
         run_name: str | None = None,
         async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
-    ) -> dict[str, VerificationResult]:
+    ) -> VerificationResultSet:
         """
         Verify questions selected by a custom function.
 
@@ -188,7 +184,7 @@ class VerificationManager:
             progress_callback: Optional callback for progress updates
 
         Returns:
-            Dictionary mapping result keys to VerificationResult objects
+            VerificationResultSet containing all verification results
         """
         # Select questions using the custom selector
         selected_questions = []
@@ -196,25 +192,25 @@ class VerificationManager:
             if question_selector(q_data):
                 selected_questions.append(q_data["id"])
 
-        result_set = self.run_verification(
+        return self.run_verification(
             config=config,
             question_ids=selected_questions,
             run_name=run_name,
             async_enabled=async_enabled,
             progress_callback=progress_callback,
         )
-        return result_set.to_legacy_dict()
 
     def verify_dry_run(
         self,
-        config: VerificationConfig,  # noqa: ARG002
         question_ids: list[str] | None = None,
     ) -> dict[str, bool]:
         """
         Perform a dry run verification (validate without executing).
 
+        This validates that templates are syntactically correct and ready for
+        verification. It does not actually run the verification pipeline.
+
         Args:
-            config: Verification configuration to validate
             question_ids: Optional list of question IDs (default: all finished)
 
         Returns:
@@ -382,7 +378,7 @@ class VerificationManager:
         self,
         question_configs: dict[str, VerificationConfig],
         progress_callback: Callable[[float, str], None] | None = None,
-    ) -> dict[str, dict[str, VerificationResult]]:
+    ) -> dict[str, VerificationResultSet]:
         """
         Verify different questions with different configurations.
 
@@ -391,9 +387,9 @@ class VerificationManager:
             progress_callback: Optional callback for progress updates
 
         Returns:
-            Dictionary mapping question IDs to their verification results
+            Dictionary mapping question IDs to their VerificationResultSet
         """
-        all_results = {}
+        all_results: dict[str, VerificationResultSet] = {}
         total_questions = len(question_configs)
 
         for i, (question_id, config) in enumerate(question_configs.items()):
@@ -410,7 +406,7 @@ class VerificationManager:
                 )
                 all_results[question_id] = question_results
             except Exception as e:
-                # Create error result
+                # Create error result wrapped in VerificationResultSet
                 q_data = self.base._questions_cache.get(question_id, {})
                 template_code = q_data.get("answer_template", "")
                 template_id = generate_template_id(template_code)
@@ -435,7 +431,7 @@ class VerificationManager:
                         result_id=error_result_id,
                     )
                 )
-                all_results[question_id] = {f"{question_id}_error": error_result}
+                all_results[question_id] = VerificationResultSet(results=[error_result])
 
         # Final progress update
         if progress_callback:
@@ -449,7 +445,7 @@ class VerificationManager:
         configs: list[VerificationConfig],
         run_names: list[str],
         progress_callback: Callable[[float, str], None] | None = None,
-    ) -> dict[str, dict[str, VerificationResult]]:
+    ) -> dict[str, VerificationResultSet]:
         """
         Run same questions with multiple configurations for comparison.
 
@@ -460,12 +456,12 @@ class VerificationManager:
             progress_callback: Optional callback for progress updates
 
         Returns:
-            Dictionary mapping run names to their results
+            Dictionary mapping run names to their VerificationResultSet
         """
         if len(configs) != len(run_names):
             raise ValueError("Number of configs must match number of run names")
 
-        all_results = {}
+        all_results: dict[str, VerificationResultSet] = {}
         total_runs = len(configs)
 
         for i, (config, run_name) in enumerate(zip(configs, run_names, strict=False)):
@@ -482,8 +478,8 @@ class VerificationManager:
                 )
                 all_results[run_name] = run_results
             except Exception as e:
-                # Create error results for this run
-                error_results = {}
+                # Create error results for this run wrapped in VerificationResultSet
+                error_results = []
                 for q_id in question_ids:
                     q_data = self.base._questions_cache.get(q_id, {})
                     template_code = q_data.get("answer_template", "")
@@ -510,8 +506,8 @@ class VerificationManager:
                             run_name=run_name,
                         )
                     )
-                    error_results[f"{q_id}_error"] = error_result
-                all_results[run_name] = error_results
+                    error_results.append(error_result)
+                all_results[run_name] = VerificationResultSet(results=error_results)
 
         # Final progress update
         if progress_callback:
@@ -526,7 +522,7 @@ class VerificationManager:
         run_name: str | None = None,
         resume_from: str | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
-    ) -> dict[str, VerificationResult]:
+    ) -> VerificationResultSet:
         """
         Verify questions in batches with ability to resume from interruptions.
 
@@ -538,7 +534,7 @@ class VerificationManager:
             progress_callback: Optional callback for progress updates
 
         Returns:
-            Dictionary mapping result keys to VerificationResult objects
+            VerificationResultSet containing all verification results
         """
         # Get all finished questions
         finished_questions = [q_id for q_id, q in self.base._questions_cache.items() if q.get("finished", False)]
@@ -549,7 +545,7 @@ class VerificationManager:
             start_index = finished_questions.index(resume_from)
 
         # Process in batches
-        all_results = {}
+        all_results: list[VerificationResult] = []
         remaining_questions = finished_questions[start_index:]
         total_batches = (len(remaining_questions) + batch_size - 1) // batch_size
 
@@ -569,7 +565,7 @@ class VerificationManager:
                     config=config,
                     run_name=f"{run_name}_batch_{batch_num + 1}" if run_name else None,
                 )
-                all_results.update(batch_results)
+                all_results.extend(batch_results.results)
 
             except Exception as e:
                 # Log the error but continue with remaining batches
@@ -583,4 +579,4 @@ class VerificationManager:
         if progress_callback:
             progress_callback(100.0, "Progressive verification complete")
 
-        return all_results
+        return VerificationResultSet(results=all_results)

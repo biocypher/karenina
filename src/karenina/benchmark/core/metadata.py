@@ -286,24 +286,6 @@ class MetadataManager:
         if "metadata" in backup:
             self.import_metadata(backup["metadata"])
 
-    def get_property_history(self, name: str) -> list[dict[str, Any]]:
-        """
-        Get history of changes for a property (if tracking is enabled).
-        Note: This is a placeholder for future implementation.
-
-        Args:
-            name: Property name
-
-        Returns:
-            List of change records
-        """
-        # This could be implemented to track property changes over time
-        # For now, just return current value if it exists
-        current_value = self.get_custom_property(name)
-        if current_value is not None:
-            return [{"timestamp": self.base.modified_at, "value": current_value, "action": "current"}]
-        return []
-
     def set_property_with_timestamp(self, name: str, value: Any) -> None:
         """
         Set a property with an associated timestamp.
