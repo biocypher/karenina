@@ -40,11 +40,8 @@ def runner() -> CliRunner:
 # Checkpoint fixtures
 # =============================================================================
 
-
-@pytest.fixture
-def fixtures_dir() -> Path:
-    """Return the root fixtures directory path."""
-    return Path(__file__).parent.parent / "fixtures"
+# NOTE: fixtures_dir is inherited from the root conftest.py at tests/conftest.py
+# Do not redefine it here - pytest will automatically use the parent fixture
 
 
 @pytest.fixture

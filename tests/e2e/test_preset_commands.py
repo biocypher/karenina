@@ -1,7 +1,18 @@
-"""E2E tests for preset management commands.
+"""E2E tests for preset management commands - Edge Cases.
 
-These tests ensure that the preset commands (list, show, delete) work correctly
-with various inputs and edge cases.
+These tests cover edge cases and advanced scenarios for preset commands
+that are NOT covered by the integration tests in tests/integration/cli/test_preset_command.py.
+
+Core functionality (basic list, show, delete operations) is tested in the
+integration tests. This file focuses on:
+- Non-existent directories
+- JSON extension handling
+- Invalid JSON handling
+- Detailed summary field verification
+- Delete by full path
+- Alphabetical sorting
+
+See tests/integration/cli/test_preset_command.py for core preset CLI tests.
 """
 
 from pathlib import Path
@@ -44,52 +55,18 @@ def _make_valid_preset(**kwargs) -> dict:
     return {"name": "test-preset", "config": default_config}
 
 
-@pytest.mark.e2e
-def test_preset_list_empty_presets_dir(runner: CliRunner, tmp_path: Path) -> None:
-    """Test preset list with empty presets directory."""
-    # Create empty presets directory
-    empty_presets = tmp_path / "presets"
-    empty_presets.mkdir()
-
-    result = runner.invoke(app, ["preset", "list"], env={"KARENINA_PRESETS_DIR": str(empty_presets)})
-
-    # Should succeed but show "no presets" message
-    assert result.exit_code == 0
-    output_lower = result.stdout.lower()
-    assert "no preset" in output_lower or "0 preset" in output_lower
-
-
-@pytest.mark.e2e
-def test_preset_list_with_multiple_presets(runner: CliRunner, tmp_path: Path) -> None:
-    """Test preset list displays multiple presets in a table."""
-    import json
-
-    presets_dir = tmp_path / "presets"
-    presets_dir.mkdir()
-
-    # Create multiple preset files with valid structure
-    with (presets_dir / "default.json").open("w") as f:
-        json.dump(_make_valid_preset(name="default"), f)
-    with (presets_dir / "fast.json").open("w") as f:
-        json.dump(_make_valid_preset(name="fast"), f)
-    with (presets_dir / "thorough.json").open("w") as f:
-        json.dump(_make_valid_preset(name="thorough"), f)
-
-    result = runner.invoke(app, ["preset", "list"], env={"KARENINA_PRESETS_DIR": str(presets_dir)})
-
-    # Should show table with all presets
-    assert result.exit_code == 0
-    # All preset names should appear in output
-    assert "default" in result.stdout
-    assert "fast" in result.stdout
-    assert "thorough" in result.stdout
-    # Should show total count
-    assert "3" in result.stdout
+# =============================================================================
+# Edge Case: Non-existent Directories
+# =============================================================================
 
 
 @pytest.mark.e2e
 def test_preset_list_nonexistent_directory(runner: CliRunner, tmp_path: Path) -> None:
-    """Test preset list with non-existent presets directory."""
+    """Test preset list with non-existent presets directory.
+
+    Unlike empty directory (tested in integration), this tests when the
+    directory itself doesn't exist at all.
+    """
     nonexistent = tmp_path / "nonexistent_presets"
 
     result = runner.invoke(app, ["preset", "list"], env={"KARENINA_PRESETS_DIR": str(nonexistent)})
@@ -100,46 +77,18 @@ def test_preset_list_nonexistent_directory(runner: CliRunner, tmp_path: Path) ->
     assert "no preset" in output_lower or "0 preset" in output_lower
 
 
-@pytest.mark.e2e
-def test_preset_show_by_name(runner: CliRunner, tmp_presets_dir: Path) -> None:
-    """Test preset show using preset name (not full path)."""
-    result = runner.invoke(app, ["preset", "show", "default"], env={"KARENINA_PRESETS_DIR": str(tmp_presets_dir)})
-
-    # Should show preset details
-    assert result.exit_code == 0
-    # Output should contain preset info
-    output_lower = result.stdout.lower()
-    assert "default" in output_lower or "preset" in output_lower
-    # Should show configuration fields
-    assert "replicate" in output_lower or "parsing" in output_lower
-
-
-@pytest.mark.e2e
-def test_preset_show_by_file_path(runner: CliRunner, tmp_path: Path) -> None:
-    """Test preset show using full file path."""
-    import json
-
-    # Create a preset file with valid structure
-    preset_file = tmp_path / "my-preset.json"
-    preset_data = _make_valid_preset(
-        name="my-preset",
-        replicate_count=3,
-    )
-    with preset_file.open("w") as f:
-        json.dump(preset_data, f)
-
-    result = runner.invoke(app, ["preset", "show", str(preset_file)])
-
-    # Should show preset details
-    assert result.exit_code == 0
-    assert "my-preset" in result.stdout or "preset" in result.stdout.lower()
-    # Should show the replicate count value
-    assert "3" in result.stdout
+# =============================================================================
+# Edge Case: JSON Extension Handling
+# =============================================================================
 
 
 @pytest.mark.e2e
 def test_preset_show_with_json_extension(runner: CliRunner, tmp_presets_dir: Path) -> None:
-    """Test preset show with .json extension included."""
+    """Test preset show with .json extension included.
+
+    Verifies that users can specify "default.json" or just "default"
+    and get the same result.
+    """
     result = runner.invoke(app, ["preset", "show", "default.json"], env={"KARENINA_PRESETS_DIR": str(tmp_presets_dir)})
 
     # Should work the same as without extension
@@ -147,20 +96,18 @@ def test_preset_show_with_json_extension(runner: CliRunner, tmp_presets_dir: Pat
     assert "default" in result.stdout.lower() or "preset" in result.stdout.lower()
 
 
-@pytest.mark.e2e
-def test_preset_show_nonexistent_preset(runner: CliRunner, tmp_path: Path) -> None:
-    """Test preset show with non-existent preset name."""
-    result = runner.invoke(app, ["preset", "show", "nonexistent_preset"], env={"KARENINA_PRESETS_DIR": str(tmp_path)})
-
-    # Should fail with error
-    assert result.exit_code != 0
-    output_lower = result.stdout.lower()
-    assert "not found" in output_lower or "error" in output_lower
+# =============================================================================
+# Edge Case: Invalid JSON Handling
+# =============================================================================
 
 
 @pytest.mark.e2e
 def test_preset_show_invalid_json(runner: CliRunner, tmp_path: Path) -> None:
-    """Test preset show with malformed preset JSON file."""
+    """Test preset show with malformed preset JSON file.
+
+    Verifies graceful error handling when a .json file contains
+    invalid JSON syntax.
+    """
     presets_dir = tmp_path / "presets"
     presets_dir.mkdir()
 
@@ -180,9 +127,18 @@ def test_preset_show_invalid_json(runner: CliRunner, tmp_path: Path) -> None:
     assert has_error_indicator
 
 
+# =============================================================================
+# Edge Case: Detailed Summary Fields
+# =============================================================================
+
+
 @pytest.mark.e2e
 def test_preset_show_displays_summary_fields(runner: CliRunner, tmp_path: Path) -> None:
-    """Test that preset show displays all summary fields."""
+    """Test that preset show displays all summary fields with complex config.
+
+    This tests a more complex preset configuration with multiple features
+    enabled, verifying all summary fields are displayed correctly.
+    """
     import json
 
     preset_file = tmp_path / "detailed.json"
@@ -231,64 +187,18 @@ def test_preset_show_displays_summary_fields(runner: CliRunner, tmp_path: Path) 
     assert "enabled" in output_lower or "true" in output_lower
 
 
-@pytest.mark.e2e
-def test_preset_delete_with_confirmation(runner: CliRunner, tmp_path: Path) -> None:
-    """Test preset delete with user confirmation (input='y')."""
-    import json
-
-    presets_dir = tmp_path / "presets"
-    presets_dir.mkdir()
-
-    # Create a preset to delete with valid structure
-    preset_file = presets_dir / "to_delete.json"
-    with preset_file.open("w") as f:
-        json.dump(_make_valid_preset(name="to_delete"), f)
-
-    # Verify file exists before deletion
-    assert preset_file.exists()
-
-    # Invoke delete with 'y' input to confirm
-    result = runner.invoke(
-        app, ["preset", "delete", "to_delete"], env={"KARENINA_PRESETS_DIR": str(presets_dir)}, input="y\n"
-    )
-
-    # Should succeed
-    assert result.exit_code == 0
-    # File should be deleted
-    assert not preset_file.exists()
-    # Should mention deletion
-    assert "deleted" in result.stdout.lower()
-
-
-@pytest.mark.e2e
-def test_preset_delete_cancelled(runner: CliRunner, tmp_path: Path) -> None:
-    """Test preset delete when user cancels (input='n')."""
-    import json
-
-    presets_dir = tmp_path / "presets"
-    presets_dir.mkdir()
-
-    # Create a preset with valid structure
-    preset_file = presets_dir / "keep_me.json"
-    with preset_file.open("w") as f:
-        json.dump(_make_valid_preset(name="keep_me"), f)
-
-    # Invoke delete with 'n' input to cancel
-    result = runner.invoke(
-        app, ["preset", "delete", "keep_me"], env={"KARENINA_PRESETS_DIR": str(presets_dir)}, input="n\n"
-    )
-
-    # Should succeed (cancellation is not an error)
-    assert result.exit_code == 0
-    # File should still exist
-    assert preset_file.exists()
-    # Should mention cancellation
-    assert "cancel" in result.stdout.lower()
+# =============================================================================
+# Edge Case: Delete by Full Path
+# =============================================================================
 
 
 @pytest.mark.e2e
 def test_preset_delete_by_full_path(runner: CliRunner, tmp_path: Path) -> None:
-    """Test preset delete using full file path."""
+    """Test preset delete using full file path.
+
+    Unlike delete by name (tested in integration), this tests deleting
+    a preset file that is outside the standard presets directory.
+    """
     import json
 
     # Create a preset outside of standard presets directory with valid structure
@@ -305,72 +215,18 @@ def test_preset_delete_by_full_path(runner: CliRunner, tmp_path: Path) -> None:
     assert not preset_file.exists()
 
 
-@pytest.mark.e2e
-def test_preset_delete_nonexistent(runner: CliRunner, tmp_path: Path) -> None:
-    """Test preset delete with non-existent preset."""
-    result = runner.invoke(
-        app, ["preset", "delete", "nonexistent"], env={"KARENINA_PRESETS_DIR": str(tmp_path)}, input="y\n"
-    )
-
-    # Should fail with error
-    assert result.exit_code != 0
-    output_lower = result.stdout.lower()
-    assert "not found" in output_lower or "error" in output_lower
-
-
-@pytest.mark.e2e
-def test_preset_list_with_env_var(runner: CliRunner, tmp_presets_dir: Path) -> None:
-    """Test preset list respects KARENINA_PRESETS_DIR environment variable."""
-    result = runner.invoke(app, ["preset", "list"], env={"KARENINA_PRESETS_DIR": str(tmp_presets_dir)})
-
-    # Should find the preset from tmp_presets_dir
-    assert result.exit_code == 0
-    assert "default" in result.stdout
-
-
-@pytest.mark.e2e
-def test_preset_show_with_env_var(runner: CliRunner, tmp_presets_dir: Path) -> None:
-    """Test preset show respects KARENINA_PRESETS_DIR environment variable."""
-    result = runner.invoke(app, ["preset", "show", "default"], env={"KARENINA_PRESETS_DIR": str(tmp_presets_dir)})
-
-    # Should find preset from the custom directory
-    assert result.exit_code == 0
-    output_lower = result.stdout.lower()
-    assert "default" in output_lower or "preset" in output_lower
-
-
-@pytest.mark.e2e
-def test_preset_list_ignores_non_json_files(runner: CliRunner, tmp_path: Path) -> None:
-    """Test preset list ignores non-.json files in presets directory."""
-    import json
-
-    presets_dir = tmp_path / "presets"
-    presets_dir.mkdir()
-
-    # Create valid preset with proper structure
-    with (presets_dir / "valid.json").open("w") as f:
-        json.dump(_make_valid_preset(name="valid"), f)
-
-    # Create non-JSON files that should be ignored
-    (presets_dir / "README.md").write_text("# Presets")
-    (presets_dir / "config.txt").write_text("not a preset")
-    (presets_dir / ".hidden").write_text("hidden file")
-
-    result = runner.invoke(app, ["preset", "list"], env={"KARENINA_PRESETS_DIR": str(presets_dir)})
-
-    # Should only show the valid preset
-    assert result.exit_code == 0
-    assert "valid" in result.stdout
-    # Should show count of 1
-    assert "1" in result.stdout
-    # Non-JSON files should not appear in the table
-    assert "README" not in result.stdout
-    assert "config.txt" not in result.stdout
+# =============================================================================
+# Edge Case: Alphabetical Sorting
+# =============================================================================
 
 
 @pytest.mark.e2e
 def test_preset_list_sorts_alphabetically(runner: CliRunner, tmp_path: Path) -> None:
-    """Test preset list outputs presets in alphabetical order."""
+    """Test preset list outputs presets in alphabetical order.
+
+    Verifies the output order is alphabetically sorted regardless of
+    filesystem ordering.
+    """
     import json
 
     presets_dir = tmp_path / "presets"
