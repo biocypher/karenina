@@ -280,7 +280,7 @@ class BaseVerificationStage(ABC):
         """
         return []
 
-    def should_run(self, context: VerificationContext) -> bool:  # noqa: ARG002
+    def should_run(self, context: VerificationContext) -> bool:  # noqa: ARG002 - Base impl ignores context, subclasses may use it
         """
         Whether this stage should execute.
 
