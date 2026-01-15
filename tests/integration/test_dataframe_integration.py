@@ -7,8 +7,6 @@ Tests use fixture-created results rather than running actual verification,
 following the fixture-based testing pattern.
 """
 
-from datetime import UTC, datetime
-
 import pandas as pd
 import pytest
 
@@ -18,42 +16,18 @@ from karenina.schemas.workflow import (
     TemplateResults,
     VerificationResult,
     VerificationResultDeepJudgment,
-    VerificationResultMetadata,
     VerificationResultRubric,
     VerificationResultTemplate,
+)
+from tests.integration.dataframe_helpers import (
+    CommonColumnTestMixin,
+    PandasOperationsTestMixin,
+    create_metadata,
 )
 
 # =============================================================================
 # Fixtures for VerificationResult objects
 # =============================================================================
-
-
-def _create_metadata(
-    question_id: str,
-    answering_model: str = "claude-haiku-4-5",
-    completed: bool = True,
-    error: str | None = None,
-) -> VerificationResultMetadata:
-    """Helper to create metadata with computed result_id."""
-    timestamp = datetime.now(UTC).isoformat()
-    return VerificationResultMetadata(
-        question_id=question_id,
-        template_id="test-template-id",
-        completed_without_errors=completed,
-        error=error,
-        question_text=f"Question text for {question_id}",
-        raw_answer="Expected answer",
-        answering_model=answering_model,
-        parsing_model="claude-haiku-4-5",
-        execution_time=1.5,
-        timestamp=timestamp,
-        result_id=VerificationResultMetadata.compute_result_id(
-            question_id=question_id,
-            answering_model=answering_model,
-            parsing_model="claude-haiku-4-5",
-            timestamp=timestamp,
-        ),
-    )
 
 
 @pytest.fixture
@@ -116,7 +90,7 @@ def verification_result_success(
 ) -> VerificationResult:
     """Create a successful verification result."""
     return VerificationResult(
-        metadata=_create_metadata("q001", "claude-haiku-4-5", completed=True),
+        metadata=create_metadata("q001", "claude-haiku-4-5", completed=True),
         template=sample_template_result,
         rubric=sample_rubric_result,
         deep_judgment=sample_deep_judgment_result,
@@ -129,7 +103,7 @@ def verification_result_failed(
 ) -> VerificationResult:
     """Create a failed verification result."""
     return VerificationResult(
-        metadata=_create_metadata("q002", "gpt-4o-mini", completed=True),
+        metadata=create_metadata("q002", "gpt-4o-mini", completed=True),
         template=sample_failed_template_result,
         rubric=None,
         deep_judgment=None,
@@ -140,7 +114,7 @@ def verification_result_failed(
 def verification_result_error() -> VerificationResult:
     """Create a verification result with errors."""
     return VerificationResult(
-        metadata=_create_metadata("q003", "claude-haiku-4-5", completed=False, error="Connection timeout"),
+        metadata=create_metadata("q003", "claude-haiku-4-5", completed=False, error="Connection timeout"),
         template=None,
         rubric=None,
         deep_judgment=None,
@@ -348,108 +322,33 @@ class TestJudgmentResultsIntegration:
 
 
 # =============================================================================
-# DataFrame Consistency Tests
+# DataFrame Consistency Tests (uses mixin)
 # =============================================================================
 
 
 @pytest.mark.integration
-class TestDataFrameConsistency:
-    """Integration tests for DataFrame consistency across result types."""
+class TestDataFrameConsistency(CommonColumnTestMixin):
+    """Integration tests for DataFrame consistency across result types.
 
-    def test_common_columns_consistency(self, verification_result_success: VerificationResult):
-        """Test that common columns are consistent across all DataFrame types."""
-        results_list = [verification_result_success]
+    Inherits common column and status tests from CommonColumnTestMixin.
+    """
 
-        # Get DataFrames from all three types
-        template_results = TemplateResults(results=results_list)
-        template_df = template_results.to_dataframe()
-
-        # Common columns that should exist in all DataFrames
-        common_columns = [
-            "completed_without_errors",
-            "question_id",
-            "answering_model",
-            "parsing_model",
-        ]
-
-        # Check TemplateResults
-        for col in common_columns:
-            assert col in template_df.columns, f"TemplateResults missing common column: {col}"
-
-        # Check RubricResults
-        rubric_results = RubricResults(results=results_list)
-        rubric_df = rubric_results.to_dataframe(trait_type="all")
-
-        for col in common_columns:
-            assert col in rubric_df.columns, f"RubricResults missing common column: {col}"
-
-        # Check JudgmentResults
-        judgment_results = JudgmentResults(results=results_list)
-        judgment_df = judgment_results.to_dataframe()
-
-        for col in common_columns:
-            assert col in judgment_df.columns, f"JudgmentResults missing common column: {col}"
-
-    def test_status_columns_first(self, verification_result_success: VerificationResult):
-        """Test that status columns appear first in all DataFrames."""
-        results_list = [verification_result_success]
-
-        # TemplateResults
-        template_results = TemplateResults(results=results_list)
-        template_df = template_results.to_dataframe()
-
-        # First column should be status
-        assert template_df.columns[0] == "completed_without_errors"
-
-        # RubricResults
-        rubric_results = RubricResults(results=results_list)
-        rubric_df = rubric_results.to_dataframe(trait_type="all")
-        assert rubric_df.columns[0] == "completed_without_errors"
-
-        # JudgmentResults
-        judgment_results = JudgmentResults(results=results_list)
-        judgment_df = judgment_results.to_dataframe()
-        assert judgment_df.columns[0] == "completed_without_errors"
+    test_template = True
+    test_rubric = True
+    test_judgment = True
 
 
 # =============================================================================
-# Pandas Operations Tests
+# Pandas Operations Tests (uses mixin)
 # =============================================================================
 
 
 @pytest.mark.integration
-class TestPandasOperations:
-    """Integration tests for pandas operations on DataFrames."""
+class TestPandasOperations(PandasOperationsTestMixin):
+    """Integration tests for pandas operations on DataFrames.
 
-    def test_groupby_operations(self, verification_results_list: list[VerificationResult]):
-        """Test pandas groupby operations on TemplateResults DataFrame."""
-        template_results = TemplateResults(results=verification_results_list)
-        df = template_results.to_dataframe()
-
-        # Test groupby question_id
-        grouped = df.groupby("question_id")
-        assert len(grouped) > 0
-
-        # Test aggregation on boolean column
-        pass_rates = grouped["completed_without_errors"].mean()
-        assert isinstance(pass_rates, pd.Series)
-        assert len(pass_rates) > 0
-
-    def test_filtering_operations(self, verification_results_list: list[VerificationResult]):
-        """Test pandas filtering operations on DataFrames."""
-        template_results = TemplateResults(results=verification_results_list)
-        df = template_results.to_dataframe()
-
-        # Filter to successful results only
-        successful = df[df["completed_without_errors"]]
-        assert len(successful) >= 0
-
-        # Filter to specific question
-        if len(df) > 0:
-            first_question = df["question_id"].iloc[0]
-            question_df = df[df["question_id"] == first_question]
-            assert len(question_df) > 0
-            assert (question_df["question_id"] == first_question).all()
+    Inherits groupby and filtering tests from PandasOperationsTestMixin.
+    """
 
     def test_pivot_operations(self, verification_result_success: VerificationResult):
         """Test pandas pivot operations on RubricResults DataFrame."""
@@ -459,7 +358,7 @@ class TestPandasOperations:
         if len(df) == 0:
             pytest.skip("No LLM trait data for pivot testing")
 
-        # Try pivot: questions × traits (if trait_name column exists)
+        # Try pivot: questions x traits (if trait_name column exists)
         if "trait_name" in df.columns and "trait_score" in df.columns:
             try:
                 pivot = df.pivot_table(
