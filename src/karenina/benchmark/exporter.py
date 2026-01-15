@@ -183,8 +183,6 @@ def export_verification_results_json(
     for result in results:
         # Use Pydantic's native JSON serialization - NO custom stringification
         # This preserves complex types (dicts, lists, booleans) for JSON export
-        # Note: The schema no longer includes per-result evaluation_rubric,
-        # duplicate trace filtering fields, etc. - they're in shared_data or root level
         result_dict = result.model_dump(mode="json")
         export_data["results"].append(result_dict)
 

@@ -9,7 +9,6 @@ Tests the consolidated utilities in benchmark/verification/utils/shared.py:
 - parse_tool_output(): Parse search tool output
 """
 
-
 import pytest
 
 from karenina.benchmark.verification.utils.shared import (

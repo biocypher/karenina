@@ -116,9 +116,7 @@ class TestIsRetryableError:
             "timed_out",
         ],
     )
-    def test_retryable_error_messages(
-        self, exception_cls: type[Exception], exception_msg: str, expected: bool
-    ) -> None:
+    def test_retryable_error_messages(self, exception_cls: type[Exception], exception_msg: str, expected: bool) -> None:
         """Verify retryable error messages are detected."""
         exc = exception_cls(exception_msg)
         assert is_retryable_error(exc) == expected
