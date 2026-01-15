@@ -21,78 +21,72 @@ Example:
     ORDER BY result_id, trait_name, is_deep_judgment;
 """
 
-from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
+from .utils import create_view_safe, drop_view_safe
+
 VIEW_NAME = "deep_judgment_rubric_traits_view"
+
+# SQLite version using json_each
+_SQLITE_SQL = """
+    SELECT
+        vr.metadata_result_id as result_id,
+        trait.key as trait_name,
+        'llm' as trait_type,
+        trait.value as score,
+        1 as is_deep_judgment
+    FROM verification_results vr
+    CROSS JOIN json_each(vr.djr_deep_judgment_rubric_scores) as trait
+    WHERE vr.djr_deep_judgment_rubric_scores IS NOT NULL
+      AND vr.djr_deep_judgment_rubric_performed = 1
+
+    UNION ALL
+
+    SELECT
+        vr.metadata_result_id as result_id,
+        trait.key as trait_name,
+        'llm' as trait_type,
+        trait.value as score,
+        0 as is_deep_judgment
+    FROM verification_results vr
+    CROSS JOIN json_each(vr.djr_standard_rubric_scores) as trait
+    WHERE vr.djr_standard_rubric_scores IS NOT NULL
+      AND vr.djr_deep_judgment_rubric_performed = 1
+"""
+
+# PostgreSQL version using jsonb_each
+_POSTGRES_SQL = """
+    SELECT
+        vr.metadata_result_id as result_id,
+        trait.key as trait_name,
+        'llm' as trait_type,
+        trait.value::text as score,
+        1 as is_deep_judgment
+    FROM verification_results vr
+    CROSS JOIN LATERAL jsonb_each(vr.djr_deep_judgment_rubric_scores::jsonb) as trait
+    WHERE vr.djr_deep_judgment_rubric_scores IS NOT NULL
+      AND vr.djr_deep_judgment_rubric_performed = TRUE
+
+    UNION ALL
+
+    SELECT
+        vr.metadata_result_id as result_id,
+        trait.key as trait_name,
+        'llm' as trait_type,
+        trait.value::text as score,
+        0 as is_deep_judgment
+    FROM verification_results vr
+    CROSS JOIN LATERAL jsonb_each(vr.djr_standard_rubric_scores::jsonb) as trait
+    WHERE vr.djr_standard_rubric_scores IS NOT NULL
+      AND vr.djr_deep_judgment_rubric_performed = TRUE
+"""
 
 
 def create_deep_judgment_rubric_traits_view(engine: Engine) -> None:
     """Create or replace the deep_judgment_rubric_traits_view."""
-    # SQLite version using json_each
-    view_sql_sqlite = """
-        SELECT
-            vr.metadata_result_id as result_id,
-            trait.key as trait_name,
-            'llm' as trait_type,
-            trait.value as score,
-            1 as is_deep_judgment
-        FROM verification_results vr
-        CROSS JOIN json_each(vr.djr_deep_judgment_rubric_scores) as trait
-        WHERE vr.djr_deep_judgment_rubric_scores IS NOT NULL
-          AND vr.djr_deep_judgment_rubric_performed = 1
-
-        UNION ALL
-
-        SELECT
-            vr.metadata_result_id as result_id,
-            trait.key as trait_name,
-            'llm' as trait_type,
-            trait.value as score,
-            0 as is_deep_judgment
-        FROM verification_results vr
-        CROSS JOIN json_each(vr.djr_standard_rubric_scores) as trait
-        WHERE vr.djr_standard_rubric_scores IS NOT NULL
-          AND vr.djr_deep_judgment_rubric_performed = 1
-    """
-
-    # PostgreSQL version using jsonb_each
-    view_sql_postgres = """
-        SELECT
-            vr.metadata_result_id as result_id,
-            trait.key as trait_name,
-            'llm' as trait_type,
-            trait.value::text as score,
-            1 as is_deep_judgment
-        FROM verification_results vr
-        CROSS JOIN LATERAL jsonb_each(vr.djr_deep_judgment_rubric_scores::jsonb) as trait
-        WHERE vr.djr_deep_judgment_rubric_scores IS NOT NULL
-          AND vr.djr_deep_judgment_rubric_performed = TRUE
-
-        UNION ALL
-
-        SELECT
-            vr.metadata_result_id as result_id,
-            trait.key as trait_name,
-            'llm' as trait_type,
-            trait.value::text as score,
-            0 as is_deep_judgment
-        FROM verification_results vr
-        CROSS JOIN LATERAL jsonb_each(vr.djr_standard_rubric_scores::jsonb) as trait
-        WHERE vr.djr_standard_rubric_scores IS NOT NULL
-          AND vr.djr_deep_judgment_rubric_performed = TRUE
-    """
-
-    with engine.begin() as conn:
-        if engine.dialect.name == "sqlite":
-            conn.execute(text(f"DROP VIEW IF EXISTS {VIEW_NAME}"))
-            conn.execute(text(f"CREATE VIEW {VIEW_NAME} AS {view_sql_sqlite}"))
-        else:
-            conn.execute(text(f"DROP VIEW IF EXISTS {VIEW_NAME}"))
-            conn.execute(text(f"CREATE VIEW {VIEW_NAME} AS {view_sql_postgres}"))
+    create_view_safe(engine, VIEW_NAME, _SQLITE_SQL, _POSTGRES_SQL)
 
 
 def drop_deep_judgment_rubric_traits_view(engine: Engine) -> None:
     """Drop the deep_judgment_rubric_traits_view if it exists."""
-    with engine.begin() as conn:
-        conn.execute(text(f"DROP VIEW IF EXISTS {VIEW_NAME}"))
+    drop_view_safe(engine, VIEW_NAME)

@@ -28,39 +28,34 @@ Example:
     FROM template_results_view GROUP BY run_name;
 """
 
-from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
+from .utils import create_view_safe, drop_view_safe
+
 VIEW_NAME = "template_results_view"
+
+_VIEW_SQL = """
+    SELECT
+        vr.metadata_result_id as result_id,
+        run.id as run_id,
+        vr.created_at as verification_date,
+        run.run_name,
+        b.name as benchmark_name,
+        vr.question_id,
+        vr.metadata_question_text as question_text,
+        vr.template_verify_result as verify_result,
+        vr.metadata_replicate as replicate
+    FROM verification_results vr
+    JOIN verification_runs run ON vr.run_id = run.id
+    JOIN benchmarks b ON run.benchmark_id = b.id
+"""
 
 
 def create_template_results_view(engine: Engine) -> None:
     """Create or replace the template_results_view."""
-    view_sql = """
-        SELECT
-            vr.metadata_result_id as result_id,
-            run.id as run_id,
-            vr.created_at as verification_date,
-            run.run_name,
-            b.name as benchmark_name,
-            vr.question_id,
-            vr.metadata_question_text as question_text,
-            vr.template_verify_result as verify_result,
-            vr.metadata_replicate as replicate
-        FROM verification_results vr
-        JOIN verification_runs run ON vr.run_id = run.id
-        JOIN benchmarks b ON run.benchmark_id = b.id
-    """
-
-    with engine.begin() as conn:
-        if engine.dialect.name == "sqlite":
-            conn.execute(text(f"DROP VIEW IF EXISTS {VIEW_NAME}"))
-            conn.execute(text(f"CREATE VIEW {VIEW_NAME} AS {view_sql}"))
-        else:
-            conn.execute(text(f"CREATE OR REPLACE VIEW {VIEW_NAME} AS {view_sql}"))
+    create_view_safe(engine, VIEW_NAME, _VIEW_SQL)
 
 
 def drop_template_results_view(engine: Engine) -> None:
     """Drop the template_results_view if it exists."""
-    with engine.begin() as conn:
-        conn.execute(text(f"DROP VIEW IF EXISTS {VIEW_NAME}"))
+    drop_view_safe(engine, VIEW_NAME)

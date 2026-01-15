@@ -17,48 +17,42 @@ Example:
     FROM result_tools_used_view GROUP BY tool_name ORDER BY result_count DESC;
 """
 
-from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
+from .utils import create_view_safe, drop_view_safe
+
 VIEW_NAME = "result_tools_used_view"
+
+# SQLite version using json_each on nested array
+_SQLITE_SQL = """
+    SELECT
+        vr.metadata_result_id as result_id,
+        tool.value as tool_name
+    FROM verification_results vr
+    CROSS JOIN json_each(json_extract(vr.template_agent_metrics, '$.tools_used')) as tool
+    WHERE vr.template_agent_metrics IS NOT NULL
+      AND json_extract(vr.template_agent_metrics, '$.tools_used') IS NOT NULL
+"""
+
+# PostgreSQL version using jsonb operators
+_POSTGRES_SQL = """
+    SELECT
+        vr.metadata_result_id as result_id,
+        tool.value as tool_name
+    FROM verification_results vr
+    CROSS JOIN LATERAL jsonb_array_elements_text(
+        (vr.template_agent_metrics::jsonb) -> 'tools_used'
+    ) as tool(value)
+    WHERE vr.template_agent_metrics IS NOT NULL
+      AND (vr.template_agent_metrics::jsonb) -> 'tools_used' IS NOT NULL
+"""
 
 
 def create_result_tools_used_view(engine: Engine) -> None:
     """Create or replace the result_tools_used_view."""
-    # SQLite version using json_each on nested array
-    view_sql_sqlite = """
-        SELECT
-            vr.metadata_result_id as result_id,
-            tool.value as tool_name
-        FROM verification_results vr
-        CROSS JOIN json_each(json_extract(vr.template_agent_metrics, '$.tools_used')) as tool
-        WHERE vr.template_agent_metrics IS NOT NULL
-          AND json_extract(vr.template_agent_metrics, '$.tools_used') IS NOT NULL
-    """
-
-    # PostgreSQL version using jsonb operators
-    view_sql_postgres = """
-        SELECT
-            vr.metadata_result_id as result_id,
-            tool.value as tool_name
-        FROM verification_results vr
-        CROSS JOIN LATERAL jsonb_array_elements_text(
-            (vr.template_agent_metrics::jsonb) -> 'tools_used'
-        ) as tool(value)
-        WHERE vr.template_agent_metrics IS NOT NULL
-          AND (vr.template_agent_metrics::jsonb) -> 'tools_used' IS NOT NULL
-    """
-
-    with engine.begin() as conn:
-        if engine.dialect.name == "sqlite":
-            conn.execute(text(f"DROP VIEW IF EXISTS {VIEW_NAME}"))
-            conn.execute(text(f"CREATE VIEW {VIEW_NAME} AS {view_sql_sqlite}"))
-        else:
-            conn.execute(text(f"DROP VIEW IF EXISTS {VIEW_NAME}"))
-            conn.execute(text(f"CREATE VIEW {VIEW_NAME} AS {view_sql_postgres}"))
+    create_view_safe(engine, VIEW_NAME, _SQLITE_SQL, _POSTGRES_SQL)
 
 
 def drop_result_tools_used_view(engine: Engine) -> None:
     """Drop the result_tools_used_view if it exists."""
-    with engine.begin() as conn:
-        conn.execute(text(f"DROP VIEW IF EXISTS {VIEW_NAME}"))
+    drop_view_safe(engine, VIEW_NAME)
