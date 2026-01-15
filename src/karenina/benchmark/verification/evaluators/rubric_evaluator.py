@@ -132,6 +132,40 @@ class RubricEvaluator:
 
         return results, usage_metadata_list
 
+    def _evaluate_deterministic_traits(
+        self,
+        answer: str,
+        traits: list[RegexTrait] | list[CallableTrait],
+        trait_type_name: str,
+    ) -> dict[str, bool | int]:
+        """
+        Evaluate deterministic traits (regex or callable) using their evaluate() method.
+
+        This is a generic helper that consolidates the common iteration pattern
+        used by both regex and callable trait evaluation.
+
+        Args:
+            answer: The text to evaluate
+            traits: List of traits to evaluate (RegexTrait or CallableTrait)
+            trait_type_name: Human-readable name for logging (e.g., "regex", "callable")
+
+        Returns:
+            Dictionary mapping trait names to their evaluated results.
+            Failed traits are marked as None for consistency with LLM evaluation.
+        """
+        results: dict[str, bool | int] = {}
+
+        for trait in traits:
+            try:
+                result = trait.evaluate(answer)
+                results[trait.name] = result
+            except Exception as e:
+                logger.warning(f"Failed to evaluate {trait_type_name} trait '{trait.name}': {e}")
+                # Mark failed traits as None for consistency with LLM evaluation
+                results[trait.name] = None  # type: ignore[assignment]
+
+        return results
+
     def _evaluate_regex_traits(self, answer: str, regex_traits: list[RegexTrait]) -> dict[str, bool]:
         """
         Evaluate regex traits using pattern matching.
@@ -142,22 +176,9 @@ class RubricEvaluator:
 
         Returns:
             Dictionary mapping trait names to boolean results
-
-        Raises:
-            RuntimeError: If evaluation of any trait fails
         """
-        results: dict[str, bool] = {}
-
-        for trait in regex_traits:
-            try:
-                result = trait.evaluate(answer)
-                results[trait.name] = result
-            except Exception as e:
-                logger.warning(f"Failed to evaluate regex trait '{trait.name}': {e}")
-                # Mark failed traits as None for consistency with LLM evaluation
-                results[trait.name] = None  # type: ignore[assignment]
-
-        return results
+        # Type narrowing: regex traits always return bool
+        return self._evaluate_deterministic_traits(answer, regex_traits, "regex")  # type: ignore[return-value]
 
     def _evaluate_callable_traits(self, answer: str, callable_traits: list[CallableTrait]) -> dict[str, bool | int]:
         """
@@ -169,22 +190,8 @@ class RubricEvaluator:
 
         Returns:
             Dictionary mapping trait names to boolean or int results (depending on trait kind)
-
-        Raises:
-            RuntimeError: If evaluation of any trait fails
         """
-        results: dict[str, bool | int] = {}
-
-        for trait in callable_traits:
-            try:
-                result = trait.evaluate(answer)
-                results[trait.name] = result
-            except Exception as e:
-                logger.warning(f"Failed to evaluate callable trait '{trait.name}': {e}")
-                # Mark failed traits as None for consistency with LLM evaluation
-                results[trait.name] = None  # type: ignore[assignment]
-
-        return results
+        return self._evaluate_deterministic_traits(answer, callable_traits, "callable")
 
     def _evaluate_batch(
         self, question: str, answer: str, rubric: Rubric
