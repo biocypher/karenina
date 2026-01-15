@@ -265,8 +265,6 @@ def convert_rating_to_rubric_trait(
                         tn_instructions = json.loads(prop.value)
                     except (json.JSONDecodeError, TypeError):
                         tn_instructions = prop.value if isinstance(prop.value, list) else []
-                # Note: fp_instructions and fn_instructions are no longer supported
-                # Old checkpoints with these fields will be ignored (backward compatibility)
 
         return MetricRubricTrait(
             name=rating.name,
