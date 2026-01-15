@@ -613,11 +613,10 @@ def test_convert_rating_to_llm_trait_score() -> None:
     assert trait.max_score == 5
 
 
-# Note: Testing unsupported trait types (ManualRubricTrait) is not possible
-# because Pydantic validates the additionalType field at creation time.
-# The convert_rating_to_rubric_trait function handles this case by raising
-# ValueError for unsupported types, but we cannot create invalid objects
-# to test this path directly.
+# Note: The deprecated ManualRubricTrait types (GlobalManualRubricTrait,
+# QuestionSpecificManualRubricTrait) are gracefully skipped with a warning log.
+# The convert_rating_to_rubric_trait function returns None for these types,
+# and callers filter out None values when building trait lists.
 
 
 # =============================================================================
