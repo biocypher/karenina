@@ -182,7 +182,7 @@ class TestAddQuestion:
         manager = QuestionManager(benchmark._base)
 
         with pytest.raises(TypeError, match="question must be either a string or Question"):
-            manager.add_question(123, "4")  # type: ignore[arg-type]
+            manager.add_question(123, "4")
 
     def test_add_question_with_metadata(self) -> None:
         """Test adding question with metadata parameters."""
@@ -242,7 +242,7 @@ class TestAddQuestion:
             pass
 
         with pytest.raises(TypeError, match="must inherit from BaseAnswer"):
-            manager.add_question("Q?", "A", answer_template=NotAnAnswer)  # type: ignore[arg-type]
+            manager.add_question("Q?", "A", answer_template=NotAnAnswer)
 
     def test_add_question_with_tags_from_question_object(self) -> None:
         """Test that tags from Question object are preserved as keywords."""
@@ -467,7 +467,7 @@ class TestAddQuestionFromObject:
         manager = QuestionManager(benchmark._base)
 
         with pytest.raises(ValueError, match="must be a Question instance"):
-            manager.add_question_from_object("not a question")  # type: ignore[arg-type]
+            manager.add_question_from_object("not a question")
 
     def test_add_from_object_duplicate_raises(self) -> None:
         """Test that adding duplicate Question object raises ValueError."""

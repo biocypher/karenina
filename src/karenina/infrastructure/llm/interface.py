@@ -293,7 +293,7 @@ SUMMARY:"""
             response = self.model.invoke([HumanMessage(content=summary_prompt)])
             return str(response.content)
 
-        def before_model(self, state: AgentState[Any], runtime: Any) -> dict[str, Any] | None:  # noqa: ARG002
+        def before_model(self, state: AgentState[Any], _runtime: Any) -> dict[str, Any] | None:
             """Check token count before each model call and summarize if needed.
 
             Uses RemoveMessage to properly delete old messages from LangGraph state,

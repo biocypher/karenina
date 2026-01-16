@@ -35,11 +35,7 @@ def resolve_type_hints_safe(model: type[BaseModel]) -> dict[str, Any]:
         return get_type_hints(model)
     except Exception:
         model_fields: dict[str, FieldInfo] = model.model_fields
-        return {
-            name: field.annotation
-            for name, field in model_fields.items()
-            if field.annotation
-        }
+        return {name: field.annotation for name, field in model_fields.items() if field.annotation}
 
 
 if TYPE_CHECKING:
@@ -78,7 +74,7 @@ def pydantic_to_flat_dict(
         if value is None:
             # For optional nested models, we need to set all nested fields to None
             if _is_pydantic_model(inner_type):
-                nested_hints = resolve_type_hints_safe(inner_type)  # type: ignore[arg-type]
+                nested_hints = resolve_type_hints_safe(inner_type)
                 for nested_name in nested_hints:
                     result[f"{prefix}{nested_name}"] = None
             else:

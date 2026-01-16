@@ -288,9 +288,7 @@ class TestRubricPandasOperations(PandasOperationsTestMixin):
     Inherits groupby and filtering tests from PandasOperationsTestMixin.
     """
 
-    def _get_test_dataframe(
-        self, verification_results_list: list[VerificationResult]
-    ) -> pd.DataFrame:
+    def _get_test_dataframe(self, verification_results_list: list[VerificationResult]) -> pd.DataFrame:
         """Override to return RubricResults DataFrame with LLM traits."""
         rubric_results = RubricResults(results=verification_results_list)
         return rubric_results.to_dataframe(trait_type="llm")
