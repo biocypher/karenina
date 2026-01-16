@@ -44,6 +44,12 @@ from .queries import (
     get_verification_history_timeline,
     get_verification_run_summary,
 )
+from .rubric_serializer import (
+    deserialize_rubric_from_dict,
+    serialize_question_rubric_from_cache,
+    serialize_rubric,
+    serialize_rubric_to_dict,
+)
 
 __all__ = [
     # Configuration
@@ -71,6 +77,11 @@ __all__ = [
     "save_verification_results",
     "load_verification_results",
     "import_verification_results",
+    # Rubric serialization
+    "serialize_rubric",
+    "serialize_rubric_to_dict",
+    "serialize_question_rubric_from_cache",
+    "deserialize_rubric_from_dict",
     # Query helpers
     "get_benchmark_summary",
     "get_verification_run_summary",
