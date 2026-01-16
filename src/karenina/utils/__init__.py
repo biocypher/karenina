@@ -17,6 +17,7 @@ from .checkpoint import (
     extract_questions_from_benchmark,
     generate_question_id,
     generate_template_id,
+    strip_deep_judgment_config_from_checkpoint,
     validate_jsonld_benchmark,
 )
 from .code import extract_and_combine_codeblocks
@@ -38,6 +39,7 @@ __all__ = [
     "validate_jsonld_benchmark",
     "convert_rubric_trait_to_rating",
     "convert_rating_to_rubric_trait",
+    "strip_deep_judgment_config_from_checkpoint",
     # Code parsing
     "extract_and_combine_codeblocks",
     # Testing utilities
