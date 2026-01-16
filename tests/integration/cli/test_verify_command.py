@@ -146,8 +146,9 @@ class TestVerifyCommandErrors:
     def test_missing_benchmark_file(self, tmp_path: Path) -> None:
         """Verify error when benchmark file doesn't exist."""
         nonexistent = tmp_path / "nonexistent.jsonld"
+        output_path = tmp_path / "results.json"
 
-        result = runner.invoke(app, ["verify", str(nonexistent)])
+        result = runner.invoke(app, ["verify", str(nonexistent), "--output", str(output_path)])
 
         # Should fail with non-zero exit code
         assert result.exit_code != 0
@@ -156,8 +157,9 @@ class TestVerifyCommandErrors:
         """Verify error when benchmark file is invalid JSON."""
         invalid_path = tmp_path / "invalid.jsonld"
         invalid_path.write_text("{ this is not valid json }")
+        output_path = tmp_path / "results.json"
 
-        result = runner.invoke(app, ["verify", str(invalid_path)])
+        result = runner.invoke(app, ["verify", str(invalid_path), "--output", str(output_path)])
 
         # Should fail with non-zero exit code
         assert result.exit_code != 0
@@ -166,8 +168,11 @@ class TestVerifyCommandErrors:
         """Verify error when preset doesn't exist."""
         monkeypatch.setenv("KARENINA_PRESETS_DIR", str(tmp_path))
         checkpoint = create_minimal_checkpoint(tmp_path)
+        output_path = tmp_path / "results.json"
 
-        result = runner.invoke(app, ["verify", str(checkpoint), "--preset", "nonexistent"])
+        result = runner.invoke(
+            app, ["verify", str(checkpoint), "--preset", "nonexistent", "--output", str(output_path)]
+        )
 
         # Should fail with non-zero exit code
         assert result.exit_code != 0
@@ -198,9 +203,10 @@ class TestVerifyCommandOptions:
         monkeypatch.setenv("KARENINA_PRESETS_DIR", str(tmp_path))
         checkpoint = create_minimal_checkpoint(tmp_path)
         create_minimal_preset(tmp_path, "my-preset")
+        output_path = tmp_path / "results.json"
 
         # Just check the option is parsed (may fail later due to API key)
-        result = runner.invoke(app, ["verify", str(checkpoint), "--preset", "my-preset"])
+        result = runner.invoke(app, ["verify", str(checkpoint), "--preset", "my-preset", "--output", str(output_path)])
 
         # Should parse the option (may fail later for other reasons)
         # Check it doesn't fail on "unrecognized option" style errors
@@ -219,24 +225,27 @@ class TestVerifyCommandOptions:
     def test_replicate_count_option_accepted(self, tmp_path: Path) -> None:
         """Verify replicate-count option is accepted."""
         checkpoint = create_minimal_checkpoint(tmp_path)
+        output_path = tmp_path / "results.json"
 
-        result = runner.invoke(app, ["verify", str(checkpoint), "--replicate-count", "3"])
+        result = runner.invoke(app, ["verify", str(checkpoint), "--replicate-count", "3", "--output", str(output_path)])
 
         assert "unrecognized" not in result.stdout.lower()
 
     def test_abstention_flag_accepted(self, tmp_path: Path) -> None:
         """Verify abstention flag is accepted."""
         checkpoint = create_minimal_checkpoint(tmp_path)
+        output_path = tmp_path / "results.json"
 
-        result = runner.invoke(app, ["verify", str(checkpoint), "--abstention"])
+        result = runner.invoke(app, ["verify", str(checkpoint), "--abstention", "--output", str(output_path)])
 
         assert "unrecognized" not in result.stdout.lower()
 
     def test_deep_judgment_flag_accepted(self, tmp_path: Path) -> None:
         """Verify deep-judgment flag is accepted."""
         checkpoint = create_minimal_checkpoint(tmp_path)
+        output_path = tmp_path / "results.json"
 
-        result = runner.invoke(app, ["verify", str(checkpoint), "--deep-judgment"])
+        result = runner.invoke(app, ["verify", str(checkpoint), "--deep-judgment", "--output", str(output_path)])
 
         assert "unrecognized" not in result.stdout.lower()
 
