@@ -401,6 +401,8 @@ class ManualTraces:
         """
         self._benchmark = benchmark
         self._trace_manager = get_manual_trace_manager()
+        # Lazy-built index for O(1) question text to hash lookup
+        self._question_text_index: dict[str, str] | None = None
 
     def register_trace(self, question_identifier: str, trace: str | list[Any], map_to_id: bool = False) -> None:
         """
@@ -450,9 +452,36 @@ class ManualTraces:
         for identifier, trace in traces_dict.items():
             self.register_trace(identifier, trace, map_to_id=map_to_id)
 
+    def _build_question_text_index(self) -> dict[str, str]:
+        """
+        Build a reverse index from question text to MD5 hash.
+
+        This index is built lazily on first use and cached for subsequent lookups,
+        converting O(n) searches to O(1) lookups.
+
+        Returns:
+            Dictionary mapping question text to MD5 hash
+        """
+        import hashlib
+
+        if self._question_text_index is not None:
+            return self._question_text_index
+
+        # Build the index
+        self._question_text_index = {}
+        for question_urn_id in self._benchmark._questions_cache:
+            question_data = self._benchmark.get_question(question_urn_id)
+            question_text = question_data["question"]
+            question_hash = hashlib.md5(question_text.encode("utf-8")).hexdigest()
+            self._question_text_index[question_text] = question_hash
+
+        return self._question_text_index
+
     def _question_text_to_hash(self, question_text: str) -> str:
         """
         Convert question text to MD5 hash using the same algorithm as Question.id.
+
+        Uses a lazily-built index for O(1) lookup after the first call.
 
         Args:
             question_text: The question text
@@ -463,24 +492,21 @@ class ManualTraces:
         Raises:
             ValueError: If question not found in benchmark
         """
+        # Build or retrieve the question text index
+        index = self._build_question_text_index()
+
+        # O(1) lookup
+        if question_text in index:
+            return index[question_text]
+
+        # Question not found - compute hash for error message
         import hashlib
 
         computed_hash = hashlib.md5(question_text.encode("utf-8")).hexdigest()
-
-        # Search through benchmark's questions to find matching question
-        # Note: _questions_cache uses URN format IDs as keys, but we need the MD5 hash
-        for question_urn_id in self._benchmark._questions_cache:
-            question_data = self._benchmark.get_question(question_urn_id)
-            if question_data["question"] == question_text:
-                # Found the question, return the MD5 hash (not the URN ID)
-                return computed_hash
-
-        # Question not found
-        available_count = len(self._benchmark._questions_cache)
         raise ValueError(
             f"Question not found in benchmark: '{question_text[:50]}...'\n"
             f"Computed hash: {computed_hash}\n"
-            f"Available questions in benchmark: {available_count}\n"
+            f"Indexed questions in benchmark: {len(index)}\n"
             "Note: Question text must match EXACTLY (case-sensitive, including whitespace)."
         )
 
