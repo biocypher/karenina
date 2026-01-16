@@ -7,7 +7,6 @@ parsing and verification logic, following the same pattern as RubricEvaluator.
 import json
 import logging
 import os
-import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -19,25 +18,9 @@ from ....infrastructure.llm.interface import init_chat_model_unified
 from ....infrastructure.llm.mcp_utils import extract_final_ai_message
 from ....schemas.domain import BaseAnswer
 from ....schemas.workflow import INTERFACES_NO_PROVIDER_REQUIRED, ModelConfig
+from ..utils.agent_metrics import extract_agent_metrics
 
 logger = logging.getLogger(__name__)
-
-
-# ============================================================================
-# Module-Level Constants
-# ============================================================================
-
-# Pre-compiled regex patterns for detecting suspected tool failures in agent traces.
-# Compiled at module load time to avoid recompilation on every _extract_agent_metrics call.
-_TOOL_FAILURE_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(r"\berror\b", re.IGNORECASE),
-    re.compile(r"\bfailed\b", re.IGNORECASE),
-    re.compile(r"\bexception\b", re.IGNORECASE),
-    re.compile(r"\btraceback\b", re.IGNORECASE),
-    re.compile(r"\b404\b", re.IGNORECASE),
-    re.compile(r"\b500\b", re.IGNORECASE),
-    re.compile(r"\btimeout\b", re.IGNORECASE),
-)
 
 
 # ============================================================================
@@ -309,7 +292,7 @@ class TemplateEvaluator:
         # Detect tool traces
         agent_metrics = None
         if isinstance(raw_response, dict):
-            agent_metrics = self._extract_agent_metrics(raw_response)
+            agent_metrics = extract_agent_metrics(raw_response)
         has_tool_traces = agent_metrics is not None and agent_metrics.get("tool_calls", 0) > 0
 
         # Build prompts
@@ -786,68 +769,3 @@ Return only the completed JSON object - no surrounding text, no markdown fences:
             True if ground truth should be exposed, False otherwise
         """
         return os.getenv("KARENINA_EXPOSE_GROUND_TRUTH", "false").lower() in ("true", "1", "yes", "on")
-
-    def _extract_agent_metrics(self, response: dict[str, Any]) -> dict[str, Any] | None:
-        """
-        Extract agent execution metrics from LangGraph agent response.
-
-        This function analyzes agent messages to track:
-        - Iterations (AI message cycles)
-        - Tool calls (successful tool invocations)
-        - Tools used (unique tool names)
-        - Suspected failed tool calls (tools with error-like output patterns)
-
-        Args:
-            response: Agent response object from LangGraph (dict with "messages" key)
-
-        Returns:
-            Dict with agent metrics or None if extraction fails
-        """
-        if not response or not isinstance(response, dict):
-            return None
-
-        messages = response.get("messages", [])
-        if not messages:
-            return None
-
-        iterations = 0
-        tool_calls = 0
-        tools_used: set[str] = set()
-        suspect_failed_tool_calls = 0
-        suspect_failed_tools: set[str] = set()
-
-        for msg in messages:
-            msg_type = getattr(msg, "__class__", None)
-            if msg_type:
-                type_name = msg_type.__name__
-
-                if type_name == "AIMessage":
-                    iterations += 1
-
-                elif type_name == "ToolMessage":
-                    tool_calls += 1
-                    tool_name = getattr(msg, "name", None)
-                    if tool_name:
-                        tools_used.add(tool_name)
-
-                    # Check for suspected failures using module-level pre-compiled patterns
-                    is_suspect_failure = False
-                    content = getattr(msg, "content", None)
-                    if content and isinstance(content, str):
-                        for pattern in _TOOL_FAILURE_PATTERNS:
-                            if pattern.search(content):
-                                is_suspect_failure = True
-                                break
-
-                    if is_suspect_failure:
-                        suspect_failed_tool_calls += 1
-                        if tool_name:
-                            suspect_failed_tools.add(tool_name)
-
-        return {
-            "iterations": iterations,
-            "tool_calls": tool_calls,
-            "tools_used": sorted(tools_used),
-            "suspect_failed_tool_calls": suspect_failed_tool_calls,
-            "suspect_failed_tools": sorted(suspect_failed_tools),
-        }

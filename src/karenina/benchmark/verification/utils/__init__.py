@@ -1,5 +1,10 @@
 """Utility functions for verification operations."""
 
+from .agent_metrics import (
+    TOOL_FAILURE_PATTERNS,
+    extract_agent_metrics,
+    extract_middleware_metrics,
+)
 from .parsing import (
     _extract_attribute_descriptions,
     _extract_attribute_names_from_class,
@@ -23,6 +28,10 @@ from .usage_tracker import UsageMetadata, UsageTracker
 from .validation import validate_answer_template
 
 __all__ = [
+    # Agent metrics
+    "TOOL_FAILURE_PATTERNS",
+    "extract_agent_metrics",
+    "extract_middleware_metrics",
     # Parsing utilities
     "_extract_attribute_names_from_class",
     "_strip_markdown_fences",
