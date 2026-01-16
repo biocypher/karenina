@@ -1,6 +1,7 @@
 """Workflow models for verification execution."""
 
 from .aggregation import AggregatorRegistry, ResultAggregator, create_default_registry
+from .judgment_dataframe import JudgmentDataFrameBuilder
 from .judgment_results import JudgmentResults
 from .models import (
     INTERFACE_LANGCHAIN,
@@ -85,6 +86,7 @@ __all__ = [
     "TemplateResults",
     "TemplateDataFrameBuilder",
     "JudgmentResults",
+    "JudgmentDataFrameBuilder",
     # Aggregation framework
     "ResultAggregator",
     "AggregatorRegistry",
