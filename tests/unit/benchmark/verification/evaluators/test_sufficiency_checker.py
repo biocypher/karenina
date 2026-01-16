@@ -59,10 +59,10 @@ class TestStripMarkdownFences:
 
     def test_handles_non_string_input(self) -> None:
         """Verify non-string input is returned unchanged."""
-        result = _strip_markdown_fences(None)  # type: ignore
+        result = _strip_markdown_fences(None)
         assert result is None
 
-        result = _strip_markdown_fences(123)  # type: ignore
+        result = _strip_markdown_fences(123)
         assert result == 123
 
     def test_handles_empty_string(self) -> None:

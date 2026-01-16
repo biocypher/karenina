@@ -211,7 +211,7 @@ def minimal_model_config() -> ModelConfig:
 
 
 @pytest.fixture
-def minimal_context(minimal_model_config: ModelConfig) -> VerificationContext:
+def minimal_context(_minimal_model_config: ModelConfig) -> VerificationContext:
     """Return a minimal VerificationContext for testing."""
     return VerificationContext(
         question_id="test-question-1",
@@ -256,7 +256,7 @@ def sample_rubric() -> Rubric:
 class TestStageOrchestratorConfiguration:
     """Test StageOrchestrator.from_config() builds correct stage lists."""
 
-    def test_template_only_mode_stages(self, minimal_model_config: ModelConfig):
+    def test_template_only_mode_stages(self, _minimal_model_config: ModelConfig):
         """Verify template_only mode includes template verification stages."""
         orchestrator = StageOrchestrator.from_config(
             evaluation_mode="template_only",
@@ -274,7 +274,7 @@ class TestStageOrchestratorConfiguration:
         # Rubric stage should NOT be present (no rubric provided)
         assert "RubricEvaluation" not in stage_names
 
-    def test_template_and_rubric_mode_stages(self, minimal_model_config: ModelConfig, sample_rubric: Rubric):
+    def test_template_and_rubric_mode_stages(self, _minimal_model_config: ModelConfig, sample_rubric: Rubric):
         """Verify template_and_rubric mode includes both template and rubric stages."""
         orchestrator = StageOrchestrator.from_config(
             rubric=sample_rubric,
@@ -292,7 +292,7 @@ class TestStageOrchestratorConfiguration:
         assert "RubricEvaluation" in stage_names
         assert "FinalizeResult" in stage_names
 
-    def test_rubric_only_mode_stages(self, minimal_model_config: ModelConfig, sample_rubric: Rubric):
+    def test_rubric_only_mode_stages(self, _minimal_model_config: ModelConfig, sample_rubric: Rubric):
         """Verify rubric_only mode skips template stages."""
         orchestrator = StageOrchestrator.from_config(
             rubric=sample_rubric,
@@ -311,7 +311,7 @@ class TestStageOrchestratorConfiguration:
         assert "RubricEvaluation" in stage_names
         assert "FinalizeResult" in stage_names
 
-    def test_abstention_enabled_adds_stage(self, minimal_model_config: ModelConfig):
+    def test_abstention_enabled_adds_stage(self, _minimal_model_config: ModelConfig):
         """Verify abstention_enabled=True adds AbstentionCheckStage."""
         orchestrator = StageOrchestrator.from_config(
             abstention_enabled=True,
@@ -321,7 +321,7 @@ class TestStageOrchestratorConfiguration:
         stage_names = [s.name for s in orchestrator.stages]
         assert "AbstentionCheck" in stage_names
 
-    def test_deep_judgment_enabled_adds_stage(self, minimal_model_config: ModelConfig):
+    def test_deep_judgment_enabled_adds_stage(self, _minimal_model_config: ModelConfig):
         """Verify deep_judgment_enabled=True adds DeepJudgmentAutoFailStage."""
         orchestrator = StageOrchestrator.from_config(
             deep_judgment_enabled=True,
@@ -331,7 +331,7 @@ class TestStageOrchestratorConfiguration:
         stage_names = [s.name for s in orchestrator.stages]
         assert "DeepJudgmentAutoFail" in stage_names
 
-    def test_finalize_result_always_last(self, minimal_model_config: ModelConfig, sample_rubric: Rubric):
+    def test_finalize_result_always_last(self, _minimal_model_config: ModelConfig, sample_rubric: Rubric):
         """Verify FinalizeResultStage is always the last stage."""
         for mode in ["template_only", "template_and_rubric", "rubric_only"]:
             orchestrator = StageOrchestrator.from_config(
@@ -342,7 +342,7 @@ class TestStageOrchestratorConfiguration:
             last_stage = orchestrator.stages[-1]
             assert last_stage.name == "FinalizeResult"
 
-    def test_recursion_limit_stage_present(self, minimal_model_config: ModelConfig):
+    def test_recursion_limit_stage_present(self, _minimal_model_config: ModelConfig):
         """Verify RecursionLimitAutoFailStage is in the pipeline."""
         orchestrator = StageOrchestrator.from_config(
             evaluation_mode="template_only",
@@ -351,7 +351,7 @@ class TestStageOrchestratorConfiguration:
         stage_names = [s.name for s in orchestrator.stages]
         assert "RecursionLimitAutoFail" in stage_names
 
-    def test_trace_validation_stage_present(self, minimal_model_config: ModelConfig):
+    def test_trace_validation_stage_present(self, _minimal_model_config: ModelConfig):
         """Verify TraceValidationAutoFailStage is in the pipeline."""
         orchestrator = StageOrchestrator.from_config(
             evaluation_mode="template_only",
@@ -360,7 +360,7 @@ class TestStageOrchestratorConfiguration:
         stage_names = [s.name for s in orchestrator.stages]
         assert "TraceValidationAutoFail" in stage_names
 
-    def test_sufficiency_enabled_adds_stage(self, minimal_model_config: ModelConfig):
+    def test_sufficiency_enabled_adds_stage(self, _minimal_model_config: ModelConfig):
         """Verify sufficiency_enabled=True adds SufficiencyCheckStage."""
         orchestrator = StageOrchestrator.from_config(
             sufficiency_enabled=True,
@@ -370,7 +370,7 @@ class TestStageOrchestratorConfiguration:
         stage_names = [s.name for s in orchestrator.stages]
         assert "SufficiencyCheck" in stage_names
 
-    def test_sufficiency_disabled_no_stage(self, minimal_model_config: ModelConfig):
+    def test_sufficiency_disabled_no_stage(self, _minimal_model_config: ModelConfig):
         """Verify sufficiency_enabled=False does not add SufficiencyCheckStage."""
         orchestrator = StageOrchestrator.from_config(
             sufficiency_enabled=False,
@@ -380,7 +380,7 @@ class TestStageOrchestratorConfiguration:
         stage_names = [s.name for s in orchestrator.stages]
         assert "SufficiencyCheck" not in stage_names
 
-    def test_sufficiency_and_abstention_both_enabled(self, minimal_model_config: ModelConfig):
+    def test_sufficiency_and_abstention_both_enabled(self, _minimal_model_config: ModelConfig):
         """Verify both sufficiency and abstention stages can be enabled together."""
         orchestrator = StageOrchestrator.from_config(
             abstention_enabled=True,
@@ -392,7 +392,7 @@ class TestStageOrchestratorConfiguration:
         assert "AbstentionCheck" in stage_names
         assert "SufficiencyCheck" in stage_names
 
-    def test_sufficiency_stage_position_after_abstention(self, minimal_model_config: ModelConfig):
+    def test_sufficiency_stage_position_after_abstention(self, _minimal_model_config: ModelConfig):
         """Verify SufficiencyCheck comes after AbstentionCheck in pipeline."""
         orchestrator = StageOrchestrator.from_config(
             abstention_enabled=True,
@@ -407,7 +407,7 @@ class TestStageOrchestratorConfiguration:
         # Sufficiency should come after abstention
         assert sufficiency_idx > abstention_idx
 
-    def test_sufficiency_stage_position_before_parse_template(self, minimal_model_config: ModelConfig):
+    def test_sufficiency_stage_position_before_parse_template(self, _minimal_model_config: ModelConfig):
         """Verify SufficiencyCheck comes before ParseTemplate in pipeline."""
         orchestrator = StageOrchestrator.from_config(
             sufficiency_enabled=True,

@@ -132,7 +132,7 @@ def test_callable_trait_extra_fields_forbidden() -> None:
             kind="boolean",
             callable_code=code,
             higher_is_better=True,
-            extra_field="not_allowed",  # type: ignore[arg-type]
+            extra_field="not_allowed",
         )
 
 
@@ -148,7 +148,7 @@ def test_callable_trait_kind_must_be_valid() -> None:
     with pytest.raises(ValidationError):
         CallableTrait(
             name="test",
-            kind="invalid",  # type: ignore[arg-type]
+            kind="invalid",
             callable_code=code,
             higher_is_better=True,
         )
@@ -231,7 +231,7 @@ def test_callable_trait_invalid_code_type_raises_error() -> None:
         CallableTrait(
             name="test",
             kind="boolean",
-            callable_code=12345,  # type: ignore[arg-type]
+            callable_code=12345,
             higher_is_better=True,
         )
 
@@ -837,7 +837,7 @@ def test_evaluate_score_returns_non_numeric_raises_error() -> None:
     """Test that score trait returning non-numeric raises RuntimeError."""
     trait = CallableTrait.from_callable(
         name="bad",
-        func=lambda _text: "not a number",  # type: ignore[return-value]
+        func=lambda _text: "not a number",
         kind="score",
         min_score=0,
         max_score=10,
@@ -1053,7 +1053,7 @@ def test_callable_trait_legacy_default_higher_is_better() -> None:
         name="test",
         kind="boolean",
         callable_code=cloudpickle.dumps(lambda _t: True),
-        higher_is_better=None,  # type: ignore[arg-type]
+        higher_is_better=None,
     )
 
     # Should default to True for legacy compatibility

@@ -463,7 +463,7 @@ def test_rubric_extra_fields_forbidden() -> None:
     with pytest.raises(ValidationError):
         Rubric(
             llm_traits=[],
-            extra_field="not_allowed",  # type: ignore[arg-type]
+            extra_field="not_allowed",
         )
 
 
@@ -486,7 +486,7 @@ def test_rubric_evaluation_extra_fields_forbidden() -> None:
     with pytest.raises(ValidationError):
         RubricEvaluation(
             trait_scores={"clarity": True},
-            extra_field="not_allowed",  # type: ignore[arg-type]
+            extra_field="not_allowed",
         )
 
 

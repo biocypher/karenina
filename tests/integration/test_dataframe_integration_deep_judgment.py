@@ -236,9 +236,7 @@ class TestDeepJudgmentPandasOperations(PandasOperationsTestMixin):
     Inherits groupby and filtering tests from PandasOperationsTestMixin.
     """
 
-    def _get_test_dataframe(
-        self, verification_results_list: list[VerificationResult]
-    ) -> pd.DataFrame:
+    def _get_test_dataframe(self, verification_results_list: list[VerificationResult]) -> pd.DataFrame:
         """Override to return JudgmentResults DataFrame."""
         judgment_results = JudgmentResults(results=verification_results_list)
         return judgment_results.to_dataframe()

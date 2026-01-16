@@ -182,7 +182,8 @@ class FixtureBackedLLMClient:
         for fixture_path in self._fixtures_dir.rglob(f"{prompt_hash}.json"):
             try:
                 with fixture_path.open("r") as f:
-                    return json.load(f)
+                    data: dict[str, Any] = json.load(f)
+                    return data
             except (json.JSONDecodeError, OSError) as e:
                 # Log warning but continue searching
                 print(f"Warning: Failed to load fixture {fixture_path}: {e}")

@@ -13,15 +13,22 @@ class SimpleLogger:
         >>> result = gepa.optimize(..., logger=logger)
     """
 
-    def __init__(self, show_all: bool = False):
+    def __init__(
+        self,
+        show_all: bool = False,
+        max_iterations: int | None = None,
+    ):
         """Initialize the logger.
 
         Args:
             show_all: If True, print all GEPA messages. If False, only key events.
+            max_iterations: Ignored (kept for API compatibility).
         """
         self.show_all = show_all
         self.baseline_score: float | None = None
         self.best_score: float = 0.0
+        # Suppress unused parameter warning - kept for API compatibility
+        _ = max_iterations
 
         # Patterns for parsing GEPA messages
         # Use (\d+(?:\.\d+)?) to match floats without capturing trailing periods
@@ -105,14 +112,31 @@ class SimpleLogger:
         if self.show_all:
             print(f"  {message}")
 
+    def print_summary(self) -> None:
+        """Print optimization summary.
+
+        Shows baseline score, best score achieved, and improvement percentage.
+        """
+        if self.baseline_score is not None:
+            improvement = (
+                ((self.best_score - self.baseline_score) / self.baseline_score * 100) if self.baseline_score else 0
+            )
+            print(f"\n{'=' * 50}")
+            print("GEPA Optimization Summary")
+            print(f"{'=' * 50}")
+            print(f"  Baseline score: {self.baseline_score:.2%}")
+            print(f"  Best score:     {self.best_score:.2%}")
+            print(f"  Improvement:    {improvement:+.1f}%")
+            print(f"{'=' * 50}")
+
 
 # Keep old names for backwards compatibility
 VerboseLogger = SimpleLogger
 
 
 def create_verbose_logger(
-    max_iterations: int = 150,  # noqa: ARG001 - Kept for API compatibility
-    console: object | None = None,  # noqa: ARG001 - Kept for API compatibility
+    max_iterations: int = 150,
+    console: object | None = None,
     show_all_messages: bool = False,
 ) -> SimpleLogger:
     """Create a SimpleLogger instance.
@@ -125,4 +149,7 @@ def create_verbose_logger(
     Returns:
         SimpleLogger instance
     """
+    # Suppress unused parameter warnings - kept for API compatibility
+    _ = max_iterations
+    _ = console
     return SimpleLogger(show_all=show_all_messages)

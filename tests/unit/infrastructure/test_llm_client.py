@@ -756,7 +756,7 @@ def test_validate_trace_data_not_dict_raises_error() -> None:
     manager = ManualTraceManager()
 
     with pytest.raises(ManualTraceError, match="Invalid trace data format"):
-        manager.load_traces_from_json("not a dict")  # type: ignore
+        manager.load_traces_from_json("not a dict")
 
 
 @pytest.mark.unit
@@ -801,7 +801,7 @@ def test_validate_trace_data_non_string_trace_raises_error() -> None:
     manager = ManualTraceManager()
 
     with pytest.raises(ManualTraceError, match="Invalid trace content"):
-        manager.load_traces_from_json({"d41d8cd98f00b204e9800998ecf8427e": 123})  # type: ignore
+        manager.load_traces_from_json({"d41d8cd98f00b204e9800998ecf8427e": 123})
 
 
 @pytest.mark.unit
@@ -827,8 +827,8 @@ def test_is_valid_md5_hash() -> None:
     assert manager._is_valid_md5_hash("") is False
     assert manager._is_valid_md5_hash("abc") is False
     assert manager._is_valid_md5_hash("g" * 32) is False  # 'g' is not a hex char
-    assert manager._is_valid_md5_hash(None) is False  # type: ignore
-    assert manager._is_valid_md5_hash(123) is False  # type: ignore
+    assert manager._is_valid_md5_hash(None) is False
+    assert manager._is_valid_md5_hash(123) is False
 
 
 # =============================================================================

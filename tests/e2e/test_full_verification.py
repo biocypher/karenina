@@ -30,7 +30,7 @@ def test_verify_help_displays() -> None:
 def test_verify_minimal_checkpoint_with_manual_interface(
     runner: CliRunner,
     minimal_checkpoint: Path,
-    tmp_preset_file: Path,
+    _tmp_preset_file: Path,
     tmp_path: Path,
 ) -> None:
     """Test verifying a minimal checkpoint with manual interface.

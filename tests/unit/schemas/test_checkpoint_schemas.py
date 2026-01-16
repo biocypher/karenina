@@ -214,7 +214,7 @@ def test_schema_org_rating_invalid_additional_type_raises_error() -> None:
             name="test",
             bestRating=1.0,
             worstRating=0.0,
-            additionalType="InvalidType",  # type: ignore[arg-type]
+            additionalType="InvalidType",
         )
 
 
