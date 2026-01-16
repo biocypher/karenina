@@ -5,6 +5,7 @@ This module implements the main 'karenina verify' command.
 """
 
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -386,6 +387,23 @@ def verify(
         if not resume and not benchmark_path:
             console.print("[red]Error: BENCHMARK_PATH is required (unless using --resume)[/red]")
             raise typer.Exit(code=1)
+
+        # Prompt for output file if not specified (and not resuming or interactive)
+        # This ensures detailed report is the default behavior
+        if not output and not resume and not interactive:
+            suggested = f"verification_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            console.print("[yellow]No output file specified.[/yellow]")
+            console.print(f"[dim]Suggested: {suggested}[/dim]")
+
+            user_input = typer.prompt("Output file path", default=suggested)
+            output = Path(user_input)
+
+            # Validate the prompted output path
+            try:
+                output_format = validate_output_path(output)
+            except ValueError as e:
+                console.print(f"[red]Error: {e}[/red]")
+                raise typer.Exit(code=1) from e
 
         # Initialize progressive save manager (will be set up later)
         progressive_manager: ProgressiveSaveManager | None = None
@@ -846,18 +864,28 @@ def verify(
         # Display summary
         total = len(final_results)
         passed = sum(1 for r in final_results if r.template and r.template.verify_result)
-        failed = total - passed
-        errors = sum(1 for r in final_results if not r.metadata.completed_without_errors)
+        execution_errors = sum(1 for r in final_results if not r.metadata.completed_without_errors)
+        failures = total - passed
+        not_passed = failures - execution_errors
 
         console.print("\n[bold]Verification Summary:[/bold]")
         console.print(f"  Total: {total}")
         console.print(f"  Passed: [green]{passed}[/green]")
-        console.print(f"  Failed: [red]{failed}[/red]")
-        if errors > 0:
-            console.print(f"  Errors: [yellow]{errors}[/yellow]")
+        if failures > 0:
+            console.print(f"  Failures: [red]{failures}[/red]")
+            if execution_errors > 0:
+                console.print(f"    Execution Errors: [yellow]{execution_errors}[/yellow]")
+            if not_passed > 0:
+                console.print(f"    Not Passed: [red]{not_passed}[/red]")
+        else:
+            console.print("  Failures: [green]0[/green]")
         console.print(f"  Duration: {duration:.2f}s")
 
-        console.print("\n[green]✓ Verification complete![/green]")
+        # Conditional completion message
+        if failures == 0:
+            console.print("\n[green]✓ Verification complete![/green]")
+        else:
+            console.print(f"\n[yellow]⚠ Verification complete with {failures} failure(s)[/yellow]")
 
         # Force exit to cleanup lingering resources (HTTP clients, MCP connections, etc.)
         # These resources prevent the process from exiting naturally

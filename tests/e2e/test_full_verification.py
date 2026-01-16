@@ -48,6 +48,7 @@ def test_verify_minimal_checkpoint_with_manual_interface(
         json.dump(manual_traces, f)
 
     # Run verify with manual interface
+    output_file = tmp_path / "results.json"
     result = runner.invoke(
         app,
         [
@@ -61,6 +62,8 @@ def test_verify_minimal_checkpoint_with_manual_interface(
             "gpt-4.1-mini",
             "--parsing-provider",
             "openai",
+            "--output",
+            str(output_file),
         ],
     )
 
@@ -75,11 +78,13 @@ def test_verify_with_preset(
     runner: CliRunner,
     minimal_checkpoint: Path,
     tmp_presets_dir: Path,
+    tmp_path: Path,
 ) -> None:
     """Test verifying with a preset configuration.
 
     This tests that preset files are correctly loaded and applied.
     """
+    output_file = tmp_path / "results.json"
     result = runner.invoke(
         app,
         [
@@ -87,6 +92,8 @@ def test_verify_with_preset(
             str(minimal_checkpoint),
             "--preset",
             str(tmp_presets_dir / "default.json"),
+            "--output",
+            str(output_file),
         ],
     )
 
@@ -97,13 +104,17 @@ def test_verify_with_preset(
 @pytest.mark.e2e
 def test_verify_checkpoint_not_found(
     runner: CliRunner,
+    tmp_path: Path,
 ) -> None:
     """Test verify command with non-existent checkpoint file."""
+    output_file = tmp_path / "results.json"
     result = runner.invoke(
         app,
         [
             "verify",
             "nonexistent_checkpoint.jsonld",
+            "--output",
+            str(output_file),
         ],
     )
 
@@ -149,7 +160,7 @@ def test_verify_with_csv_output(
 ) -> None:
     """Test CSV output option.
 
-    This tests the --csv option for exporting results to CSV format.
+    This tests the --output option for exporting results to CSV format.
     """
     result = runner.invoke(
         app,
@@ -158,7 +169,7 @@ def test_verify_with_csv_output(
             str(minimal_checkpoint),
             "--preset",
             str(tmp_presets_dir / "default.json"),
-            "--csv",
+            "--output",
             str(output_csv),
         ],
     )
@@ -172,11 +183,13 @@ def test_verify_with_question_indices(
     runner: CliRunner,
     large_checkpoint: Path,
     tmp_presets_dir: Path,
+    tmp_path: Path,
 ) -> None:
     """Test verifying specific questions by index.
 
     This tests the --indices option for filtering which questions to verify.
     """
+    output_file = tmp_path / "results.json"
     result = runner.invoke(
         app,
         [
@@ -187,6 +200,8 @@ def test_verify_with_question_indices(
             "--indices",
             "0",
             "1",  # Only verify first 2 questions
+            "--output",
+            str(output_file),
         ],
     )
 
@@ -199,11 +214,13 @@ def test_verify_with_invalid_indices(
     runner: CliRunner,
     minimal_checkpoint: Path,
     tmp_presets_dir: Path,
+    tmp_path: Path,
 ) -> None:
     """Test verify with invalid question indices.
 
     This tests error handling for out-of-range indices.
     """
+    output_file = tmp_path / "results.json"
     result = runner.invoke(
         app,
         [
@@ -213,6 +230,8 @@ def test_verify_with_invalid_indices(
             str(tmp_presets_dir / "default.json"),
             "--indices",
             "999",  # Way out of range
+            "--output",
+            str(output_file),
         ],
     )
 
@@ -225,12 +244,14 @@ def test_checkpoint_resume_functionality(
     runner: CliRunner,
     checkpoint_with_results: Path,
     tmp_presets_dir: Path,
+    tmp_path: Path,
 ) -> None:
     """Test that checkpoint with existing results can be resumed.
 
     This tests incremental verification - when some questions already
     have results, only remaining questions should be verified.
     """
+    output_file = tmp_path / "results.json"
     result = runner.invoke(
         app,
         [
@@ -238,6 +259,8 @@ def test_checkpoint_resume_functionality(
             str(checkpoint_with_results),
             "--preset",
             str(tmp_presets_dir / "default.json"),
+            "--output",
+            str(output_file),
         ],
     )
 
