@@ -11,6 +11,7 @@ from .models import (
     ModelConfig,
     QuestionFewShotConfig,
 )
+from .rubric_dataframe import RubricDataFrameBuilder
 from .rubric_judgment_results import RubricJudgmentResults
 from .rubric_outputs import (
     BatchRubricScores,
@@ -79,6 +80,7 @@ __all__ = [
     # Result set and specialized results
     "VerificationResultSet",
     "RubricResults",
+    "RubricDataFrameBuilder",
     "RubricJudgmentResults",
     "TemplateResults",
     "TemplateDataFrameBuilder",
