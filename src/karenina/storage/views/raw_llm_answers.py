@@ -19,32 +19,27 @@ Example:
     WHERE t.verify_result = 0;
 """
 
-from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
+from .utils import create_view_safe, drop_view_safe
+
 VIEW_NAME = "raw_llm_answers_view"
+
+_VIEW_SQL = """
+    SELECT
+        vr.metadata_result_id as result_id,
+        vr.question_id,
+        vr.template_raw_llm_response as raw_llm_response
+    FROM verification_results vr
+    WHERE vr.template_raw_llm_response IS NOT NULL
+"""
 
 
 def create_raw_llm_answers_view(engine: Engine) -> None:
     """Create or replace the raw_llm_answers_view."""
-    view_sql = """
-        SELECT
-            vr.metadata_result_id as result_id,
-            vr.question_id,
-            vr.template_raw_llm_response as raw_llm_response
-        FROM verification_results vr
-        WHERE vr.template_raw_llm_response IS NOT NULL
-    """
-
-    with engine.begin() as conn:
-        if engine.dialect.name == "sqlite":
-            conn.execute(text(f"DROP VIEW IF EXISTS {VIEW_NAME}"))
-            conn.execute(text(f"CREATE VIEW {VIEW_NAME} AS {view_sql}"))
-        else:
-            conn.execute(text(f"CREATE OR REPLACE VIEW {VIEW_NAME} AS {view_sql}"))
+    create_view_safe(engine, VIEW_NAME, _VIEW_SQL)
 
 
 def drop_raw_llm_answers_view(engine: Engine) -> None:
     """Drop the raw_llm_answers_view if it exists."""
-    with engine.begin() as conn:
-        conn.execute(text(f"DROP VIEW IF EXISTS {VIEW_NAME}"))
+    drop_view_safe(engine, VIEW_NAME)

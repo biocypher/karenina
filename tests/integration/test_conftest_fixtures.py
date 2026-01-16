@@ -202,10 +202,10 @@ class TestCheckpointFixtures:
 class TestIntegrationHelpers:
     """Test integration test helper fixtures."""
 
-    def test_integration_fixtures_dir_exists(self, integration_fixtures_dir):
-        """Verify integration fixtures directory exists."""
-        assert integration_fixtures_dir.exists()
-        assert integration_fixtures_dir.is_dir()
+    def test_fixtures_dir_exists(self, fixtures_dir):
+        """Verify fixtures directory exists (inherited from root conftest)."""
+        assert fixtures_dir.exists()
+        assert fixtures_dir.is_dir()
 
     def test_checkpoint_fixtures_dir_exists(self, checkpoint_fixtures_dir):
         """Verify checkpoint fixtures directory exists."""

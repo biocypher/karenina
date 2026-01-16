@@ -16,6 +16,33 @@ from .utils import is_pydantic_model as _is_pydantic_model
 from .utils import unwrap_optional as _unwrap_optional
 
 if TYPE_CHECKING:
+    from pydantic.fields import FieldInfo
+
+
+def resolve_type_hints_safe(model: type[BaseModel]) -> dict[str, Any]:
+    """Safely resolve type hints for a Pydantic model.
+
+    Attempts to use get_type_hints() first, falling back to model_fields
+    if that fails (e.g., due to forward references or evaluation issues).
+
+    Args:
+        model: The Pydantic model class to get type hints from
+
+    Returns:
+        Dictionary mapping field names to their type annotations
+    """
+    try:
+        return get_type_hints(model)
+    except Exception:
+        model_fields: dict[str, FieldInfo] = model.model_fields
+        return {
+            name: field.annotation
+            for name, field in model_fields.items()
+            if field.annotation
+        }
+
+
+if TYPE_CHECKING:
     from sqlalchemy.orm import DeclarativeBase
 
 
@@ -39,10 +66,7 @@ def pydantic_to_flat_dict(
     result: dict[str, Any] = {}
 
     # Get type hints for the model
-    try:
-        hints = get_type_hints(type(obj))
-    except Exception:
-        hints = {name: field.annotation for name, field in type(obj).model_fields.items() if field.annotation}
+    hints = resolve_type_hints_safe(type(obj))
 
     for field_name, field_type in hints.items():
         value = getattr(obj, field_name, None)
@@ -54,15 +78,7 @@ def pydantic_to_flat_dict(
         if value is None:
             # For optional nested models, we need to set all nested fields to None
             if _is_pydantic_model(inner_type):
-                try:
-                    nested_hints = get_type_hints(inner_type)
-                except Exception:
-                    # Type checker doesn't know inner_type is BaseModel, but we checked with _is_pydantic_model
-                    nested_hints = {
-                        name: field.annotation
-                        for name, field in inner_type.model_fields.items()  # type: ignore[attr-defined]
-                        if field.annotation
-                    }
+                nested_hints = resolve_type_hints_safe(inner_type)  # type: ignore[arg-type]
                 for nested_name in nested_hints:
                     result[f"{prefix}{nested_name}"] = None
             else:
@@ -89,11 +105,7 @@ def _flatten_nested_model(obj: BaseModel, prefix: str) -> dict[str, Any]:
         Flat dictionary with prefixed keys
     """
     result: dict[str, Any] = {}
-
-    try:
-        hints = get_type_hints(type(obj))
-    except Exception:
-        hints = {name: field.annotation for name, field in type(obj).model_fields.items() if field.annotation}
+    hints = resolve_type_hints_safe(type(obj))
 
     for field_name, field_type in hints.items():
         value = getattr(obj, field_name, None)
@@ -163,11 +175,7 @@ def flat_dict_to_pydantic(
     """
     # Build nested structure
     nested_data: dict[str, Any] = {}
-
-    try:
-        hints = get_type_hints(pydantic_class)
-    except Exception:
-        hints = {name: field.annotation for name, field in pydantic_class.model_fields.items() if field.annotation}
+    hints = resolve_type_hints_safe(pydantic_class)
 
     for field_name, field_type in hints.items():
         config = flatten_config.get(field_name, {})
@@ -217,11 +225,7 @@ def _extract_nested_data(
         Dictionary with unprefixed keys for the nested model
     """
     result: dict[str, Any] = {}
-
-    try:
-        hints = get_type_hints(model_class)
-    except Exception:
-        hints = {name: field.annotation for name, field in model_class.model_fields.items() if field.annotation}
+    hints = resolve_type_hints_safe(model_class)
 
     for field_name, field_type in hints.items():
         column_name = f"{prefix}{field_name}"

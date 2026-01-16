@@ -13,6 +13,9 @@ try:
 except ImportError:
     pd = None  # type: ignore[assignment,unused-ignore]
 
+# Error message constant for pandas requirement
+_PANDAS_REQUIRED_ERROR = "pandas is required for aggregation"
+
 
 class ResultAggregator(Protocol):
     """
@@ -118,7 +121,7 @@ class MeanAggregator:
             Mean value, or None if no valid values
         """
         if pd is None:
-            raise ImportError("pandas is required for aggregation")
+            raise ImportError(_PANDAS_REQUIRED_ERROR)
 
         result = series.mean()
         return None if pd.isna(result) else float(result)
@@ -142,7 +145,7 @@ class MedianAggregator:
             Median value, or None if no valid values
         """
         if pd is None:
-            raise ImportError("pandas is required for aggregation")
+            raise ImportError(_PANDAS_REQUIRED_ERROR)
 
         result = series.median()
         return None if pd.isna(result) else float(result)
@@ -166,7 +169,7 @@ class ModeAggregator:
             Most common value, or None if no valid values
         """
         if pd is None:
-            raise ImportError("pandas is required for aggregation")
+            raise ImportError(_PANDAS_REQUIRED_ERROR)
 
         mode_result = series.mode()
         if len(mode_result) == 0:
@@ -195,7 +198,7 @@ class MajorityVoteAggregator:
             True if majority voted True, False otherwise, or None if no valid values
         """
         if pd is None:
-            raise ImportError("pandas is required for aggregation")
+            raise ImportError(_PANDAS_REQUIRED_ERROR)
 
         # Drop NaN values
         clean_series = series.dropna()
@@ -226,7 +229,7 @@ class FirstAggregator:
             First non-null value, or None if all are null
         """
         if pd is None:
-            raise ImportError("pandas is required for aggregation")
+            raise ImportError(_PANDAS_REQUIRED_ERROR)
 
         clean_series = series.dropna()
         if len(clean_series) == 0:
@@ -253,7 +256,7 @@ class CountAggregator:
             Dictionary mapping values to their occurrence counts
         """
         if pd is None:
-            raise ImportError("pandas is required for aggregation")
+            raise ImportError(_PANDAS_REQUIRED_ERROR)
 
         if not include_none:
             series = series.dropna()

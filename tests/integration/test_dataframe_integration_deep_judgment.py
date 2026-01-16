@@ -10,52 +10,20 @@ Tests are marked with:
 Run with: pytest tests/integration/test_dataframe_integration_deep_judgment.py -v
 """
 
-from datetime import UTC, datetime
-
 import pandas as pd
 import pytest
 
 from karenina.schemas.workflow import (
     JudgmentResults,
-    TemplateResults,
     VerificationResult,
     VerificationResultDeepJudgment,
-    VerificationResultMetadata,
     VerificationResultTemplate,
 )
-
-# =============================================================================
-# Helper Functions
-# =============================================================================
-
-
-def _create_metadata(
-    question_id: str,
-    answering_model: str = "claude-haiku-4-5",
-    completed: bool = True,
-    error: str | None = None,
-) -> VerificationResultMetadata:
-    """Helper to create metadata with computed result_id."""
-    timestamp = datetime.now(UTC).isoformat()
-    return VerificationResultMetadata(
-        question_id=question_id,
-        template_id="test-template-id",
-        completed_without_errors=completed,
-        error=error,
-        question_text=f"Question text for {question_id}",
-        raw_answer="Expected answer",
-        answering_model=answering_model,
-        parsing_model="claude-haiku-4-5",
-        execution_time=1.5,
-        timestamp=timestamp,
-        result_id=VerificationResultMetadata.compute_result_id(
-            question_id=question_id,
-            answering_model=answering_model,
-            parsing_model="claude-haiku-4-5",
-            timestamp=timestamp,
-        ),
-    )
-
+from tests.integration.dataframe_helpers import (
+    CommonColumnTestMixin,
+    PandasOperationsTestMixin,
+    create_metadata,
+)
 
 # =============================================================================
 # Fixtures
@@ -106,7 +74,7 @@ def verification_result_with_dj(
 ) -> VerificationResult:
     """Create a verification result with deep judgment data."""
     return VerificationResult(
-        metadata=_create_metadata("dj_q1", "gpt-4"),
+        metadata=create_metadata("dj_q1", "gpt-4"),
         template=template_result_success,
         deep_judgment=deep_judgment_result,
     )
@@ -119,7 +87,7 @@ def verification_result_with_dj_different_model(
 ) -> VerificationResult:
     """Create a verification result with a different model."""
     return VerificationResult(
-        metadata=_create_metadata("dj_q2", "claude-sonnet-4"),
+        metadata=create_metadata("dj_q2", "claude-sonnet-4"),
         template=template_result_success,
         deep_judgment=deep_judgment_result,
     )
@@ -237,52 +205,47 @@ class TestJudgmentResultsAggregation:
             assert isinstance(model_name, str)
 
 
-@pytest.mark.integration
-@pytest.mark.deep_judgment
-class TestDeepJudgmentConsistency:
-    """Test consistency between JudgmentResults and TemplateResults."""
-
-    def test_common_columns_with_template_results(self, verification_results_list: list[VerificationResult]):
-        """Test that common columns are consistent between result types."""
-        template_results = TemplateResults(results=verification_results_list)
-        judgment_results = JudgmentResults(results=verification_results_list)
-
-        template_df = template_results.to_dataframe()
-        judgment_df = judgment_results.to_dataframe()
-
-        # Common columns
-        common_columns = ["completed_without_errors", "question_id", "answering_model"]
-
-        for col in common_columns:
-            assert col in template_df.columns
-            assert col in judgment_df.columns
-
-    def test_status_column_first(self, verification_results_list: list[VerificationResult]):
-        """Test that status column appears first."""
-        judgment_results = JudgmentResults(results=verification_results_list)
-        df = judgment_results.to_dataframe()
-
-        assert df.columns[0] == "completed_without_errors"
+# =============================================================================
+# Deep Judgment Consistency Tests (uses mixin)
+# =============================================================================
 
 
 @pytest.mark.integration
 @pytest.mark.deep_judgment
-class TestDeepJudgmentPandasOperations:
-    """Test pandas operations on JudgmentResults DataFrames."""
+class TestDeepJudgmentConsistency(CommonColumnTestMixin):
+    """Test consistency between JudgmentResults and TemplateResults.
 
-    def test_groupby_operations(self, verification_results_list: list[VerificationResult]):
-        """Test pandas groupby operations."""
+    Inherits common column and status tests from CommonColumnTestMixin.
+    """
+
+    test_template = True
+    test_rubric = False  # No rubric data in these fixtures
+    test_judgment = True
+
+
+# =============================================================================
+# Deep Judgment Pandas Operations Tests (uses mixin)
+# =============================================================================
+
+
+@pytest.mark.integration
+@pytest.mark.deep_judgment
+class TestDeepJudgmentPandasOperations(PandasOperationsTestMixin):
+    """Test pandas operations on JudgmentResults DataFrames.
+
+    Inherits groupby and filtering tests from PandasOperationsTestMixin.
+    """
+
+    def _get_test_dataframe(
+        self, verification_results_list: list[VerificationResult]
+    ) -> pd.DataFrame:
+        """Override to return JudgmentResults DataFrame."""
         judgment_results = JudgmentResults(results=verification_results_list)
-        df = judgment_results.to_dataframe()
+        return judgment_results.to_dataframe()
 
-        # Group by question
-        grouped = df.groupby("question_id")
-        assert len(grouped) > 0
-
-    def test_filtering_operations(self, verification_results_list: list[VerificationResult]):
-        """Test pandas filtering operations."""
-        judgment_results = JudgmentResults(results=verification_results_list)
-        df = judgment_results.to_dataframe()
+    def test_filtering_by_attribute(self, verification_results_list: list[VerificationResult]):
+        """Test filtering DataFrame by attribute name."""
+        df = self._get_test_dataframe(verification_results_list)
 
         # Filter to specific attribute
         gene_df = df[df["attribute_name"] == "gene_name"]
@@ -290,8 +253,7 @@ class TestDeepJudgmentPandasOperations:
 
     def test_pivot_operations_on_attributes(self, verification_results_list: list[VerificationResult]):
         """Test pandas pivot operations on attributes."""
-        judgment_results = JudgmentResults(results=verification_results_list)
-        df = judgment_results.to_dataframe()
+        df = self._get_test_dataframe(verification_results_list)
 
         if len(df) == 0:
             pytest.skip("No data for pivot testing")

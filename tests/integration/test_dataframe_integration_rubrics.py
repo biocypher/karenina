@@ -10,52 +10,20 @@ Tests are marked with:
 Run with: pytest tests/integration/test_dataframe_integration_rubrics.py -v
 """
 
-from datetime import UTC, datetime
-
 import pandas as pd
 import pytest
 
 from karenina.schemas.workflow import (
     RubricResults,
-    TemplateResults,
     VerificationResult,
-    VerificationResultMetadata,
     VerificationResultRubric,
     VerificationResultTemplate,
 )
-
-# =============================================================================
-# Helper Functions
-# =============================================================================
-
-
-def _create_metadata(
-    question_id: str,
-    answering_model: str = "claude-haiku-4-5",
-    completed: bool = True,
-    error: str | None = None,
-) -> VerificationResultMetadata:
-    """Helper to create metadata with computed result_id."""
-    timestamp = datetime.now(UTC).isoformat()
-    return VerificationResultMetadata(
-        question_id=question_id,
-        template_id="test-template-id",
-        completed_without_errors=completed,
-        error=error,
-        question_text=f"Question text for {question_id}",
-        raw_answer="Expected answer",
-        answering_model=answering_model,
-        parsing_model="claude-haiku-4-5",
-        execution_time=1.5,
-        timestamp=timestamp,
-        result_id=VerificationResultMetadata.compute_result_id(
-            question_id=question_id,
-            answering_model=answering_model,
-            parsing_model="claude-haiku-4-5",
-            timestamp=timestamp,
-        ),
-    )
-
+from tests.integration.dataframe_helpers import (
+    CommonColumnTestMixin,
+    PandasOperationsTestMixin,
+    create_metadata,
+)
 
 # =============================================================================
 # Fixtures
@@ -111,7 +79,7 @@ def verification_result_with_rubric(
 ) -> VerificationResult:
     """Create a verification result with rubric data."""
     return VerificationResult(
-        metadata=_create_metadata("rubric_q1", "gpt-4"),
+        metadata=create_metadata("rubric_q1", "gpt-4"),
         template=template_result_success,
         rubric=rubric_result_with_all_traits,
     )
@@ -124,7 +92,7 @@ def verification_result_different_model(
 ) -> VerificationResult:
     """Create a verification result with a different model."""
     return VerificationResult(
-        metadata=_create_metadata("rubric_q2", "claude-sonnet-4"),
+        metadata=create_metadata("rubric_q2", "claude-sonnet-4"),
         template=template_result_success,
         rubric=rubric_result_with_all_traits,
     )
@@ -230,7 +198,7 @@ class TestRubricResultsAggregation:
         assert len(aggregated) > 0
 
         # Each question should have trait scores
-        for question_id, traits in aggregated.items():
+        for _question_id, traits in aggregated.items():
             assert isinstance(traits, dict)
             # Should have the LLM traits we defined
             assert "Clarity" in traits or "Completeness" in traits
@@ -254,10 +222,10 @@ class TestRubricResultsAggregation:
 
         assert isinstance(aggregated, dict)
 
-        for question_id, traits in aggregated.items():
+        for _question_id, traits in aggregated.items():
             assert isinstance(traits, dict)
             # Regex traits are boolean
-            for trait_name, value in traits.items():
+            for _trait_name, value in traits.items():
                 assert isinstance(value, bool)
 
     def test_aggregate_callable_traits(self, verification_results_list: list[VerificationResult]):
@@ -267,7 +235,7 @@ class TestRubricResultsAggregation:
 
         assert isinstance(aggregated, dict)
 
-        for question_id, traits in aggregated.items():
+        for _question_id, traits in aggregated.items():
             assert isinstance(traits, dict)
 
     def test_aggregate_metric_traits(self, verification_results_list: list[VerificationResult]):
@@ -281,7 +249,7 @@ class TestRubricResultsAggregation:
 
         assert isinstance(aggregated, dict)
 
-        for question_id, traits in aggregated.items():
+        for _question_id, traits in aggregated.items():
             assert isinstance(traits, dict)
             # Should have the EntityExtraction trait
             if "EntityExtraction" in traits:
@@ -289,50 +257,46 @@ class TestRubricResultsAggregation:
                 assert 0.0 <= traits["EntityExtraction"] <= 1.0
 
 
-@pytest.mark.integration
-@pytest.mark.rubric
-class TestRubricConsistency:
-    """Test consistency between RubricResults and TemplateResults."""
-
-    def test_common_columns_with_template_results(self, verification_results_list: list[VerificationResult]):
-        """Test that common columns are consistent between result types."""
-        template_results = TemplateResults(results=verification_results_list)
-        rubric_results = RubricResults(results=verification_results_list)
-
-        template_df = template_results.to_dataframe()
-        rubric_df = rubric_results.to_dataframe(trait_type="all")
-
-        # Common columns
-        common_columns = ["completed_without_errors", "question_id", "answering_model"]
-
-        for col in common_columns:
-            assert col in template_df.columns
-            assert col in rubric_df.columns
-
-    def test_status_column_first(self, verification_results_list: list[VerificationResult]):
-        """Test that status column appears first."""
-        rubric_results = RubricResults(results=verification_results_list)
-        df = rubric_results.to_dataframe(trait_type="all")
-
-        assert df.columns[0] == "completed_without_errors"
+# =============================================================================
+# Rubric Consistency Tests (uses mixin)
+# =============================================================================
 
 
 @pytest.mark.integration
 @pytest.mark.rubric
-class TestRubricPandasOperations:
-    """Test pandas operations on RubricResults DataFrames."""
+class TestRubricConsistency(CommonColumnTestMixin):
+    """Test consistency between RubricResults and TemplateResults.
 
-    def test_groupby_operations(self, verification_results_list: list[VerificationResult]):
-        """Test pandas groupby operations."""
+    Inherits common column and status tests from CommonColumnTestMixin.
+    """
+
+    test_template = True
+    test_rubric = True
+    test_judgment = False  # No deep judgment data in these fixtures
+
+
+# =============================================================================
+# Rubric Pandas Operations Tests (uses mixin)
+# =============================================================================
+
+
+@pytest.mark.integration
+@pytest.mark.rubric
+class TestRubricPandasOperations(PandasOperationsTestMixin):
+    """Test pandas operations on RubricResults DataFrames.
+
+    Inherits groupby and filtering tests from PandasOperationsTestMixin.
+    """
+
+    def _get_test_dataframe(
+        self, verification_results_list: list[VerificationResult]
+    ) -> pd.DataFrame:
+        """Override to return RubricResults DataFrame with LLM traits."""
         rubric_results = RubricResults(results=verification_results_list)
-        df = rubric_results.to_dataframe(trait_type="llm")
+        return rubric_results.to_dataframe(trait_type="llm")
 
-        # Group by question
-        grouped = df.groupby("question_id")
-        assert len(grouped) > 0
-
-    def test_filtering_operations(self, verification_results_list: list[VerificationResult]):
-        """Test pandas filtering operations."""
+    def test_filtering_by_trait(self, verification_results_list: list[VerificationResult]):
+        """Test filtering DataFrame by trait name."""
         rubric_results = RubricResults(results=verification_results_list)
         df = rubric_results.to_dataframe(trait_type="all")
 
@@ -342,8 +306,7 @@ class TestRubricPandasOperations:
 
     def test_pivot_operations_on_traits(self, verification_results_list: list[VerificationResult]):
         """Test pandas pivot operations on traits."""
-        rubric_results = RubricResults(results=verification_results_list)
-        df = rubric_results.to_dataframe(trait_type="llm")
+        df = self._get_test_dataframe(verification_results_list)
 
         if len(df) == 0:
             pytest.skip("No LLM trait data for pivot testing")

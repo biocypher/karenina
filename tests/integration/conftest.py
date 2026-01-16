@@ -343,17 +343,14 @@ def citation_regex_rubric() -> Rubric:
 # Integration Test Helpers
 # =============================================================================
 
-
-@pytest.fixture
-def integration_fixtures_dir() -> Path:
-    """Return the path to integration test fixtures."""
-    return Path(__file__).parent.parent / "fixtures"
+# NOTE: fixtures_dir is inherited from the root conftest.py at tests/conftest.py
+# Do not redefine it here - pytest will automatically use the parent fixture
 
 
 @pytest.fixture
-def checkpoint_fixtures_dir(integration_fixtures_dir: Path) -> Path:
+def checkpoint_fixtures_dir(fixtures_dir: Path) -> Path:
     """Return the path to checkpoint fixture files."""
-    return integration_fixtures_dir / "checkpoints"
+    return fixtures_dir / "checkpoints"
 
 
 def load_checkpoint_fixture(checkpoint_fixtures_dir: Path, name: str) -> Any:
