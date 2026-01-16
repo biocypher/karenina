@@ -79,13 +79,13 @@ def test_is_pydantic_model_with_regular_class() -> None:
 def test_is_pydantic_model_with_instance() -> None:
     """Test is_pydantic_model returns False for model instances (not classes)."""
     instance = SimpleModel(name="test", value=42)
-    assert is_pydantic_model(instance) is False  # type: ignore[arg-type]
+    assert is_pydantic_model(instance) is False
 
 
 @pytest.mark.unit
 def test_is_pydantic_model_with_none() -> None:
     """Test is_pydantic_model returns False for None."""
-    assert is_pydantic_model(None) is False  # type: ignore[arg-type]
+    assert is_pydantic_model(None) is False
 
 
 @pytest.mark.unit

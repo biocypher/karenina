@@ -46,6 +46,7 @@ Example Usage:
 
 import asyncio
 import concurrent.futures
+import contextlib
 import inspect
 import logging
 from collections.abc import Callable
@@ -254,10 +255,15 @@ def _invoke_tool(
             raise ValueError("Executor required for async tool invocation")
 
         def run_async_in_thread() -> Any:
-            """Run async tool in a new event loop within a thread."""
-            # Create new event loop for this thread
+            """Run async tool in a new event loop within a thread.
+
+            Note: We avoid setting the event loop as the thread's loop to prevent
+            pollution when thread pool threads are reused. The loop is run directly
+            and properly cleaned up to avoid stale references.
+            """
+            # Create new event loop for this thread but don't set it as the thread's loop
+            # to avoid pollution when thread pool threads are reused
             loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
             try:
                 if method == "ainvoke":
                     return loop.run_until_complete(tool.ainvoke(query))
@@ -266,7 +272,18 @@ def _invoke_tool(
                 else:  # async callable
                     return loop.run_until_complete(tool(query))
             finally:
+                # Cancel any pending tasks to avoid warnings
+                pending = asyncio.all_tasks(loop)
+                for task in pending:
+                    task.cancel()
+                if pending:
+                    # Give cancelled tasks a chance to clean up
+                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
                 loop.close()
+                # Clear any stale event loop reference from the thread
+                # RuntimeError can occur if loop is already closed or thread has no loop set
+                with contextlib.suppress(RuntimeError):
+                    asyncio.set_event_loop(None)
 
         # Submit to thread pool and wait for result
         future = executor.submit(run_async_in_thread)

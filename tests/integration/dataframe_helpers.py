@@ -153,9 +153,7 @@ class PandasOperationsTestMixin:
     Override _get_test_dataframe() to return the appropriate DataFrame.
     """
 
-    def _get_test_dataframe(
-        self, verification_results_list: list[VerificationResult]
-    ) -> pd.DataFrame:
+    def _get_test_dataframe(self, verification_results_list: list[VerificationResult]) -> pd.DataFrame:
         """Override this method to return the DataFrame for testing.
 
         Default implementation returns TemplateResults DataFrame.

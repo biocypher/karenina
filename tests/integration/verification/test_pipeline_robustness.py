@@ -41,9 +41,6 @@ from karenina.schemas.workflow import (
     ModelConfig,
 )
 
-# Import fixture infrastructure
-from tests.conftest import FixtureBackedLLMClient
-
 # =============================================================================
 # Test Fixtures
 # =============================================================================
@@ -137,7 +134,7 @@ class TestStageExecutionOrder:
     - Error handling (early termination when appropriate)
     """
 
-    def test_abstention_check_before_parse_template(self, minimal_model_config: ModelConfig):
+    def test_abstention_check_before_parse_template(self):
         """AbstentionCheck must run before ParseTemplate to skip expensive parsing.
 
         When a model refuses to answer, we should detect this BEFORE spending
@@ -157,7 +154,7 @@ class TestStageExecutionOrder:
             f"ParseTemplate (idx={parse_idx}) to skip expensive LLM parsing"
         )
 
-    def test_parse_template_before_verify_template(self, minimal_model_config: ModelConfig):
+    def test_parse_template_before_verify_template(self):
         """ParseTemplate must run before VerifyTemplate (dependency)."""
         orchestrator = StageOrchestrator.from_config(
             evaluation_mode="template_only",
@@ -172,7 +169,7 @@ class TestStageExecutionOrder:
             f"VerifyTemplate (idx={verify_idx}) - produces parsed_answer"
         )
 
-    def test_verify_template_before_embedding_check(self, minimal_model_config: ModelConfig):
+    def test_verify_template_before_embedding_check(self):
         """VerifyTemplate must run before EmbeddingCheck (semantic fallback).
 
         Note: EmbeddingCheckStage is always added to the pipeline but has its own
@@ -191,7 +188,7 @@ class TestStageExecutionOrder:
             f"EmbeddingCheck (idx={embedding_idx}) - embedding is fallback"
         )
 
-    def test_generate_answer_before_abstention_check(self, minimal_model_config: ModelConfig):
+    def test_generate_answer_before_abstention_check(self):
         """GenerateAnswer must run before AbstentionCheck (needs raw response)."""
         orchestrator = StageOrchestrator.from_config(
             abstention_enabled=True,
@@ -207,7 +204,7 @@ class TestStageExecutionOrder:
             f"AbstentionCheck (idx={abstention_idx}) - needs raw_llm_response"
         )
 
-    def test_recursion_limit_before_abstention_check(self, minimal_model_config: ModelConfig):
+    def test_recursion_limit_before_abstention_check(self):
         """RecursionLimitAutoFail should run before AbstentionCheck."""
         orchestrator = StageOrchestrator.from_config(
             abstention_enabled=True,
@@ -223,7 +220,7 @@ class TestStageExecutionOrder:
             f"AbstentionCheck (idx={abstention_idx}) - no point checking abstention if recursion limit hit"
         )
 
-    def test_trace_validation_before_abstention_check(self, minimal_model_config: ModelConfig):
+    def test_trace_validation_before_abstention_check(self):
         """TraceValidationAutoFail should run before AbstentionCheck."""
         orchestrator = StageOrchestrator.from_config(
             abstention_enabled=True,
@@ -239,9 +236,7 @@ class TestStageExecutionOrder:
             f"AbstentionCheck (idx={abstention_idx}) - invalid trace means skip abstention"
         )
 
-    def test_rubric_evaluation_independent_of_template_verification(
-        self, minimal_model_config: ModelConfig, sample_rubric: Rubric
-    ):
+    def test_rubric_evaluation_independent_of_template_verification(self, sample_rubric: Rubric):
         """RubricEvaluation runs after GenerateAnswer but independent of template stages."""
         orchestrator = StageOrchestrator.from_config(
             rubric=sample_rubric,
@@ -257,7 +252,7 @@ class TestStageExecutionOrder:
             f"RubricEvaluation (idx={rubric_idx}) - needs raw_llm_response"
         )
 
-    def test_finalize_result_always_last(self, minimal_model_config: ModelConfig, sample_rubric: Rubric):
+    def test_finalize_result_always_last(self, sample_rubric: Rubric):
         """FinalizeResult must always be the last stage in any configuration."""
         configs = [
             {"evaluation_mode": "template_only"},
@@ -283,7 +278,7 @@ class TestStageExecutionOrder:
                 f"FinalizeResult must be last, but got {last_stage.name} for config: {config}"
             )
 
-    def test_validate_template_always_first_in_template_modes(self, minimal_model_config: ModelConfig):
+    def test_validate_template_always_first_in_template_modes(self):
         """ValidateTemplate must be first in template evaluation modes."""
         for mode in ["template_only", "template_and_rubric"]:
             orchestrator = StageOrchestrator.from_config(
@@ -546,9 +541,7 @@ class TestArtifactDependencies:
         assert minimal_context.has_artifact("Answer"), "Should produce Answer class"
         assert minimal_context.has_artifact("RawAnswer"), "Should produce RawAnswer class"
 
-    def test_generate_answer_produces_raw_response(
-        self, minimal_context: VerificationContext, llm_client: FixtureBackedLLMClient
-    ):
+    def test_generate_answer_produces_raw_response(self, minimal_context: VerificationContext):
         """GenerateAnswerStage should produce raw_llm_response artifact."""
         # Validate first to get Answer class
         ValidateTemplateStage().execute(minimal_context)
@@ -855,7 +848,7 @@ class TestEdgeCases:
 class TestConfigurationCombinations:
     """Test various combinations of pipeline configuration options."""
 
-    def test_all_features_enabled(self, minimal_model_config: ModelConfig, sample_rubric: Rubric):
+    def test_all_features_enabled(self, sample_rubric: Rubric):
         """Test pipeline with all optional features enabled."""
         orchestrator = StageOrchestrator.from_config(
             rubric=sample_rubric,
@@ -878,7 +871,7 @@ class TestConfigurationCombinations:
         parse_idx = stage_names.index("ParseTemplate")
         assert abstention_idx < parse_idx
 
-    def test_minimal_configuration(self, minimal_model_config: ModelConfig):
+    def test_minimal_configuration(self):
         """Test pipeline with minimal configuration (template_only, no extras).
 
         Note: EmbeddingCheckStage is always included but has its own should_run()
@@ -904,7 +897,7 @@ class TestConfigurationCombinations:
         assert "AbstentionCheck" not in stage_names
         assert "RubricEvaluation" not in stage_names
 
-    def test_rubric_with_deep_judgment(self, minimal_model_config: ModelConfig, sample_rubric: Rubric):
+    def test_rubric_with_deep_judgment(self, sample_rubric: Rubric):
         """Test rubric evaluation with deep judgment enabled."""
         orchestrator = StageOrchestrator.from_config(
             rubric=sample_rubric,
@@ -917,7 +910,7 @@ class TestConfigurationCombinations:
         assert "RubricEvaluation" in stage_names
         assert "DeepJudgmentRubricAutoFail" in stage_names
 
-    def test_embedding_always_included_in_template_mode(self, minimal_model_config: ModelConfig):
+    def test_embedding_always_included_in_template_mode(self):
         """EmbeddingCheckStage is always included in template modes.
 
         The stage has its own should_run() logic that activates only when

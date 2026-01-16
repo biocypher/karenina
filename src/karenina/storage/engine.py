@@ -4,6 +4,7 @@ This module provides functions for creating and managing SQLAlchemy engines
 and sessions, including automatic database and table creation.
 """
 
+import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
@@ -19,11 +20,16 @@ from .views import create_all_views
 # Global cache for engines (one per storage URL)
 _engine_cache: dict[str, Engine] = {}
 
+# Lock for thread-safe access to _engine_cache
+# Using RLock to allow reentrant calls (e.g., get_engine calling itself indirectly)
+_engine_lock = threading.RLock()
+
 
 def get_engine(db_config: DBConfig) -> Engine:
     """Get or create a SQLAlchemy engine for the given configuration.
 
     Engines are cached per storage URL to avoid creating duplicate connections.
+    This function is thread-safe.
 
     Args:
         db_config: Database configuration
@@ -31,42 +37,43 @@ def get_engine(db_config: DBConfig) -> Engine:
     Returns:
         SQLAlchemy engine instance
     """
-    # Check cache first
-    if db_config.storage_url in _engine_cache:
-        return _engine_cache[db_config.storage_url]
+    with _engine_lock:
+        # Check cache first (under lock to prevent race conditions)
+        if db_config.storage_url in _engine_cache:
+            return _engine_cache[db_config.storage_url]
 
-    # Create engine with appropriate settings
-    if db_config.is_sqlite:
-        # SQLite-specific settings
-        engine = create_engine(
-            db_config.storage_url,
-            echo=db_config.echo,
-            # SQLite doesn't support server-side connections
-            pool_pre_ping=False,
-        )
+        # Create engine with appropriate settings
+        if db_config.is_sqlite:
+            # SQLite-specific settings
+            engine = create_engine(
+                db_config.storage_url,
+                echo=db_config.echo,
+                # SQLite doesn't support server-side connections
+                pool_pre_ping=False,
+            )
 
-        # Enable foreign keys for SQLite (disabled by default)
-        @event.listens_for(engine, "connect")
-        def set_sqlite_pragma(dbapi_conn: Any, _connection_record: Any) -> None:
-            cursor = dbapi_conn.cursor()
-            cursor.execute("PRAGMA foreign_keys=ON")
-            cursor.close()
+            # Enable foreign keys for SQLite (disabled by default)
+            @event.listens_for(engine, "connect")
+            def set_sqlite_pragma(dbapi_conn: Any, _connection_record: Any) -> None:
+                cursor = dbapi_conn.cursor()
+                cursor.execute("PRAGMA foreign_keys=ON")
+                cursor.close()
 
-    else:
-        # PostgreSQL, MySQL, etc.
-        engine = create_engine(
-            db_config.storage_url,
-            echo=db_config.echo,
-            pool_size=db_config.pool_size,
-            max_overflow=db_config.max_overflow,
-            pool_recycle=db_config.pool_recycle,
-            pool_pre_ping=db_config.pool_pre_ping,
-        )
+        else:
+            # PostgreSQL, MySQL, etc.
+            engine = create_engine(
+                db_config.storage_url,
+                echo=db_config.echo,
+                pool_size=db_config.pool_size,
+                max_overflow=db_config.max_overflow,
+                pool_recycle=db_config.pool_recycle,
+                pool_pre_ping=db_config.pool_pre_ping,
+            )
 
-    # Cache the engine
-    _engine_cache[db_config.storage_url] = engine
+        # Cache the engine
+        _engine_cache[db_config.storage_url] = engine
 
-    return engine
+        return engine
 
 
 def create_session_factory(db_config: DBConfig) -> sessionmaker[Session]:
@@ -157,15 +164,32 @@ def close_engine(db_config: DBConfig) -> None:
     """Close and dispose of the engine for the given configuration.
 
     This should be called when done with a database connection, especially
-    in testing scenarios or when switching databases.
+    in testing scenarios or when switching databases. This function is thread-safe.
 
     Args:
         db_config: Database configuration
     """
-    if db_config.storage_url in _engine_cache:
-        engine = _engine_cache[db_config.storage_url]
+    with _engine_lock:
+        # Use pop() for atomic removal - avoids TOCTOU race between check and delete
+        engine = _engine_cache.pop(db_config.storage_url, None)
+        if engine is not None:
+            engine.dispose()
+
+
+def close_all_engines() -> None:
+    """Close and dispose of all cached engines.
+
+    This is useful for cleanup during application shutdown or testing.
+    This function is thread-safe.
+    """
+    with _engine_lock:
+        # Create a list of engines to dispose (can't modify dict while iterating)
+        engines_to_close = list(_engine_cache.values())
+        _engine_cache.clear()
+
+    # Dispose engines outside the lock to avoid holding it during potentially slow I/O
+    for engine in engines_to_close:
         engine.dispose()
-        del _engine_cache[db_config.storage_url]
 
 
 def reset_database(db_config: DBConfig) -> None:

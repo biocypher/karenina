@@ -156,6 +156,10 @@ warn_unused_ignores = true
 warn_no_return = true
 follow_imports = "normal"
 ignore_missing_imports = true
+# Exclude directories with invalid Python package names (hyphens)
+exclude = [
+    "tests/fixtures/llm_responses/claude-haiku-4-5",
+]
 
 # Relax strictness for optional dependencies (search tools)
 [[tool.mypy.overrides]]

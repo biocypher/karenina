@@ -24,6 +24,23 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================================================
+# Module-Level Constants
+# ============================================================================
+
+# Pre-compiled regex patterns for detecting suspected tool failures in agent traces.
+# Compiled at module load time to avoid recompilation on every _extract_agent_metrics call.
+_TOOL_FAILURE_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"\berror\b", re.IGNORECASE),
+    re.compile(r"\bfailed\b", re.IGNORECASE),
+    re.compile(r"\bexception\b", re.IGNORECASE),
+    re.compile(r"\btraceback\b", re.IGNORECASE),
+    re.compile(r"\b404\b", re.IGNORECASE),
+    re.compile(r"\b500\b", re.IGNORECASE),
+    re.compile(r"\btimeout\b", re.IGNORECASE),
+)
+
+
+# ============================================================================
 # Result Dataclasses
 # ============================================================================
 
@@ -957,17 +974,6 @@ Please respond with ONLY the JSON object, nothing else."""
         suspect_failed_tool_calls = 0
         suspect_failed_tools: set[str] = set()
 
-        # Regex patterns to detect suspected tool failures
-        tool_failure_patterns = [
-            re.compile(r"\berror\b", re.IGNORECASE),
-            re.compile(r"\bfailed\b", re.IGNORECASE),
-            re.compile(r"\bexception\b", re.IGNORECASE),
-            re.compile(r"\btraceback\b", re.IGNORECASE),
-            re.compile(r"\b404\b", re.IGNORECASE),
-            re.compile(r"\b500\b", re.IGNORECASE),
-            re.compile(r"\btimeout\b", re.IGNORECASE),
-        ]
-
         for msg in messages:
             msg_type = getattr(msg, "__class__", None)
             if msg_type:
@@ -982,11 +988,11 @@ Please respond with ONLY the JSON object, nothing else."""
                     if tool_name:
                         tools_used.add(tool_name)
 
-                    # Check for suspected failures
+                    # Check for suspected failures using module-level pre-compiled patterns
                     is_suspect_failure = False
                     content = getattr(msg, "content", None)
                     if content and isinstance(content, str):
-                        for pattern in tool_failure_patterns:
+                        for pattern in _TOOL_FAILURE_PATTERNS:
                             if pattern.search(content):
                                 is_suspect_failure = True
                                 break

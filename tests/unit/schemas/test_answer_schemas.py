@@ -234,7 +234,7 @@ def test_llm_rubric_trait_extra_fields_forbidden() -> None:
             name="test",
             kind="boolean",
             higher_is_better=True,
-            extra_field="not_allowed",  # type: ignore[arg-type]
+            extra_field="not_allowed",
         )
 
 
@@ -361,7 +361,7 @@ def test_regex_trait_extra_fields_forbidden() -> None:
             name="test",
             pattern=r"\w+",
             higher_is_better=True,
-            extra_field="not_allowed",  # type: ignore[arg-type]
+            extra_field="not_allowed",
         )
 
 

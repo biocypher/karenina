@@ -4,7 +4,6 @@ Evaluates LLM responses against qualitative rubric criteria.
 """
 
 import logging
-from copy import deepcopy
 from typing import Any
 
 from ....infrastructure.llm.mcp_utils import extract_final_ai_message
@@ -107,7 +106,9 @@ def apply_deep_judgment_config_to_traits(
     """
     Apply resolved deep judgment configuration to a list of traits.
 
-    Creates deep copies of traits with resolved deep judgment settings.
+    Creates shallow copies of traits with resolved deep judgment settings.
+    Uses Pydantic's model_copy() for efficient copying since we only modify
+    scalar config fields (bool, int, float).
 
     Args:
         traits: List of traits to configure
@@ -120,19 +121,21 @@ def apply_deep_judgment_config_to_traits(
     configured_traits = []
 
     for trait in traits:
-        # Deep copy to avoid modifying original
-        trait_copy = deepcopy(trait)
+        # Resolve configuration for this trait (before copy to avoid unnecessary work)
+        dj_config = resolve_deep_judgment_config_for_trait(trait, question_id, config)
 
-        # Resolve configuration for this trait
-        dj_config = resolve_deep_judgment_config_for_trait(trait_copy, question_id, config)
-
-        # Apply resolved config to trait
-        trait_copy.deep_judgment_enabled = dj_config.enabled
-        trait_copy.deep_judgment_excerpt_enabled = dj_config.excerpt_enabled
-        trait_copy.deep_judgment_max_excerpts = dj_config.max_excerpts
-        trait_copy.deep_judgment_fuzzy_match_threshold = dj_config.fuzzy_match_threshold
-        trait_copy.deep_judgment_excerpt_retry_attempts = dj_config.excerpt_retry_attempts
-        trait_copy.deep_judgment_search_enabled = dj_config.search_enabled
+        # Use Pydantic's model_copy with update dict for efficient shallow copy
+        # This avoids expensive deepcopy for scalar field updates
+        trait_copy = trait.model_copy(
+            update={
+                "deep_judgment_enabled": dj_config.enabled,
+                "deep_judgment_excerpt_enabled": dj_config.excerpt_enabled,
+                "deep_judgment_max_excerpts": dj_config.max_excerpts,
+                "deep_judgment_fuzzy_match_threshold": dj_config.fuzzy_match_threshold,
+                "deep_judgment_excerpt_retry_attempts": dj_config.excerpt_retry_attempts,
+                "deep_judgment_search_enabled": dj_config.search_enabled,
+            }
+        )
 
         configured_traits.append(trait_copy)
 
@@ -302,11 +305,9 @@ class RubricEvaluationStage(BaseVerificationStage):
                     context,  # Pass context which has config fields
                 )
 
-                # Create modified rubric with configured traits
-                from copy import deepcopy
-
-                configured_rubric = deepcopy(rubric)
-                configured_rubric.llm_traits = configured_llm_traits
+                # Create modified rubric with configured traits using Pydantic's model_copy
+                # This is more efficient than deepcopy since we only need to replace llm_traits
+                configured_rubric = rubric.model_copy(update={"llm_traits": configured_llm_traits})
 
             # Check if any LLM traits have deep judgment enabled (after configuration)
             has_deep_judgment_traits = False

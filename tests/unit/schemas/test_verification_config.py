@@ -32,9 +32,17 @@ from karenina.schemas.workflow.verification.config import (
 
 
 @pytest.mark.unit
-@pytest.mark.skip(reason="Default values vary by environment; needs investigation")
-def test_verification_config_default_values() -> None:
-    """Test VerificationConfig default field values."""
+@patch.dict(
+    "os.environ",
+    {},
+    clear=True,
+)
+@patch("karenina.schemas.workflow.verification.config.os.getenv", return_value=None)
+def test_verification_config_default_values(_mock_getenv) -> None:
+    """Test VerificationConfig default field values.
+
+    Patches os.getenv to ensure environment variables don't affect defaults.
+    """
     config = VerificationConfig(
         answering_models=[
             ModelConfig(

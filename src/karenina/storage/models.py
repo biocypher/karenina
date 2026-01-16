@@ -27,7 +27,7 @@ from .base import Base
 
 if TYPE_CHECKING:
     # VerificationResultModel is dynamically generated, so we import it for type checking
-    from .generated_models import VerificationResultModel  # type: ignore[misc]
+    from .generated_models import VerificationResultModel
 
 
 class BenchmarkModel(Base):
@@ -92,7 +92,7 @@ class QuestionModel(Base):
     benchmark_questions: Mapped[list["BenchmarkQuestionModel"]] = relationship(
         "BenchmarkQuestionModel", back_populates="question"
     )
-    verification_results: Mapped[list["VerificationResultModel"]] = relationship(
+    verification_results: Mapped[list["VerificationResultModel"]] = relationship(  # type: ignore[valid-type]
         "VerificationResultModel", back_populates="question"
     )
 
@@ -181,7 +181,7 @@ class VerificationRunModel(Base):
 
     # Relationships
     benchmark: Mapped["BenchmarkModel"] = relationship("BenchmarkModel", back_populates="verification_runs")
-    results: Mapped[list["VerificationResultModel"]] = relationship(
+    results: Mapped[list["VerificationResultModel"]] = relationship(  # type: ignore[valid-type]
         "VerificationResultModel", back_populates="run", cascade="all, delete-orphan"
     )
 
