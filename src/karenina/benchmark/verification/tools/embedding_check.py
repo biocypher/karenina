@@ -3,6 +3,7 @@
 import json
 import os
 import threading
+from collections import OrderedDict
 from typing import Any
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
@@ -10,14 +11,22 @@ from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from ....infrastructure.llm.interface import init_chat_model_unified
 from ....schemas.workflow import ModelConfig
 
-# Global cache for embedding models (thread-safe)
-_embedding_model_cache: dict[str, Any] = {}
+# Global cache for embedding models (thread-safe) with LRU eviction
+# Using OrderedDict to track access order for LRU eviction policy
+_embedding_model_cache: OrderedDict[str, Any] = OrderedDict()
 _cache_lock = threading.Lock()
+
+# Maximum number of embedding models to keep in cache
+# SentenceTransformer models are 100MB-1GB each, so limit to prevent memory exhaustion
+_MAX_CACHED_MODELS = 3
 
 
 def preload_embedding_model() -> str:
     """
     Preload the embedding model for the current job.
+
+    Uses LRU (Least Recently Used) caching to limit memory usage.
+    When the cache exceeds _MAX_CACHED_MODELS, the oldest models are evicted.
 
     Returns:
         Model name that was loaded
@@ -30,6 +39,8 @@ def preload_embedding_model() -> str:
 
     with _cache_lock:
         if model_name in _embedding_model_cache:
+            # Move to end to mark as most recently used
+            _embedding_model_cache.move_to_end(model_name)
             return model_name
 
         try:
@@ -42,6 +53,14 @@ def preload_embedding_model() -> str:
         try:
             model = SentenceTransformer(model_name)
             _embedding_model_cache[model_name] = model
+
+            # Evict oldest models if cache exceeds limit
+            while len(_embedding_model_cache) > _MAX_CACHED_MODELS:
+                # Remove oldest (first) item - the least recently used
+                evicted_name, evicted_model = _embedding_model_cache.popitem(last=False)
+                # Explicitly delete reference to help garbage collection
+                del evicted_model
+
             return model_name
         except Exception as e:
             raise RuntimeError(f"Failed to preload embedding model {model_name}: {e}") from e
@@ -69,6 +88,8 @@ def _get_cached_embedding_model(model_name: str) -> Any:
     """
     with _cache_lock:
         if model_name in _embedding_model_cache:
+            # Move to end to mark as most recently used
+            _embedding_model_cache.move_to_end(model_name)
             return _embedding_model_cache[model_name]
 
     # Model not cached, preload it
