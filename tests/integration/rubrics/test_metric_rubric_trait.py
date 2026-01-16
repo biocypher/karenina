@@ -22,6 +22,7 @@ Metric formulas tested:
 
 import pytest
 
+from karenina.benchmark.verification.evaluators import MetricTraitEvaluator
 from karenina.schemas.domain import MetricRubricTrait, Rubric
 
 # =============================================================================
@@ -121,15 +122,22 @@ class TestMetricComputation:
     """Test metric computation formulas.
 
     These tests verify the mathematical correctness of metric calculations
-    by using the RubricEvaluator's internal _compute_metrics method.
+    by using MetricTraitEvaluator's internal _compute_metrics method.
+
+    Note: _compute_metrics was moved from RubricEvaluator to MetricTraitEvaluator
+    during the flaw-001 refactoring to extract metric trait evaluation.
     """
 
     @pytest.fixture
-    def evaluator(self, rubric_evaluator):
-        """Get rubric evaluator for metric computation."""
-        return rubric_evaluator
+    def metric_evaluator(self):
+        """Get metric trait evaluator for metric computation.
 
-    def test_perfect_extraction_all_metrics_one(self, evaluator):
+        Note: _compute_metrics was moved from RubricEvaluator to MetricTraitEvaluator
+        during the flaw-001 refactoring.
+        """
+        return MetricTraitEvaluator(llm=None)
+
+    def test_perfect_extraction_all_metrics_one(self, metric_evaluator):
         """Verify perfect extraction: P=1, R=1, F1=1."""
         # All TP instructions found, no FN or FP
         tp = ["item1", "item2", "item3"]
@@ -137,13 +145,13 @@ class TestMetricComputation:
         fp = []
         tn = []
 
-        metrics = evaluator._compute_metrics(tp, tn, fp, fn, ["precision", "recall", "f1"])
+        metrics = metric_evaluator._compute_metrics(tp, tn, fp, fn, ["precision", "recall", "f1"])
 
         assert metrics["precision"] == 1.0
         assert metrics["recall"] == 1.0
         assert metrics["f1"] == 1.0
 
-    def test_partial_extraction_recall_less_than_one(self, evaluator):
+    def test_partial_extraction_recall_less_than_one(self, metric_evaluator):
         """Verify partial extraction: recall < 1 when some items missed."""
         # 2 out of 4 TP instructions found
         tp = ["item1", "item2"]
@@ -151,7 +159,7 @@ class TestMetricComputation:
         fp = []
         tn = []
 
-        metrics = evaluator._compute_metrics(tp, tn, fp, fn, ["precision", "recall", "f1"])
+        metrics = metric_evaluator._compute_metrics(tp, tn, fp, fn, ["precision", "recall", "f1"])
 
         # Precision = 2 / (2 + 0) = 1.0
         assert metrics["precision"] == 1.0
@@ -160,7 +168,7 @@ class TestMetricComputation:
         # F1 = 2 * (1.0 * 0.5) / (1.0 + 0.5) = 2/3
         assert abs(metrics["f1"] - (2 / 3)) < 0.0001
 
-    def test_false_positives_precision_less_than_one(self, evaluator):
+    def test_false_positives_precision_less_than_one(self, metric_evaluator):
         """Verify false positives: precision < 1 when extra items included."""
         # 2 TP but also 2 FP
         tp = ["correct1", "correct2"]
@@ -168,7 +176,7 @@ class TestMetricComputation:
         fp = ["wrong1", "wrong2"]
         tn = []
 
-        metrics = evaluator._compute_metrics(tp, tn, fp, fn, ["precision", "recall", "f1"])
+        metrics = metric_evaluator._compute_metrics(tp, tn, fp, fn, ["precision", "recall", "f1"])
 
         # Precision = 2 / (2 + 2) = 0.5
         assert metrics["precision"] == 0.5
@@ -177,7 +185,7 @@ class TestMetricComputation:
         # F1 = 2 * (0.5 * 1.0) / (0.5 + 1.0) = 2/3
         assert abs(metrics["f1"] - (2 / 3)) < 0.0001
 
-    def test_no_matches_handles_divide_by_zero(self, evaluator):
+    def test_no_matches_handles_divide_by_zero(self, metric_evaluator):
         """Verify no matches case: returns 0 instead of divide by zero error."""
         # No TP found
         tp = []
@@ -185,7 +193,7 @@ class TestMetricComputation:
         fp = ["wrong1"]
         tn = []
 
-        metrics = evaluator._compute_metrics(tp, tn, fp, fn, ["precision", "recall", "f1"])
+        metrics = metric_evaluator._compute_metrics(tp, tn, fp, fn, ["precision", "recall", "f1"])
 
         # Precision = 0 / (0 + 1) = 0.0
         assert metrics["precision"] == 0.0
@@ -194,51 +202,53 @@ class TestMetricComputation:
         # F1 = 0 (since precision + recall = 0)
         assert metrics["f1"] == 0.0
 
-    def test_all_empty_lists_handles_gracefully(self, evaluator):
+    def test_all_empty_lists_handles_gracefully(self, metric_evaluator):
         """Verify all empty lists returns zeros."""
         tp = []
         fn = []
         fp = []
         tn = []
 
-        metrics = evaluator._compute_metrics(tp, tn, fp, fn, ["precision", "recall", "f1"])
+        metrics = metric_evaluator._compute_metrics(tp, tn, fp, fn, ["precision", "recall", "f1"])
 
         assert metrics["precision"] == 0.0
         assert metrics["recall"] == 0.0
         assert metrics["f1"] == 0.0
 
-    def test_specificity_calculation(self, evaluator):
+    def test_specificity_calculation(self, metric_evaluator):
         """Verify specificity formula: TN / (TN + FP)."""
         tp = ["found"]
         fn = []
         fp = ["wrong1"]
         tn = ["correctly_absent1", "correctly_absent2", "correctly_absent3"]
 
-        metrics = evaluator._compute_metrics(tp, tn, fp, fn, ["specificity"])
+        metrics = metric_evaluator._compute_metrics(tp, tn, fp, fn, ["specificity"])
 
         # Specificity = 3 / (3 + 1) = 0.75
         assert metrics["specificity"] == 0.75
 
-    def test_accuracy_calculation(self, evaluator):
+    def test_accuracy_calculation(self, metric_evaluator):
         """Verify accuracy formula: (TP + TN) / (TP + TN + FP + FN)."""
         tp = ["correct1", "correct2"]
         tn = ["absent1", "absent2", "absent3"]
         fp = ["wrong1"]
         fn = ["missed1", "missed2"]
 
-        metrics = evaluator._compute_metrics(tp, tn, fp, fn, ["accuracy"])
+        metrics = metric_evaluator._compute_metrics(tp, tn, fp, fn, ["accuracy"])
 
         # Accuracy = (2 + 3) / (2 + 3 + 1 + 2) = 5/8 = 0.625
         assert metrics["accuracy"] == 0.625
 
-    def test_all_full_matrix_metrics(self, evaluator):
+    def test_all_full_matrix_metrics(self, metric_evaluator):
         """Verify all metrics in full matrix mode."""
         tp = ["tp1", "tp2"]  # 2
         tn = ["tn1", "tn2", "tn3"]  # 3
         fp = ["fp1"]  # 1
         fn = ["fn1"]  # 1
 
-        metrics = evaluator._compute_metrics(tp, tn, fp, fn, ["precision", "recall", "specificity", "accuracy", "f1"])
+        metrics = metric_evaluator._compute_metrics(
+            tp, tn, fp, fn, ["precision", "recall", "specificity", "accuracy", "f1"]
+        )
 
         # Precision = 2 / (2 + 1) = 2/3
         assert abs(metrics["precision"] - (2 / 3)) < 0.0001
@@ -481,11 +491,11 @@ class TestMetricFormulas:
     """Test that metric formulas match standard definitions."""
 
     @pytest.fixture
-    def evaluator(self, rubric_evaluator):
-        """Get rubric evaluator for metric computation."""
-        return rubric_evaluator
+    def metric_evaluator(self):
+        """Get metric trait evaluator for metric computation."""
+        return MetricTraitEvaluator(llm=None)
 
-    def test_precision_matches_sklearn_definition(self, evaluator):
+    def test_precision_matches_sklearn_definition(self, metric_evaluator):
         """Verify precision matches sklearn: TP / (TP + FP)."""
         # sklearn definition: precision = tp / (tp + fp)
         tp = ["a", "b", "c"]  # 3
@@ -493,12 +503,12 @@ class TestMetricFormulas:
         fn = ["z"]  # 1
         tn = []
 
-        metrics = evaluator._compute_metrics(tp, tn, fp, fn, ["precision"])
+        metrics = metric_evaluator._compute_metrics(tp, tn, fp, fn, ["precision"])
 
         expected = 3 / (3 + 2)  # 0.6
         assert metrics["precision"] == expected
 
-    def test_recall_matches_sklearn_definition(self, evaluator):
+    def test_recall_matches_sklearn_definition(self, metric_evaluator):
         """Verify recall matches sklearn: TP / (TP + FN)."""
         # sklearn definition: recall = tp / (tp + fn)
         tp = ["a", "b"]  # 2
@@ -506,19 +516,19 @@ class TestMetricFormulas:
         fp = ["x"]  # 1
         tn = []
 
-        metrics = evaluator._compute_metrics(tp, tn, fp, fn, ["recall"])
+        metrics = metric_evaluator._compute_metrics(tp, tn, fp, fn, ["recall"])
 
         expected = 2 / (2 + 3)  # 0.4
         assert metrics["recall"] == expected
 
-    def test_f1_matches_sklearn_definition(self, evaluator):
+    def test_f1_matches_sklearn_definition(self, metric_evaluator):
         """Verify F1 matches sklearn: 2 * (precision * recall) / (precision + recall)."""
         tp = ["a", "b", "c"]  # 3
         fp = ["x"]  # 1
         fn = ["y"]  # 1
         tn = []
 
-        metrics = evaluator._compute_metrics(tp, tn, fp, fn, ["precision", "recall", "f1"])
+        metrics = metric_evaluator._compute_metrics(tp, tn, fp, fn, ["precision", "recall", "f1"])
 
         precision = 3 / (3 + 1)  # 0.75
         recall = 3 / (3 + 1)  # 0.75
@@ -528,14 +538,14 @@ class TestMetricFormulas:
         assert metrics["recall"] == recall
         assert metrics["f1"] == expected_f1
 
-    def test_f1_equals_precision_equals_recall_when_fp_equals_fn(self, evaluator):
+    def test_f1_equals_precision_equals_recall_when_fp_equals_fn(self, metric_evaluator):
         """Verify F1 = precision = recall when FP = FN."""
         tp = ["a", "b"]  # 2
         fp = ["x"]  # 1
         fn = ["y"]  # 1 (same as FP)
         tn = []
 
-        metrics = evaluator._compute_metrics(tp, tn, fp, fn, ["precision", "recall", "f1"])
+        metrics = metric_evaluator._compute_metrics(tp, tn, fp, fn, ["precision", "recall", "f1"])
 
         # When FP = FN, precision = recall = F1
         assert metrics["precision"] == metrics["recall"]
