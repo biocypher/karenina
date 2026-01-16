@@ -10,6 +10,7 @@ from .metadata import MetadataManager
 from .question_query import QuestionQueryBuilder
 from .questions import QuestionManager
 from .results import ResultsManager
+from .results_io import ResultsIOHandler
 from .rubrics import RubricManager
 from .templates import TemplateManager
 from .verification_manager import VerificationManager
@@ -20,6 +21,7 @@ __all__ = [
     "MetadataManager",
     "QuestionManager",
     "QuestionQueryBuilder",
+    "ResultsIOHandler",
     "ResultsManager",
     "RubricManager",
     "TemplateManager",
