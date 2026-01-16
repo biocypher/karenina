@@ -16,6 +16,14 @@ from .config import (
     DEFAULT_PARSING_SYSTEM_PROMPT,
     VerificationConfig,
 )
+from .config_presets import (
+    create_preset_structure,
+    load_preset,
+    sanitize_model_config,
+    sanitize_preset_name,
+    save_preset,
+    validate_preset_metadata,
+)
 
 # Re-export job
 from .job import VerificationJob
@@ -38,6 +46,13 @@ __all__ = [
     "DEFAULT_PARSING_SYSTEM_PROMPT",
     # Configuration
     "VerificationConfig",
+    # Preset utilities
+    "sanitize_model_config",
+    "sanitize_preset_name",
+    "validate_preset_metadata",
+    "create_preset_structure",
+    "save_preset",
+    "load_preset",
     # Result components
     "VerificationResultMetadata",
     "VerificationResultTemplate",
