@@ -22,6 +22,7 @@ from .rubric_outputs import (
     TraitExcerptsOutput,
 )
 from .rubric_results import RubricResults
+from .template_dataframe import TemplateDataFrameBuilder
 from .template_results import TemplateResults
 from .verification import (
     DEFAULT_ANSWERING_SYSTEM_PROMPT,
@@ -80,6 +81,7 @@ __all__ = [
     "RubricResults",
     "RubricJudgmentResults",
     "TemplateResults",
+    "TemplateDataFrameBuilder",
     "JudgmentResults",
     # Aggregation framework
     "ResultAggregator",
