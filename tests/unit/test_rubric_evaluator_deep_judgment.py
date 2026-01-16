@@ -13,7 +13,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from karenina.benchmark.verification.evaluators.rubric_evaluator import RubricEvaluator
+from karenina.benchmark.verification.evaluators.rubric_deep_judgment import RubricDeepJudgmentHandler
 from karenina.schemas import ModelConfig
 from karenina.schemas.domain import LLMRubricTrait, Rubric
 
@@ -71,13 +71,9 @@ class TestDeepJudgmentRetryMechanism:
             deep_judgment_excerpt_enabled=False,
         )
 
-    @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
-    def test_excerpt_extraction_first_attempt_success(
-        self, mock_init_model, mock_model_config, sample_answer, dj_trait_with_excerpts
-    ):
+    def test_excerpt_extraction_first_attempt_success(self, mock_model_config, sample_answer, dj_trait_with_excerpts):
         """Test successful excerpt extraction on first attempt."""
         mock_llm = Mock()
-        mock_init_model.return_value = mock_llm
 
         # Mock excerpt extraction response with valid excerpts
         mock_llm.invoke.side_effect = [
@@ -104,7 +100,8 @@ class TestDeepJudgmentRetryMechanism:
             Mock(content=json.dumps({"scientific_accuracy": 5})),
         ]
 
-        evaluator = RubricEvaluator(mock_model_config, evaluation_strategy="sequential")
+        # Create handler directly with mock LLM
+        handler = RubricDeepJudgmentHandler(mock_llm, mock_model_config)
 
         # Create a mock config object with deep judgment settings
         from karenina.schemas import VerificationConfig
@@ -118,7 +115,7 @@ class TestDeepJudgmentRetryMechanism:
         )
 
         # Call the deep judgment evaluation
-        result = evaluator._extract_excerpts_for_trait(sample_answer, dj_trait_with_excerpts, config)
+        result = handler._extract_excerpts_for_trait(sample_answer, dj_trait_with_excerpts, config)
 
         # Verify results
         assert result["auto_fail"] is False  # Changed from success to auto_fail
@@ -129,13 +126,9 @@ class TestDeepJudgmentRetryMechanism:
         # Verify LLM was called once for extraction
         assert mock_llm.invoke.call_count >= 1
 
-    @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
-    def test_excerpt_extraction_retry_success(
-        self, mock_init_model, mock_model_config, sample_answer, dj_trait_with_excerpts
-    ):
+    def test_excerpt_extraction_retry_success(self, mock_model_config, sample_answer, dj_trait_with_excerpts):
         """Test excerpt extraction succeeds on retry after validation failure."""
         mock_llm = Mock()
-        mock_init_model.return_value = mock_llm
 
         # First attempt: excerpts with low similarity (fail validation)
         # Second attempt: excerpts with high similarity (pass validation)
@@ -172,7 +165,7 @@ class TestDeepJudgmentRetryMechanism:
             Mock(content=json.dumps({"scientific_accuracy": 4})),
         ]
 
-        evaluator = RubricEvaluator(mock_model_config, evaluation_strategy="sequential")
+        handler = RubricDeepJudgmentHandler(mock_llm, mock_model_config)
 
         from karenina.schemas import VerificationConfig
 
@@ -184,20 +177,16 @@ class TestDeepJudgmentRetryMechanism:
             deep_judgment_fuzzy_match_threshold=0.8,
         )
 
-        result = evaluator._extract_excerpts_for_trait(sample_answer, dj_trait_with_excerpts, config)
+        result = handler._extract_excerpts_for_trait(sample_answer, dj_trait_with_excerpts, config)
 
         # Verify retry occurred
         assert result["auto_fail"] is False  # Changed from success to auto_fail
         assert result["retry_count"] == 1
         assert len(result["excerpts"]) >= 1
 
-    @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
-    def test_excerpt_extraction_all_retries_exhausted(
-        self, mock_init_model, mock_model_config, sample_answer, dj_trait_with_excerpts
-    ):
+    def test_excerpt_extraction_all_retries_exhausted(self, mock_model_config, sample_answer, dj_trait_with_excerpts):
         """Test auto-fail when all retry attempts are exhausted."""
         mock_llm = Mock()
-        mock_init_model.return_value = mock_llm
 
         # All attempts return invalid excerpts
         mock_llm.invoke.return_value = Mock(
@@ -213,7 +202,7 @@ class TestDeepJudgmentRetryMechanism:
             )
         )
 
-        evaluator = RubricEvaluator(mock_model_config, evaluation_strategy="sequential")
+        handler = RubricDeepJudgmentHandler(mock_llm, mock_model_config)
 
         from karenina.schemas import VerificationConfig
 
@@ -225,17 +214,15 @@ class TestDeepJudgmentRetryMechanism:
             deep_judgment_fuzzy_match_threshold=0.8,
         )
 
-        result = evaluator._extract_excerpts_for_trait(sample_answer, dj_trait_with_excerpts, config)
+        result = handler._extract_excerpts_for_trait(sample_answer, dj_trait_with_excerpts, config)
 
         # Verify auto-fail
         assert result["auto_fail"] is True
         assert result["retry_count"] == 2  # Max retries reached
 
-    @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
-    def test_per_trait_retry_override(self, mock_init_model, mock_model_config, sample_answer):
+    def test_per_trait_retry_override(self, mock_model_config, sample_answer):
         """Test that trait-specific retry_attempts override global default."""
         mock_llm = Mock()
-        mock_init_model.return_value = mock_llm
 
         # Create trait with custom retry attempts
         trait = LLMRubricTrait(
@@ -254,7 +241,7 @@ class TestDeepJudgmentRetryMechanism:
             content=json.dumps({"excerpts": [{"text": "Invalid text", "confidence": "low"}]})
         )
 
-        evaluator = RubricEvaluator(mock_model_config, evaluation_strategy="sequential")
+        handler = RubricDeepJudgmentHandler(mock_llm, mock_model_config)
 
         from karenina.schemas import VerificationConfig
 
@@ -266,18 +253,14 @@ class TestDeepJudgmentRetryMechanism:
             deep_judgment_fuzzy_match_threshold=0.8,
         )
 
-        result = evaluator._extract_excerpts_for_trait(sample_answer, trait, config)
+        result = handler._extract_excerpts_for_trait(sample_answer, trait, config)
 
         # Should use trait-specific retry count (5) not global (2)
         assert result["retry_count"] == 5
 
-    @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
-    def test_validation_feedback_format(
-        self, mock_init_model, mock_model_config, sample_answer, dj_trait_with_excerpts
-    ):
+    def test_validation_feedback_format(self, mock_model_config, sample_answer, dj_trait_with_excerpts):
         """Test that validation feedback includes scores and threshold."""
         mock_llm = Mock()
-        mock_init_model.return_value = mock_llm
 
         # Track the prompts sent to LLM
         prompts_sent = []
@@ -289,7 +272,7 @@ class TestDeepJudgmentRetryMechanism:
 
         mock_llm.invoke.side_effect = capture_prompt
 
-        evaluator = RubricEvaluator(mock_model_config, evaluation_strategy="sequential")
+        handler = RubricDeepJudgmentHandler(mock_llm, mock_model_config)
 
         from karenina.schemas import VerificationConfig
 
@@ -301,7 +284,7 @@ class TestDeepJudgmentRetryMechanism:
             deep_judgment_fuzzy_match_threshold=0.85,
         )
 
-        evaluator._extract_excerpts_for_trait(sample_answer, dj_trait_with_excerpts, config)
+        handler._extract_excerpts_for_trait(sample_answer, dj_trait_with_excerpts, config)
 
         # Check that retry includes feedback
         if len(prompts_sent) > 1:
@@ -594,11 +577,9 @@ class TestDeepJudgmentEdgeCases:
         """Sample answer for testing."""
         return "This is a test answer."
 
-    @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
-    def test_empty_excerpts_from_llm(self, mock_init_model, mock_model_config, sample_answer):
+    def test_empty_excerpts_from_llm(self, mock_model_config, sample_answer):
         """Test handling of empty excerpts list from LLM."""
         mock_llm = Mock()
-        mock_init_model.return_value = mock_llm
 
         # LLM returns empty excerpts list
         mock_llm.invoke.return_value = Mock(content=json.dumps({"excerpts": []}))
@@ -613,7 +594,7 @@ class TestDeepJudgmentEdgeCases:
             deep_judgment_excerpt_enabled=True,
         )
 
-        evaluator = RubricEvaluator(mock_model_config, evaluation_strategy="sequential")
+        handler = RubricDeepJudgmentHandler(mock_llm, mock_model_config)
 
         from karenina.schemas import VerificationConfig
 
@@ -624,16 +605,14 @@ class TestDeepJudgmentEdgeCases:
             deep_judgment_fuzzy_match_threshold=0.8,
         )
 
-        result = evaluator._extract_excerpts_for_trait(sample_answer, trait, config)
+        result = handler._extract_excerpts_for_trait(sample_answer, trait, config)
 
         # Empty excerpts should be treated as validation failure
         assert result["auto_fail"] is True or len(result.get("excerpts", [])) == 0
 
-    @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
-    def test_partial_validation_success(self, mock_init_model, mock_model_config, sample_answer):
+    def test_partial_validation_success(self, mock_model_config, sample_answer):
         """Test when some excerpts are valid and some are invalid."""
         mock_llm = Mock()
-        mock_init_model.return_value = mock_llm
 
         # Return mix of valid and invalid excerpts
         mock_llm.invoke.return_value = Mock(
@@ -657,7 +636,7 @@ class TestDeepJudgmentEdgeCases:
             deep_judgment_excerpt_enabled=True,
         )
 
-        evaluator = RubricEvaluator(mock_model_config, evaluation_strategy="sequential")
+        handler = RubricDeepJudgmentHandler(mock_llm, mock_model_config)
 
         from karenina.schemas import VerificationConfig
 
@@ -668,7 +647,7 @@ class TestDeepJudgmentEdgeCases:
             deep_judgment_fuzzy_match_threshold=0.8,
         )
 
-        result = evaluator._extract_excerpts_for_trait(sample_answer, trait, config)
+        result = handler._extract_excerpts_for_trait(sample_answer, trait, config)
 
         # Should proceed with valid excerpts
         if not result["auto_fail"]:
