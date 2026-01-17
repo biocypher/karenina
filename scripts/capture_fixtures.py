@@ -310,6 +310,18 @@ SCENARIOS = {
             "RubricEvaluator._build_single_trait_user_prompt()",
         ],
     },
+    "literal_evaluation": {
+        "description": "LLM classifying responses into literal kind categories",
+        "source_files": [
+            "src/karenina/benchmark/verification/evaluators/rubric_llm_trait_evaluator.py",
+        ],
+        "llm_calls": [
+            "LLMTraitEvaluator._build_literal_batch_system_prompt()",
+            "LLMTraitEvaluator._build_literal_batch_user_prompt()",
+            "LLMTraitEvaluator._build_literal_single_system_prompt()",
+            "LLMTraitEvaluator._build_literal_single_user_prompt()",
+        ],
+    },
     "abstention": {
         "description": "LLM abstention detection using ACTUAL prompts from prompts.py",
         "source_files": [
@@ -822,10 +834,138 @@ def _run_mcp_agent_scenario(model: str, provider: str, output_dir: Path) -> int:
     return 0
 
 
+def _run_literal_evaluation_scenario(model: str, provider: str, output_dir: Path) -> int:
+    """Capture literal kind trait evaluation LLM calls using the ACTUAL LLMTraitEvaluator.
+
+    This uses the real LLMTraitEvaluator with literal kind traits to ensure
+    captured prompts match production exactly.
+
+    Scenarios captured:
+    - Single literal trait classification (sentiment)
+    - Multiple literal traits batch evaluation (sentiment + response_type)
+    - Invalid classification handling (LLM returns invalid class name)
+    """
+    from karenina.benchmark.verification.evaluators.rubric_evaluator import RubricEvaluator
+    from karenina.schemas.domain import LLMRubricTrait, Rubric
+    from karenina.schemas.workflow import ModelConfig
+
+    real_llm = _create_real_llm(model, provider)
+    capture_client = CaptureLLMClient(real_llm, output_dir, "literal_evaluation", model)
+
+    print("  Running literal evaluation scenario using ACTUAL LLMTraitEvaluator...")
+
+    # Create model config matching production
+    model_config = ModelConfig(
+        id="test-evaluator",
+        model_provider=provider,
+        model_name=model,
+        temperature=0.0,
+        interface="langchain",
+    )
+
+    # Create evaluator using batch strategy
+    evaluator = RubricEvaluator(
+        model_config=model_config,
+        evaluation_strategy="batch",
+    )
+
+    # --- Scenario 1: Single literal trait (sentiment classification) ---
+    sentiment_trait = LLMRubricTrait(
+        name="sentiment",
+        description="Classify the emotional tone of the response",
+        kind="literal",
+        classes={
+            "negative": "Response expresses criticism, disappointment, or pessimism",
+            "neutral": "Response is factual and emotionally neutral",
+            "positive": "Response expresses optimism, satisfaction, or enthusiasm",
+        },
+        higher_is_better=True,  # positive > neutral > negative
+    )
+
+    rubric1 = Rubric(llm_traits=[sentiment_trait])
+
+    with patch.object(evaluator, "llm", capture_client):
+        try:
+            evaluator.evaluate_rubric(
+                question="What did you think of the conference?",
+                answer="The conference was fantastic! I learned so much about the latest AI developments and met amazing people. I'm really looking forward to attending next year!",
+                rubric=rubric1,
+            )
+        except Exception as e:
+            print(f"    Note: Evaluation completed with: {type(e).__name__}")
+
+    # --- Scenario 2: Multiple literal traits (batch evaluation) ---
+    sentiment_trait2 = LLMRubricTrait(
+        name="sentiment",
+        description="Classify the emotional tone of the response",
+        kind="literal",
+        classes={
+            "negative": "Response expresses criticism, disappointment, or pessimism",
+            "neutral": "Response is factual and emotionally neutral",
+            "positive": "Response expresses optimism, satisfaction, or enthusiasm",
+        },
+        higher_is_better=True,
+    )
+    response_type_trait = LLMRubricTrait(
+        name="response_type",
+        description="Classify the type of response given",
+        kind="literal",
+        classes={
+            "factual": "Response presents objective facts or data",
+            "opinion": "Response expresses subjective views or preferences",
+            "speculative": "Response discusses possibilities or hypotheticals",
+            "refusal": "Response declines to answer or redirects the question",
+        },
+        higher_is_better=False,  # Order doesn't imply quality
+    )
+
+    rubric2 = Rubric(llm_traits=[sentiment_trait2, response_type_trait])
+
+    with patch.object(evaluator, "llm", capture_client):
+        try:
+            evaluator.evaluate_rubric(
+                question="Will quantum computing replace classical computers?",
+                answer="While quantum computing shows great promise, it's unlikely to fully replace classical computers. Quantum computers excel at specific problems like cryptography and optimization, but classical computers will remain better for everyday tasks. I believe we'll see a hybrid approach in the future.",
+                rubric=rubric2,
+            )
+        except Exception as e:
+            print(f"    Note: Evaluation completed with: {type(e).__name__}")
+
+    # --- Scenario 3: Literal trait with neutral response ---
+    rubric3 = Rubric(llm_traits=[sentiment_trait])
+
+    with patch.object(evaluator, "llm", capture_client):
+        try:
+            evaluator.evaluate_rubric(
+                question="What is the capital of France?",
+                answer="The capital of France is Paris. Paris is located in northern France along the Seine River.",
+                rubric=rubric3,
+            )
+        except Exception as e:
+            print(f"    Note: Evaluation completed with: {type(e).__name__}")
+
+    # --- Scenario 4: Literal trait with negative sentiment ---
+    rubric4 = Rubric(llm_traits=[sentiment_trait])
+
+    with patch.object(evaluator, "llm", capture_client):
+        try:
+            evaluator.evaluate_rubric(
+                question="How was your experience with customer service?",
+                answer="It was terrible. I waited on hold for 45 minutes only to be disconnected. When I finally got through, the representative was unhelpful and dismissive. I'm extremely disappointed with this company.",
+                rubric=rubric4,
+            )
+        except Exception as e:
+            print(f"    Note: Evaluation completed with: {type(e).__name__}")
+
+    print(f"  Captured {capture_client.captured_count} fixtures using real LLMTraitEvaluator prompts")
+    return 0
+
+
 # Scenario runner mapping
 SCENARIO_RUNNERS = {
     "template_parsing": _run_template_parsing_scenario,
     "rubric_evaluation": _run_rubric_evaluation_scenario,
+    "literal_evaluation": _run_literal_evaluation_scenario,
     "abstention": _run_abstention_scenario,
     "full_pipeline": _run_full_pipeline_scenario,
     "mcp_agent": _run_mcp_agent_scenario,

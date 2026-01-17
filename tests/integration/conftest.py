@@ -339,6 +339,92 @@ def citation_regex_rubric() -> Rubric:
     return Rubric(regex_traits=[citation_trait, url_trait])
 
 
+@pytest.fixture
+def literal_sentiment_rubric() -> Rubric:
+    """Return a rubric with a literal kind LLM trait for sentiment classification.
+
+    Tests categorical classification with three classes.
+    """
+    sentiment_trait = LLMRubricTrait(
+        name="sentiment",
+        description="Classify the emotional tone of the response",
+        kind="literal",
+        classes={
+            "negative": "Response expresses criticism, disappointment, or pessimism",
+            "neutral": "Response is factual and emotionally neutral",
+            "positive": "Response expresses optimism, satisfaction, or enthusiasm",
+        },
+        higher_is_better=True,  # positive > neutral > negative
+    )
+    return Rubric(llm_traits=[sentiment_trait])
+
+
+@pytest.fixture
+def multi_literal_rubric() -> Rubric:
+    """Return a rubric with multiple literal kind LLM traits.
+
+    Tests batch evaluation of multiple categorical classifications.
+    """
+    sentiment_trait = LLMRubricTrait(
+        name="sentiment",
+        description="Classify the emotional tone of the response",
+        kind="literal",
+        classes={
+            "negative": "Response expresses criticism, disappointment, or pessimism",
+            "neutral": "Response is factual and emotionally neutral",
+            "positive": "Response expresses optimism, satisfaction, or enthusiasm",
+        },
+        higher_is_better=True,
+    )
+    response_type_trait = LLMRubricTrait(
+        name="response_type",
+        description="Classify the type of response given",
+        kind="literal",
+        classes={
+            "factual": "Response presents objective facts or data",
+            "opinion": "Response expresses subjective views or preferences",
+            "speculative": "Response discusses possibilities or hypotheticals",
+            "refusal": "Response declines to answer or redirects the question",
+        },
+        higher_is_better=False,  # Order doesn't imply quality
+    )
+    return Rubric(llm_traits=[sentiment_trait, response_type_trait])
+
+
+@pytest.fixture
+def mixed_rubric_with_literal() -> Rubric:
+    """Return a rubric mixing literal, boolean, and score traits.
+
+    Tests that literal traits can coexist with other trait kinds.
+    """
+    sentiment_trait = LLMRubricTrait(
+        name="sentiment",
+        description="Classify the emotional tone of the response",
+        kind="literal",
+        classes={
+            "negative": "Response expresses criticism, disappointment, or pessimism",
+            "neutral": "Response is factual and emotionally neutral",
+            "positive": "Response expresses optimism, satisfaction, or enthusiasm",
+        },
+        higher_is_better=True,
+    )
+    accuracy_trait = LLMRubricTrait(
+        name="accuracy",
+        description="The response contains factually correct information",
+        kind="boolean",
+        higher_is_better=True,
+    )
+    completeness_trait = LLMRubricTrait(
+        name="completeness",
+        description="The response thoroughly addresses all aspects of the question",
+        kind="score",
+        min_score=1,
+        max_score=5,
+        higher_is_better=True,
+    )
+    return Rubric(llm_traits=[sentiment_trait, accuracy_trait, completeness_trait])
+
+
 # =============================================================================
 # Integration Test Helpers
 # =============================================================================
