@@ -1,6 +1,7 @@
 """Template validation logic for verification system."""
 
 import inspect
+from typing import Any
 
 from ....schemas.domain import BaseAnswer
 
@@ -78,7 +79,7 @@ def validate_answer_template(template_code: str) -> tuple[bool, str | None, type
         # The 'correct' field is optional, but if present via model_post_init, it must be a dict
         if "model_post_init" in Answer.__dict__:
             try:
-                from ..utils.parsing import create_test_instance_from_answer_class
+                from .template_parsing_helpers import create_test_instance_from_answer_class
 
                 test_instance, ground_truth = create_test_instance_from_answer_class(Answer)
                 if ground_truth is not None and not isinstance(ground_truth, dict):
