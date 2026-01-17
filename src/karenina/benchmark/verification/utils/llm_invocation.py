@@ -1,13 +1,13 @@
-"""Verification utility functions.
+"""LLM invocation utilities for verification operations.
 
 Shared utilities used by verification stages, runner, and evaluators.
 These functions handle common tasks like LLM invocation with retries,
 response parsing, and validation.
 
 Functions provided:
-- Error handling: is_retryable_error (imported from utils.shared)
+- Error handling: is_retryable_error (imported from error_helpers)
 - LLM invocation: _invoke_llm_with_retry
-- Agent metrics: _extract_agent_metrics (from utils.agent_metrics)
+- Agent metrics: _extract_agent_metrics (from trace_agent_metrics)
 - Response parsing: _split_parsed_response
 - Prompt construction: _construct_few_shot_prompt
 - Retry logic: _retry_parse_with_null_feedback, _extract_null_fields_from_error
@@ -26,11 +26,11 @@ from langchain_core.callbacks.usage import UsageMetadataCallbackHandler
 from langchain_core.messages import BaseMessage, HumanMessage
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from .utils.agent_metrics import (
+from .error_helpers import is_retryable_error
+from .trace_agent_metrics import (
     extract_agent_metrics,
     extract_middleware_metrics,
 )
-from .utils.shared import is_retryable_error
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ _extract_middleware_metrics = extract_middleware_metrics
 # Error Handling and Retry Logic
 # ============================================================================
 
-# is_retryable_error is imported from utils.shared
+# is_retryable_error is imported from error_helpers
 
 
 def _invoke_llm_with_retry(
@@ -169,7 +169,7 @@ def _invoke_agent_with_middleware(
 
     # Run the async invocation using the shared portal if available,
     # otherwise fall back to asyncio.run()
-    from .batch_runner import get_async_portal
+    from ..batch_runner import get_async_portal
 
     portal = get_async_portal()
 
@@ -471,7 +471,7 @@ def _retry_parse_with_null_feedback(
         Tuple of (parsed_answer, usage_metadata)
         parsed_answer is None if retry also fails
     """
-    from .utils.shared import strip_markdown_fences as _strip_markdown_fences
+    from .json_helpers import strip_markdown_fences as _strip_markdown_fences
 
     # Try to extract JSON from error message
     failed_json = None
