@@ -123,11 +123,15 @@ class FixtureBackedLLMClient:
             "total_tokens": usage_data.get("total_tokens", 0),
         }
 
+        # Extract model from response or metadata
+        model = response_data.get("model") or fixture.get("metadata", {}).get("model")
+
         # Return AIMessage for LangGraph compatibility
         return AIMessage(
             content=content,
             id=response_id,
             usage_metadata=usage_metadata,
+            response_metadata={"model": model} if model else {},
         )
 
     async def ainvoke(self, messages: list[Any], **kwargs: Any) -> AIMessage:

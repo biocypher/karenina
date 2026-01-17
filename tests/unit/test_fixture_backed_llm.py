@@ -125,7 +125,7 @@ def test_fixture_client_with_real_fixture(tmp_path: Path) -> None:
 
     assert response.content == "4"
     assert response.id == "msg-123"
-    assert response.model == "claude-haiku-4-5"
-    assert response.usage.input_tokens == 5
-    assert response.usage.output_tokens == 1
-    assert response.usage.total_tokens == 6
+    assert response.response_metadata["model"] == "claude-haiku-4-5"
+    assert response.usage_metadata["input_tokens"] == 5
+    assert response.usage_metadata["output_tokens"] == 1
+    assert response.usage_metadata["total_tokens"] == 6
