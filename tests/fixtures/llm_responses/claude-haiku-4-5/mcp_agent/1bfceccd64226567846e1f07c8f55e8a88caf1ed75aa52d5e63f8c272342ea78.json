@@ -1,0 +1,115 @@
+{
+  "metadata": {
+    "scenario": "mcp_agent",
+    "model": "claude-haiku-4-5",
+    "timestamp": "2026-01-17T01:21:46.055324",
+    "prompt_hash": "1bfceccd64226567846e1f07c8f55e8a88caf1ed75aa52d5e63f8c272342ea78"
+  },
+  "request": {
+    "messages": [
+      {
+        "content": "What is the most severe consequence of 19_44908822_C_T?",
+        "additional_kwargs": {},
+        "response_metadata": {},
+        "type": "human",
+        "name": null,
+        "id": "3fe621fc-ed81-4d2d-9e20-8b860c7ae026"
+      },
+      {
+        "content": [
+          {
+            "text": "I'll help you find information about the variant 19_44908822_C_T and its most severe consequence. Let me query the Open Targets Platform for this variant.",
+            "type": "text"
+          },
+          {
+            "id": "toolu_01UhTq6Bu3TBvPv2VWnBubsW",
+            "input": {
+              "query_string": "query {\n  variant(id: \"19_44908822_C_T\") {\n    id\n    rsId\n    consequences {\n      variantFunctionalClass\n      transcriptConsequences {\n        consequence\n        transcriptId\n        geneId\n        geneName\n        sift\n        polyphen\n      }\n    }\n  }\n}"
+            },
+            "name": "query_open_targets_graphql",
+            "type": "tool_use"
+          }
+        ],
+        "additional_kwargs": {},
+        "response_metadata": {
+          "id": "msg_01Av36bVWh65HhwyU4AkbyEg",
+          "model": "claude-haiku-4-5-20251001",
+          "stop_reason": "tool_use",
+          "stop_sequence": null,
+          "usage": {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "input_tokens": 2806,
+            "output_tokens": 180,
+            "server_tool_use": null,
+            "service_tier": "standard"
+          },
+          "model_name": "claude-haiku-4-5-20251001",
+          "model_provider": "anthropic"
+        },
+        "type": "ai",
+        "name": null,
+        "id": "lc_run--78b9d493-8e26-4db3-9012-ada79d4a3f2f-0",
+        "tool_calls": [
+          {
+            "name": "query_open_targets_graphql",
+            "args": {
+              "query_string": "query {\n  variant(id: \"19_44908822_C_T\") {\n    id\n    rsId\n    consequences {\n      variantFunctionalClass\n      transcriptConsequences {\n        consequence\n        transcriptId\n        geneId\n        geneName\n        sift\n        polyphen\n      }\n    }\n  }\n}"
+            },
+            "id": "toolu_01UhTq6Bu3TBvPv2VWnBubsW",
+            "type": "tool_call"
+          }
+        ],
+        "invalid_tool_calls": [],
+        "usage_metadata": {
+          "input_tokens": 2806,
+          "output_tokens": 180,
+          "total_tokens": 2986,
+          "input_token_details": {
+            "cache_read": 0,
+            "cache_creation": 0,
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          }
+        }
+      },
+      {
+        "content": "Tool 'query_open_targets_graphql' failed after 4 attempts with NotImplementedError: StructuredTool does not support sync invocation.. Please try again.",
+        "additional_kwargs": {},
+        "response_metadata": {},
+        "type": "tool",
+        "name": "query_open_targets_graphql",
+        "id": "13e229c4-c402-46f7-890d-0d56ed1b9d23",
+        "tool_call_id": "toolu_01UhTq6Bu3TBvPv2VWnBubsW",
+        "artifact": null,
+        "status": "error"
+      }
+    ],
+    "kwargs": {}
+  },
+  "response": {
+    "content": [
+      {
+        "text": "Let me try a different approach by first checking the schema and then querying:",
+        "type": "text"
+      },
+      {
+        "id": "toolu_01DX1dWvQNLrbuZAPDHJAkcA",
+        "input": {},
+        "name": "get_open_targets_graphql_schema",
+        "type": "tool_use"
+      }
+    ],
+    "id": "lc_run--4d6b2ae0-737f-411a-af82-7dd300724b36-0",
+    "model": "claude-haiku-4-5",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    }
+  }
+}

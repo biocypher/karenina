@@ -107,7 +107,7 @@ class CaptureLLMClient:
         self._scenario_dir = self._output_dir / model / scenario
         self._scenario_dir.mkdir(parents=True, exist_ok=True)
 
-    def invoke(self, messages: list[Any], **kwargs: Any) -> CaptureResponse:
+    def invoke(self, messages: list[Any], **kwargs: Any) -> Any:
         """Invoke the real LLM and capture the response.
 
         Args:
@@ -115,7 +115,7 @@ class CaptureLLMClient:
             **kwargs: Additional arguments passed to real LLM
 
         Returns:
-            CaptureResponse with the same attributes as a real LLM response
+            The actual LLM response (for agent compatibility)
         """
         prompt_hash = self._hash_messages(messages)
 
@@ -123,21 +123,17 @@ class CaptureLLMClient:
         fixture_path = self._scenario_dir / f"{prompt_hash}.json"
         if fixture_path.exists():
             print(f"  [SKIP] Fixture already exists: {prompt_hash[:8]}...")
-            # Load and return existing fixture
-            with fixture_path.open("r") as f:
-                data = json.load(f)
-            response_data = data.get("response", {})
-            return CaptureResponse(
-                content=response_data.get("content", ""),
-                id=response_data.get("id", f"fixture-{prompt_hash[:8]}"),
-                model=response_data.get("model", self._model),
-                usage=CaptureUsage(**response_data.get("usage", {})),
-            )
+            # Still call the real LLM to get a proper response object
+            # (we can't reconstruct a proper AIMessage from saved data easily)
 
         # Call real LLM
         response = self._real_client.invoke(messages, **kwargs)
 
-        # Extract response attributes
+        # Skip saving if fixture already exists
+        if fixture_path.exists():
+            return response
+
+        # Extract response attributes for saving
         content = response.content if hasattr(response, "content") else str(response)
 
         response_id = getattr(response, "id", f"captured-{prompt_hash[:8]}")
@@ -163,7 +159,7 @@ class CaptureLLMClient:
             ),
         )
 
-        # Build capture response
+        # Build capture data for storage
         capture_response = CaptureResponse(
             content=content,
             id=response_id,
@@ -195,7 +191,8 @@ class CaptureLLMClient:
         self._captured_count += 1
         print(f"  [CAPTURED] {prompt_hash[:8]}... ({self._captured_count} total)")
 
-        return capture_response
+        # Return the actual LLM response for agent compatibility
+        return response
 
     def _hash_messages(self, messages: list[Any]) -> str:
         """Generate SHA256 hash of messages for fixture lookup.
@@ -235,10 +232,10 @@ class CaptureLLMClient:
         for msg in messages:
             if isinstance(msg, dict):
                 serialized.append(msg)
-            elif hasattr(msg, "dict"):
-                serialized.append(msg.dict())
             elif hasattr(msg, "model_dump"):
                 serialized.append(msg.model_dump())
+            elif hasattr(msg, "dict"):
+                serialized.append(msg.dict())
             else:
                 # Fallback: capture class name and content
                 serialized.append(
@@ -249,10 +246,40 @@ class CaptureLLMClient:
                 )
         return serialized
 
+    def bind_tools(self, tools: list[Any], **kwargs: Any) -> "CaptureLLMClient":
+        """Bind tools to the underlying LLM and return a new capturing wrapper.
+
+        This method is required for LangGraph agent compatibility. It delegates
+        to the real LLM's bind_tools method and wraps the result in a new
+        CaptureLLMClient that shares the same output directory and counters.
+
+        Args:
+            tools: List of tools to bind
+            **kwargs: Additional arguments for bind_tools
+
+        Returns:
+            A new CaptureLLMClient wrapping the tool-bound LLM
+        """
+        bound_llm = self._real_client.bind_tools(tools, **kwargs)
+        # Create new wrapper that shares our state
+        wrapper = CaptureLLMClient(bound_llm, self._output_dir, self._scenario, self._model)
+        # Share the captured count so we track across all invocations
+        wrapper._captured_count = self._captured_count
+        wrapper._scenario_dir = self._scenario_dir
+        return wrapper
+
     @property
     def captured_count(self) -> int:
         """Return the number of fixtures captured."""
         return self._captured_count
+
+    def __getattr__(self, name: str) -> Any:
+        """Forward all other attributes to the wrapped LLM.
+
+        This ensures full compatibility with LangGraph agents that may
+        access attributes like `model_name`, `model_provider`, etc.
+        """
+        return getattr(self._real_client, name)
 
 
 # =============================================================================
@@ -301,6 +328,18 @@ SCENARIOS = {
         ],
         "llm_calls": [
             "All pipeline LLM calls",
+        ],
+    },
+    "mcp_agent": {
+        "description": "MCP-enabled LangGraph agent invocation with tool calls",
+        "source_files": [
+            "src/karenina/infrastructure/llm/interface.py",
+            "src/karenina/infrastructure/llm/mcp_utils.py",
+        ],
+        "llm_calls": [
+            "create_agent() with middleware",
+            "Agent invoke with MCP tools",
+            "InvokeSummarizationMiddleware.before_model()",
         ],
     },
 }
@@ -652,12 +691,144 @@ def _run_full_pipeline_scenario(model: str, provider: str, output_dir: Path) -> 
     return exit_code
 
 
+def _run_mcp_agent_scenario(model: str, provider: str, output_dir: Path) -> int:
+    """Capture MCP-enabled LangGraph agent LLM calls.
+
+    This scenario creates a LangGraph agent with MCP tools and middleware,
+    then invokes it with a simple question to capture all LLM calls including
+    middleware interactions.
+
+    Uses the Open Targets MCP server as a real-world MCP endpoint.
+    """
+    print("  Running MCP agent scenario using real LangGraph agent...")
+    print("  MCP Server: Open Targets Platform (https://mcp.platform.opentargets.org/mcp)")
+
+    try:
+        from langchain.agents import create_agent
+        from langchain_core.messages import HumanMessage
+        from langgraph.checkpoint.memory import InMemorySaver
+    except ImportError as e:
+        print(f"  Error: MCP dependencies not available: {e}")
+        print("  Install with: uv add 'langchain>=1.1.0' langgraph langchain-mcp-adapters")
+        return 1
+
+    from karenina.infrastructure.llm.interface import _build_agent_middleware
+    from karenina.infrastructure.llm.mcp_utils import sync_create_mcp_client_and_tools
+    from karenina.schemas.workflow.models import AgentMiddlewareConfig
+
+    # Create output directory
+    scenario_dir = output_dir / model / "mcp_agent"
+    scenario_dir.mkdir(parents=True, exist_ok=True)
+
+    # Check if fixtures already exist
+    existing = list(scenario_dir.glob("*.json"))
+    if existing:
+        print(f"  Found {len(existing)} existing MCP agent fixtures")
+
+    # Create the real LLM that will be wrapped by the capturing client
+    real_llm = _create_real_llm(model, provider)
+
+    # Create capturing wrapper for the LLM
+    # This captures all LLM calls made by the agent internally
+    capture_client = CaptureLLMClient(real_llm, output_dir, "mcp_agent", model)
+
+    # MCP configuration - use Open Targets Platform
+    mcp_urls_dict = {
+        "opentargets": "https://mcp.platform.opentargets.org/mcp",
+    }
+
+    # No filter - allow all tools from the server
+    mcp_tool_filter = None
+
+    try:
+        print("  Connecting to MCP server and fetching tools...")
+        _, tools = sync_create_mcp_client_and_tools(
+            mcp_urls_dict,
+            mcp_tool_filter,
+            None,  # No description overrides
+        )
+        print(f"  Got {len(tools)} MCP tools: {[t.name for t in tools]}")
+
+        if not tools:
+            print("  Warning: No tools retrieved from MCP server")
+            print("  This might indicate the MCP server is unavailable")
+            return 1
+
+    except Exception as e:
+        print(f"  Error connecting to MCP server: {e}")
+        print("  Make sure the Open Targets MCP server is accessible")
+        return 1
+
+    # Build middleware (this is what we're testing - the middleware signature)
+    middleware_config = AgentMiddlewareConfig()
+    middleware = _build_agent_middleware(
+        middleware_config,
+        max_context_tokens=8000,  # Small context to exercise summarization path
+        base_model=capture_client,  # Use capturing client for summarization model too
+    )
+    print(f"  Built {len(middleware)} middleware components")
+
+    # Create the agent with capturing LLM
+    try:
+        memory = InMemorySaver()
+        agent = create_agent(
+            model=capture_client,  # Use capturing client as the base model
+            tools=tools,
+            checkpointer=memory,
+            middleware=middleware,
+        )
+        print("  Created LangGraph agent with MCP tools and middleware")
+    except Exception as e:
+        print(f"  Error creating agent: {e}")
+        import traceback
+
+        traceback.print_exc()
+        return 1
+
+    # Invoke the agent with a simple question that should use MCP tools
+    print("  Invoking agent with test question...")
+    try:
+        # Question that triggers Open Targets variant lookup
+        question = "What is the most severe consequence of 19_44908822_C_T?"
+
+        # Invoke the agent - this exercises the full middleware chain
+        # including InvokeSummarizationMiddleware.before_model()
+        result = agent.invoke(
+            {"messages": [HumanMessage(content=question)]},
+            config={"configurable": {"thread_id": "mcp-fixture-capture"}},
+        )
+
+        # Extract the final response
+        final_message = result.get("messages", [])[-1] if result.get("messages") else None
+        if final_message and hasattr(final_message, "content"):
+            print(f"  Agent response (truncated): {str(final_message.content)[:200]}...")
+        else:
+            print(f"  Agent result: {result}")
+
+        print(f"  Captured {capture_client.captured_count} LLM call fixtures")
+
+    except Exception as e:
+        print(f"  Error invoking agent: {e}")
+        import traceback
+
+        traceback.print_exc()
+        # Still count as partial success if we captured some fixtures
+        if capture_client.captured_count > 0:
+            print(f"  Partial success: Captured {capture_client.captured_count} fixtures before error")
+            return 0
+        return 1
+
+    print(f"  MCP agent scenario complete: {capture_client.captured_count} fixtures captured")
+    return 0
+
+
 # Scenario runner mapping
 SCENARIO_RUNNERS = {
     "template_parsing": _run_template_parsing_scenario,
     "rubric_evaluation": _run_rubric_evaluation_scenario,
     "abstention": _run_abstention_scenario,
     "full_pipeline": _run_full_pipeline_scenario,
+    "mcp_agent": _run_mcp_agent_scenario,
 }
 
 

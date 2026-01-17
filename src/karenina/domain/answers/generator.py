@@ -64,6 +64,9 @@ __all__ = [
     "generate_answer_templates_from_questions_file",
     "load_answer_templates_from_json",
     "inject_question_id_into_answer_class",
+    # Internal API used by builder.py
+    "_generate_pydantic_class",
+    "_format_ground_truth_value",
 ]
 
 if TYPE_CHECKING:
