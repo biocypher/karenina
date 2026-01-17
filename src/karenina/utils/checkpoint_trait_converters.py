@@ -368,6 +368,7 @@ def _convert_rating_to_llm_trait(rating: SchemaOrgRating) -> LLMRubricTrait:
         kind="boolean" if is_boolean else "score",
         min_score=None if is_boolean else int(rating.worstRating),
         max_score=None if is_boolean else int(rating.bestRating),
+        classes=None,
         deep_judgment_enabled=deep_judgment_enabled,
         deep_judgment_excerpt_enabled=deep_judgment_excerpt_enabled,
         deep_judgment_max_excerpts=deep_judgment_max_excerpts,

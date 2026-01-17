@@ -11,15 +11,24 @@ from typing import Any, Literal
 import cloudpickle
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator, model_validator
 
-TraitKind = Literal["boolean", "score"]
+TraitKind = Literal["boolean", "score", "literal"]
 
 
 class LLMRubricTrait(BaseModel):
     """
     LLM-evaluated trait for qualitative assessment.
 
-    A trait can be either boolean (true/false) or score-based (1-5 scale).
-    Evaluated by prompting an LLM to assess the answer quality.
+    A trait can be:
+    - boolean (true/false): Binary pass/fail assessment
+    - score (1-5 scale): Numeric rating within a range
+    - literal (categorical): Classification into predefined classes
+
+    For kind="literal":
+    - The `classes` field is REQUIRED
+    - `min_score` is automatically set to 0 (first class index)
+    - `max_score` is automatically set to len(classes)-1 (last class index)
+    - Returns int index (0, 1, 2...) based on class order
+    - `higher_is_better` controls ordering interpretation
 
     Deep Judgment Mode (optional):
         When enabled, provides evidence-based evaluation with:
@@ -31,9 +40,16 @@ class LLMRubricTrait(BaseModel):
 
     name: str = Field(..., min_length=1, description="Human readable identifier for the trait")
     description: str | None = Field(None, description="Detailed description shown to user/LLM")
-    kind: TraitKind = Field(..., description="Type of trait: 'boolean' or 'score'")
-    min_score: int | None = Field(1, description="Lower bound for score traits (default: 1)")
-    max_score: int | None = Field(5, description="Upper bound for score traits (default: 5)")
+    kind: TraitKind = Field(..., description="Type of trait: 'boolean', 'score', or 'literal'")
+    min_score: int | None = Field(1, description="Lower bound for score traits (default: 1). Auto-derived for literal.")
+    max_score: int | None = Field(5, description="Upper bound for score traits (default: 5). Auto-derived for literal.")
+
+    # Literal-specific field (required when kind="literal")
+    classes: dict[str, str] | None = Field(
+        None,
+        description="Class name → description mapping. Required when kind='literal'. "
+        "Order determines indices (0, 1, 2...). Must have 2-20 classes.",
+    )
 
     # Deep Judgment fields
     deep_judgment_enabled: bool = Field(
@@ -64,10 +80,36 @@ class LLMRubricTrait(BaseModel):
     # Directionality field
     higher_is_better: bool = Field(
         ...,
-        description="Whether higher values indicate better performance. True: higher = better. False: lower = better.",
+        description="Whether higher values indicate better performance. "
+        "For boolean: True means True is good. "
+        "For score: True means higher scores are better. "
+        "For literal: True means higher indices (later classes) are better.",
     )
 
     model_config = ConfigDict(extra="forbid")
+
+    @field_validator("classes")
+    @classmethod
+    def validate_classes(cls, v: dict[str, str] | None) -> dict[str, str] | None:
+        """Validate class definitions when present."""
+        if v is None:
+            return None
+        if len(v) < 2:
+            raise ValueError("Literal trait must have at least 2 classes")
+        if len(v) > 20:
+            raise ValueError("Literal trait cannot have more than 20 classes")
+
+        seen_names: set[str] = set()
+        for class_name, class_desc in v.items():
+            if not class_name.strip():
+                raise ValueError("Class names cannot be empty")
+            if not class_desc.strip():
+                raise ValueError(f"Description for class '{class_name}' cannot be empty")
+            lower_name = class_name.lower()
+            if lower_name in seen_names:
+                raise ValueError(f"Duplicate class name (case-insensitive): '{class_name}'")
+            seen_names.add(lower_name)
+        return v
 
     @model_validator(mode="before")
     @classmethod
@@ -77,19 +119,48 @@ class LLMRubricTrait(BaseModel):
             values["higher_is_better"] = True
         return values
 
+    @model_validator(mode="after")
+    def validate_kind_fields(self) -> "LLMRubricTrait":
+        """Validate and set kind-specific fields."""
+        if self.kind == "literal":
+            if self.classes is None:
+                raise ValueError("classes field is required when kind='literal'")
+            # Automatically derive min_score and max_score from classes
+            object.__setattr__(self, "min_score", 0)
+            object.__setattr__(self, "max_score", len(self.classes) - 1)
+        return self
+
+    def get_class_names(self) -> list[str]:
+        """Get list of valid class names (preserves dict order). Only for kind='literal'."""
+        if self.kind != "literal" or self.classes is None:
+            return []
+        return list(self.classes.keys())
+
+    def get_class_index(self, class_name: str) -> int:
+        """Get numeric index for a class name. Returns -1 if invalid. Only for kind='literal'."""
+        class_names = self.get_class_names()
+        try:
+            return class_names.index(class_name)
+        except ValueError:
+            return -1
+
     def validate_score(self, value: int | bool) -> bool:
         """Validate that a given score is valid for this trait."""
         if self.kind == "boolean":
             return isinstance(value, bool)
-        else:  # self.kind == "score"
+        else:  # kind == "score" or kind == "literal"
+            # Both use min_score/max_score (literal derives them from classes)
             # Reject boolean values explicitly (bool is a subclass of int in Python)
             if isinstance(value, bool):
                 return False
             if not isinstance(value, int):
                 return False
             # Use explicit None checks to allow min_score=0
-            min_val = self.min_score if self.min_score is not None else 1
+            min_val = self.min_score if self.min_score is not None else 0
             max_val = self.max_score if self.max_score is not None else 5
+            # For literal, also allow -1 as error state
+            if self.kind == "literal" and value == -1:
+                return True
             return min_val <= value <= max_val
 
 
@@ -547,13 +618,14 @@ class Rubric(BaseModel):
         """Get max_score for all score-based traits (LLM and callable).
 
         Returns:
-            Dict mapping trait name to max_score for traits with kind='score'.
+            Dict mapping trait name to max_score for traits with kind='score' or 'literal'.
             Boolean traits and metric traits are not included.
+            For literal traits, max_score is len(classes)-1.
         """
         max_scores: dict[str, int] = {}
 
         for llm_trait in self.llm_traits:
-            if llm_trait.kind == "score" and llm_trait.max_score is not None:
+            if llm_trait.kind in ("score", "literal") and llm_trait.max_score is not None:
                 max_scores[llm_trait.name] = llm_trait.max_score
 
         for callable_trait in self.callable_traits:

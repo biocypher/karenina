@@ -79,6 +79,7 @@ def _deserialize_llm_trait(trait_data: dict[str, Any]) -> Any:
         higher_is_better=trait_data.get("higher_is_better", True),
         min_score=trait_data.get("min_score", 1) if kind == "score" else None,
         max_score=trait_data.get("max_score", 5) if kind == "score" else None,
+        classes=trait_data.get("classes"),
         deep_judgment_enabled=trait_data.get("deep_judgment_enabled", False),
         deep_judgment_excerpt_enabled=trait_data.get("deep_judgment_excerpt_enabled", False),
         deep_judgment_max_excerpts=trait_data.get("deep_judgment_max_excerpts"),
