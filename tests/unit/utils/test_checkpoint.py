@@ -365,6 +365,62 @@ def test_convert_llm_trait_with_deep_judgment_settings() -> None:
     assert props["deep_judgment_fuzzy_match_threshold"] == 0.85
 
 
+@pytest.mark.unit
+def test_convert_llm_trait_literal_to_rating() -> None:
+    """Test converting literal LLMRubricTrait to SchemaOrgRating."""
+    trait = LLMRubricTrait(
+        name="sentiment",
+        kind="literal",
+        description="Classify the emotional tone",
+        classes={
+            "negative": "Response expresses criticism",
+            "neutral": "Response is emotionally neutral",
+            "positive": "Response expresses enthusiasm",
+        },
+        higher_is_better=True,
+    )
+
+    rating = convert_rubric_trait_to_rating(trait, "global")
+
+    assert rating.name == "sentiment"
+    assert rating.description == "Classify the emotional tone"
+    # bestRating = len(classes) - 1 = 2
+    assert rating.bestRating == 2.0
+    # worstRating = 0
+    assert rating.worstRating == 0.0
+    assert rating.additionalType == "GlobalLLMRubricTrait"
+
+    # Check additionalProperty
+    props = {prop.name: prop.value for prop in (rating.additionalProperty or [])}
+    assert props["kind"] == "literal"
+    assert props["classes"] == {
+        "negative": "Response expresses criticism",
+        "neutral": "Response is emotionally neutral",
+        "positive": "Response expresses enthusiasm",
+    }
+    assert props["higher_is_better"] is True
+
+
+@pytest.mark.unit
+def test_convert_llm_trait_literal_question_specific() -> None:
+    """Test converting question-specific literal LLMRubricTrait."""
+    trait = LLMRubricTrait(
+        name="response_type",
+        kind="literal",
+        classes={
+            "factual": "Based on facts",
+            "opinion": "Personal view",
+        },
+        higher_is_better=False,
+    )
+
+    rating = convert_rubric_trait_to_rating(trait, "question-specific")
+
+    assert rating.additionalType == "QuestionSpecificLLMRubricTrait"
+    assert rating.bestRating == 1.0  # len(classes) - 1 = 1
+    assert rating.worstRating == 0.0
+
+
 # =============================================================================
 # convert_rubric_trait_to_rating() - MetricRubricTrait Tests
 # =============================================================================
@@ -611,6 +667,87 @@ def test_convert_rating_to_llm_trait_score() -> None:
     assert trait.kind == "score"
     assert trait.min_score == 1
     assert trait.max_score == 5
+
+
+@pytest.mark.unit
+def test_convert_rating_to_llm_trait_literal() -> None:
+    """Test converting SchemaOrgRating back to literal LLMRubricTrait."""
+    from karenina.schemas.checkpoint import (
+        SchemaOrgPropertyValue,
+        SchemaOrgRating,
+    )
+
+    rating = SchemaOrgRating(
+        name="sentiment",
+        description="Classify the emotional tone",
+        bestRating=2,
+        worstRating=0,
+        additionalType="GlobalLLMRubricTrait",
+        additionalProperty=[
+            SchemaOrgPropertyValue(name="kind", value="literal"),
+            SchemaOrgPropertyValue(
+                name="classes",
+                value={
+                    "negative": "Response expresses criticism",
+                    "neutral": "Response is emotionally neutral",
+                    "positive": "Response expresses enthusiasm",
+                },
+            ),
+            SchemaOrgPropertyValue(name="higher_is_better", value=True),
+            SchemaOrgPropertyValue(name="deep_judgment_enabled", value=False),
+        ],
+    )
+
+    trait = convert_rating_to_rubric_trait(rating)
+
+    assert isinstance(trait, LLMRubricTrait)
+    assert trait.name == "sentiment"
+    assert trait.description == "Classify the emotional tone"
+    assert trait.kind == "literal"
+    assert trait.classes == {
+        "negative": "Response expresses criticism",
+        "neutral": "Response is emotionally neutral",
+        "positive": "Response expresses enthusiasm",
+    }
+    # min_score/max_score are auto-derived from classes by the model validator
+    assert trait.min_score == 0
+    assert trait.max_score == 2
+    assert trait.higher_is_better is True
+
+
+@pytest.mark.unit
+def test_convert_llm_trait_literal_roundtrip() -> None:
+    """Test roundtrip conversion of literal LLMRubricTrait."""
+    original = LLMRubricTrait(
+        name="quality_tier",
+        kind="literal",
+        description="Overall response quality",
+        classes={
+            "poor": "Below expectations",
+            "acceptable": "Meets basic requirements",
+            "good": "Above average quality",
+            "excellent": "Exceptional quality",
+        },
+        deep_judgment_enabled=True,
+        deep_judgment_excerpt_enabled=True,
+        higher_is_better=True,
+    )
+
+    # Convert to rating
+    rating = convert_rubric_trait_to_rating(original, "global")
+
+    # Convert back to trait
+    restored = convert_rating_to_rubric_trait(rating)
+
+    assert isinstance(restored, LLMRubricTrait)
+    assert restored.name == original.name
+    assert restored.description == original.description
+    assert restored.kind == "literal"
+    assert restored.classes == original.classes
+    assert restored.min_score == 0
+    assert restored.max_score == 3  # 4 classes -> 0-3
+    assert restored.higher_is_better == original.higher_is_better
+    assert restored.deep_judgment_enabled == original.deep_judgment_enabled
 
 
 # Note: The deprecated ManualRubricTrait types (GlobalManualRubricTrait,
