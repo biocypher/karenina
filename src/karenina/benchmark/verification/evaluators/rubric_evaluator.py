@@ -21,9 +21,9 @@ from typing import Any
 from ....infrastructure.llm.interface import init_chat_model_unified
 from ....schemas.domain import CallableTrait, MetricRubricTrait, RegexTrait, Rubric
 from ....schemas.workflow import INTERFACES_NO_PROVIDER_REQUIRED, ModelConfig
-from .llm_trait_evaluator import LLMTraitEvaluator
-from .metric_trait_evaluator import MetricTraitEvaluator
 from .rubric_deep_judgment import RubricDeepJudgmentHandler
+from .rubric_llm_trait_evaluator import LLMTraitEvaluator
+from .rubric_metric_trait_evaluator import MetricTraitEvaluator
 
 logger = logging.getLogger(__name__)
 

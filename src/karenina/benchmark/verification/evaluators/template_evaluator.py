@@ -223,7 +223,7 @@ class TemplateEvaluator:
     def retry_handler(self) -> Any:
         """Lazy-initialized retry handler for parsing failures."""
         if self._retry_handler is None:
-            from .template_retry import TemplateRetryHandler
+            from .template_retry_strategy import TemplateRetryHandler
 
             self._retry_handler = TemplateRetryHandler(llm=self.llm, parser=self.parser)
         return self._retry_handler
@@ -706,7 +706,7 @@ Return only the completed JSON object - no surrounding text, no markdown fences:
             ParseResult with deep judgment metadata
         """
         from ....schemas.workflow import VerificationConfig
-        from ..evaluators.deep_judgment import deep_judgment_parse
+        from ..evaluators.template_deep_judgment import deep_judgment_parse
 
         result = ParseResult()
         result.deep_judgment_performed = True

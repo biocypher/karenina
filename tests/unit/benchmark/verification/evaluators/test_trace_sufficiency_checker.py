@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from karenina.benchmark.verification.evaluators.sufficiency_checker import (
+from karenina.benchmark.verification.evaluators.trace_sufficiency_checker import (
     _strip_markdown_fences,
     detect_sufficiency,
     is_retryable_error,
@@ -199,7 +199,7 @@ class TestDetectSufficiency:
         )
 
         with patch(
-            "karenina.benchmark.verification.evaluators.sufficiency_checker.init_chat_model_unified"
+            "karenina.benchmark.verification.evaluators.trace_sufficiency_checker.init_chat_model_unified"
         ) as mock_init:
             mock_llm = MagicMock()
             mock_llm.invoke.return_value = mock_response
@@ -232,7 +232,7 @@ class TestDetectSufficiency:
         )
 
         with patch(
-            "karenina.benchmark.verification.evaluators.sufficiency_checker.init_chat_model_unified"
+            "karenina.benchmark.verification.evaluators.trace_sufficiency_checker.init_chat_model_unified"
         ) as mock_init:
             mock_llm = MagicMock()
             mock_llm.invoke.return_value = mock_response
@@ -259,7 +259,7 @@ class TestDetectSufficiency:
         mock_response.content = "Not valid JSON {{"
 
         with patch(
-            "karenina.benchmark.verification.evaluators.sufficiency_checker.init_chat_model_unified"
+            "karenina.benchmark.verification.evaluators.trace_sufficiency_checker.init_chat_model_unified"
         ) as mock_init:
             mock_llm = MagicMock()
             mock_llm.invoke.return_value = mock_response
@@ -292,7 +292,7 @@ class TestDetectSufficiency:
         )
 
         with patch(
-            "karenina.benchmark.verification.evaluators.sufficiency_checker.init_chat_model_unified"
+            "karenina.benchmark.verification.evaluators.trace_sufficiency_checker.init_chat_model_unified"
         ) as mock_init:
             mock_llm = MagicMock()
             mock_llm.invoke.return_value = mock_response
@@ -319,7 +319,7 @@ class TestDetectSufficiency:
         mock_response.content = '```json\n{"reasoning": "Response is sufficient.", "sufficient": true}\n```'
 
         with patch(
-            "karenina.benchmark.verification.evaluators.sufficiency_checker.init_chat_model_unified"
+            "karenina.benchmark.verification.evaluators.trace_sufficiency_checker.init_chat_model_unified"
         ) as mock_init:
             mock_llm = MagicMock()
             mock_llm.invoke.return_value = mock_response
@@ -343,7 +343,7 @@ class TestDetectSufficiency:
     ) -> None:
         """Verify non-retryable errors default to sufficient=True."""
         with patch(
-            "karenina.benchmark.verification.evaluators.sufficiency_checker.init_chat_model_unified"
+            "karenina.benchmark.verification.evaluators.trace_sufficiency_checker.init_chat_model_unified"
         ) as mock_init:
             mock_llm = MagicMock()
             mock_llm.invoke.side_effect = ValueError("Invalid model config")
@@ -382,7 +382,7 @@ class TestDetectSufficiencyReturnSemantics:
         mock_response.content = json.dumps({"reasoning": "OK", "sufficient": True})
 
         with patch(
-            "karenina.benchmark.verification.evaluators.sufficiency_checker.init_chat_model_unified"
+            "karenina.benchmark.verification.evaluators.trace_sufficiency_checker.init_chat_model_unified"
         ) as mock_init:
             mock_llm = MagicMock()
             mock_llm.invoke.return_value = mock_response
@@ -402,7 +402,7 @@ class TestDetectSufficiencyReturnSemantics:
         mock_response.content = json.dumps({"reasoning": "Missing", "sufficient": False})
 
         with patch(
-            "karenina.benchmark.verification.evaluators.sufficiency_checker.init_chat_model_unified"
+            "karenina.benchmark.verification.evaluators.trace_sufficiency_checker.init_chat_model_unified"
         ) as mock_init:
             mock_llm = MagicMock()
             mock_llm.invoke.return_value = mock_response
