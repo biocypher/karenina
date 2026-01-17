@@ -14,13 +14,60 @@ import json
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.output_parsers import BaseOutputParser, PydanticOutputParser
-from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field, ValidationError, field_validator
 from tqdm import tqdm
 
 from karenina.domain.questions.reader import read_questions_from_file
-from karenina.infrastructure.llm.interface import init_chat_model_unified
 from karenina.schemas.domain import BaseAnswer  # noqa: F401
+
+# Import from extracted modules
+from .generator_code import (
+    format_ground_truth_value,
+    generate_verification_logic,
+    python_type_to_annotation,
+)
+from .generator_code import (
+    generate_pydantic_class as _generate_pydantic_class,
+)
+from .generator_prompts import (
+    FIELD_DESCRIPTION_SYSTEM_PROMPT,
+    FIELD_DESCRIPTION_USER_PROMPT_TEMPLATE,
+    GROUND_TRUTH_SYSTEM_PROMPT,
+    GROUND_TRUTH_USER_PROMPT_TEMPLATE,
+    build_generation_chain,
+    build_retry_chain,
+)
+
+# Backward compatibility aliases for internal functions
+_format_ground_truth_value = format_ground_truth_value
+_python_type_to_annotation = python_type_to_annotation
+_generate_verification_logic = generate_verification_logic
+
+# Re-export for backward compatibility
+__all__ = [
+    # Schema classes
+    "GroundTruthField",
+    "GroundTruthSpec",
+    "AttributeDescriptions",
+    "JSONOnlyOutputParser",
+    # Prompt constants (re-exported from generator_prompts)
+    "GROUND_TRUTH_SYSTEM_PROMPT",
+    "GROUND_TRUTH_USER_PROMPT_TEMPLATE",
+    "FIELD_DESCRIPTION_SYSTEM_PROMPT",
+    "FIELD_DESCRIPTION_USER_PROMPT_TEMPLATE",
+    # Code generation (re-exported from generator_code)
+    "python_type_to_annotation",
+    "generate_verification_logic",
+    "format_ground_truth_value",
+    # Public API
+    "generate_answer_template",
+    "generate_answer_templates_from_questions_file",
+    "load_answer_templates_from_json",
+    "inject_question_id_into_answer_class",
+    # Internal API used by builder.py
+    "_generate_pydantic_class",
+    "_format_ground_truth_value",
+]
 
 if TYPE_CHECKING:
     from karenina.schemas.workflow import ModelConfig
@@ -112,157 +159,18 @@ class JSONOnlyOutputParser(BaseOutputParser[Any]):
         return "json_only_output_parser"
 
 
-# System prompts adapted from structured_generator.py
-GROUND_TRUTH_SYSTEM_PROMPT = """
-You are an expert evaluation designer extracting ground-truth attributes from a question and its ideal answer. Build a Pydantic-friendly schema capturing what a judge model should read from candidate responses. Apply the following rules when specifying attributes:
-
-- Prefer concise snake_case names that are stable and unambiguous.
-- FORBIDDEN: Never use `str`, `List[str]`, or `Dict[str, str]` types. All text-based evaluations must be converted to boolean checks.
-- Use `bool` whenever the judge needs to confirm whether a concept, entity, or pattern is present. This is the primary type for text-based evaluation.
-- Use numeric types (int, float) only when measurable quantities are required.
-- When the answer implies a categorical classification or grading scheme, use `Literal` types to enumerate all reasonable values in that domain.
-- For lists of items (e.g., multiple drugs, genes, etc.), create separate boolean attributes for each expected item rather than using List[str].
-- When the reference answer contains compound terms or phrases, treat them as single semantic units and create one boolean attribute for the complete concept, not separate attributes for individual words.
-- Avoid redundant attributes; ensure each serves a unique decision-making purpose.
-- Frame every attribute as something the judge can extract by reading the candidate response (e.g., `number_of_interacting_genes` to count genes mentioned, `mentions_control_group` to flag a concept).
-- For each attribute, derive the `ground_truth` value from the reference answer that represents the expected correct response.
-- Ensure the final response is valid JSON without trailing commentary.
-
-Example JSON output:
-{{
-  "attributes": [
-    {{
-      "name": "count_of_items",
-      "type": "int",
-      "ground_truth": 3
-    }},
-    {{
-      "name": "mentions_first_concept",
-      "type": "bool",
-      "ground_truth": true
-    }},
-    {{
-      "name": "mentions_second_concept",
-      "type": "bool",
-      "ground_truth": false
-    }},
-    {{
-      "name": "classification_level",
-      "type": "Literal['high', 'medium', 'low']",
-      "ground_truth": "high"
-    }}
-  ]
-}}
-""".strip()
-
-GROUND_TRUTH_USER_PROMPT_TEMPLATE = """
-You receive an evaluation sample consisting of a question and its reference answer:
-
-Question:
-{question}
-
-Reference Answer:
-{answer}
-
-Identify the minimal set of structured attributes that a judge must extract from a candidate response to verify correctness. Construct a JSON object with a single key `attributes` containing a list of attribute definitions. Each definition must include `name`, `type`, and `ground_truth` fields, where `ground_truth` contains the expected correct value derived from the reference answer.
-
-When selecting types, follow these guidelines:
-- FORBIDDEN: Never use `str`, `List[str]`, or `Dict[str, str]` types.
-- Use `bool` to capture presence or absence of concepts, entities, or patterns. This is the primary evaluation mechanism.
-- When the reference answer suggests a categorical classification or scale, use `Literal` types with all reasonable values in that domain.
-- For multiple items in the reference answer, create separate boolean attributes for each item instead of using lists.
-- When the reference answer contains compound terms or phrases, treat them as single semantic units and create one boolean attribute for the complete concept, not separate attributes for individual words.
-
-Return only valid JSON.
-""".strip()
-
-FIELD_DESCRIPTION_SYSTEM_PROMPT = """
-You craft instructional text for judge models who must parse a candidate response to a question. For every attribute in the provided ground-truth specification, produce a short, direct description that explains exactly what the judge should read for in the response and how to answer. Highlight boolean expectations clearly.
-
-Guidelines:
-- Reference attribute names verbatim.
-- Mention the expected type implicitly via phrasing (e.g., "Answer with true or false if ..." for booleans, "Provide the count of ..." for numeric fields).
-- For boolean attributes checking concept presence, allow semantic equivalence and related terms rather than requiring exact string matches. Focus on whether the underlying concept is conveyed.
-- When relevant, reference concrete response-focused examples such as "Number of interacting genes mentioned in the response" or "Does the response cite a control group?" to reinforce that extraction happens from the candidate answer.
-- Stay concise (<= 2 sentences per attribute).
-- Return only valid JSON.
-
-Example mapping:
-{{
-  "field_descriptions": {{
-    "count_of_items": "Provide an integer equal to the number of items mentioned in the response.",
-    "mentions_first_concept": "Answer with true if the response refers to the first concept or semantically related terms; otherwise answer false.",
-    "mentions_second_concept": "Answer with true if the response refers to the second concept or semantically related terms; otherwise answer false.",
-    "classification_level": "Select the classification level mentioned in the response from the available options."
-  }}
-}}
-""".strip()
-
-FIELD_DESCRIPTION_USER_PROMPT_TEMPLATE = """
-Question:
-{question}
-
-Reference Answer:
-{answer}
-
-Ground-truth attribute specification:
-{spec_json}
-
-Produce JSON with key `field_descriptions` mapping attribute names to their instructional descriptions for judge prompts.
-
-Ensure descriptions communicate type expectations, especially emphasizing when boolean values should be used to flag presence of concepts. For boolean concept checks, focus on semantic meaning rather than exact word matching. Make it explicit that the judge is reading the candidate response to this question.
-
-Return only valid JSON.
-""".strip()
-
-
 def _build_chain(stage: str, config: "ModelConfig") -> Any:
-    """Build generation chain for a specific stage."""
-    if stage == "ground_truth":
-        parser = JSONOnlyOutputParser(inner=PydanticOutputParser(pydantic_object=GroundTruthSpec))
-        system_prompt = GROUND_TRUTH_SYSTEM_PROMPT
-        user_template = GROUND_TRUTH_USER_PROMPT_TEMPLATE
-    elif stage == "field_descriptions":
-        parser = JSONOnlyOutputParser(inner=PydanticOutputParser(pydantic_object=AttributeDescriptions))
-        system_prompt = FIELD_DESCRIPTION_SYSTEM_PROMPT
-        user_template = FIELD_DESCRIPTION_USER_PROMPT_TEMPLATE
-    else:
-        raise ValueError(f"Unsupported stage: {stage}")
+    """Build generation chain for a specific stage.
 
-    # No custom instructions in new structured approach
-
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            ("system", system_prompt),
-            ("user", user_template),
-        ]
+    Delegates to generator_prompts.build_generation_chain.
+    """
+    return build_generation_chain(
+        stage=stage,
+        config=config,
+        GroundTruthSpec=GroundTruthSpec,
+        AttributeDescriptions=AttributeDescriptions,
+        JSONOnlyOutputParser=JSONOnlyOutputParser,
     )
-
-    # Use karenina's unified model interface
-    model_params: dict[str, Any] = {
-        "model": config.model_name,
-        "provider": config.model_provider,
-        "interface": config.interface,
-        "temperature": config.temperature,
-    }
-
-    # Add endpoint configuration for openai_endpoint interface
-    if config.interface == "openai_endpoint":
-        model_params["endpoint_base_url"] = config.endpoint_base_url
-        if config.endpoint_api_key is not None:
-            # Extract secret value if it's a SecretStr
-            if hasattr(config.endpoint_api_key, "get_secret_value"):
-                model_params["endpoint_api_key"] = config.endpoint_api_key.get_secret_value()
-            else:
-                model_params["endpoint_api_key"] = config.endpoint_api_key
-
-    # Add any extra kwargs if provided (e.g., vendor-specific API keys)
-    if config.extra_kwargs:
-        model_params.update(config.extra_kwargs)
-
-    model = init_chat_model_unified(**model_params)
-
-    return prompt | model | parser
 
 
 def _generate_with_retry(
@@ -277,54 +185,19 @@ def _generate_with_retry(
     for attempt in range(max_retries + 1):
         try:
             # Build/rebuild chain for each attempt (for error injection)
-            chain = _build_chain(stage, config)
-
-            # Add error context on retry
             if attempt > 0 and last_error:
+                # Add error context on retry
                 error_context = f"\n\nPREVIOUS ATTEMPT FAILED with error: {last_error}\nPlease fix the validation issues and try again."
-
-                if stage == "ground_truth":
-                    system_prompt = GROUND_TRUTH_SYSTEM_PROMPT + error_context
-                    user_template = GROUND_TRUTH_USER_PROMPT_TEMPLATE
-                    parser = JSONOnlyOutputParser(inner=PydanticOutputParser(pydantic_object=GroundTruthSpec))
-                else:
-                    system_prompt = FIELD_DESCRIPTION_SYSTEM_PROMPT + error_context
-                    user_template = FIELD_DESCRIPTION_USER_PROMPT_TEMPLATE
-                    parser = JSONOnlyOutputParser(inner=PydanticOutputParser(pydantic_object=AttributeDescriptions))
-
-                # No custom instructions in new structured approach
-
-                prompt = ChatPromptTemplate.from_messages(
-                    [
-                        ("system", system_prompt),
-                        ("user", user_template),
-                    ]
+                chain = build_retry_chain(
+                    stage=stage,
+                    config=config,
+                    error_context=error_context,
+                    GroundTruthSpec=GroundTruthSpec,
+                    AttributeDescriptions=AttributeDescriptions,
+                    JSONOnlyOutputParser=JSONOnlyOutputParser,
                 )
-
-                model_params: dict[str, Any] = {
-                    "model": config.model_name,
-                    "provider": config.model_provider,
-                    "interface": config.interface,
-                    "temperature": config.temperature,
-                }
-
-                # Add endpoint configuration for openai_endpoint interface
-                if config.interface == "openai_endpoint":
-                    model_params["endpoint_base_url"] = config.endpoint_base_url
-                    if config.endpoint_api_key is not None:
-                        # Extract secret value if it's a SecretStr
-                        if hasattr(config.endpoint_api_key, "get_secret_value"):
-                            model_params["endpoint_api_key"] = config.endpoint_api_key.get_secret_value()
-                        else:
-                            model_params["endpoint_api_key"] = config.endpoint_api_key
-
-                # Add any extra kwargs if provided (e.g., vendor-specific API keys)
-                if config.extra_kwargs:
-                    model_params.update(config.extra_kwargs)
-
-                model = init_chat_model_unified(**model_params)
-
-                chain = prompt | model | parser
+            else:
+                chain = _build_chain(stage, config)
 
             result = chain.invoke(inputs)
             return result
@@ -371,139 +244,6 @@ def _generate_structured_outputs(
         "attributes": gt_json["attributes"],
         "field_descriptions": fd_result.field_descriptions,
     }
-
-
-def _python_type_to_annotation(type_str: str) -> str:
-    """Convert a Python type string to proper type annotation."""
-    # Handle Literal types
-    if type_str.startswith("Literal"):
-        return type_str
-
-    # Handle basic types
-    type_mapping = {"bool": "bool", "int": "int", "float": "float", "str": "str"}
-
-    # Handle List types
-    if type_str.startswith("List["):
-        inner_type = type_str[5:-1]  # Extract inner type from List[...]
-        return f"List[{_python_type_to_annotation(inner_type)}]"
-
-    # Handle Dict types
-    if type_str.startswith("Dict["):
-        # Extract key, value types from Dict[key, value]
-        inner = type_str[5:-1]
-        key_type, value_type = inner.split(", ")
-        return f"Dict[{_python_type_to_annotation(key_type)}, {_python_type_to_annotation(value_type)}]"
-
-    return type_mapping.get(type_str, type_str)
-
-
-def _generate_verification_logic(attr_name: str, attr_type: str, tolerance: float = 0.001) -> str:
-    """Generate verification logic for a specific attribute type."""
-    if attr_type == "float":
-        return f'abs(self.{attr_name} - self.correct["{attr_name}"]) <= {tolerance}'
-    elif attr_type in ["bool", "int", "str"] or attr_type.startswith("Literal"):
-        return f'self.{attr_name} == self.correct["{attr_name}"]'
-    elif attr_type.startswith("List["):
-        # For lists, compare as sets to ignore order or do exact comparison
-        return f'set(self.{attr_name}) == set(self.correct["{attr_name}"])'
-    elif attr_type.startswith("Dict["):
-        return f'self.{attr_name} == self.correct["{attr_name}"]'
-    else:
-        # Default to equality check
-        return f'self.{attr_name} == self.correct["{attr_name}"]'
-
-
-def _format_ground_truth_value(value: Any) -> str:
-    """Format ground truth value for Python code."""
-    if isinstance(value, str):
-        return repr(value)  # Handles quotes and escaping
-    elif isinstance(value, bool | int | float):
-        return str(value)
-    elif isinstance(value, list | dict):
-        return repr(value)
-    else:
-        return repr(value)
-
-
-def _generate_pydantic_class(
-    spec_dict: dict[str, Any], class_name: str = "Answer", float_tolerance: float = 0.001
-) -> str:
-    """Generate a Pydantic class from structured generator output."""
-    attributes = spec_dict["attributes"]
-    field_descriptions = spec_dict["field_descriptions"]
-
-    # Start building the class
-    lines = []
-
-    # Class definition (no imports - they'll be added by existing system)
-    lines.append(f"class {class_name}(BaseAnswer):")
-
-    # Field definitions
-    for attr in attributes:
-        attr_name = attr["name"]
-        attr_type = attr["type"]
-        description = field_descriptions[attr_name]
-
-        # Convert type to proper annotation
-        type_annotation = _python_type_to_annotation(attr_type)
-
-        # Add field definition
-        field_def = f'    {attr_name}: {type_annotation} = Field(description="{description}")'
-        lines.append(field_def)
-
-    lines.append("")
-
-    # model_post_init method
-    lines.append("    def model_post_init(self, __context):")
-
-    # Build correct dictionary
-    correct_dict_items = []
-    for attr in attributes:
-        attr_name = attr["name"]
-        ground_truth_value = _format_ground_truth_value(attr["ground_truth"])
-        correct_dict_items.append(f'"{attr_name}": {ground_truth_value}')
-
-    correct_dict = "{" + ", ".join(correct_dict_items) + "}"
-    lines.append(f"        self.correct = {correct_dict}")
-    lines.append("")
-
-    # verify method
-    lines.append("    def verify(self) -> bool:")
-    if len(attributes) == 1:
-        # Single attribute - simple check
-        attr = attributes[0]
-        verification_logic = _generate_verification_logic(attr["name"], attr["type"], float_tolerance)
-        lines.append(f"        return {verification_logic}")
-    else:
-        # Multiple attributes - all must pass
-        lines.append("        return (")
-        verification_conditions = []
-        for attr in attributes:
-            verification_logic = _generate_verification_logic(attr["name"], attr["type"], float_tolerance)
-            verification_conditions.append(f"            {verification_logic}")
-
-        lines.append(" and\n".join(verification_conditions))
-        lines.append("        )")
-
-    lines.append("")
-
-    # verify_granular method (only if multiple attributes)
-    if len(attributes) > 1:
-        lines.append("    def verify_granular(self) -> float:")
-        lines.append("        correct_count = 0")
-        lines.append("        total_count = " + str(len(attributes)))
-        lines.append("")
-
-        for attr in attributes:
-            verification_logic = _generate_verification_logic(attr["name"], attr["type"], float_tolerance)
-            lines.append(f"        if {verification_logic}:")
-            lines.append("            correct_count += 1")
-
-        lines.append("")
-        lines.append("        return correct_count / total_count")
-
-    # Generate the class code
-    return "\n".join(lines)
 
 
 def inject_question_id_into_answer_class(answer_class: type, question_id: str) -> type:

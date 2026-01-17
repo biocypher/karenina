@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from langchain_core.messages import AIMessage
+
 
 @dataclass
 class MockUsage:
@@ -33,6 +35,8 @@ class MockResponse:
 
     Real LLM responses have .content, .id, .model, and optionally .usage attributes.
     This class provides the same interface for testing.
+
+    Note: For LangGraph agents, use FixtureBackedLLMClient which returns AIMessage.
     """
 
     content: str
@@ -78,15 +82,15 @@ class FixtureBackedLLMClient:
         self._fixtures_dir = Path(fixtures_dir)
         self._cache: dict[str, dict[str, Any]] = {}  # prompt_hash -> fixture data
 
-    def invoke(self, messages: list[Any], **kwargs: Any) -> MockResponse:  # noqa: ARG002
-        """Invoke LLM with messages, returning captured fixture response.
+    def invoke(self, messages: list[Any], **kwargs: Any) -> AIMessage:  # noqa: ARG002
+        """Invoke LLM with messages, returning captured fixture response as AIMessage.
 
         Args:
             messages: List of BaseMessage objects (HumanMessage, SystemMessage, etc.)
             **kwargs: Additional arguments (ignored for fixture replay)
 
         Returns:
-            MockResponse with content, id, model, usage attributes
+            AIMessage compatible with LangGraph agents
 
         Raises:
             ValueError: If no fixture exists for the given prompt hash
@@ -110,19 +114,27 @@ class FixtureBackedLLMClient:
         # Build response from fixture data
         content = response_data.get("content", "")
         response_id = response_data.get("id", f"fixture-{prompt_hash[:8]}")
-        model = response_data.get("model", "claude-haiku-4-5")
 
         # Extract usage metadata
         usage_data = response_data.get("usage", {})
-        usage = MockUsage(
-            input_tokens=usage_data.get("input_tokens", 0),
-            output_tokens=usage_data.get("output_tokens", 0),
-            total_tokens=usage_data.get("total_tokens", 0),
+        usage_metadata = {
+            "input_tokens": usage_data.get("input_tokens", 0),
+            "output_tokens": usage_data.get("output_tokens", 0),
+            "total_tokens": usage_data.get("total_tokens", 0),
+        }
+
+        # Extract model from response or metadata
+        model = response_data.get("model") or fixture.get("metadata", {}).get("model")
+
+        # Return AIMessage for LangGraph compatibility
+        return AIMessage(
+            content=content,
+            id=response_id,
+            usage_metadata=usage_metadata,
+            response_metadata={"model": model} if model else {},
         )
 
-        return MockResponse(content=content, id=response_id, model=model, usage=usage)
-
-    async def ainvoke(self, messages: list[Any], **kwargs: Any) -> MockResponse:
+    async def ainvoke(self, messages: list[Any], **kwargs: Any) -> AIMessage:
         """Async version of invoke (returns same result synchronously).
 
         Args:
@@ -130,7 +142,7 @@ class FixtureBackedLLMClient:
             **kwargs: Additional arguments (ignored)
 
         Returns:
-            MockResponse with content, id, model, usage attributes
+            AIMessage compatible with LangGraph agents
         """
         return self.invoke(messages, **kwargs)
 
@@ -189,6 +201,42 @@ class FixtureBackedLLMClient:
                 print(f"Warning: Failed to load fixture {fixture_path}: {e}")
 
         return None
+
+    def bind_tools(self, tools: list[Any], **kwargs: Any) -> "FixtureBackedLLMClient":  # noqa: ARG002
+        """Bind tools to the LLM and return a new fixture-backed wrapper.
+
+        This method enables compatibility with LangGraph agents that use tool binding.
+        The returned client shares the same fixture directory but can be extended
+        for tool-aware fixture matching in the future.
+
+        Args:
+            tools: List of tools to bind (stored but not used in fixture lookup)
+            **kwargs: Additional arguments for bind_tools (ignored)
+
+        Returns:
+            A new FixtureBackedLLMClient sharing the same fixtures directory
+        """
+        # Return a new client that shares our fixtures
+        # Tools are not currently used in fixture lookup, but could be in the future
+        client = FixtureBackedLLMClient(self._fixtures_dir)
+        client._cache = self._cache  # Share the cache
+        return client
+
+    def __getattr__(self, name: str) -> Any:
+        """Provide default values for common LLM attributes.
+
+        This ensures compatibility with LangGraph and other frameworks that
+        may access attributes like model_name on the LLM object.
+        """
+        # Common LLM attributes with sensible defaults
+        defaults = {
+            "model_name": "claude-haiku-4-5",
+            "model": "claude-haiku-4-5",
+            "temperature": 0.0,
+        }
+        if name in defaults:
+            return defaults[name]
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
 
 __all__ = ["FixtureBackedLLMClient", "MockResponse", "MockUsage"]

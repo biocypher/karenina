@@ -7,8 +7,10 @@ split by responsibility for better maintainability.
 from .base import BenchmarkBase
 from .exports import ExportManager
 from .metadata import MetadataManager
+from .question_query import QuestionQueryBuilder
 from .questions import QuestionManager
 from .results import ResultsManager
+from .results_io import ResultsIOHandler
 from .rubrics import RubricManager
 from .templates import TemplateManager
 from .verification_manager import VerificationManager
@@ -18,6 +20,8 @@ __all__ = [
     "ExportManager",
     "MetadataManager",
     "QuestionManager",
+    "QuestionQueryBuilder",
+    "ResultsIOHandler",
     "ResultsManager",
     "RubricManager",
     "TemplateManager",

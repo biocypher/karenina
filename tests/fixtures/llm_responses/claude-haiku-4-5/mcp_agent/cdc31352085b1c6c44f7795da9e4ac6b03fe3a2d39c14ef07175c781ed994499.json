@@ -1,0 +1,44 @@
+{
+  "metadata": {
+    "scenario": "mcp_agent",
+    "model": "claude-haiku-4-5",
+    "timestamp": "2026-01-17T01:21:37.671603",
+    "prompt_hash": "cdc31352085b1c6c44f7795da9e4ac6b03fe3a2d39c14ef07175c781ed994499"
+  },
+  "request": {
+    "messages": [
+      {
+        "content": "What is the most severe consequence of 19_44908822_C_T?",
+        "additional_kwargs": {},
+        "response_metadata": {},
+        "type": "human",
+        "name": null,
+        "id": "3fe621fc-ed81-4d2d-9e20-8b860c7ae026"
+      }
+    ],
+    "kwargs": {}
+  },
+  "response": {
+    "content": [
+      {
+        "text": "I'll help you find information about the variant 19_44908822_C_T and its most severe consequence. Let me query the Open Targets Platform for this variant.",
+        "type": "text"
+      },
+      {
+        "id": "toolu_01UhTq6Bu3TBvPv2VWnBubsW",
+        "input": {
+          "query_string": "query {\n  variant(id: \"19_44908822_C_T\") {\n    id\n    rsId\n    consequences {\n      variantFunctionalClass\n      transcriptConsequences {\n        consequence\n        transcriptId\n        geneId\n        geneName\n        sift\n        polyphen\n      }\n    }\n  }\n}"
+        },
+        "name": "query_open_targets_graphql",
+        "type": "tool_use"
+      }
+    ],
+    "id": "lc_run--78b9d493-8e26-4db3-9012-ada79d4a3f2f-0",
+    "model": "claude-haiku-4-5",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    }
+  }
+}

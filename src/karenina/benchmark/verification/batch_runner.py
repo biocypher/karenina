@@ -154,6 +154,55 @@ def _resolve_few_shot(
     )
 
 
+def _create_preview_result(task: dict[str, Any]) -> VerificationResult:
+    """Create a preview VerificationResult for progress tracking.
+
+    This creates a minimal result object with empty timestamp to indicate
+    that the task is "starting" (not yet completed).
+
+    Args:
+        task: Task dictionary with question_id, question_text, and model info
+
+    Returns:
+        VerificationResult with preview metadata
+    """
+    preview_result_id = VerificationResultMetadata.compute_result_id(
+        question_id=task["question_id"],
+        answering_model=task["answering_model"].id,
+        parsing_model=task["parsing_model"].id,
+        timestamp="",  # Empty timestamp indicates "starting" event
+    )
+    return VerificationResult(
+        metadata=VerificationResultMetadata(
+            question_id=task["question_id"],
+            template_id="no_template",
+            completed_without_errors=False,
+            question_text=task["question_text"],
+            answering_model=task["answering_model"].id,
+            parsing_model=task["parsing_model"].id,
+            execution_time=0.0,
+            timestamp="",  # Empty timestamp indicates "starting" event
+            result_id=preview_result_id,
+        )
+    )
+
+
+def _log_cache_stats(answer_cache: AnswerTraceCache, mode: str = "sequential") -> None:
+    """Log answer cache statistics if there were cache interactions.
+
+    Args:
+        answer_cache: The answer trace cache instance
+        mode: Execution mode for logging ("sequential" or "parallel mode")
+    """
+    stats = answer_cache.get_stats()
+    if stats["hits"] > 0 or stats["waits"] > 0:
+        logger.info(
+            f"Answer cache statistics ({mode}): {stats['hits']} hits, {stats['misses']} misses, "
+            f"{stats['waits']} {'IN_PROGRESS encounters' if mode == 'parallel mode' else 'waits'}, "
+            f"{stats['timeouts']} timeouts"
+        )
+
+
 def _extract_feature_flags(config: VerificationConfig) -> dict[str, Any]:
     """Extract feature flags from config."""
     return {
@@ -401,26 +450,7 @@ def execute_sequential(
     for idx, task in enumerate(tasks, 1):
         # Call progress callback BEFORE starting task (with preview result)
         if progress_callback:
-            # Create a minimal result-like object for progress tracking
-            preview_result_id = VerificationResultMetadata.compute_result_id(
-                question_id=task["question_id"],
-                answering_model=task["answering_model"].id,
-                parsing_model=task["parsing_model"].id,
-                timestamp="",  # Empty timestamp indicates "starting" event
-            )
-            preview_result = VerificationResult(
-                metadata=VerificationResultMetadata(
-                    question_id=task["question_id"],
-                    template_id="no_template",
-                    completed_without_errors=False,
-                    question_text=task["question_text"],
-                    answering_model=task["answering_model"].id,
-                    parsing_model=task["parsing_model"].id,
-                    execution_time=0.0,
-                    timestamp="",  # Empty timestamp indicates "starting" event
-                    result_id=preview_result_id,
-                )
-            )
+            preview_result = _create_preview_result(task)
             progress_callback(idx, total, preview_result)
 
         # Execute the task with answer cache
@@ -433,12 +463,7 @@ def execute_sequential(
             progress_callback(idx, total, result)
 
     # Log cache statistics
-    stats = answer_cache.get_stats()
-    if stats["hits"] > 0 or stats["waits"] > 0:
-        logger.info(
-            f"Answer cache statistics: {stats['hits']} hits, {stats['misses']} misses, "
-            f"{stats['waits']} waits, {stats['timeouts']} timeouts"
-        )
+    _log_cache_stats(answer_cache, mode="sequential")
 
     return results
 
@@ -549,25 +574,7 @@ def execute_parallel(
                 # Status is MISS or HIT - ready to execute
                 # Call preview progress callback
                 if progress_callback:
-                    preview_result_id = VerificationResultMetadata.compute_result_id(
-                        question_id=task["question_id"],
-                        answering_model=task["answering_model"].id,
-                        parsing_model=task["parsing_model"].id,
-                        timestamp="",  # Empty timestamp indicates "starting" event
-                    )
-                    preview_result = VerificationResult(
-                        metadata=VerificationResultMetadata(
-                            question_id=task["question_id"],
-                            template_id="no_template",
-                            completed_without_errors=False,
-                            question_text=task["question_text"],
-                            answering_model=task["answering_model"].id,
-                            parsing_model=task["parsing_model"].id,
-                            execution_time=0.0,
-                            timestamp="",  # Empty timestamp indicates "starting" event
-                            result_id=preview_result_id,
-                        )
-                    )
+                    preview_result = _create_preview_result(task)
                     with progress_lock:
                         progress_callback(completed_count[0] + 1, total, preview_result)
 
@@ -637,12 +644,7 @@ def execute_parallel(
         results[result_key] = verification_result
 
     # Log cache statistics
-    stats = answer_cache.get_stats()
-    if stats["hits"] > 0 or stats["waits"] > 0:
-        logger.info(
-            f"Answer cache statistics (parallel mode): {stats['hits']} hits, {stats['misses']} misses, "
-            f"{stats['waits']} IN_PROGRESS encounters, {stats['timeouts']} timeouts"
-        )
+    _log_cache_stats(answer_cache, mode="parallel mode")
 
     return results
 

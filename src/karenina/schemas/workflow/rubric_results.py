@@ -7,12 +7,12 @@ multiple verification runs, supporting aggregation and analysis of trait scores.
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field, PrivateAttr
 
 from .aggregation import AggregatorRegistry, create_default_registry
+from .rubric_dataframe import RubricDataFrameBuilder
 
 if TYPE_CHECKING:
     from .verification import VerificationResult
@@ -38,6 +38,7 @@ class RubricResults(BaseModel):
     results: list[VerificationResult] = Field(description="List of verification results containing rubric data")
     _include_deep_judgment: bool = PrivateAttr(default=False)
     _aggregator_registry: AggregatorRegistry = PrivateAttr()
+    _dataframe_builder: RubricDataFrameBuilder | None = PrivateAttr(default=None)
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -55,6 +56,15 @@ class RubricResults(BaseModel):
         self._include_deep_judgment = include_deep_judgment
         # Create default aggregator registry
         self._aggregator_registry = create_default_registry()
+        # DataFrame builder created lazily
+        self._dataframe_builder = None
+
+    @property
+    def dataframe_builder(self) -> RubricDataFrameBuilder:
+        """Get or create the DataFrame builder instance."""
+        if self._dataframe_builder is None:
+            self._dataframe_builder = RubricDataFrameBuilder(self.results, self._include_deep_judgment)
+        return self._dataframe_builder
 
     # ========================================================================
     # DataFrame Conversion
@@ -113,318 +123,7 @@ class RubricResults(BaseModel):
             >>> # Analyze reasoning and excerpts
             >>> df[['trait_name', 'trait_score', 'trait_reasoning']].head()
         """
-        import pandas as pd
-
-        rows = []
-
-        for result in self.results:
-            if result.rubric is None or not result.rubric.rubric_evaluation_performed:
-                # No rubric data - create single row with minimal info
-                rows.append(self._create_empty_rubric_row(result))
-                continue
-
-            # Process LLM traits
-            if trait_type in ("llm_score", "llm_binary", "llm", "all") and result.rubric.llm_trait_scores:
-                for trait_name, trait_score in result.rubric.llm_trait_scores.items():
-                    # Determine if score or binary based on value type
-                    is_binary = isinstance(trait_score, bool)
-                    score_type = "llm_binary" if is_binary else "llm_score"
-
-                    # Filter by requested type
-                    if trait_type == "llm_score" and is_binary:
-                        continue
-                    if trait_type == "llm_binary" and not is_binary:
-                        continue
-
-                    rows.append(self._create_llm_trait_row(result, trait_name, trait_score, score_type))
-
-            # Process regex traits
-            if trait_type in ("regex", "all") and result.rubric.regex_trait_scores:
-                for trait_name, trait_score in result.rubric.regex_trait_scores.items():
-                    rows.append(self._create_regex_trait_row(result, trait_name, trait_score))
-
-            # Process callable traits
-            if trait_type in ("callable", "all") and result.rubric.callable_trait_scores:
-                for trait_name, trait_score in result.rubric.callable_trait_scores.items():
-                    rows.append(self._create_callable_trait_row(result, trait_name, trait_score))
-
-            # Process metric traits (EXPLODED by metric)
-            if trait_type in ("metric", "all") and result.rubric.metric_trait_scores:
-                for trait_name, metrics in result.rubric.metric_trait_scores.items():
-                    # Each metric gets its own row
-                    for metric_name, metric_score in metrics.items():
-                        # Get confusion matrix data for this trait
-                        confusion_data = None
-                        if result.rubric.metric_trait_confusion_lists:
-                            confusion_data = result.rubric.metric_trait_confusion_lists.get(trait_name)
-
-                        rows.append(
-                            self._create_metric_trait_row(result, trait_name, metric_name, metric_score, confusion_data)
-                        )
-
-        df = pd.DataFrame(rows)
-
-        # Reorder columns for consistent structure
-        # Define desired column order
-        desired_order = [
-            # Status
-            "completed_without_errors",
-            "error",
-            # Identification
-            "question_id",
-            "template_id",
-            "question_text",
-            "keywords",
-            "replicate",
-            # Model Config
-            "answering_model",
-            "parsing_model",
-            "answering_system_prompt",
-            "parsing_system_prompt",
-            # Rubric Data
-            "trait_name",
-            "trait_score",
-            "trait_type",
-            "metric_name",
-            # Confusion Matrix (for metric traits)
-            "confusion_tp",
-            "confusion_fp",
-            "confusion_fn",
-            "confusion_tn",
-            # Execution Metadata
-            "execution_time",
-            "timestamp",
-            "run_name",
-            # Deep Judgment (if included)
-            "trait_reasoning",
-            "trait_excerpts",
-            "trait_hallucination_risk",
-        ]
-
-        # Only include columns that exist in the DataFrame
-        column_order = [col for col in desired_order if col in df.columns]
-
-        # Columns to explicitly exclude from output
-        excluded_columns = {"job_id"}
-
-        # Add any columns that weren't in our desired order (shouldn't happen, but defensive)
-        for col in df.columns:
-            if col not in column_order and col not in excluded_columns:
-                column_order.append(col)
-
-        return df[column_order]
-
-    def _create_llm_trait_row(
-        self,
-        result: VerificationResult,
-        trait_name: str,
-        trait_score: int | bool,
-        score_type: str,
-    ) -> dict[str, Any]:
-        """Create DataFrame row for LLM trait."""
-        metadata = result.metadata
-
-        row: dict[str, Any] = {
-            # === Status ===
-            "completed_without_errors": metadata.completed_without_errors,
-            "error": metadata.error,
-            # === Identification Metadata ===
-            "question_id": metadata.question_id,
-            "template_id": metadata.template_id,
-            "question_text": metadata.question_text,
-            "keywords": metadata.keywords,
-            "replicate": metadata.replicate,
-            # === Model Configuration ===
-            "answering_model": metadata.answering_model,
-            "parsing_model": metadata.parsing_model,
-            "answering_system_prompt": metadata.answering_system_prompt,
-            "parsing_system_prompt": metadata.parsing_system_prompt,
-            # === Rubric Data ===
-            "trait_name": trait_name,
-            "trait_type": score_type,
-            "trait_score": trait_score,
-            # === Rubric Metadata ===
-            # Note: evaluation_rubric removed in v2.0 format - stored in shared_data instead
-            # === Execution Metadata ===
-            "execution_time": metadata.execution_time,
-            "timestamp": metadata.timestamp,
-            "run_name": metadata.run_name,
-        }
-
-        # Add deep judgment columns if requested
-        if self._include_deep_judgment:
-            # Get deep judgment rubric data
-            rubric_dj = result.deep_judgment_rubric
-
-            # Add trait_reasoning
-            row["trait_reasoning"] = (
-                rubric_dj.rubric_trait_reasoning.get(trait_name)
-                if rubric_dj and rubric_dj.rubric_trait_reasoning
-                else None
-            )
-
-            # Add trait_excerpts (JSON serialized)
-            row["trait_excerpts"] = json.dumps(
-                rubric_dj.extracted_rubric_excerpts.get(trait_name, [])
-                if rubric_dj and rubric_dj.extracted_rubric_excerpts
-                else []
-            )
-
-            # Add trait_hallucination_risk
-            row["trait_hallucination_risk"] = (
-                rubric_dj.rubric_hallucination_risk_assessment.get(trait_name)
-                if rubric_dj and rubric_dj.rubric_hallucination_risk_assessment
-                else None
-            )
-
-        return row
-
-    def _create_regex_trait_row(
-        self,
-        result: VerificationResult,
-        trait_name: str,
-        trait_score: bool,
-    ) -> dict[str, Any]:
-        """Create DataFrame row for regex trait."""
-        metadata = result.metadata
-
-        return {
-            # === Status ===
-            "completed_without_errors": metadata.completed_without_errors,
-            "error": metadata.error,
-            # === Identification Metadata ===
-            "question_id": metadata.question_id,
-            "template_id": metadata.template_id,
-            "question_text": metadata.question_text,
-            "keywords": metadata.keywords,
-            "replicate": metadata.replicate,
-            # === Model Configuration ===
-            "answering_model": metadata.answering_model,
-            "parsing_model": metadata.parsing_model,
-            "answering_system_prompt": metadata.answering_system_prompt,
-            "parsing_system_prompt": metadata.parsing_system_prompt,
-            # === Rubric Data ===
-            "trait_name": trait_name,
-            "trait_type": "regex",
-            "trait_score": trait_score,
-            # === Rubric Metadata ===
-            # Note: evaluation_rubric removed in v2.0 format - stored in shared_data instead
-            # === Execution Metadata ===
-            "execution_time": metadata.execution_time,
-            "timestamp": metadata.timestamp,
-            "run_name": metadata.run_name,
-        }
-
-    def _create_callable_trait_row(
-        self,
-        result: VerificationResult,
-        trait_name: str,
-        trait_score: bool | int,
-    ) -> dict[str, Any]:
-        """Create DataFrame row for callable trait."""
-        metadata = result.metadata
-
-        return {
-            # === Status ===
-            "completed_without_errors": metadata.completed_without_errors,
-            "error": metadata.error,
-            # === Identification Metadata ===
-            "question_id": metadata.question_id,
-            "template_id": metadata.template_id,
-            "question_text": metadata.question_text,
-            "keywords": metadata.keywords,
-            "replicate": metadata.replicate,
-            # === Model Configuration ===
-            "answering_model": metadata.answering_model,
-            "parsing_model": metadata.parsing_model,
-            "answering_system_prompt": metadata.answering_system_prompt,
-            "parsing_system_prompt": metadata.parsing_system_prompt,
-            # === Rubric Data ===
-            "trait_name": trait_name,
-            "trait_type": "callable",
-            "trait_score": trait_score,
-            # === Rubric Metadata ===
-            # Note: evaluation_rubric removed in v2.0 format - stored in shared_data instead
-            # === Execution Metadata ===
-            "execution_time": metadata.execution_time,
-            "timestamp": metadata.timestamp,
-            "run_name": metadata.run_name,
-        }
-
-    def _create_metric_trait_row(
-        self,
-        result: VerificationResult,
-        trait_name: str,
-        metric_name: str,
-        metric_score: float,
-        confusion_data: dict[str, list[str]] | None,
-    ) -> dict[str, Any]:
-        """Create DataFrame row for metric trait (EXPLODED by metric)."""
-        metadata = result.metadata
-
-        return {
-            # === Status ===
-            "completed_without_errors": metadata.completed_without_errors,
-            "error": metadata.error,
-            # === Identification Metadata ===
-            "question_id": metadata.question_id,
-            "template_id": metadata.template_id,
-            "question_text": metadata.question_text,
-            "keywords": metadata.keywords,
-            "replicate": metadata.replicate,
-            # === Model Configuration ===
-            "answering_model": metadata.answering_model,
-            "parsing_model": metadata.parsing_model,
-            "answering_system_prompt": metadata.answering_system_prompt,
-            "parsing_system_prompt": metadata.parsing_system_prompt,
-            # === Metric Trait Data (EXPLODED) ===
-            "trait_name": trait_name,
-            "trait_type": "metric",
-            "metric_name": metric_name,
-            "trait_score": metric_score,
-            # === Confusion Matrix Metadata ===
-            "confusion_tp": confusion_data.get("tp") if confusion_data else None,
-            "confusion_fp": confusion_data.get("fp") if confusion_data else None,
-            "confusion_fn": confusion_data.get("fn") if confusion_data else None,
-            "confusion_tn": confusion_data.get("tn") if confusion_data else None,
-            # === Rubric Metadata ===
-            # Note: evaluation_rubric removed in v2.0 format - stored in shared_data instead
-            # === Execution Metadata ===
-            "execution_time": metadata.execution_time,
-            "timestamp": metadata.timestamp,
-            "run_name": metadata.run_name,
-        }
-
-    def _create_empty_rubric_row(self, result: VerificationResult) -> dict[str, Any]:
-        """Create empty DataFrame row for results without rubric data."""
-        metadata = result.metadata
-
-        return {
-            # === Status ===
-            "completed_without_errors": metadata.completed_without_errors,
-            "error": metadata.error,
-            # === Identification Metadata ===
-            "question_id": metadata.question_id,
-            "template_id": metadata.template_id,
-            "question_text": metadata.question_text,
-            "keywords": metadata.keywords,
-            "replicate": metadata.replicate,
-            # === Model Configuration ===
-            "answering_model": metadata.answering_model,
-            "parsing_model": metadata.parsing_model,
-            "answering_system_prompt": metadata.answering_system_prompt,
-            "parsing_system_prompt": metadata.parsing_system_prompt,
-            # === Rubric Data (None) ===
-            "trait_name": None,
-            "trait_score": None,
-            "trait_type": None,
-            # === Rubric Metadata ===
-            # Note: evaluation_rubric removed in v2.0 format - stored in shared_data instead
-            # === Execution Metadata ===
-            "execution_time": metadata.execution_time,
-            "timestamp": metadata.timestamp,
-            "run_name": metadata.run_name,
-        }
+        return self.dataframe_builder.build_dataframe(trait_type)
 
     # ========================================================================
     # Core Data Access

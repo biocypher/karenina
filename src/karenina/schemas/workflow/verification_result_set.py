@@ -417,7 +417,551 @@ class VerificationResultSet(BaseModel):
         return {rep: VerificationResultSet(results=results) for rep, results in grouped.items()}
 
     # ========================================================================
-    # Summary and Statistics
+    # Summary and Statistics - Private Helper Methods
+    # ========================================================================
+
+    def _calculate_basic_counts(self) -> dict[str, Any]:
+        """Calculate basic counts: completed, template, rubric, judgment, unique sets."""
+        num_completed = 0
+        num_with_template = 0
+        num_with_rubric = 0
+        num_with_judgment = 0
+        questions: set[str] = set()
+        models: set[str] = set()
+        parsing_models: set[str] = set()
+        replicates: set[int] = set()
+
+        for result in self.results:
+            if result.metadata.completed_without_errors:
+                num_completed += 1
+
+            if result.template and result.template.template_verification_performed:
+                num_with_template += 1
+
+            if result.rubric and result.rubric.rubric_evaluation_performed:
+                num_with_rubric += 1
+
+            if result.deep_judgment and result.deep_judgment.deep_judgment_performed:
+                num_with_judgment += 1
+
+            questions.add(result.metadata.question_id)
+            models.add(result.metadata.answering_model)
+            parsing_models.add(result.metadata.parsing_model)
+            if result.metadata.replicate is not None:
+                replicates.add(result.metadata.replicate)
+
+        total_execution_time = sum(
+            r.metadata.execution_time for r in self.results if r.metadata.execution_time is not None
+        )
+
+        return {
+            "num_completed": num_completed,
+            "num_with_template": num_with_template,
+            "num_with_rubric": num_with_rubric,
+            "num_with_judgment": num_with_judgment,
+            "questions": questions,
+            "models": models,
+            "parsing_models": parsing_models,
+            "replicates": replicates,
+            "total_execution_time": total_execution_time,
+        }
+
+    def _calculate_token_stats(
+        self, num_with_judgment: int
+    ) -> tuple[dict[str, Any], dict[tuple[str, str, tuple[str, ...] | None], dict[str, int]]]:
+        """Calculate token usage statistics.
+
+        Returns:
+            Tuple of (tokens_dict, tokens_by_combo_dict)
+        """
+        import numpy as np
+
+        total_input_tokens_list: list[int] = []
+        total_output_tokens_list: list[int] = []
+        template_input_tokens_list: list[int] = []
+        template_output_tokens_list: list[int] = []
+        rubric_input_tokens_list: list[int] = []
+        rubric_output_tokens_list: list[int] = []
+        deep_judgment_input_tokens_list: list[int] = []
+        deep_judgment_output_tokens_list: list[int] = []
+
+        per_question_input_tokens: list[int] = []
+        per_question_output_tokens: list[int] = []
+
+        def is_valid_number(val: Any) -> bool:
+            """Check if value is a valid non-NaN number."""
+            return val is not None and isinstance(val, int | float) and not (isinstance(val, float) and np.isnan(val))
+
+        for result in self.results:
+            if result.template and hasattr(result.template, "usage_metadata") and result.template.usage_metadata:
+                usage_metadata = result.template.usage_metadata
+
+                # Total tokens
+                if "total" in usage_metadata:
+                    total_usage = usage_metadata["total"]
+                    inp = total_usage.get("input_tokens", 0)
+                    out = total_usage.get("output_tokens", 0)
+                    if is_valid_number(inp):
+                        total_input_tokens_list.append(int(inp))
+                        per_question_input_tokens.append(int(inp))
+                    if is_valid_number(out):
+                        total_output_tokens_list.append(int(out))
+                        per_question_output_tokens.append(int(out))
+
+                # Template tokens (answer_generation + parsing)
+                template_inp = 0
+                template_out = 0
+                if "answer_generation" in usage_metadata:
+                    answer_usage = usage_metadata["answer_generation"]
+                    ans_inp = answer_usage.get("input_tokens", 0)
+                    ans_out = answer_usage.get("output_tokens", 0)
+                    if is_valid_number(ans_inp):
+                        template_inp += int(ans_inp)
+                    if is_valid_number(ans_out):
+                        template_out += int(ans_out)
+
+                if "parsing" in usage_metadata:
+                    parsing_usage = usage_metadata["parsing"]
+                    parse_inp = parsing_usage.get("input_tokens", 0)
+                    parse_out = parsing_usage.get("output_tokens", 0)
+                    if is_valid_number(parse_inp):
+                        template_inp += int(parse_inp)
+                    if is_valid_number(parse_out):
+                        template_out += int(parse_out)
+
+                if template_inp > 0 or template_out > 0:
+                    template_input_tokens_list.append(template_inp)
+                    template_output_tokens_list.append(template_out)
+
+                # Rubric tokens
+                if "rubric_evaluation" in usage_metadata:
+                    rubric_usage = usage_metadata["rubric_evaluation"]
+                    rubric_inp = rubric_usage.get("input_tokens", 0)
+                    rubric_out = rubric_usage.get("output_tokens", 0)
+                    if is_valid_number(rubric_inp) and rubric_inp > 0:
+                        rubric_input_tokens_list.append(int(rubric_inp))
+                    if is_valid_number(rubric_out) and rubric_out > 0:
+                        rubric_output_tokens_list.append(int(rubric_out))
+
+            # Deep judgment tokens
+            if (
+                result.deep_judgment
+                and hasattr(result.deep_judgment, "usage_metadata")
+                and result.deep_judgment.usage_metadata
+            ):
+                dj_usage = result.deep_judgment.usage_metadata
+                if "total" in dj_usage:
+                    dj_total = dj_usage["total"]
+                    dj_inp = dj_total.get("input_tokens", 0)
+                    dj_out = dj_total.get("output_tokens", 0)
+                    if is_valid_number(dj_inp) and dj_inp > 0:
+                        deep_judgment_input_tokens_list.append(int(dj_inp))
+                    if is_valid_number(dj_out) and dj_out > 0:
+                        deep_judgment_output_tokens_list.append(int(dj_out))
+
+        def compute_stats(values: list[int]) -> tuple[float, float]:
+            """Compute median and std, returning (median, std)"""
+            if not values:
+                return 0.0, 0.0
+            arr = np.array([v for v in values if not (isinstance(v, float) and np.isnan(v))])
+            if len(arr) == 0:
+                return 0.0, 0.0
+            median_val = float(np.median(arr))
+            std_val = float(np.std(arr))
+            if np.isnan(median_val):
+                median_val = 0.0
+            if np.isnan(std_val):
+                std_val = 0.0
+            return median_val, std_val
+
+        # Compute actual totals (sum) for all token types
+        total_input_sum = sum(total_input_tokens_list)
+        total_output_sum = sum(total_output_tokens_list)
+        template_input_sum = sum(template_input_tokens_list)
+        template_output_sum = sum(template_output_tokens_list)
+        rubric_input_sum = sum(rubric_input_tokens_list)
+        rubric_output_sum = sum(rubric_output_tokens_list)
+        dj_input_sum = sum(deep_judgment_input_tokens_list)
+        dj_output_sum = sum(deep_judgment_output_tokens_list)
+
+        # Compute median and std for variance information
+        total_input_median, total_input_std = compute_stats(total_input_tokens_list)
+        total_output_median, total_output_std = compute_stats(total_output_tokens_list)
+        template_input_median, template_input_std = compute_stats(template_input_tokens_list)
+        template_output_median, template_output_std = compute_stats(template_output_tokens_list)
+        rubric_input_median, rubric_input_std = compute_stats(rubric_input_tokens_list)
+        rubric_output_median, rubric_output_std = compute_stats(rubric_output_tokens_list)
+        dj_input_median, dj_input_std = compute_stats(deep_judgment_input_tokens_list)
+        dj_output_median, dj_output_std = compute_stats(deep_judgment_output_tokens_list)
+
+        # Median tokens per question
+        per_q_input_median, per_q_input_std = compute_stats(per_question_input_tokens)
+        per_q_output_median, per_q_output_std = compute_stats(per_question_output_tokens)
+
+        # Token usage by model combination
+        from collections import defaultdict
+
+        combo_token_stats: dict[tuple[str, str, tuple[str, ...] | None], dict[str, int]] = defaultdict(
+            lambda: {"input": 0, "output": 0}
+        )
+
+        for result in self.results:
+            mcp_servers = (
+                result.template.answering_mcp_servers
+                if result.template and result.template.answering_mcp_servers
+                else None
+            )
+            mcp_key = tuple(sorted(mcp_servers)) if mcp_servers else None
+            combo_key = (result.metadata.answering_model, result.metadata.parsing_model, mcp_key)
+
+            # Add tokens from template verification
+            if result.template and hasattr(result.template, "usage_metadata") and result.template.usage_metadata:
+                usage_metadata = result.template.usage_metadata
+                if "total" in usage_metadata:
+                    total_usage = usage_metadata["total"]
+                    inp = total_usage.get("input_tokens", 0)
+                    out = total_usage.get("output_tokens", 0)
+                    if is_valid_number(inp):
+                        combo_token_stats[combo_key]["input"] += int(inp)
+                    if is_valid_number(out):
+                        combo_token_stats[combo_key]["output"] += int(out)
+
+            # Add tokens from deep judgment
+            if (
+                result.deep_judgment
+                and hasattr(result.deep_judgment, "usage_metadata")
+                and result.deep_judgment.usage_metadata
+            ):
+                dj_usage = result.deep_judgment.usage_metadata
+                if "total" in dj_usage:
+                    dj_total = dj_usage["total"]
+                    dj_inp = dj_total.get("input_tokens", 0)
+                    dj_out = dj_total.get("output_tokens", 0)
+                    if is_valid_number(dj_inp):
+                        combo_token_stats[combo_key]["input"] += int(dj_inp)
+                    if is_valid_number(dj_out):
+                        combo_token_stats[combo_key]["output"] += int(dj_out)
+
+        tokens_by_combo = {
+            combo_key: {
+                "input": stats["input"],
+                "output": stats["output"],
+                "total": stats["input"] + stats["output"],
+            }
+            for combo_key, stats in combo_token_stats.items()
+        }
+
+        tokens = {
+            # Total tokens (sum across all results)
+            "total_input": total_input_sum,
+            "total_input_std": total_input_std,
+            "total_output": total_output_sum,
+            "total_output_std": total_output_std,
+            # Template tokens (sum)
+            "template_input": template_input_sum,
+            "template_input_std": template_input_std,
+            "template_output": template_output_sum,
+            "template_output_std": template_output_std,
+            # Rubric tokens (sum)
+            "rubric_input": rubric_input_sum,
+            "rubric_input_std": rubric_input_std,
+            "rubric_output": rubric_output_sum,
+            "rubric_output_std": rubric_output_std,
+            # Deep judgment tokens (sum)
+            "deep_judgment_input": dj_input_sum if num_with_judgment > 0 else None,
+            "deep_judgment_input_std": dj_input_std if num_with_judgment > 0 else None,
+            "deep_judgment_output": dj_output_sum if num_with_judgment > 0 else None,
+            "deep_judgment_output_std": dj_output_std if num_with_judgment > 0 else None,
+            # Median tokens per question (aggregated over questions and replicates)
+            "median_per_question_input": per_q_input_median,
+            "median_per_question_input_std": per_q_input_std,
+            "median_per_question_output": per_q_output_median,
+            "median_per_question_output_std": per_q_output_std,
+        }
+
+        return tokens, tokens_by_combo
+
+    def _calculate_completion_by_combo(
+        self,
+    ) -> dict[tuple[str, str, tuple[str, ...] | None], dict[str, Any]]:
+        """Calculate completion status by model combination."""
+        from collections import defaultdict
+
+        combo_stats: dict[tuple[str, str, tuple[str, ...] | None], dict[str, int]] = defaultdict(
+            lambda: {"total": 0, "completed": 0}
+        )
+
+        for result in self.results:
+            mcp_servers = (
+                result.template.answering_mcp_servers
+                if result.template and result.template.answering_mcp_servers
+                else None
+            )
+            mcp_key = tuple(sorted(mcp_servers)) if mcp_servers else None
+            combo_key = (result.metadata.answering_model, result.metadata.parsing_model, mcp_key)
+
+            combo_stats[combo_key]["total"] += 1
+            if result.metadata.completed_without_errors:
+                combo_stats[combo_key]["completed"] += 1
+
+        return {
+            combo_key: {
+                "total": stats["total"],
+                "completed": stats["completed"],
+                "completion_pct": (stats["completed"] / stats["total"] * 100) if stats["total"] > 0 else 0,
+            }
+            for combo_key, stats in combo_stats.items()
+        }
+
+    def _calculate_rubric_traits(self, questions: set[str], num_with_rubric: int) -> dict[str, Any] | None:
+        """Calculate rubric trait breakdown (global vs question-specific by type)."""
+        if num_with_rubric == 0:
+            return None
+
+        from collections import defaultdict
+
+        trait_questions: dict[str, set[str]] = defaultdict(set)
+        trait_types: dict[str, str] = {}
+
+        for result in self.results:
+            if result.rubric and result.rubric.rubric_evaluation_performed:
+                q_id = result.metadata.question_id
+
+                if result.rubric.llm_trait_scores:
+                    for trait_name in result.rubric.llm_trait_scores:
+                        trait_questions[trait_name].add(q_id)
+                        trait_types[trait_name] = "llm"
+
+                if result.rubric.regex_trait_scores:
+                    for trait_name in result.rubric.regex_trait_scores:
+                        trait_questions[trait_name].add(q_id)
+                        trait_types[trait_name] = "regex"
+
+                if result.rubric.callable_trait_scores:
+                    for trait_name in result.rubric.callable_trait_scores:
+                        trait_questions[trait_name].add(q_id)
+                        trait_types[trait_name] = "callable"
+
+                if result.rubric.metric_trait_confusion_lists:
+                    for trait_name in result.rubric.metric_trait_confusion_lists:
+                        trait_questions[trait_name].add(q_id)
+                        trait_types[trait_name] = "metric"
+
+        num_questions = len(questions)
+        global_traits = {trait for trait, qs in trait_questions.items() if len(qs) == num_questions}
+
+        # Count evaluations by type
+        global_llm = global_regex = global_callable = global_metric = 0
+        qs_llm = qs_regex = qs_callable = qs_metric = 0
+
+        for result in self.results:
+            if result.rubric and result.rubric.rubric_evaluation_performed:
+                if result.rubric.llm_trait_scores:
+                    for trait in result.rubric.llm_trait_scores:
+                        if trait in global_traits:
+                            global_llm += 1
+                        else:
+                            qs_llm += 1
+
+                if result.rubric.regex_trait_scores:
+                    for trait in result.rubric.regex_trait_scores:
+                        if trait in global_traits:
+                            global_regex += 1
+                        else:
+                            qs_regex += 1
+
+                if result.rubric.callable_trait_scores:
+                    for trait in result.rubric.callable_trait_scores:
+                        if trait in global_traits:
+                            global_callable += 1
+                        else:
+                            qs_callable += 1
+
+                if result.rubric.metric_trait_confusion_lists:
+                    for trait in result.rubric.metric_trait_confusion_lists:
+                        if trait in global_traits:
+                            global_metric += 1
+                        else:
+                            qs_metric += 1
+
+        return {
+            "global_traits": {
+                "llm": {"count": global_llm},
+                "regex": {"count": global_regex},
+                "callable": {"count": global_callable},
+                "metric": {"count": global_metric},
+            },
+            "question_specific_traits": {
+                "llm": {"count": qs_llm},
+                "regex": {"count": qs_regex},
+                "callable": {"count": qs_callable},
+                "metric": {"count": qs_metric},
+            },
+        }
+
+    def _calculate_template_pass_rates(
+        self, num_with_template: int
+    ) -> tuple[dict[tuple[str, str, tuple[str, ...] | None], dict[str, Any]] | None, dict[str, Any] | None]:
+        """Calculate template pass rates by combo and overall.
+
+        Returns:
+            Tuple of (pass_by_combo, pass_overall) or (None, None) if no templates.
+        """
+        if num_with_template == 0:
+            return None, None
+
+        from collections import defaultdict
+
+        combo_pass_stats: dict[tuple[str, str, tuple[str, ...] | None], dict[str, int]] = defaultdict(
+            lambda: {"total": 0, "passed": 0}
+        )
+
+        for result in self.results:
+            if result.template and result.template.template_verification_performed:
+                mcp_servers = result.template.answering_mcp_servers if result.template.answering_mcp_servers else None
+                mcp_key = tuple(sorted(mcp_servers)) if mcp_servers else None
+                combo_key = (result.metadata.answering_model, result.metadata.parsing_model, mcp_key)
+
+                combo_pass_stats[combo_key]["total"] += 1
+                if result.template.verify_result:
+                    combo_pass_stats[combo_key]["passed"] += 1
+
+        template_pass_by_combo = {
+            combo_key: {
+                "total": stats["total"],
+                "passed": stats["passed"],
+                "pass_pct": (stats["passed"] / stats["total"] * 100) if stats["total"] > 0 else 0,
+            }
+            for combo_key, stats in combo_pass_stats.items()
+        }
+
+        overall_passed = sum(s["passed"] for s in combo_pass_stats.values())
+        overall_total = sum(s["total"] for s in combo_pass_stats.values())
+        template_pass_overall = {
+            "total": overall_total,
+            "passed": overall_passed,
+            "pass_pct": (overall_passed / overall_total * 100) if overall_total > 0 else 0,
+        }
+
+        return template_pass_by_combo, template_pass_overall
+
+    def _calculate_replicate_stats(self, replicates: set[int], num_with_template: int) -> dict[str, Any] | None:
+        """Calculate replicate statistics for template pass rates.
+
+        Returns:
+            Dict with replicate_pass_rates and replicate_summary, or None.
+        """
+        if len(replicates) <= 1 or num_with_template == 0:
+            return None
+
+        import statistics
+        from collections import defaultdict
+
+        rep_stats_dict: dict[int, dict[str, int]] = defaultdict(lambda: {"total": 0, "passed": 0})
+
+        for result in self.results:
+            if result.template and result.template.template_verification_performed:
+                rep_num = result.metadata.replicate
+                if rep_num is not None:
+                    rep_stats_dict[rep_num]["total"] += 1
+                    if result.template.verify_result:
+                        rep_stats_dict[rep_num]["passed"] += 1
+
+        replicate_pass_rates: dict[int, dict[str, Any]] = {}
+        pass_rates_list: list[float] = []
+
+        for rep_num, stats in rep_stats_dict.items():
+            passed = stats["passed"]
+            total = stats["total"]
+            pct = (passed / total * 100) if total > 0 else 0
+            pass_rate = passed / total if total > 0 else 0
+            pass_rates_list.append(pass_rate)
+
+            replicate_pass_rates[rep_num] = {
+                "total": total,
+                "passed": passed,
+                "pass_pct": pct,
+                "pass_rate": pass_rate,
+            }
+
+        replicate_summary: dict[str, float] | None = None
+        if len(pass_rates_list) > 0:
+            mean = statistics.mean(pass_rates_list)
+            std = statistics.stdev(pass_rates_list) if len(pass_rates_list) > 1 else 0.0
+            replicate_summary = {"mean": mean, "std": std}
+
+        if replicate_pass_rates and replicate_summary is not None:
+            return {
+                "replicate_pass_rates": replicate_pass_rates,
+                "replicate_summary": replicate_summary,
+            }
+        return None
+
+    def _calculate_tool_usage_stats(self) -> dict[str, Any] | None:
+        """Calculate tool usage aggregation across all results."""
+        from collections import defaultdict
+
+        tool_total_calls: dict[str, int] = defaultdict(int)
+        tool_trace_counts: dict[str, int] = defaultdict(int)
+        results_with_tools = 0
+
+        for result in self.results:
+            if result.template and result.template.agent_metrics:
+                tool_counts = result.template.agent_metrics.get("tool_call_counts")
+                if tool_counts:
+                    results_with_tools += 1
+                    for tool_name, count in tool_counts.items():
+                        tool_total_calls[tool_name] += count
+                        tool_trace_counts[tool_name] += 1
+
+        if results_with_tools == 0:
+            return None
+
+        return {
+            "tools": {
+                name: {
+                    "total_calls": tool_total_calls[name],
+                    "traces_using": tool_trace_counts[name],
+                    "avg_calls_per_trace": tool_total_calls[name] / results_with_tools,
+                }
+                for name in sorted(tool_total_calls.keys())
+            },
+            "total_traces_with_tools": results_with_tools,
+            "total_tool_calls": sum(tool_total_calls.values()),
+        }
+
+    def _calculate_trace_length_stats(self) -> dict[str, Any] | None:
+        """Calculate trace length statistics (iterations = AI message cycles)."""
+        iteration_counts: list[int] = []
+
+        for result in self.results:
+            if result.template and result.template.agent_metrics:
+                iterations = result.template.agent_metrics.get("iterations")
+                if iterations is not None:
+                    iteration_counts.append(iterations)
+
+        if not iteration_counts:
+            return None
+
+        iterations_sorted = sorted(iteration_counts)
+        n = len(iterations_sorted)
+        median_iterations = (
+            iterations_sorted[n // 2] if n % 2 == 1 else (iterations_sorted[n // 2 - 1] + iterations_sorted[n // 2]) / 2
+        )
+        mean_iterations = sum(iteration_counts) / n
+        std_iterations = (sum((x - mean_iterations) ** 2 for x in iteration_counts) / n) ** 0.5
+
+        return {
+            "median_iterations": median_iterations,
+            "mean_iterations": mean_iterations,
+            "std_iterations": std_iterations,
+            "min_iterations": min(iteration_counts),
+            "max_iterations": max(iteration_counts),
+            "num_traces": n,
+        }
+
+    # ========================================================================
+    # Summary and Statistics - Public Methods
     # ========================================================================
 
     def get_summary(self) -> dict[str, Any]:
@@ -478,537 +1022,39 @@ class VerificationResultSet(BaseModel):
             print(f"Total tokens: {summary['tokens']['total_input']} input")
             ```
         """
-        from collections import defaultdict
+        # Calculate all components using helper methods
+        basic_counts = self._calculate_basic_counts()
 
-        # Basic counts
-        num_completed = 0
-        num_with_template = 0
-        num_with_rubric = 0
-        num_with_judgment = 0
-        questions = set()
-        models = set()
-        parsing_models = set()
-        replicates = set()
+        num_completed = basic_counts["num_completed"]
+        num_with_template = basic_counts["num_with_template"]
+        num_with_rubric = basic_counts["num_with_rubric"]
+        num_with_judgment = basic_counts["num_with_judgment"]
+        questions = basic_counts["questions"]
+        models = basic_counts["models"]
+        parsing_models = basic_counts["parsing_models"]
+        replicates = basic_counts["replicates"]
+        total_execution_time = basic_counts["total_execution_time"]
 
-        for result in self.results:
-            if result.metadata.completed_without_errors:
-                num_completed += 1
-
-            if result.template and result.template.template_verification_performed:
-                num_with_template += 1
-
-            if result.rubric and result.rubric.rubric_evaluation_performed:
-                num_with_rubric += 1
-
-            if result.deep_judgment and result.deep_judgment.deep_judgment_performed:
-                num_with_judgment += 1
-
-            questions.add(result.metadata.question_id)
-            models.add(result.metadata.answering_model)
-            parsing_models.add(result.metadata.parsing_model)
-            if result.metadata.replicate is not None:
-                replicates.add(result.metadata.replicate)
-
-        # Execution time
-        total_execution_time = sum(
-            r.metadata.execution_time for r in self.results if r.metadata.execution_time is not None
-        )
-
-        # Token usage - collect per-result measurements for median/std calculation
-        import numpy as np
-
-        total_input_tokens_list: list[int] = []
-        total_output_tokens_list: list[int] = []
-        template_input_tokens_list: list[int] = []
-        template_output_tokens_list: list[int] = []
-        rubric_input_tokens_list: list[int] = []
-        rubric_output_tokens_list: list[int] = []
-        deep_judgment_input_tokens_list: list[int] = []
-        deep_judgment_output_tokens_list: list[int] = []
-
-        # Per-question token measurements for "median tokens per question" statistic
-        per_question_input_tokens: list[int] = []
-        per_question_output_tokens: list[int] = []
-
-        for result in self.results:
-            if result.template and hasattr(result.template, "usage_metadata") and result.template.usage_metadata:
-                usage_metadata = result.template.usage_metadata
-
-                # Total tokens
-                if "total" in usage_metadata:
-                    total_usage = usage_metadata["total"]
-                    inp = total_usage.get("input_tokens", 0)
-                    out = total_usage.get("output_tokens", 0)
-                    # Only append non-None, non-NaN values to avoid NaN in statistics
-                    if (
-                        inp is not None
-                        and isinstance(inp, int | float)
-                        and not (isinstance(inp, float) and np.isnan(inp))
-                    ):
-                        total_input_tokens_list.append(int(inp))
-                        per_question_input_tokens.append(int(inp))
-                    if (
-                        out is not None
-                        and isinstance(out, int | float)
-                        and not (isinstance(out, float) and np.isnan(out))
-                    ):
-                        total_output_tokens_list.append(int(out))
-                        per_question_output_tokens.append(int(out))
-
-                # Template tokens (answer_generation + parsing)
-                template_inp = 0
-                template_out = 0
-                if "answer_generation" in usage_metadata:
-                    answer_usage = usage_metadata["answer_generation"]
-                    ans_inp = answer_usage.get("input_tokens", 0)
-                    ans_out = answer_usage.get("output_tokens", 0)
-                    if (
-                        ans_inp is not None
-                        and isinstance(ans_inp, int | float)
-                        and not (isinstance(ans_inp, float) and np.isnan(ans_inp))
-                    ):
-                        template_inp += int(ans_inp)
-                    if (
-                        ans_out is not None
-                        and isinstance(ans_out, int | float)
-                        and not (isinstance(ans_out, float) and np.isnan(ans_out))
-                    ):
-                        template_out += int(ans_out)
-
-                if "parsing" in usage_metadata:
-                    parsing_usage = usage_metadata["parsing"]
-                    parse_inp = parsing_usage.get("input_tokens", 0)
-                    parse_out = parsing_usage.get("output_tokens", 0)
-                    if (
-                        parse_inp is not None
-                        and isinstance(parse_inp, int | float)
-                        and not (isinstance(parse_inp, float) and np.isnan(parse_inp))
-                    ):
-                        template_inp += int(parse_inp)
-                    if (
-                        parse_out is not None
-                        and isinstance(parse_out, int | float)
-                        and not (isinstance(parse_out, float) and np.isnan(parse_out))
-                    ):
-                        template_out += int(parse_out)
-
-                if template_inp > 0 or template_out > 0:
-                    template_input_tokens_list.append(template_inp)
-                    template_output_tokens_list.append(template_out)
-
-                # Rubric tokens
-                if "rubric_evaluation" in usage_metadata:
-                    rubric_usage = usage_metadata["rubric_evaluation"]
-                    rubric_inp = rubric_usage.get("input_tokens", 0)
-                    rubric_out = rubric_usage.get("output_tokens", 0)
-                    # Only append non-None, non-NaN values
-                    if (
-                        rubric_inp is not None
-                        and isinstance(rubric_inp, int | float)
-                        and rubric_inp > 0
-                        and not (isinstance(rubric_inp, float) and np.isnan(rubric_inp))
-                    ):
-                        rubric_input_tokens_list.append(int(rubric_inp))
-                    if (
-                        rubric_out is not None
-                        and isinstance(rubric_out, int | float)
-                        and rubric_out > 0
-                        and not (isinstance(rubric_out, float) and np.isnan(rubric_out))
-                    ):
-                        rubric_output_tokens_list.append(int(rubric_out))
-
-            # Deep judgment tokens
-            if (
-                result.deep_judgment
-                and hasattr(result.deep_judgment, "usage_metadata")
-                and result.deep_judgment.usage_metadata
-            ):
-                dj_usage = result.deep_judgment.usage_metadata
-                if "total" in dj_usage:
-                    dj_total = dj_usage["total"]
-                    dj_inp = dj_total.get("input_tokens", 0)
-                    dj_out = dj_total.get("output_tokens", 0)
-                    # Only append non-None, non-NaN values
-                    if (
-                        dj_inp is not None
-                        and isinstance(dj_inp, int | float)
-                        and dj_inp > 0
-                        and not (isinstance(dj_inp, float) and np.isnan(dj_inp))
-                    ):
-                        deep_judgment_input_tokens_list.append(int(dj_inp))
-                    if (
-                        dj_out is not None
-                        and isinstance(dj_out, int | float)
-                        and dj_out > 0
-                        and not (isinstance(dj_out, float) and np.isnan(dj_out))
-                    ):
-                        deep_judgment_output_tokens_list.append(int(dj_out))
-
-        # Compute median and std for each token type
-        def compute_stats(values: list[int]) -> tuple[float, float]:
-            """Compute median and std, returning (median, std)"""
-            if not values:
-                return 0.0, 0.0
-            # Filter out any NaN values and convert to numpy array
-            arr = np.array([v for v in values if not (isinstance(v, float) and np.isnan(v))])
-            if len(arr) == 0:
-                return 0.0, 0.0
-            # Compute median and std, handling potential NaN results
-            median_val = float(np.median(arr))
-            std_val = float(np.std(arr))
-            # Replace NaN with 0.0
-            if np.isnan(median_val):
-                median_val = 0.0
-            if np.isnan(std_val):
-                std_val = 0.0
-            return median_val, std_val
-
-        # Compute actual totals (sum) for all token types
-        total_input_sum = sum(total_input_tokens_list)
-        total_output_sum = sum(total_output_tokens_list)
-        template_input_sum = sum(template_input_tokens_list)
-        template_output_sum = sum(template_output_tokens_list)
-        rubric_input_sum = sum(rubric_input_tokens_list)
-        rubric_output_sum = sum(rubric_output_tokens_list)
-        dj_input_sum = sum(deep_judgment_input_tokens_list)
-        dj_output_sum = sum(deep_judgment_output_tokens_list)
-
-        # Compute median and std for variance information
-        total_input_median, total_input_std = compute_stats(total_input_tokens_list)
-        total_output_median, total_output_std = compute_stats(total_output_tokens_list)
-        template_input_median, template_input_std = compute_stats(template_input_tokens_list)
-        template_output_median, template_output_std = compute_stats(template_output_tokens_list)
-        rubric_input_median, rubric_input_std = compute_stats(rubric_input_tokens_list)
-        rubric_output_median, rubric_output_std = compute_stats(rubric_output_tokens_list)
-        dj_input_median, dj_input_std = compute_stats(deep_judgment_input_tokens_list)
-        dj_output_median, dj_output_std = compute_stats(deep_judgment_output_tokens_list)
-
-        # Median tokens per question (median of all per-result measurements)
-        per_q_input_median, per_q_input_std = compute_stats(per_question_input_tokens)
-        per_q_output_median, per_q_output_std = compute_stats(per_question_output_tokens)
-
-        # Token usage by model combination
-        combo_token_stats: dict[tuple[str, str, tuple[str, ...] | None], dict[str, int]] = defaultdict(
-            lambda: {"input": 0, "output": 0}
-        )
-
-        for result in self.results:
-            mcp_servers = (
-                result.template.answering_mcp_servers
-                if result.template and result.template.answering_mcp_servers
-                else None
-            )
-            mcp_key = tuple(sorted(mcp_servers)) if mcp_servers else None
-            combo_key = (result.metadata.answering_model, result.metadata.parsing_model, mcp_key)
-
-            # Add tokens from template verification
-            if result.template and hasattr(result.template, "usage_metadata") and result.template.usage_metadata:
-                usage_metadata = result.template.usage_metadata
-                if "total" in usage_metadata:
-                    total_usage = usage_metadata["total"]
-                    inp = total_usage.get("input_tokens", 0)
-                    out = total_usage.get("output_tokens", 0)
-                    # Only add non-None, non-NaN values
-                    if (
-                        inp is not None
-                        and isinstance(inp, int | float)
-                        and not (isinstance(inp, float) and np.isnan(inp))
-                    ):
-                        combo_token_stats[combo_key]["input"] += int(inp)
-                    if (
-                        out is not None
-                        and isinstance(out, int | float)
-                        and not (isinstance(out, float) and np.isnan(out))
-                    ):
-                        combo_token_stats[combo_key]["output"] += int(out)
-
-            # Add tokens from deep judgment
-            if (
-                result.deep_judgment
-                and hasattr(result.deep_judgment, "usage_metadata")
-                and result.deep_judgment.usage_metadata
-            ):
-                dj_usage = result.deep_judgment.usage_metadata
-                if "total" in dj_usage:
-                    dj_total = dj_usage["total"]
-                    dj_inp = dj_total.get("input_tokens", 0)
-                    dj_out = dj_total.get("output_tokens", 0)
-                    # Only add non-None, non-NaN values
-                    if (
-                        dj_inp is not None
-                        and isinstance(dj_inp, int | float)
-                        and not (isinstance(dj_inp, float) and np.isnan(dj_inp))
-                    ):
-                        combo_token_stats[combo_key]["input"] += int(dj_inp)
-                    if (
-                        dj_out is not None
-                        and isinstance(dj_out, int | float)
-                        and not (isinstance(dj_out, float) and np.isnan(dj_out))
-                    ):
-                        combo_token_stats[combo_key]["output"] += int(dj_out)
-
-        tokens_by_combo = {}
-        for combo_key, stats in combo_token_stats.items():
-            tokens_by_combo[combo_key] = {
-                "input": stats["input"],
-                "output": stats["output"],
-                "total": stats["input"] + stats["output"],
-            }
+        # Token statistics
+        tokens, tokens_by_combo = self._calculate_token_stats(num_with_judgment)
 
         # Completion status by model combination
-        combo_stats: dict[tuple[str, str, tuple[str, ...] | None], dict[str, int]] = defaultdict(
-            lambda: {"total": 0, "completed": 0}
-        )
+        completion_by_combo = self._calculate_completion_by_combo()
 
-        for result in self.results:
-            mcp_servers = (
-                result.template.answering_mcp_servers
-                if result.template and result.template.answering_mcp_servers
-                else None
-            )
-            mcp_key = tuple(sorted(mcp_servers)) if mcp_servers else None
-            combo_key = (result.metadata.answering_model, result.metadata.parsing_model, mcp_key)
-
-            combo_stats[combo_key]["total"] += 1
-            if result.metadata.completed_without_errors:
-                combo_stats[combo_key]["completed"] += 1
-
-        # Add completion percentages
-        completion_by_combo = {}
-        for combo_key, stats in combo_stats.items():
-            completion_by_combo[combo_key] = {
-                "total": stats["total"],
-                "completed": stats["completed"],
-                "completion_pct": (stats["completed"] / stats["total"] * 100) if stats["total"] > 0 else 0,
-            }
-
-        # Rubric trait breakdown (if rubrics enabled)
-        rubric_traits = None
-        if num_with_rubric > 0:
-            trait_questions = defaultdict(set)
-            trait_types = {}
-
-            for result in self.results:
-                if result.rubric and result.rubric.rubric_evaluation_performed:
-                    q_id = result.metadata.question_id
-
-                    if result.rubric.llm_trait_scores:
-                        for trait_name in result.rubric.llm_trait_scores:
-                            trait_questions[trait_name].add(q_id)
-                            trait_types[trait_name] = "llm"
-
-                    if result.rubric.regex_trait_scores:
-                        for trait_name in result.rubric.regex_trait_scores:
-                            trait_questions[trait_name].add(q_id)
-                            trait_types[trait_name] = "regex"
-
-                    if result.rubric.callable_trait_scores:
-                        for trait_name in result.rubric.callable_trait_scores:
-                            trait_questions[trait_name].add(q_id)
-                            trait_types[trait_name] = "callable"
-
-                    if result.rubric.metric_trait_confusion_lists:
-                        for trait_name in result.rubric.metric_trait_confusion_lists:
-                            trait_questions[trait_name].add(q_id)
-                            trait_types[trait_name] = "metric"
-
-            num_questions = len(questions)
-            global_traits = {trait for trait, qs in trait_questions.items() if len(qs) == num_questions}
-
-            # Count evaluations by type
-            global_llm = global_regex = global_callable = global_metric = 0
-            qs_llm = qs_regex = qs_callable = qs_metric = 0
-
-            for result in self.results:
-                if result.rubric and result.rubric.rubric_evaluation_performed:
-                    if result.rubric.llm_trait_scores:
-                        for trait in result.rubric.llm_trait_scores:
-                            if trait in global_traits:
-                                global_llm += 1
-                            else:
-                                qs_llm += 1
-
-                    if result.rubric.regex_trait_scores:
-                        for trait in result.rubric.regex_trait_scores:
-                            if trait in global_traits:
-                                global_regex += 1
-                            else:
-                                qs_regex += 1
-
-                    if result.rubric.callable_trait_scores:
-                        for trait in result.rubric.callable_trait_scores:
-                            if trait in global_traits:
-                                global_callable += 1
-                            else:
-                                qs_callable += 1
-
-                    if result.rubric.metric_trait_confusion_lists:
-                        for trait in result.rubric.metric_trait_confusion_lists:
-                            if trait in global_traits:
-                                global_metric += 1
-                            else:
-                                qs_metric += 1
-
-            rubric_traits = {
-                "global_traits": {
-                    "llm": {"count": global_llm},
-                    "regex": {"count": global_regex},
-                    "callable": {"count": global_callable},
-                    "metric": {"count": global_metric},
-                },
-                "question_specific_traits": {
-                    "llm": {"count": qs_llm},
-                    "regex": {"count": qs_regex},
-                    "callable": {"count": qs_callable},
-                    "metric": {"count": qs_metric},
-                },
-            }
+        # Rubric trait breakdown
+        rubric_traits = self._calculate_rubric_traits(questions, num_with_rubric)
 
         # Template pass rates
-        template_pass_by_combo = None
-        template_pass_overall = None
-
-        if num_with_template > 0:
-            combo_pass_stats: dict[tuple[str, str, tuple[str, ...] | None], dict[str, int]] = defaultdict(
-                lambda: {"total": 0, "passed": 0}
-            )
-
-            for result in self.results:
-                if result.template and result.template.template_verification_performed:
-                    mcp_servers = (
-                        result.template.answering_mcp_servers if result.template.answering_mcp_servers else None
-                    )
-                    mcp_key = tuple(sorted(mcp_servers)) if mcp_servers else None
-                    combo_key = (result.metadata.answering_model, result.metadata.parsing_model, mcp_key)
-
-                    combo_pass_stats[combo_key]["total"] += 1
-                    if result.template.verify_result:
-                        combo_pass_stats[combo_key]["passed"] += 1
-
-            # Add pass percentages
-            template_pass_by_combo = {}
-            for combo_key, stats in combo_pass_stats.items():
-                template_pass_by_combo[combo_key] = {
-                    "total": stats["total"],
-                    "passed": stats["passed"],
-                    "pass_pct": (stats["passed"] / stats["total"] * 100) if stats["total"] > 0 else 0,
-                }
-
-            # Overall pass rate
-            overall_passed = sum(s["passed"] for s in combo_pass_stats.values())
-            overall_total = sum(s["total"] for s in combo_pass_stats.values())
-            template_pass_overall = {
-                "total": overall_total,
-                "passed": overall_passed,
-                "pass_pct": (overall_passed / overall_total * 100) if overall_total > 0 else 0,
-            }
+        template_pass_by_combo, template_pass_overall = self._calculate_template_pass_rates(num_with_template)
 
         # Replicate statistics
-        replicate_pass_rates = None
-        replicate_summary = None
+        replicate_stats = self._calculate_replicate_stats(replicates, num_with_template)
 
-        if len(replicates) > 1 and num_with_template > 0:
-            rep_stats_dict: dict[int, dict[str, int]] = defaultdict(lambda: {"total": 0, "passed": 0})
+        # Tool usage statistics
+        tool_usage_stats = self._calculate_tool_usage_stats()
 
-            for result in self.results:
-                if result.template and result.template.template_verification_performed:
-                    rep_num = result.metadata.replicate
-                    if rep_num is not None:
-                        rep_stats_dict[rep_num]["total"] += 1
-                        if result.template.verify_result:
-                            rep_stats_dict[rep_num]["passed"] += 1
-
-            replicate_pass_rates = {}
-            pass_rates_list = []
-
-            for rep_num, stats in rep_stats_dict.items():
-                passed = stats["passed"]
-                total = stats["total"]
-                pct = (passed / total * 100) if total > 0 else 0
-                pass_rate = passed / total if total > 0 else 0
-                pass_rates_list.append(pass_rate)
-
-                replicate_pass_rates[rep_num] = {
-                    "total": total,
-                    "passed": passed,
-                    "pass_pct": pct,
-                    "pass_rate": pass_rate,
-                }
-
-            # Calculate mean and std
-            if len(pass_rates_list) > 0:
-                import statistics
-
-                mean = statistics.mean(pass_rates_list)
-                std = statistics.stdev(pass_rates_list) if len(pass_rates_list) > 1 else 0.0
-                replicate_summary = {"mean": mean, "std": std}
-
-        # Build replicate_stats only if we have replicates
-        replicate_stats: dict[str, dict[int, dict[str, float | int]] | dict[str, float]] | None = None
-        if replicate_pass_rates is not None and replicate_summary is not None:
-            replicate_stats = {
-                "replicate_pass_rates": replicate_pass_rates,
-                "replicate_summary": replicate_summary,
-            }
-
-        # Tool usage aggregation across all results
-        tool_usage_stats: dict[str, Any] | None = None
-        tool_total_calls: dict[str, int] = defaultdict(int)
-        tool_trace_counts: dict[str, int] = defaultdict(int)  # Count of traces using each tool
-        results_with_tools = 0
-
-        for result in self.results:
-            if result.template and result.template.agent_metrics:
-                tool_counts = result.template.agent_metrics.get("tool_call_counts")
-                if tool_counts:
-                    results_with_tools += 1
-                    for tool_name, count in tool_counts.items():
-                        tool_total_calls[tool_name] += count
-                        tool_trace_counts[tool_name] += 1
-
-        if results_with_tools > 0:
-            tool_usage_stats = {
-                "tools": {
-                    name: {
-                        "total_calls": tool_total_calls[name],
-                        "traces_using": tool_trace_counts[name],
-                        "avg_calls_per_trace": tool_total_calls[name] / results_with_tools,
-                    }
-                    for name in sorted(tool_total_calls.keys())
-                },
-                "total_traces_with_tools": results_with_tools,
-                "total_tool_calls": sum(tool_total_calls.values()),
-            }
-
-        # Trace length statistics (iterations = AI message cycles)
-        trace_length_stats: dict[str, Any] | None = None
-        iteration_counts: list[int] = []
-
-        for result in self.results:
-            if result.template and result.template.agent_metrics:
-                iterations = result.template.agent_metrics.get("iterations")
-                if iterations is not None:
-                    iteration_counts.append(iterations)
-
-        if iteration_counts:
-            iterations_sorted = sorted(iteration_counts)
-            n = len(iterations_sorted)
-            median_iterations = (
-                iterations_sorted[n // 2]
-                if n % 2 == 1
-                else (iterations_sorted[n // 2 - 1] + iterations_sorted[n // 2]) / 2
-            )
-            mean_iterations = sum(iteration_counts) / n
-            std_iterations = (sum((x - mean_iterations) ** 2 for x in iteration_counts) / n) ** 0.5
-
-            trace_length_stats = {
-                "median_iterations": median_iterations,
-                "mean_iterations": mean_iterations,
-                "std_iterations": std_iterations,
-                "min_iterations": min(iteration_counts),
-                "max_iterations": max(iteration_counts),
-                "num_traces": n,
-            }
+        # Trace length statistics
+        trace_length_stats = self._calculate_trace_length_stats()
 
         return {
             # Basic counts
@@ -1024,33 +1070,7 @@ class VerificationResultSet(BaseModel):
             # Execution
             "total_execution_time": total_execution_time,
             # Token usage
-            "tokens": {
-                # Total tokens (sum across all results)
-                "total_input": total_input_sum,
-                "total_input_std": total_input_std,
-                "total_output": total_output_sum,
-                "total_output_std": total_output_std,
-                # Template tokens (sum)
-                "template_input": template_input_sum,
-                "template_input_std": template_input_std,
-                "template_output": template_output_sum,
-                "template_output_std": template_output_std,
-                # Rubric tokens (sum)
-                "rubric_input": rubric_input_sum,
-                "rubric_input_std": rubric_input_std,
-                "rubric_output": rubric_output_sum,
-                "rubric_output_std": rubric_output_std,
-                # Deep judgment tokens (sum)
-                "deep_judgment_input": dj_input_sum if num_with_judgment > 0 else None,
-                "deep_judgment_input_std": dj_input_std if num_with_judgment > 0 else None,
-                "deep_judgment_output": dj_output_sum if num_with_judgment > 0 else None,
-                "deep_judgment_output_std": dj_output_std if num_with_judgment > 0 else None,
-                # Median tokens per question (aggregated over questions and replicates)
-                "median_per_question_input": per_q_input_median,
-                "median_per_question_input_std": per_q_input_std,
-                "median_per_question_output": per_q_output_median,
-                "median_per_question_output_std": per_q_output_std,
-            },
+            "tokens": tokens,
             # Token usage by model combination
             "tokens_by_combo": tokens_by_combo,
             # Completion status

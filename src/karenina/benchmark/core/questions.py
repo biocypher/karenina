@@ -1,4 +1,9 @@
-"""Question management functionality for benchmarks."""
+"""Question management functionality for benchmarks.
+
+This module provides the QuestionManager class which handles all question
+CRUD operations and metadata management. Filtering and search operations
+are delegated to QuestionQueryBuilder for single responsibility.
+"""
 
 import ast
 import inspect
@@ -11,6 +16,7 @@ if TYPE_CHECKING:
     from .base import BenchmarkBase
 
 from ...utils.checkpoint import add_question_to_benchmark
+from .question_query import QuestionQueryBuilder
 
 # Sentinel value to detect if finished parameter was explicitly provided
 _NOT_PROVIDED = object()
@@ -51,11 +57,31 @@ def _rename_answer_class_to_standard(source_code: str, original_class_name: str)
 
 
 class QuestionManager:
-    """Manager for question CRUD operations and metadata."""
+    """Manager for question CRUD operations and metadata.
+
+    This class handles all question-related operations including:
+    - CRUD operations (add, get, update, remove questions)
+    - Metadata management (author, sources, custom properties)
+    - Finished status management
+
+    Filtering, searching, and aggregation operations are delegated to
+    QuestionQueryBuilder for single responsibility.
+    """
 
     def __init__(self, base: "BenchmarkBase") -> None:
         """Initialize with reference to benchmark base."""
         self.base = base
+        self._query_builder: QuestionQueryBuilder | None = None
+
+    @property
+    def query_builder(self) -> QuestionQueryBuilder:
+        """Lazy-initialized query builder for filtering and searching."""
+        if self._query_builder is None:
+            self._query_builder = QuestionQueryBuilder(
+                self.base,
+                template_checker=self._is_default_template,
+            )
+        return self._query_builder
 
     def add_question(
         self,
@@ -727,49 +753,13 @@ class QuestionManager:
                 custom_filter=lambda q: q.get("custom_metadata", {}).get("category") == "math"
             )
         """
-        results = []
-
-        for _q_id, q_data in self.base._questions_cache.items():
-            # Check finished status
-            if finished is not None and q_data.get("finished", False) != finished:
-                continue
-
-            # Check template existence (non-default templates only)
-            if has_template is not None:
-                # Check if it's a meaningful (non-default) template
-                template = q_data.get("answer_template")
-                if template:
-                    question_text = q_data.get("question", "")
-                    has_tmpl = not self._is_default_template(template, question_text)
-                else:
-                    has_tmpl = False
-                if has_tmpl != has_template:
-                    continue
-
-            # Check rubric existence
-            if has_rubric is not None:
-                has_rub = bool(q_data.get("question_rubric"))
-                if has_rub != has_rubric:
-                    continue
-
-            # Check author
-            if author is not None:
-                q_author = q_data.get("author", {}).get("name", "") if q_data.get("author") else ""
-                if author.lower() not in q_author.lower():
-                    continue
-
-            # Apply custom filter function
-            if custom_filter is not None:
-                try:
-                    if not custom_filter(q_data):
-                        continue
-                except Exception:
-                    # If custom filter raises exception, skip this question
-                    continue
-
-            results.append(q_data)
-
-        return results
+        return self.query_builder.filter_questions(
+            finished=finished,
+            has_template=has_template,
+            has_rubric=has_rubric,
+            author=author,
+            custom_filter=custom_filter,
+        )
 
     def filter_by_metadata(
         self,
@@ -777,128 +767,16 @@ class QuestionManager:
         value: Any,
         match_mode: str = "exact",
     ) -> list[dict[str, Any]]:
-        """
-        Filter questions by a metadata field using dot notation for nested fields.
-
-        Args:
-            field_path: Dot-notation path to field (e.g., "custom_metadata.category", "finished")
-            value: Value to match against
-            match_mode: Matching mode - "exact", "contains", "in", or "regex"
-
-        Returns:
-            List of question dictionaries matching the criteria
-
-        Examples:
-            # Exact match on custom metadata
-            math_qs = benchmark.filter_by_metadata("custom_metadata.category", "math")
-
-            # Value in list (for tags/arrays)
-            algebra_qs = benchmark.filter_by_metadata("custom_metadata.tags", "algebra", match_mode="in")
-
-            # Substring match
-            bio_qs = benchmark.filter_by_metadata("custom_metadata.domain", "bio", match_mode="contains")
-
-            # Regex match
-            calc_qs = benchmark.filter_by_metadata("question", r"calculate.*sum", match_mode="regex")
-        """
-        import re
-
-        results = []
-        field_parts = field_path.split(".")
-
-        for q_data in self.base._questions_cache.values():
-            # Navigate to the field using dot notation
-            field_value: Any = q_data
-            try:
-                for part in field_parts:
-                    if isinstance(field_value, dict):
-                        field_value = field_value.get(part)
-                    else:
-                        field_value = None
-                        break
-            except (KeyError, TypeError, AttributeError):
-                field_value = None
-
-            # Skip if field doesn't exist
-            if field_value is None:
-                continue
-
-            # Apply matching logic based on match_mode
-            matches = False
-            if match_mode == "exact":
-                matches = field_value == value
-            elif match_mode == "contains":
-                # Substring match (works for strings)
-                if isinstance(field_value, str) and isinstance(value, str):
-                    matches = value.lower() in field_value.lower()
-            elif match_mode == "in":
-                # Check if value is in a list/array field
-                if isinstance(field_value, list | tuple):
-                    matches = value in field_value
-            elif match_mode == "regex":
-                # Regex match (works for strings)
-                if isinstance(field_value, str) and isinstance(value, str):
-                    try:
-                        matches = bool(re.search(value, field_value, re.IGNORECASE))
-                    except re.error:
-                        matches = False
-            else:
-                raise ValueError(f"Invalid match_mode: {match_mode}. Must be 'exact', 'contains', 'in', or 'regex'")
-
-            if matches:
-                results.append(q_data)
-
-        return results
+        """Filter questions by a metadata field using dot notation."""
+        return self.query_builder.filter_by_metadata(field_path, value, match_mode)
 
     def filter_by_custom_metadata(
         self,
         match_all: bool = True,
         **criteria: Any,
     ) -> list[dict[str, Any]]:
-        """
-        Filter questions by custom metadata fields with AND/OR logic.
-
-        Args:
-            match_all: If True, all criteria must match (AND). If False, any criterion matches (OR)
-            **criteria: Keyword arguments for custom metadata fields to match
-
-        Returns:
-            List of question dictionaries matching the criteria
-
-        Examples:
-            # AND logic: both category and difficulty must match
-            math_hard = benchmark.filter_by_custom_metadata(category="math", difficulty="hard")
-
-            # OR logic: match any of the categories
-            stem = benchmark.filter_by_custom_metadata(
-                match_all=False,
-                category="math",
-                subject="science"
-            )
-        """
-        results = []
-
-        for q_data in self.base._questions_cache.values():
-            custom_meta = q_data.get("custom_metadata")
-
-            # Skip questions without custom metadata
-            if custom_meta is None:
-                continue
-
-            # Ensure custom_meta is a dict
-            if not isinstance(custom_meta, dict):
-                continue
-
-            if match_all:
-                # AND logic: all criteria must match
-                if all(custom_meta.get(key) == val for key, val in criteria.items()):
-                    results.append(q_data)
-            else:
-                # OR logic: any criterion matches
-                if any(custom_meta.get(key) == val for key, val in criteria.items()):
-                    results.append(q_data)
-
-        return results
+        """Filter questions by custom metadata fields with AND/OR logic."""
+        return self.query_builder.filter_by_custom_metadata(match_all, **criteria)
 
     def search_questions(
         self,
@@ -908,161 +786,24 @@ class QuestionManager:
         case_sensitive: bool = False,
         regex: bool = False,
     ) -> list[dict[str, Any]]:
-        """
-        Search for questions containing the query text (unified search method).
-
-        Args:
-            query: Single search term (str) or list of terms for multi-term search
-            match_all: For multi-term search - True for AND logic, False for OR logic
-            fields: Fields to search in. Default: ["question"]. Can include "raw_answer"
-            case_sensitive: Whether to perform case-sensitive search
-            regex: Whether to treat query as regex pattern
-
-        Returns:
-            List of question dictionaries matching the search criteria
-
-        Examples:
-            # Simple search (backward compatible)
-            results = benchmark.search_questions("machine learning")
-
-            # Multi-term AND search
-            results = benchmark.search_questions(["quantum", "mechanics"], match_all=True)
-
-            # Multi-term OR search
-            results = benchmark.search_questions(["python", "java"], match_all=False)
-
-            # Search in multiple fields
-            results = benchmark.search_questions("algorithm", fields=["question", "raw_answer"])
-
-            # Case-sensitive search
-            results = benchmark.search_questions("Python", case_sensitive=True)
-
-            # Regex search
-            results = benchmark.search_questions(r"what (is|are)", regex=True)
-        """
-        import re
-
-        # Default fields to search
-        if fields is None:
-            fields = ["question"]
-
-        # Normalize query to list for uniform handling
-        queries = [query] if isinstance(query, str) else query
-
-        # Handle empty query list - return empty results
-        if not queries:
-            return []
-
-        results = []
-
-        for q_data in self.base._questions_cache.values():
-            # Collect text from specified fields
-            search_texts = []
-            for field in fields:
-                if field in q_data:
-                    search_texts.append(q_data[field])
-
-            # Combine all field texts
-            combined_text = " ".join(str(t) for t in search_texts if t)
-
-            # Prepare text for searching
-            if not case_sensitive and not regex:
-                combined_text = combined_text.lower()
-
-            # Check if question matches the search criteria
-            matches = []
-            for q in queries:
-                # Prepare query
-                if not case_sensitive and not regex:
-                    q = q.lower()
-
-                # Perform search
-                if regex:
-                    try:
-                        flags = 0 if case_sensitive else re.IGNORECASE
-                        match = bool(re.search(q, combined_text, flags))
-                    except re.error:
-                        match = False
-                else:
-                    match = q in combined_text
-
-                matches.append(match)
-
-            # Apply AND/OR logic for multi-term searches
-            if match_all:
-                # AND: all terms must match
-                if all(matches):
-                    results.append(q_data)
-            else:
-                # OR: any term matches
-                if any(matches):
-                    results.append(q_data)
-
-        return results
+        """Search for questions containing the query text (unified search method)."""
+        return self.query_builder.search_questions(query, match_all, fields, case_sensitive, regex)
 
     def get_questions_by_author(self, author: str) -> list[dict[str, Any]]:
         """Get questions created by a specific author."""
-        return self.filter_questions(author=author)
+        return self.query_builder.get_questions_by_author(author)
 
     def get_questions_with_rubric(self) -> list[dict[str, Any]]:
         """Get questions that have question-specific rubrics."""
-        return self.filter_questions(has_rubric=True)
+        return self.query_builder.get_questions_with_rubric()
 
     def count_by_field(
         self,
         field_path: str,
         questions: list[dict[str, Any]] | None = None,
     ) -> dict[Any, int]:
-        """
-        Count questions grouped by a field value using dot notation.
-
-        Args:
-            field_path: Dot-notation path to field (e.g., "custom_metadata.category", "finished")
-            questions: Optional list of questions to count from (defaults to all questions)
-
-        Returns:
-            Dictionary mapping field values to their counts
-
-        Examples:
-            # Count by custom metadata field
-            category_counts = benchmark.count_by_field("custom_metadata.category")
-            # Result: {"math": 45, "science": 32, "history": 18}
-
-            # Count finished vs unfinished
-            status_counts = benchmark.count_by_field("finished")
-            # Result: {True: 67, False: 28}
-
-            # Count on filtered subset
-            math_qs = benchmark.filter_by_custom_metadata(category="math")
-            difficulty_counts = benchmark.count_by_field("custom_metadata.difficulty", questions=math_qs)
-        """
-        from collections import Counter
-
-        # Use all questions if not specified
-        if questions is None:
-            questions = list(self.base._questions_cache.values())
-
-        field_parts = field_path.split(".")
-        values = []
-
-        for q_data in questions:
-            # Navigate to the field using dot notation
-            field_value: Any = q_data
-            try:
-                for part in field_parts:
-                    if isinstance(field_value, dict):
-                        field_value = field_value.get(part)
-                    else:
-                        field_value = None
-                        break
-            except (KeyError, TypeError, AttributeError):
-                field_value = None
-
-            # Add value to list (including None for missing fields)
-            values.append(field_value)
-
-        # Count occurrences
-        return dict(Counter(values))
+        """Count questions grouped by a field value using dot notation."""
+        return self.query_builder.count_by_field(field_path, questions)
 
     def __iter__(self) -> Iterator[dict[str, Any]]:
         """Iterate over questions in the benchmark."""

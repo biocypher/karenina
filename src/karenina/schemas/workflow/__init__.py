@@ -1,6 +1,7 @@
 """Workflow models for verification execution."""
 
 from .aggregation import AggregatorRegistry, ResultAggregator, create_default_registry
+from .judgment_dataframe import JudgmentDataFrameBuilder
 from .judgment_results import JudgmentResults
 from .models import (
     INTERFACE_LANGCHAIN,
@@ -11,6 +12,7 @@ from .models import (
     ModelConfig,
     QuestionFewShotConfig,
 )
+from .rubric_dataframe import RubricDataFrameBuilder
 from .rubric_judgment_results import RubricJudgmentResults
 from .rubric_outputs import (
     BatchRubricScores,
@@ -22,6 +24,7 @@ from .rubric_outputs import (
     TraitExcerptsOutput,
 )
 from .rubric_results import RubricResults
+from .template_dataframe import TemplateDataFrameBuilder
 from .template_results import TemplateResults
 from .verification import (
     DEFAULT_ANSWERING_SYSTEM_PROMPT,
@@ -78,9 +81,12 @@ __all__ = [
     # Result set and specialized results
     "VerificationResultSet",
     "RubricResults",
+    "RubricDataFrameBuilder",
     "RubricJudgmentResults",
     "TemplateResults",
+    "TemplateDataFrameBuilder",
     "JudgmentResults",
+    "JudgmentDataFrameBuilder",
     # Aggregation framework
     "ResultAggregator",
     "AggregatorRegistry",
