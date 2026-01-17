@@ -16,9 +16,9 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
-from ..utils.shared import extract_json_from_text as _extract_json_from_text
-from ..utils.shared import is_openai_endpoint_llm as _is_openai_endpoint_llm
-from ..utils.shared import strip_markdown_fences as _strip_markdown_fences
+from ..utils.json_helpers import extract_json_from_text as _extract_json_from_text
+from ..utils.json_helpers import strip_markdown_fences as _strip_markdown_fences
+from ..utils.llm_detection import is_openai_endpoint_llm as _is_openai_endpoint_llm
 
 logger = logging.getLogger(__name__)
 

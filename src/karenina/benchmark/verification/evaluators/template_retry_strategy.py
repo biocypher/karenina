@@ -78,7 +78,7 @@ class TemplateRetryHandler:
             Tuple of (parsed_answer, usage_metadata)
             parsed_answer is None if retry also fails
         """
-        from ..utils.parsing import _strip_markdown_fences
+        from ..utils.json_helpers import strip_markdown_fences as _strip_markdown_fences
 
         # Try to extract JSON from error message
         failed_json = None
@@ -162,7 +162,7 @@ Please provide a corrected response with all required fields populated."""
             Tuple of (parsed_answer, usage_metadata)
             parsed_answer is None if retry also fails
         """
-        from ..utils.parsing import _strip_markdown_fences
+        from ..utils.json_helpers import strip_markdown_fences as _strip_markdown_fences
 
         # Only handle JSON format errors
         if not self._is_invalid_json_error(error):

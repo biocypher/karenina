@@ -18,7 +18,7 @@ from ...schemas.workflow import (
 )
 from ...utils.checkpoint import generate_template_id
 from ..verification import run_verification_batch
-from ..verification.utils.validation import validate_answer_template
+from ..verification.utils.template_validation import validate_answer_template
 
 
 class VerificationManager:

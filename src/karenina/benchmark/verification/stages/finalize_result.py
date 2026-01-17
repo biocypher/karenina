@@ -7,7 +7,7 @@ import logging
 
 from ....schemas.workflow import VerificationResult
 from ..stage import BaseVerificationStage, VerificationContext
-from ..verification_utils import _split_parsed_response
+from ..utils.llm_invocation import _split_parsed_response
 
 # Set up logger
 logger = logging.getLogger(__name__)

@@ -537,7 +537,7 @@ class ManualTraces:
         elif isinstance(trace, list):
             # LangChain message format - extract metrics and harmonize
             try:
-                from karenina.benchmark.verification.verification_utils import _extract_agent_metrics
+                from karenina.benchmark.verification.utils.llm_invocation import _extract_agent_metrics
                 from karenina.infrastructure.llm.mcp_utils import harmonize_agent_response
 
                 # Build response object expected by extraction function
