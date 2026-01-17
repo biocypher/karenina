@@ -6,7 +6,7 @@ used for deep-judgment excerpt validation.
 
 import pytest
 
-from karenina.benchmark.verification.tools.fuzzy_match import (
+from karenina.benchmark.verification.utils.trace_fuzzy_match import (
     fuzzy_match_excerpt,
     fuzzy_match_excerpt_with_context,
 )

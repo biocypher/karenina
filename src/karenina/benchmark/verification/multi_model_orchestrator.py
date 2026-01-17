@@ -7,7 +7,7 @@ from typing import Any
 from ...schemas.domain import Rubric
 from ...schemas.workflow import ModelConfig, VerificationConfig, VerificationResult
 from .runner import run_single_model_verification
-from .tools.embedding_check import clear_embedding_model_cache, preload_embedding_model
+from .utils.embedding_check import clear_embedding_model_cache, preload_embedding_model
 
 
 def _create_verification_task(

@@ -6,7 +6,7 @@ Detects when LLM responses lack sufficient information to populate a template.
 import logging
 from typing import Any
 
-from ..evaluators.sufficiency_checker import detect_sufficiency
+from ..evaluators.trace_sufficiency_checker import detect_sufficiency
 from ..stage import BaseVerificationStage, VerificationContext
 from ..utils import UsageTracker
 

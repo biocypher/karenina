@@ -23,7 +23,10 @@ from rich.progress import (
 from rich.prompt import Confirm, Prompt
 
 from karenina.benchmark import Benchmark
-from karenina.benchmark.exporter import export_verification_results_csv, export_verification_results_json
+from karenina.benchmark.verification.results_exporter import (
+    export_verification_results_csv,
+    export_verification_results_json,
+)
 from karenina.benchmark.verification.batch_runner import generate_task_queue, run_verification_batch
 from karenina.schemas import FinishedTemplate, VerificationConfig, VerificationResult, VerificationResultSet
 

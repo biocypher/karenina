@@ -14,7 +14,7 @@ exporting benchmark STRUCTURE/METADATA (questions, templates, rubrics definition
 not verification execution results.
 
 Usage:
-    from karenina.benchmark import export_verification_results_csv, export_verification_results_json
+    from karenina.benchmark.verification import export_verification_results_csv, export_verification_results_json
 
     # Export verification job results
     json_export = export_verification_results_json(job, results, global_rubric)
@@ -28,7 +28,7 @@ import time
 from io import StringIO
 from typing import Any, Protocol
 
-from ..schemas.workflow import VerificationJob, VerificationResultSet
+from ...schemas.workflow import VerificationJob, VerificationResultSet
 
 
 class HasTraitNames(Protocol):

@@ -18,7 +18,7 @@ from ....infrastructure.llm.interface import init_chat_model_unified
 from ....infrastructure.llm.mcp_utils import extract_final_ai_message
 from ....schemas.domain import BaseAnswer
 from ....schemas.workflow import INTERFACES_NO_PROVIDER_REQUIRED, ModelConfig
-from ..utils.agent_metrics import extract_agent_metrics
+from ..utils.trace_agent_metrics import extract_agent_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -223,7 +223,7 @@ class TemplateEvaluator:
     def retry_handler(self) -> Any:
         """Lazy-initialized retry handler for parsing failures."""
         if self._retry_handler is None:
-            from .template_retry import TemplateRetryHandler
+            from .template_retry_strategy import TemplateRetryHandler
 
             self._retry_handler = TemplateRetryHandler(llm=self.llm, parser=self.parser)
         return self._retry_handler
@@ -283,7 +283,7 @@ class TemplateEvaluator:
         ground_truth = None
         if self._should_expose_ground_truth():
             try:
-                from ..utils.parsing import create_test_instance_from_answer_class
+                from ..utils.template_parsing_helpers import create_test_instance_from_answer_class
 
                 _, ground_truth = create_test_instance_from_answer_class(self.raw_answer_class)
             except Exception as e:
@@ -580,7 +580,7 @@ Return only the completed JSON object - no surrounding text, no markdown fences:
         Returns:
             ParseResult with parsed answer
         """
-        from ..utils.parsing import _strip_markdown_fences
+        from ..utils.json_helpers import strip_markdown_fences as _strip_markdown_fences
         from .template_parsing import (
             invoke_with_structured_output_for_template,
             parse_template_response,
@@ -706,7 +706,7 @@ Return only the completed JSON object - no surrounding text, no markdown fences:
             ParseResult with deep judgment metadata
         """
         from ....schemas.workflow import VerificationConfig
-        from ..evaluators.deep_judgment import deep_judgment_parse
+        from ..evaluators.template_deep_judgment import deep_judgment_parse
 
         result = ParseResult()
         result.deep_judgment_performed = True

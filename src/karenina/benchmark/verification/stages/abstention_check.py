@@ -5,7 +5,7 @@ Detects when LLMs refuse to answer or abstain from responding.
 
 import logging
 
-from ..evaluators.abstention_checker import detect_abstention
+from ..evaluators.trace_abstention_checker import detect_abstention
 from ..stage import BaseVerificationStage, VerificationContext
 from ..utils import UsageTracker
 

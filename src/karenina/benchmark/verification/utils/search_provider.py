@@ -53,7 +53,7 @@ from collections.abc import Callable
 from typing import Any
 
 from ....schemas import SearchResultItem
-from ..utils.shared import parse_tool_output as _parse_tool_output
+from .search_helpers import parse_tool_output as _parse_tool_output
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +115,7 @@ def create_search_tool(
         if tool_name == "tavily":
             # Import here to avoid dependency issues if Tavily not installed
             try:
-                from .search_tools_tavily import create_tavily_search_tool
+                from .search_tavily import create_tavily_search_tool
 
                 logger.info("Creating Tavily search tool")
                 return create_tavily_search_tool(**kwargs)  # type: ignore[no-any-return]

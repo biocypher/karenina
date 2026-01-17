@@ -13,7 +13,7 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
-from ..utils.shared import is_openai_endpoint_llm as _is_openai_endpoint_llm
+from ..utils.llm_detection import is_openai_endpoint_llm as _is_openai_endpoint_llm
 
 logger = logging.getLogger(__name__)
 
@@ -167,7 +167,7 @@ def parse_raw_response(response: str | Any, model_class: type[T]) -> T:
         logger.debug(f"Direct JSON parse failed: {e}")
 
     # Strategy 2: Extract JSON from mixed text (handles markdown fences)
-    from ..utils.shared import extract_json_from_text, strip_markdown_fences
+    from ..utils.json_helpers import extract_json_from_text, strip_markdown_fences
 
     cleaned = strip_markdown_fences(response)
     if cleaned and cleaned != response:

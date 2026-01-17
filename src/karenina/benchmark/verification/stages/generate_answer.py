@@ -11,8 +11,8 @@ from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 from ....infrastructure.llm.interface import init_chat_model_unified
 from ..stage import BaseVerificationStage, VerificationContext
-from ..utils import UsageTracker
-from ..verification_utils import _construct_few_shot_prompt, _invoke_llm_with_retry
+from ..utils.llm_invocation import _construct_few_shot_prompt, _invoke_llm_with_retry
+from ..utils.trace_usage_tracker import UsageTracker
 
 # Set up logger
 logger = logging.getLogger(__name__)

@@ -1,24 +1,24 @@
 """Unit tests for verification shared utility functions.
 
-Tests the consolidated utilities in benchmark/verification/utils/shared.py:
-- strip_markdown_fences(): Remove markdown code fences
-- extract_json_from_text(): Extract JSON from mixed text
-- extract_balanced_braces(): Extract balanced brace expressions
-- is_retryable_error(): Check for transient errors
-- is_openai_endpoint_llm(): Check for OpenAI-compatible endpoints
-- parse_tool_output(): Parse search tool output
+Tests the consolidated utilities in benchmark/verification/utils/:
+- strip_markdown_fences(): Remove markdown code fences (json_helpers)
+- extract_json_from_text(): Extract JSON from mixed text (json_helpers)
+- extract_balanced_braces(): Extract balanced brace expressions (json_helpers)
+- is_retryable_error(): Check for transient errors (error_helpers)
+- is_openai_endpoint_llm(): Check for OpenAI-compatible endpoints (llm_detection)
+- parse_tool_output(): Parse search tool output (search_helpers)
 """
 
 import pytest
 
-from karenina.benchmark.verification.utils.shared import (
+from karenina.benchmark.verification.utils.error_helpers import is_retryable_error
+from karenina.benchmark.verification.utils.json_helpers import (
     extract_balanced_braces,
     extract_json_from_text,
-    is_openai_endpoint_llm,
-    is_retryable_error,
-    parse_tool_output,
     strip_markdown_fences,
 )
+from karenina.benchmark.verification.utils.llm_detection import is_openai_endpoint_llm
+from karenina.benchmark.verification.utils.search_helpers import parse_tool_output
 from karenina.schemas import SearchResultItem
 
 # =============================================================================

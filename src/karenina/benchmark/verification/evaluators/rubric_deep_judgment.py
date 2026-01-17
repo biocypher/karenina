@@ -444,7 +444,7 @@ Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
         Returns:
             Tuple of (valid_excerpts, failed_excerpts)
         """
-        from ..tools.fuzzy_match import fuzzy_match_excerpt
+        from ..utils.trace_fuzzy_match import fuzzy_match_excerpt
 
         valid = []
         failed = []
@@ -559,7 +559,7 @@ Extract up to {max_excerpts} verbatim quotes from the answer that demonstrate or
         Returns:
             Dictionary with: excerpts (updated with search results), risk_assessment, model_calls, usage_metadata_list
         """
-        from ..tools.search_tools import create_search_tool
+        from ..utils.search_provider import create_search_tool
 
         # Create search tool
         search_tool = create_search_tool(config.deep_judgment_rubric_search_tool)
