@@ -365,20 +365,34 @@ def test_resume_uses_state_config_not_cli(runner: CliRunner, tmp_path: Path) -> 
 def test_checkpoint_with_results_incremental(
     runner: CliRunner,
     checkpoint_with_results: Path,
-    tmp_presets_dir: Path,
+    tmp_path: Path,
 ) -> None:
     """Test that checkpoint with existing results is processed incrementally.
 
     This tests that questions with existing results are skipped and only
     questions without results are processed.
+
+    Uses manual interface to avoid LLM API calls - the checkpoint already has
+    all questions marked as finished, so no verification should occur.
     """
+    import json
+
+    # Create empty manual traces file (won't be used since all questions are finished)
+    traces_file = tmp_path / "traces.json"
+    traces_file.write_text(json.dumps({}))
+
+    output_file = tmp_path / "results.json"
     result = runner.invoke(
         app,
         [
             "verify",
             str(checkpoint_with_results),
-            "--preset",
-            str(tmp_presets_dir / "default.json"),
+            "--interface",
+            "manual",
+            "--manual-traces",
+            str(traces_file),
+            "--output",
+            str(output_file),
         ],
     )
 
