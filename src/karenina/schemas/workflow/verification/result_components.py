@@ -155,6 +155,11 @@ class VerificationResultRubric(BaseModel):
 
     # Split trait scores by type (replaces old verify_rubric dict)
     llm_trait_scores: dict[str, int | bool] | None = None  # LLM-evaluated traits (1-5 scale or binary)
+    llm_trait_labels: dict[str, str] | None = None  # Class labels for literal kind traits
+    # Structure: {"trait_name": "ClassName"}
+    # For literal kind traits, scores are stored as int indices (0 to len(classes)-1) in llm_trait_scores,
+    # and the human-readable class names are stored here. For non-literal traits, this field is not used.
+    # Error state: score=-1 in llm_trait_scores indicates invalid classification, label contains the invalid value.
     regex_trait_scores: dict[str, bool] | None = None  # Regex-based traits (boolean)
     callable_trait_scores: dict[str, bool | int] | None = None  # Callable-based traits (boolean or score)
     metric_trait_scores: dict[str, dict[str, float]] | None = None  # Metric traits with nested metrics dict
@@ -209,6 +214,19 @@ class VerificationResultRubric(BaseModel):
         if self.metric_trait_scores and name in self.metric_trait_scores:
             return (self.metric_trait_scores[name], "metric")
         return None
+
+    def get_llm_trait_labels(self) -> dict[str, str]:
+        """
+        Get class labels for literal kind LLM traits.
+
+        Returns:
+            dict: Mapping of trait names to class labels for literal kind traits.
+                  Returns empty dict if no labels are stored.
+
+        Example:
+            {"response_type": "Factual", "tone": "Professional"}
+        """
+        return self.llm_trait_labels or {}
 
 
 class VerificationResultDeepJudgment(BaseModel):
