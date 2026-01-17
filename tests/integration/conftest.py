@@ -98,7 +98,7 @@ def rubric_evaluator(
 
     Example:
         def test_rubric_eval(rubric_evaluator, sample_rubric):
-            results, usage = rubric_evaluator.evaluate_rubric(
+            results, labels, usage = rubric_evaluator.evaluate_rubric(
                 question="What is 2+2?",
                 answer="The answer is 4.",
                 rubric=sample_rubric,

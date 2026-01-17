@@ -702,7 +702,7 @@ class Answer(BaseAnswer):
             try:
                 evaluator = RubricEvaluator(parsing_model, evaluation_strategy="batch")
                 question_text = question_dict.get("question", "")
-                rubric_scores, _ = evaluator.evaluate_rubric(
+                rubric_scores, _, _ = evaluator.evaluate_rubric(
                     question=question_text, answer=response_text, rubric=rubric
                 )
             except Exception as e:
