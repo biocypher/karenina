@@ -15,10 +15,12 @@ from .models import (
 from .rubric_dataframe import RubricDataFrameBuilder
 from .rubric_judgment_results import RubricJudgmentResults
 from .rubric_outputs import (
+    BatchLiteralClassifications,
     BatchRubricScores,
     ConfusionMatrixOutput,
     HallucinationRiskOutput,
     SingleBooleanScore,
+    SingleLiteralClassification,
     SingleNumericScore,
     TraitExcerpt,
     TraitExcerptsOutput,
@@ -100,4 +102,7 @@ __all__ = [
     "TraitExcerpt",
     "TraitExcerptsOutput",
     "HallucinationRiskOutput",
+    # Literal trait classification models
+    "SingleLiteralClassification",
+    "BatchLiteralClassifications",
 ]

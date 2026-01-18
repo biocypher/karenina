@@ -150,7 +150,7 @@ class TestLLMRubricTraitEvaluation:
         rubric = Rubric(llm_traits=[trait])
 
         # This should match the fixture for boolean clarity trait
-        scores, usage = rubric_evaluator.evaluate_rubric(
+        scores, labels, usage = rubric_evaluator.evaluate_rubric(
             question="What is the capital of France?",
             answer="Paris is the capital of France. It is a major European city.",
             rubric=rubric,
@@ -178,7 +178,7 @@ class TestLLMRubricTraitEvaluation:
 
         rubric = Rubric(llm_traits=[trait])
 
-        scores, usage = rubric_evaluator.evaluate_rubric(
+        scores, labels, usage = rubric_evaluator.evaluate_rubric(
             question="Explain the process of photosynthesis.",
             answer="Photosynthesis converts sunlight to energy.",
             rubric=rubric,
@@ -221,7 +221,7 @@ class TestLLMRubricTraitEvaluation:
 
         rubric = Rubric(llm_traits=traits)
 
-        scores, usage = rubric_evaluator.evaluate_rubric(
+        scores, labels, usage = rubric_evaluator.evaluate_rubric(
             question="How do I treat a minor burn?",
             answer="For a minor burn, run cool water over it for 10-20 minutes. Do not use ice directly. Apply aloe vera gel if available. Cover with a sterile bandage. Seek medical attention if the burn blisters or is larger than 3 inches.",
             rubric=rubric,

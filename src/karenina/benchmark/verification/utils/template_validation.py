@@ -1,7 +1,6 @@
 """Template validation logic for verification system."""
 
 import inspect
-from typing import Any
 
 from ....schemas.domain import BaseAnswer
 

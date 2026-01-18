@@ -71,7 +71,10 @@ class RubricResults(BaseModel):
     # ========================================================================
 
     def to_dataframe(
-        self, trait_type: Literal["llm_score", "llm_binary", "llm", "regex", "callable", "metric", "all"] = "all"
+        self,
+        trait_type: Literal[
+            "llm_score", "llm_binary", "llm_literal", "llm", "regex", "callable", "metric", "all"
+        ] = "all",
     ) -> Any:
         """
         Convert rubric evaluation results to pandas DataFrame.
@@ -83,7 +86,8 @@ class RubricResults(BaseModel):
             trait_type: Type of traits to include
                 - "llm_score": LLM traits with 1-5 scale scores
                 - "llm_binary": LLM traits with boolean scores
-                - "llm": All LLM traits (both score and binary)
+                - "llm_literal": LLM traits with literal kind (categorical classification)
+                - "llm": All LLM traits (score, binary, and literal)
                 - "regex": Regex traits (boolean)
                 - "callable": Callable traits (boolean or score)
                 - "metric": Metric traits (precision, recall, f1) - EXPLODED by metric
@@ -93,13 +97,19 @@ class RubricResults(BaseModel):
             1. Status: completed_without_errors, error
             2. Identification: question_id, template_id, question_text, keywords, replicate
             3. Model Config: answering_model, parsing_model, system_prompts
-            4. Rubric Data: trait_name, trait_score, trait_type, metric_name (for metrics only)
+            4. Rubric Data: trait_name, trait_score, trait_label, trait_type, metric_name
             5. Confusion Matrix: confusion_tp, confusion_fp, confusion_fn, confusion_tn (for metrics only)
             6. Execution Metadata: execution_time, timestamp, run_name
             7. Deep Judgment (if include_deep_judgment=True):
                - trait_reasoning: Reasoning text for the trait score
                - trait_excerpts: JSON-serialized list of excerpts
                - trait_hallucination_risk: Hallucination risk assessment
+
+        Literal Kind Traits:
+            For literal kind LLM traits, `trait_score` contains the integer index (0 to N-1)
+            and `trait_label` contains the human-readable class name. This allows numeric
+            aggregation on scores while preserving the categorical label for display.
+            Error state is indicated by score=-1 with label containing the invalid value.
 
         Deep Judgment Columns:
             When `include_deep_judgment=True` is set during initialization,
@@ -122,6 +132,10 @@ class RubricResults(BaseModel):
             >>> df = rubric_results.to_dataframe(trait_type="llm")
             >>> # Analyze reasoning and excerpts
             >>> df[['trait_name', 'trait_score', 'trait_reasoning']].head()
+
+            >>> # Literal kind traits with labels
+            >>> df_literal = rubric_results.to_dataframe(trait_type="llm_literal")
+            >>> df_literal[['trait_name', 'trait_score', 'trait_label']].head()
         """
         return self.dataframe_builder.build_dataframe(trait_type)
 

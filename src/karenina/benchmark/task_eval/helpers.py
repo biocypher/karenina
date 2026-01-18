@@ -85,7 +85,7 @@ def evaluate_standalone_rubrics(
         try:
             evaluator = RubricEvaluator(parsing_model)
             question = f"Evaluate the overall quality of the {context} outputs."
-            rubric_scores, _ = evaluator.evaluate_rubric(
+            rubric_scores, _, _ = evaluator.evaluate_rubric(
                 question=question, answer=concatenated_logs, rubric=merged_rubric
             )
         except Exception as e:

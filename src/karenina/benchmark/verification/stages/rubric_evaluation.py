@@ -185,6 +185,7 @@ class RubricEvaluationStage(BaseVerificationStage):
         """Artifacts produced by this stage."""
         return [
             "rubric_result",
+            "llm_trait_labels",
             "metric_confusion_lists",
             "metric_results",
             "rubric_evaluation_input",
@@ -281,6 +282,7 @@ class RubricEvaluationStage(BaseVerificationStage):
         context.set_artifact("rubric_trace_extraction_error", rubric_trace_extraction_error)
 
         rubric_result = None
+        llm_trait_labels = None
         metric_confusion_lists = None
         metric_results = None
 
@@ -352,6 +354,9 @@ class RubricEvaluationStage(BaseVerificationStage):
                     rubric_result.update(dj_result["deep_judgment_scores"])
                     rubric_result.update(dj_result["standard_scores"])
 
+                    # Get literal trait labels from standard evaluation (if any)
+                    llm_trait_labels = dj_result.get("standard_labels")
+
                     # Store deep judgment metadata in result fields
                     context.set_result_field("deep_judgment_rubric_performed", True)
                     context.set_result_field("extracted_rubric_excerpts", dj_result["excerpts"])
@@ -386,7 +391,7 @@ class RubricEvaluationStage(BaseVerificationStage):
 
                 else:
                     # Standard rubric evaluation (no deep judgment)
-                    rubric_result, usage_metadata_list = evaluator.evaluate_rubric(
+                    rubric_result, llm_trait_labels, usage_metadata_list = evaluator.evaluate_rubric(
                         question=context.question_text,
                         answer=rubric_evaluation_input,  # Use filtered or full trace based on config
                         rubric=configured_rubric,  # Use configured rubric
@@ -436,6 +441,7 @@ class RubricEvaluationStage(BaseVerificationStage):
 
         # Store results (even if None)
         context.set_artifact("rubric_result", rubric_result)
+        context.set_artifact("llm_trait_labels", llm_trait_labels)
         context.set_artifact("metric_confusion_lists", metric_confusion_lists)
         context.set_artifact("metric_results", metric_results)
 
@@ -444,6 +450,7 @@ class RubricEvaluationStage(BaseVerificationStage):
 
         # Store in result builder
         context.set_result_field("verify_rubric", rubric_result)
+        context.set_result_field("llm_trait_labels", llm_trait_labels)
         context.set_result_field("metric_trait_confusion_lists", metric_confusion_lists)
         context.set_result_field("metric_trait_metrics", metric_results)
         # Note: evaluation_rubric is now stored in shared_data at export time (not per-result)

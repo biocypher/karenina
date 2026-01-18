@@ -74,12 +74,13 @@ class RubricDeepJudgmentHandler:
             rubric: The rubric containing evaluation traits
             config: VerificationConfig with deep judgment settings
             standard_evaluator_fn: Callback function to evaluate standard (non-DJ) traits
-                                   Signature: (question, answer, rubric) -> (scores, usage_metadata_list)
+                                   Signature: (question, answer, rubric) -> (scores, labels, usage_metadata_list)
 
         Returns:
             Dictionary containing:
                 - deep_judgment_scores: Scores for deep-judgment-enabled traits
                 - standard_scores: Scores for standard traits
+                - standard_labels: Labels for literal kind traits in standard evaluation (or None)
                 - excerpts: Extracted excerpts per trait
                 - reasoning: Reasoning per trait
                 - metadata: Per-trait evaluation metadata
@@ -149,16 +150,20 @@ class RubricDeepJudgmentHandler:
 
         # Evaluate standard traits using the provided callback
         standard_scores: dict[str, int | bool] = {}
+        standard_labels: dict[str, str] | None = None
         standard_usage_metadata_list: list[dict[str, Any]] = []
         if standard_traits:
             logger.debug(f"Evaluating {len(standard_traits)} standard traits")
             standard_rubric = RubricClass(llm_traits=standard_traits)
-            standard_scores, standard_usage_metadata_list = standard_evaluator_fn(question, answer, standard_rubric)
+            standard_scores, standard_labels, standard_usage_metadata_list = standard_evaluator_fn(
+                question, answer, standard_rubric
+            )
             usage_metadata_list.extend(standard_usage_metadata_list)
 
         return {
             "deep_judgment_scores": dj_scores,
             "standard_scores": standard_scores,
+            "standard_labels": standard_labels,
             "excerpts": excerpts,
             "reasoning": reasoning,
             "metadata": metadata,

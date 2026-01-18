@@ -12,12 +12,12 @@ from typing import Any, get_args, get_origin
 from ....schemas.domain import BaseAnswer
 from ....schemas.shared import SearchResultItem
 
-# Import and re-export _invoke_llm_with_retry with usage tracking support
-from .llm_invocation import _invoke_llm_with_retry
-
 # Re-export shared utilities for backward compatibility
 from .json_helpers import extract_json_from_text as _extract_json_from_text
 from .json_helpers import strip_markdown_fences as _strip_markdown_fences
+
+# Import and re-export _invoke_llm_with_retry with usage tracking support
+from .llm_invocation import _invoke_llm_with_retry
 
 __all__ = [
     "_invoke_llm_with_retry",

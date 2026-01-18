@@ -39,7 +39,10 @@ class RubricDataFrameBuilder:
         self._include_deep_judgment = include_deep_judgment
 
     def build_dataframe(
-        self, trait_type: Literal["llm_score", "llm_binary", "llm", "regex", "callable", "metric", "all"] = "all"
+        self,
+        trait_type: Literal[
+            "llm_score", "llm_binary", "llm_literal", "llm", "regex", "callable", "metric", "all"
+        ] = "all",
     ) -> Any:
         """
         Convert rubric evaluation results to pandas DataFrame.
@@ -51,7 +54,8 @@ class RubricDataFrameBuilder:
             trait_type: Type of traits to include
                 - "llm_score": LLM traits with 1-5 scale scores
                 - "llm_binary": LLM traits with boolean scores
-                - "llm": All LLM traits (both score and binary)
+                - "llm_literal": LLM traits with literal kind (categorical classification)
+                - "llm": All LLM traits (score, binary, and literal)
                 - "regex": Regex traits (boolean)
                 - "callable": Callable traits (boolean or score)
                 - "metric": Metric traits (precision, recall, f1) - EXPLODED by metric
@@ -61,13 +65,19 @@ class RubricDataFrameBuilder:
             1. Status: completed_without_errors, error
             2. Identification: question_id, template_id, question_text, keywords, replicate
             3. Model Config: answering_model, parsing_model, system_prompts
-            4. Rubric Data: trait_name, trait_score, trait_type, metric_name (for metrics only)
+            4. Rubric Data: trait_name, trait_score, trait_label, trait_type, metric_name
             5. Confusion Matrix: confusion_tp, confusion_fp, confusion_fn, confusion_tn (for metrics only)
             6. Execution Metadata: execution_time, timestamp, run_name
             7. Deep Judgment (if include_deep_judgment=True):
                - trait_reasoning: Reasoning text for the trait score
                - trait_excerpts: JSON-serialized list of excerpts
                - trait_hallucination_risk: Hallucination risk assessment
+
+        Note on literal kind traits:
+            For literal kind LLM traits, `trait_score` contains the integer index (0 to N-1)
+            and `trait_label` contains the human-readable class name. This allows numeric
+            aggregation on scores while preserving the categorical label for display.
+            Error state is indicated by score=-1 with label containing the invalid value.
 
         Returns:
             pandas.DataFrame: Exploded DataFrame with one row per trait/metric
@@ -76,6 +86,10 @@ class RubricDataFrameBuilder:
             >>> builder = RubricDataFrameBuilder(results)
             >>> df = builder.build_dataframe(trait_type="llm_score")
             >>> avg_scores = df[df['trait_name'] == 'clarity'].groupby('question_id')['trait_score'].mean()
+
+            >>> # For literal traits, access labels for display
+            >>> df_literal = builder.build_dataframe(trait_type="llm_literal")
+            >>> df_literal[['trait_name', 'trait_score', 'trait_label']].head()
         """
         import pandas as pd
 
@@ -88,19 +102,37 @@ class RubricDataFrameBuilder:
                 continue
 
             # Process LLM traits
-            if trait_type in ("llm_score", "llm_binary", "llm", "all") and result.rubric.llm_trait_scores:
+            if (
+                trait_type in ("llm_score", "llm_binary", "llm_literal", "llm", "all")
+                and result.rubric.llm_trait_scores
+            ):
+                # Get labels for literal kind traits (if any)
+                llm_trait_labels = result.rubric.get_llm_trait_labels()
+
                 for trait_name, trait_score in result.rubric.llm_trait_scores.items():
-                    # Determine if score or binary based on value type
+                    # Determine trait type based on value and presence in labels
                     is_binary = isinstance(trait_score, bool)
-                    score_type = "llm_binary" if is_binary else "llm_score"
+                    is_literal = trait_name in llm_trait_labels
+
+                    if is_binary:
+                        score_type = "llm_binary"
+                        trait_label = None
+                    elif is_literal:
+                        score_type = "llm_literal"
+                        trait_label = llm_trait_labels[trait_name]
+                    else:
+                        score_type = "llm_score"
+                        trait_label = None
 
                     # Filter by requested type
-                    if trait_type == "llm_score" and is_binary:
+                    if trait_type == "llm_score" and (is_binary or is_literal):
                         continue
                     if trait_type == "llm_binary" and not is_binary:
                         continue
+                    if trait_type == "llm_literal" and not is_literal:
+                        continue
 
-                    rows.append(self._create_llm_trait_row(result, trait_name, trait_score, score_type))
+                    rows.append(self._create_llm_trait_row(result, trait_name, trait_score, score_type, trait_label))
 
             # Process regex traits
             if trait_type in ("regex", "all") and result.rubric.regex_trait_scores:
@@ -162,6 +194,7 @@ class RubricDataFrameBuilder:
             # Rubric Data
             "trait_name",
             "trait_score",
+            "trait_label",  # For literal kind LLM traits: class name (score is index)
             "trait_type",
             "metric_name",
             # Confusion Matrix (for metric traits)
@@ -198,8 +231,18 @@ class RubricDataFrameBuilder:
         trait_name: str,
         trait_score: int | bool,
         score_type: str,
+        trait_label: str | None = None,
     ) -> dict[str, Any]:
-        """Create DataFrame row for LLM trait."""
+        """Create DataFrame row for LLM trait.
+
+        Args:
+            result: The verification result
+            trait_name: Name of the trait
+            trait_score: Score value (bool for binary, int for score/literal)
+            score_type: Type of LLM trait ("llm_binary", "llm_score", or "llm_literal")
+            trait_label: For literal kind traits, the class name (human-readable label).
+                         Score is the index, label is the class name.
+        """
         metadata = result.metadata
 
         row: dict[str, Any] = {
@@ -221,6 +264,7 @@ class RubricDataFrameBuilder:
             "trait_name": trait_name,
             "trait_type": score_type,
             "trait_score": trait_score,
+            "trait_label": trait_label,  # Class name for literal kind traits, None otherwise
             # === Execution Metadata ===
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,

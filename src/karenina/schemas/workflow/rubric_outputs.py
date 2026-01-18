@@ -95,3 +95,37 @@ class HallucinationRiskOutput(BaseModel):
         description="Hallucination risk level: none=strong external support, low=some support, medium=weak/ambiguous, high=no support or contradicted"
     )
     justification: str = Field(description="Brief explanation for the risk assessment")
+
+
+# ========== Literal Trait Classification Models ==========
+
+
+class SingleLiteralClassification(BaseModel):
+    """Structured output for single literal trait classification.
+
+    Used when evaluating a single literal (categorical) trait.
+    The LLM classifies the response into one of the predefined classes.
+
+    The classification field should contain the exact class name as defined
+    in the trait's classes field. If the LLM returns an invalid class name,
+    the evaluator will set score=-1 and store the invalid value in the label
+    for debugging purposes.
+    """
+
+    classification: str = Field(
+        description="The assigned class name (must match one of the trait's predefined classes exactly)"
+    )
+
+
+class BatchLiteralClassifications(BaseModel):
+    """Structured output for batch literal trait classification.
+
+    Used when evaluating multiple literal (categorical) traits in a single LLM call.
+    The LLM classifies the response for each trait into its predefined classes.
+
+    Each key in the classifications dict is a trait name, and the value is the
+    assigned class name for that trait. Class names must exactly match those
+    defined in each trait's classes field.
+    """
+
+    classifications: dict[str, str] = Field(description="Dictionary mapping trait names to assigned class names")

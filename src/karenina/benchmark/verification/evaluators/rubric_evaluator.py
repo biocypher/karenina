@@ -114,7 +114,7 @@ class RubricEvaluator:
 
     def evaluate_rubric(
         self, question: str, answer: str, rubric: Rubric
-    ) -> tuple[dict[str, int | bool], list[dict[str, Any]]]:
+    ) -> tuple[dict[str, int | bool], dict[str, str] | None, list[dict[str, Any]]]:
         """
         Evaluate an answer against a rubric's traits (LLM, regex, and callable).
 
@@ -124,14 +124,16 @@ class RubricEvaluator:
             rubric: The rubric containing evaluation traits
 
         Returns:
-            Tuple of (results, usage_metadata_list) where:
+            Tuple of (results, llm_trait_labels, usage_metadata_list) where:
             - results: Dictionary mapping trait names to their evaluated scores
+            - llm_trait_labels: Dictionary mapping literal trait names to class labels (or None if no literal traits)
             - usage_metadata_list: List of usage metadata dicts from LLM calls
 
         Raises:
             Exception: If evaluation fails completely
         """
         results: dict[str, int | bool] = {}
+        llm_trait_labels: dict[str, str] | None = None
         usage_metadata_list: list[dict[str, Any]] = []
 
         # Evaluate regex traits first (fast and deterministic)
@@ -146,29 +148,61 @@ class RubricEvaluator:
 
         # Evaluate LLM traits if present - delegate to LLMTraitEvaluator
         if rubric.llm_traits:
-            if self.evaluation_strategy == "batch":
-                try:
-                    llm_results, usage_metadata = self.llm_trait_evaluator.evaluate_batch(
-                        question, answer, rubric.llm_traits
-                    )
-                    results.update(llm_results)
-                    if usage_metadata:
-                        usage_metadata_list.append(usage_metadata)
-                except Exception as e:
-                    logger.error(f"Batch evaluation failed: {e}")
-                    raise RuntimeError(f"Failed to evaluate rubric traits using batch strategy: {e}") from e
-            else:  # "sequential"
-                try:
-                    llm_results, seq_usage_metadata_list = self.llm_trait_evaluator.evaluate_sequential(
-                        question, answer, rubric.llm_traits
-                    )
-                    results.update(llm_results)
-                    usage_metadata_list.extend(seq_usage_metadata_list)
-                except Exception as e:
-                    logger.error(f"Sequential evaluation failed: {e}")
-                    raise RuntimeError(f"Failed to evaluate rubric traits using sequential strategy: {e}") from e
+            # Separate literal traits from boolean/score traits
+            literal_traits = [t for t in rubric.llm_traits if t.kind == "literal"]
+            non_literal_traits = [t for t in rubric.llm_traits if t.kind != "literal"]
 
-        return results, usage_metadata_list
+            # Evaluate non-literal (boolean/score) traits
+            if non_literal_traits:
+                if self.evaluation_strategy == "batch":
+                    try:
+                        llm_results, usage_metadata = self.llm_trait_evaluator.evaluate_batch(
+                            question, answer, non_literal_traits
+                        )
+                        results.update(llm_results)
+                        if usage_metadata:
+                            usage_metadata_list.append(usage_metadata)
+                    except Exception as e:
+                        logger.error(f"Batch evaluation failed: {e}")
+                        raise RuntimeError(f"Failed to evaluate rubric traits using batch strategy: {e}") from e
+                else:  # "sequential"
+                    try:
+                        llm_results, seq_usage_metadata_list = self.llm_trait_evaluator.evaluate_sequential(
+                            question, answer, non_literal_traits
+                        )
+                        results.update(llm_results)
+                        usage_metadata_list.extend(seq_usage_metadata_list)
+                    except Exception as e:
+                        logger.error(f"Sequential evaluation failed: {e}")
+                        raise RuntimeError(f"Failed to evaluate rubric traits using sequential strategy: {e}") from e
+
+            # Evaluate literal (categorical) traits
+            if literal_traits:
+                if self.evaluation_strategy == "batch":
+                    try:
+                        literal_scores, literal_labels, usage_metadata = (
+                            self.llm_trait_evaluator.evaluate_literal_batch(question, answer, literal_traits)
+                        )
+                        results.update(literal_scores)
+                        llm_trait_labels = literal_labels if literal_labels else None
+                        if usage_metadata:
+                            usage_metadata_list.append(usage_metadata)
+                    except Exception as e:
+                        logger.error(f"Literal batch evaluation failed: {e}")
+                        raise RuntimeError(f"Failed to evaluate literal traits using batch strategy: {e}") from e
+                else:  # "sequential"
+                    try:
+                        literal_scores, literal_labels, seq_usage_metadata_list = (
+                            self.llm_trait_evaluator.evaluate_literal_sequential(question, answer, literal_traits)
+                        )
+                        results.update(literal_scores)
+                        llm_trait_labels = literal_labels if literal_labels else None
+                        usage_metadata_list.extend(seq_usage_metadata_list)
+                    except Exception as e:
+                        logger.error(f"Literal sequential evaluation failed: {e}")
+                        raise RuntimeError(f"Failed to evaluate literal traits using sequential strategy: {e}") from e
+
+        return results, llm_trait_labels, usage_metadata_list
 
     def _evaluate_deterministic_traits(
         self,

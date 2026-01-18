@@ -6,6 +6,11 @@ of LLMRubricTrait instances using LLM-as-judge for subjective assessments.
 Two evaluation strategies are supported:
 - batch: Evaluate all traits in a single LLM call (efficient)
 - sequential: Evaluate traits one-by-one (reliable)
+
+Supports three trait kinds:
+- boolean: Binary true/false assessment
+- score: Numeric rating within a range (e.g., 1-5)
+- literal: Categorical classification into predefined classes
 """
 
 import json
@@ -25,24 +30,46 @@ class LLMTraitEvaluator:
     Evaluates LLM rubric traits using LLM-as-judge.
 
     This evaluator handles LLMRubricTrait evaluation by prompting an LLM
-    to assess response quality against trait criteria. Supports both
-    boolean (pass/fail) and numeric (scored) traits.
+    to assess response quality against trait criteria. Supports three kinds:
+    - boolean (pass/fail): Binary true/false assessment
+    - score (numeric): Rating within a defined range (e.g., 1-5)
+    - literal (categorical): Classification into predefined classes
+
+    For literal traits, scores are returned as int indices (0 to len(classes)-1),
+    with class labels returned separately for display purposes.
 
     Example usage:
         evaluator = LLMTraitEvaluator(llm)
-        results, usage = evaluator.evaluate_batch(question, answer, rubric)
-        # or
-        results, usage = evaluator.evaluate_sequential(question, answer, rubric)
+        # For boolean/score traits:
+        results, usage = evaluator.evaluate_batch(question, answer, traits)
+        # For literal traits:
+        scores, labels, usage = evaluator.evaluate_literal_batch(question, answer, literal_traits)
     """
 
-    def __init__(self, llm: Any):
+    def __init__(
+        self,
+        llm: Any,
+        async_enabled: bool | None = None,
+        async_max_workers: int | None = None,
+    ):
         """
         Initialize the LLM trait evaluator.
 
         Args:
             llm: Initialized LLM instance (LangChain compatible) for evaluation
+            async_enabled: Whether to run sequential trait evaluations in parallel.
+                          If None, reads from KARENINA_ASYNC_ENABLED env var (default: True).
+            async_max_workers: Max concurrent workers for parallel execution.
+                              If None, reads from KARENINA_ASYNC_MAX_WORKERS env var (default: 2).
         """
+        from ....infrastructure.llm.parallel_invoker import read_async_config
+
         self.llm = llm
+
+        # Read async config with env var fallbacks
+        default_enabled, default_workers = read_async_config()
+        self._async_enabled = async_enabled if async_enabled is not None else default_enabled
+        self._async_max_workers = async_max_workers if async_max_workers is not None else default_workers
 
     def evaluate_batch(
         self, question: str, answer: str, traits: list[LLMRubricTrait]
@@ -81,7 +108,11 @@ class LLMTraitEvaluator:
         self, question: str, answer: str, traits: list[LLMRubricTrait]
     ) -> tuple[dict[str, int | bool], list[dict[str, Any]]]:
         """
-        Evaluate traits one by one (fallback method).
+        Evaluate traits one by one.
+
+        When async_enabled is True, the LLM calls run in parallel using
+        ParallelLLMInvoker for significant speedup. Otherwise, calls run
+        sequentially (legacy behavior).
 
         Args:
             question: The original question asked
@@ -91,18 +122,84 @@ class LLMTraitEvaluator:
         Returns:
             Tuple of (results_dict, list_of_usage_metadata)
         """
+        from ....schemas.workflow.rubric_outputs import SingleBooleanScore, SingleNumericScore
+
+        # Build all tasks upfront
+        tasks: list[tuple[list[BaseMessage], type]] = []
+        for trait in traits:
+            system_prompt = self._build_single_trait_system_prompt(trait)
+            user_prompt = self._build_single_trait_user_prompt(question, answer, trait)
+            messages: list[BaseMessage] = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=user_prompt),
+            ]
+            model_class = SingleBooleanScore if trait.kind == "boolean" else SingleNumericScore
+            tasks.append((messages, model_class))
+
+        if self._async_enabled:
+            return self._execute_parallel_sequential(tasks, traits)
+        else:
+            return self._execute_true_sequential(tasks, traits)
+
+    def _execute_parallel_sequential(
+        self,
+        tasks: list[tuple[list[BaseMessage], type]],
+        traits: list[LLMRubricTrait],
+    ) -> tuple[dict[str, int | bool], list[dict[str, Any]]]:
+        """Execute sequential evaluation tasks in parallel using ParallelLLMInvoker."""
+        from ....infrastructure.llm.parallel_invoker import ParallelLLMInvoker
+
+        invoker = ParallelLLMInvoker(self.llm, max_workers=self._async_max_workers)
+        raw_results = invoker.invoke_batch(tasks)
+
         results: dict[str, int | bool] = {}
         usage_metadata_list: list[dict[str, Any]] = []
 
-        for trait in traits:
+        for i, (parsed_result, usage, error) in enumerate(raw_results):
+            trait = traits[i]
+            if error:
+                logger.warning(f"Failed to evaluate trait '{trait.name}': {error}")
+                results[trait.name] = None  # type: ignore[assignment]
+                usage_metadata_list.append({})
+            else:
+                # Extract score from result
+                assert parsed_result is not None  # mypy: error implies parsed_result is None
+                if trait.kind == "boolean":
+                    score: int | bool = parsed_result.result
+                else:
+                    score = parsed_result.score
+                results[trait.name] = self._validate_score(score, trait)
+                usage_metadata_list.append(usage or {})
+
+        return results, usage_metadata_list
+
+    def _execute_true_sequential(
+        self,
+        tasks: list[tuple[list[BaseMessage], type]],
+        traits: list[LLMRubricTrait],
+    ) -> tuple[dict[str, int | bool], list[dict[str, Any]]]:
+        """Execute evaluation tasks truly sequentially (legacy behavior)."""
+        from .rubric_parsing import invoke_with_structured_output
+
+        results: dict[str, int | bool] = {}
+        usage_metadata_list: list[dict[str, Any]] = []
+
+        for i, (messages, model_class) in enumerate(tasks):
+            trait = traits[i]
             try:
-                score, usage_metadata = self._evaluate_single_trait(question, answer, trait)
-                results[trait.name] = score
+                parsed_result: Any
+                parsed_result, usage_metadata = invoke_with_structured_output(self.llm, messages, model_class)
+                # Extract score from result
+                if trait.kind == "boolean":
+                    score: int | bool = parsed_result.result
+                else:
+                    score = parsed_result.score
+                results[trait.name] = self._validate_score(score, trait)
                 usage_metadata_list.append(usage_metadata)
             except Exception as e:
                 logger.warning(f"Failed to evaluate trait '{trait.name}': {e}")
-                # Continue with other traits, mark this one as None
                 results[trait.name] = None  # type: ignore[assignment]
+                usage_metadata_list.append({})
 
         return results, usage_metadata_list
 
@@ -438,3 +535,358 @@ Evaluate this answer for the trait above and return your assessment as JSON: {fo
 
             score = int(numbers[0])
             return self._validate_score(score, trait)
+
+    # ========== Literal Trait Evaluation Methods ==========
+
+    def evaluate_literal_batch(
+        self, question: str, answer: str, traits: list[LLMRubricTrait]
+    ) -> tuple[dict[str, int], dict[str, str], dict[str, Any]]:
+        """
+        Evaluate literal (categorical) traits in a single LLM call.
+
+        Literal traits classify responses into predefined categories. The LLM
+        returns class names, which are then converted to integer indices.
+
+        Args:
+            question: The original question asked
+            answer: The LLM's response to evaluate
+            traits: List of literal kind LLM traits to evaluate
+
+        Returns:
+            Tuple of (scores, labels, usage_metadata) where:
+            - scores: Dict mapping trait names to int indices (0 to N-1, or -1 for error)
+            - labels: Dict mapping trait names to class labels (or invalid value for error)
+            - usage_metadata: Usage metadata from the LLM call
+        """
+        from ....schemas.workflow.rubric_outputs import BatchLiteralClassifications
+        from .rubric_parsing import invoke_with_structured_output
+
+        # Filter to only literal traits
+        literal_traits = [t for t in traits if t.kind == "literal"]
+        if not literal_traits:
+            return {}, {}, {}
+
+        system_prompt = self._build_literal_batch_system_prompt()
+        user_prompt = self._build_literal_batch_user_prompt(question, answer, literal_traits)
+
+        messages: list[BaseMessage] = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
+
+        # Invoke with automatic strategy selection and fallbacks
+        parsed_result, usage_metadata = invoke_with_structured_output(self.llm, messages, BatchLiteralClassifications)
+
+        # Validate classifications and convert to scores + labels
+        scores, labels = self._validate_literal_classifications(parsed_result.classifications, literal_traits)
+        return scores, labels, usage_metadata
+
+    def evaluate_literal_sequential(
+        self, question: str, answer: str, traits: list[LLMRubricTrait]
+    ) -> tuple[dict[str, int], dict[str, str], list[dict[str, Any]]]:
+        """
+        Evaluate literal traits one by one.
+
+        When async_enabled is True, the LLM calls run in parallel using
+        ParallelLLMInvoker for significant speedup. Otherwise, calls run
+        sequentially (legacy behavior).
+
+        Args:
+            question: The original question asked
+            answer: The LLM's response to evaluate
+            traits: List of literal kind LLM traits to evaluate
+
+        Returns:
+            Tuple of (scores, labels, usage_metadata_list) where:
+            - scores: Dict mapping trait names to int indices (0 to N-1, or -1 for error)
+            - labels: Dict mapping trait names to class labels (or invalid value for error)
+            - usage_metadata_list: List of usage metadata dicts from LLM calls
+        """
+        from ....schemas.workflow.rubric_outputs import SingleLiteralClassification
+
+        # Filter to only literal traits
+        literal_traits = [t for t in traits if t.kind == "literal"]
+        if not literal_traits:
+            return {}, {}, []
+
+        # Build all tasks upfront
+        tasks: list[tuple[list[BaseMessage], type[SingleLiteralClassification]]] = []
+        for trait in literal_traits:
+            system_prompt = self._build_literal_single_system_prompt(trait)
+            user_prompt = self._build_literal_single_user_prompt(question, answer, trait)
+            messages: list[BaseMessage] = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=user_prompt),
+            ]
+            tasks.append((messages, SingleLiteralClassification))
+
+        if self._async_enabled:
+            return self._execute_parallel_literal_sequential(tasks, literal_traits)
+        else:
+            return self._execute_true_literal_sequential(tasks, literal_traits)
+
+    def _execute_parallel_literal_sequential(
+        self,
+        tasks: list[tuple[list[BaseMessage], type]],
+        traits: list[LLMRubricTrait],
+    ) -> tuple[dict[str, int], dict[str, str], list[dict[str, Any]]]:
+        """Execute literal sequential evaluation tasks in parallel."""
+        from ....infrastructure.llm.parallel_invoker import ParallelLLMInvoker
+
+        invoker = ParallelLLMInvoker(self.llm, max_workers=self._async_max_workers)
+        raw_results = invoker.invoke_batch(tasks)
+
+        scores: dict[str, int] = {}
+        labels: dict[str, str] = {}
+        usage_metadata_list: list[dict[str, Any]] = []
+
+        for i, (parsed_result, usage, error) in enumerate(raw_results):
+            trait = traits[i]
+            if error:
+                logger.warning(f"Failed to evaluate literal trait '{trait.name}': {error}")
+                scores[trait.name] = -1
+                labels[trait.name] = f"[EVALUATION_ERROR: {error!s}]"
+                usage_metadata_list.append({})
+            else:
+                assert parsed_result is not None  # mypy: error implies parsed_result is None
+                score, label = self._validate_literal_classification(trait, parsed_result.classification)
+                scores[trait.name] = score
+                labels[trait.name] = label
+                usage_metadata_list.append(usage or {})
+
+        return scores, labels, usage_metadata_list
+
+    def _execute_true_literal_sequential(
+        self,
+        tasks: list[tuple[list[BaseMessage], type]],
+        traits: list[LLMRubricTrait],
+    ) -> tuple[dict[str, int], dict[str, str], list[dict[str, Any]]]:
+        """Execute literal evaluation tasks truly sequentially (legacy behavior)."""
+        from .rubric_parsing import invoke_with_structured_output
+
+        scores: dict[str, int] = {}
+        labels: dict[str, str] = {}
+        usage_metadata_list: list[dict[str, Any]] = []
+
+        for i, (messages, model_class) in enumerate(tasks):
+            trait = traits[i]
+            try:
+                parsed_result: Any
+                parsed_result, usage_metadata = invoke_with_structured_output(self.llm, messages, model_class)
+                usage_metadata_list.append(usage_metadata)
+
+                # Validate and convert classification to score + label
+                score, label = self._validate_literal_classification(trait, parsed_result.classification)
+                scores[trait.name] = score
+                labels[trait.name] = label
+            except Exception as e:
+                logger.warning(f"Failed to evaluate literal trait '{trait.name}': {e}")
+                scores[trait.name] = -1
+                labels[trait.name] = f"[EVALUATION_ERROR: {e!s}]"
+                usage_metadata_list.append({})
+
+        return scores, labels, usage_metadata_list
+
+    def _validate_literal_classification(self, trait: LLMRubricTrait, class_name: str) -> tuple[int, str]:
+        """
+        Validate and convert a class name to score index and label.
+
+        Args:
+            trait: The literal trait being evaluated
+            class_name: The class name returned by the LLM
+
+        Returns:
+            Tuple of (score, label) where:
+            - score: Int index (0 to N-1) if valid, -1 if invalid class name
+            - label: The class name if valid, or the invalid value for debugging
+        """
+        if trait.kind != "literal" or trait.classes is None:
+            return -1, f"[NOT_LITERAL_TRAIT: {class_name}]"
+
+        # Get the index for the class name
+        index = trait.get_class_index(class_name)
+        if index == -1:
+            # Try case-insensitive matching as fallback
+            class_names_lower = {name.lower(): name for name in trait.classes}
+            matched_name = class_names_lower.get(class_name.lower())
+            if matched_name is not None:
+                index = trait.get_class_index(matched_name)
+                class_name = matched_name  # Use the canonical name
+            else:
+                # Invalid class name - store the invalid value for debugging
+                logger.warning(
+                    f"Invalid class '{class_name}' for trait '{trait.name}'. "
+                    f"Valid classes: {list(trait.classes.keys())}"
+                )
+                return -1, class_name  # Return invalid class name for debugging
+
+        return index, class_name
+
+    def _validate_literal_classifications(
+        self, classifications: dict[str, str], traits: list[LLMRubricTrait]
+    ) -> tuple[dict[str, int], dict[str, str]]:
+        """
+        Validate and convert batch classifications to scores and labels.
+
+        Args:
+            classifications: Dict mapping trait names to class names from LLM
+            traits: List of literal traits being evaluated
+
+        Returns:
+            Tuple of (scores, labels) dictionaries
+        """
+        scores: dict[str, int] = {}
+        labels: dict[str, str] = {}
+        trait_map = {trait.name: trait for trait in traits}
+
+        for trait_name, class_name in classifications.items():
+            if trait_name in trait_map:
+                trait = trait_map[trait_name]
+                score, label = self._validate_literal_classification(trait, class_name)
+                scores[trait_name] = score
+                labels[trait_name] = label
+
+        # Add error state for missing traits
+        for trait in traits:
+            if trait.name not in scores:
+                scores[trait.name] = -1
+                labels[trait.name] = "[MISSING_FROM_RESPONSE]"
+
+        return scores, labels
+
+    def _build_literal_batch_system_prompt(self) -> str:
+        """Build system prompt for batch literal trait evaluation."""
+        return """You are an expert evaluator classifying responses into predefined categories.
+
+Your task is to classify a given answer into categories for multiple classification traits.
+
+**RESPONSE FORMAT:**
+You will receive a JSON Schema specifying the exact output structure. Your response MUST conform to this schema.
+Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
+
+**CRITICAL REQUIREMENTS:**
+1. **Exact Class Names**: Use the EXACT class names from each trait's categories (case-sensitive)
+2. **One Class Per Trait**: Choose exactly one class for each trait
+3. **All Traits Required**: Include ALL traits in your response
+4. **No Invention**: Do NOT invent new categories - only use the provided class names
+
+**CLASSIFICATION GUIDELINES:**
+- Read each trait's class definitions carefully
+- Consider the full context of the answer before classifying
+- When a response spans multiple categories, choose the most dominant one
+- When uncertain, choose the category that best captures the primary intent
+
+**WHAT NOT TO DO:**
+- Do NOT wrap JSON in markdown code blocks (no ```)
+- Do NOT add explanatory text before or after the JSON
+- Do NOT modify or paraphrase class names
+- Do NOT skip any traits"""
+
+    def _build_literal_batch_user_prompt(self, question: str, answer: str, traits: list[LLMRubricTrait]) -> str:
+        """Build user prompt for batch literal trait evaluation."""
+        from ....schemas.workflow.rubric_outputs import BatchLiteralClassifications
+
+        traits_description = []
+        example_classifications: dict[str, str] = {}
+
+        for trait in traits:
+            if trait.kind != "literal" or trait.classes is None:
+                continue
+
+            class_names = list(trait.classes.keys())
+            # Build class descriptions
+            class_details = []
+            for name, description in trait.classes.items():
+                class_details.append(f"    - **{name}**: {description}")
+
+            trait_desc = (
+                f"- **{trait.name}**: {trait.description or 'Classification trait'}\n"
+                f"  Classes: {', '.join(class_names)}\n" + "\n".join(class_details)
+            )
+            traits_description.append(trait_desc)
+            # Use first class as example
+            example_classifications[trait.name] = class_names[0]
+
+        example_json = json.dumps({"classifications": example_classifications}, indent=2)
+        json_schema = json.dumps(BatchLiteralClassifications.model_json_schema(), indent=2)
+
+        return f"""Classify the following answer for each trait:
+
+**TRAITS TO CLASSIFY:**
+{chr(10).join(traits_description)}
+
+**QUESTION:**
+{question}
+
+**ANSWER TO CLASSIFY:**
+{answer}
+
+**JSON SCHEMA (your response MUST conform to this):**
+```json
+{json_schema}
+```
+
+**REQUIRED OUTPUT FORMAT:**
+Return a JSON object with a "classifications" key mapping trait names to class names.
+Use EXACT trait and class names as shown above.
+
+Example (using YOUR trait and class names):
+{example_json}
+
+**YOUR JSON RESPONSE:**"""
+
+    def _build_literal_single_system_prompt(self, trait: LLMRubricTrait) -> str:
+        """Build system prompt for single literal trait evaluation."""
+        if trait.kind != "literal" or trait.classes is None:
+            raise ValueError(f"Trait '{trait.name}' is not a literal kind trait")
+
+        class_names = list(trait.classes.keys())
+        class_details = []
+        for name, description in trait.classes.items():
+            class_details.append(f"  - **{name}**: {description}")
+
+        return f"""You are evaluating responses for the classification trait: **{trait.name}**
+
+**Description:** {trait.description or "Classification trait"}
+
+**Available Classes:**
+{chr(10).join(class_details)}
+
+**RESPONSE FORMAT:**
+You will receive a JSON Schema specifying the exact output structure. Your response MUST conform to this schema.
+Return valid JSON: {{"classification": "<class_name>"}}
+
+**CLASSIFICATION GUIDELINES:**
+- You MUST use one of these exact class names: {", ".join(class_names)}
+- Choose the single most appropriate class for the answer
+- Do NOT invent new classes or modify class names
+- When uncertain, choose the class that best captures the primary intent
+
+**PARSING NOTES:**
+- Use the exact class name as provided (case-sensitive)
+- Do NOT wrap in markdown code blocks
+- Do NOT add explanatory text"""
+
+    def _build_literal_single_user_prompt(self, question: str, answer: str, trait: LLMRubricTrait) -> str:
+        """Build user prompt for single literal trait evaluation."""
+        from ....schemas.workflow.rubric_outputs import SingleLiteralClassification
+
+        if trait.kind != "literal" or trait.classes is None:
+            raise ValueError(f"Trait '{trait.name}' is not a literal kind trait")
+
+        class_names = list(trait.classes.keys())
+        json_schema = json.dumps(SingleLiteralClassification.model_json_schema(), indent=2)
+
+        return f"""**QUESTION:**
+{question}
+
+**ANSWER TO CLASSIFY:**
+{answer}
+
+**TRAIT:** {trait.name}
+**DESCRIPTION:** {trait.description or "No description provided"}
+**AVAILABLE CLASSES:** {", ".join(class_names)}
+
+**JSON SCHEMA (your response MUST conform to this):**
+```json
+{json_schema}
+```
+
+Classify this answer and return your classification as JSON: {{"classification": "<class_name>"}}"""

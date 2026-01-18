@@ -16,6 +16,7 @@ from ..schemas.checkpoint import (
     SchemaOrgRating,
 )
 from ..schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
+from ..schemas.domain.rubric import TraitKind
 
 logger = logging.getLogger(__name__)
 
@@ -170,6 +171,21 @@ def _convert_llm_trait_to_rating(trait: LLMRubricTrait, rubric_type: str) -> Sch
             additionalType="GlobalRubricTrait" if rubric_type == "global" else "QuestionSpecificRubricTrait",
             additionalProperty=additional_props,
         )
+    elif trait.kind == "literal":
+        # Literal kind: store kind and classes in additionalProperty
+        # min_score=0, max_score=len(classes)-1 (auto-derived from classes)
+        additional_props.append(SchemaOrgPropertyValue(name="kind", value="literal"))
+        if trait.classes is not None:
+            additional_props.append(SchemaOrgPropertyValue(name="classes", value=trait.classes))
+
+        return SchemaOrgRating(
+            name=trait.name,
+            description=trait.description,
+            bestRating=float(trait.max_score) if trait.max_score is not None else 0.0,
+            worstRating=float(trait.min_score) if trait.min_score is not None else 0.0,
+            additionalType="GlobalLLMRubricTrait" if rubric_type == "global" else "QuestionSpecificLLMRubricTrait",
+            additionalProperty=additional_props,
+        )
     else:  # score
         min_score = trait.min_score if trait.min_score is not None else 1
         max_score = trait.max_score if trait.max_score is not None else 5
@@ -218,7 +234,7 @@ def convert_rating_to_rubric_trait(
         )
         return None
 
-    # Handle LLMRubricTrait (default case)
+    # Handle LLMRubricTrait (default case, also handles GlobalLLMRubricTrait/QuestionSpecificLLMRubricTrait)
     return _convert_rating_to_llm_trait(rating)
 
 
@@ -333,10 +349,7 @@ def _convert_rating_to_callable_trait(rating: SchemaOrgRating) -> CallableTrait:
 
 def _convert_rating_to_llm_trait(rating: SchemaOrgRating) -> LLMRubricTrait:
     """Convert SchemaOrgRating to LLMRubricTrait."""
-    # Determine if it's a boolean trait (0-1 range)
-    is_boolean = rating.bestRating == 1 and rating.worstRating == 0
-
-    # Extract deep judgment configuration from additionalProperty
+    # Extract configuration from additionalProperty
     deep_judgment_enabled = False
     deep_judgment_excerpt_enabled = False
     deep_judgment_search_enabled = False
@@ -344,6 +357,8 @@ def _convert_rating_to_llm_trait(rating: SchemaOrgRating) -> LLMRubricTrait:
     deep_judgment_fuzzy_match_threshold = None
     deep_judgment_excerpt_retry_attempts = None
     higher_is_better = True  # Legacy default
+    kind: TraitKind | None = None  # Explicit kind from property (for literal)
+    classes: dict[str, str] | None = None  # Classes for literal kind
 
     if rating.additionalProperty:
         for prop in rating.additionalProperty:
@@ -361,21 +376,75 @@ def _convert_rating_to_llm_trait(rating: SchemaOrgRating) -> LLMRubricTrait:
                 deep_judgment_excerpt_retry_attempts = prop.value
             elif prop.name == "higher_is_better":
                 higher_is_better = prop.value
+            elif prop.name == "kind":
+                kind = cast(TraitKind, prop.value)
+            elif prop.name == "classes":
+                # Classes can be stored as dict directly or as JSON string
+                if isinstance(prop.value, dict):
+                    classes = prop.value
+                elif isinstance(prop.value, str):
+                    try:
+                        classes = json.loads(prop.value)
+                    except json.JSONDecodeError:
+                        logger.warning("Failed to parse classes JSON for trait '%s'", rating.name)
+                        classes = None
 
-    return LLMRubricTrait(
-        name=rating.name,
-        description=rating.description,
-        kind="boolean" if is_boolean else "score",
-        min_score=None if is_boolean else int(rating.worstRating),
-        max_score=None if is_boolean else int(rating.bestRating),
-        deep_judgment_enabled=deep_judgment_enabled,
-        deep_judgment_excerpt_enabled=deep_judgment_excerpt_enabled,
-        deep_judgment_max_excerpts=deep_judgment_max_excerpts,
-        deep_judgment_fuzzy_match_threshold=deep_judgment_fuzzy_match_threshold,
-        deep_judgment_excerpt_retry_attempts=deep_judgment_excerpt_retry_attempts,
-        deep_judgment_search_enabled=deep_judgment_search_enabled,
-        higher_is_better=higher_is_better,
-    )
+    # Determine kind: explicit kind takes precedence, then infer from rating range
+    if kind is None:
+        # Infer kind from rating range (legacy support)
+        is_boolean = rating.bestRating == 1 and rating.worstRating == 0
+        kind = "boolean" if is_boolean else "score"
+
+    # Build the trait based on kind
+    if kind == "literal":
+        # Literal kind: min_score/max_score are auto-derived from classes by the model validator
+        return LLMRubricTrait(
+            name=rating.name,
+            description=rating.description,
+            kind="literal",
+            classes=classes,
+            min_score=None,  # Auto-derived by model validator
+            max_score=None,  # Auto-derived by model validator
+            deep_judgment_enabled=deep_judgment_enabled,
+            deep_judgment_excerpt_enabled=deep_judgment_excerpt_enabled,
+            deep_judgment_max_excerpts=deep_judgment_max_excerpts,
+            deep_judgment_fuzzy_match_threshold=deep_judgment_fuzzy_match_threshold,
+            deep_judgment_excerpt_retry_attempts=deep_judgment_excerpt_retry_attempts,
+            deep_judgment_search_enabled=deep_judgment_search_enabled,
+            higher_is_better=higher_is_better,
+        )
+    elif kind == "boolean":
+        return LLMRubricTrait(
+            name=rating.name,
+            description=rating.description,
+            kind="boolean",
+            min_score=None,
+            max_score=None,
+            classes=None,
+            deep_judgment_enabled=deep_judgment_enabled,
+            deep_judgment_excerpt_enabled=deep_judgment_excerpt_enabled,
+            deep_judgment_max_excerpts=deep_judgment_max_excerpts,
+            deep_judgment_fuzzy_match_threshold=deep_judgment_fuzzy_match_threshold,
+            deep_judgment_excerpt_retry_attempts=deep_judgment_excerpt_retry_attempts,
+            deep_judgment_search_enabled=deep_judgment_search_enabled,
+            higher_is_better=higher_is_better,
+        )
+    else:  # score
+        return LLMRubricTrait(
+            name=rating.name,
+            description=rating.description,
+            kind="score",
+            min_score=int(rating.worstRating),
+            max_score=int(rating.bestRating),
+            classes=None,
+            deep_judgment_enabled=deep_judgment_enabled,
+            deep_judgment_excerpt_enabled=deep_judgment_excerpt_enabled,
+            deep_judgment_max_excerpts=deep_judgment_max_excerpts,
+            deep_judgment_fuzzy_match_threshold=deep_judgment_fuzzy_match_threshold,
+            deep_judgment_excerpt_retry_attempts=deep_judgment_excerpt_retry_attempts,
+            deep_judgment_search_enabled=deep_judgment_search_enabled,
+            higher_is_better=higher_is_better,
+        )
 
 
 def strip_deep_judgment_config_from_checkpoint(checkpoint: JsonLdCheckpoint) -> None:
