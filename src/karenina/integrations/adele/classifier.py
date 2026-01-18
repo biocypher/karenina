@@ -51,6 +51,8 @@ class QuestionClassifier:
         endpoint_base_url: str | None = None,
         endpoint_api_key: str | None = None,
         trait_eval_mode: str = "batch",
+        async_enabled: bool | None = None,
+        async_max_workers: int | None = None,
     ):
         """
         Initialize the question classifier.
@@ -74,7 +76,13 @@ class QuestionClassifier:
                             "batch" - all traits in one LLM call (faster, cheaper)
                             "sequential" - each trait in separate call (potentially more accurate)
                             Defaults to "batch".
+            async_enabled: Whether to run sequential trait evaluations in parallel.
+                          If None, reads from KARENINA_ASYNC_ENABLED env var (default: True).
+            async_max_workers: Max concurrent workers for parallel execution.
+                              If None, reads from KARENINA_ASYNC_MAX_WORKERS env var (default: 2).
         """
+        from karenina.infrastructure.llm.parallel_invoker import read_async_config
+
         self._llm = llm
         self._model_name = model_name
         self._provider = provider
@@ -83,6 +91,11 @@ class QuestionClassifier:
         self._endpoint_base_url = endpoint_base_url
         self._endpoint_api_key = endpoint_api_key
         self._trait_eval_mode = trait_eval_mode
+
+        # Read async config with env var fallbacks
+        default_enabled, default_workers = read_async_config()
+        self._async_enabled = async_enabled if async_enabled is not None else default_enabled
+        self._async_max_workers = async_max_workers if async_max_workers is not None else default_workers
 
     @property
     def llm(self) -> BaseChatModel:
@@ -179,46 +192,33 @@ class QuestionClassifier:
         """
         Classify a question by evaluating each trait in a separate LLM call.
 
-        This is slower and more expensive but may be more accurate as the LLM
-        can focus on one dimension at a time.
+        When async_enabled is True, the LLM calls run in parallel using
+        ParallelLLMInvoker for significant speedup. Otherwise, calls run
+        sequentially (legacy behavior).
         """
-        from karenina.benchmark.verification.evaluators.rubric_parsing import (
-            invoke_with_structured_output,
-        )
         from karenina.schemas.workflow.rubric_outputs import SingleLiteralClassification
 
         scores: dict[str, int] = {}
         labels: dict[str, str] = {}
         combined_usage: dict[str, Any] = {"calls": 0, "total_tokens": 0}
 
+        # Build all tasks upfront
+        tasks: list[tuple[list[BaseMessage], type[SingleLiteralClassification]]] = []
         for trait in traits:
-            try:
-                system_prompt = self._build_system_prompt_single_trait()
-                user_prompt = self._build_user_prompt_single_trait(question_text, trait)
+            system_prompt = self._build_system_prompt_single_trait()
+            user_prompt = self._build_user_prompt_single_trait(question_text, trait)
+            messages: list[BaseMessage] = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=user_prompt),
+            ]
+            tasks.append((messages, SingleLiteralClassification))
 
-                messages: list[BaseMessage] = [
-                    SystemMessage(content=system_prompt),
-                    HumanMessage(content=user_prompt),
-                ]
-
-                parsed_result, usage_metadata = invoke_with_structured_output(
-                    self.llm, messages, SingleLiteralClassification
-                )
-
-                # Validate the classification
-                score, label = self._validate_single_classification(trait, parsed_result.classification)
-                scores[trait.name] = score
-                labels[trait.name] = label
-
-                # Accumulate usage metadata
-                combined_usage["calls"] += 1
-                if usage_metadata and "total_tokens" in usage_metadata:
-                    combined_usage["total_tokens"] += usage_metadata.get("total_tokens", 0)
-
-            except Exception as e:
-                logger.error(f"Failed to classify trait {trait.name}: {e}")
-                scores[trait.name] = -1
-                labels[trait.name] = f"[ERROR: {e!s}]"
+        if self._async_enabled:
+            # Execute in parallel
+            scores, labels, combined_usage = self._execute_parallel_classification(tasks, traits)
+        else:
+            # Fall back to sequential execution
+            scores, labels, combined_usage = self._execute_sequential_classification(tasks, traits)
 
         return QuestionClassificationResult(
             question_id=question_id,
@@ -229,6 +229,78 @@ class QuestionClassifier:
             classified_at=datetime.now(UTC).isoformat(),
             usage_metadata=combined_usage,
         )
+
+    def _execute_parallel_classification(
+        self,
+        tasks: list[tuple[list[BaseMessage], Any]],
+        traits: list[Any],
+    ) -> tuple[dict[str, int], dict[str, str], dict[str, Any]]:
+        """Execute classification tasks in parallel using ParallelLLMInvoker."""
+        from karenina.infrastructure.llm.parallel_invoker import ParallelLLMInvoker
+
+        invoker = ParallelLLMInvoker(self.llm, max_workers=self._async_max_workers)
+        results = invoker.invoke_batch(tasks)
+
+        scores: dict[str, int] = {}
+        labels: dict[str, str] = {}
+        combined_usage: dict[str, Any] = {"calls": 0, "total_tokens": 0, "input_tokens": 0, "output_tokens": 0}
+
+        for i, (result, usage, error) in enumerate(results):
+            trait = traits[i]
+            if error:
+                logger.error(f"Failed to classify trait {trait.name}: {error}")
+                scores[trait.name] = -1
+                labels[trait.name] = f"[ERROR: {error!s}]"
+            else:
+                assert result is not None  # mypy: error implies result is None
+                score, label = self._validate_single_classification(trait, result.classification)
+                scores[trait.name] = score
+                labels[trait.name] = label
+                combined_usage["calls"] += 1
+                if usage:
+                    combined_usage["total_tokens"] += usage.get("total_tokens", 0)
+                    combined_usage["input_tokens"] += usage.get("input_tokens", 0)
+                    combined_usage["output_tokens"] += usage.get("output_tokens", 0)
+
+        return scores, labels, combined_usage
+
+    def _execute_sequential_classification(
+        self,
+        tasks: list[tuple[list[BaseMessage], Any]],
+        traits: list[Any],
+    ) -> tuple[dict[str, int], dict[str, str], dict[str, Any]]:
+        """Execute classification tasks sequentially (legacy behavior)."""
+        from karenina.benchmark.verification.evaluators.rubric_parsing import (
+            invoke_with_structured_output,
+        )
+
+        scores: dict[str, int] = {}
+        labels: dict[str, str] = {}
+        combined_usage: dict[str, Any] = {"calls": 0, "total_tokens": 0, "input_tokens": 0, "output_tokens": 0}
+
+        for i, (messages, model_class) in enumerate(tasks):
+            trait = traits[i]
+            try:
+                parsed_result, usage_metadata = invoke_with_structured_output(self.llm, messages, model_class)
+
+                # Validate the classification
+                score, label = self._validate_single_classification(trait, parsed_result.classification)
+                scores[trait.name] = score
+                labels[trait.name] = label
+
+                # Accumulate usage metadata
+                combined_usage["calls"] += 1
+                if usage_metadata:
+                    combined_usage["total_tokens"] += usage_metadata.get("total_tokens", 0)
+                    combined_usage["input_tokens"] += usage_metadata.get("input_tokens", 0)
+                    combined_usage["output_tokens"] += usage_metadata.get("output_tokens", 0)
+
+            except Exception as e:
+                logger.error(f"Failed to classify trait {trait.name}: {e}")
+                scores[trait.name] = -1
+                labels[trait.name] = f"[ERROR: {e!s}]"
+
+        return scores, labels, combined_usage
 
     def classify_batch(
         self,

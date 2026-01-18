@@ -46,14 +46,30 @@ class LLMTraitEvaluator:
         scores, labels, usage = evaluator.evaluate_literal_batch(question, answer, literal_traits)
     """
 
-    def __init__(self, llm: Any):
+    def __init__(
+        self,
+        llm: Any,
+        async_enabled: bool | None = None,
+        async_max_workers: int | None = None,
+    ):
         """
         Initialize the LLM trait evaluator.
 
         Args:
             llm: Initialized LLM instance (LangChain compatible) for evaluation
+            async_enabled: Whether to run sequential trait evaluations in parallel.
+                          If None, reads from KARENINA_ASYNC_ENABLED env var (default: True).
+            async_max_workers: Max concurrent workers for parallel execution.
+                              If None, reads from KARENINA_ASYNC_MAX_WORKERS env var (default: 2).
         """
+        from ....infrastructure.llm.parallel_invoker import read_async_config
+
         self.llm = llm
+
+        # Read async config with env var fallbacks
+        default_enabled, default_workers = read_async_config()
+        self._async_enabled = async_enabled if async_enabled is not None else default_enabled
+        self._async_max_workers = async_max_workers if async_max_workers is not None else default_workers
 
     def evaluate_batch(
         self, question: str, answer: str, traits: list[LLMRubricTrait]
@@ -92,7 +108,11 @@ class LLMTraitEvaluator:
         self, question: str, answer: str, traits: list[LLMRubricTrait]
     ) -> tuple[dict[str, int | bool], list[dict[str, Any]]]:
         """
-        Evaluate traits one by one (fallback method).
+        Evaluate traits one by one.
+
+        When async_enabled is True, the LLM calls run in parallel using
+        ParallelLLMInvoker for significant speedup. Otherwise, calls run
+        sequentially (legacy behavior).
 
         Args:
             question: The original question asked
@@ -102,18 +122,84 @@ class LLMTraitEvaluator:
         Returns:
             Tuple of (results_dict, list_of_usage_metadata)
         """
+        from ....schemas.workflow.rubric_outputs import SingleBooleanScore, SingleNumericScore
+
+        # Build all tasks upfront
+        tasks: list[tuple[list[BaseMessage], type]] = []
+        for trait in traits:
+            system_prompt = self._build_single_trait_system_prompt(trait)
+            user_prompt = self._build_single_trait_user_prompt(question, answer, trait)
+            messages: list[BaseMessage] = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=user_prompt),
+            ]
+            model_class = SingleBooleanScore if trait.kind == "boolean" else SingleNumericScore
+            tasks.append((messages, model_class))
+
+        if self._async_enabled:
+            return self._execute_parallel_sequential(tasks, traits)
+        else:
+            return self._execute_true_sequential(tasks, traits)
+
+    def _execute_parallel_sequential(
+        self,
+        tasks: list[tuple[list[BaseMessage], type]],
+        traits: list[LLMRubricTrait],
+    ) -> tuple[dict[str, int | bool], list[dict[str, Any]]]:
+        """Execute sequential evaluation tasks in parallel using ParallelLLMInvoker."""
+        from ....infrastructure.llm.parallel_invoker import ParallelLLMInvoker
+
+        invoker = ParallelLLMInvoker(self.llm, max_workers=self._async_max_workers)
+        raw_results = invoker.invoke_batch(tasks)
+
         results: dict[str, int | bool] = {}
         usage_metadata_list: list[dict[str, Any]] = []
 
-        for trait in traits:
+        for i, (parsed_result, usage, error) in enumerate(raw_results):
+            trait = traits[i]
+            if error:
+                logger.warning(f"Failed to evaluate trait '{trait.name}': {error}")
+                results[trait.name] = None  # type: ignore[assignment]
+                usage_metadata_list.append({})
+            else:
+                # Extract score from result
+                assert parsed_result is not None  # mypy: error implies parsed_result is None
+                if trait.kind == "boolean":
+                    score: int | bool = parsed_result.result
+                else:
+                    score = parsed_result.score
+                results[trait.name] = self._validate_score(score, trait)
+                usage_metadata_list.append(usage or {})
+
+        return results, usage_metadata_list
+
+    def _execute_true_sequential(
+        self,
+        tasks: list[tuple[list[BaseMessage], type]],
+        traits: list[LLMRubricTrait],
+    ) -> tuple[dict[str, int | bool], list[dict[str, Any]]]:
+        """Execute evaluation tasks truly sequentially (legacy behavior)."""
+        from .rubric_parsing import invoke_with_structured_output
+
+        results: dict[str, int | bool] = {}
+        usage_metadata_list: list[dict[str, Any]] = []
+
+        for i, (messages, model_class) in enumerate(tasks):
+            trait = traits[i]
             try:
-                score, usage_metadata = self._evaluate_single_trait(question, answer, trait)
-                results[trait.name] = score
+                parsed_result: Any
+                parsed_result, usage_metadata = invoke_with_structured_output(self.llm, messages, model_class)
+                # Extract score from result
+                if trait.kind == "boolean":
+                    score: int | bool = parsed_result.result
+                else:
+                    score = parsed_result.score
+                results[trait.name] = self._validate_score(score, trait)
                 usage_metadata_list.append(usage_metadata)
             except Exception as e:
                 logger.warning(f"Failed to evaluate trait '{trait.name}': {e}")
-                # Continue with other traits, mark this one as None
                 results[trait.name] = None  # type: ignore[assignment]
+                usage_metadata_list.append({})
 
         return results, usage_metadata_list
 
@@ -496,7 +582,11 @@ Evaluate this answer for the trait above and return your assessment as JSON: {fo
         self, question: str, answer: str, traits: list[LLMRubricTrait]
     ) -> tuple[dict[str, int], dict[str, str], list[dict[str, Any]]]:
         """
-        Evaluate literal traits one by one (fallback method).
+        Evaluate literal traits one by one.
+
+        When async_enabled is True, the LLM calls run in parallel using
+        ParallelLLMInvoker for significant speedup. Otherwise, calls run
+        sequentially (legacy behavior).
 
         Args:
             question: The original question asked
@@ -510,25 +600,76 @@ Evaluate this answer for the trait above and return your assessment as JSON: {fo
             - usage_metadata_list: List of usage metadata dicts from LLM calls
         """
         from ....schemas.workflow.rubric_outputs import SingleLiteralClassification
+
+        # Filter to only literal traits
+        literal_traits = [t for t in traits if t.kind == "literal"]
+        if not literal_traits:
+            return {}, {}, []
+
+        # Build all tasks upfront
+        tasks: list[tuple[list[BaseMessage], type[SingleLiteralClassification]]] = []
+        for trait in literal_traits:
+            system_prompt = self._build_literal_single_system_prompt(trait)
+            user_prompt = self._build_literal_single_user_prompt(question, answer, trait)
+            messages: list[BaseMessage] = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=user_prompt),
+            ]
+            tasks.append((messages, SingleLiteralClassification))
+
+        if self._async_enabled:
+            return self._execute_parallel_literal_sequential(tasks, literal_traits)
+        else:
+            return self._execute_true_literal_sequential(tasks, literal_traits)
+
+    def _execute_parallel_literal_sequential(
+        self,
+        tasks: list[tuple[list[BaseMessage], type]],
+        traits: list[LLMRubricTrait],
+    ) -> tuple[dict[str, int], dict[str, str], list[dict[str, Any]]]:
+        """Execute literal sequential evaluation tasks in parallel."""
+        from ....infrastructure.llm.parallel_invoker import ParallelLLMInvoker
+
+        invoker = ParallelLLMInvoker(self.llm, max_workers=self._async_max_workers)
+        raw_results = invoker.invoke_batch(tasks)
+
+        scores: dict[str, int] = {}
+        labels: dict[str, str] = {}
+        usage_metadata_list: list[dict[str, Any]] = []
+
+        for i, (parsed_result, usage, error) in enumerate(raw_results):
+            trait = traits[i]
+            if error:
+                logger.warning(f"Failed to evaluate literal trait '{trait.name}': {error}")
+                scores[trait.name] = -1
+                labels[trait.name] = f"[EVALUATION_ERROR: {error!s}]"
+                usage_metadata_list.append({})
+            else:
+                assert parsed_result is not None  # mypy: error implies parsed_result is None
+                score, label = self._validate_literal_classification(trait, parsed_result.classification)
+                scores[trait.name] = score
+                labels[trait.name] = label
+                usage_metadata_list.append(usage or {})
+
+        return scores, labels, usage_metadata_list
+
+    def _execute_true_literal_sequential(
+        self,
+        tasks: list[tuple[list[BaseMessage], type]],
+        traits: list[LLMRubricTrait],
+    ) -> tuple[dict[str, int], dict[str, str], list[dict[str, Any]]]:
+        """Execute literal evaluation tasks truly sequentially (legacy behavior)."""
         from .rubric_parsing import invoke_with_structured_output
 
         scores: dict[str, int] = {}
         labels: dict[str, str] = {}
         usage_metadata_list: list[dict[str, Any]] = []
 
-        # Filter to only literal traits
-        literal_traits = [t for t in traits if t.kind == "literal"]
-
-        for trait in literal_traits:
+        for i, (messages, model_class) in enumerate(tasks):
+            trait = traits[i]
             try:
-                system_prompt = self._build_literal_single_system_prompt(trait)
-                user_prompt = self._build_literal_single_user_prompt(question, answer, trait)
-
-                messages: list[BaseMessage] = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
-
-                parsed_result, usage_metadata = invoke_with_structured_output(
-                    self.llm, messages, SingleLiteralClassification
-                )
+                parsed_result: Any
+                parsed_result, usage_metadata = invoke_with_structured_output(self.llm, messages, model_class)
                 usage_metadata_list.append(usage_metadata)
 
                 # Validate and convert classification to score + label
@@ -537,9 +678,9 @@ Evaluate this answer for the trait above and return your assessment as JSON: {fo
                 labels[trait.name] = label
             except Exception as e:
                 logger.warning(f"Failed to evaluate literal trait '{trait.name}': {e}")
-                # Mark as error state: score=-1, label contains error info
                 scores[trait.name] = -1
                 labels[trait.name] = f"[EVALUATION_ERROR: {e!s}]"
+                usage_metadata_list.append({})
 
         return scores, labels, usage_metadata_list
 
