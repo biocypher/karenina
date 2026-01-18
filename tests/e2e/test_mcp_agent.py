@@ -46,7 +46,10 @@ def test_mcp_agent_middleware_signature() -> None:
     # Connect to Open Targets MCP server to get tools
     # (tools come from MCP server, LLM responses come from fixtures)
     mcp_urls = {"opentargets": "https://mcp.platform.opentargets.org/mcp"}
-    _, tools = sync_create_mcp_client_and_tools(mcp_urls, None, None)
+    try:
+        _, tools = sync_create_mcp_client_and_tools(mcp_urls, None, None)
+    except (TimeoutError, ConnectionError, OSError) as e:
+        pytest.skip(f"MCP server unavailable: {e}")
 
     assert len(tools) > 0, "Should retrieve tools from MCP server"
 
