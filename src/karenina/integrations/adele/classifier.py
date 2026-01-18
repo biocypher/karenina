@@ -47,6 +47,10 @@ class QuestionClassifier:
         model_name: str = "claude-3-5-haiku-latest",
         provider: str = "anthropic",
         temperature: float = 0.0,
+        interface: str = "langchain",
+        endpoint_base_url: str | None = None,
+        endpoint_api_key: str | None = None,
+        trait_eval_mode: str = "batch",
     ):
         """
         Initialize the question classifier.
@@ -59,11 +63,26 @@ class QuestionClassifier:
             provider: Model provider to use if llm not provided.
             temperature: Temperature for LLM calls. Defaults to 0.0 for
                         deterministic classifications.
+            interface: The interface to use for model initialization.
+                      Supported values: "langchain", "openrouter", "openai_endpoint".
+                      Defaults to "langchain".
+            endpoint_base_url: Custom base URL for openai_endpoint interface.
+                              Required when interface="openai_endpoint".
+            endpoint_api_key: API key for openai_endpoint interface.
+                             Required when interface="openai_endpoint".
+            trait_eval_mode: How to evaluate traits for a single question.
+                            "batch" - all traits in one LLM call (faster, cheaper)
+                            "sequential" - each trait in separate call (potentially more accurate)
+                            Defaults to "batch".
         """
         self._llm = llm
         self._model_name = model_name
         self._provider = provider
         self._temperature = temperature
+        self._interface = interface
+        self._endpoint_base_url = endpoint_base_url
+        self._endpoint_api_key = endpoint_api_key
+        self._trait_eval_mode = trait_eval_mode
 
     @property
     def llm(self) -> BaseChatModel:
@@ -75,6 +94,9 @@ class QuestionClassifier:
                 model=self._model_name,
                 provider=self._provider,
                 temperature=self._temperature,
+                interface=self._interface,
+                endpoint_base_url=self._endpoint_base_url,
+                endpoint_api_key=self._endpoint_api_key,
             )
         return self._llm
 
@@ -96,15 +118,32 @@ class QuestionClassifier:
         Returns:
             QuestionClassificationResult with scores, labels, and metadata.
         """
-        from karenina.benchmark.verification.evaluators.rubric_parsing import (
-            invoke_with_structured_output,
-        )
-        from karenina.schemas.workflow.rubric_outputs import BatchLiteralClassifications
-
         # Get traits to evaluate
         if trait_names is None:
             trait_names = ADELE_TRAIT_NAMES
         traits = [get_adele_trait(name) for name in trait_names]
+
+        # Choose evaluation mode
+        if self._trait_eval_mode == "sequential":
+            return self._classify_single_sequential(question_text, traits, question_id)
+        else:
+            return self._classify_single_batch(question_text, traits, question_id)
+
+    def _classify_single_batch(
+        self,
+        question_text: str,
+        traits: list[Any],
+        question_id: str | None = None,
+    ) -> QuestionClassificationResult:
+        """
+        Classify a question by evaluating all traits in a single LLM call.
+
+        This is faster and cheaper but may be less accurate for complex questions.
+        """
+        from karenina.benchmark.verification.evaluators.rubric_parsing import (
+            invoke_with_structured_output,
+        )
+        from karenina.schemas.workflow.rubric_outputs import BatchLiteralClassifications
 
         # Build prompts for question classification
         system_prompt = self._build_system_prompt()
@@ -129,6 +168,66 @@ class QuestionClassifier:
             model=self._model_name,
             classified_at=datetime.now(UTC).isoformat(),
             usage_metadata=usage_metadata,
+        )
+
+    def _classify_single_sequential(
+        self,
+        question_text: str,
+        traits: list[Any],
+        question_id: str | None = None,
+    ) -> QuestionClassificationResult:
+        """
+        Classify a question by evaluating each trait in a separate LLM call.
+
+        This is slower and more expensive but may be more accurate as the LLM
+        can focus on one dimension at a time.
+        """
+        from karenina.benchmark.verification.evaluators.rubric_parsing import (
+            invoke_with_structured_output,
+        )
+        from karenina.schemas.workflow.rubric_outputs import SingleLiteralClassification
+
+        scores: dict[str, int] = {}
+        labels: dict[str, str] = {}
+        combined_usage: dict[str, Any] = {"calls": 0, "total_tokens": 0}
+
+        for trait in traits:
+            try:
+                system_prompt = self._build_system_prompt_single_trait()
+                user_prompt = self._build_user_prompt_single_trait(question_text, trait)
+
+                messages: list[BaseMessage] = [
+                    SystemMessage(content=system_prompt),
+                    HumanMessage(content=user_prompt),
+                ]
+
+                parsed_result, usage_metadata = invoke_with_structured_output(
+                    self.llm, messages, SingleLiteralClassification
+                )
+
+                # Validate the classification
+                score, label = self._validate_single_classification(trait, parsed_result.classification)
+                scores[trait.name] = score
+                labels[trait.name] = label
+
+                # Accumulate usage metadata
+                combined_usage["calls"] += 1
+                if usage_metadata and "total_tokens" in usage_metadata:
+                    combined_usage["total_tokens"] += usage_metadata.get("total_tokens", 0)
+
+            except Exception as e:
+                logger.error(f"Failed to classify trait {trait.name}: {e}")
+                scores[trait.name] = -1
+                labels[trait.name] = f"[ERROR: {e!s}]"
+
+        return QuestionClassificationResult(
+            question_id=question_id,
+            question_text=question_text,
+            scores=scores,
+            labels=labels,
+            model=self._model_name,
+            classified_at=datetime.now(UTC).isoformat(),
+            usage_metadata=combined_usage,
         )
 
     def classify_batch(
@@ -179,8 +278,76 @@ class QuestionClassifier:
 
         return results
 
+    def _build_system_prompt_single_trait(self) -> str:
+        """Build system prompt for single-trait question classification."""
+        return """You are an expert evaluator classifying QUESTIONS (not answers) using the ADeLe framework.
+
+ADeLe (Assessment Dimensions for Language Evaluation) characterizes questions by their cognitive complexity. Your task is to analyze the QUESTION ITSELF and classify it for a SINGLE dimension.
+
+**RESPONSE FORMAT:**
+You will receive a JSON Schema specifying the exact output structure. Your response MUST conform to this schema.
+Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
+
+**CRITICAL REQUIREMENTS:**
+1. **Exact Class Name**: Use the EXACT class name from the trait's categories (case-sensitive)
+2. **One Class Only**: Choose exactly one class
+3. **No Invention**: Do NOT invent new categories - only use the provided class names
+
+**CLASSIFICATION GUIDELINES:**
+- You are classifying the QUESTION, not evaluating an answer
+- Consider what cognitive demands the question places on someone trying to answer it
+- Read each class definition carefully - they describe increasing levels of complexity
+- When uncertain, choose the level that best represents the primary cognitive demand
+
+**WHAT NOT TO DO:**
+- Do NOT wrap JSON in markdown code blocks (no ```)
+- Do NOT add explanatory text before or after the JSON
+- Do NOT modify or paraphrase class names"""
+
+    def _build_user_prompt_single_trait(self, question_text: str, trait: Any) -> str:
+        """Build user prompt for single-trait question classification."""
+        from karenina.schemas.workflow.rubric_outputs import SingleLiteralClassification
+
+        if trait.kind != "literal" or trait.classes is None:
+            raise ValueError(f"Trait {trait.name} is not a literal trait with classes")
+
+        class_names = list(trait.classes.keys())
+        class_details = []
+        for name, description in trait.classes.items():
+            desc_preview = description[:400] + "..." if len(description) > 400 else description
+            class_details.append(f"  - **{name}**: {desc_preview}")
+
+        json_schema = json.dumps(SingleLiteralClassification.model_json_schema(), indent=2)
+        mid_idx = len(class_names) // 2
+        example_json = json.dumps({"classification": class_names[mid_idx]}, indent=2)
+
+        return f"""Classify the following QUESTION for the ADeLe dimension: **{trait.name}**
+
+**QUESTION TO CLASSIFY:**
+{question_text}
+
+**DIMENSION: {trait.name}**
+{trait.description or "Classification dimension"}
+
+Classes (in order of increasing complexity): {", ".join(class_names)}
+
+{chr(10).join(class_details)}
+
+**JSON SCHEMA (your response MUST conform to this):**
+```json
+{json_schema}
+```
+
+**REQUIRED OUTPUT FORMAT:**
+Return a JSON object with a "classification" key containing the exact class name.
+
+Example format (class value is just an example):
+{example_json}
+
+**YOUR JSON RESPONSE:**"""
+
     def _build_system_prompt(self) -> str:
-        """Build system prompt for question classification."""
+        """Build system prompt for batch question classification."""
         return """You are an expert evaluator classifying QUESTIONS (not answers) using the ADeLe framework.
 
 ADeLe (Assessment Dimensions for Language Evaluation) characterizes questions by their cognitive complexity across multiple dimensions. Your task is to analyze the QUESTION ITSELF and determine what level of each dimension would be required to answer it.
