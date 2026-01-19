@@ -26,7 +26,19 @@ Example:
     >>> result = await agent.run(messages=[Message.user("Hello!")])
 """
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    # Import types for type checking only
+    from karenina.adapters.factory import (
+        build_llm_kwargs,
+        check_adapter_available,
+        format_model_string,
+        get_agent,
+        get_llm,
+        get_parser,
+    )
+    from karenina.adapters.registry import AdapterAvailability
 
 # Note: Factory functions will be exported once lc-008 is implemented.
 # For now, this module establishes the package structure.
