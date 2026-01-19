@@ -10,7 +10,7 @@ Key differences from LangChain:
 - Uses query() with output_format={'type': 'json_schema', 'schema': ...}
 - SDK's structured_output is already a Python dict, NOT a JSON string
 - Use schema.model_validate(result.structured_output) NOT json.loads()
-- SDK needs max_turns>=5 for internal structured output validation
+- SDK needs max_turns>=2 for internal structured output validation
 """
 
 from __future__ import annotations
@@ -72,13 +72,19 @@ class ClaudeSDKParserAdapter:
         'BCL2'
     """
 
-    def __init__(self, model_config: ModelConfig) -> None:
+    # Default max_turns for structured output (minimum needed for SDK validation)
+    DEFAULT_STRUCTURED_MAX_TURNS = 2
+
+    def __init__(self, model_config: ModelConfig, *, max_turns: int | None = None) -> None:
         """Initialize the Claude SDK parser adapter.
 
         Args:
             model_config: Configuration specifying model, provider, and interface.
+            max_turns: Maximum turns for SDK structured output validation.
+                Default is 2 (minimum needed for structured output).
         """
         self._config = model_config
+        self._max_turns = max_turns if max_turns is not None else self.DEFAULT_STRUCTURED_MAX_TURNS
 
     def _build_options(self, schema: type[BaseModel]) -> ClaudeAgentOptions:
         """Build ClaudeAgentOptions for structured output parsing.
@@ -104,9 +110,8 @@ class ClaudeSDKParserAdapter:
                 "type": "json_schema",
                 "schema": json_schema,
             },
-            # CRITICAL: SDK needs internal turns for structured output validation
-            # Setting too low causes failures on retry
-            "max_turns": 5,
+            # SDK needs internal turns for structured output validation
+            "max_turns": self._max_turns,
         }
 
         # Add model specification if provided
