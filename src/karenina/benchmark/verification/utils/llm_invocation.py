@@ -26,6 +26,8 @@ from langchain_core.callbacks.usage import UsageMetadataCallbackHandler
 from langchain_core.messages import BaseMessage, HumanMessage
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
+from karenina.adapters.langchain.agent import extract_partial_agent_state
+
 from .error_helpers import is_retryable_error
 from .trace_agent_metrics import (
     extract_agent_metrics,
@@ -160,7 +162,7 @@ def _invoke_agent_with_middleware(
                 logger.info(f"Agent hit limit: {error_type}")
 
                 # Try to extract partial state
-                partial_state = _extract_partial_agent_state(llm, messages, e)
+                partial_state = extract_partial_agent_state(llm, messages, e, config)
                 return partial_state, local_usage_metadata, limit_reached
             else:
                 # Non-limit error - let it propagate
@@ -217,55 +219,6 @@ def _invoke_agent_with_middleware(
                 break
 
     return harmonize_agent_response(response, original_question), limit_reached, usage_metadata, agent_metrics
-
-
-def _extract_partial_agent_state(llm: Any, messages: list[BaseMessage], exception: Exception) -> dict[str, Any]:
-    """
-    Extract partial agent state after a limit is reached.
-
-    Tries multiple methods to recover accumulated messages:
-    1. Exception's state attribute
-    2. Checkpointer's get_state method
-    3. Exception's messages attribute
-    4. Fallback to input messages
-
-    Args:
-        llm: The LangGraph agent
-        messages: Original input messages
-        exception: The limit exception
-
-    Returns:
-        Dict with "messages" key containing recovered messages
-    """
-    # Method 1: Check if exception contains state information
-    if hasattr(exception, "state") and exception.state is not None:
-        logger.info("Extracted partial state from exception.state")
-        state = exception.state
-        return state if isinstance(state, dict) else {"messages": messages}
-
-    # Method 2: Try to get current graph state if checkpointer exists
-    if hasattr(llm, "checkpointer") and llm.checkpointer is not None:
-        try:
-            if hasattr(llm, "get_state"):
-                config = {"configurable": {"thread_id": "default"}}
-                state = llm.get_state(config)
-                if state and hasattr(state, "values") and "messages" in state.values:
-                    logger.info("Extracted partial state from graph checkpointer")
-                    return {"messages": state.values["messages"]}
-        except Exception as state_error:
-            logger.debug(f"Could not extract state from checkpointer: {state_error}")
-
-    # Method 3: Check if exception has accumulated messages attribute
-    if hasattr(exception, "messages") and exception.messages is not None:
-        logger.info("Extracted messages from exception.messages attribute")
-        return {"messages": exception.messages}
-
-    # FALLBACK: Return input messages with warning
-    logger.warning(
-        "Could not extract partial agent state after limit reached. "
-        "Returning input messages only. Accumulated trace may be lost."
-    )
-    return {"messages": messages}
 
 
 def _invoke_llm_with_tenacity_retry(

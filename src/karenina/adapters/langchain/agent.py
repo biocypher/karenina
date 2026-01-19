@@ -32,6 +32,60 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def extract_partial_agent_state(
+    agent: Any,
+    messages: list[Any],
+    exception: Exception,
+    config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Extract partial agent state after a limit is reached.
+
+    Tries multiple methods to recover accumulated messages:
+    1. Exception's state attribute
+    2. Checkpointer's get_state method
+    3. Exception's messages attribute
+    4. Fallback to input messages
+
+    Args:
+        agent: The LangGraph agent
+        messages: Original input messages
+        exception: The limit exception
+        config: Optional agent config with thread_id for checkpointer
+
+    Returns:
+        Dict with "messages" key containing recovered messages
+    """
+    # Method 1: Check if exception contains state information
+    if hasattr(exception, "state") and exception.state is not None:
+        logger.info("Extracted partial state from exception.state")
+        state = exception.state
+        return state if isinstance(state, dict) else {"messages": messages}
+
+    # Method 2: Try to get current graph state if checkpointer exists
+    if hasattr(agent, "checkpointer") and agent.checkpointer is not None:
+        try:
+            if hasattr(agent, "get_state"):
+                state_config = config or {"configurable": {"thread_id": "default"}}
+                state = agent.get_state(state_config)
+                if state and hasattr(state, "values") and "messages" in state.values:
+                    logger.info("Extracted partial state from graph checkpointer")
+                    return {"messages": state.values["messages"]}
+        except Exception as state_error:
+            logger.debug(f"Could not extract state from checkpointer: {state_error}")
+
+    # Method 3: Check if exception has accumulated messages attribute
+    if hasattr(exception, "messages") and exception.messages is not None:
+        logger.info("Extracted messages from exception.messages attribute")
+        return {"messages": exception.messages}
+
+    # FALLBACK: Return input messages with warning
+    logger.warning(
+        "Could not extract partial agent state after limit reached. "
+        "Returning input messages only. Accumulated trace may be lost."
+    )
+    return {"messages": messages}
+
+
 class LangChainAgentAdapter:
     """Agent adapter using LangGraph with MCP tools.
 
@@ -333,19 +387,8 @@ class LangChainAgentAdapter:
                 recursion_limit_reached = True
                 logger.warning(f"Agent hit recursion limit: {e}")
 
-                # Try to get partial state from checkpointer
-                if hasattr(agent, "checkpointer") and agent.checkpointer is not None:
-                    try:
-                        if hasattr(agent, "get_state"):
-                            state = agent.get_state(agent_config)
-                            if state and hasattr(state, "values") and "messages" in state.values:
-                                agent_response = {"messages": state.values["messages"]}
-                    except Exception:
-                        pass
-
-                # If we still don't have messages, use input
-                if not agent_response.get("messages"):
-                    agent_response = {"messages": lc_messages}
+                # Extract partial state using the shared recovery function
+                agent_response = extract_partial_agent_state(agent, lc_messages, e, agent_config)
             else:
                 raise AgentExecutionError(f"Agent execution failed: {e}") from e
 
