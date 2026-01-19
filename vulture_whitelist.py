@@ -10,5 +10,8 @@ BlockingPortal  # Used in type hints within TYPE_CHECKING block
 # Hook method parameters that must match interface signature
 runtime  # LangGraph hook interface parameter (interface.py)
 
+# Protocol method parameters that define interface signatures
+schema  # LLMPort protocol method parameter (ports/llm.py)
+
 # create_verbose_logger parameters kept for API backwards compatibility
 # These are consumed via _ = param pattern to avoid vulture warnings
