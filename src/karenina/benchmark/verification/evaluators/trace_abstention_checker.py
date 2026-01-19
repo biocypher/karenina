@@ -9,11 +9,11 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 
 from ....adapters import get_llm
 from ....ports import LLMResponse, Message
-from ....ports.usage import UsageMetadata
 from ....schemas.workflow import ModelConfig
 from ..utils.error_helpers import is_retryable_error
-from ..utils.json_helpers import strip_markdown_fences as _strip_markdown_fences
+from ..utils.llm_judge_helpers import extract_judge_result, fallback_json_parse
 from ..utils.prompts import ABSTENTION_DETECTION_SYS, ABSTENTION_DETECTION_USER
+from ..utils.trace_usage_tracker import convert_port_usage_to_dict
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -26,51 +26,6 @@ class AbstentionResult(BaseModel):
     abstention_detected: bool = Field(
         description="True if the model refused to answer or abstained, False if genuine answer attempt"
     )
-
-
-def _convert_usage_to_dict(usage: UsageMetadata) -> dict[str, Any]:
-    """Convert UsageMetadata dataclass to dict for backward compatibility."""
-    result: dict[str, Any] = {
-        "input_tokens": usage.input_tokens,
-        "output_tokens": usage.output_tokens,
-        "total_tokens": usage.total_tokens,
-    }
-    if usage.cost_usd is not None:
-        result["cost_usd"] = usage.cost_usd
-    if usage.cache_read_tokens is not None:
-        result["cache_read_input_tokens"] = usage.cache_read_tokens
-    if usage.cache_creation_tokens is not None:
-        result["cache_creation_input_tokens"] = usage.cache_creation_tokens
-    if usage.model is not None:
-        result["model"] = usage.model
-    return result
-
-
-def _extract_result(response: LLMResponse) -> AbstentionResult | None:
-    """Extract AbstentionResult from LLMResponse."""
-    if isinstance(response.raw, AbstentionResult):
-        return response.raw
-    if hasattr(response.raw, "abstention_detected"):
-        return AbstentionResult(
-            abstention_detected=response.raw.abstention_detected,
-            reasoning=getattr(response.raw, "reasoning", "No reasoning provided"),
-        )
-    return None
-
-
-def _fallback_parse(content: str, usage_metadata: dict[str, Any]) -> tuple[bool, bool, str | None, dict[str, Any]]:
-    """Fallback to manual JSON parsing when structured output fails."""
-    try:
-        cleaned_response = _strip_markdown_fences(content)
-        if cleaned_response is None:
-            return False, False, None, usage_metadata
-        result = json.loads(cleaned_response)
-        abstention_detected = result.get("abstention_detected", False)
-        reasoning = result.get("reasoning", "No reasoning provided")
-        logger.debug(f"Abstention check (fallback): {abstention_detected}")
-        return abstention_detected, True, reasoning, usage_metadata
-    except json.JSONDecodeError:
-        return False, False, None, usage_metadata
 
 
 def detect_abstention(
@@ -140,16 +95,18 @@ def detect_abstention(
 
             # Invoke with structured output
             response: LLMResponse = structured_llm.invoke(messages)
-            usage_metadata = _convert_usage_to_dict(response.usage)
+            usage_metadata = convert_port_usage_to_dict(response.usage)
 
             # Extract result from structured output or fall back to manual parsing
-            result = _extract_result(response)
+            result = extract_judge_result(response, AbstentionResult, "abstention_detected")
             if result is not None:
                 logger.debug(f"Abstention check: {result.abstention_detected} - Reasoning: {result.reasoning}")
                 return result.abstention_detected, True, result.reasoning, usage_metadata
 
             # Fallback: manual JSON parsing from content
-            return _fallback_parse(response.content, usage_metadata)
+            return fallback_json_parse(
+                response.content, usage_metadata, "abstention_detected", False, "Abstention check (fallback)"
+            )
 
         except json.JSONDecodeError as e:
             # JSON parsing failed - log and treat as check failure

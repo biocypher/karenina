@@ -18,11 +18,27 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from karenina.benchmark.verification.evaluators.trace_sufficiency_checker import (
-    _strip_markdown_fences,
+    SufficiencyResult,
     detect_sufficiency,
-    is_retryable_error,
 )
+from karenina.benchmark.verification.utils.error_helpers import is_retryable_error
+from karenina.benchmark.verification.utils.json_helpers import strip_markdown_fences as _strip_markdown_fences
+from karenina.ports import LLMResponse
+from karenina.ports.usage import UsageMetadata
 from karenina.schemas.workflow import ModelConfig
+
+
+def _create_mock_llm_response(
+    content: str,
+    raw: SufficiencyResult | None = None,
+) -> LLMResponse:
+    """Create a mock LLMResponse for testing."""
+    return LLMResponse(
+        content=content,
+        usage=UsageMetadata(input_tokens=100, output_tokens=50, total_tokens=150),
+        raw=raw,
+    )
+
 
 # =============================================================================
 # Helper Function Tests: _strip_markdown_fences
@@ -190,20 +206,18 @@ class TestDetectSufficiency:
         sample_template_schema: dict,
     ) -> None:
         """Verify sufficient response returns (True, True, reasoning, metadata)."""
-        mock_response = MagicMock()
-        mock_response.content = json.dumps(
-            {
-                "reasoning": "The response clearly states the answer is Paris.",
-                "sufficient": True,
-            }
+        result = SufficiencyResult(
+            reasoning="The response clearly states the answer is Paris.",
+            sufficient=True,
         )
+        mock_response = _create_mock_llm_response(content="", raw=result)
 
-        with patch(
-            "karenina.benchmark.verification.evaluators.trace_sufficiency_checker.init_chat_model_unified"
-        ) as mock_init:
+        with patch("karenina.benchmark.verification.evaluators.trace_sufficiency_checker.get_llm") as mock_get_llm:
             mock_llm = MagicMock()
-            mock_llm.invoke.return_value = mock_response
-            mock_init.return_value = mock_llm
+            mock_structured_llm = MagicMock()
+            mock_structured_llm.invoke.return_value = mock_response
+            mock_llm.with_structured_output.return_value = mock_structured_llm
+            mock_get_llm.return_value = mock_llm
 
             sufficient, check_performed, reasoning, metadata = detect_sufficiency(
                 raw_llm_response="The capital of France is Paris.",
@@ -223,20 +237,18 @@ class TestDetectSufficiency:
         sample_template_schema: dict,
     ) -> None:
         """Verify insufficient response returns (False, True, reasoning, metadata)."""
-        mock_response = MagicMock()
-        mock_response.content = json.dumps(
-            {
-                "reasoning": "The response does not provide the requested answer.",
-                "sufficient": False,
-            }
+        result = SufficiencyResult(
+            reasoning="The response does not provide the requested answer.",
+            sufficient=False,
         )
+        mock_response = _create_mock_llm_response(content="", raw=result)
 
-        with patch(
-            "karenina.benchmark.verification.evaluators.trace_sufficiency_checker.init_chat_model_unified"
-        ) as mock_init:
+        with patch("karenina.benchmark.verification.evaluators.trace_sufficiency_checker.get_llm") as mock_get_llm:
             mock_llm = MagicMock()
-            mock_llm.invoke.return_value = mock_response
-            mock_init.return_value = mock_llm
+            mock_structured_llm = MagicMock()
+            mock_structured_llm.invoke.return_value = mock_response
+            mock_llm.with_structured_output.return_value = mock_structured_llm
+            mock_get_llm.return_value = mock_llm
 
             sufficient, check_performed, reasoning, metadata = detect_sufficiency(
                 raw_llm_response="I don't know.",
@@ -255,15 +267,15 @@ class TestDetectSufficiency:
         sample_template_schema: dict,
     ) -> None:
         """Verify JSON parsing failure defaults to sufficient=True, check_performed=False."""
-        mock_response = MagicMock()
-        mock_response.content = "Not valid JSON {{"
+        # No raw result, and content is invalid JSON - triggers fallback parse failure
+        mock_response = _create_mock_llm_response(content="Not valid JSON {{", raw=None)
 
-        with patch(
-            "karenina.benchmark.verification.evaluators.trace_sufficiency_checker.init_chat_model_unified"
-        ) as mock_init:
+        with patch("karenina.benchmark.verification.evaluators.trace_sufficiency_checker.get_llm") as mock_get_llm:
             mock_llm = MagicMock()
-            mock_llm.invoke.return_value = mock_response
-            mock_init.return_value = mock_llm
+            mock_structured_llm = MagicMock()
+            mock_structured_llm.invoke.return_value = mock_response
+            mock_llm.with_structured_output.return_value = mock_structured_llm
+            mock_get_llm.return_value = mock_llm
 
             sufficient, check_performed, reasoning, metadata = detect_sufficiency(
                 raw_llm_response="The answer is 42.",
@@ -282,21 +294,17 @@ class TestDetectSufficiency:
         parsing_model_config: ModelConfig,
         sample_template_schema: dict,
     ) -> None:
-        """Verify missing 'sufficient' key defaults to True."""
-        mock_response = MagicMock()
-        mock_response.content = json.dumps(
-            {
-                "reasoning": "Some reasoning but forgot the key.",
-                # Note: "sufficient" key is missing
-            }
-        )
+        """Verify missing 'sufficient' key defaults to True via fallback parsing."""
+        # No raw result, content has valid JSON but missing 'sufficient' key
+        content = json.dumps({"reasoning": "Some reasoning but forgot the key."})
+        mock_response = _create_mock_llm_response(content=content, raw=None)
 
-        with patch(
-            "karenina.benchmark.verification.evaluators.trace_sufficiency_checker.init_chat_model_unified"
-        ) as mock_init:
+        with patch("karenina.benchmark.verification.evaluators.trace_sufficiency_checker.get_llm") as mock_get_llm:
             mock_llm = MagicMock()
-            mock_llm.invoke.return_value = mock_response
-            mock_init.return_value = mock_llm
+            mock_structured_llm = MagicMock()
+            mock_structured_llm.invoke.return_value = mock_response
+            mock_llm.with_structured_output.return_value = mock_structured_llm
+            mock_get_llm.return_value = mock_llm
 
             sufficient, check_performed, reasoning, metadata = detect_sufficiency(
                 raw_llm_response="The answer is Paris.",
@@ -305,7 +313,7 @@ class TestDetectSufficiency:
                 template_schema=sample_template_schema,
             )
 
-            # Missing key defaults to True
+            # Missing key defaults to True via fallback parsing
             assert sufficient is True
             assert check_performed is True
 
@@ -314,16 +322,17 @@ class TestDetectSufficiency:
         parsing_model_config: ModelConfig,
         sample_template_schema: dict,
     ) -> None:
-        """Verify markdown-wrapped JSON response is properly parsed."""
-        mock_response = MagicMock()
-        mock_response.content = '```json\n{"reasoning": "Response is sufficient.", "sufficient": true}\n```'
+        """Verify markdown-wrapped JSON response is properly parsed via fallback."""
+        # No raw result, content has markdown-wrapped JSON - triggers fallback parsing
+        content = '```json\n{"reasoning": "Response is sufficient.", "sufficient": true}\n```'
+        mock_response = _create_mock_llm_response(content=content, raw=None)
 
-        with patch(
-            "karenina.benchmark.verification.evaluators.trace_sufficiency_checker.init_chat_model_unified"
-        ) as mock_init:
+        with patch("karenina.benchmark.verification.evaluators.trace_sufficiency_checker.get_llm") as mock_get_llm:
             mock_llm = MagicMock()
-            mock_llm.invoke.return_value = mock_response
-            mock_init.return_value = mock_llm
+            mock_structured_llm = MagicMock()
+            mock_structured_llm.invoke.return_value = mock_response
+            mock_llm.with_structured_output.return_value = mock_structured_llm
+            mock_get_llm.return_value = mock_llm
 
             sufficient, check_performed, reasoning, metadata = detect_sufficiency(
                 raw_llm_response="The answer is 42.",
@@ -342,12 +351,12 @@ class TestDetectSufficiency:
         sample_template_schema: dict,
     ) -> None:
         """Verify non-retryable errors default to sufficient=True."""
-        with patch(
-            "karenina.benchmark.verification.evaluators.trace_sufficiency_checker.init_chat_model_unified"
-        ) as mock_init:
+        with patch("karenina.benchmark.verification.evaluators.trace_sufficiency_checker.get_llm") as mock_get_llm:
             mock_llm = MagicMock()
-            mock_llm.invoke.side_effect = ValueError("Invalid model config")
-            mock_init.return_value = mock_llm
+            mock_structured_llm = MagicMock()
+            mock_structured_llm.invoke.side_effect = ValueError("Invalid model config")
+            mock_llm.with_structured_output.return_value = mock_structured_llm
+            mock_get_llm.return_value = mock_llm
 
             sufficient, check_performed, reasoning, metadata = detect_sufficiency(
                 raw_llm_response="Some response.",
@@ -378,15 +387,15 @@ class TestDetectSufficiencyReturnSemantics:
     ) -> None:
         """Document and verify the return value semantics."""
         # When sufficient=True: response has info for all fields (good)
-        mock_response = MagicMock()
-        mock_response.content = json.dumps({"reasoning": "OK", "sufficient": True})
+        result_true = SufficiencyResult(reasoning="OK", sufficient=True)
+        mock_response_true = _create_mock_llm_response(content="", raw=result_true)
 
-        with patch(
-            "karenina.benchmark.verification.evaluators.trace_sufficiency_checker.init_chat_model_unified"
-        ) as mock_init:
+        with patch("karenina.benchmark.verification.evaluators.trace_sufficiency_checker.get_llm") as mock_get_llm:
             mock_llm = MagicMock()
-            mock_llm.invoke.return_value = mock_response
-            mock_init.return_value = mock_llm
+            mock_structured_llm = MagicMock()
+            mock_structured_llm.invoke.return_value = mock_response_true
+            mock_llm.with_structured_output.return_value = mock_structured_llm
+            mock_get_llm.return_value = mock_llm
 
             sufficient, _, _, _ = detect_sufficiency(
                 raw_llm_response="Paris",
@@ -399,14 +408,15 @@ class TestDetectSufficiencyReturnSemantics:
             assert sufficient is True
 
         # When sufficient=False: response lacks info (bad, should fail verification)
-        mock_response.content = json.dumps({"reasoning": "Missing", "sufficient": False})
+        result_false = SufficiencyResult(reasoning="Missing", sufficient=False)
+        mock_response_false = _create_mock_llm_response(content="", raw=result_false)
 
-        with patch(
-            "karenina.benchmark.verification.evaluators.trace_sufficiency_checker.init_chat_model_unified"
-        ) as mock_init:
+        with patch("karenina.benchmark.verification.evaluators.trace_sufficiency_checker.get_llm") as mock_get_llm:
             mock_llm = MagicMock()
-            mock_llm.invoke.return_value = mock_response
-            mock_init.return_value = mock_llm
+            mock_structured_llm = MagicMock()
+            mock_structured_llm.invoke.return_value = mock_response_false
+            mock_llm.with_structured_output.return_value = mock_structured_llm
+            mock_get_llm.return_value = mock_llm
 
             sufficient, _, _, _ = detect_sufficiency(
                 raw_llm_response="I don't know",

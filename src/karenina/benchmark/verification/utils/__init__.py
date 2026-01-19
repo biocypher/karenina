@@ -7,6 +7,7 @@ from .json_helpers import (
     strip_markdown_fences,
 )
 from .llm_detection import is_openai_endpoint_llm
+from .llm_judge_helpers import extract_judge_result, fallback_json_parse
 from .prompts import (
     ABSTENTION_DETECTION_SYS,
     ABSTENTION_DETECTION_USER,
@@ -31,7 +32,7 @@ from .trace_agent_metrics import (
     extract_agent_metrics,
     extract_middleware_metrics,
 )
-from .trace_usage_tracker import UsageMetadata, UsageTracker
+from .trace_usage_tracker import UsageMetadata, UsageTracker, convert_port_usage_to_dict
 
 __all__ = [
     # Error helpers
@@ -68,4 +69,8 @@ __all__ = [
     # Usage tracking
     "UsageMetadata",
     "UsageTracker",
+    "convert_port_usage_to_dict",
+    # LLM judge helpers
+    "extract_judge_result",
+    "fallback_json_parse",
 ]

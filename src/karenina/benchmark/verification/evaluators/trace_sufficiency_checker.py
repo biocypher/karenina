@@ -4,18 +4,28 @@ import json
 import logging
 from typing import Any
 
-from langchain_core.callbacks import get_usage_metadata_callback
-from langchain_core.messages import HumanMessage, SystemMessage
+from pydantic import BaseModel, Field
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from ....infrastructure.llm.interface import init_chat_model_unified
+from ....adapters import get_llm
+from ....ports import LLMResponse, Message
 from ....schemas.workflow import ModelConfig
 from ..utils.error_helpers import is_retryable_error
-from ..utils.json_helpers import strip_markdown_fences as _strip_markdown_fences
+from ..utils.llm_judge_helpers import extract_judge_result, fallback_json_parse
 from ..utils.prompts import SUFFICIENCY_DETECTION_SYS, SUFFICIENCY_DETECTION_USER
+from ..utils.trace_usage_tracker import convert_port_usage_to_dict
 
 # Set up logger
 logger = logging.getLogger(__name__)
+
+
+class SufficiencyResult(BaseModel):
+    """Result of sufficiency detection by LLM judge."""
+
+    reasoning: str = Field(
+        description="For each field, explain whether information exists. End with overall determination."
+    )
+    sufficient: bool = Field(description="True if response has info for all fields, False if information missing")
 
 
 def detect_sufficiency(
@@ -42,7 +52,7 @@ def detect_sufficiency(
         - sufficient: True if response has info for all fields, False if information missing
         - check_performed: True if check completed successfully, False if check failed
         - reasoning: The LLM's explanation for its determination (None if check failed)
-        - usage_metadata: Token usage metadata from LangChain callback
+        - usage_metadata: Token usage metadata from the LLM invocation
 
     Examples:
         >>> config = ModelConfig(id="parser", model_provider="openai", ...)
@@ -71,65 +81,44 @@ def detect_sufficiency(
         usage_metadata: dict[str, Any] = {}
 
         try:
-            # Initialize the parsing model for sufficiency detection
-            # Note: model_name is guaranteed non-None by ModelConfig validator
-            assert parsing_model.model_name is not None, "model_name must not be None"
+            # Create config copy with temperature=0 for consistent detection
+            # Note: LangChain adapter respects temperature; Claude SDK adapter ignores it
+            detection_config = parsing_model.model_copy(update={"temperature": 0.0})
 
-            # Build kwargs for model initialization
-            model_kwargs: dict[str, Any] = {
-                "model": parsing_model.model_name,
-                "provider": parsing_model.model_provider,
-                "temperature": 0.0,  # Use temperature 0 for consistent detection
-                "interface": parsing_model.interface,
-            }
+            # Get LLM via adapter factory
+            llm = get_llm(detection_config)
 
-            # Add endpoint configuration if using openai_endpoint interface
-            if parsing_model.endpoint_base_url:
-                model_kwargs["endpoint_base_url"] = parsing_model.endpoint_base_url
-            if parsing_model.endpoint_api_key:
-                model_kwargs["endpoint_api_key"] = parsing_model.endpoint_api_key
-
-            # Add any extra kwargs if provided (e.g., vendor-specific API keys)
-            if parsing_model.extra_kwargs:
-                model_kwargs.update(parsing_model.extra_kwargs)
-
-            llm = init_chat_model_unified(**model_kwargs)
+            # Configure for structured output
+            structured_llm = llm.with_structured_output(SufficiencyResult)
 
             # Convert schema to string for prompt
             schema_str = json.dumps(template_schema, indent=2)
 
-            # Construct the prompt
+            # Build messages using unified Message class
             user_prompt = SUFFICIENCY_DETECTION_USER.format(
                 question=question_text,
                 response=raw_llm_response,
                 schema=schema_str,
             )
-
             messages = [
-                SystemMessage(content=SUFFICIENCY_DETECTION_SYS),
-                HumanMessage(content=user_prompt),
+                Message.system(SUFFICIENCY_DETECTION_SYS),
+                Message.user(user_prompt),
             ]
 
-            # Invoke the LLM with usage metadata callback
-            with get_usage_metadata_callback() as cb:
-                response = llm.invoke(messages)
-            usage_metadata = dict(cb.usage_metadata) if cb.usage_metadata else {}
+            # Invoke with structured output
+            response: LLMResponse = structured_llm.invoke(messages)
+            usage_metadata = convert_port_usage_to_dict(response.usage)
 
-            raw_response = response.content if hasattr(response, "content") else str(response)
+            # Extract result from structured output or fall back to manual parsing
+            result = extract_judge_result(response, SufficiencyResult, "sufficient")
+            if result is not None:
+                logger.debug(f"Sufficiency check: {result.sufficient} - Reasoning: {result.reasoning}")
+                return result.sufficient, True, result.reasoning, usage_metadata
 
-            # Parse the JSON response
-            cleaned_response = _strip_markdown_fences(raw_response)
-            # raw_response is always a str, so cleaned_response will be str
-            result = json.loads(cleaned_response)  # type: ignore[arg-type]
-
-            # Extract the sufficiency determination
-            sufficient = result.get("sufficient", True)  # Default to sufficient if missing
-
-            # Log the reasoning for debugging
-            reasoning = result.get("reasoning", "No reasoning provided")
-            logger.debug(f"Sufficiency check result: {sufficient} - Reasoning: {reasoning}")
-
-            return sufficient, True, reasoning, usage_metadata
+            # Fallback: manual JSON parsing from content
+            return fallback_json_parse(
+                response.content, usage_metadata, "sufficient", True, "Sufficiency check (fallback)"
+            )
 
         except json.JSONDecodeError as e:
             # JSON parsing failed - log and treat as check failure
