@@ -611,6 +611,9 @@ Evaluate this answer for the trait above and return your assessment as JSON: {fo
         Literal traits classify responses into predefined categories. The LLM
         returns class names, which are then converted to integer indices.
 
+        When a ParserPort adapter is available (claude_agent_sdk interface), uses
+        adapter-based parsing. Otherwise falls back to LangChain strategies.
+
         Args:
             question: The original question asked
             answer: The LLM's response to evaluate
@@ -635,8 +638,18 @@ Evaluate this answer for the trait above and return your assessment as JSON: {fo
 
         messages: list[BaseMessage] = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
 
+        # Build combined prompt text for adapter path
+        prompt_text = f"{system_prompt}\n\n{user_prompt}"
+
         # Invoke with automatic strategy selection and fallbacks
-        parsed_result, usage_metadata = invoke_with_structured_output(self.llm, messages, BatchLiteralClassifications)
+        # Pass parser adapter if available for adapter-based parsing
+        parsed_result, usage_metadata = invoke_with_structured_output(
+            self.llm,
+            messages,
+            BatchLiteralClassifications,
+            parser=self._parser_adapter,
+            prompt_text=prompt_text,
+        )
 
         # Validate classifications and convert to scores + labels
         scores, labels = self._validate_literal_classifications(parsed_result.classifications, literal_traits)
@@ -691,7 +704,19 @@ Evaluate this answer for the trait above and return your assessment as JSON: {fo
         tasks: list[tuple[list[BaseMessage], type]],
         traits: list[LLMRubricTrait],
     ) -> tuple[dict[str, int], dict[str, str], list[dict[str, Any]]]:
-        """Execute literal sequential evaluation tasks in parallel."""
+        """Execute literal sequential evaluation tasks in parallel.
+
+        Note: When a ParserPort adapter is available (claude_agent_sdk interface),
+        falls back to true sequential execution since ParallelLLMInvoker doesn't
+        currently support the adapter path. This ensures correct behavior while
+        maintaining the adapter abstraction.
+        """
+        # When using adapter, fall back to true sequential execution
+        # ParallelLLMInvoker doesn't support the adapter path yet
+        if self._parser_adapter is not None:
+            logger.debug("ParserPort adapter available, using true sequential execution for parallel literal mode")
+            return self._execute_true_literal_sequential(tasks, traits)
+
         from ....infrastructure.llm.parallel_invoker import ParallelLLMInvoker
 
         invoker = ParallelLLMInvoker(self.llm, max_workers=self._async_max_workers)
@@ -722,7 +747,12 @@ Evaluate this answer for the trait above and return your assessment as JSON: {fo
         tasks: list[tuple[list[BaseMessage], type]],
         traits: list[LLMRubricTrait],
     ) -> tuple[dict[str, int], dict[str, str], list[dict[str, Any]]]:
-        """Execute literal evaluation tasks truly sequentially (legacy behavior)."""
+        """Execute literal evaluation tasks truly sequentially (legacy behavior).
+
+        When a ParserPort adapter is available (claude_agent_sdk interface), uses
+        adapter-based parsing via invoke_with_structured_output. Otherwise falls
+        back to the LangChain path.
+        """
         from .rubric_parsing import invoke_with_structured_output
 
         scores: dict[str, int] = {}
@@ -732,8 +762,24 @@ Evaluate this answer for the trait above and return your assessment as JSON: {fo
         for i, (messages, model_class) in enumerate(tasks):
             trait = traits[i]
             try:
+                # Build prompt_text from messages for adapter path
+                prompt_text: str | None = None
+                if self._parser_adapter is not None:
+                    # Extract content from messages to build full prompt text
+                    prompt_parts = []
+                    for msg in messages:
+                        content = msg.content if hasattr(msg, "content") else str(msg)
+                        prompt_parts.append(str(content))
+                    prompt_text = "\n\n".join(prompt_parts)
+
                 parsed_result: Any
-                parsed_result, usage_metadata = invoke_with_structured_output(self.llm, messages, model_class)
+                parsed_result, usage_metadata = invoke_with_structured_output(
+                    self.llm,
+                    messages,
+                    model_class,
+                    parser=self._parser_adapter,
+                    prompt_text=prompt_text,
+                )
                 usage_metadata_list.append(usage_metadata)
 
                 # Validate and convert classification to score + label
