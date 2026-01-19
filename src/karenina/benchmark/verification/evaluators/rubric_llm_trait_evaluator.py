@@ -12,8 +12,9 @@ Supports three trait kinds:
 - score: Numeric rating within a range (e.g., 1-5)
 - literal: Categorical classification into predefined classes
 
-The module also supports adapter-based parsing via ParserPort when using the
-claude_agent_sdk interface for consistent LLM backend abstraction.
+The module also supports adapter-based parsing via ParserPort for consistent
+LLM backend abstraction. The adapter factory returns the appropriate implementation
+(LangChainParserAdapter or ClaudeSDKParserAdapter) based on the model interface.
 """
 
 import json
@@ -69,8 +70,9 @@ class LLMTraitEvaluator:
                           If None, reads from KARENINA_ASYNC_ENABLED env var (default: True).
             async_max_workers: Max concurrent workers for parallel execution.
                               If None, reads from KARENINA_ASYNC_MAX_WORKERS env var (default: 2).
-            model_config: Optional model configuration. When provided with interface='claude_agent_sdk',
-                          enables adapter-based parsing via ParserPort.
+            model_config: Optional model configuration. When provided, enables adapter-based
+                          parsing via ParserPort. The factory returns the appropriate adapter
+                          (LangChainParserAdapter or ClaudeSDKParserAdapter) based on interface.
         """
         from ....infrastructure.llm.parallel_invoker import read_async_config
 
@@ -82,14 +84,19 @@ class LLMTraitEvaluator:
         self._async_enabled = async_enabled if async_enabled is not None else default_enabled
         self._async_max_workers = async_max_workers if async_max_workers is not None else default_workers
 
-        # Initialize parser adapter when using claude_agent_sdk interface
+        # Initialize parser adapter for all supported interfaces
+        # The factory returns the appropriate adapter (LangChainParserAdapter or ClaudeSDKParserAdapter)
+        # or None for manual interface
         self._parser_adapter: ParserPort | None = None
-        if model_config is not None and model_config.interface == "claude_agent_sdk":
+        if model_config is not None:
             from ....adapters import get_parser
 
-            # mypy can't properly type __getattr__ lazy imports, but get_parser is correctly typed in factory.py
-            self._parser_adapter = get_parser(model_config)  # type: ignore[misc]
-            logger.debug(f"LLMTraitEvaluator: Initialized ParserPort for interface={model_config.interface}")
+            # Initialize parser adapter via factory
+            # mypy can't infer type through __getattr__ lazy import pattern
+            parser: ParserPort | None = get_parser(model_config)  # type: ignore[misc,unused-ignore]
+            self._parser_adapter = parser
+            if self._parser_adapter is not None:
+                logger.debug(f"LLMTraitEvaluator: Initialized ParserPort for interface={model_config.interface}")
 
     def evaluate_batch(
         self, question: str, answer: str, traits: list[LLMRubricTrait]

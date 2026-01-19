@@ -219,16 +219,20 @@ class TemplateEvaluator:
         # Create parser
         self.parser: Any = PydanticOutputParser(pydantic_object=answer_class)
 
-        # Initialize adapter-based parser for supported interfaces
+        # Initialize adapter-based parser for all supported interfaces
+        # The factory returns the appropriate adapter (LangChainParserAdapter or ClaudeSDKParserAdapter)
+        # or None for manual interface
         self._parser_adapter: ParserPort | None = None
-        if model_config.interface == "claude_agent_sdk":
-            try:
-                from ....adapters import get_parser
+        try:
+            from ....adapters import get_parser
 
-                self._parser_adapter = get_parser(model_config)
+            # mypy can't infer type through __getattr__ lazy import pattern
+            parser: ParserPort | None = get_parser(model_config)  # type: ignore[misc,unused-ignore]
+            self._parser_adapter = parser
+            if self._parser_adapter is not None:
                 logger.debug(f"Initialized ParserPort adapter for interface={model_config.interface}")
-            except Exception as e:
-                logger.warning(f"Failed to initialize ParserPort adapter: {e}, falling back to LangChain")
+        except Exception as e:
+            logger.warning(f"Failed to initialize ParserPort adapter: {e}, falling back to LangChain")
 
         # Lazy-initialized retry handler
         self._retry_handler: Any = None

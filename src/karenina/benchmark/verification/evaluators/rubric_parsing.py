@@ -6,8 +6,9 @@ using a multi-strategy fallback approach:
 2. ToolStrategy (tool calling) - fallback with error handling
 3. Manual parsing with jsonrepair - last resort
 
-The module also supports adapter-based parsing via ParserPort when using the
-claude_agent_sdk interface for consistent LLM backend abstraction.
+The module also supports adapter-based parsing via ParserPort for consistent
+LLM backend abstraction. The adapter factory returns the appropriate implementation
+(LangChainParserAdapter or ClaudeSDKParserAdapter) based on the model interface.
 """
 
 import json
