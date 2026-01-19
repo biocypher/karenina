@@ -278,11 +278,23 @@ class TestGetLLM:
             assert llm is not None
             assert type(llm).__name__ == "LangChainLLMAdapter"
 
-    def test_get_llm_manual_returns_none(self, manual_model_config: Any) -> None:
-        """Test get_llm returns None for manual interface."""
+    def test_get_llm_manual_returns_manual_adapter(self, manual_model_config: Any) -> None:
+        """Test get_llm returns ManualLLMAdapter for manual interface.
+
+        Manual adapters raise ManualInterfaceError if invoked, acting as a safety net.
+        Call sites should check interface != 'manual' before using the adapter.
+        """
+        from karenina.adapters.manual import ManualInterfaceError, ManualLLMAdapter
+
         llm = get_llm(manual_model_config)
 
-        assert llm is None
+        assert llm is not None
+        assert isinstance(llm, ManualLLMAdapter)
+
+        # Verify it raises ManualInterfaceError when invoked
+        with pytest.raises(ManualInterfaceError) as exc_info:
+            llm.invoke([])
+        assert "llm.invoke()" in str(exc_info.value)
 
     def test_get_llm_claude_sdk_fallback_to_langchain(self, claude_sdk_model_config: Any) -> None:
         """Test get_llm falls back to LangChain when Claude SDK unavailable."""
@@ -357,11 +369,23 @@ class TestGetAgent:
         assert agent is not None
         assert type(agent).__name__ == "LangChainAgentAdapter"
 
-    def test_get_agent_manual_returns_none(self, manual_model_config: Any) -> None:
-        """Test get_agent returns None for manual interface."""
+    def test_get_agent_manual_returns_manual_adapter(self, manual_model_config: Any) -> None:
+        """Test get_agent returns ManualAgentAdapter for manual interface.
+
+        Manual adapters raise ManualInterfaceError if invoked, acting as a safety net.
+        Call sites should check interface != 'manual' before using the adapter.
+        """
+        from karenina.adapters.manual import ManualAgentAdapter, ManualInterfaceError
+
         agent = get_agent(manual_model_config)
 
-        assert agent is None
+        assert agent is not None
+        assert isinstance(agent, ManualAgentAdapter)
+
+        # Verify it raises ManualInterfaceError when invoked
+        with pytest.raises(ManualInterfaceError) as exc_info:
+            agent.run_sync([])
+        assert "agent.run_sync()" in str(exc_info.value)
 
     def test_get_agent_claude_sdk_fallback_to_langchain(self, claude_sdk_model_config: Any) -> None:
         """Test get_agent falls back to LangChain when Claude SDK unavailable."""
@@ -422,11 +446,28 @@ class TestGetParser:
             assert parser is not None
             assert type(parser).__name__ == "LangChainParserAdapter"
 
-    def test_get_parser_manual_returns_none(self, manual_model_config: Any) -> None:
-        """Test get_parser returns None for manual interface."""
+    def test_get_parser_manual_returns_manual_adapter(self, manual_model_config: Any) -> None:
+        """Test get_parser returns ManualParserAdapter for manual interface.
+
+        Manual adapters raise ManualInterfaceError if invoked, acting as a safety net.
+        Call sites should check interface != 'manual' before using the adapter.
+        """
+        from pydantic import BaseModel
+
+        from karenina.adapters.manual import ManualInterfaceError, ManualParserAdapter
+
         parser = get_parser(manual_model_config)
 
-        assert parser is None
+        assert parser is not None
+        assert isinstance(parser, ManualParserAdapter)
+
+        # Verify it raises ManualInterfaceError when invoked
+        class DummySchema(BaseModel):
+            value: str
+
+        with pytest.raises(ManualInterfaceError) as exc_info:
+            parser.parse_to_pydantic("test", DummySchema)
+        assert "parser.parse_to_pydantic()" in str(exc_info.value)
 
     def test_get_parser_claude_sdk_fallback_to_langchain(self, claude_sdk_model_config: Any) -> None:
         """Test get_parser falls back to LangChain when Claude SDK unavailable."""

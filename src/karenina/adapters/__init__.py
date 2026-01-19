@@ -32,12 +32,14 @@ from typing import Any
 # For now, this module establishes the package structure.
 
 __all__ = [
-    # Factory functions (to be implemented in lc-008)
+    # Factory functions
     "get_llm",
     "get_agent",
     "get_parser",
     "check_adapter_available",
-    # Availability checking (to be implemented in lc-008)
+    "format_model_string",
+    "build_llm_kwargs",
+    # Availability checking
     "AdapterAvailability",
 ]
 
@@ -48,11 +50,19 @@ def __getattr__(name: str) -> Any:
     This allows importing from karenina.adapters before all submodules
     are implemented.
     """
-    if name in ("get_llm", "get_agent", "get_parser", "check_adapter_available", "AdapterAvailability"):
+    if name in (
+        "get_llm",
+        "get_agent",
+        "get_parser",
+        "check_adapter_available",
+        "format_model_string",
+        "build_llm_kwargs",
+    ):
         try:
             from karenina.adapters.factory import (
-                AdapterAvailability,
+                build_llm_kwargs,
                 check_adapter_available,
+                format_model_string,
                 get_agent,
                 get_llm,
                 get_parser,
@@ -63,10 +73,17 @@ def __getattr__(name: str) -> Any:
                 "get_agent": get_agent,
                 "get_parser": get_parser,
                 "check_adapter_available": check_adapter_available,
-                "AdapterAvailability": AdapterAvailability,
+                "format_model_string": format_model_string,
+                "build_llm_kwargs": build_llm_kwargs,
             }[name]
         except ImportError as e:
             raise ImportError(
                 f"Cannot import '{name}' - factory module not yet implemented. See PR2 task lc-008. Original error: {e}"
             ) from e
+
+    if name == "AdapterAvailability":
+        from karenina.adapters.registry import AdapterAvailability
+
+        return AdapterAvailability
+
     raise AttributeError(f"module 'karenina.adapters' has no attribute '{name}'")
