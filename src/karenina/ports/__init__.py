@@ -18,6 +18,7 @@ from karenina.ports.messages import (
     ToolResultContent,
     ToolUseContent,
 )
+from karenina.ports.usage import UsageMetadata
 
 __all__ = [
     # Enums
@@ -31,4 +32,6 @@ __all__ = [
     "ThinkingContent",
     # Message class
     "Message",
+    # Usage tracking
+    "UsageMetadata",
 ]
