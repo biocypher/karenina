@@ -177,7 +177,19 @@ class LLMTraitEvaluator:
         tasks: list[tuple[list[BaseMessage], type]],
         traits: list[LLMRubricTrait],
     ) -> tuple[dict[str, int | bool], list[dict[str, Any]]]:
-        """Execute sequential evaluation tasks in parallel using ParallelLLMInvoker."""
+        """Execute sequential evaluation tasks in parallel using ParallelLLMInvoker.
+
+        Note: When a ParserPort adapter is available (claude_agent_sdk interface),
+        falls back to true sequential execution since ParallelLLMInvoker doesn't
+        currently support the adapter path. This ensures correct behavior while
+        maintaining the adapter abstraction.
+        """
+        # When using adapter, fall back to true sequential execution
+        # ParallelLLMInvoker doesn't support the adapter path yet
+        if self._parser_adapter is not None:
+            logger.debug("ParserPort adapter available, using true sequential execution for parallel mode")
+            return self._execute_true_sequential(tasks, traits)
+
         from ....infrastructure.llm.parallel_invoker import ParallelLLMInvoker
 
         invoker = ParallelLLMInvoker(self.llm, max_workers=self._async_max_workers)
@@ -209,7 +221,12 @@ class LLMTraitEvaluator:
         tasks: list[tuple[list[BaseMessage], type]],
         traits: list[LLMRubricTrait],
     ) -> tuple[dict[str, int | bool], list[dict[str, Any]]]:
-        """Execute evaluation tasks truly sequentially (legacy behavior)."""
+        """Execute evaluation tasks truly sequentially (legacy behavior).
+
+        When a ParserPort adapter is available (claude_agent_sdk interface), uses
+        adapter-based parsing via invoke_with_structured_output. Otherwise falls
+        back to the LangChain path.
+        """
         from .rubric_parsing import invoke_with_structured_output
 
         results: dict[str, int | bool] = {}
@@ -218,8 +235,24 @@ class LLMTraitEvaluator:
         for i, (messages, model_class) in enumerate(tasks):
             trait = traits[i]
             try:
+                # Build prompt_text from messages for adapter path
+                prompt_text: str | None = None
+                if self._parser_adapter is not None:
+                    # Extract content from messages to build full prompt text
+                    prompt_parts = []
+                    for msg in messages:
+                        content = msg.content if hasattr(msg, "content") else str(msg)
+                        prompt_parts.append(str(content))
+                    prompt_text = "\n\n".join(prompt_parts)
+
                 parsed_result: Any
-                parsed_result, usage_metadata = invoke_with_structured_output(self.llm, messages, model_class)
+                parsed_result, usage_metadata = invoke_with_structured_output(
+                    self.llm,
+                    messages,
+                    model_class,
+                    parser=self._parser_adapter,
+                    prompt_text=prompt_text,
+                )
                 # Extract score from result
                 if trait.kind == "boolean":
                     score: int | bool = parsed_result.result
