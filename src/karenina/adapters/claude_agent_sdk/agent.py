@@ -38,6 +38,7 @@ from karenina.ports import (
 
 from .mcp import convert_mcp_config
 from .messages import ClaudeSDKMessageConverter
+from .trace import sdk_messages_to_raw_trace
 from .usage import extract_sdk_usage
 
 if TYPE_CHECKING:
@@ -150,8 +151,8 @@ class ClaudeSDKAgentAdapter:
     def _build_raw_trace(self, messages: list[Any]) -> str:
         """Build raw_trace string from SDK messages.
 
+        Delegates to sdk_messages_to_raw_trace() from trace module.
         Matches the format used by LangChain adapter's harmonize_agent_response().
-        Uses delimiters like "--- AI Message ---" and "--- Tool Message ---".
 
         Args:
             messages: List of SDK message objects.
@@ -159,120 +160,7 @@ class ClaudeSDKAgentAdapter:
         Returns:
             Formatted trace string compatible with existing infrastructure.
         """
-        try:
-            from claude_agent_sdk import AssistantMessage, UserMessage
-            from claude_agent_sdk.types import (
-                TextBlock,
-                ThinkingBlock,
-                ToolResultBlock,
-                ToolUseBlock,
-            )
-        except ImportError:
-            return "[SDK types not available - cannot format trace]"
-
-        trace_parts: list[str] = []
-
-        for msg in messages:
-            if isinstance(msg, UserMessage):
-                # Skip user messages in trace (matches LangChain behavior)
-                continue
-
-            elif isinstance(msg, AssistantMessage):
-                parts = self._format_assistant_message_for_trace(
-                    msg, TextBlock, ToolUseBlock, ToolResultBlock, ThinkingBlock
-                )
-                trace_parts.extend(parts)
-
-        return "\n\n".join(trace_parts)
-
-    def _format_assistant_message_for_trace(
-        self,
-        msg: Any,
-        TextBlock: type,
-        ToolUseBlock: type,
-        ToolResultBlock: type,
-        ThinkingBlock: type,
-    ) -> list[str]:
-        """Format an AssistantMessage for trace output.
-
-        Args:
-            msg: AssistantMessage from SDK.
-            TextBlock: SDK TextBlock type.
-            ToolUseBlock: SDK ToolUseBlock type.
-            ToolResultBlock: SDK ToolResultBlock type.
-            ThinkingBlock: SDK ThinkingBlock type.
-
-        Returns:
-            List of formatted trace sections.
-        """
-        result: list[str] = []
-        text_parts: list[str] = []
-        tool_calls: list[dict[str, Any]] = []
-        tool_results: list[tuple[str, str, bool]] = []  # (call_id, content, is_error)
-
-        for block in msg.content:
-            if isinstance(block, TextBlock):
-                text_parts.append(block.text)  # type: ignore[attr-defined]
-
-            elif isinstance(block, ThinkingBlock):
-                # Include thinking in trace with its own header
-                result.append(f"--- Thinking ---\n{block.thinking}")  # type: ignore[attr-defined]
-
-            elif isinstance(block, ToolUseBlock):
-                tool_calls.append(
-                    {
-                        "name": block.name,  # type: ignore[attr-defined]
-                        "id": block.id,  # type: ignore[attr-defined]
-                        "args": block.input if isinstance(block.input, dict) else {},  # type: ignore[attr-defined]
-                    }
-                )
-
-            elif isinstance(block, ToolResultBlock):
-                content_str = ""
-                if block.content:  # type: ignore[attr-defined]
-                    if isinstance(block.content, str):  # type: ignore[attr-defined]
-                        content_str = block.content  # type: ignore[attr-defined]
-                    elif isinstance(block.content, list):  # type: ignore[attr-defined]
-                        parts = []
-                        for c in block.content:  # type: ignore[attr-defined]
-                            if hasattr(c, "text"):
-                                parts.append(c.text)
-                        content_str = "\n".join(parts)
-                    else:
-                        content_str = str(block.content)  # type: ignore[attr-defined]
-
-                is_error = getattr(block, "is_error", False)
-                if not isinstance(is_error, bool):
-                    is_error = False
-
-                tool_results.append((block.tool_use_id, content_str, is_error))  # type: ignore[attr-defined]
-
-        # Build AI Message section (matches LangChain format)
-        if text_parts or tool_calls:
-            header = "--- AI Message ---"
-            content_parts: list[str] = []
-
-            if text_parts:
-                content_parts.append("\n".join(text_parts))
-
-            if tool_calls:
-                content_parts.append("\nTool Calls:")
-                for tc in tool_calls:
-                    content_parts.append(f"  {tc['name']} (call_{tc['id']})")
-                    content_parts.append(f"   Call ID: {tc['id']}")
-                    if tc["args"]:
-                        content_parts.append(f"   Args: {tc['args']}")
-
-            result.append(f"{header}\n{''.join(content_parts)}")
-
-        # Add tool result sections
-        for call_id, content, is_error in tool_results:
-            header = f"--- Tool Message (call_id: {call_id}) ---"
-            if is_error:
-                content = f"[ERROR] {content}"
-            result.append(f"{header}\n{content}")
-
-        return result
+        return sdk_messages_to_raw_trace(messages, include_user_messages=False)
 
     def _extract_final_response(self, messages: list[Any], result_msg: Any) -> str:
         """Extract final text response from SDK messages.
