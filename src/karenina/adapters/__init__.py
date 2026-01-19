@@ -38,6 +38,7 @@ if TYPE_CHECKING:
         get_llm,
         get_parser,
     )
+    from karenina.adapters.parallel import AdapterParallelInvoker
     from karenina.adapters.registry import AdapterAvailability
 
 # Note: Factory functions will be exported once lc-008 is implemented.
@@ -53,6 +54,8 @@ __all__ = [
     "build_llm_kwargs",
     # Availability checking
     "AdapterAvailability",
+    # Parallel invocation
+    "AdapterParallelInvoker",
 ]
 
 
@@ -97,5 +100,10 @@ def __getattr__(name: str) -> Any:
         from karenina.adapters.registry import AdapterAvailability
 
         return AdapterAvailability
+
+    if name == "AdapterParallelInvoker":
+        from karenina.adapters.parallel import AdapterParallelInvoker
+
+        return AdapterParallelInvoker
 
     raise AttributeError(f"module 'karenina.adapters' has no attribute '{name}'")

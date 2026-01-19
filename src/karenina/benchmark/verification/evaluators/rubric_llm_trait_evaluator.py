@@ -12,9 +12,9 @@ Supports three trait kinds:
 - score: Numeric rating within a range (e.g., 1-5)
 - literal: Categorical classification into predefined classes
 
-The module also supports adapter-based parsing via ParserPort for consistent
-LLM backend abstraction. The adapter factory returns the appropriate implementation
-(LangChainParserAdapter or ClaudeSDKParserAdapter) based on the model interface.
+All parsing is done via ParserPort adapters for consistent LLM backend abstraction.
+The adapter factory returns the appropriate implementation (LangChainParserAdapter
+or ClaudeSDKParserAdapter) based on the model interface configuration.
 """
 
 import json
@@ -46,8 +46,11 @@ class LLMTraitEvaluator:
     For literal traits, scores are returned as int indices (0 to len(classes)-1),
     with class labels returned separately for display purposes.
 
+    All parsing is performed via ParserPort adapters, which are initialized from
+    the required model_config parameter.
+
     Example usage:
-        evaluator = LLMTraitEvaluator(llm)
+        evaluator = LLMTraitEvaluator(llm, model_config=model_config)
         # For boolean/score traits:
         results, usage = evaluator.evaluate_batch(question, answer, traits)
         # For literal traits:
@@ -59,7 +62,8 @@ class LLMTraitEvaluator:
         llm: Any,
         async_enabled: bool | None = None,
         async_max_workers: int | None = None,
-        model_config: "ModelConfig | None" = None,
+        *,
+        model_config: "ModelConfig",
     ):
         """
         Initialize the LLM trait evaluator.
@@ -70,10 +74,11 @@ class LLMTraitEvaluator:
                           If None, reads from KARENINA_ASYNC_ENABLED env var (default: True).
             async_max_workers: Max concurrent workers for parallel execution.
                               If None, reads from KARENINA_ASYNC_MAX_WORKERS env var (default: 2).
-            model_config: Optional model configuration. When provided, enables adapter-based
-                          parsing via ParserPort. The factory returns the appropriate adapter
-                          (LangChainParserAdapter or ClaudeSDKParserAdapter) based on interface.
+            model_config: Model configuration for adapter-based parsing via ParserPort.
+                          The factory returns the appropriate adapter (LangChainParserAdapter
+                          or ClaudeSDKParserAdapter) based on interface.
         """
+        from ....adapters import get_parser
         from ....infrastructure.llm.parallel_invoker import read_async_config
 
         self.llm = llm
@@ -84,26 +89,17 @@ class LLMTraitEvaluator:
         self._async_enabled = async_enabled if async_enabled is not None else default_enabled
         self._async_max_workers = async_max_workers if async_max_workers is not None else default_workers
 
-        # Initialize parser adapter via the registry when model_config is provided
+        # Initialize parser adapter via the registry
         # Factory always returns a ParserPort (LangChainParserAdapter, ClaudeSDKParserAdapter,
         # or ManualParserAdapter) or raises AdapterUnavailableError
-        self._parser_adapter: ParserPort | None = None
-        if model_config is not None:
-            from ....adapters import get_parser
-
-            self._parser_adapter = get_parser(model_config)
-            logger.debug(f"LLMTraitEvaluator: Initialized ParserPort for interface={model_config.interface}")
+        self._parser_adapter: ParserPort = get_parser(model_config)
+        logger.debug(f"LLMTraitEvaluator: Initialized ParserPort for interface={model_config.interface}")
 
     def evaluate_batch(
         self, question: str, answer: str, traits: list[LLMRubricTrait]
     ) -> tuple[dict[str, int | bool], dict[str, Any]]:
         """
-        Evaluate all traits in a single LLM call using LangChain or adapter strategies.
-
-        When a ParserPort adapter is available (claude_agent_sdk interface), uses
-        adapter-based parsing. Otherwise falls back to LangChain strategies:
-        1. json_schema method (native structured output)
-        2. Manual parsing with json-repair
+        Evaluate all traits in a single LLM call using adapter-based parsing.
 
         Args:
             question: The original question asked
@@ -124,8 +120,7 @@ class LLMTraitEvaluator:
         # Build combined prompt text for adapter path
         prompt_text = f"{system_prompt}\n\n{user_prompt}"
 
-        # Invoke with automatic strategy selection and fallbacks
-        # Pass parser adapter if available for adapter-based parsing
+        # Invoke via adapter for structured parsing
         parsed_result, usage_metadata = invoke_with_structured_output(
             self.llm,
             messages,
@@ -145,8 +140,8 @@ class LLMTraitEvaluator:
         Evaluate traits one by one.
 
         When async_enabled is True, the LLM calls run in parallel using
-        ParallelLLMInvoker for significant speedup. Otherwise, calls run
-        sequentially (legacy behavior).
+        AdapterParallelInvoker for significant speedup. Otherwise, calls run
+        sequentially.
 
         Args:
             question: The original question asked
@@ -180,23 +175,29 @@ class LLMTraitEvaluator:
         tasks: list[tuple[list[BaseMessage], type]],
         traits: list[LLMRubricTrait],
     ) -> tuple[dict[str, int | bool], list[dict[str, Any]]]:
-        """Execute sequential evaluation tasks in parallel using ParallelLLMInvoker.
+        """Execute sequential evaluation tasks in parallel using AdapterParallelInvoker.
 
-        Note: When a ParserPort adapter is available (claude_agent_sdk interface),
-        falls back to true sequential execution since ParallelLLMInvoker doesn't
-        currently support the adapter path. This ensures correct behavior while
-        maintaining the adapter abstraction.
+        Converts message-based tasks to prompt-text tasks and uses the
+        AdapterParallelInvoker for true async parallelism with ParserPort.
         """
-        # When using adapter, fall back to true sequential execution
-        # ParallelLLMInvoker doesn't support the adapter path yet
-        if self._parser_adapter is not None:
-            logger.debug("ParserPort adapter available, using true sequential execution for parallel mode")
-            return self._execute_true_sequential(tasks, traits)
+        from ....adapters import AdapterParallelInvoker
 
-        from ....infrastructure.llm.parallel_invoker import ParallelLLMInvoker
+        # Convert message-based tasks to prompt-text tasks
+        adapter_tasks: list[tuple[str, type]] = []
+        for messages, model_class in tasks:
+            # Extract content from messages to build full prompt text
+            prompt_parts = []
+            for msg in messages:
+                content = msg.content if hasattr(msg, "content") else str(msg)
+                prompt_parts.append(str(content))
+            prompt_text = "\n\n".join(prompt_parts)
+            adapter_tasks.append((prompt_text, model_class))
 
-        invoker = ParallelLLMInvoker(self.llm, max_workers=self._async_max_workers)
-        raw_results = invoker.invoke_batch(tasks)
+        logger.debug(
+            f"AdapterParallelInvoker: Executing {len(adapter_tasks)} tasks with max_workers={self._async_max_workers}"
+        )
+        invoker = AdapterParallelInvoker(self._parser_adapter, max_workers=self._async_max_workers)
+        raw_results = invoker.invoke_batch(adapter_tasks)
 
         results: dict[str, int | bool] = {}
         usage_metadata_list: list[dict[str, Any]] = []
@@ -224,11 +225,10 @@ class LLMTraitEvaluator:
         tasks: list[tuple[list[BaseMessage], type]],
         traits: list[LLMRubricTrait],
     ) -> tuple[dict[str, int | bool], list[dict[str, Any]]]:
-        """Execute evaluation tasks truly sequentially (legacy behavior).
+        """Execute evaluation tasks truly sequentially.
 
-        When a ParserPort adapter is available (claude_agent_sdk interface), uses
-        adapter-based parsing via invoke_with_structured_output. Otherwise falls
-        back to the LangChain path.
+        Uses adapter-based parsing via invoke_with_structured_output for each
+        task one at a time. Used when async_enabled=False.
         """
         from .rubric_parsing import invoke_with_structured_output
 
@@ -238,15 +238,12 @@ class LLMTraitEvaluator:
         for i, (messages, model_class) in enumerate(tasks):
             trait = traits[i]
             try:
-                # Build prompt_text from messages for adapter path
-                prompt_text: str | None = None
-                if self._parser_adapter is not None:
-                    # Extract content from messages to build full prompt text
-                    prompt_parts = []
-                    for msg in messages:
-                        content = msg.content if hasattr(msg, "content") else str(msg)
-                        prompt_parts.append(str(content))
-                    prompt_text = "\n\n".join(prompt_parts)
+                # Build prompt_text from messages for adapter
+                prompt_parts = []
+                for msg in messages:
+                    content = msg.content if hasattr(msg, "content") else str(msg)
+                    prompt_parts.append(str(content))
+                prompt_text = "\n\n".join(prompt_parts)
 
                 parsed_result: Any
                 parsed_result, usage_metadata = invoke_with_structured_output(
@@ -269,43 +266,6 @@ class LLMTraitEvaluator:
                 usage_metadata_list.append({})
 
         return results, usage_metadata_list
-
-    def _evaluate_single_trait(
-        self, question: str, answer: str, trait: LLMRubricTrait
-    ) -> tuple[int | bool, dict[str, Any]]:
-        """
-        Evaluate a single trait using LangChain strategies.
-
-        Strategy order:
-        1. json_schema method (native structured output)
-        2. Manual parsing with json-repair
-
-        Args:
-            question: The original question
-            answer: The answer to evaluate
-            trait: The LLM trait to evaluate
-
-        Returns:
-            Tuple of (score, usage_metadata)
-        """
-        from ....schemas.workflow.rubric_outputs import SingleBooleanScore, SingleNumericScore
-        from .rubric_parsing import invoke_with_structured_output
-
-        system_prompt = self._build_single_trait_system_prompt(trait)
-        user_prompt = self._build_single_trait_user_prompt(question, answer, trait)
-
-        messages: list[BaseMessage] = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
-
-        # Choose model class based on trait kind
-        model_class = SingleBooleanScore if trait.kind == "boolean" else SingleNumericScore
-
-        # Invoke with automatic strategy selection and fallbacks
-        parsed_result, usage_metadata = invoke_with_structured_output(self.llm, messages, model_class)
-
-        # Extract score from result
-        score: int | bool = parsed_result.result if trait.kind == "boolean" else parsed_result.score  # type: ignore[attr-defined]
-
-        return self._validate_score(score, trait), usage_metadata
 
     def _validate_batch_scores(
         self, scores: dict[str, int | bool], traits: list[LLMRubricTrait]
@@ -614,8 +574,7 @@ Evaluate this answer for the trait above and return your assessment as JSON: {fo
         Literal traits classify responses into predefined categories. The LLM
         returns class names, which are then converted to integer indices.
 
-        When a ParserPort adapter is available (claude_agent_sdk interface), uses
-        adapter-based parsing. Otherwise falls back to LangChain strategies.
+        Uses adapter-based parsing via ParserPort.
 
         Args:
             question: The original question asked
@@ -641,11 +600,10 @@ Evaluate this answer for the trait above and return your assessment as JSON: {fo
 
         messages: list[BaseMessage] = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
 
-        # Build combined prompt text for adapter path
+        # Build combined prompt text for adapter
         prompt_text = f"{system_prompt}\n\n{user_prompt}"
 
-        # Invoke with automatic strategy selection and fallbacks
-        # Pass parser adapter if available for adapter-based parsing
+        # Invoke via adapter for structured parsing
         parsed_result, usage_metadata = invoke_with_structured_output(
             self.llm,
             messages,
@@ -665,8 +623,8 @@ Evaluate this answer for the trait above and return your assessment as JSON: {fo
         Evaluate literal traits one by one.
 
         When async_enabled is True, the LLM calls run in parallel using
-        ParallelLLMInvoker for significant speedup. Otherwise, calls run
-        sequentially (legacy behavior).
+        AdapterParallelInvoker for significant speedup. Otherwise, calls run
+        sequentially.
 
         Args:
             question: The original question asked
@@ -707,23 +665,29 @@ Evaluate this answer for the trait above and return your assessment as JSON: {fo
         tasks: list[tuple[list[BaseMessage], type]],
         traits: list[LLMRubricTrait],
     ) -> tuple[dict[str, int], dict[str, str], list[dict[str, Any]]]:
-        """Execute literal sequential evaluation tasks in parallel.
+        """Execute literal evaluation tasks in parallel using AdapterParallelInvoker.
 
-        Note: When a ParserPort adapter is available (claude_agent_sdk interface),
-        falls back to true sequential execution since ParallelLLMInvoker doesn't
-        currently support the adapter path. This ensures correct behavior while
-        maintaining the adapter abstraction.
+        Converts message-based tasks to prompt-text tasks and uses the
+        AdapterParallelInvoker for true async parallelism with ParserPort.
         """
-        # When using adapter, fall back to true sequential execution
-        # ParallelLLMInvoker doesn't support the adapter path yet
-        if self._parser_adapter is not None:
-            logger.debug("ParserPort adapter available, using true sequential execution for parallel literal mode")
-            return self._execute_true_literal_sequential(tasks, traits)
+        from ....adapters import AdapterParallelInvoker
 
-        from ....infrastructure.llm.parallel_invoker import ParallelLLMInvoker
+        # Convert message-based tasks to prompt-text tasks
+        adapter_tasks: list[tuple[str, type]] = []
+        for messages, model_class in tasks:
+            # Extract content from messages to build full prompt text
+            prompt_parts = []
+            for msg in messages:
+                content = msg.content if hasattr(msg, "content") else str(msg)
+                prompt_parts.append(str(content))
+            prompt_text = "\n\n".join(prompt_parts)
+            adapter_tasks.append((prompt_text, model_class))
 
-        invoker = ParallelLLMInvoker(self.llm, max_workers=self._async_max_workers)
-        raw_results = invoker.invoke_batch(tasks)
+        logger.debug(
+            f"AdapterParallelInvoker: Executing {len(adapter_tasks)} literal tasks with max_workers={self._async_max_workers}"
+        )
+        invoker = AdapterParallelInvoker(self._parser_adapter, max_workers=self._async_max_workers)
+        raw_results = invoker.invoke_batch(adapter_tasks)
 
         scores: dict[str, int] = {}
         labels: dict[str, str] = {}
@@ -750,11 +714,10 @@ Evaluate this answer for the trait above and return your assessment as JSON: {fo
         tasks: list[tuple[list[BaseMessage], type]],
         traits: list[LLMRubricTrait],
     ) -> tuple[dict[str, int], dict[str, str], list[dict[str, Any]]]:
-        """Execute literal evaluation tasks truly sequentially (legacy behavior).
+        """Execute literal evaluation tasks truly sequentially.
 
-        When a ParserPort adapter is available (claude_agent_sdk interface), uses
-        adapter-based parsing via invoke_with_structured_output. Otherwise falls
-        back to the LangChain path.
+        Uses adapter-based parsing via invoke_with_structured_output for each
+        task one at a time. Used when async_enabled=False.
         """
         from .rubric_parsing import invoke_with_structured_output
 
@@ -765,15 +728,12 @@ Evaluate this answer for the trait above and return your assessment as JSON: {fo
         for i, (messages, model_class) in enumerate(tasks):
             trait = traits[i]
             try:
-                # Build prompt_text from messages for adapter path
-                prompt_text: str | None = None
-                if self._parser_adapter is not None:
-                    # Extract content from messages to build full prompt text
-                    prompt_parts = []
-                    for msg in messages:
-                        content = msg.content if hasattr(msg, "content") else str(msg)
-                        prompt_parts.append(str(content))
-                    prompt_text = "\n\n".join(prompt_parts)
+                # Build prompt_text from messages for adapter
+                prompt_parts = []
+                for msg in messages:
+                    content = msg.content if hasattr(msg, "content") else str(msg)
+                    prompt_parts.append(str(content))
+                prompt_text = "\n\n".join(prompt_parts)
 
                 parsed_result: Any
                 parsed_result, usage_metadata = invoke_with_structured_output(
