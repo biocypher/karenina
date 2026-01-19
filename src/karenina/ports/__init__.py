@@ -17,6 +17,14 @@ from karenina.ports.agent import (
     MCPStdioServerConfig,
     Tool,
 )
+from karenina.ports.errors import (
+    AdapterUnavailableError,
+    AgentExecutionError,
+    AgentResponseError,
+    AgentTimeoutError,
+    ParseError,
+    PortError,
+)
 from karenina.ports.llm import LLMPort, LLMResponse
 from karenina.ports.messages import (
     Content,
@@ -59,4 +67,11 @@ __all__ = [
     # Agent port and result
     "AgentPort",
     "AgentResult",
+    # Error types
+    "PortError",
+    "AdapterUnavailableError",
+    "AgentExecutionError",
+    "AgentTimeoutError",
+    "AgentResponseError",
+    "ParseError",
 ]
