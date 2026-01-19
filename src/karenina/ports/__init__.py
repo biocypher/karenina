@@ -8,10 +8,24 @@ allowing the core application logic to remain independent of specific
 LLM provider implementations.
 """
 
-from karenina.ports.messages import ContentType, Role
+from karenina.ports.messages import (
+    Content,
+    ContentType,
+    Role,
+    TextContent,
+    ThinkingContent,
+    ToolResultContent,
+    ToolUseContent,
+)
 
 __all__ = [
-    # Message types
+    # Enums
     "Role",
     "ContentType",
+    # Content types
+    "Content",
+    "TextContent",
+    "ToolUseContent",
+    "ToolResultContent",
+    "ThinkingContent",
 ]
