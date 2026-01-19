@@ -8,6 +8,7 @@ allowing the core application logic to remain independent of specific
 LLM provider implementations.
 """
 
+from karenina.ports.llm import LLMPort, LLMResponse
 from karenina.ports.messages import (
     Content,
     ContentType,
@@ -34,4 +35,7 @@ __all__ = [
     "Message",
     # Usage tracking
     "UsageMetadata",
+    # LLM Port
+    "LLMPort",
+    "LLMResponse",
 ]
