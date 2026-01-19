@@ -286,12 +286,11 @@ class RubricEvaluationStage(BaseVerificationStage):
         metric_confusion_lists = None
         metric_results = None
 
-        # Build model string for tracking
+        # Build model string for tracking (centralized via adapter registry)
+        from karenina.adapters import format_model_string
+
         parsing_model = context.parsing_model
-        if parsing_model.interface == "openrouter":
-            parsing_model_str = parsing_model.model_name
-        else:
-            parsing_model_str = f"{parsing_model.model_provider}/{parsing_model.model_name}"
+        parsing_model_str = format_model_string(parsing_model)
 
         try:
             # Create rubric evaluator with parsing model and strategy from config

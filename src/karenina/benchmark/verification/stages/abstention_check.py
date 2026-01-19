@@ -92,12 +92,11 @@ class AbstentionCheckStage(BaseVerificationStage):
             usage_tracker = UsageTracker()
             logger.warning("No usage tracker found in context, initializing new one")
 
-        # Build model string for tracking
+        # Build model string for tracking (centralized via adapter registry)
+        from karenina.adapters import format_model_string
+
         parsing_model = context.parsing_model
-        if parsing_model.interface == "openrouter":
-            parsing_model_str = parsing_model.model_name
-        else:
-            parsing_model_str = f"{parsing_model.model_provider}/{parsing_model.model_name}"
+        parsing_model_str = format_model_string(parsing_model)
 
         # Detect abstention
         abstention_detected, abstention_check_performed, abstention_reasoning, usage_metadata = detect_abstention(
