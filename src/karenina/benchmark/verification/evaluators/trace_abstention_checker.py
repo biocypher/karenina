@@ -4,11 +4,12 @@ import json
 import logging
 from typing import Any
 
-from langchain_core.callbacks import get_usage_metadata_callback
-from langchain_core.messages import HumanMessage, SystemMessage
+from pydantic import BaseModel, Field
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from ....infrastructure.llm.interface import init_chat_model_unified
+from ....adapters import get_llm
+from ....ports import LLMResponse, Message
+from ....ports.usage import UsageMetadata
 from ....schemas.workflow import ModelConfig
 from ..utils.error_helpers import is_retryable_error
 from ..utils.json_helpers import strip_markdown_fences as _strip_markdown_fences
@@ -16,6 +17,60 @@ from ..utils.prompts import ABSTENTION_DETECTION_SYS, ABSTENTION_DETECTION_USER
 
 # Set up logger
 logger = logging.getLogger(__name__)
+
+
+class AbstentionResult(BaseModel):
+    """Result of abstention detection by LLM judge."""
+
+    reasoning: str = Field(description="Brief explanation of why this was classified as abstention or genuine attempt")
+    abstention_detected: bool = Field(
+        description="True if the model refused to answer or abstained, False if genuine answer attempt"
+    )
+
+
+def _convert_usage_to_dict(usage: UsageMetadata) -> dict[str, Any]:
+    """Convert UsageMetadata dataclass to dict for backward compatibility."""
+    result: dict[str, Any] = {
+        "input_tokens": usage.input_tokens,
+        "output_tokens": usage.output_tokens,
+        "total_tokens": usage.total_tokens,
+    }
+    if usage.cost_usd is not None:
+        result["cost_usd"] = usage.cost_usd
+    if usage.cache_read_tokens is not None:
+        result["cache_read_input_tokens"] = usage.cache_read_tokens
+    if usage.cache_creation_tokens is not None:
+        result["cache_creation_input_tokens"] = usage.cache_creation_tokens
+    if usage.model is not None:
+        result["model"] = usage.model
+    return result
+
+
+def _extract_result(response: LLMResponse) -> AbstentionResult | None:
+    """Extract AbstentionResult from LLMResponse."""
+    if isinstance(response.raw, AbstentionResult):
+        return response.raw
+    if hasattr(response.raw, "abstention_detected"):
+        return AbstentionResult(
+            abstention_detected=response.raw.abstention_detected,
+            reasoning=getattr(response.raw, "reasoning", "No reasoning provided"),
+        )
+    return None
+
+
+def _fallback_parse(content: str, usage_metadata: dict[str, Any]) -> tuple[bool, bool, str | None, dict[str, Any]]:
+    """Fallback to manual JSON parsing when structured output fails."""
+    try:
+        cleaned_response = _strip_markdown_fences(content)
+        if cleaned_response is None:
+            return False, False, None, usage_metadata
+        result = json.loads(cleaned_response)
+        abstention_detected = result.get("abstention_detected", False)
+        reasoning = result.get("reasoning", "No reasoning provided")
+        logger.debug(f"Abstention check (fallback): {abstention_detected}")
+        return abstention_detected, True, reasoning, usage_metadata
+    except json.JSONDecodeError:
+        return False, False, None, usage_metadata
 
 
 def detect_abstention(
@@ -40,7 +95,7 @@ def detect_abstention(
         - abstention_detected: True if model refused/abstained, False if genuine attempt
         - check_performed: True if check completed successfully, False if check failed
         - reasoning: The LLM's explanation for its determination (None if check failed)
-        - usage_metadata: Token usage metadata from LangChain callback
+        - usage_metadata: Token usage metadata from the LLM invocation
 
     Examples:
         >>> config = ModelConfig(id="parser", model_provider="openai", ...)
@@ -66,58 +121,35 @@ def detect_abstention(
         usage_metadata: dict[str, Any] = {}
 
         try:
-            # Initialize the parsing model for abstention detection
-            # Note: model_name is guaranteed non-None by ModelConfig validator
-            assert parsing_model.model_name is not None, "model_name must not be None"
+            # Create config copy with temperature=0 for consistent detection
+            # Note: LangChain adapter respects temperature; Claude SDK adapter ignores it
+            detection_config = parsing_model.model_copy(update={"temperature": 0.0})
 
-            # Build kwargs for model initialization
-            model_kwargs: dict[str, Any] = {
-                "model": parsing_model.model_name,
-                "provider": parsing_model.model_provider,
-                "temperature": 0.0,  # Use temperature 0 for consistent detection
-                "interface": parsing_model.interface,
-            }
+            # Get LLM via adapter factory
+            llm = get_llm(detection_config)
 
-            # Add endpoint configuration if using openai_endpoint interface
-            if parsing_model.endpoint_base_url:
-                model_kwargs["endpoint_base_url"] = parsing_model.endpoint_base_url
-            if parsing_model.endpoint_api_key:
-                model_kwargs["endpoint_api_key"] = parsing_model.endpoint_api_key
+            # Configure for structured output
+            structured_llm = llm.with_structured_output(AbstentionResult)
 
-            # Add any extra kwargs if provided (e.g., vendor-specific API keys)
-            if parsing_model.extra_kwargs:
-                model_kwargs.update(parsing_model.extra_kwargs)
-
-            llm = init_chat_model_unified(**model_kwargs)
-
-            # Construct the prompt
+            # Build messages using unified Message class
             user_prompt = ABSTENTION_DETECTION_USER.format(question=question_text, response=raw_llm_response)
-
             messages = [
-                SystemMessage(content=ABSTENTION_DETECTION_SYS),
-                HumanMessage(content=user_prompt),
+                Message.system(ABSTENTION_DETECTION_SYS),
+                Message.user(user_prompt),
             ]
 
-            # Invoke the LLM with usage metadata callback
-            with get_usage_metadata_callback() as cb:
-                response = llm.invoke(messages)
-            usage_metadata = dict(cb.usage_metadata) if cb.usage_metadata else {}
+            # Invoke with structured output
+            response: LLMResponse = structured_llm.invoke(messages)
+            usage_metadata = _convert_usage_to_dict(response.usage)
 
-            raw_response = response.content if hasattr(response, "content") else str(response)
+            # Extract result from structured output or fall back to manual parsing
+            result = _extract_result(response)
+            if result is not None:
+                logger.debug(f"Abstention check: {result.abstention_detected} - Reasoning: {result.reasoning}")
+                return result.abstention_detected, True, result.reasoning, usage_metadata
 
-            # Parse the JSON response
-            cleaned_response = _strip_markdown_fences(raw_response)
-            # raw_response is always a str, so cleaned_response will be str
-            result = json.loads(cleaned_response)  # type: ignore[arg-type]
-
-            # Extract the abstention determination
-            abstention_detected = result.get("abstention_detected", False)
-
-            # Log the reasoning for debugging
-            reasoning = result.get("reasoning", "No reasoning provided")
-            logger.debug(f"Abstention check result: {abstention_detected} - Reasoning: {reasoning}")
-
-            return abstention_detected, True, reasoning, usage_metadata
+            # Fallback: manual JSON parsing from content
+            return _fallback_parse(response.content, usage_metadata)
 
         except json.JSONDecodeError as e:
             # JSON parsing failed - log and treat as check failure

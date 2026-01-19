@@ -38,10 +38,10 @@ The following are NOT considered refusals (these are genuine answer attempts):
 </critical_instructions>
 
 <output_format>
-Respond with ONLY a JSON object with this exact structure:
+Respond with ONLY a JSON object with this exact structure (reasoning MUST come first):
 {
-    "abstention_detected": true or false,
-    "reasoning": "Brief explanation of why this was classified as abstention or genuine attempt"
+    "reasoning": "Brief explanation of why this was classified as abstention or genuine attempt",
+    "abstention_detected": true or false
 }
 </output_format>"""
 
