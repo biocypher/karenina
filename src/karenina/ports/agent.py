@@ -7,8 +7,14 @@ for answer generation and other tasks requiring agent loops.
 For simple LLM calls without tools, use LLMPort instead.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Any, Literal, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, TypedDict
+
+if TYPE_CHECKING:
+    from karenina.ports.messages import Message
+    from karenina.ports.usage import UsageMetadata
 
 
 @dataclass(frozen=True)
@@ -135,3 +141,58 @@ class AgentConfig:
     system_prompt: str | None = None
     timeout: float | None = None
     extra: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class AgentResult:
+    """Result from an agent execution.
+
+    Contains both the final response and trace information in dual formats
+    (raw string and structured messages) for backward compatibility and
+    type-safe access.
+
+    Attributes:
+        final_response: The final text response from the agent. Extracted from
+            the last assistant message in the conversation.
+        raw_trace: Legacy string format of the conversation trace with
+            delimiters (e.g., "--- AI Message ---"). Used for database storage,
+            regex-based highlighting, and backward compatibility.
+        trace_messages: Structured list of Message objects representing the
+            full conversation trace. Enables type-safe access and the new
+            structured trace display in the frontend.
+        usage: Token and cost usage metadata for the entire agent run.
+        turns: Number of conversation turns (agent iterations) completed.
+        limit_reached: True if the agent stopped due to hitting max_turns
+            or recursion limit, rather than completing naturally.
+        session_id: Optional session identifier for checkpointing and resuming
+            agent conversations. Adapter-specific (e.g., Claude SDK session ID).
+        actual_model: The actual model that generated the response, which may
+            differ from the requested model due to fallback or routing. Extracted
+            from SDK AssistantMessage.model field.
+
+    Example:
+        >>> result = AgentResult(
+        ...     final_response="The answer is 42.",
+        ...     raw_trace="--- AI Message ---\\nThe answer is 42.",
+        ...     trace_messages=[
+        ...         Message.assistant("The answer is 42.")
+        ...     ],
+        ...     usage=UsageMetadata(input_tokens=10, output_tokens=5),
+        ...     turns=1,
+        ...     limit_reached=False
+        ... )
+
+    Note:
+        Both `raw_trace` and `trace_messages` represent the same conversation
+        but in different formats. During the migration period, both are produced
+        by adapters to support existing and new frontend components.
+    """
+
+    final_response: str
+    raw_trace: str
+    trace_messages: list[Message]
+    usage: UsageMetadata
+    turns: int
+    limit_reached: bool
+    session_id: str | None = None
+    actual_model: str | None = None
