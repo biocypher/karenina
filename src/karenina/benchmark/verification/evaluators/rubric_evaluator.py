@@ -102,7 +102,7 @@ class RubricEvaluator:
     def llm_trait_evaluator(self) -> LLMTraitEvaluator:
         """Get or create the LLM trait evaluator."""
         if self._llm_trait_evaluator is None:
-            self._llm_trait_evaluator = LLMTraitEvaluator(self.llm)
+            self._llm_trait_evaluator = LLMTraitEvaluator(self.llm, model_config=self.model_config)
         return self._llm_trait_evaluator
 
     @property

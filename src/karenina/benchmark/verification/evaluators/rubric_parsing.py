@@ -5,15 +5,21 @@ using a multi-strategy fallback approach:
 1. ProviderStrategy (native structured output) - automatic for supported models
 2. ToolStrategy (tool calling) - fallback with error handling
 3. Manual parsing with jsonrepair - last resort
+
+The module also supports adapter-based parsing via ParserPort when using the
+claude_agent_sdk interface for consistent LLM backend abstraction.
 """
 
 import json
 import logging
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
 from ..utils.llm_detection import is_openai_endpoint_llm as _is_openai_endpoint_llm
+
+if TYPE_CHECKING:
+    from ....ports import ParserPort
 
 logger = logging.getLogger(__name__)
 
@@ -53,20 +59,31 @@ def invoke_with_structured_output(
     llm: Any,
     messages: list[Any],  # BaseMessage or dict
     model_class: type[T],
+    *,
+    parser: "ParserPort | None" = None,
+    prompt_text: str | None = None,
 ) -> tuple[T, dict[str, Any]]:
     """
-    Invoke LLM with structured output using a two-strategy approach.
+    Invoke LLM with structured output using a multi-strategy approach.
 
-    Strategy order:
+    The function supports two paths:
+    - **Adapter path** (when parser provided): Uses ParserPort.parse_to_pydantic()
+    - **LangChain path** (default): Uses llm.with_structured_output() method
+
+    LangChain path strategy order:
     1. json_schema method (native structured output) - for providers that support it
        EXCEPT for models with dynamic dict fields (like BatchRubricScores)
        EXCEPT for OpenAI-compatible endpoints (can hang indefinitely)
     2. Manual parsing with json-repair - robust fallback for any response
 
     Args:
-        llm: LangChain chat model
-        messages: List of messages to send
+        llm: LangChain chat model (used for LangChain path)
+        messages: List of messages to send (used for LangChain path)
         model_class: Pydantic model for structured output
+        parser: Optional ParserPort adapter for adapter-based parsing
+        prompt_text: Full prompt text to parse (required when parser is provided).
+                     This should be the combined system+user prompt that instructs
+                     the LLM how to evaluate and what schema to output.
 
     Returns:
         Tuple of (parsed_result, usage_metadata)
@@ -74,12 +91,29 @@ def invoke_with_structured_output(
     Raises:
         ValueError: If all parsing strategies fail
     """
+    usage_metadata: dict[str, Any] = {}
+
+    # Adapter path: use ParserPort when provided
+    if parser is not None:
+        if prompt_text is None:
+            logger.warning("ParserPort provided but prompt_text is None, falling back to LangChain path")
+        else:
+            try:
+                result = parser.parse_to_pydantic(prompt_text, model_class)
+                if isinstance(result, model_class):
+                    logger.debug(f"ParserPort succeeded for rubric {model_class.__name__}")
+                    # Note: ParserPort implementations track usage internally
+                    # We don't have access to usage metadata through the sync API
+                    return result, usage_metadata
+            except Exception as e:
+                logger.debug(f"ParserPort parsing failed for rubric: {e}")
+                # Fall through to LangChain path for fallback
+
+    # LangChain path
     from langchain_core.callbacks import get_usage_metadata_callback
 
     # Import here to avoid circular imports
     from ....schemas.workflow.rubric_outputs import BatchRubricScores
-
-    usage_metadata: dict[str, Any] = {}
 
     # Skip json_schema method for models with dynamic dict fields
     # The json_schema method generates strict schemas with additionalProperties: false

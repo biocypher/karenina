@@ -11,16 +11,23 @@ Supports three trait kinds:
 - boolean: Binary true/false assessment
 - score: Numeric rating within a range (e.g., 1-5)
 - literal: Categorical classification into predefined classes
+
+The module also supports adapter-based parsing via ParserPort when using the
+claude_agent_sdk interface for consistent LLM backend abstraction.
 """
 
 import json
 import logging
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 from ....schemas.domain import LLMRubricTrait
+
+if TYPE_CHECKING:
+    from ....ports import ParserPort
+    from ....schemas.workflow.models import ModelConfig
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +58,7 @@ class LLMTraitEvaluator:
         llm: Any,
         async_enabled: bool | None = None,
         async_max_workers: int | None = None,
+        model_config: "ModelConfig | None" = None,
     ):
         """
         Initialize the LLM trait evaluator.
@@ -61,23 +69,36 @@ class LLMTraitEvaluator:
                           If None, reads from KARENINA_ASYNC_ENABLED env var (default: True).
             async_max_workers: Max concurrent workers for parallel execution.
                               If None, reads from KARENINA_ASYNC_MAX_WORKERS env var (default: 2).
+            model_config: Optional model configuration. When provided with interface='claude_agent_sdk',
+                          enables adapter-based parsing via ParserPort.
         """
         from ....infrastructure.llm.parallel_invoker import read_async_config
 
         self.llm = llm
+        self._model_config = model_config
 
         # Read async config with env var fallbacks
         default_enabled, default_workers = read_async_config()
         self._async_enabled = async_enabled if async_enabled is not None else default_enabled
         self._async_max_workers = async_max_workers if async_max_workers is not None else default_workers
 
+        # Initialize parser adapter when using claude_agent_sdk interface
+        self._parser_adapter: ParserPort | None = None
+        if model_config is not None and model_config.interface == "claude_agent_sdk":
+            from ....adapters import get_parser
+
+            # mypy can't properly type __getattr__ lazy imports, but get_parser is correctly typed in factory.py
+            self._parser_adapter = get_parser(model_config)  # type: ignore[misc]
+            logger.debug(f"LLMTraitEvaluator: Initialized ParserPort for interface={model_config.interface}")
+
     def evaluate_batch(
         self, question: str, answer: str, traits: list[LLMRubricTrait]
     ) -> tuple[dict[str, int | bool], dict[str, Any]]:
         """
-        Evaluate all traits in a single LLM call using LangChain strategies.
+        Evaluate all traits in a single LLM call using LangChain or adapter strategies.
 
-        Strategy order:
+        When a ParserPort adapter is available (claude_agent_sdk interface), uses
+        adapter-based parsing. Otherwise falls back to LangChain strategies:
         1. json_schema method (native structured output)
         2. Manual parsing with json-repair
 
@@ -97,8 +118,18 @@ class LLMTraitEvaluator:
 
         messages: list[BaseMessage] = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
 
+        # Build combined prompt text for adapter path
+        prompt_text = f"{system_prompt}\n\n{user_prompt}"
+
         # Invoke with automatic strategy selection and fallbacks
-        parsed_result, usage_metadata = invoke_with_structured_output(self.llm, messages, BatchRubricScores)
+        # Pass parser adapter if available for adapter-based parsing
+        parsed_result, usage_metadata = invoke_with_structured_output(
+            self.llm,
+            messages,
+            BatchRubricScores,
+            parser=self._parser_adapter,
+            prompt_text=prompt_text,
+        )
 
         # Validate scores against trait definitions
         results = self._validate_batch_scores(parsed_result.scores, traits)
