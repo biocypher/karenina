@@ -8,6 +8,13 @@ allowing the core application logic to remain independent of specific
 LLM provider implementations.
 """
 
+from karenina.ports.agent import (
+    AgentConfig,
+    MCPHttpServerConfig,
+    MCPServerConfig,
+    MCPStdioServerConfig,
+    Tool,
+)
 from karenina.ports.llm import LLMPort, LLMResponse
 from karenina.ports.messages import (
     Content,
@@ -38,4 +45,10 @@ __all__ = [
     # LLM Port
     "LLMPort",
     "LLMResponse",
+    # Agent configuration types
+    "Tool",
+    "MCPServerConfig",
+    "MCPStdioServerConfig",
+    "MCPHttpServerConfig",
+    "AgentConfig",
 ]
