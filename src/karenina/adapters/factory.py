@@ -225,13 +225,9 @@ def _create_llm_adapter(model_config: ModelConfig, interface: str) -> LLMPort:
         return LangChainLLMAdapter(model_config)
 
     if interface == INTERFACE_CLAUDE_AGENT_SDK:
-        # Claude SDK adapter - placeholder for PR3
-        # For now, raise an error indicating it's not yet implemented
-        raise AdapterUnavailableError(
-            message="Claude Agent SDK adapter not yet implemented",
-            reason="Claude Agent SDK LLM adapter is planned for PR3",
-            fallback_interface="langchain",
-        )
+        from karenina.adapters.claude_agent_sdk import ClaudeSDKLLMAdapter
+
+        return ClaudeSDKLLMAdapter(model_config)
 
     # Should not reach here due to availability check
     raise AdapterUnavailableError(
@@ -317,12 +313,9 @@ def _create_agent_adapter(model_config: ModelConfig, interface: str) -> AgentPor
         return LangChainAgentAdapter(model_config)
 
     if interface == INTERFACE_CLAUDE_AGENT_SDK:
-        # Claude SDK adapter - placeholder for PR3
-        raise AdapterUnavailableError(
-            message="Claude Agent SDK adapter not yet implemented",
-            reason="Claude Agent SDK Agent adapter is planned for PR3",
-            fallback_interface="langchain",
-        )
+        from karenina.adapters.claude_agent_sdk import ClaudeSDKAgentAdapter
+
+        return ClaudeSDKAgentAdapter(model_config)
 
     # Should not reach here due to availability check
     raise AdapterUnavailableError(
@@ -410,12 +403,9 @@ def _create_parser_adapter(model_config: ModelConfig, interface: str) -> ParserP
         return LangChainParserAdapter(model_config)
 
     if interface == INTERFACE_CLAUDE_AGENT_SDK:
-        # Claude SDK adapter - placeholder for PR3
-        raise AdapterUnavailableError(
-            message="Claude Agent SDK adapter not yet implemented",
-            reason="Claude Agent SDK Parser adapter is planned for PR3",
-            fallback_interface="langchain",
-        )
+        from karenina.adapters.claude_agent_sdk import ClaudeSDKParserAdapter
+
+        return ClaudeSDKParserAdapter(model_config)
 
     # Should not reach here due to availability check
     raise AdapterUnavailableError(

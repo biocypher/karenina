@@ -537,7 +537,7 @@ class ModelConfig(BaseModel):
     model_provider: str | None = None  # Optional - only required for langchain interface
     model_name: str | None = None  # Optional - defaults to "manual" for manual interface
     temperature: float = 0.1
-    interface: Literal["langchain", "openrouter", "manual", "openai_endpoint"] = "langchain"
+    interface: Literal["langchain", "openrouter", "manual", "openai_endpoint", "claude_agent_sdk"] = "langchain"
     system_prompt: str | None = None  # Optional - defaults applied based on context (answering/parsing)
     max_retries: int = 2  # Optional max retries for template generation
     mcp_urls_dict: dict[str, str] | None = None  # Optional MCP server URLs
