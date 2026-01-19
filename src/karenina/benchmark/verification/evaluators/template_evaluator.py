@@ -8,7 +8,7 @@ import json
 import logging
 import os
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from langchain_core.callbacks import get_usage_metadata_callback
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
@@ -19,6 +19,9 @@ from ....infrastructure.llm.mcp_utils import extract_final_ai_message
 from ....schemas.domain import BaseAnswer
 from ....schemas.workflow import INTERFACES_NO_PROVIDER_REQUIRED, ModelConfig
 from ..utils.trace_agent_metrics import extract_agent_metrics
+
+if TYPE_CHECKING:
+    from ....ports import ParserPort
 
 logger = logging.getLogger(__name__)
 
@@ -216,6 +219,17 @@ class TemplateEvaluator:
         # Create parser
         self.parser: Any = PydanticOutputParser(pydantic_object=answer_class)
 
+        # Initialize adapter-based parser for supported interfaces
+        self._parser_adapter: ParserPort | None = None
+        if model_config.interface == "claude_agent_sdk":
+            try:
+                from ....adapters import get_parser
+
+                self._parser_adapter = get_parser(model_config)
+                logger.debug(f"Initialized ParserPort adapter for interface={model_config.interface}")
+            except Exception as e:
+                logger.warning(f"Failed to initialize ParserPort adapter: {e}, falling back to LangChain")
+
         # Lazy-initialized retry handler
         self._retry_handler: Any = None
 
@@ -326,6 +340,7 @@ class TemplateEvaluator:
             else:
                 result = self._parse_standard(
                     messages=messages,
+                    trace_text=template_input,
                     usage_tracker=usage_tracker,
                 )
         except Exception as e:
@@ -562,19 +577,21 @@ Return only the completed JSON object - no surrounding text, no markdown fences:
     def _parse_standard(
         self,
         messages: list[BaseMessage],
+        trace_text: str,
         usage_tracker: Any | None = None,
     ) -> ParseResult:
         """
         Standard parsing with native structured output + fallback strategies.
 
         Strategy order:
-        1. Native structured output (method="json_schema")
+        1. Native structured output (method="json_schema") or ParserPort adapter
         2. Manual parsing with json-repair
         3. Null-value feedback retry
         4. Format feedback retry
 
         Args:
-            messages: Prepared parsing messages
+            messages: Prepared parsing messages (for LangChain path)
+            trace_text: Raw trace text to parse (for adapter path)
             usage_tracker: Optional usage tracker
 
         Returns:
@@ -588,11 +605,13 @@ Return only the completed JSON object - no surrounding text, no markdown fences:
 
         result = ParseResult()
 
-        # Strategy 1: Try native structured output
+        # Strategy 1: Try native structured output (or ParserPort adapter)
         structured_result, struct_usage, used_structured = invoke_with_structured_output_for_template(
             llm=self.llm,
             messages=messages,
             answer_class=self.answer_class,
+            parser=self._parser_adapter,
+            trace_text=trace_text,
         )
 
         if struct_usage:
