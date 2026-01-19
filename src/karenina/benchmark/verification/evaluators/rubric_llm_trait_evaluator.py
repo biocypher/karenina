@@ -84,19 +84,15 @@ class LLMTraitEvaluator:
         self._async_enabled = async_enabled if async_enabled is not None else default_enabled
         self._async_max_workers = async_max_workers if async_max_workers is not None else default_workers
 
-        # Initialize parser adapter for all supported interfaces
-        # The factory returns the appropriate adapter (LangChainParserAdapter or ClaudeSDKParserAdapter)
-        # or None for manual interface
+        # Initialize parser adapter via the registry when model_config is provided
+        # Factory always returns a ParserPort (LangChainParserAdapter, ClaudeSDKParserAdapter,
+        # or ManualParserAdapter) or raises AdapterUnavailableError
         self._parser_adapter: ParserPort | None = None
         if model_config is not None:
             from ....adapters import get_parser
 
-            # Initialize parser adapter via factory
-            # mypy can't infer type through __getattr__ lazy import pattern
-            parser: ParserPort | None = get_parser(model_config)  # type: ignore[misc,unused-ignore]
-            self._parser_adapter = parser
-            if self._parser_adapter is not None:
-                logger.debug(f"LLMTraitEvaluator: Initialized ParserPort for interface={model_config.interface}")
+            self._parser_adapter = get_parser(model_config)
+            logger.debug(f"LLMTraitEvaluator: Initialized ParserPort for interface={model_config.interface}")
 
     def evaluate_batch(
         self, question: str, answer: str, traits: list[LLMRubricTrait]

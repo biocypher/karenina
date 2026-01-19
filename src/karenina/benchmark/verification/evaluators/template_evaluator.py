@@ -180,59 +180,31 @@ class TemplateEvaluator:
         self.answer_class: type[BaseAnswer] = answer_class
         self.raw_answer_class: type[BaseAnswer] = raw_answer_class or answer_class
 
-        # Initialize LLM
+        # Initialize LLM using centralized kwargs builder
         try:
-            model_kwargs: dict[str, Any] = {
-                "model": model_config.model_name,
-                "provider": model_config.model_provider,
-                "temperature": model_config.temperature,
-                "interface": model_config.interface,
-            }
+            from ....adapters import build_llm_kwargs
 
-            # Add interface-specific parameters
-            if model_config.interface == "openai_endpoint":
-                if not model_config.endpoint_base_url:
-                    raise ValueError("endpoint_base_url is required for openai_endpoint interface")
-                if not model_config.endpoint_api_key:
-                    raise ValueError("endpoint_api_key is required for openai_endpoint interface")
-
-                model_kwargs["endpoint_base_url"] = model_config.endpoint_base_url
-                model_kwargs["endpoint_api_key"] = model_config.endpoint_api_key.get_secret_value()
-
-            # Add extra kwargs if provided
-            if model_config.extra_kwargs:
-                model_kwargs.update(model_config.extra_kwargs)
-
+            model_kwargs = build_llm_kwargs(model_config)
             self.llm = init_chat_model_unified(**model_kwargs)
 
         except Exception as e:
             raise RuntimeError(f"Failed to initialize LLM for template evaluation: {e}") from e
 
-        # Build model string for tracking
-        if model_config.interface == "openrouter":
-            self.model_str = model_config.model_name
-        elif model_config.interface == "openai_endpoint":
-            self.model_str = f"endpoint/{model_config.model_name}"
-        else:
-            self.model_str = f"{model_config.model_provider}/{model_config.model_name}"
+        # Build model string for tracking (centralized via adapter registry)
+        from ....adapters import format_model_string
+
+        self.model_str = format_model_string(model_config)
 
         # Create parser
         self.parser: Any = PydanticOutputParser(pydantic_object=answer_class)
 
-        # Initialize adapter-based parser for all supported interfaces
-        # The factory returns the appropriate adapter (LangChainParserAdapter or ClaudeSDKParserAdapter)
-        # or None for manual interface
-        self._parser_adapter: ParserPort | None = None
-        try:
-            from ....adapters import get_parser
+        # Initialize adapter-based parser via the registry
+        # Factory always returns a ParserPort (LangChainParserAdapter, ClaudeSDKParserAdapter,
+        # or ManualParserAdapter) or raises AdapterUnavailableError
+        from ....adapters import get_parser
 
-            # mypy can't infer type through __getattr__ lazy import pattern
-            parser: ParserPort | None = get_parser(model_config)  # type: ignore[misc,unused-ignore]
-            self._parser_adapter = parser
-            if self._parser_adapter is not None:
-                logger.debug(f"Initialized ParserPort adapter for interface={model_config.interface}")
-        except Exception as e:
-            logger.warning(f"Failed to initialize ParserPort adapter: {e}, falling back to LangChain")
+        self._parser_adapter: ParserPort = get_parser(model_config)
+        logger.debug(f"Initialized ParserPort adapter for interface={model_config.interface}")
 
         # Lazy-initialized retry handler
         self._retry_handler: Any = None
@@ -601,36 +573,24 @@ Return only the completed JSON object - no surrounding text, no markdown fences:
         Returns:
             ParseResult with parsed answer
         """
+        from ..utils.json_helpers import parse_json_to_pydantic
         from ..utils.json_helpers import strip_markdown_fences as _strip_markdown_fences
-        from .template_parsing import (
-            invoke_with_structured_output_for_template,
-            parse_template_response,
-        )
 
         result = ParseResult()
 
-        # Strategy 1: Try native structured output (or ParserPort adapter)
-        structured_result, struct_usage, used_structured = invoke_with_structured_output_for_template(
-            llm=self.llm,
-            messages=messages,
-            answer_class=self.answer_class,
-            parser=self._parser_adapter,
-            trace_text=trace_text,
-        )
+        # Strategy 1: Try structured output via ParserPort adapter from registry
+        try:
+            parsed = self._parser_adapter.parse_to_pydantic(trace_text, self.answer_class)
+            if isinstance(parsed, self.answer_class):
+                result.parsed_answer = parsed
+                result.success = True
+                logger.debug("Template parsing succeeded via ParserPort adapter")
+                return result
+        except Exception as e:
+            logger.debug(f"ParserPort parsing failed: {e}")
 
-        if struct_usage:
-            result.usage_metadata_list.append(struct_usage)
-            if usage_tracker:
-                usage_tracker.track_call("parsing", self.model_str, struct_usage)
-
-        if structured_result is not None and used_structured:
-            result.parsed_answer = structured_result
-            result.success = True
-            logger.debug("Template parsing succeeded via native structured output")
-            return result
-
-        # Strategy 2: Fall back to manual parsing with json-repair
-        logger.debug("Native structured output failed, falling back to manual parsing")
+        # Strategy 2: Fall back to LLM call + multi-strategy JSON parsing
+        logger.debug("ParserPort adapter failed, falling back to LLM + JSON parsing")
 
         with get_usage_metadata_callback() as cb:
             parsing_response = self.llm.invoke(messages)
@@ -647,9 +607,9 @@ Return only the completed JSON object - no surrounding text, no markdown fences:
 
         # Try multi-strategy parsing with json-repair
         try:
-            result.parsed_answer = parse_template_response(raw_parsing_response, self.answer_class)
+            result.parsed_answer = parse_json_to_pydantic(raw_parsing_response, self.answer_class)
             result.success = True
-            logger.debug("Template parsing succeeded via manual parsing with json-repair")
+            logger.debug("Template parsing succeeded via JSON parsing with repair")
             return result
         except Exception as parse_error:
             logger.warning(f"Initial parsing failed: {parse_error}")

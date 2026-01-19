@@ -7,15 +7,25 @@ Functions:
     strip_markdown_fences: Remove markdown code fences and extract JSON from text
     extract_json_from_text: Extract JSON objects from mixed text content
     extract_balanced_braces: Extract balanced brace expressions from text
+    parse_json_to_pydantic: Parse JSON response into Pydantic model with fallbacks
 """
 
 import json
+import logging
 import re
+from typing import Any, TypeVar
+
+from pydantic import BaseModel, ValidationError
+
+logger = logging.getLogger(__name__)
+
+T = TypeVar("T", bound=BaseModel)
 
 __all__ = [
     "strip_markdown_fences",
     "extract_json_from_text",
     "extract_balanced_braces",
+    "parse_json_to_pydantic",
 ]
 
 
@@ -174,3 +184,99 @@ def extract_balanced_braces(text: str, start: int) -> str | None:
         i += 1
 
     return None  # Unbalanced braces
+
+
+def parse_json_to_pydantic(response: str | Any, model_class: type[T]) -> T:
+    """
+    Parse raw LLM response into a Pydantic model with multiple fallback strategies.
+
+    Strategy order:
+    1. Already a model instance (pass through)
+    2. Direct JSON parsing
+    3. JSON extraction from mixed text (markdown fences, etc.)
+    4. JSON repair with jsonrepair library
+
+    This function is designed to handle the variety of formats LLMs may output,
+    including markdown-wrapped JSON, JSON with reasoning text, and malformed JSON.
+
+    Args:
+        response: Raw string response from LLM (or already parsed object)
+        model_class: Pydantic model class to validate against
+
+    Returns:
+        Validated Pydantic model instance
+
+    Raises:
+        ValueError: If all parsing strategies fail
+
+    Example:
+        >>> from pydantic import BaseModel
+        >>> class Answer(BaseModel):
+        ...     value: str
+        >>> parse_json_to_pydantic('{"value": "test"}', Answer)
+        Answer(value='test')
+        >>> parse_json_to_pydantic('```json\\n{"value": "test"}\\n```', Answer)
+        Answer(value='test')
+    """
+    # Already a model instance
+    if isinstance(response, model_class):
+        return response
+
+    # Convert to string if needed
+    if not isinstance(response, str):
+        response = str(response)
+
+    # Strategy 1: Direct JSON parsing
+    try:
+        data = json.loads(response.strip())
+        return model_class.model_validate(data)
+    except (json.JSONDecodeError, ValidationError) as e:
+        logger.debug(f"Direct JSON parse failed: {e}")
+
+    # Strategy 2: Extract JSON from mixed text (handles markdown fences)
+    cleaned = strip_markdown_fences(response)
+    if cleaned and cleaned != response:
+        # Fences were stripped, try parsing the cleaned text
+        try:
+            data = json.loads(cleaned)
+            return model_class.model_validate(data)
+        except (json.JSONDecodeError, ValidationError) as e:
+            logger.debug(f"Cleaned text parse failed: {e}")
+
+    # Try extracting JSON object from text
+    json_str = extract_json_from_text(response)
+    if json_str:
+        try:
+            data = json.loads(json_str)
+            return model_class.model_validate(data)
+        except (json.JSONDecodeError, ValidationError) as e:
+            logger.debug(f"Extracted JSON parse failed: {e}")
+
+    # Strategy 3: JSON repair for malformed JSON
+    try:
+        from json_repair import repair_json
+
+        repaired = repair_json(response)
+        data = json.loads(repaired)
+        logger.debug(f"JSON repair succeeded for {model_class.__name__}")
+        return model_class.model_validate(data)
+    except ImportError:
+        logger.warning("json-repair not installed, skipping repair strategy")
+    except Exception as e:
+        logger.debug(f"JSON repair failed: {e}")
+
+    # Strategy 4: Try repair on cleaned text
+    if cleaned and cleaned != response:
+        try:
+            from json_repair import repair_json
+
+            repaired = repair_json(cleaned)
+            data = json.loads(repaired)
+            logger.debug(f"JSON repair on cleaned text succeeded for {model_class.__name__}")
+            return model_class.model_validate(data)
+        except Exception as e:
+            logger.debug(f"JSON repair on cleaned text failed: {e}")
+
+    # All strategies failed
+    preview = response[:200] if len(response) > 200 else response
+    raise ValueError(f"Could not parse response into {model_class.__name__}: {preview}")
