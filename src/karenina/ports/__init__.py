@@ -10,6 +10,7 @@ LLM provider implementations.
 
 from karenina.ports.agent import (
     AgentConfig,
+    AgentPort,
     AgentResult,
     MCPHttpServerConfig,
     MCPServerConfig,
@@ -52,6 +53,7 @@ __all__ = [
     "MCPStdioServerConfig",
     "MCPHttpServerConfig",
     "AgentConfig",
-    # Agent result
+    # Agent port and result
+    "AgentPort",
     "AgentResult",
 ]

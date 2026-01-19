@@ -10,7 +10,7 @@ For simple LLM calls without tools, use LLMPort instead.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, Protocol, TypedDict, runtime_checkable
 
 if TYPE_CHECKING:
     from karenina.ports.messages import Message
@@ -196,3 +196,106 @@ class AgentResult:
     limit_reached: bool
     session_id: str | None = None
     actual_model: str | None = None
+
+
+@runtime_checkable
+class AgentPort(Protocol):
+    """Protocol for multi-turn agent execution with tools and MCP servers.
+
+    AgentPort defines the interface for agentic LLM interactions that involve
+    tool use, MCP servers, and multi-turn conversations. This is the primary
+    interface for answer generation and other tasks requiring agent loops.
+
+    The protocol is async-first (Claude Agent SDK has no sync API), with a
+    sync wrapper for convenience.
+
+    Implementations:
+        - LangChainAgentAdapter: Uses LangGraph and langchain-mcp-adapters
+        - ClaudeSDKAgentAdapter: Uses native Claude Agent SDK with MCP
+
+    Example:
+        >>> # Using an AgentPort implementation
+        >>> agent: AgentPort = get_agent(model_config)
+        >>> result = await agent.run(
+        ...     messages=[Message.user("What files are in the repo?")],
+        ...     mcp_servers={
+        ...         "filesystem": {
+        ...             "command": "npx",
+        ...             "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path"]
+        ...         }
+        ...     },
+        ...     config=AgentConfig(max_turns=10)
+        ... )
+        >>> print(result.final_response)
+
+    Notes:
+        - MCP servers are passed to `run()` rather than at construction time
+          to allow per-run server configuration
+        - The `config` parameter controls execution behavior (max_turns, timeout, etc.)
+        - Both `raw_trace` and `trace_messages` in AgentResult provide the same
+          conversation data in different formats for backward compatibility
+    """
+
+    async def run(
+        self,
+        messages: list[Message],
+        tools: list[Tool] | None = None,
+        mcp_servers: dict[str, MCPServerConfig] | None = None,
+        config: AgentConfig | None = None,
+    ) -> AgentResult:
+        """Execute an agent loop with optional tools and MCP servers.
+
+        This is the primary async API for agent execution. The agent processes
+        the input messages, potentially making tool calls and MCP requests,
+        until it produces a final response or hits a limit.
+
+        Args:
+            messages: Initial conversation messages. Typically starts with a
+                user message, but can include system prompts or prior context.
+            tools: Optional list of Tool definitions the agent can invoke.
+                These are standalone tools, not from MCP servers.
+            mcp_servers: Optional dict mapping server names to MCP server
+                configurations. Supports both stdio and HTTP/SSE transports.
+            config: Optional AgentConfig controlling execution parameters
+                like max_turns, timeout, and adapter-specific options.
+
+        Returns:
+            AgentResult containing the final response, trace (both formats),
+            usage metadata, and execution metadata.
+
+        Raises:
+            AgentExecutionError: If the agent fails during execution.
+            AgentTimeoutError: If the execution exceeds the timeout.
+            AgentResponseError: If the response is malformed or invalid.
+        """
+        ...
+
+    def run_sync(
+        self,
+        messages: list[Message],
+        tools: list[Tool] | None = None,
+        mcp_servers: dict[str, MCPServerConfig] | None = None,
+        config: AgentConfig | None = None,
+    ) -> AgentResult:
+        """Synchronous wrapper for run().
+
+        Convenience method that wraps the async `run()` method for use in
+        synchronous contexts. Uses asyncio.run() internally.
+
+        Args:
+            messages: Initial conversation messages.
+            tools: Optional list of Tool definitions.
+            mcp_servers: Optional MCP server configurations.
+            config: Optional AgentConfig for execution parameters.
+
+        Returns:
+            AgentResult from the agent execution.
+
+        Raises:
+            Same exceptions as run().
+
+        Note:
+            This method creates a new event loop. Do not call from within
+            an existing async context - use `run()` directly instead.
+        """
+        ...
