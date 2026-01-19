@@ -11,6 +11,7 @@ LLM provider implementations.
 from karenina.ports.messages import (
     Content,
     ContentType,
+    Message,
     Role,
     TextContent,
     ThinkingContent,
@@ -28,4 +29,6 @@ __all__ = [
     "ToolUseContent",
     "ToolResultContent",
     "ThinkingContent",
+    # Message class
+    "Message",
 ]
