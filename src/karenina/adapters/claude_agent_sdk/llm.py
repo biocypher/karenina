@@ -20,9 +20,10 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
-from karenina.ports import LLMPort, LLMResponse, Message, UsageMetadata
+from karenina.ports import LLMPort, LLMResponse, Message
 
 from .messages import ClaudeSDKMessageConverter
+from .usage import extract_sdk_usage
 
 if TYPE_CHECKING:
     from claude_agent_sdk import ClaudeAgentOptions, ResultMessage
@@ -124,35 +125,6 @@ class ClaudeSDKLLMAdapter:
 
         return ClaudeAgentOptions(**options_kwargs)
 
-    def _extract_usage(self, result: ResultMessage) -> UsageMetadata:
-        """Extract usage metadata from ResultMessage.
-
-        Args:
-            result: SDK ResultMessage with usage data.
-
-        Returns:
-            UsageMetadata with token counts and cost info.
-        """
-        usage_data: dict[str, Any] = result.usage or {}
-
-        input_tokens = usage_data.get("input_tokens", 0)
-        output_tokens = usage_data.get("output_tokens", 0)
-        total_tokens = input_tokens + output_tokens
-
-        # Extract cache tokens if available
-        cache_read = usage_data.get("cache_read_input_tokens")
-        cache_creation = usage_data.get("cache_creation_input_tokens")
-
-        return UsageMetadata(
-            input_tokens=int(input_tokens),
-            output_tokens=int(output_tokens),
-            total_tokens=int(total_tokens),
-            cost_usd=result.total_cost_usd,
-            cache_read_tokens=int(cache_read) if cache_read else None,
-            cache_creation_tokens=int(cache_creation) if cache_creation else None,
-            model=self._config.model_name,
-        )
-
     async def ainvoke(self, messages: list[Message]) -> LLMResponse:
         """Invoke the LLM asynchronously.
 
@@ -197,7 +169,7 @@ class ClaudeSDKLLMAdapter:
             content = result.result or ""
 
         # Extract usage metadata
-        usage = self._extract_usage(result)
+        usage = extract_sdk_usage(result, model=self._config.model_name)
 
         return LLMResponse(
             content=content,

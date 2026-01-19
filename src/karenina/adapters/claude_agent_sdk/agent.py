@@ -38,6 +38,7 @@ from karenina.ports import (
 
 from .mcp import convert_mcp_config
 from .messages import ClaudeSDKMessageConverter
+from .usage import extract_sdk_usage
 
 if TYPE_CHECKING:
     from claude_agent_sdk import ClaudeAgentOptions, ResultMessage
@@ -145,35 +146,6 @@ class ClaudeSDKAgentAdapter:
                     options_kwargs[key] = value
 
         return ClaudeAgentOptions(**options_kwargs)
-
-    def _extract_usage(self, result: ResultMessage) -> UsageMetadata:
-        """Extract usage metadata from ResultMessage.
-
-        Args:
-            result: SDK ResultMessage with usage data.
-
-        Returns:
-            UsageMetadata with token counts and cost info.
-        """
-        usage_data: dict[str, Any] = result.usage or {}
-
-        input_tokens = usage_data.get("input_tokens", 0)
-        output_tokens = usage_data.get("output_tokens", 0)
-        total_tokens = input_tokens + output_tokens
-
-        # Extract cache tokens if available
-        cache_read = usage_data.get("cache_read_input_tokens")
-        cache_creation = usage_data.get("cache_creation_input_tokens")
-
-        return UsageMetadata(
-            input_tokens=int(input_tokens),
-            output_tokens=int(output_tokens),
-            total_tokens=int(total_tokens),
-            cost_usd=result.total_cost_usd,
-            cache_read_tokens=int(cache_read) if cache_read else None,
-            cache_creation_tokens=int(cache_creation) if cache_creation else None,
-            model=self._config.model_name,
-        )
 
     def _build_raw_trace(self, messages: list[Any]) -> str:
         """Build raw_trace string from SDK messages.
@@ -493,7 +465,7 @@ class ClaudeSDKAgentAdapter:
 
         # Extract usage
         usage = (
-            self._extract_usage(result_message)
+            extract_sdk_usage(result_message, model=self._config.model_name)
             if result_message
             else UsageMetadata(
                 input_tokens=0,
