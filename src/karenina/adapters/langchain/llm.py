@@ -2,19 +2,83 @@
 
 This module provides the LangChainLLMAdapter class that wraps existing
 LangChain infrastructure (init_chat_model) behind the unified LLMPort interface.
+
+Retry Logic:
+    This adapter includes tenacity-based retry for transient errors (connection
+    errors, timeouts, rate limits, 5xx errors). Retry is applied to both
+    ainvoke() and with_structured_output() calls with exponential backoff.
 """
 
 from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import logging
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 from karenina.ports import LLMPort, LLMResponse, Message, UsageMetadata
 
 from .messages import LangChainMessageConverter
+
+logger = logging.getLogger(__name__)
+
+
+def _is_retryable_error(exception: BaseException) -> bool:
+    """Check if an exception is retryable (transient error).
+
+    Args:
+        exception: The exception to check
+
+    Returns:
+        True if the error is transient and should be retried, False otherwise
+    """
+    exception_str = str(exception).lower()
+    exception_type = type(exception).__name__
+
+    # Connection-related errors (check error message content)
+    if any(
+        keyword in exception_str
+        for keyword in [
+            "connection",
+            "timeout",
+            "timed out",
+            "rate limit",
+            "429",
+            "503",
+            "502",
+            "500",
+            "network",
+            "temporary failure",
+            "overloaded",
+        ]
+    ):
+        return True
+
+    # Common retryable exception types
+    retryable_types = [
+        "ConnectionError",
+        "TimeoutError",
+        "HTTPError",
+        "ReadTimeout",
+        "ConnectTimeout",
+        "APIConnectionError",
+        "APITimeoutError",
+        "RateLimitError",
+        "OverloadedError",
+        "InternalServerError",
+    ]
+
+    return exception_type in retryable_types
+
+
+def _log_retry(retry_state: Any) -> None:
+    """Log retry attempt with error details."""
+    exc = retry_state.outcome.exception() if retry_state.outcome else None
+    logger.warning(f"Retrying LLM call (attempt {retry_state.attempt_number}/3) after error: {exc}")
+
 
 if TYPE_CHECKING:
     from karenina.schemas.workflow.models import ModelConfig
@@ -146,7 +210,10 @@ class LangChainLLMAdapter:
         )
 
     async def ainvoke(self, messages: list[Message]) -> LLMResponse:
-        """Invoke the LLM asynchronously.
+        """Invoke the LLM asynchronously with automatic retry for transient errors.
+
+        Uses tenacity for exponential backoff retry logic on transient errors
+        (connection errors, timeouts, rate limits, 5xx errors).
 
         Args:
             messages: List of unified Message objects.
@@ -155,13 +222,24 @@ class LangChainLLMAdapter:
             LLMResponse with content, usage metadata, and raw response.
 
         Raises:
-            PortError: If the invocation fails.
+            PortError: If the invocation fails after all retries.
         """
         # Convert unified messages to LangChain format
         lc_messages = self._converter.to_provider(messages)
 
-        # Invoke the underlying model
-        response = await self._model.ainvoke(lc_messages)
+        # Define retry-wrapped inner function
+        @retry(
+            retry=retry_if_exception(_is_retryable_error),
+            stop=stop_after_attempt(3),
+            wait=wait_exponential(multiplier=1, min=2, max=10),
+            reraise=True,
+            before_sleep=_log_retry,
+        )
+        async def _invoke_with_retry() -> Any:
+            return await self._model.ainvoke(lc_messages)
+
+        # Invoke with retry
+        response = await _invoke_with_retry()
 
         # Extract content - handle both structured and text responses
         if self._structured_schema is not None:
