@@ -28,6 +28,7 @@ from karenina.ports.messages import (
     ToolResultContent,
     ToolUseContent,
 )
+from karenina.ports.parser import ParserPort
 from karenina.ports.usage import UsageMetadata
 
 __all__ = [
@@ -47,6 +48,8 @@ __all__ = [
     # LLM Port
     "LLMPort",
     "LLMResponse",
+    # Parser Port
+    "ParserPort",
     # Agent configuration types
     "Tool",
     "MCPServerConfig",
