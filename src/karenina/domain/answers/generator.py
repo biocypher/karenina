@@ -6,59 +6,34 @@ This module implements a two-phase structured generation approach:
 2. Field description generation for judge prompts
 3. Pydantic class code generation
 
-This replaces the previous example-based prompting system with a more
-reliable and standardized approach.
+This module uses the port/adapter pattern for LLM invocation,
+decoupling from specific LLM backends like LangChain.
 """
 
 import json
 from typing import TYPE_CHECKING, Any
 
-from langchain_core.output_parsers import BaseOutputParser, PydanticOutputParser
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, Field, field_validator
 from tqdm import tqdm
 
+from karenina.adapters import get_llm
 from karenina.domain.questions.reader import read_questions_from_file
+from karenina.ports import Message
 from karenina.schemas.domain import BaseAnswer  # noqa: F401
 
 # Import from extracted modules
-from .generator_code import (
-    format_ground_truth_value,
-    generate_verification_logic,
-    python_type_to_annotation,
-)
-from .generator_code import (
-    generate_pydantic_class as _generate_pydantic_class,
-)
+from .generator_code import format_ground_truth_value as _format_ground_truth_value
+from .generator_code import generate_pydantic_class as _generate_pydantic_class
 from .generator_prompts import (
     FIELD_DESCRIPTION_SYSTEM_PROMPT,
     FIELD_DESCRIPTION_USER_PROMPT_TEMPLATE,
     GROUND_TRUTH_SYSTEM_PROMPT,
     GROUND_TRUTH_USER_PROMPT_TEMPLATE,
-    build_generation_chain,
-    build_retry_chain,
 )
 
-# Backward compatibility aliases for internal functions
-_format_ground_truth_value = format_ground_truth_value
-_python_type_to_annotation = python_type_to_annotation
-_generate_verification_logic = generate_verification_logic
-
-# Re-export for backward compatibility
 __all__ = [
-    # Schema classes
+    # Schema classes (used by builder.py)
     "GroundTruthField",
-    "GroundTruthSpec",
-    "AttributeDescriptions",
-    "JSONOnlyOutputParser",
-    # Prompt constants (re-exported from generator_prompts)
-    "GROUND_TRUTH_SYSTEM_PROMPT",
-    "GROUND_TRUTH_USER_PROMPT_TEMPLATE",
-    "FIELD_DESCRIPTION_SYSTEM_PROMPT",
-    "FIELD_DESCRIPTION_USER_PROMPT_TEMPLATE",
-    # Code generation (re-exported from generator_code)
-    "python_type_to_annotation",
-    "generate_verification_logic",
-    "format_ground_truth_value",
     # Public API
     "generate_answer_template",
     "generate_answer_templates_from_questions_file",
@@ -121,94 +96,63 @@ class AttributeDescriptions(BaseModel):
     )
 
 
-class JSONOnlyOutputParser(BaseOutputParser[Any]):
-    """Parser ensuring output is valid JSON before delegating to Pydantic parser.
-
-    This parser handles markdown-wrapped JSON responses by stripping code blocks
-    before attempting JSON parsing.
-    """
-
-    def __init__(self, inner: PydanticOutputParser[Any]):
-        self._inner = inner
-
-    def parse(self, text: str) -> Any:
-        from karenina.utils.code import extract_and_combine_codeblocks
-
-        # Try parsing directly first
-        try:
-            json.loads(text)
-            return self._inner.parse(text)
-        except json.JSONDecodeError:
-            # If direct parsing fails, try stripping markdown code blocks
-            stripped = extract_and_combine_codeblocks(text)
-            if stripped:
-                try:
-                    json.loads(stripped)
-                    return self._inner.parse(stripped)
-                except json.JSONDecodeError as exc:
-                    raise ValueError(
-                        f"Model response is not valid JSON even after stripping code blocks: {exc}"
-                    ) from exc
-            else:
-                # No code blocks found, original text is invalid
-                raise ValueError("Model response is not valid JSON") from None
-
-    @property
-    def _type(self) -> str:
-        """Return the type of parser for LangChain compatibility."""
-        return "json_only_output_parser"
-
-
-def _build_chain(stage: str, config: "ModelConfig") -> Any:
-    """Build generation chain for a specific stage.
-
-    Delegates to generator_prompts.build_generation_chain.
-    """
-    return build_generation_chain(
-        stage=stage,
-        config=config,
-        GroundTruthSpec=GroundTruthSpec,
-        AttributeDescriptions=AttributeDescriptions,
-        JSONOnlyOutputParser=JSONOnlyOutputParser,
-    )
-
-
-def _generate_with_retry(
+def _generate_structured_output(
     stage: str,
     inputs: dict[str, Any],
     config: "ModelConfig",
-    max_retries: int = 2,
-) -> Any:
-    """Generate output with retry logic on validation failures."""
-    last_error = None
+    output_schema: type[BaseModel],
+    max_retries: int = 0,
+) -> BaseModel:
+    """Generate structured output using LLM adapter.
 
-    for attempt in range(max_retries + 1):
-        try:
-            # Build/rebuild chain for each attempt (for error injection)
-            if attempt > 0 and last_error:
-                # Add error context on retry
-                error_context = f"\n\nPREVIOUS ATTEMPT FAILED with error: {last_error}\nPlease fix the validation issues and try again."
-                chain = build_retry_chain(
-                    stage=stage,
-                    config=config,
-                    error_context=error_context,
-                    GroundTruthSpec=GroundTruthSpec,
-                    AttributeDescriptions=AttributeDescriptions,
-                    JSONOnlyOutputParser=JSONOnlyOutputParser,
-                )
-            else:
-                chain = _build_chain(stage, config)
+    Args:
+        stage: The generation stage ("ground_truth" or "field_descriptions").
+        inputs: Dictionary of inputs to format the prompt template.
+        config: Model configuration.
+        output_schema: Pydantic model class for structured output.
+        max_retries: Maximum retry attempts on validation failure (default: 0).
+            Retry logic with error feedback is handled by the adapter.
 
-            result = chain.invoke(inputs)
-            return result
+    Returns:
+        Parsed Pydantic model instance.
 
-        except (ValidationError, ValueError) as e:
-            last_error = str(e)
-            if attempt == max_retries:
-                raise ValueError(f"Failed after {max_retries + 1} attempts. Last error: {last_error}") from None
-            continue
+    Raises:
+        TypeError: If the adapter does not return a valid Pydantic model instance.
+        ValueError: If generation fails after all retry attempts.
+    """
+    # Select prompts based on stage
+    if stage == "ground_truth":
+        system_prompt = GROUND_TRUTH_SYSTEM_PROMPT
+        user_template = GROUND_TRUTH_USER_PROMPT_TEMPLATE
+    else:
+        system_prompt = FIELD_DESCRIPTION_SYSTEM_PROMPT
+        user_template = FIELD_DESCRIPTION_USER_PROMPT_TEMPLATE
 
-    raise ValueError("Unexpected error in retry logic")
+    # Format user message
+    user_content = user_template.format(**inputs)
+
+    # Get LLM with structured output and retry support
+    llm = get_llm(config).with_structured_output(output_schema, max_retries=max_retries)
+
+    # Build messages
+    messages = [
+        Message.system(system_prompt),
+        Message.user(user_content),
+    ]
+
+    # Invoke and return parsed model from raw
+    response = llm.invoke(messages)
+
+    # The adapter guarantees response.raw is the Pydantic model instance
+    if isinstance(response.raw, output_schema):
+        return response.raw
+
+    # Fail if the adapter did not return the expected type
+    raise TypeError(
+        f"Adapter returned invalid structured output. "
+        f"Expected {output_schema.__name__}, got {type(response.raw).__name__}. "
+        f"The adapter's with_structured_output() must guarantee a Pydantic model in response.raw."
+    )
 
 
 def _generate_structured_outputs(
@@ -217,9 +161,18 @@ def _generate_structured_outputs(
     config: "ModelConfig",
     max_retries: int = 2,
 ) -> dict[str, Any]:
-    """Generate structured outputs (ground truth + field descriptions) using two-phase approach."""
+    """Generate structured outputs (ground truth + field descriptions) using two-phase approach.
+
+    Retry logic with error feedback is handled by the adapter's with_structured_output().
+    """
     # Phase 1: Generate ground truth specification
-    gt_result = _generate_with_retry("ground_truth", {"question": question, "answer": answer}, config, max_retries)
+    gt_result = _generate_structured_output(
+        "ground_truth",
+        {"question": question, "answer": answer},
+        config,
+        GroundTruthSpec,
+        max_retries,
+    )
 
     gt_json = gt_result.model_dump() if isinstance(gt_result, BaseModel) else gt_result
 
@@ -229,7 +182,7 @@ def _generate_structured_outputs(
         "attributes": [{k: v for k, v in attr.items() if k != "ground_truth"} for attr in gt_json["attributes"]]
     }
 
-    fd_result = _generate_with_retry(
+    fd_result = _generate_structured_output(
         "field_descriptions",
         {
             "question": question,
@@ -237,12 +190,20 @@ def _generate_structured_outputs(
             "spec_json": json.dumps(spec_for_descriptions, ensure_ascii=False),
         },
         config,
+        AttributeDescriptions,
         max_retries,
+    )
+
+    # Cast to AttributeDescriptions to access field_descriptions attribute
+    fd_typed = (
+        fd_result
+        if isinstance(fd_result, AttributeDescriptions)
+        else AttributeDescriptions.model_validate(fd_result.model_dump())
     )
 
     return {
         "attributes": gt_json["attributes"],
-        "field_descriptions": fd_result.field_descriptions,
+        "field_descriptions": fd_typed.field_descriptions,
     }
 
 
@@ -320,10 +281,10 @@ def generate_answer_template(
         # Create ModelConfig from individual parameters
         model_config = ModelConfig(
             id="template-generator",
-            model_name=model or "gemini-2.0-flash",
-            model_provider=model_provider or "google_genai",
+            model_name=model,
+            model_provider=model_provider,
             temperature=temperature if temperature is not None else 0.0,
-            interface=interface or "langchain",  # type: ignore[arg-type]
+            interface=interface,  # type: ignore[arg-type]
             system_prompt="",  # Not used in structured generation
             endpoint_base_url=endpoint_base_url,
             endpoint_api_key=SecretStr(endpoint_api_key) if endpoint_api_key else None,
@@ -341,9 +302,9 @@ def generate_answer_template(
 
 def generate_answer_templates_from_questions_file(
     questions_py_path: str,
-    model: str = "gemini-2.0-flash",
-    model_provider: str = "google_genai",
-    interface: str = "langchain",
+    model: str,
+    model_provider: str,
+    interface: str,
     return_blocks: bool = False,
 ) -> dict[str, Any] | tuple[dict[str, Any], dict[str, str]]:
     """

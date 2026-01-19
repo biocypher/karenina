@@ -574,7 +574,7 @@ class LangChainLLMAdapter:
             # No event loop running, safe to use asyncio.run
             return asyncio.run(self.ainvoke(messages))
 
-    def with_structured_output(self, schema: type[BaseModel], *, max_retries: int = 0) -> LangChainLLMAdapter:
+    def with_structured_output(self, schema: type[BaseModel], *, max_retries: int | None = None) -> LangChainLLMAdapter:
         """Return a new adapter configured for structured output.
 
         The returned adapter tries native with_structured_output() first at invoke time.
@@ -587,7 +587,7 @@ class LangChainLLMAdapter:
             schema: A Pydantic model class defining the output structure.
             max_retries: Maximum number of retry attempts on validation failure.
                 Each retry includes error feedback to help the LLM fix issues.
-                Default is 0 (no retries).
+                Default is 3 retries.
 
         Returns:
             A new LangChainLLMAdapter instance configured for structured output.
@@ -619,7 +619,7 @@ class LangChainLLMAdapter:
             _structured_schema=schema,
             _structured_model=structured_model,
             _base_model=self._model,  # Keep base model for fallback
-            _max_retries=max_retries,
+            _max_retries=max_retries if max_retries is not None else 3,
         )
 
 

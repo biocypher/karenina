@@ -256,7 +256,12 @@ class ManualLLMAdapter(LLMPort):
         """Raises ManualInterfaceError - manual interface cannot invoke LLM."""
         raise ManualInterfaceError("llm.invoke()")
 
-    def with_structured_output(self, schema: type[BaseModel]) -> LLMPort:  # noqa: ARG002
+    def with_structured_output(
+        self,
+        schema: type[BaseModel],  # noqa: ARG002
+        *,
+        max_retries: int | None = None,  # noqa: ARG002
+    ) -> LLMPort:
         """Raises ManualInterfaceError - manual interface cannot invoke LLM."""
         raise ManualInterfaceError("llm.with_structured_output()")
 

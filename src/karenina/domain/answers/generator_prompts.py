@@ -1,22 +1,10 @@
 """
-Prompt constants and chain building for answer template generation.
+Prompt constants for answer template generation.
 
 This module contains the system prompts and user prompt templates used
-by the structured answer generator, along with the chain building logic.
+by the structured answer generator. Chain building has been moved to
+generator.py using the port/adapter pattern.
 """
-
-from typing import TYPE_CHECKING, Any
-
-from langchain_core.output_parsers import PydanticOutputParser
-from langchain_core.prompts import ChatPromptTemplate
-
-from karenina.infrastructure.llm.interface import init_chat_model_unified
-
-if TYPE_CHECKING:
-    from karenina.schemas.workflow import ModelConfig
-
-    from .generator import AttributeDescriptions, GroundTruthSpec, JSONOnlyOutputParser
-
 
 # ============================================================================
 # GROUND TRUTH EXTRACTION PROMPTS
@@ -130,123 +118,9 @@ Return only valid JSON.
 """.strip()
 
 
-# ============================================================================
-# CHAIN BUILDING
-# ============================================================================
-
-
-def build_generation_chain(
-    stage: str,
-    config: "ModelConfig",
-    GroundTruthSpec: type["GroundTruthSpec"],
-    AttributeDescriptions: type["AttributeDescriptions"],
-    JSONOnlyOutputParser: type["JSONOnlyOutputParser"],
-) -> Any:
-    """Build generation chain for a specific stage.
-
-    Args:
-        stage: Either "ground_truth" or "field_descriptions"
-        config: Model configuration
-        GroundTruthSpec: The GroundTruthSpec Pydantic model class
-        AttributeDescriptions: The AttributeDescriptions Pydantic model class
-        JSONOnlyOutputParser: The JSONOnlyOutputParser class
-
-    Returns:
-        A LangChain chain (prompt | model | parser)
-    """
-    if stage == "ground_truth":
-        parser = JSONOnlyOutputParser(inner=PydanticOutputParser(pydantic_object=GroundTruthSpec))
-        system_prompt = GROUND_TRUTH_SYSTEM_PROMPT
-        user_template = GROUND_TRUTH_USER_PROMPT_TEMPLATE
-    elif stage == "field_descriptions":
-        parser = JSONOnlyOutputParser(inner=PydanticOutputParser(pydantic_object=AttributeDescriptions))
-        system_prompt = FIELD_DESCRIPTION_SYSTEM_PROMPT
-        user_template = FIELD_DESCRIPTION_USER_PROMPT_TEMPLATE
-    else:
-        raise ValueError(f"Unsupported stage: {stage}")
-
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            ("system", system_prompt),
-            ("user", user_template),
-        ]
-    )
-
-    model = _create_model_from_config(config)
-
-    return prompt | model | parser
-
-
-def build_retry_chain(
-    stage: str,
-    config: "ModelConfig",
-    error_context: str,
-    GroundTruthSpec: type["GroundTruthSpec"],
-    AttributeDescriptions: type["AttributeDescriptions"],
-    JSONOnlyOutputParser: type["JSONOnlyOutputParser"],
-) -> Any:
-    """Build generation chain with error context for retry attempts.
-
-    Args:
-        stage: Either "ground_truth" or "field_descriptions"
-        config: Model configuration
-        error_context: Error message to append to system prompt
-        GroundTruthSpec: The GroundTruthSpec Pydantic model class
-        AttributeDescriptions: The AttributeDescriptions Pydantic model class
-        JSONOnlyOutputParser: The JSONOnlyOutputParser class
-
-    Returns:
-        A LangChain chain (prompt | model | parser)
-    """
-    if stage == "ground_truth":
-        system_prompt = GROUND_TRUTH_SYSTEM_PROMPT + error_context
-        user_template = GROUND_TRUTH_USER_PROMPT_TEMPLATE
-        parser = JSONOnlyOutputParser(inner=PydanticOutputParser(pydantic_object=GroundTruthSpec))
-    else:
-        system_prompt = FIELD_DESCRIPTION_SYSTEM_PROMPT + error_context
-        user_template = FIELD_DESCRIPTION_USER_PROMPT_TEMPLATE
-        parser = JSONOnlyOutputParser(inner=PydanticOutputParser(pydantic_object=AttributeDescriptions))
-
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            ("system", system_prompt),
-            ("user", user_template),
-        ]
-    )
-
-    model = _create_model_from_config(config)
-
-    return prompt | model | parser
-
-
-def _create_model_from_config(config: "ModelConfig") -> Any:
-    """Create a LangChain model from ModelConfig.
-
-    Args:
-        config: Model configuration
-
-    Returns:
-        Initialized LangChain chat model
-    """
-    model_params: dict[str, Any] = {
-        "model": config.model_name,
-        "provider": config.model_provider,
-        "interface": config.interface,
-        "temperature": config.temperature,
-    }
-
-    # Add endpoint configuration for openai_endpoint interface
-    if config.interface == "openai_endpoint":
-        model_params["endpoint_base_url"] = config.endpoint_base_url
-        if config.endpoint_api_key is not None:
-            # Extract secret value if it's a SecretStr
-            if hasattr(config.endpoint_api_key, "get_secret_value"):
-                model_params["endpoint_api_key"] = config.endpoint_api_key.get_secret_value()
-            else:
-                model_params["endpoint_api_key"] = config.endpoint_api_key
-
-    # Add any extra kwargs if provided (e.g., vendor-specific API keys)
-    if config.extra_kwargs:
-        model_params.update(config.extra_kwargs)
-
-    return init_chat_model_unified(**model_params)
+__all__ = [
+    "GROUND_TRUTH_SYSTEM_PROMPT",
+    "GROUND_TRUTH_USER_PROMPT_TEMPLATE",
+    "FIELD_DESCRIPTION_SYSTEM_PROMPT",
+    "FIELD_DESCRIPTION_USER_PROMPT_TEMPLATE",
+]
