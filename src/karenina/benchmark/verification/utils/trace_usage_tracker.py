@@ -1,8 +1,9 @@
 """
-Usage tracking utilities for LangChain LLM calls.
+Usage tracking utilities for LLM calls.
 
 Provides classes to track and aggregate token usage and agent metrics across
-verification stages.
+verification stages. Works with any adapter that returns usage metadata in
+the expected format.
 """
 
 from dataclasses import dataclass, field
@@ -33,10 +34,10 @@ class UsageMetadata:
     @classmethod
     def from_callback_metadata(cls, callback_metadata: dict[str, Any]) -> "UsageMetadata":
         """
-        Create UsageMetadata from LangChain callback metadata.
+        Create UsageMetadata from model-keyed callback metadata.
 
         Args:
-            callback_metadata: Dict from get_usage_metadata_callback().usage_metadata
+            callback_metadata: Dict keyed by model name containing usage data.
                 Expected format:
                 {
                     'model-name': {
@@ -54,7 +55,7 @@ class UsageMetadata:
         if not callback_metadata:
             return cls(model_name="unknown")
 
-        # LangChain returns metadata keyed by model name
+        # Metadata is keyed by model name
         # Extract the first (and usually only) model entry
         if isinstance(callback_metadata, dict):
             for model_name, metadata in callback_metadata.items():
@@ -121,7 +122,8 @@ class UsageTracker:
         Args:
             stage_name: Name of verification stage (e.g., "answer_generation")
             model_name: Model identifier for fallback if not in metadata
-            callback_metadata: Dict from get_usage_metadata_callback().usage_metadata
+            callback_metadata: Dict keyed by model name with usage data.
+                See UsageMetadata.from_callback_metadata() for expected format.
         """
         if not callback_metadata:
             # Create minimal metadata if callback returned nothing
@@ -138,8 +140,11 @@ class UsageTracker:
         """
         Extract and store agent execution metrics from response.
 
+        Note: This method is used by stages that need to extract metrics from
+        raw response objects. For pre-extracted metrics, use set_agent_metrics().
+
         Args:
-            response: Agent response object from LangGraph (dict with "messages" key)
+            response: Agent response dict with "messages" key containing message objects.
         """
         if not response or not isinstance(response, dict):
             return
