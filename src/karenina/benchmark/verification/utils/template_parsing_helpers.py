@@ -16,11 +16,7 @@ from ....schemas.shared import SearchResultItem
 from .json_helpers import extract_json_from_text as _extract_json_from_text
 from .json_helpers import strip_markdown_fences as _strip_markdown_fences
 
-# Import and re-export _invoke_llm_with_retry with usage tracking support
-from .llm_invocation import _invoke_llm_with_retry
-
 __all__ = [
-    "_invoke_llm_with_retry",
     "_strip_markdown_fences",
     "_extract_json_from_text",
 ]
