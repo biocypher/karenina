@@ -1,6 +1,6 @@
 """Unit tests for ADeLe question classifier."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -9,6 +9,7 @@ from karenina.integrations.adele import (
     QuestionClassifier,
 )
 from karenina.integrations.adele.schemas import AdeleTraitInfo
+from karenina.ports.usage import UsageMetadata
 
 
 class TestQuestionClassificationResult:
@@ -161,20 +162,24 @@ class TestQuestionClassifier:
         assert "volume" in prompt
         assert "classifications" in prompt
 
-    @patch("karenina.benchmark.verification.evaluators.rubric_parsing.invoke_with_structured_output")
-    def test_classify_single_mocked(self, mock_invoke: MagicMock) -> None:
+    def test_classify_single_mocked(self) -> None:
         """Test classify_single with mocked LLM call."""
-        # Mock the structured output response
+        # Create a mock LLM that supports with_structured_output
+        mock_llm = MagicMock()
+        mock_structured_llm = MagicMock()
+        mock_llm.with_structured_output.return_value = mock_structured_llm
+
+        # Mock the response from structured LLM
+        mock_response = MagicMock()
         mock_result = MagicMock()
         mock_result.classifications = {
             "attention_and_scan": "none",
             "volume": "very_low",
         }
-        mock_usage = {"input_tokens": 100, "output_tokens": 50}
-        mock_invoke.return_value = (mock_result, mock_usage)
+        mock_response.raw = mock_result
+        mock_response.usage = UsageMetadata(input_tokens=100, output_tokens=50, total_tokens=150)
+        mock_structured_llm.invoke.return_value = mock_response
 
-        # Create classifier with mock LLM
-        mock_llm = MagicMock()
         classifier = QuestionClassifier(llm=mock_llm)
 
         # Classify with only 2 traits for simplicity
@@ -190,22 +195,28 @@ class TestQuestionClassifier:
         assert result.scores["volume"] == 1  # "very_low" -> index 1
         assert result.labels["attention_and_scan"] == "none"
         assert result.labels["volume"] == "very_low"
-        assert result.usage_metadata == mock_usage
+        # Usage metadata is now converted from dataclass
+        assert result.usage_metadata["input_tokens"] == 100
+        assert result.usage_metadata["output_tokens"] == 50
 
-    @patch("karenina.benchmark.verification.evaluators.rubric_parsing.invoke_with_structured_output")
-    def test_classify_batch_mocked(self, mock_invoke: MagicMock) -> None:
+    def test_classify_batch_mocked(self) -> None:
         """Test classify_batch with mocked LLM calls."""
-        # Mock responses for multiple questions
+        # Create a mock LLM that supports with_structured_output
+        mock_llm = MagicMock()
+        mock_structured_llm = MagicMock()
+        mock_llm.with_structured_output.return_value = mock_structured_llm
+
+        # Mock response for batch mode
+        mock_response = MagicMock()
         mock_result = MagicMock()
         mock_result.classifications = {
             "attention_and_scan": "intermediate",
             "volume": "high",
         }
-        mock_usage = {"input_tokens": 100, "output_tokens": 50}
-        mock_invoke.return_value = (mock_result, mock_usage)
+        mock_response.raw = mock_result
+        mock_response.usage = UsageMetadata(input_tokens=100, output_tokens=50, total_tokens=150)
+        mock_structured_llm.invoke.return_value = mock_response
 
-        # Create classifier with mock LLM
-        mock_llm = MagicMock()
         classifier = QuestionClassifier(llm=mock_llm)
 
         # Track progress

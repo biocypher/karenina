@@ -4,6 +4,7 @@
 
 # TYPE_CHECKING imports used for type annotations
 from anyio.from_thread import BlockingPortal  # noqa: F401
+
 from karenina.ports.usage import UsageMetadata as PortUsageMetadata  # noqa: F401
 
 BlockingPortal  # Used in type hints within TYPE_CHECKING block

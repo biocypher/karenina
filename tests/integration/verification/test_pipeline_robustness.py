@@ -546,11 +546,17 @@ class TestArtifactDependencies:
         # Validate first to get Answer class
         ValidateTemplateStage().execute(minimal_context)
 
-        # Mock the unified LLM initialization to use fixture client
-        with patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified") as mock_init:
-            mock_llm = MagicMock()
-            mock_llm.invoke.return_value = MagicMock(content="The capital is Paris.")
-            mock_init.return_value = mock_llm
+        # Mock get_agent to return a mock agent with run_sync
+        with patch("karenina.benchmark.verification.stages.generate_answer.get_agent") as mock_get_agent:
+            mock_agent = MagicMock()
+            mock_result = MagicMock()
+            mock_result.final_response = "The capital is Paris."
+            mock_result.raw_trace = "The capital is Paris."
+            mock_result.usage = MagicMock(input_tokens=10, output_tokens=10, total_tokens=20)
+            mock_result.turns = 1
+            mock_result.limit_reached = False
+            mock_agent.run_sync.return_value = mock_result
+            mock_get_agent.return_value = mock_agent
 
             stage = GenerateAnswerStage()
             stage.execute(minimal_context)
@@ -602,15 +608,21 @@ class TestPipelineIntegration:
         # Create a real parsed answer instance
         parsed_answer = Answer(capital="Paris")
 
-        # Mock LLM for answer generation and template parsing
+        # Mock agent for answer generation and template parsing
         with (
-            patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified") as mock_gen,
+            patch("karenina.benchmark.verification.stages.generate_answer.get_agent") as mock_get_agent,
             patch("karenina.benchmark.verification.stages.parse_template.TemplateEvaluator") as MockEvaluator,
         ):
-            # Answer generation mock
-            mock_gen_llm = MagicMock()
-            mock_gen_llm.invoke.return_value = MagicMock(content="The capital of France is Paris.")
-            mock_gen.return_value = mock_gen_llm
+            # Answer generation mock - return AgentResult-like object
+            mock_agent = MagicMock()
+            mock_result = MagicMock()
+            mock_result.final_response = "The capital of France is Paris."
+            mock_result.raw_trace = "The capital of France is Paris."
+            mock_result.usage = MagicMock(input_tokens=10, output_tokens=10, total_tokens=20)
+            mock_result.turns = 1
+            mock_result.limit_reached = False
+            mock_agent.run_sync.return_value = mock_result
+            mock_get_agent.return_value = mock_agent
 
             # Template parsing mock - use proper return types
             mock_evaluator = MagicMock()
@@ -676,15 +688,19 @@ class TestPipelineIntegration:
             return context.get_artifact("final_result")
 
         with (
-            patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified") as mock_gen,
+            patch("karenina.benchmark.verification.stages.generate_answer.get_agent") as mock_get_agent,
             patch("karenina.benchmark.verification.stages.abstention_check.detect_abstention") as mock_abstention,
         ):
-            # Generate a refusal response
-            mock_gen_llm = MagicMock()
-            mock_gen_llm.invoke.return_value = MagicMock(
-                content="I'm sorry, but I cannot provide information about that topic."
-            )
-            mock_gen.return_value = mock_gen_llm
+            # Generate a refusal response - return AgentResult-like object
+            mock_agent = MagicMock()
+            mock_result = MagicMock()
+            mock_result.final_response = "I'm sorry, but I cannot provide information about that topic."
+            mock_result.raw_trace = "I'm sorry, but I cannot provide information about that topic."
+            mock_result.usage = MagicMock(input_tokens=10, output_tokens=10, total_tokens=20)
+            mock_result.turns = 1
+            mock_result.limit_reached = False
+            mock_agent.run_sync.return_value = mock_result
+            mock_get_agent.return_value = mock_agent
 
             # Abstention detector returns (detected, check_performed, reasoning, usage_metadata)
             mock_abstention.return_value = (
