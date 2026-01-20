@@ -18,7 +18,8 @@ Evaluation is delegated to specialized handlers:
 import logging
 from typing import Any
 
-from ....infrastructure.llm.interface import init_chat_model_unified
+from ....adapters import get_llm
+from ....ports import LLMPort
 from ....schemas.domain import CallableTrait, MetricRubricTrait, RegexTrait, Rubric
 from ....schemas.workflow import INTERFACES_NO_PROVIDER_REQUIRED, ModelConfig
 from .rubric_deep_judgment import RubricDeepJudgmentHandler
@@ -72,25 +73,8 @@ class RubricEvaluator:
         self.evaluation_strategy = evaluation_strategy
 
         try:
-            # Build kwargs for model initialization
-            model_kwargs: dict[str, Any] = {
-                "model": model_config.model_name,
-                "provider": model_config.model_provider,
-                "temperature": model_config.temperature,
-                "interface": model_config.interface,
-            }
-
-            # Add endpoint configuration if using openai_endpoint interface
-            if model_config.endpoint_base_url:
-                model_kwargs["endpoint_base_url"] = model_config.endpoint_base_url
-            if model_config.endpoint_api_key:
-                model_kwargs["endpoint_api_key"] = model_config.endpoint_api_key
-
-            # Add any extra kwargs if provided (e.g., vendor-specific API keys)
-            if model_config.extra_kwargs:
-                model_kwargs.update(model_config.extra_kwargs)
-
-            self.llm = init_chat_model_unified(**model_kwargs)
+            # Use the adapter factory to get an LLMPort implementation
+            self.llm: LLMPort = get_llm(model_config)
         except Exception as e:
             raise RuntimeError(f"Failed to initialize LLM for rubric evaluation: {e}") from e
 
@@ -109,7 +93,7 @@ class RubricEvaluator:
     def metric_trait_evaluator(self) -> MetricTraitEvaluator:
         """Get or create the metric trait evaluator."""
         if self._metric_trait_evaluator is None:
-            self._metric_trait_evaluator = MetricTraitEvaluator(self.llm)
+            self._metric_trait_evaluator = MetricTraitEvaluator(self.llm, model_config=self.model_config)
         return self._metric_trait_evaluator
 
     def evaluate_rubric(

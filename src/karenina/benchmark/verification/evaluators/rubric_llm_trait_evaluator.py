@@ -12,22 +12,21 @@ Supports three trait kinds:
 - score: Numeric rating within a range (e.g., 1-5)
 - literal: Categorical classification into predefined classes
 
-All parsing is done via ParserPort adapters for consistent LLM backend abstraction.
-The adapter factory returns the appropriate implementation (LangChainParserAdapter
-or ClaudeSDKParserAdapter) based on the model interface configuration.
+All LLM calls use LLMPort.with_structured_output() for consistent backend abstraction.
+The adapter factory returns the appropriate implementation (LangChainLLMAdapter
+or ClaudeSDKLLMAdapter) based on the model interface configuration.
 """
 
 import json
 import logging
 import re
+from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
-
+from ....ports import LLMPort, Message
 from ....schemas.domain import LLMRubricTrait
 
 if TYPE_CHECKING:
-    from ....ports import ParserPort
     from ....schemas.workflow.models import ModelConfig
 
 logger = logging.getLogger(__name__)
@@ -46,8 +45,8 @@ class LLMTraitEvaluator:
     For literal traits, scores are returned as int indices (0 to len(classes)-1),
     with class labels returned separately for display purposes.
 
-    All parsing is performed via ParserPort adapters, which are initialized from
-    the required model_config parameter.
+    All LLM calls use LLMPort.with_structured_output() for consistent
+    backend abstraction.
 
     Example usage:
         evaluator = LLMTraitEvaluator(llm, model_config=model_config)
@@ -59,7 +58,7 @@ class LLMTraitEvaluator:
 
     def __init__(
         self,
-        llm: Any,
+        llm: LLMPort,
         async_enabled: bool | None = None,
         async_max_workers: int | None = None,
         *,
@@ -69,17 +68,14 @@ class LLMTraitEvaluator:
         Initialize the LLM trait evaluator.
 
         Args:
-            llm: Initialized LLM instance (LangChain compatible) for evaluation
+            llm: LLMPort adapter for LLM operations.
             async_enabled: Whether to run sequential trait evaluations in parallel.
                           If None, reads from KARENINA_ASYNC_ENABLED env var (default: True).
             async_max_workers: Max concurrent workers for parallel execution.
                               If None, reads from KARENINA_ASYNC_MAX_WORKERS env var (default: 2).
-            model_config: Model configuration for adapter-based parsing via ParserPort.
-                          The factory returns the appropriate adapter (LangChainParserAdapter
-                          or ClaudeSDKParserAdapter) based on interface.
+            model_config: Model configuration for reference.
         """
-        from ....adapters import get_parser
-        from ....infrastructure.llm.parallel_invoker import read_async_config
+        from ....adapters.llm_parallel import read_async_config
 
         self.llm = llm
         self._model_config = model_config
@@ -89,17 +85,13 @@ class LLMTraitEvaluator:
         self._async_enabled = async_enabled if async_enabled is not None else default_enabled
         self._async_max_workers = async_max_workers if async_max_workers is not None else default_workers
 
-        # Initialize parser adapter via the registry
-        # Factory always returns a ParserPort (LangChainParserAdapter, ClaudeSDKParserAdapter,
-        # or ManualParserAdapter) or raises AdapterUnavailableError
-        self._parser_adapter: ParserPort = get_parser(model_config)
-        logger.debug(f"LLMTraitEvaluator: Initialized ParserPort for interface={model_config.interface}")
+        logger.debug(f"LLMTraitEvaluator: Initialized for interface={model_config.interface}")
 
     def evaluate_batch(
         self, question: str, answer: str, traits: list[LLMRubricTrait]
     ) -> tuple[dict[str, int | bool], dict[str, Any]]:
         """
-        Evaluate all traits in a single LLM call using adapter-based parsing.
+        Evaluate all traits in a single LLM call using structured output.
 
         Args:
             question: The original question asked
@@ -110,27 +102,22 @@ class LLMTraitEvaluator:
             Tuple of (results_dict, usage_metadata)
         """
         from ....schemas.workflow.rubric_outputs import BatchRubricScores
-        from .rubric_parsing import invoke_with_structured_output
 
         system_prompt = self._build_batch_system_prompt()
         user_prompt = self._build_batch_user_prompt(question, answer, traits)
 
-        messages: list[BaseMessage] = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
+        messages: list[Message] = [Message.system(system_prompt), Message.user(user_prompt)]
 
-        # Build combined prompt text for adapter path
-        prompt_text = f"{system_prompt}\n\n{user_prompt}"
+        # Use LLMPort.with_structured_output() for parsing
+        # The adapter guarantees response.raw is a validated BatchRubricScores instance
+        structured_llm = self.llm.with_structured_output(BatchRubricScores)
+        response = structured_llm.invoke(messages)
 
-        # Invoke via adapter for structured parsing
-        parsed_result, usage_metadata = invoke_with_structured_output(
-            self.llm,
-            messages,
-            BatchRubricScores,
-            parser=self._parser_adapter,
-            prompt_text=prompt_text,
-        )
+        # Extract usage metadata
+        usage_metadata = asdict(response.usage) if response.usage else {}
 
-        # Validate scores against trait definitions
-        results = self._validate_batch_scores(parsed_result.scores, traits)
+        # Validate scores against trait definitions (response.raw is already validated by adapter)
+        results = self._validate_batch_scores(response.raw.scores, traits)
         return results, usage_metadata
 
     def evaluate_sequential(
@@ -154,50 +141,36 @@ class LLMTraitEvaluator:
         from ....schemas.workflow.rubric_outputs import SingleBooleanScore, SingleNumericScore
 
         # Build all tasks upfront
-        tasks: list[tuple[list[BaseMessage], type]] = []
+        tasks: list[tuple[list[Message], type]] = []
         for trait in traits:
             system_prompt = self._build_single_trait_system_prompt(trait)
             user_prompt = self._build_single_trait_user_prompt(question, answer, trait)
-            messages: list[BaseMessage] = [
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=user_prompt),
+            messages: list[Message] = [
+                Message.system(system_prompt),
+                Message.user(user_prompt),
             ]
             model_class = SingleBooleanScore if trait.kind == "boolean" else SingleNumericScore
             tasks.append((messages, model_class))
 
         if self._async_enabled:
-            return self._execute_parallel_sequential(tasks, traits)
+            return self._execute_concurrent(tasks, traits)
         else:
-            return self._execute_true_sequential(tasks, traits)
+            return self._execute_serial(tasks, traits)
 
-    def _execute_parallel_sequential(
+    def _execute_concurrent(
         self,
-        tasks: list[tuple[list[BaseMessage], type]],
+        tasks: list[tuple[list[Message], type]],
         traits: list[LLMRubricTrait],
     ) -> tuple[dict[str, int | bool], list[dict[str, Any]]]:
-        """Execute sequential evaluation tasks in parallel using AdapterParallelInvoker.
+        """Execute evaluation tasks concurrently using LLMParallelInvoker.
 
-        Converts message-based tasks to prompt-text tasks and uses the
-        AdapterParallelInvoker for true async parallelism with ParserPort.
+        Uses the LLMParallelInvoker for concurrent execution with LLMPort.
         """
-        from ....adapters import AdapterParallelInvoker
+        from ....adapters import LLMParallelInvoker
 
-        # Convert message-based tasks to prompt-text tasks
-        adapter_tasks: list[tuple[str, type]] = []
-        for messages, model_class in tasks:
-            # Extract content from messages to build full prompt text
-            prompt_parts = []
-            for msg in messages:
-                content = msg.content if hasattr(msg, "content") else str(msg)
-                prompt_parts.append(str(content))
-            prompt_text = "\n\n".join(prompt_parts)
-            adapter_tasks.append((prompt_text, model_class))
-
-        logger.debug(
-            f"AdapterParallelInvoker: Executing {len(adapter_tasks)} tasks with max_workers={self._async_max_workers}"
-        )
-        invoker = AdapterParallelInvoker(self._parser_adapter, max_workers=self._async_max_workers)
-        raw_results = invoker.invoke_batch(adapter_tasks)
+        logger.debug(f"LLMParallelInvoker: Executing {len(tasks)} tasks with max_workers={self._async_max_workers}")
+        invoker = LLMParallelInvoker(self.llm, max_workers=self._async_max_workers)
+        raw_results = invoker.invoke_batch(tasks)
 
         results: dict[str, int | bool] = {}
         usage_metadata_list: list[dict[str, Any]] = []
@@ -220,40 +193,31 @@ class LLMTraitEvaluator:
 
         return results, usage_metadata_list
 
-    def _execute_true_sequential(
+    def _execute_serial(
         self,
-        tasks: list[tuple[list[BaseMessage], type]],
+        tasks: list[tuple[list[Message], type]],
         traits: list[LLMRubricTrait],
     ) -> tuple[dict[str, int | bool], list[dict[str, Any]]]:
-        """Execute evaluation tasks truly sequentially.
+        """Execute evaluation tasks serially (one at a time).
 
-        Uses adapter-based parsing via invoke_with_structured_output for each
-        task one at a time. Used when async_enabled=False.
+        Uses LLMPort.with_structured_output() for each task one at a time.
+        Used when async_enabled=False.
         """
-        from .rubric_parsing import invoke_with_structured_output
-
         results: dict[str, int | bool] = {}
         usage_metadata_list: list[dict[str, Any]] = []
 
         for i, (messages, model_class) in enumerate(tasks):
             trait = traits[i]
             try:
-                # Build prompt_text from messages for adapter
-                prompt_parts = []
-                for msg in messages:
-                    content = msg.content if hasattr(msg, "content") else str(msg)
-                    prompt_parts.append(str(content))
-                prompt_text = "\n\n".join(prompt_parts)
+                # Use LLMPort.with_structured_output() for parsing
+                structured_llm = self.llm.with_structured_output(model_class)
+                response = structured_llm.invoke(messages)
 
-                parsed_result: Any
-                parsed_result, usage_metadata = invoke_with_structured_output(
-                    self.llm,
-                    messages,
-                    model_class,
-                    parser=self._parser_adapter,
-                    prompt_text=prompt_text,
-                )
-                # Extract score from result
+                # Extract usage metadata
+                usage_metadata = asdict(response.usage) if response.usage else {}
+
+                # Extract score from parsed result
+                parsed_result = response.raw
                 if trait.kind == "boolean":
                     score: int | bool = parsed_result.result
                 else:
@@ -481,7 +445,7 @@ Evaluate this answer for the trait above and return your assessment as JSON: {fo
         Parse the batch evaluation response.
 
         This is a fallback method for when structured output fails. Usually
-        invoke_with_structured_output handles parsing, but this can be used
+        LLMPort.with_structured_output() handles parsing, but this can be used
         for manual parsing scenarios.
 
         Args:
@@ -526,7 +490,7 @@ Evaluate this answer for the trait above and return your assessment as JSON: {fo
         Parse a single trait evaluation response.
 
         This is a fallback method for when structured output fails. Usually
-        invoke_with_structured_output handles parsing, but this can be used
+        LLMPort.with_structured_output() handles parsing, but this can be used
         for manual parsing scenarios.
 
         Args:
@@ -574,7 +538,7 @@ Evaluate this answer for the trait above and return your assessment as JSON: {fo
         Literal traits classify responses into predefined categories. The LLM
         returns class names, which are then converted to integer indices.
 
-        Uses adapter-based parsing via ParserPort.
+        Uses LLMPort.with_structured_output() for parsing.
 
         Args:
             question: The original question asked
@@ -588,7 +552,6 @@ Evaluate this answer for the trait above and return your assessment as JSON: {fo
             - usage_metadata: Usage metadata from the LLM call
         """
         from ....schemas.workflow.rubric_outputs import BatchLiteralClassifications
-        from .rubric_parsing import invoke_with_structured_output
 
         # Filter to only literal traits
         literal_traits = [t for t in traits if t.kind == "literal"]
@@ -598,21 +561,17 @@ Evaluate this answer for the trait above and return your assessment as JSON: {fo
         system_prompt = self._build_literal_batch_system_prompt()
         user_prompt = self._build_literal_batch_user_prompt(question, answer, literal_traits)
 
-        messages: list[BaseMessage] = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
+        messages: list[Message] = [Message.system(system_prompt), Message.user(user_prompt)]
 
-        # Build combined prompt text for adapter
-        prompt_text = f"{system_prompt}\n\n{user_prompt}"
+        # Use LLMPort.with_structured_output() for parsing
+        structured_llm = self.llm.with_structured_output(BatchLiteralClassifications)
+        response = structured_llm.invoke(messages)
 
-        # Invoke via adapter for structured parsing
-        parsed_result, usage_metadata = invoke_with_structured_output(
-            self.llm,
-            messages,
-            BatchLiteralClassifications,
-            parser=self._parser_adapter,
-            prompt_text=prompt_text,
-        )
+        # Extract usage metadata
+        usage_metadata = asdict(response.usage) if response.usage else {}
 
         # Validate classifications and convert to scores + labels
+        parsed_result = response.raw
         scores, labels = self._validate_literal_classifications(parsed_result.classifications, literal_traits)
         return scores, labels, usage_metadata
 
@@ -623,7 +582,7 @@ Evaluate this answer for the trait above and return your assessment as JSON: {fo
         Evaluate literal traits one by one.
 
         When async_enabled is True, the LLM calls run in parallel using
-        AdapterParallelInvoker for significant speedup. Otherwise, calls run
+        LLMParallelInvoker for significant speedup. Otherwise, calls run
         sequentially.
 
         Args:
@@ -645,49 +604,37 @@ Evaluate this answer for the trait above and return your assessment as JSON: {fo
             return {}, {}, []
 
         # Build all tasks upfront
-        tasks: list[tuple[list[BaseMessage], type[SingleLiteralClassification]]] = []
+        tasks: list[tuple[list[Message], type[SingleLiteralClassification]]] = []
         for trait in literal_traits:
             system_prompt = self._build_literal_single_system_prompt(trait)
             user_prompt = self._build_literal_single_user_prompt(question, answer, trait)
-            messages: list[BaseMessage] = [
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=user_prompt),
+            messages: list[Message] = [
+                Message.system(system_prompt),
+                Message.user(user_prompt),
             ]
             tasks.append((messages, SingleLiteralClassification))
 
         if self._async_enabled:
-            return self._execute_parallel_literal_sequential(tasks, literal_traits)
+            return self._execute_concurrent_literal(tasks, literal_traits)
         else:
-            return self._execute_true_literal_sequential(tasks, literal_traits)
+            return self._execute_serial_literal(tasks, literal_traits)
 
-    def _execute_parallel_literal_sequential(
+    def _execute_concurrent_literal(
         self,
-        tasks: list[tuple[list[BaseMessage], type]],
+        tasks: list[tuple[list[Message], type]],
         traits: list[LLMRubricTrait],
     ) -> tuple[dict[str, int], dict[str, str], list[dict[str, Any]]]:
-        """Execute literal evaluation tasks in parallel using AdapterParallelInvoker.
+        """Execute literal evaluation tasks concurrently using LLMParallelInvoker.
 
-        Converts message-based tasks to prompt-text tasks and uses the
-        AdapterParallelInvoker for true async parallelism with ParserPort.
+        Uses the LLMParallelInvoker for concurrent execution with LLMPort.
         """
-        from ....adapters import AdapterParallelInvoker
-
-        # Convert message-based tasks to prompt-text tasks
-        adapter_tasks: list[tuple[str, type]] = []
-        for messages, model_class in tasks:
-            # Extract content from messages to build full prompt text
-            prompt_parts = []
-            for msg in messages:
-                content = msg.content if hasattr(msg, "content") else str(msg)
-                prompt_parts.append(str(content))
-            prompt_text = "\n\n".join(prompt_parts)
-            adapter_tasks.append((prompt_text, model_class))
+        from ....adapters import LLMParallelInvoker
 
         logger.debug(
-            f"AdapterParallelInvoker: Executing {len(adapter_tasks)} literal tasks with max_workers={self._async_max_workers}"
+            f"LLMParallelInvoker: Executing {len(tasks)} literal tasks with max_workers={self._async_max_workers}"
         )
-        invoker = AdapterParallelInvoker(self._parser_adapter, max_workers=self._async_max_workers)
-        raw_results = invoker.invoke_batch(adapter_tasks)
+        invoker = LLMParallelInvoker(self.llm, max_workers=self._async_max_workers)
+        raw_results = invoker.invoke_batch(tasks)
 
         scores: dict[str, int] = {}
         labels: dict[str, str] = {}
@@ -709,18 +656,16 @@ Evaluate this answer for the trait above and return your assessment as JSON: {fo
 
         return scores, labels, usage_metadata_list
 
-    def _execute_true_literal_sequential(
+    def _execute_serial_literal(
         self,
-        tasks: list[tuple[list[BaseMessage], type]],
+        tasks: list[tuple[list[Message], type]],
         traits: list[LLMRubricTrait],
     ) -> tuple[dict[str, int], dict[str, str], list[dict[str, Any]]]:
-        """Execute literal evaluation tasks truly sequentially.
+        """Execute literal evaluation tasks serially (one at a time).
 
-        Uses adapter-based parsing via invoke_with_structured_output for each
-        task one at a time. Used when async_enabled=False.
+        Uses LLMPort.with_structured_output() for each task one at a time.
+        Used when async_enabled=False.
         """
-        from .rubric_parsing import invoke_with_structured_output
-
         scores: dict[str, int] = {}
         labels: dict[str, str] = {}
         usage_metadata_list: list[dict[str, Any]] = []
@@ -728,24 +673,16 @@ Evaluate this answer for the trait above and return your assessment as JSON: {fo
         for i, (messages, model_class) in enumerate(tasks):
             trait = traits[i]
             try:
-                # Build prompt_text from messages for adapter
-                prompt_parts = []
-                for msg in messages:
-                    content = msg.content if hasattr(msg, "content") else str(msg)
-                    prompt_parts.append(str(content))
-                prompt_text = "\n\n".join(prompt_parts)
+                # Use LLMPort.with_structured_output() for parsing
+                structured_llm = self.llm.with_structured_output(model_class)
+                response = structured_llm.invoke(messages)
 
-                parsed_result: Any
-                parsed_result, usage_metadata = invoke_with_structured_output(
-                    self.llm,
-                    messages,
-                    model_class,
-                    parser=self._parser_adapter,
-                    prompt_text=prompt_text,
-                )
+                # Extract usage metadata
+                usage_metadata = asdict(response.usage) if response.usage else {}
                 usage_metadata_list.append(usage_metadata)
 
                 # Validate and convert classification to score + label
+                parsed_result = response.raw
                 score, label = self._validate_literal_classification(trait, parsed_result.classification)
                 scores[trait.name] = score
                 labels[trait.name] = label

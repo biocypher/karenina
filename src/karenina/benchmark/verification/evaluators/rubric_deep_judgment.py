@@ -16,15 +16,18 @@ which extends standard LLM trait evaluation with a multi-stage approach:
 4. Stage 3: Extract final score based on reasoning
 
 For traits without excerpt extraction enabled, only stages 2-3 are performed.
+
+All LLM calls use LLMPort.with_structured_output() for consistent backend abstraction
+where structured output is needed, and regular LLMPort.invoke() for text generation.
 """
 
 import json
 import logging
 import re
+from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
-from langchain_core.callbacks import get_usage_metadata_callback
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from ....ports import LLMPort, Message
 
 if TYPE_CHECKING:
     from ....schemas.domain import LLMRubricTrait, Rubric
@@ -44,18 +47,44 @@ class RubricDeepJudgmentHandler:
 
     This approach provides more transparent and verifiable trait evaluation
     compared to single-shot LLM judgment.
+
+    All LLM calls use LLMPort.with_structured_output() for structured parsing
+    and regular LLMPort.invoke() for text generation.
     """
 
-    def __init__(self, llm: Any, model_config: Any):
+    def __init__(self, llm: LLMPort, model_config: Any):
         """
         Initialize the deep judgment handler.
 
         Args:
-            llm: Initialized LLM instance for evaluation
-            model_config: Configuration for the evaluation model
+            llm: LLMPort adapter for LLM operations.
+            model_config: Configuration for the evaluation model.
         """
         self.llm = llm
         self.model_config = model_config
+
+    def _validate_score(self, score: Any, trait: "LLMRubricTrait") -> int | bool:
+        """Validate and convert a score for a trait."""
+        if trait.kind == "boolean":
+            if isinstance(score, bool):
+                return score
+            elif isinstance(score, int | str):
+                return bool(score) and str(score).lower() not in ["false", "0", "no"]
+            else:
+                return bool(score)
+        else:
+            if not isinstance(score, int | float):
+                try:
+                    score = int(score)
+                except (ValueError, TypeError) as e:
+                    raise ValueError(f"Invalid score type for trait {trait.name}: {type(score)}") from e
+
+            min_score = trait.min_score or 1
+            max_score = trait.max_score or 5
+
+            # Clamp score to valid range
+            clamped_score = max(min_score, min(max_score, int(score)))
+            return clamped_score
 
     def evaluate_rubric_with_deep_judgment(
         self,
@@ -346,9 +375,8 @@ class RubricDeepJudgmentHandler:
             prompt = self._build_trait_excerpt_prompt(trait, max_excerpts, answer, validation_feedback)
 
             # Call LLM
-            messages = [
-                SystemMessage(
-                    content="""You are an expert at extracting verbatim quotes from text that demonstrate specific qualities.
+            messages: list[Message] = [
+                Message.system("""You are an expert at extracting verbatim quotes from text that demonstrate specific qualities.
 
 You will receive a JSON Schema specifying the exact output structure. Your response MUST conform to this schema.
 Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
@@ -365,23 +393,27 @@ Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
 - Do NOT wrap JSON in markdown code blocks (no ```)
 - Do NOT add explanatory text before or after the JSON
 - Do NOT paraphrase or modify quotes
-- Do NOT invent quotes not present in the text"""
-                ),
-                HumanMessage(content=prompt),
+- Do NOT invent quotes not present in the text"""),
+                Message.user(prompt),
             ]
 
-            with get_usage_metadata_callback() as cb:
-                response = self.llm.invoke(messages)
-            model_calls += 1
-            if cb.usage_metadata:
-                usage_metadata_list.append(dict(cb.usage_metadata))
+            # Use LLMPort.with_structured_output() for parsing
+            from ....schemas.workflow.rubric_outputs import TraitExcerptsOutput
 
-            raw_response = response.content if hasattr(response, "content") else str(response)
-
-            # Parse excerpts
             try:
-                raw_excerpts = self._parse_excerpt_response(raw_response)
+                structured_llm = self.llm.with_structured_output(TraitExcerptsOutput)
+                response = structured_llm.invoke(messages)
+                model_calls += 1
+
+                # Extract usage metadata
+                if response.usage:
+                    usage_metadata_list.append(asdict(response.usage))
+
+                # Extract parsed result
+                parsed_result = response.raw
+                raw_excerpts = [{"text": e.text, "confidence": e.confidence} for e in parsed_result.excerpts]
             except Exception as e:
+                model_calls += 1
                 logger.warning(f"Failed to parse excerpt response for trait '{trait.name}': {e}")
                 if attempt < max_attempts:
                     validation_feedback = (
@@ -622,9 +654,8 @@ Extract up to {max_excerpts} verbatim quotes from the answer that demonstrate or
 
 **YOUR JSON RESPONSE:**"""
 
-            messages: list[BaseMessage] = [
-                SystemMessage(
-                    content="""You are an expert at assessing hallucination risk using external evidence.
+            messages: list[Message] = [
+                Message.system("""You are an expert at assessing hallucination risk using external evidence.
 
 You will receive a JSON Schema specifying the exact output structure. Your response MUST conform to this schema.
 Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
@@ -640,30 +671,28 @@ Compare excerpts against external search results to determine if the information
 **WHAT NOT TO DO:**
 - Do NOT wrap JSON in markdown code blocks (no ```)
 - Do NOT add explanatory text before or after the JSON
-- Do NOT assume claims are true without supporting evidence"""
-                ),
-                HumanMessage(content=prompt),
+- Do NOT assume claims are true without supporting evidence"""),
+                Message.user(prompt),
             ]
 
-            with get_usage_metadata_callback() as cb:
-                response = self.llm.invoke(messages)
-            model_calls += 1
-            if cb.usage_metadata:
-                usage_metadata_list.append(dict(cb.usage_metadata))
+            # Use LLMPort.with_structured_output() for parsing
+            from ....schemas.workflow.rubric_outputs import HallucinationRiskOutput
 
-            raw_response = response.content if hasattr(response, "content") else str(response)
-
-            # Parse response
             try:
-                json_match = re.search(r"\{.*\}", raw_response, re.DOTALL)
-                if json_match:
-                    risk_data = json.loads(json_match.group())
-                    risk = risk_data.get("risk", "medium")
-                    justification = risk_data.get("justification", "")
-                else:
-                    risk = "medium"
-                    justification = "Failed to parse response"
+                structured_llm = self.llm.with_structured_output(HallucinationRiskOutput)
+                response = structured_llm.invoke(messages)
+                model_calls += 1
+
+                # Extract usage metadata
+                if response.usage:
+                    usage_metadata_list.append(asdict(response.usage))
+
+                # Extract parsed result
+                parsed_result = response.raw
+                risk = parsed_result.risk
+                justification = parsed_result.justification
             except Exception as e:
+                model_calls += 1
                 logger.warning(f"Failed to parse hallucination assessment: {e}")
                 risk = "medium"
                 justification = "Failed to parse"
@@ -712,18 +741,18 @@ Compare excerpts against external search results to determine if the information
             # Without excerpts
             prompt = self._build_trait_reasoning_prompt_without_excerpts(question, answer, trait)
 
-        messages: list[BaseMessage] = [
-            SystemMessage(content="You are an expert at analyzing text quality and providing clear reasoning."),
-            HumanMessage(content=prompt),
+        messages: list[Message] = [
+            Message.system("You are an expert at analyzing text quality and providing clear reasoning."),
+            Message.user(prompt),
         ]
 
-        with get_usage_metadata_callback() as cb:
-            response = self.llm.invoke(messages)
+        # Use LLMPort.invoke() for text generation (no structured output needed)
+        response = self.llm.invoke(messages)
 
-        raw_response = response.content if hasattr(response, "content") else str(response)
-        reasoning = raw_response.strip()
+        reasoning = response.content.strip()
 
-        usage_metadata = dict(cb.usage_metadata) if cb.usage_metadata else {}
+        # Extract usage metadata
+        usage_metadata = asdict(response.usage) if response.usage else {}
         return {"reasoning": reasoning, "usage_metadata": usage_metadata}
 
     def _build_trait_reasoning_prompt_with_excerpts(
@@ -810,9 +839,8 @@ This reasoning will be used in a follow-up step to determine the final score.
         """
         prompt = self._build_trait_scoring_prompt(trait, reasoning)
 
-        messages: list[BaseMessage] = [
-            SystemMessage(
-                content="""You are an expert evaluator providing precise trait scores based on prior reasoning.
+        messages: list[Message] = [
+            Message.system("""You are an expert evaluator providing precise trait scores based on prior reasoning.
 
 You will receive a JSON Schema specifying the exact output structure. Your response MUST conform to this schema.
 Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
@@ -834,21 +862,37 @@ Convert analytical reasoning into a final score that accurately reflects the ass
 **WHAT NOT TO DO:**
 - Do NOT wrap JSON in markdown code blocks (no ```)
 - Do NOT add explanatory text before or after the JSON
-- Do NOT contradict the reasoning - your score should align with it"""
-            ),
-            HumanMessage(content=prompt),
+- Do NOT contradict the reasoning - your score should align with it"""),
+            Message.user(prompt),
         ]
 
-        with get_usage_metadata_callback() as cb:
+        # Use LLMPort.with_structured_output() for parsing
+        from ....schemas.workflow.rubric_outputs import SingleBooleanScore, SingleNumericScore
+
+        try:
+            schema_class = SingleBooleanScore if trait.kind == "boolean" else SingleNumericScore
+            structured_llm = self.llm.with_structured_output(schema_class)
+            response = structured_llm.invoke(messages)
+
+            # Extract usage metadata
+            usage_metadata = asdict(response.usage) if response.usage else {}
+
+            # Extract score from parsed result
+            parsed_result = response.raw
+            if trait.kind == "boolean":
+                score = parsed_result.result
+            else:
+                score = self._validate_score(parsed_result.score, trait)
+
+            return {"score": score, "usage_metadata": usage_metadata}
+        except Exception as e:
+            logger.warning(f"Failed to parse score for trait '{trait.name}': {e}. Using fallback parsing.")
+            # Fallback to manual parsing on error
             response = self.llm.invoke(messages)
-
-        raw_response = response.content if hasattr(response, "content") else str(response)
-
-        # Parse score
-        score = self._parse_trait_score_response(raw_response, trait)
-
-        usage_metadata = dict(cb.usage_metadata) if cb.usage_metadata else {}
-        return {"score": score, "usage_metadata": usage_metadata}
+            raw_response = response.content
+            score = self._parse_trait_score_response(raw_response, trait)
+            usage_metadata = asdict(response.usage) if response.usage else {}
+            return {"score": score, "usage_metadata": usage_metadata}
 
     def _build_trait_scoring_prompt(self, trait: "LLMRubricTrait", reasoning: str) -> str:
         """Build prompt for final scoring."""

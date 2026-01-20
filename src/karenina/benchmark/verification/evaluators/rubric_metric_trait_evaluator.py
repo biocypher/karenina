@@ -10,16 +10,21 @@ on TP and TN instructions defined in the trait.
 Two evaluation modes are supported:
 - tp_only: Only TP instructions provided; computes precision, recall, F1
 - full_matrix: Both TP and TN instructions; computes all metrics including specificity
+
+All LLM calls use LLMPort.with_structured_output() for consistent backend abstraction.
 """
 
 import json
 import logging
 import re
-from typing import Any
+from dataclasses import asdict
+from typing import TYPE_CHECKING, Any
 
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
-
+from ....ports import LLMPort, Message
 from ....schemas.domain import MetricRubricTrait
+
+if TYPE_CHECKING:
+    from ....schemas.workflow.models import ModelConfig
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +38,11 @@ class MetricTraitEvaluator:
     2. Optionally deduplicating extracted items
     3. Computing requested metrics (precision, recall, F1, etc.)
 
+    All LLM calls use LLMPort.with_structured_output() for consistent
+    backend abstraction.
+
     Example usage:
-        evaluator = MetricTraitEvaluator(llm)
+        evaluator = MetricTraitEvaluator(llm, model_config=config)
         confusion_lists, metrics, usage = evaluator.evaluate_metric_traits(
             question="What diseases affect the lungs?",
             answer="Asthma and bronchitis are common lung diseases.",
@@ -42,14 +50,16 @@ class MetricTraitEvaluator:
         )
     """
 
-    def __init__(self, llm: Any):
+    def __init__(self, llm: LLMPort, *, model_config: "ModelConfig"):
         """
         Initialize the metric trait evaluator.
 
         Args:
-            llm: Initialized LLM instance (LangChain compatible) for evaluation
+            llm: LLMPort adapter for LLM operations.
+            model_config: Model configuration for reference.
         """
         self.llm = llm
+        self._model_config = model_config
 
     def evaluate_metric_traits(
         self, question: str, answer: str, metric_traits: list[MetricRubricTrait]
@@ -96,11 +106,7 @@ class MetricTraitEvaluator:
         self, question: str, answer: str, trait: MetricRubricTrait
     ) -> tuple[dict[str, list[str]], dict[str, float], dict[str, Any]]:
         """
-        Evaluate a single metric trait using LangChain strategies.
-
-        Strategy order:
-        1. json_schema method (native structured output)
-        2. Manual parsing with json-repair
+        Evaluate a single metric trait using LLMPort.with_structured_output().
 
         Args:
             question: The original question
@@ -111,16 +117,22 @@ class MetricTraitEvaluator:
             Tuple of (confusion_lists, metrics, usage_metadata)
         """
         from ....schemas.workflow.rubric_outputs import ConfusionMatrixOutput
-        from .rubric_parsing import invoke_with_structured_output
 
         # Build prompt
         system_prompt = self._build_metric_trait_system_prompt()
         user_prompt = self._build_metric_trait_user_prompt(question, answer, trait)
 
-        messages: list[BaseMessage] = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
+        messages: list[Message] = [Message.system(system_prompt), Message.user(user_prompt)]
 
-        # Invoke with automatic strategy selection and fallbacks
-        parsed_result, usage_metadata = invoke_with_structured_output(self.llm, messages, ConfusionMatrixOutput)
+        # Use LLMPort.with_structured_output() for parsing
+        structured_llm = self.llm.with_structured_output(ConfusionMatrixOutput)
+        response = structured_llm.invoke(messages)
+
+        # Extract usage metadata
+        usage_metadata = asdict(response.usage) if response.usage else {}
+
+        # Extract parsed result
+        parsed_result = response.raw
 
         confusion_lists = {
             "tp": parsed_result.tp,
