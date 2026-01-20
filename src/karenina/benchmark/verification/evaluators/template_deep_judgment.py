@@ -23,8 +23,8 @@ import json
 import logging
 from typing import Any
 
-from langchain_core.messages import HumanMessage, SystemMessage
-
+from ....adapters.langchain.messages import LangChainMessageConverter
+from ....ports import Message
 from ....schemas.domain import BaseAnswer
 from ....schemas.shared import SearchResultItem
 from ....schemas.workflow import ModelConfig, VerificationConfig
@@ -41,6 +41,9 @@ from ..utils.template_parsing_helpers import (
 from ..utils.trace_fuzzy_match import fuzzy_match_excerpt
 
 logger = logging.getLogger(__name__)
+
+# Message converter for LangChain compatibility
+_message_converter = LangChainMessageConverter()
 
 
 def deep_judgment_parse(
@@ -204,8 +207,9 @@ Return JSON matching this structure exactly:
             excerpt_prompt += "\n\n<error>Some excerpts from the previous attempt were not found verbatim in the response. Please provide EXACT quotes that appear in the text above, or return empty list [] if no valid excerpts exist.</error>"
 
         # Invoke parsing model with excerpt-specific system prompt
-        messages = [SystemMessage(content=excerpt_system_prompt), HumanMessage(content=excerpt_prompt)]
-        raw_response, _, usage_metadata, _ = _invoke_llm_with_retry(parsing_llm, messages, is_agent=False)
+        excerpt_messages: list[Message] = [Message.system(excerpt_system_prompt), Message.user(excerpt_prompt)]
+        lc_messages = _message_converter.to_provider(excerpt_messages)
+        raw_response, _, usage_metadata, _ = _invoke_llm_with_retry(parsing_llm, lc_messages, is_agent=False)
         model_calls += 1
         # Track usage for excerpt extraction
         if usage_tracker and usage_metadata and parsing_model_str:
@@ -487,10 +491,14 @@ For each excerpt:
 **YOUR JSON RESPONSE:**"""
 
             # Invoke LLM for batch assessment
-            messages = [SystemMessage(content=assessment_system_prompt), HumanMessage(content=assessment_prompt)]
+            assessment_messages: list[Message] = [
+                Message.system(assessment_system_prompt),
+                Message.user(assessment_prompt),
+            ]
+            lc_messages = _message_converter.to_provider(assessment_messages)
 
             try:
-                raw_response, _, usage_metadata, _ = _invoke_llm_with_retry(parsing_llm, messages, is_agent=False)
+                raw_response, _, usage_metadata, _ = _invoke_llm_with_retry(parsing_llm, lc_messages, is_agent=False)
                 model_calls += 1
                 # Track usage for hallucination assessment
                 if usage_tracker and usage_metadata and parsing_model_str:
@@ -660,8 +668,9 @@ Return JSON with reasoning for ALL attributes:
 {format_excerpts_for_reasoning(excerpts)}
 </extracted_excerpts>"""
 
-    messages = [SystemMessage(content=reasoning_system_prompt), HumanMessage(content=reasoning_prompt)]
-    raw_response, _, usage_metadata, _ = _invoke_llm_with_retry(parsing_llm, messages, is_agent=False)
+    reasoning_messages: list[Message] = [Message.system(reasoning_system_prompt), Message.user(reasoning_prompt)]
+    lc_messages = _message_converter.to_provider(reasoning_messages)
+    raw_response, _, usage_metadata, _ = _invoke_llm_with_retry(parsing_llm, lc_messages, is_agent=False)
     model_calls += 1
     # Track usage for reasoning generation
     if usage_tracker and usage_metadata and parsing_model_str:
@@ -773,8 +782,9 @@ For each attribute:
 
 **YOUR JSON RESPONSE (following the schema above):**"""
 
-    messages = [SystemMessage(content=parsing_system_prompt), HumanMessage(content=parsing_prompt)]
-    raw_response, _, usage_metadata, _ = _invoke_llm_with_retry(parsing_llm, messages, is_agent=False)
+    parsing_messages: list[Message] = [Message.system(parsing_system_prompt), Message.user(parsing_prompt)]
+    lc_messages = _message_converter.to_provider(parsing_messages)
+    raw_response, _, usage_metadata, _ = _invoke_llm_with_retry(parsing_llm, lc_messages, is_agent=False)
     model_calls += 1
     # Track usage for parameter extraction
     if usage_tracker and usage_metadata and parsing_model_str:
@@ -799,7 +809,7 @@ For each attribute:
         retried_answer, retry_usage = _retry_parse_with_null_feedback(
             parsing_llm=parsing_llm,
             parser=parser,
-            original_messages=messages,
+            original_messages=lc_messages,
             failed_response=cleaned_response,
             error=parse_error,
             usage_tracker=usage_tracker,

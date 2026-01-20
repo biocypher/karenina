@@ -11,11 +11,11 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.callbacks import get_usage_metadata_callback
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_core.output_parsers import PydanticOutputParser
 
 from ....infrastructure.llm.interface import init_chat_model_unified
 from ....infrastructure.llm.mcp_utils import extract_final_ai_message
+from ....ports import Message
 from ....schemas.domain import BaseAnswer
 from ....schemas.workflow import INTERFACES_NO_PROVIDER_REQUIRED, ModelConfig
 from ..utils.trace_agent_metrics import extract_agent_metrics
@@ -298,10 +298,10 @@ class TemplateEvaluator:
             response_to_parse=template_input,
         )
 
-        messages: list[BaseMessage] = []
+        messages: list[Message] = []
         if system_prompt:
-            messages.append(SystemMessage(content=system_prompt))
-        messages.append(HumanMessage(content=user_prompt))
+            messages.append(Message.system(system_prompt))
+        messages.append(Message.user(user_prompt))
 
         try:
             if deep_judgment_enabled:
@@ -552,7 +552,7 @@ Return only the completed JSON object - no surrounding text, no markdown fences:
 
     def _parse_standard(
         self,
-        messages: list[BaseMessage],
+        messages: list[Message],
         trace_text: str,
         usage_tracker: Any | None = None,
     ) -> ParseResult:
