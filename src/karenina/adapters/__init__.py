@@ -38,6 +38,7 @@ if TYPE_CHECKING:
         get_llm,
         get_parser,
     )
+    from karenina.adapters.llm_parallel import LLMParallelInvoker
     from karenina.adapters.parallel import AdapterParallelInvoker
     from karenina.adapters.registry import AdapterAvailability
 
@@ -56,6 +57,7 @@ __all__ = [
     "AdapterAvailability",
     # Parallel invocation
     "AdapterParallelInvoker",
+    "LLMParallelInvoker",
 ]
 
 
@@ -105,5 +107,10 @@ def __getattr__(name: str) -> Any:
         from karenina.adapters.parallel import AdapterParallelInvoker
 
         return AdapterParallelInvoker
+
+    if name == "LLMParallelInvoker":
+        from karenina.adapters.llm_parallel import LLMParallelInvoker
+
+        return LLMParallelInvoker
 
     raise AttributeError(f"module 'karenina.adapters' has no attribute '{name}'")
