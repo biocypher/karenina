@@ -265,16 +265,19 @@ class VerificationConfig(BaseModel):
             raise ValueError("At least one answering model must be configured (unless parsing_only=True)")
 
         # Validate model configurations
+        # Note: Basic model validation (model_name, model_provider) is also done by
+        # the adapter factory at runtime, but we validate here too for early failure.
         for model in self.answering_models + self.parsing_models:
-            # Model provider is optional for OpenRouter and manual interfaces
+            if not model.model_name:
+                raise ValueError(f"Model name is required in model configuration (model: {model.id})")
+            # Model provider is optional for OpenRouter, manual, and openai_endpoint interfaces
             if model.interface not in INTERFACES_NO_PROVIDER_REQUIRED and not model.model_provider:
                 raise ValueError(
-                    f"Model provider is required for model {model.id} "
-                    f"(interface: {model.interface}). Only {INTERFACES_NO_PROVIDER_REQUIRED} "
-                    f"interfaces allow empty providers."
+                    f"Model provider is required for interface '{model.interface}'. "
+                    f"Only {list(INTERFACES_NO_PROVIDER_REQUIRED)} interfaces allow empty providers. "
+                    f"(model: {model.id})"
                 )
-            if not model.model_name:
-                raise ValueError(f"Model name is required for model {model.id}")
+            # System prompt is required for verification (not validated by factory)
             if not model.system_prompt:
                 raise ValueError(f"System prompt is required for model {model.id}")
 

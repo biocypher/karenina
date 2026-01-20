@@ -55,6 +55,9 @@ from karenina.ports import (
 if TYPE_CHECKING:
     from karenina.schemas.workflow.models import ModelConfig
 
+# Import at runtime for validation function (not circular since ModelConfig is only TYPE_CHECKING)
+from karenina.schemas.workflow.models import INTERFACES_NO_PROVIDER_REQUIRED
+
 # Type alias for interface values
 InterfaceType = Literal["langchain", "openrouter", "manual", "openai_endpoint", "claude_agent_sdk"]
 
@@ -68,6 +71,39 @@ LANGCHAIN_ROUTED_INTERFACES = frozenset({"langchain", "openrouter", "openai_endp
 
 # Interface value for manual/pre-recorded traces
 INTERFACE_MANUAL = "manual"
+
+
+def validate_model_config(model_config: ModelConfig | None) -> None:
+    """Validate that a model configuration has all required fields.
+
+    This centralizes validation that was previously duplicated across evaluators.
+    Called by factory functions before creating adapters.
+
+    Args:
+        model_config: The model configuration to validate.
+
+    Raises:
+        ValueError: If model_config is None, model_name is empty, or
+            model_provider is missing for interfaces that require it.
+
+    Example:
+        >>> config = ModelConfig(model_name="gpt-4", model_provider="openai")
+        >>> validate_model_config(config)  # OK
+        >>>
+        >>> validate_model_config(None)  # Raises ValueError
+    """
+    if not model_config:
+        raise ValueError("Model configuration is required")
+
+    if not model_config.model_name:
+        raise ValueError("Model name is required in model configuration")
+
+    # Model provider is optional for OpenRouter, manual, and openai_endpoint interfaces
+    if model_config.interface not in INTERFACES_NO_PROVIDER_REQUIRED and not model_config.model_provider:
+        raise ValueError(
+            f"Model provider is required for interface '{model_config.interface}'. "
+            f"Only {list(INTERFACES_NO_PROVIDER_REQUIRED)} interfaces allow empty providers."
+        )
 
 
 def check_adapter_available(interface: str) -> AdapterAvailability:
@@ -158,6 +194,9 @@ def get_llm(
         >>> if config.interface != "manual":
         ...     response = await llm.ainvoke([Message.user("Hello!")])
     """
+    # Validate config has required fields
+    validate_model_config(model_config)
+
     interface = model_config.interface
 
     # Check availability
@@ -229,6 +268,9 @@ def get_agent(
         ...         mcp_servers={"filesystem": {"type": "http", "url": "http://localhost:8080"}}
         ...     )
     """
+    # Validate config has required fields
+    validate_model_config(model_config)
+
     interface = model_config.interface
 
     # Check availability
@@ -302,6 +344,9 @@ def get_parser(
         >>> if config.interface != "manual":
         ...     answer = await parser.aparse_to_pydantic(trace_text, Answer)
     """
+    # Validate config has required fields
+    validate_model_config(model_config)
+
     interface = model_config.interface
 
     # Check availability

@@ -37,6 +37,7 @@ if TYPE_CHECKING:
         get_agent,
         get_llm,
         get_parser,
+        validate_model_config,
     )
     from karenina.adapters.llm_parallel import LLMParallelInvoker
     from karenina.adapters.parallel import AdapterParallelInvoker
@@ -53,6 +54,7 @@ __all__ = [
     "check_adapter_available",
     "format_model_string",
     "build_llm_kwargs",
+    "validate_model_config",
     # Availability checking
     "AdapterAvailability",
     # Parallel invocation
@@ -74,6 +76,7 @@ def __getattr__(name: str) -> Any:
         "check_adapter_available",
         "format_model_string",
         "build_llm_kwargs",
+        "validate_model_config",
     ):
         try:
             from karenina.adapters.factory import (
@@ -83,6 +86,7 @@ def __getattr__(name: str) -> Any:
                 get_agent,
                 get_llm,
                 get_parser,
+                validate_model_config,
             )
 
             return {
@@ -92,6 +96,7 @@ def __getattr__(name: str) -> Any:
                 "check_adapter_available": check_adapter_available,
                 "format_model_string": format_model_string,
                 "build_llm_kwargs": build_llm_kwargs,
+                "validate_model_config": validate_model_config,
             }[name]
         except ImportError as e:
             raise ImportError(

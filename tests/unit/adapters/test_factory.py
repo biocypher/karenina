@@ -32,6 +32,7 @@ from karenina.adapters.factory import (
     get_agent,
     get_llm,
     get_parser,
+    validate_model_config,
 )
 from karenina.ports import AdapterUnavailableError
 
@@ -548,3 +549,106 @@ class TestAdapterUnavailableError:
         assert str(error) == "No fallback available"
         assert error.reason == "Infrastructure missing"
         assert error.fallback_interface is None
+
+
+# =============================================================================
+# validate_model_config Tests
+# =============================================================================
+
+
+class TestValidateModelConfig:
+    """Tests for validate_model_config function.
+
+    This validation is now centralized in the factory and called by
+    get_llm, get_agent, and get_parser before creating adapters.
+    """
+
+    def test_validate_model_config_none_raises(self) -> None:
+        """Test validate_model_config raises ValueError when config is None."""
+        with pytest.raises(ValueError, match="Model configuration is required"):
+            validate_model_config(None)
+
+    def test_validate_model_config_empty_model_name_raises(self) -> None:
+        """Test validate_model_config raises ValueError when model_name is empty."""
+        from karenina.schemas.workflow.models import ModelConfig
+
+        config = ModelConfig(
+            id="test",
+            model_provider="anthropic",
+            model_name="",  # Empty model name
+        )
+
+        with pytest.raises(ValueError, match="Model name is required"):
+            validate_model_config(config)
+
+    def test_validate_model_config_missing_provider_for_langchain_raises(self) -> None:
+        """Test validate_model_config raises ValueError when provider missing for langchain."""
+        from karenina.schemas.workflow.models import ModelConfig
+
+        config = ModelConfig(
+            id="test",
+            model_name="claude-sonnet-4-20250514",
+            model_provider=None,  # Missing provider
+            interface="langchain",
+        )
+
+        with pytest.raises(ValueError, match="Model provider is required"):
+            validate_model_config(config)
+
+    def test_validate_model_config_allows_empty_provider_for_openrouter(self) -> None:
+        """Test validate_model_config allows empty provider for openrouter."""
+        from karenina.schemas.workflow.models import ModelConfig
+
+        config = ModelConfig(
+            id="test",
+            model_name="anthropic/claude-3-sonnet",
+            model_provider=None,  # No provider needed for openrouter
+            interface="openrouter",
+        )
+
+        # Should not raise
+        validate_model_config(config)
+
+    def test_validate_model_config_allows_empty_provider_for_manual(self) -> None:
+        """Test validate_model_config allows empty provider for manual interface."""
+        mock_config = MagicMock()
+        mock_config.interface = "manual"
+        mock_config.model_name = "manual"
+        mock_config.model_provider = None
+
+        # Should not raise
+        validate_model_config(mock_config)
+
+    def test_validate_model_config_allows_empty_provider_for_openai_endpoint(self) -> None:
+        """Test validate_model_config allows empty provider for openai_endpoint."""
+        from karenina.schemas.workflow.models import ModelConfig
+
+        config = ModelConfig(
+            id="test",
+            model_name="gpt-4",
+            model_provider=None,  # No provider needed for openai_endpoint
+            interface="openai_endpoint",
+        )
+
+        # Should not raise
+        validate_model_config(config)
+
+    def test_validate_model_config_valid_config_passes(self, langchain_model_config: Any) -> None:
+        """Test validate_model_config passes for valid config."""
+        # Should not raise
+        validate_model_config(langchain_model_config)
+
+    def test_get_llm_validates_config(self) -> None:
+        """Test get_llm calls validate_model_config and raises for invalid config."""
+        with pytest.raises(ValueError, match="Model configuration is required"):
+            get_llm(None)
+
+    def test_get_agent_validates_config(self) -> None:
+        """Test get_agent calls validate_model_config and raises for invalid config."""
+        with pytest.raises(ValueError, match="Model configuration is required"):
+            get_agent(None)
+
+    def test_get_parser_validates_config(self) -> None:
+        """Test get_parser calls validate_model_config and raises for invalid config."""
+        with pytest.raises(ValueError, match="Model configuration is required"):
+            get_parser(None)
