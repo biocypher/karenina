@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from karenina.benchmark.verification.evaluators.trace_sufficiency_checker import (
+from karenina.benchmark.verification.evaluators.trace.sufficiency import (
     SufficiencyResult,
     detect_sufficiency,
 )
@@ -212,7 +212,7 @@ class TestDetectSufficiency:
         )
         mock_response = _create_mock_llm_response(content="", raw=result)
 
-        with patch("karenina.benchmark.verification.evaluators.trace_sufficiency_checker.get_llm") as mock_get_llm:
+        with patch("karenina.benchmark.verification.evaluators.trace.sufficiency.get_llm") as mock_get_llm:
             mock_llm = MagicMock()
             mock_structured_llm = MagicMock()
             mock_structured_llm.invoke.return_value = mock_response
@@ -243,7 +243,7 @@ class TestDetectSufficiency:
         )
         mock_response = _create_mock_llm_response(content="", raw=result)
 
-        with patch("karenina.benchmark.verification.evaluators.trace_sufficiency_checker.get_llm") as mock_get_llm:
+        with patch("karenina.benchmark.verification.evaluators.trace.sufficiency.get_llm") as mock_get_llm:
             mock_llm = MagicMock()
             mock_structured_llm = MagicMock()
             mock_structured_llm.invoke.return_value = mock_response
@@ -270,7 +270,7 @@ class TestDetectSufficiency:
         # No raw result, and content is invalid JSON - triggers fallback parse failure
         mock_response = _create_mock_llm_response(content="Not valid JSON {{", raw=None)
 
-        with patch("karenina.benchmark.verification.evaluators.trace_sufficiency_checker.get_llm") as mock_get_llm:
+        with patch("karenina.benchmark.verification.evaluators.trace.sufficiency.get_llm") as mock_get_llm:
             mock_llm = MagicMock()
             mock_structured_llm = MagicMock()
             mock_structured_llm.invoke.return_value = mock_response
@@ -299,7 +299,7 @@ class TestDetectSufficiency:
         content = json.dumps({"reasoning": "Some reasoning but forgot the key."})
         mock_response = _create_mock_llm_response(content=content, raw=None)
 
-        with patch("karenina.benchmark.verification.evaluators.trace_sufficiency_checker.get_llm") as mock_get_llm:
+        with patch("karenina.benchmark.verification.evaluators.trace.sufficiency.get_llm") as mock_get_llm:
             mock_llm = MagicMock()
             mock_structured_llm = MagicMock()
             mock_structured_llm.invoke.return_value = mock_response
@@ -327,7 +327,7 @@ class TestDetectSufficiency:
         content = '```json\n{"reasoning": "Response is sufficient.", "sufficient": true}\n```'
         mock_response = _create_mock_llm_response(content=content, raw=None)
 
-        with patch("karenina.benchmark.verification.evaluators.trace_sufficiency_checker.get_llm") as mock_get_llm:
+        with patch("karenina.benchmark.verification.evaluators.trace.sufficiency.get_llm") as mock_get_llm:
             mock_llm = MagicMock()
             mock_structured_llm = MagicMock()
             mock_structured_llm.invoke.return_value = mock_response
@@ -351,7 +351,7 @@ class TestDetectSufficiency:
         sample_template_schema: dict,
     ) -> None:
         """Verify non-retryable errors default to sufficient=True."""
-        with patch("karenina.benchmark.verification.evaluators.trace_sufficiency_checker.get_llm") as mock_get_llm:
+        with patch("karenina.benchmark.verification.evaluators.trace.sufficiency.get_llm") as mock_get_llm:
             mock_llm = MagicMock()
             mock_structured_llm = MagicMock()
             mock_structured_llm.invoke.side_effect = ValueError("Invalid model config")
@@ -390,7 +390,7 @@ class TestDetectSufficiencyReturnSemantics:
         result_true = SufficiencyResult(reasoning="OK", sufficient=True)
         mock_response_true = _create_mock_llm_response(content="", raw=result_true)
 
-        with patch("karenina.benchmark.verification.evaluators.trace_sufficiency_checker.get_llm") as mock_get_llm:
+        with patch("karenina.benchmark.verification.evaluators.trace.sufficiency.get_llm") as mock_get_llm:
             mock_llm = MagicMock()
             mock_structured_llm = MagicMock()
             mock_structured_llm.invoke.return_value = mock_response_true
@@ -411,7 +411,7 @@ class TestDetectSufficiencyReturnSemantics:
         result_false = SufficiencyResult(reasoning="Missing", sufficient=False)
         mock_response_false = _create_mock_llm_response(content="", raw=result_false)
 
-        with patch("karenina.benchmark.verification.evaluators.trace_sufficiency_checker.get_llm") as mock_get_llm:
+        with patch("karenina.benchmark.verification.evaluators.trace.sufficiency.get_llm") as mock_get_llm:
             mock_llm = MagicMock()
             mock_structured_llm = MagicMock()
             mock_structured_llm.invoke.return_value = mock_response_false

@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from karenina.benchmark.verification.evaluators.rubric_llm_trait_evaluator import (
+from karenina.benchmark.verification.evaluators.rubric.llm_trait import (
     LLMTraitEvaluator,
 )
 from karenina.schemas.domain.rubric import LLMRubricTrait

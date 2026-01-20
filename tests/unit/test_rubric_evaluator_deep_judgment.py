@@ -14,7 +14,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from karenina.benchmark.verification.evaluators.rubric_deep_judgment import RubricDeepJudgmentHandler
+from karenina.benchmark.verification.evaluators.rubric.deep_judgment import RubricDeepJudgmentHandler
 from karenina.ports.usage import UsageMetadata
 from karenina.schemas import ModelConfig
 from karenina.schemas.domain import LLMRubricTrait, Rubric

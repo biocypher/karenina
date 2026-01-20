@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from ...schemas.domain import Question, Rubric
 
 from ...schemas.workflow import ModelConfig, VerificationConfig
-from ..verification.evaluators.rubric_evaluator import RubricEvaluator
+from ..verification.evaluators import RubricEvaluator
 from .models import LogEvent, StepEval, TaskEvalResult
 
 

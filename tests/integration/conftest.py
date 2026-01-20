@@ -18,8 +18,7 @@ from unittest.mock import patch
 import pytest
 from pydantic import BaseModel
 
-from karenina.benchmark.verification.evaluators.rubric_evaluator import RubricEvaluator
-from karenina.benchmark.verification.evaluators.template_evaluator import TemplateEvaluator
+from karenina.benchmark.verification.evaluators import RubricEvaluator, TemplateEvaluator
 from karenina.ports import LLMPort, LLMResponse
 from karenina.ports.usage import UsageMetadata
 from karenina.schemas.domain import BaseAnswer, LLMRubricTrait, RegexTrait, Rubric
@@ -211,9 +210,9 @@ def template_evaluator(
         def verify(self) -> bool:
             return True
 
-    # Patch init_chat_model_unified since TemplateEvaluator still uses that
-    with patch("karenina.benchmark.verification.evaluators.template_evaluator.init_chat_model_unified") as mock_init:
-        mock_init.return_value = llm_client
+    # Patch get_llm since TemplateEvaluator uses factory functions
+    with patch("karenina.benchmark.verification.evaluators.template.evaluator.get_llm") as mock_get_llm:
+        mock_get_llm.return_value = llm_client
         evaluator = TemplateEvaluator(
             model_config=parsing_model_config,
             answer_class=MinimalAnswer,
