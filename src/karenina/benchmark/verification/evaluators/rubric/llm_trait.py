@@ -23,11 +23,11 @@ import re
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
-from ....ports import LLMPort, Message
-from ....schemas.domain import LLMRubricTrait
+from .....ports import LLMPort, Message
+from .....schemas.domain import LLMRubricTrait
 
 if TYPE_CHECKING:
-    from ....schemas.workflow.models import ModelConfig
+    from .....schemas.workflow.models import ModelConfig
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ class LLMTraitEvaluator:
                               If None, reads from KARENINA_ASYNC_MAX_WORKERS env var (default: 2).
             model_config: Model configuration for reference.
         """
-        from ....adapters.llm_parallel import read_async_config
+        from .....adapters.llm_parallel import read_async_config
 
         self.llm = llm
         self._model_config = model_config
@@ -101,7 +101,7 @@ class LLMTraitEvaluator:
         Returns:
             Tuple of (results_dict, usage_metadata)
         """
-        from ....schemas.workflow.rubric_outputs import BatchRubricScores
+        from .....schemas.workflow.rubric_outputs import BatchRubricScores
 
         system_prompt = self._build_batch_system_prompt()
         user_prompt = self._build_batch_user_prompt(question, answer, traits)
@@ -138,7 +138,7 @@ class LLMTraitEvaluator:
         Returns:
             Tuple of (results_dict, list_of_usage_metadata)
         """
-        from ....schemas.workflow.rubric_outputs import SingleBooleanScore, SingleNumericScore
+        from .....schemas.workflow.rubric_outputs import SingleBooleanScore, SingleNumericScore
 
         # Build all tasks upfront
         tasks: list[tuple[list[Message], type]] = []
@@ -166,7 +166,7 @@ class LLMTraitEvaluator:
 
         Uses the LLMParallelInvoker for concurrent execution with LLMPort.
         """
-        from ....adapters import LLMParallelInvoker
+        from .....adapters import LLMParallelInvoker
 
         logger.debug(f"LLMParallelInvoker: Executing {len(tasks)} tasks with max_workers={self._async_max_workers}")
         invoker = LLMParallelInvoker(self.llm, max_workers=self._async_max_workers)
@@ -310,7 +310,7 @@ Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
 
     def _build_batch_user_prompt(self, question: str, answer: str, traits: list[LLMRubricTrait]) -> str:
         """Build user prompt for batch evaluation."""
-        from ....schemas.workflow.rubric_outputs import BatchRubricScores
+        from .....schemas.workflow.rubric_outputs import BatchRubricScores
 
         traits_description = []
         trait_names = []
@@ -415,7 +415,7 @@ When uncertain about borderline cases, choose conservatively based on the trait'
 
     def _build_single_trait_user_prompt(self, question: str, answer: str, trait: LLMRubricTrait) -> str:
         """Build user prompt for single trait evaluation."""
-        from ....schemas.workflow.rubric_outputs import SingleBooleanScore, SingleNumericScore
+        from .....schemas.workflow.rubric_outputs import SingleBooleanScore, SingleNumericScore
 
         if trait.kind == "boolean":
             format_hint = '{"result": true} or {"result": false}'
@@ -551,7 +551,7 @@ Evaluate this answer for the trait above and return your assessment as JSON: {fo
             - labels: Dict mapping trait names to class labels (or invalid value for error)
             - usage_metadata: Usage metadata from the LLM call
         """
-        from ....schemas.workflow.rubric_outputs import BatchLiteralClassifications
+        from .....schemas.workflow.rubric_outputs import BatchLiteralClassifications
 
         # Filter to only literal traits
         literal_traits = [t for t in traits if t.kind == "literal"]
@@ -596,7 +596,7 @@ Evaluate this answer for the trait above and return your assessment as JSON: {fo
             - labels: Dict mapping trait names to class labels (or invalid value for error)
             - usage_metadata_list: List of usage metadata dicts from LLM calls
         """
-        from ....schemas.workflow.rubric_outputs import SingleLiteralClassification
+        from .....schemas.workflow.rubric_outputs import SingleLiteralClassification
 
         # Filter to only literal traits
         literal_traits = [t for t in traits if t.kind == "literal"]
@@ -628,7 +628,7 @@ Evaluate this answer for the trait above and return your assessment as JSON: {fo
 
         Uses the LLMParallelInvoker for concurrent execution with LLMPort.
         """
-        from ....adapters import LLMParallelInvoker
+        from .....adapters import LLMParallelInvoker
 
         logger.debug(
             f"LLMParallelInvoker: Executing {len(tasks)} literal tasks with max_workers={self._async_max_workers}"
@@ -791,7 +791,7 @@ Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
 
     def _build_literal_batch_user_prompt(self, question: str, answer: str, traits: list[LLMRubricTrait]) -> str:
         """Build user prompt for batch literal trait evaluation."""
-        from ....schemas.workflow.rubric_outputs import BatchLiteralClassifications
+        from .....schemas.workflow.rubric_outputs import BatchLiteralClassifications
 
         traits_description = []
         example_classifications: dict[str, str] = {}
@@ -876,7 +876,7 @@ Return valid JSON: {{"classification": "<class_name>"}}
 
     def _build_literal_single_user_prompt(self, question: str, answer: str, trait: LLMRubricTrait) -> str:
         """Build user prompt for single literal trait evaluation."""
-        from ....schemas.workflow.rubric_outputs import SingleLiteralClassification
+        from .....schemas.workflow.rubric_outputs import SingleLiteralClassification
 
         if trait.kind != "literal" or trait.classes is None:
             raise ValueError(f"Trait '{trait.name}' is not a literal kind trait")

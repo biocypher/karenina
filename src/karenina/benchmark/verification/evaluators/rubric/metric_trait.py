@@ -20,11 +20,11 @@ import re
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
-from ....ports import LLMPort, Message
-from ....schemas.domain import MetricRubricTrait
+from .....ports import LLMPort, Message
+from .....schemas.domain import MetricRubricTrait
 
 if TYPE_CHECKING:
-    from ....schemas.workflow.models import ModelConfig
+    from .....schemas.workflow.models import ModelConfig
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +116,7 @@ class MetricTraitEvaluator:
         Returns:
             Tuple of (confusion_lists, metrics, usage_metadata)
         """
-        from ....schemas.workflow.rubric_outputs import ConfusionMatrixOutput
+        from .....schemas.workflow.rubric_outputs import ConfusionMatrixOutput
 
         # Build prompt
         system_prompt = self._build_metric_trait_system_prompt()
@@ -197,7 +197,7 @@ Do NOT include any text before or after the JSON.
 
     def _build_metric_trait_user_prompt(self, question: str, answer: str, trait: MetricRubricTrait) -> str:
         """Build user prompt for metric trait evaluation (mode-specific)."""
-        from ....schemas.workflow.rubric_outputs import ConfusionMatrixOutput
+        from .....schemas.workflow.rubric_outputs import ConfusionMatrixOutput
 
         # Get JSON schema from Pydantic model
         json_schema = json.dumps(ConfusionMatrixOutput.model_json_schema(), indent=2)

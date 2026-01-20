@@ -23,38 +23,34 @@ import json
 import logging
 from typing import Any
 
-from ....adapters.langchain.messages import LangChainMessageConverter
-from ....ports import Message
-from ....schemas.domain import BaseAnswer
-from ....schemas.shared import SearchResultItem
-from ....schemas.workflow import ModelConfig, VerificationConfig
-from ..utils.json_helpers import strip_markdown_fences as _strip_markdown_fences
-from ..utils.llm_invocation import _invoke_llm_with_retry
-from ..utils.search_provider import create_search_tool
-from ..utils.template_parsing_helpers import (
+from .....ports import LLMPort, Message, ParserPort
+from .....schemas.domain import BaseAnswer
+from .....schemas.shared import SearchResultItem
+from .....schemas.workflow import ModelConfig, VerificationConfig
+from ...utils.json_helpers import strip_markdown_fences as _strip_markdown_fences
+from ...utils.search_provider import create_search_tool
+from ...utils.template_parsing_helpers import (
     _extract_attribute_descriptions,
     _extract_attribute_names_from_class,
     _format_search_results_for_llm,
     format_excerpts_for_reasoning,
     format_reasoning_for_parsing,
 )
-from ..utils.trace_fuzzy_match import fuzzy_match_excerpt
+from ...utils.trace_fuzzy_match import fuzzy_match_excerpt
 
 logger = logging.getLogger(__name__)
-
-# Message converter for LangChain compatibility
-_message_converter = LangChainMessageConverter()
 
 
 def deep_judgment_parse(
     raw_llm_response: str,
     RawAnswer: type[BaseAnswer],
     parsing_model: ModelConfig,  # noqa: ARG001 - Kept for interface consistency with standard parsing
-    parsing_llm: Any,
+    parsing_llm: LLMPort,
+    parser: ParserPort,
     question_text: str,
     config: VerificationConfig,
-    format_instructions: str,
-    combined_system_prompt: str,
+    format_instructions: str,  # noqa: ARG001 - No longer needed, ParserPort builds its own
+    combined_system_prompt: str,  # noqa: ARG001 - No longer needed, ParserPort builds its own
     usage_tracker: Any | None = None,
     parsing_model_str: str | None = None,
 ) -> tuple[BaseAnswer, dict[str, list[dict[str, Any]]], dict[str, str], dict[str, Any]]:
@@ -62,17 +58,18 @@ def deep_judgment_parse(
 
     This is a drop-in replacement for the standard parsing step. It performs three
     sequential stages using the parsing model to extract excerpts, generate reasoning,
-    and finally parse attribute values.
+    and finally parse attribute values via ParserPort.
 
     Args:
         raw_llm_response: Raw trace from answering model
         RawAnswer: Answer template class (BaseAnswer subclass)
-        parsing_model: Parsing model configuration
-        parsing_llm: Initialized parsing LLM instance
+        parsing_model: Parsing model configuration (kept for interface consistency)
+        parsing_llm: LLMPort adapter for Stages 1, 1.5, 2 (excerpt/reasoning extraction)
+        parser: ParserPort adapter for Stage 3 (parameter extraction with retry)
         question_text: Original question text for context
         config: Verification configuration with deep-judgment settings
-        format_instructions: Parser format instructions from PydanticOutputParser
-        combined_system_prompt: System prompt with format instructions
+        format_instructions: Kept for interface consistency (ParserPort builds its own)
+        combined_system_prompt: Kept for interface consistency (ParserPort builds its own)
         usage_tracker: Optional usage tracker to record token usage for each stage
         parsing_model_str: Model string identifier for usage tracking
 
@@ -89,7 +86,7 @@ def deep_judgment_parse(
 
     Raises:
         ValueError: If excerpt JSON parsing fails after all retries
-        Exception: If any stage fails (propagated from _invoke_llm_with_retry)
+        ParseError: If Stage 3 parsing fails after all adapter retries
 
     Example:
         >>> parsed, excerpts, reasoning, meta = deep_judgment_parse(...)
@@ -115,8 +112,8 @@ def deep_judgment_parse(
     # Generate JSON schema with field descriptions from the template class
     from langchain_core.output_parsers import PydanticOutputParser
 
-    parser = PydanticOutputParser(pydantic_object=RawAnswer)
-    json_schema = parser.get_format_instructions()
+    temp_parser = PydanticOutputParser(pydantic_object=RawAnswer)
+    json_schema = temp_parser.get_format_instructions()
 
     # Extract generic system instructions (without format_instructions for stages 1&2)
     # The combined_system_prompt contains general instructions + format_instructions
@@ -208,8 +205,8 @@ Return JSON matching this structure exactly:
 
         # Invoke parsing model with excerpt-specific system prompt
         excerpt_messages: list[Message] = [Message.system(excerpt_system_prompt), Message.user(excerpt_prompt)]
-        lc_messages = _message_converter.to_provider(excerpt_messages)
-        raw_response, _, usage_metadata, _ = _invoke_llm_with_retry(parsing_llm, lc_messages, is_agent=False)
+        llm_response = parsing_llm.invoke(excerpt_messages)
+        raw_response, usage_metadata = llm_response.content, llm_response.usage.to_dict()
         model_calls += 1
         # Track usage for excerpt extraction
         if usage_tracker and usage_metadata and parsing_model_str:
@@ -495,10 +492,10 @@ For each excerpt:
                 Message.system(assessment_system_prompt),
                 Message.user(assessment_prompt),
             ]
-            lc_messages = _message_converter.to_provider(assessment_messages)
 
             try:
-                raw_response, _, usage_metadata, _ = _invoke_llm_with_retry(parsing_llm, lc_messages, is_agent=False)
+                llm_response = parsing_llm.invoke(assessment_messages)
+                raw_response, usage_metadata = llm_response.content, llm_response.usage.to_dict()
                 model_calls += 1
                 # Track usage for hallucination assessment
                 if usage_tracker and usage_metadata and parsing_model_str:
@@ -669,8 +666,8 @@ Return JSON with reasoning for ALL attributes:
 </extracted_excerpts>"""
 
     reasoning_messages: list[Message] = [Message.system(reasoning_system_prompt), Message.user(reasoning_prompt)]
-    lc_messages = _message_converter.to_provider(reasoning_messages)
-    raw_response, _, usage_metadata, _ = _invoke_llm_with_retry(parsing_llm, lc_messages, is_agent=False)
+    llm_response = parsing_llm.invoke(reasoning_messages)
+    raw_response, usage_metadata = llm_response.content, llm_response.usage.to_dict()
     model_calls += 1
     # Track usage for reasoning generation
     if usage_tracker and usage_metadata and parsing_model_str:
@@ -729,99 +726,19 @@ Return JSON with reasoning for ALL attributes:
         logger.info(f"Stage 2 completed: Generated reasoning for {len(reasoning)} attributes")
 
     # ==========================================
-    # STAGE 3: PARAMETER EXTRACTION
+    # STAGE 3: PARAMETER EXTRACTION (via ParserPort)
     # ==========================================
-    # Build system prompt with format_instructions for structured output
-    parsing_system_prompt = f"""{generic_system_prompt}
+    # Format reasoning traces as text for the parser to extract from.
+    # Include question context so parser has all information needed.
+    reasoning_text = f"""Original Question: {question_text}
 
-You are an expert parameter extractor for deep-judgment template parsing. Your role is to extract final attribute values from reasoning traces.
+Reasoning Traces (explaining how excerpts inform each attribute value):
 
-# Task Overview
+{format_reasoning_for_parsing(reasoning)}"""
 
-You will receive:
-1. An original question in <original_question> tags
-2. Reasoning traces in <reasoning_traces> tags explaining how excerpts map to attribute values
-
-Your task: Extract **final attribute values** based on the reasoning traces, conforming to the JSON schema below.
-
-# Extraction Protocol
-
-For each attribute:
-1. **Read the reasoning** - understand what value was determined
-2. **Apply the schema** - extract the value in the correct format/type
-3. **Handle missing info** - use null if allowed, or best inference
-
-# Critical Requirements
-
-**Schema Compliance**: Output MUST match the JSON schema exactly.
-
-**Reasoning-Based**: Extract values based on the reasoning provided.
-
-**Type Correctness**: Use correct data types (string, bool, int, list, etc.)
-
-**JSON Only**: Return ONLY the JSON object - no explanations, no markdown fences.
-
-# What NOT to Do
-
-- Do NOT invent values not supported by the reasoning
-- Do NOT wrap the JSON in markdown code blocks
-- Do NOT add explanatory text before or after the JSON
-- Do NOT include extra fields not in the schema
-
-# Output Schema
-
-{format_instructions}"""
-
-    parsing_prompt = f"""<original_question>
-{question_text}
-</original_question>
-
-<reasoning_traces>
-{format_reasoning_for_parsing(reasoning)}
-</reasoning_traces>
-
-**YOUR JSON RESPONSE (following the schema above):**"""
-
-    parsing_messages: list[Message] = [Message.system(parsing_system_prompt), Message.user(parsing_prompt)]
-    lc_messages = _message_converter.to_provider(parsing_messages)
-    raw_response, _, usage_metadata, _ = _invoke_llm_with_retry(parsing_llm, lc_messages, is_agent=False)
-    model_calls += 1
-    # Track usage for parameter extraction
-    if usage_tracker and usage_metadata and parsing_model_str:
-        usage_tracker.track_call("deep_judgment_parameters", parsing_model_str, usage_metadata)
-    cleaned_response = _strip_markdown_fences(raw_response)
-
-    # Parse with PydanticOutputParser (standard logic)
-    from langchain_core.output_parsers import PydanticOutputParser
-
-    from ..utils.llm_invocation import _retry_parse_with_null_feedback
-
-    parser = PydanticOutputParser(pydantic_object=RawAnswer)
-    if cleaned_response is None:
-        raise ValueError("Empty response from LLM for parameter extraction")
-
-    # Try parsing, with null-value retry on failure
-    try:
-        parsed_answer = parser.parse(cleaned_response)
-    except Exception as parse_error:
-        # Try to recover with null-value feedback
-        logger.warning(f"Deep-judgment parameter parsing failed: {parse_error}")
-        retried_answer, retry_usage = _retry_parse_with_null_feedback(
-            parsing_llm=parsing_llm,
-            parser=parser,
-            original_messages=lc_messages,
-            failed_response=cleaned_response,
-            error=parse_error,
-            usage_tracker=usage_tracker,
-            model_str=parsing_model_str,
-        )
-
-        if retried_answer is not None:
-            parsed_answer = retried_answer
-            model_calls += 1  # Count the retry call
-        else:
-            # Retry failed, re-raise original error
-            raise parse_error
+    # Use ParserPort for parsing - it handles LLM call, JSON parsing, and retry logic internally
+    parsed_answer = parser.parse_to_pydantic(reasoning_text, RawAnswer)
+    model_calls += 1  # ParserPort makes at least one LLM call
 
     stages_completed.append("parameters")
     logger.info("Stage 3 completed: Parameter extraction finished")

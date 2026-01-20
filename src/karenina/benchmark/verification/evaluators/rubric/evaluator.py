@@ -10,21 +10,21 @@ LLM responses against rubric traits. It supports multiple trait types:
 - Metric traits: Precision/recall/F1 metrics using confusion matrix
 
 Evaluation is delegated to specialized handlers:
-- LLM traits: LLMTraitEvaluator (llm_trait_evaluator.py)
-- Metric traits: MetricTraitEvaluator (metric_trait_evaluator.py)
-- Deep judgment: RubricDeepJudgmentHandler (rubric_deep_judgment.py)
+- LLM traits: LLMTraitEvaluator (llm_trait.py)
+- Metric traits: MetricTraitEvaluator (metric_trait.py)
+- Deep judgment: RubricDeepJudgmentHandler (deep_judgment.py)
 """
 
 import logging
 from typing import Any
 
-from ....adapters import get_llm
-from ....ports import LLMPort
-from ....schemas.domain import CallableTrait, MetricRubricTrait, RegexTrait, Rubric
-from ....schemas.workflow import INTERFACES_NO_PROVIDER_REQUIRED, ModelConfig
-from .rubric_deep_judgment import RubricDeepJudgmentHandler
-from .rubric_llm_trait_evaluator import LLMTraitEvaluator
-from .rubric_metric_trait_evaluator import MetricTraitEvaluator
+from .....adapters import get_llm
+from .....ports import LLMPort
+from .....schemas.domain import CallableTrait, MetricRubricTrait, RegexTrait, Rubric
+from .....schemas.workflow import ModelConfig
+from .deep_judgment import RubricDeepJudgmentHandler
+from .llm_trait import LLMTraitEvaluator
+from .metric_trait import MetricTraitEvaluator
 
 logger = logging.getLogger(__name__)
 
@@ -52,29 +52,19 @@ class RubricEvaluator:
                 - "sequential": Evaluate traits one-by-one (reliable)
 
         Raises:
-            ValueError: If model configuration is invalid
+            ValueError: If model configuration is invalid (validated by adapter factory)
             RuntimeError: If LLM initialization fails
         """
-        if not model_config:
-            raise ValueError("Model configuration is required")
-
-        if not model_config.model_name:
-            raise ValueError("Model name is required in model configuration")
-
-        # Model provider is optional for OpenRouter and manual interfaces
-        if model_config.interface not in INTERFACES_NO_PROVIDER_REQUIRED and not model_config.model_provider:
-            raise ValueError(
-                f"Model provider is required for model {model_config.id} "
-                f"(interface: {model_config.interface}). Only {INTERFACES_NO_PROVIDER_REQUIRED} "
-                f"interfaces allow empty providers."
-            )
-
         self.model_config = model_config
         self.evaluation_strategy = evaluation_strategy
 
+        # Note: ValueError from validate_model_config propagates directly;
+        # only runtime errors (adapter unavailable, etc.) are wrapped.
         try:
             # Use the adapter factory to get an LLMPort implementation
             self.llm: LLMPort = get_llm(model_config)
+        except ValueError:
+            raise  # Let validation errors propagate
         except Exception as e:
             raise RuntimeError(f"Failed to initialize LLM for rubric evaluation: {e}") from e
 

@@ -27,10 +27,10 @@ import re
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
-from ....ports import LLMPort, Message
+from .....ports import LLMPort, Message
 
 if TYPE_CHECKING:
-    from ....schemas.domain import LLMRubricTrait, Rubric
+    from .....schemas.domain import LLMRubricTrait, Rubric
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +116,7 @@ class RubricDeepJudgmentHandler:
                 - hallucination_risks: Per-trait hallucination risk (if search enabled)
                 - traits_without_valid_excerpts: Traits that failed excerpt extraction
         """
-        from ....schemas.domain import Rubric as RubricClass
+        from .....schemas.domain import Rubric as RubricClass
 
         # Separate deep-judgment vs standard traits
         dj_traits = [t for t in rubric.llm_traits if t.deep_judgment_enabled]
@@ -398,7 +398,7 @@ Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
             ]
 
             # Use LLMPort.with_structured_output() for parsing
-            from ....schemas.workflow.rubric_outputs import TraitExcerptsOutput
+            from .....schemas.workflow.rubric_outputs import TraitExcerptsOutput
 
             try:
                 structured_llm = self.llm.with_structured_output(TraitExcerptsOutput)
@@ -481,7 +481,7 @@ Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
         Returns:
             Tuple of (valid_excerpts, failed_excerpts)
         """
-        from ..utils.trace_fuzzy_match import fuzzy_match_excerpt
+        from ...utils.trace_fuzzy_match import fuzzy_match_excerpt
 
         valid = []
         failed = []
@@ -521,7 +521,7 @@ Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
         self, trait: "LLMRubricTrait", max_excerpts: int, answer: str, feedback: str | None = None
     ) -> str:
         """Build prompt for excerpt extraction (with optional retry feedback)."""
-        from ....schemas.workflow.rubric_outputs import TraitExcerptsOutput
+        from .....schemas.workflow.rubric_outputs import TraitExcerptsOutput
 
         json_schema = json.dumps(TraitExcerptsOutput.model_json_schema(), indent=2)
 
@@ -596,7 +596,7 @@ Extract up to {max_excerpts} verbatim quotes from the answer that demonstrate or
         Returns:
             Dictionary with: excerpts (updated with search results), risk_assessment, model_calls, usage_metadata_list
         """
-        from ..utils.search_provider import create_search_tool
+        from ...utils.search_provider import create_search_tool
 
         # Create search tool
         search_tool = create_search_tool(config.deep_judgment_rubric_search_tool)
@@ -619,7 +619,7 @@ Extract up to {max_excerpts} verbatim quotes from the answer that demonstrate or
 
         for i, excerpt in enumerate(excerpts):
             # Build prompt for hallucination assessment
-            from ....schemas.workflow.rubric_outputs import HallucinationRiskOutput
+            from .....schemas.workflow.rubric_outputs import HallucinationRiskOutput
 
             json_schema = json.dumps(HallucinationRiskOutput.model_json_schema(), indent=2)
 
@@ -676,7 +676,7 @@ Compare excerpts against external search results to determine if the information
             ]
 
             # Use LLMPort.with_structured_output() for parsing
-            from ....schemas.workflow.rubric_outputs import HallucinationRiskOutput
+            from .....schemas.workflow.rubric_outputs import HallucinationRiskOutput
 
             try:
                 structured_llm = self.llm.with_structured_output(HallucinationRiskOutput)
@@ -867,7 +867,7 @@ Convert analytical reasoning into a final score that accurately reflects the ass
         ]
 
         # Use LLMPort.with_structured_output() for parsing
-        from ....schemas.workflow.rubric_outputs import SingleBooleanScore, SingleNumericScore
+        from .....schemas.workflow.rubric_outputs import SingleBooleanScore, SingleNumericScore
 
         try:
             schema_class = SingleBooleanScore if trait.kind == "boolean" else SingleNumericScore
@@ -896,7 +896,7 @@ Convert analytical reasoning into a final score that accurately reflects the ass
 
     def _build_trait_scoring_prompt(self, trait: "LLMRubricTrait", reasoning: str) -> str:
         """Build prompt for final scoring."""
-        from ....schemas.workflow.rubric_outputs import SingleBooleanScore, SingleNumericScore
+        from .....schemas.workflow.rubric_outputs import SingleBooleanScore, SingleNumericScore
 
         if trait.kind == "boolean":
             json_schema = json.dumps(SingleBooleanScore.model_json_schema(), indent=2)

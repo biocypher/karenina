@@ -32,7 +32,7 @@ from .trace_agent_metrics import (
     extract_agent_metrics,
     extract_middleware_metrics,
 )
-from .trace_usage_tracker import UsageMetadata, UsageTracker, convert_port_usage_to_dict
+from .trace_usage_tracker import UsageMetadata, UsageTracker
 
 __all__ = [
     # Error helpers
@@ -69,7 +69,6 @@ __all__ = [
     # Usage tracking
     "UsageMetadata",
     "UsageTracker",
-    "convert_port_usage_to_dict",
     # LLM judge helpers
     "extract_judge_result",
     "fallback_json_parse",

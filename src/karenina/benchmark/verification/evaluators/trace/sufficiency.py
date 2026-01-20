@@ -7,13 +7,12 @@ from typing import Any
 from pydantic import BaseModel, Field
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from ....adapters import get_llm
-from ....ports import LLMResponse, Message
-from ....schemas.workflow import ModelConfig
-from ..utils.error_helpers import is_retryable_error
-from ..utils.llm_judge_helpers import extract_judge_result, fallback_json_parse
-from ..utils.prompts import SUFFICIENCY_DETECTION_SYS, SUFFICIENCY_DETECTION_USER
-from ..utils.trace_usage_tracker import convert_port_usage_to_dict
+from .....adapters import get_llm
+from .....ports import LLMResponse, Message
+from .....schemas.workflow import ModelConfig
+from ...utils.error_helpers import is_retryable_error
+from ...utils.llm_judge_helpers import extract_judge_result, fallback_json_parse
+from ...utils.prompts import SUFFICIENCY_DETECTION_SYS, SUFFICIENCY_DETECTION_USER
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -107,7 +106,7 @@ def detect_sufficiency(
 
             # Invoke with structured output
             response: LLMResponse = structured_llm.invoke(messages)
-            usage_metadata = convert_port_usage_to_dict(response.usage)
+            usage_metadata = response.usage.to_dict()
 
             # Extract result from structured output or fall back to manual parsing
             result = extract_judge_result(response, SufficiencyResult, "sufficient")

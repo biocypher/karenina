@@ -6,7 +6,7 @@ Parses LLM responses into Pydantic objects using standard or deep-judgment parsi
 import logging
 from typing import Any
 
-from ..evaluators.template_evaluator import TemplateEvaluator
+from ..evaluators import TemplateEvaluator
 from ..stage import BaseVerificationStage, VerificationContext
 from ..utils import UsageTracker
 

@@ -7,10 +7,7 @@ the expected format.
 """
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from karenina.ports.usage import UsageMetadata as PortUsageMetadata
+from typing import Any
 
 
 @dataclass
@@ -278,32 +275,3 @@ class UsageTracker:
             Agent metrics dict or None if no agent was used
         """
         return self._agent_metrics
-
-
-def convert_port_usage_to_dict(usage: "PortUsageMetadata") -> dict[str, Any]:
-    """Convert ports.UsageMetadata dataclass to dict for backward compatibility.
-
-    This function bridges the new adapter pattern (which returns ports.UsageMetadata)
-    with existing code that expects usage as a plain dict.
-
-    Args:
-        usage: UsageMetadata from karenina.ports.usage
-
-    Returns:
-        Dict with usage fields, using legacy key names for cache tokens
-    """
-
-    result: dict[str, Any] = {
-        "input_tokens": usage.input_tokens,
-        "output_tokens": usage.output_tokens,
-        "total_tokens": usage.total_tokens,
-    }
-    if usage.cost_usd is not None:
-        result["cost_usd"] = usage.cost_usd
-    if usage.cache_read_tokens is not None:
-        result["cache_read_input_tokens"] = usage.cache_read_tokens
-    if usage.cache_creation_tokens is not None:
-        result["cache_creation_input_tokens"] = usage.cache_creation_tokens
-    if usage.model is not None:
-        result["model"] = usage.model
-    return result

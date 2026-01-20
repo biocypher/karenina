@@ -9,7 +9,7 @@ from typing import Any
 from ....infrastructure.llm.mcp_utils import extract_final_ai_message
 from ....schemas.domain import LLMRubricTrait
 from ....schemas.workflow.verification.config import DeepJudgmentTraitConfig
-from ..evaluators.rubric_evaluator import RubricEvaluator
+from ..evaluators import RubricEvaluator
 from ..stage import BaseVerificationStage, VerificationContext
 from ..utils import UsageTracker
 
