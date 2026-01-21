@@ -1,0 +1,184 @@
+"""Claude Tool Parser adapter implementing the ParserPort interface.
+
+This module provides the ClaudeToolParserAdapter class that uses the Anthropic Python SDK's
+beta.messages.parse() for structured output parsing via the LLM adapter's with_structured_output().
+
+Key features:
+- Uses Anthropic's native structured output (beta.messages.parse)
+- Supports Pydantic models for type-safe extraction
+- Simple delegation to LLM adapter's structured output capability
+"""
+
+from __future__ import annotations
+
+import asyncio
+import concurrent.futures
+import logging
+from typing import TypeVar
+
+from pydantic import BaseModel
+
+from karenina.ports import Message, ParseError, ParserPort
+from karenina.schemas.workflow.models import ModelConfig
+
+from .llm import ClaudeToolLLMAdapter
+
+logger = logging.getLogger(__name__)
+
+T = TypeVar("T", bound=BaseModel)
+
+
+class ClaudeToolParserAdapter:
+    """Parser adapter using Anthropic SDK's beta.messages.parse().
+
+    This adapter implements the ParserPort Protocol and provides LLM-based
+    structured output parsing. It invokes Claude to interpret natural language
+    responses and extract structured data according to a Pydantic schema.
+
+    The adapter delegates to ClaudeToolLLMAdapter.with_structured_output() which
+    uses Anthropic's native structured output API (beta.messages.parse). The API
+    constrains model output to match the Pydantic schema exactly.
+
+    Example:
+        >>> from karenina.schemas.workflow.models import ModelConfig
+        >>> from pydantic import BaseModel, Field
+
+        >>> class Answer(BaseModel):
+        ...     gene_name: str = Field(description="The gene mentioned")
+        ...     is_oncogene: bool = Field(description="Whether it's an oncogene")
+
+        >>> config = ModelConfig(
+        ...     id="claude-haiku",
+        ...     model_name="claude-haiku-4-5",
+        ...     model_provider="anthropic",
+        ...     interface="claude_tool"
+        ... )
+        >>> parser = ClaudeToolParserAdapter(config)
+        >>> trace = "Based on my analysis, BCL2 is an anti-apoptotic gene..."
+        >>> answer = await parser.aparse_to_pydantic(trace, Answer)
+        >>> print(answer.gene_name)
+        'BCL2'
+    """
+
+    def __init__(self, model_config: ModelConfig, *, max_retries: int = 2) -> None:
+        """Initialize the Claude Tool parser adapter.
+
+        Args:
+            model_config: Configuration specifying model, provider, and interface.
+            max_retries: Maximum validation retry attempts (passed to structured output).
+        """
+        self._config = model_config
+        self._llm_adapter = ClaudeToolLLMAdapter(model_config)
+        self._max_retries = max_retries
+
+    def _build_parsing_messages(
+        self,
+        response: str,
+        schema: type[BaseModel],  # noqa: ARG002
+    ) -> list[Message]:
+        """Build the parsing messages with response context.
+
+        Args:
+            response: The raw text response to parse.
+            schema: The Pydantic schema defining expected structure.
+
+        Returns:
+            List of Message objects for the parsing request.
+        """
+        system_content = """You are an evaluator that extracts structured information from responses.
+
+Extract information according to the schema field descriptions. Each field description specifies what to extract.
+
+Critical rules:
+- Extract only what's actually stated - don't infer or add information not present
+- Use null for information not present (if field allows null)"""
+
+        user_content = f"""Parse the following response and extract structured information according to the schema.
+
+**RESPONSE TO PARSE:**
+{response}"""
+
+        return [
+            Message.system(system_content),
+            Message.user(user_content),
+        ]
+
+    async def aparse_to_pydantic(self, response: str, schema: type[T]) -> T:
+        """Parse an LLM response into a structured Pydantic model.
+
+        This invokes Claude to extract structured data from the response text.
+        The LLM acts as a "judge" that interprets the natural language and
+        fills in the schema attributes.
+
+        Uses Anthropic's native structured output API (beta.messages.parse) which
+        constrains model output to match the Pydantic schema exactly.
+
+        Args:
+            response: The raw text response from an LLM (the "trace" to parse).
+            schema: A Pydantic model class defining the expected structure.
+
+        Returns:
+            An instance of the schema type with extracted values.
+
+        Raises:
+            ParseError: If the LLM fails to extract valid structured data.
+        """
+        messages = self._build_parsing_messages(response, schema)
+
+        try:
+            structured_adapter = self._llm_adapter.with_structured_output(schema, max_retries=self._max_retries)
+            llm_response = await structured_adapter.ainvoke(messages)
+
+            # The structured output API returns the parsed model in .raw
+            if isinstance(llm_response.raw, schema):
+                return llm_response.raw
+
+            # Fallback: shouldn't happen with native structured output
+            raise ParseError(
+                f"Structured output did not return {schema.__name__} instance, got {type(llm_response.raw)}"
+            )
+
+        except Exception as e:
+            if isinstance(e, ParseError):
+                raise
+            raise ParseError(f"Failed to parse response into {schema.__name__}: {e}") from e
+
+    def parse_to_pydantic(self, response: str, schema: type[T]) -> T:
+        """Parse an LLM response into a structured Pydantic model (sync).
+
+        Args:
+            response: The raw text response from an LLM.
+            schema: A Pydantic model class defining the expected structure.
+
+        Returns:
+            An instance of the schema type with extracted values.
+
+        Raises:
+            ParseError: If parsing fails.
+        """
+        from karenina.benchmark.verification.batch_runner import get_async_portal
+
+        portal = get_async_portal()
+
+        if portal is not None:
+            return portal.call(self.aparse_to_pydantic, response, schema)
+
+        try:
+            asyncio.get_running_loop()
+
+            def run_in_thread() -> T:
+                return asyncio.run(self.aparse_to_pydantic(response, schema))
+
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(run_in_thread)
+                return future.result(timeout=300)
+
+        except RuntimeError:
+            return asyncio.run(self.aparse_to_pydantic(response, schema))
+
+
+# Protocol verification
+def _verify_protocol_compliance() -> None:
+    """Verify ClaudeToolParserAdapter implements ParserPort protocol."""
+    adapter_instance: ParserPort = None  # type: ignore[assignment]
+    _ = adapter_instance
