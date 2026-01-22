@@ -34,6 +34,7 @@ from karenina.utils.messages import append_error_feedback
 from karenina.utils.retry import TRANSIENT_RETRY
 
 from .messages import LangChainMessageConverter
+from .prompts import FORMAT_INSTRUCTIONS
 from .usage import extract_usage_from_response
 
 logger = logging.getLogger(__name__)
@@ -403,11 +404,7 @@ class LangChainLLMAdapter:
             return messages
 
         schema_json = json.dumps(self._structured_schema.model_json_schema(), indent=2)
-        format_instruction = (
-            f"\n\nYou must respond with valid JSON that matches this schema:\n"
-            f"```json\n{schema_json}\n```\n"
-            f"Return ONLY the JSON object, no additional text."
-        )
+        format_instruction = FORMAT_INSTRUCTIONS.format(schema_json=schema_json)
 
         augmented = list(messages)
         for i in range(len(augmented) - 1, -1, -1):

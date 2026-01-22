@@ -16,6 +16,8 @@ import httpx
 from langchain_core.messages import HumanMessage
 from pydantic import SecretStr
 
+from .prompts import SUMMARIZATION, build_question_context
+
 if TYPE_CHECKING:
     from karenina.schemas.workflow.models import AgentMiddlewareConfig
 
@@ -147,28 +149,11 @@ class InvokeSummarizationMiddleware:
         messages_text = "\n\n".join(formatted_parts)
 
         # Build context-aware prompt
-        question_context = ""
-        if original_question:
-            question_context = f"""
-ORIGINAL QUESTION: {original_question}
-
-"""
-
-        summary_prompt = f"""You are summarizing a conversation to preserve context for an ongoing task.
-{question_context}CONVERSATION TO SUMMARIZE:
-{messages_text}
-
-INSTRUCTIONS:
-Create a concise but information-rich summary that preserves:
-1. The original question/goal being addressed
-2. Key data and results from any tool calls (specific values, IDs, names)
-3. Important reasoning steps and conclusions reached
-4. Any errors encountered and how they were handled
-5. The current state of progress toward answering the question
-
-Keep the summary focused and factual. Do not include unnecessary pleasantries or meta-commentary.
-
-SUMMARY:"""
+        question_context = build_question_context(original_question)
+        summary_prompt = SUMMARIZATION.format(
+            question_context=question_context,
+            messages_text=messages_text,
+        )
 
         response = self.model.invoke([HumanMessage(content=summary_prompt)])
         return str(response.content)

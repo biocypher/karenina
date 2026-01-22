@@ -35,6 +35,7 @@ from karenina.utils.json_extraction import extract_json_from_response, is_invali
 
 from .llm import LangChainLLMAdapter
 from .messages import LangChainMessageConverter
+from .prompts import FEEDBACK_FORMAT, FEEDBACK_NULL, PARSER_SYSTEM, PARSER_USER
 
 if TYPE_CHECKING:
     from karenina.schemas.workflow.models import ModelConfig
@@ -297,48 +298,10 @@ class LangChainParserAdapter:
         # Generate JSON schema from the Pydantic model
         json_schema = json.dumps(schema.model_json_schema(), indent=2)
 
-        system_content = """You are an evaluator that extracts structured information from responses.
-
-You will receive:
-1. A response to parse (from an LLM or other source)
-2. A JSON schema with descriptive fields indicating what information to extract
-
-# Extraction Protocol
-
-## 1. Extract According to Schema
-- Each field description specifies WHAT to extract from the response
-- Follow field descriptions precisely
-- Use `null` for information not present (if field allows null)
-
-## 2. Validate Structure
-- Return valid JSON matching the provided schema exactly
-- Use correct data types for each field
-
-# Critical Rules
-
-**Fidelity**: Extract only what's actually stated. Don't infer or add information not present.
-
-**JSON Only**: Return ONLY the JSON object - no explanations, no markdown fences, no surrounding text."""
-
-        user_content = f"""Parse the following response and extract structured information.
-
-**RESPONSE TO PARSE:**
-{response}
-
-**JSON SCHEMA (your response MUST conform to this):**
-```json
-{json_schema}
-```
-
-**PARSING NOTES:**
-- Extract values for each field based on its description in the schema
-- If information for a field is not present, use null (if field allows null) or your best inference
-- Return ONLY the JSON object - no surrounding text
-
-**YOUR JSON RESPONSE:**"""
+        user_content = PARSER_USER.format(response=response, json_schema=json_schema)
 
         return [
-            Message.system(system_content),
+            Message.system(PARSER_SYSTEM),
             Message.user(user_content),
         ]
 
@@ -433,20 +396,7 @@ You will receive:
 
         # Build feedback message
         field_list = ", ".join(null_fields)
-        feedback_prompt = f"""The previous response contained null values for required fields: [{field_list}].
-
-Required fields cannot be null. Please provide actual values instead:
-- If the information is not available in the source, provide an appropriate default value:
-  * 0.0 for numeric fields (float/int)
-  * Empty string "" for text fields
-  * false for boolean fields
-- If the field represents "unknown" or "not applicable", use a sensible placeholder
-- **Never use null/None for required fields**
-
-Previous response that failed:
-{failed_response}
-
-Please provide a corrected response with all required fields populated."""
+        feedback_prompt = FEEDBACK_NULL.format(field_list=field_list, failed_response=failed_response)
 
         # Create retry messages
         retry_messages = list(original_messages)
@@ -502,22 +452,12 @@ Please provide a corrected response with all required fields populated."""
             pass
 
         # Build feedback message
-        feedback_prompt = f"""Your previous response could not be parsed as valid JSON.
-
-**CRITICAL**: You must output ONLY a valid JSON object. Do not include:
-- Any reasoning, explanation, or thinking
-- Any text before or after the JSON
-- Any markdown formatting (no ``` blocks)
-- Any comments
-
-**Your previous response that failed to parse:**
-{failed_response[:1000]}{"..." if len(failed_response) > 1000 else ""}
-
-**Error message:**
-{str(error)[:500]}
-{schema_hint}
-
-Please respond with ONLY the JSON object, nothing else."""
+        truncated_response = failed_response[:1000] + ("..." if len(failed_response) > 1000 else "")
+        feedback_prompt = FEEDBACK_FORMAT.format(
+            failed_response=truncated_response,
+            error=str(error)[:500],
+            schema_hint=schema_hint,
+        )
 
         # Create retry messages
         retry_messages = list(original_messages)
