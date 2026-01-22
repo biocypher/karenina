@@ -129,6 +129,26 @@ def extract_usage_from_response(response: Any, *, model_name: str | None = None)
     return _build_usage_metadata(usage_data, model_name)
 
 
+def count_agent_turns(messages: list[BaseMessage] | list[Any]) -> int:
+    """Count the number of agent turns from message history.
+
+    A turn is counted for each AIMessage in the trace.
+
+    Args:
+        messages: List of LangChain messages.
+
+    Returns:
+        Number of turns (AI message count).
+    """
+    try:
+        from langchain_core.messages import AIMessage
+    except ImportError:
+        # Count by checking type name
+        return sum(1 for m in messages if "ai" in type(m).__name__.lower())
+
+    return sum(1 for m in messages if isinstance(m, AIMessage))
+
+
 def extract_usage_cumulative(
     messages: list[BaseMessage] | list[Any],
     *,

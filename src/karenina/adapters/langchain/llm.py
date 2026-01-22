@@ -13,10 +13,8 @@ Structured Output Fallback:
     adapter falls back to manual JSON parsing with format instructions.
 
 Module Organization:
-    - Constants & Configuration: Retry decorator, error detection
-    - Helper Functions: JSON extraction, logging
     - Main Adapter Class: LangChainLLMAdapter
-    - Protocol Verification: Static compliance check
+    - Structured output orchestration with fallback parsing
 """
 
 from __future__ import annotations
@@ -28,124 +26,18 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ValidationError
-from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
-from karenina.ports import LLMPort, LLMResponse, Message, UsageMetadata
+from karenina.ports import LLMPort, LLMResponse, Message
+from karenina.utils.errors import is_retryable_error
+from karenina.utils.json_extraction import extract_json_from_response
+from karenina.utils.messages import append_error_feedback
+from karenina.utils.retry import TRANSIENT_RETRY
 
 from .messages import LangChainMessageConverter
+from .usage import extract_usage_from_response
 
 logger = logging.getLogger(__name__)
 
-# =============================================================================
-# Constants & Configuration
-# =============================================================================
-
-
-def _extract_json_from_response(text: str) -> str:
-    """Extract JSON from a response that may be wrapped in markdown code blocks.
-
-    Args:
-        text: Raw response text that may contain JSON.
-
-    Returns:
-        Extracted JSON string.
-
-    Raises:
-        ValueError: If no valid JSON can be extracted.
-    """
-    # Try direct parsing first
-    text = text.strip()
-    if text.startswith("{") or text.startswith("["):
-        return text
-
-    # Try to extract from markdown code blocks
-    import re
-
-    # Match ```json ... ``` or ``` ... ```
-    code_block_pattern = r"```(?:json)?\s*\n?([\s\S]*?)\n?```"
-    matches: list[str] = re.findall(code_block_pattern, text)
-    if matches:
-        for match in matches:
-            extracted = match.strip()
-            if extracted.startswith("{") or extracted.startswith("["):
-                return extracted
-
-    # Last resort: find JSON-like content
-    json_pattern = r"\{[\s\S]*\}"
-    json_match = re.search(json_pattern, text)
-    if json_match:
-        return json_match.group()
-
-    raise ValueError(f"Could not extract JSON from response: {text[:200]}...")
-
-
-def _is_retryable_error(exception: BaseException) -> bool:
-    """Check if an exception is retryable (transient error).
-
-    Args:
-        exception: The exception to check
-
-    Returns:
-        True if the error is transient and should be retried, False otherwise
-    """
-    exception_str = str(exception).lower()
-    exception_type = type(exception).__name__
-
-    # Connection-related errors (check error message content)
-    if any(
-        keyword in exception_str
-        for keyword in [
-            "connection",
-            "timeout",
-            "timed out",
-            "rate limit",
-            "429",
-            "503",
-            "502",
-            "500",
-            "network",
-            "temporary failure",
-            "overloaded",
-        ]
-    ):
-        return True
-
-    # Common retryable exception types
-    retryable_types = [
-        "ConnectionError",
-        "TimeoutError",
-        "HTTPError",
-        "ReadTimeout",
-        "ConnectTimeout",
-        "APIConnectionError",
-        "APITimeoutError",
-        "RateLimitError",
-        "OverloadedError",
-        "InternalServerError",
-    ]
-
-    return exception_type in retryable_types
-
-
-def _log_retry(retry_state: Any) -> None:
-    """Log retry attempt with error details."""
-    exc = retry_state.outcome.exception() if retry_state.outcome else None
-    logger.warning(f"Retrying LLM call (attempt {retry_state.attempt_number}/3) after error: {exc}")
-
-
-# Reusable retry decorator for transient errors (connection, timeout, rate limit, 5xx)
-_TRANSIENT_RETRY = retry(
-    retry=retry_if_exception(_is_retryable_error),
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=2, max=10),
-    reraise=True,
-    before_sleep=_log_retry,
-)
-
-
-# =============================================================================
-# Main Adapter Class
-# =============================================================================
 
 if TYPE_CHECKING:
     from karenina.schemas.workflow.models import ModelConfig
@@ -181,6 +73,10 @@ class LangChainLLMAdapter:
         >>> structured = adapter.with_structured_output(Answer)
         >>> response = await structured.ainvoke([Message.user("What is 2+2?")])
     """
+
+    # =========================================================================
+    # Initialization
+    # =========================================================================
 
     def __init__(
         self,
@@ -218,7 +114,7 @@ class LangChainLLMAdapter:
         Returns:
             Initialized LangChain chat model.
         """
-        from karenina.infrastructure.llm.interface import init_chat_model_unified
+        from karenina.adapters.langchain.initialization import init_chat_model_unified
 
         # Build kwargs for model initialization
         kwargs: dict[str, Any] = {}
@@ -244,44 +140,9 @@ class LangChainLLMAdapter:
 
         return model
 
-    def _extract_usage(self, response: Any) -> UsageMetadata:
-        """Extract usage metadata from LangChain response.
-
-        Args:
-            response: LangChain AIMessage or similar response object.
-
-        Returns:
-            UsageMetadata with token counts and cost info.
-        """
-        # LangChain stores usage in response_metadata or usage_metadata attribute
-        usage_data: dict[str, Any] = {}
-
-        # Try response_metadata first (newer LangChain versions)
-        if hasattr(response, "response_metadata"):
-            metadata = response.response_metadata or {}
-            # Anthropic/OpenAI style: token_usage or usage
-            usage_data = metadata.get("token_usage") or metadata.get("usage") or {}
-
-        # Fall back to usage_metadata attribute
-        if not usage_data and hasattr(response, "usage_metadata"):
-            usage_data = response.usage_metadata or {}
-
-        input_tokens = usage_data.get("input_tokens") or usage_data.get("prompt_tokens") or 0
-        output_tokens = usage_data.get("output_tokens") or usage_data.get("completion_tokens") or 0
-        total_tokens = usage_data.get("total_tokens") or (input_tokens + output_tokens)
-
-        # Extract cache tokens if available (Anthropic)
-        cache_read = usage_data.get("cache_read_input_tokens") or usage_data.get("cache_read_tokens")
-        cache_creation = usage_data.get("cache_creation_input_tokens") or usage_data.get("cache_creation_tokens")
-
-        return UsageMetadata(
-            input_tokens=int(input_tokens),
-            output_tokens=int(output_tokens),
-            total_tokens=int(total_tokens),
-            cache_read_tokens=int(cache_read) if cache_read else None,
-            cache_creation_tokens=int(cache_creation) if cache_creation else None,
-            model=self._config.model_name,
-        )
+    # =========================================================================
+    # Public API
+    # =========================================================================
 
     async def ainvoke(self, messages: list[Message]) -> LLMResponse:
         """Invoke the LLM asynchronously with automatic retry for transient errors.
@@ -310,228 +171,6 @@ class LangChainLLMAdapter:
 
         # Regular text mode
         return await self._ainvoke_text(messages)
-
-    async def _ainvoke_text(self, messages: list[Message]) -> LLMResponse:
-        """Invoke LLM for regular text output."""
-        lc_messages = self._converter.to_provider(messages)
-        response = await self._invoke_model_with_retry(self._model, lc_messages)
-
-        content = str(response.content) if hasattr(response, "content") else str(response)
-        usage = self._extract_usage(response)
-
-        return LLMResponse(content=content, usage=usage, raw=response)
-
-    async def _invoke_model_with_retry(self, model: Any, lc_messages: list[Any]) -> Any:
-        """Invoke a LangChain model with automatic retry for transient errors.
-
-        This is a helper that applies the standard transient retry policy
-        to any model invocation.
-
-        Args:
-            model: The LangChain model to invoke.
-            lc_messages: LangChain-formatted messages.
-
-        Returns:
-            The model's response.
-
-        Raises:
-            Exception: After all retries are exhausted.
-        """
-
-        @_TRANSIENT_RETRY
-        async def _invoke() -> Any:
-            return await model.ainvoke(lc_messages)
-
-        return await _invoke()
-
-    async def _ainvoke_structured(self, messages: list[Message]) -> LLMResponse:
-        """Invoke LLM for structured output, with automatic fallback and retry.
-
-        Tries native with_structured_output() first. If that fails (model doesn't
-        support it properly), falls back to manual JSON parsing.
-
-        When max_retries > 0, validation errors trigger retry with error feedback
-        appended to the messages, giving the LLM a chance to fix issues.
-        """
-        if self._structured_schema is None:
-            raise RuntimeError("_ainvoke_structured called without structured schema")
-
-        last_error: str | None = None
-
-        for attempt in range(self._max_retries + 1):
-            # Add error feedback on retry attempts
-            effective_messages = (
-                self._add_retry_feedback(messages, last_error) if attempt > 0 and last_error else messages
-            )
-
-            try:
-                return await self._try_structured_invocation(effective_messages)
-            except (ValidationError, ValueError) as e:
-                last_error = str(e)
-                if attempt == self._max_retries:
-                    raise ValueError(
-                        f"Structured output failed after {self._max_retries + 1} attempts. Last error: {last_error}"
-                    ) from None
-                logger.info(
-                    f"Structured output validation failed (attempt {attempt + 1}/{self._max_retries + 1}): {e}. "
-                    "Retrying with error feedback."
-                )
-
-        raise ValueError("Unexpected error in retry logic")
-
-    async def _try_structured_invocation(self, messages: list[Message]) -> LLMResponse:
-        """Try native structured output, falling back to manual parsing if needed.
-
-        Args:
-            messages: Messages to send to the LLM.
-
-        Returns:
-            LLMResponse with parsed structured output.
-
-        Raises:
-            ValidationError: If parsing fails.
-            Exception: For transient errors (will be retried by caller).
-        """
-        # Try native structured output first (if available)
-        if self._structured_model is not None:
-            try:
-                return await self._ainvoke_native_structured(messages)
-            except Exception as e:
-                if _is_retryable_error(e):
-                    raise  # Let transient errors propagate
-                logger.warning(
-                    f"Native structured output failed for {self._config.model_name}: {e}. "
-                    "Falling back to manual JSON parsing."
-                )
-
-        # Fallback to manual JSON parsing
-        return await self._ainvoke_with_fallback_parsing(messages)
-
-    def _add_retry_feedback(self, messages: list[Message], error: str) -> list[Message]:
-        """Add retry feedback to messages after a validation failure.
-
-        Appends a user message with the validation error, giving the LLM
-        context to fix the issue on the next attempt.
-
-        Args:
-            messages: Original messages.
-            error: The validation error message.
-
-        Returns:
-            New message list with error feedback appended.
-        """
-        feedback = Message.user(
-            f"PREVIOUS ATTEMPT FAILED with error: {error}\nPlease fix the validation issues and try again."
-        )
-        return list(messages) + [feedback]
-
-    async def _ainvoke_native_structured(self, messages: list[Message]) -> LLMResponse:
-        """Invoke using native with_structured_output()."""
-        lc_messages = self._converter.to_provider(messages)
-        response = await self._invoke_model_with_retry(self._structured_model, lc_messages)
-
-        # Native structured output - response should be a Pydantic model
-        if isinstance(response, BaseModel):
-            return LLMResponse(
-                content=str(response),
-                usage=self._extract_usage(response),
-                raw=response,
-            )
-
-        # Unexpected response type - raise to trigger fallback
-        raise TypeError(f"Native structured output returned unexpected type: {type(response).__name__}")
-
-    async def _ainvoke_with_fallback_parsing(self, messages: list[Message]) -> LLMResponse:
-        """Invoke LLM with manual JSON parsing for structured output.
-
-        Used when native with_structured_output() fails or is unavailable.
-        Adds format instructions to the prompt and parses the JSON response manually.
-
-        Args:
-            messages: List of unified Message objects.
-
-        Returns:
-            LLMResponse with the parsed Pydantic model in raw.
-
-        Raises:
-            ValidationError: If the response cannot be parsed into the schema.
-        """
-        if self._structured_schema is None:
-            raise RuntimeError("Fallback parsing requires a structured schema")
-
-        # Augment messages with format instructions
-        augmented_messages = self._augment_with_format_instructions(messages)
-
-        # Use base model for fallback (not the structured model)
-        model_to_use = self._base_model if self._base_model is not None else self._model
-        lc_messages = self._converter.to_provider(augmented_messages)
-        response = await self._invoke_model_with_retry(model_to_use, lc_messages)
-
-        # Extract and parse response
-        text_content = str(response.content) if hasattr(response, "content") else str(response)
-        parsed_model = self._parse_json_response(text_content)
-
-        return LLMResponse(
-            content=text_content,
-            usage=self._extract_usage(response),
-            raw=parsed_model,
-        )
-
-    def _augment_with_format_instructions(self, messages: list[Message]) -> list[Message]:
-        """Append JSON schema format instructions to the last user message.
-
-        Args:
-            messages: Original messages.
-
-        Returns:
-            New message list with format instructions appended to the last user message.
-        """
-        from karenina.ports.messages import TextContent
-
-        if self._structured_schema is None:
-            return messages
-
-        schema_json = json.dumps(self._structured_schema.model_json_schema(), indent=2)
-        format_instruction = (
-            f"\n\nYou must respond with valid JSON that matches this schema:\n"
-            f"```json\n{schema_json}\n```\n"
-            f"Return ONLY the JSON object, no additional text."
-        )
-
-        augmented = list(messages)
-        for i in range(len(augmented) - 1, -1, -1):
-            msg = augmented[i]
-            if msg.role.value == "user":
-                new_content = [
-                    TextContent(text=c.text + format_instruction) if isinstance(c, TextContent) else c
-                    for c in msg.content
-                ]
-                augmented[i] = Message(role=msg.role, content=new_content)
-                break
-
-        return augmented
-
-    def _parse_json_response(self, text_content: str) -> BaseModel:
-        """Parse JSON from LLM response into the structured schema.
-
-        Args:
-            text_content: Raw response text that may contain JSON.
-
-        Returns:
-            Validated Pydantic model instance.
-
-        Raises:
-            ValidationError: If parsing or validation fails.
-        """
-        if self._structured_schema is None:
-            raise RuntimeError("Cannot parse without structured schema")
-
-        try:
-            json_str = _extract_json_from_response(text_content)
-            return self._structured_schema.model_validate_json(json_str)
-        except (json.JSONDecodeError, ValidationError) as e:
-            logger.error(f"Failed to parse structured output: {e}\nResponse: {text_content[:500]}")
-            raise
 
     def invoke(self, messages: list[Message]) -> LLMResponse:
         """Invoke the LLM synchronously.
@@ -622,18 +261,219 @@ class LangChainLLMAdapter:
             _max_retries=max_retries if max_retries is not None else 3,
         )
 
+    # =========================================================================
+    # Text Invocation
+    # =========================================================================
 
-# =============================================================================
-# Protocol Verification
-# =============================================================================
+    async def _ainvoke_text(self, messages: list[Message]) -> LLMResponse:
+        """Invoke LLM for regular text output."""
+        lc_messages = self._converter.to_provider(messages)
+        response = await self._invoke_model_with_retry(self._model, lc_messages)
+
+        content = str(response.content) if hasattr(response, "content") else str(response)
+        usage = extract_usage_from_response(response, model_name=self._config.model_name)
+
+        return LLMResponse(content=content, usage=usage, raw=response)
+
+    # =========================================================================
+    # Structured Output (main flow)
+    # =========================================================================
+
+    async def _ainvoke_structured(self, messages: list[Message]) -> LLMResponse:
+        """Invoke LLM for structured output, with automatic fallback and retry.
+
+        Tries native with_structured_output() first. If that fails (model doesn't
+        support it properly), falls back to manual JSON parsing.
+
+        When max_retries > 0, validation errors trigger retry with error feedback
+        appended to the messages, giving the LLM a chance to fix issues.
+        """
+        if self._structured_schema is None:
+            raise RuntimeError("_ainvoke_structured called without structured schema")
+
+        last_error: str | None = None
+
+        for attempt in range(self._max_retries + 1):
+            # Add error feedback on retry attempts
+            effective_messages = append_error_feedback(messages, last_error) if attempt > 0 and last_error else messages
+
+            try:
+                return await self._try_structured_invocation(effective_messages)
+            except (ValidationError, ValueError) as e:
+                last_error = str(e)
+                if attempt == self._max_retries:
+                    raise ValueError(
+                        f"Structured output failed after {self._max_retries + 1} attempts. Last error: {last_error}"
+                    ) from None
+                logger.info(
+                    f"Structured output validation failed (attempt {attempt + 1}/{self._max_retries + 1}): {e}. "
+                    "Retrying with error feedback."
+                )
+
+        raise ValueError("Unexpected error in retry logic")
+
+    async def _try_structured_invocation(self, messages: list[Message]) -> LLMResponse:
+        """Try native structured output, falling back to manual parsing if needed.
+
+        Args:
+            messages: Messages to send to the LLM.
+
+        Returns:
+            LLMResponse with parsed structured output.
+
+        Raises:
+            ValidationError: If parsing fails.
+            Exception: For transient errors (will be retried by caller).
+        """
+        # Try native structured output first (if available)
+        if self._structured_model is not None:
+            try:
+                lc_messages = self._converter.to_provider(messages)
+                response = await self._invoke_model_with_retry(self._structured_model, lc_messages)
+                if isinstance(response, BaseModel):
+                    return LLMResponse(
+                        content=str(response),
+                        usage=extract_usage_from_response(response, model_name=self._config.model_name),
+                        raw=response,
+                    )
+                raise TypeError(f"Native structured output returned unexpected type: {type(response).__name__}")
+            except Exception as e:
+                if is_retryable_error(e):
+                    raise  # Let transient errors propagate
+                logger.warning(
+                    f"Native structured output failed for {self._config.model_name}: {e}. "
+                    "Falling back to manual JSON parsing."
+                )
+
+        # Fallback to manual JSON parsing
+        return await self._ainvoke_with_fallback_parsing(messages)
+
+    # =========================================================================
+    # Structured Output (helpers)
+    # =========================================================================
+
+    async def _ainvoke_with_fallback_parsing(self, messages: list[Message]) -> LLMResponse:
+        """Invoke LLM with manual JSON parsing for structured output.
+
+        Used when native with_structured_output() fails or is unavailable.
+        Adds format instructions to the prompt and parses the JSON response manually.
+
+        Args:
+            messages: List of unified Message objects.
+
+        Returns:
+            LLMResponse with the parsed Pydantic model in raw.
+
+        Raises:
+            ValidationError: If the response cannot be parsed into the schema.
+        """
+        if self._structured_schema is None:
+            raise RuntimeError("Fallback parsing requires a structured schema")
+
+        # Augment messages with format instructions
+        augmented_messages = self._augment_with_format_instructions(messages)
+
+        # Use base model for fallback (not the structured model)
+        model_to_use = self._base_model if self._base_model is not None else self._model
+        lc_messages = self._converter.to_provider(augmented_messages)
+        response = await self._invoke_model_with_retry(model_to_use, lc_messages)
+
+        # Extract and parse response
+        text_content = str(response.content) if hasattr(response, "content") else str(response)
+        parsed_model = self._parse_json_response(text_content)
+
+        return LLMResponse(
+            content=text_content,
+            usage=extract_usage_from_response(response, model_name=self._config.model_name),
+            raw=parsed_model,
+        )
+
+    def _augment_with_format_instructions(self, messages: list[Message]) -> list[Message]:
+        """Append JSON schema format instructions to the last user message.
+
+        Args:
+            messages: Original messages.
+
+        Returns:
+            New message list with format instructions appended to the last user message.
+        """
+        from karenina.ports.messages import TextContent
+
+        if self._structured_schema is None:
+            return messages
+
+        schema_json = json.dumps(self._structured_schema.model_json_schema(), indent=2)
+        format_instruction = (
+            f"\n\nYou must respond with valid JSON that matches this schema:\n"
+            f"```json\n{schema_json}\n```\n"
+            f"Return ONLY the JSON object, no additional text."
+        )
+
+        augmented = list(messages)
+        for i in range(len(augmented) - 1, -1, -1):
+            msg = augmented[i]
+            if msg.role.value == "user":
+                new_content = [
+                    TextContent(text=c.text + format_instruction) if isinstance(c, TextContent) else c
+                    for c in msg.content
+                ]
+                augmented[i] = Message(role=msg.role, content=new_content)
+                break
+
+        return augmented
+
+    def _parse_json_response(self, text_content: str) -> BaseModel:
+        """Parse JSON from LLM response into the structured schema.
+
+        Args:
+            text_content: Raw response text that may contain JSON.
+
+        Returns:
+            Validated Pydantic model instance.
+
+        Raises:
+            ValidationError: If parsing or validation fails.
+        """
+        if self._structured_schema is None:
+            raise RuntimeError("Cannot parse without structured schema")
+
+        try:
+            json_str = extract_json_from_response(text_content)
+            return self._structured_schema.model_validate_json(json_str)
+        except (json.JSONDecodeError, ValidationError) as e:
+            logger.error(f"Failed to parse structured output: {e}\nResponse: {text_content[:500]}")
+            raise
+
+    # =========================================================================
+    # Low-level Helpers
+    # =========================================================================
+
+    async def _invoke_model_with_retry(self, model: Any, lc_messages: list[Any]) -> Any:
+        """Invoke a LangChain model with automatic retry for transient errors.
+
+        This is a helper that applies the standard transient retry policy
+        to any model invocation.
+
+        Args:
+            model: The LangChain model to invoke.
+            lc_messages: LangChain-formatted messages.
+
+        Returns:
+            The model's response.
+
+        Raises:
+            Exception: After all retries are exhausted.
+        """
+
+        @TRANSIENT_RETRY
+        async def _invoke() -> Any:
+            return await model.ainvoke(lc_messages)
+
+        return await _invoke()
 
 
+# Verify protocol compliance at import time
 def _verify_protocol_compliance() -> None:
     """Verify LangChainLLMAdapter implements LLMPort protocol."""
-    # This is a static check - if this fails, it means the adapter
-    # doesn't properly implement the protocol
     adapter_instance: LLMPort = None  # type: ignore[assignment]
-
-    # The following would fail mypy if the protocol wasn't properly implemented
-    # We don't actually run this, it's just for static analysis
-    _ = adapter_instance  # Suppress unused warning
+    _ = adapter_instance
