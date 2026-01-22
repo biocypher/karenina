@@ -77,6 +77,8 @@ def openai_endpoint_model_config() -> Any:
         model_name="gpt-4",
         model_provider="openai",
         interface="openai_endpoint",
+        endpoint_base_url="http://localhost:8000/v1",
+        endpoint_api_key="test-api-key",
     )
 
 
@@ -251,7 +253,7 @@ class TestGetLLM:
 
     def test_get_llm_langchain(self, langchain_model_config: Any) -> None:
         """Test get_llm routes langchain to LangChainLLMAdapter."""
-        with patch("karenina.infrastructure.llm.interface.init_chat_model_unified") as mock_init:
+        with patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init:
             mock_init.return_value = MagicMock()
 
             llm = get_llm(langchain_model_config)
@@ -261,8 +263,8 @@ class TestGetLLM:
 
     def test_get_llm_openrouter(self, openrouter_model_config: Any) -> None:
         """Test get_llm routes openrouter to LangChainLLMAdapter."""
-        with patch("karenina.infrastructure.llm.interface.init_chat_model_unified") as mock_init:
-            mock_init.return_value = MagicMock()
+        with patch("karenina.adapters.langchain.initialization.ChatOpenRouter") as mock_cls:
+            mock_cls.return_value = MagicMock()
 
             llm = get_llm(openrouter_model_config)
 
@@ -271,8 +273,8 @@ class TestGetLLM:
 
     def test_get_llm_openai_endpoint(self, openai_endpoint_model_config: Any) -> None:
         """Test get_llm routes openai_endpoint to LangChainLLMAdapter."""
-        with patch("karenina.infrastructure.llm.interface.init_chat_model_unified") as mock_init:
-            mock_init.return_value = MagicMock()
+        with patch("karenina.adapters.langchain.initialization.ChatOpenAIEndpoint") as mock_cls:
+            mock_cls.return_value = MagicMock()
 
             llm = get_llm(openai_endpoint_model_config)
 
@@ -301,7 +303,7 @@ class TestGetLLM:
         """Test get_llm falls back to LangChain when Claude SDK unavailable."""
         with (
             patch("shutil.which") as mock_which,
-            patch("karenina.infrastructure.llm.interface.init_chat_model_unified") as mock_init,
+            patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init,
         ):
             mock_which.return_value = None  # Claude CLI not installed
             mock_init.return_value = MagicMock()
@@ -325,7 +327,7 @@ class TestGetLLM:
 
     def test_get_llm_unknown_interface_fallback(self, unknown_interface_model_config: Any) -> None:
         """Test get_llm with unknown interface falls back to langchain."""
-        with patch("karenina.infrastructure.llm.interface.init_chat_model_unified") as mock_init:
+        with patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init:
             mock_init.return_value = MagicMock()
 
             llm = get_llm(unknown_interface_model_config, auto_fallback=True)
@@ -419,7 +421,7 @@ class TestGetParser:
 
     def test_get_parser_langchain(self, langchain_model_config: Any) -> None:
         """Test get_parser routes langchain to LangChainParserAdapter."""
-        with patch("karenina.infrastructure.llm.interface.init_chat_model_unified") as mock_init:
+        with patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init:
             mock_init.return_value = MagicMock()
 
             parser = get_parser(langchain_model_config)
@@ -429,8 +431,8 @@ class TestGetParser:
 
     def test_get_parser_openrouter(self, openrouter_model_config: Any) -> None:
         """Test get_parser routes openrouter to LangChainParserAdapter."""
-        with patch("karenina.infrastructure.llm.interface.init_chat_model_unified") as mock_init:
-            mock_init.return_value = MagicMock()
+        with patch("karenina.adapters.langchain.initialization.ChatOpenRouter") as mock_cls:
+            mock_cls.return_value = MagicMock()
 
             parser = get_parser(openrouter_model_config)
 
@@ -439,8 +441,8 @@ class TestGetParser:
 
     def test_get_parser_openai_endpoint(self, openai_endpoint_model_config: Any) -> None:
         """Test get_parser routes openai_endpoint to LangChainParserAdapter."""
-        with patch("karenina.infrastructure.llm.interface.init_chat_model_unified") as mock_init:
-            mock_init.return_value = MagicMock()
+        with patch("karenina.adapters.langchain.initialization.ChatOpenAIEndpoint") as mock_cls:
+            mock_cls.return_value = MagicMock()
 
             parser = get_parser(openai_endpoint_model_config)
 
@@ -474,7 +476,7 @@ class TestGetParser:
         """Test get_parser falls back to LangChain when Claude SDK unavailable."""
         with (
             patch("shutil.which") as mock_which,
-            patch("karenina.infrastructure.llm.interface.init_chat_model_unified") as mock_init,
+            patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init,
         ):
             mock_which.return_value = None  # Claude CLI not installed
             mock_init.return_value = MagicMock()

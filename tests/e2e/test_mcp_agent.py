@@ -36,7 +36,7 @@ def test_mcp_agent_middleware_signature() -> None:
     from langchain_core.messages import HumanMessage
     from langgraph.checkpoint.memory import InMemorySaver
 
-    from karenina.infrastructure.llm.interface import _build_agent_middleware
+    from karenina.adapters.langchain.middleware import build_agent_middleware
     from karenina.infrastructure.llm.mcp_utils import sync_create_mcp_client_and_tools
     from karenina.schemas.workflow.models import AgentMiddlewareConfig
 
@@ -55,7 +55,7 @@ def test_mcp_agent_middleware_signature() -> None:
 
     # Build middleware - this includes InvokeSummarizationMiddleware
     middleware_config = AgentMiddlewareConfig()
-    middleware = _build_agent_middleware(
+    middleware = build_agent_middleware(
         middleware_config,
         max_context_tokens=8000,
         base_model=llm,

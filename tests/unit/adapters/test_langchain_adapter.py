@@ -281,7 +281,7 @@ class TestLangChainLLMAdapter:
     def test_adapter_initialization(self, model_config: Any) -> None:
         """Test adapter can be initialized with ModelConfig."""
         # Patch at the source module since it's lazy imported inside the method
-        with patch("karenina.infrastructure.llm.interface.init_chat_model_unified") as mock_init:
+        with patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init:
             mock_init.return_value = MagicMock()
             adapter = LangChainLLMAdapter(model_config)
 
@@ -292,7 +292,7 @@ class TestLangChainLLMAdapter:
     @pytest.mark.asyncio
     async def test_ainvoke_basic(self, model_config: Any) -> None:
         """Test basic async invocation."""
-        with patch("karenina.infrastructure.llm.interface.init_chat_model_unified") as mock_init:
+        with patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init:
             # Set up mock model
             mock_response = MagicMock()
             mock_response.content = "Hello! I'm happy to help."
@@ -313,7 +313,7 @@ class TestLangChainLLMAdapter:
     @pytest.mark.asyncio
     async def test_ainvoke_with_usage_metadata(self, model_config: Any) -> None:
         """Test usage metadata extraction from response."""
-        with patch("karenina.infrastructure.llm.interface.init_chat_model_unified") as mock_init:
+        with patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init:
             mock_response = MagicMock()
             mock_response.content = "Response text"
             mock_response.response_metadata = {
@@ -338,7 +338,7 @@ class TestLangChainLLMAdapter:
 
     def test_with_structured_output(self, model_config: Any) -> None:
         """Test with_structured_output returns new adapter instance."""
-        with patch("karenina.infrastructure.llm.interface.init_chat_model_unified") as mock_init:
+        with patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init:
             mock_model = MagicMock()
             mock_structured_model = MagicMock()
             mock_model.with_structured_output = MagicMock(return_value=mock_structured_model)
@@ -377,48 +377,44 @@ class TestLangChainParserAdapter:
 
     def test_parser_initialization(self, model_config: Any) -> None:
         """Test parser adapter can be initialized."""
-        with patch("karenina.infrastructure.llm.interface.init_chat_model_unified") as mock_init:
+        with patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init:
             mock_init.return_value = MagicMock()
             parser = LangChainParserAdapter(model_config)
 
             assert parser._config == model_config
             assert parser._llm_adapter is not None
 
-    def test_strip_markdown_fences(self, model_config: Any) -> None:
-        """Test markdown fence stripping."""
-        with patch("karenina.infrastructure.llm.interface.init_chat_model_unified") as mock_init:
-            mock_init.return_value = MagicMock()
-            parser = LangChainParserAdapter(model_config)
+    def test_json_extraction_with_markdown_fences(self) -> None:
+        """Test JSON extraction from markdown fences via shared utility."""
+        from karenina.utils.json_extraction import extract_json_from_response
 
-            # Test with json fence
-            text = '```json\n{"value": "test"}\n```'
-            result = parser._strip_markdown_fences(text)
-            assert result == '{"value": "test"}'
+        # Test with json fence
+        text = '```json\n{"value": "test"}\n```'
+        result = extract_json_from_response(text)
+        assert result == '{"value": "test"}'
 
-            # Test without fence
-            text = '{"value": "test"}'
-            result = parser._strip_markdown_fences(text)
-            assert result == '{"value": "test"}'
+        # Test without fence (direct JSON)
+        text = '{"value": "test"}'
+        result = extract_json_from_response(text)
+        assert result == '{"value": "test"}'
 
-    def test_extract_json_from_text(self, model_config: Any) -> None:
-        """Test JSON extraction from mixed text."""
-        with patch("karenina.infrastructure.llm.interface.init_chat_model_unified") as mock_init:
-            mock_init.return_value = MagicMock()
-            parser = LangChainParserAdapter(model_config)
+    def test_json_extraction_from_mixed_text(self) -> None:
+        """Test JSON extraction from mixed text via shared utility."""
+        from karenina.utils.json_extraction import extract_json_from_response
 
-            # Test embedded JSON
-            text = 'Here is the result: {"gene": "BCL2", "score": 0.95} as requested.'
-            result = parser._extract_json_from_text(text)
-            assert result == '{"gene": "BCL2", "score": 0.95}'
+        # Test embedded JSON
+        text = 'Here is the result: {"gene": "BCL2", "score": 0.95} as requested.'
+        result = extract_json_from_response(text)
+        assert '{"gene": "BCL2", "score": 0.95}' in result
 
-            # Test no JSON
-            text = "No JSON here"
-            result = parser._extract_json_from_text(text)
-            assert result is None
+        # Test no JSON
+        text = "No JSON here"
+        with pytest.raises(ValueError, match="Could not extract JSON"):
+            extract_json_from_response(text)
 
     def test_parse_response_content_direct_json(self, model_config: Any) -> None:
         """Test direct JSON parsing."""
-        with patch("karenina.infrastructure.llm.interface.init_chat_model_unified") as mock_init:
+        with patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init:
             mock_init.return_value = MagicMock()
             parser = LangChainParserAdapter(model_config)
 
@@ -434,7 +430,7 @@ class TestLangChainParserAdapter:
 
     def test_parse_response_content_with_markdown_fences(self, model_config: Any) -> None:
         """Test parsing JSON wrapped in markdown fences."""
-        with patch("karenina.infrastructure.llm.interface.init_chat_model_unified") as mock_init:
+        with patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init:
             mock_init.return_value = MagicMock()
             parser = LangChainParserAdapter(model_config)
 
@@ -543,7 +539,7 @@ class TestLangChainAgentAdapter:
 
     def test_extract_usage_from_ai_messages(self, model_config: Any) -> None:
         """Test usage extraction from AIMessage list."""
-        adapter = LangChainAgentAdapter(model_config)
+        from karenina.adapters.langchain.usage import extract_usage_cumulative
 
         # Create mock AIMessages with usage metadata
         msg1 = AIMessage(content="First response")
@@ -558,15 +554,15 @@ class TestLangChainAgentAdapter:
             msg2,
         ]
 
-        usage = adapter._extract_usage(messages)
+        usage = extract_usage_cumulative(messages, model_name=model_config.model_name)
 
         assert usage.input_tokens == 180  # 100 + 80
         assert usage.output_tokens == 90  # 50 + 40
         assert usage.total_tokens == 270
 
-    def test_count_turns(self, model_config: Any) -> None:
+    def test_count_turns(self) -> None:
         """Test turn counting from messages."""
-        adapter = LangChainAgentAdapter(model_config)
+        from karenina.adapters.langchain.usage import count_agent_turns
 
         messages: list[Any] = [
             HumanMessage(content="Question 1"),
@@ -576,17 +572,41 @@ class TestLangChainAgentAdapter:
             AIMessage(content="Answer 3"),
         ]
 
-        turns = adapter._count_turns(messages)
+        turns = count_agent_turns(messages)
         assert turns == 3  # 3 AIMessages
+
+    @pytest.mark.asyncio
+    async def test_run_requires_mcp_servers(self, model_config: Any) -> None:
+        """Test that agent run requires MCP servers."""
+        from karenina.ports.errors import AgentExecutionError
+
+        adapter = LangChainAgentAdapter(model_config)
+
+        with pytest.raises(AgentExecutionError, match="AgentPort requires MCP servers"):
+            await adapter.run([Message.user("Test question")])
 
     @pytest.mark.asyncio
     async def test_run_basic(self, model_config: Any) -> None:
         """Test basic agent run with mocked infrastructure."""
         with (
-            patch("karenina.infrastructure.llm.interface.init_chat_model_unified") as mock_init,
+            patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init_model,
+            patch("karenina.adapters.langchain.middleware.build_agent_middleware") as mock_middleware,
+            patch("karenina.infrastructure.llm.mcp_utils.create_mcp_client_and_tools") as mock_mcp,
+            patch("langchain.agents.create_agent") as mock_create_agent,
+            patch("langgraph.checkpoint.memory.InMemorySaver"),
             patch("karenina.infrastructure.llm.mcp_utils.harmonize_agent_response") as mock_harmonize,
             patch("karenina.infrastructure.llm.mcp_utils.extract_final_ai_message_from_response") as mock_extract,
         ):
+            # Set up mock model
+            mock_base_model = MagicMock()
+            mock_init_model.return_value = mock_base_model
+
+            # Set up mock middleware
+            mock_middleware.return_value = []
+
+            # Set up mock MCP tools
+            mock_mcp.return_value = (None, [MagicMock()])  # (client, tools)
+
             # Set up mock agent
             ai_msg = AIMessage(content="Final answer")
             ai_msg.response_metadata = {"usage": {"input_tokens": 50, "output_tokens": 25}}
@@ -600,13 +620,16 @@ class TestLangChainAgentAdapter:
 
             mock_agent = AsyncMock()
             mock_agent.ainvoke = AsyncMock(return_value=mock_response)
-            mock_init.return_value = mock_agent
+            mock_create_agent.return_value = mock_agent
 
             mock_harmonize.return_value = "--- User Message ---\nTest question\n\n--- AI Message ---\nFinal answer"
             mock_extract.return_value = ("Final answer", None)
 
             adapter = LangChainAgentAdapter(model_config)
-            result = await adapter.run([Message.user("Test question")])
+            result = await adapter.run(
+                [Message.user("Test question")],
+                mcp_servers={"test": {"type": "http", "url": "http://localhost:8080"}},
+            )
 
             assert result.final_response == "Final answer"
             assert result.raw_trace is not None
@@ -656,3 +679,74 @@ class TestUsageMetadataExtraction:
         assert usage.cache_read_tokens is None
         assert usage.cache_creation_tokens is None
         assert usage.model is None
+
+
+# =============================================================================
+# ChatOpenRouter and ChatOpenAIEndpoint Model Tests
+# =============================================================================
+
+
+class TestChatOpenRouter:
+    """Tests for ChatOpenRouter custom model class."""
+
+    def test_chat_openrouter_initialization(self) -> None:
+        """Test ChatOpenRouter initialization."""
+        from karenina.adapters.langchain.models import ChatOpenRouter
+
+        with patch.dict("os.environ", {"OPENROUTER_API_KEY": "test-key"}):
+            model = ChatOpenRouter(model="gpt-4", temperature=0.5)
+
+            assert model.model_name == "gpt-4"
+            assert model.temperature == 0.5
+
+    def test_chat_openrouter_lc_secrets(self) -> None:
+        """Test ChatOpenRouter lc_secrets property."""
+        from karenina.adapters.langchain.models import ChatOpenRouter
+
+        model = ChatOpenRouter(model="gpt-4", openai_api_key="test-key")
+        secrets = model.lc_secrets
+        assert secrets == {"openai_api_key": "OPENROUTER_API_KEY"}
+
+
+class TestChatOpenAIEndpoint:
+    """Tests for ChatOpenAIEndpoint custom model class."""
+
+    def test_chat_openai_endpoint_requires_api_key(self) -> None:
+        """Test that ChatOpenAIEndpoint requires an API key."""
+        from karenina.adapters.langchain.models import ChatOpenAIEndpoint
+
+        with pytest.raises(ValueError, match="API key is required"):
+            ChatOpenAIEndpoint(base_url="http://localhost:8000")
+
+    def test_chat_openai_endpoint_requires_explicit_api_key(self) -> None:
+        """Test that ChatOpenAIEndpoint does NOT read from environment."""
+        from karenina.adapters.langchain.models import ChatOpenAIEndpoint
+
+        # Even with env var set, it should still fail if no explicit key
+        with (
+            patch.dict("os.environ", {"OPENAI_API_KEY": "env-key"}),
+            pytest.raises(ValueError, match="API key is required"),
+        ):
+            ChatOpenAIEndpoint(base_url="http://localhost:8000")
+
+    def test_chat_openai_endpoint_initialization_with_key(self) -> None:
+        """Test ChatOpenAIEndpoint initialization with explicit API key."""
+        from karenina.adapters.langchain.models import ChatOpenAIEndpoint
+
+        model = ChatOpenAIEndpoint(
+            base_url="http://localhost:8000",
+            openai_api_key="explicit-key",
+        )
+
+        assert model is not None
+
+    def test_chat_openai_endpoint_lc_secrets_empty(self) -> None:
+        """Test ChatOpenAIEndpoint lc_secrets returns empty dict."""
+        from karenina.adapters.langchain.models import ChatOpenAIEndpoint
+
+        model = ChatOpenAIEndpoint(
+            base_url="http://localhost:8000",
+            openai_api_key="test-key",
+        )
+        secrets = model.lc_secrets
+        assert secrets == {}

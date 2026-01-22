@@ -2,41 +2,29 @@
 
 Tests cover:
 - Exception classes (LLMError, LLMNotAvailableError, SessionError, ManualTraceError, ManualTraceNotFoundError)
-- Pydantic models (ChatRequest, ChatResponse)
-- ChatSession class (initialization, message handling, system messages)
-- Session management functions (get_session, list_sessions, delete_session, clear_all_sessions)
 - ManualLLM class (fixture-based testing without API calls)
 - ManualTraceManager class (trace storage, validation, cleanup)
 - Manual trace utilities
-- Custom OpenAI client classes (ChatOpenRouter, ChatOpenAIEndpoint)
+- init_chat_model_unified function
+
+Note: Tests for ChatOpenRouter and ChatOpenAIEndpoint are in test_langchain_adapter.py
+since those classes live in karenina.adapters.langchain.models.
 
 Note: Tests do NOT make actual API calls. All LLM interaction is mocked or uses fixture-backed implementations.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from pydantic import ValidationError
+from langchain_core.messages import AIMessage, HumanMessage
 
+from karenina.adapters.langchain.initialization import init_chat_model_unified
 from karenina.infrastructure.llm.exceptions import (
     LLMError,
     LLMNotAvailableError,
     ManualTraceError,
     ManualTraceNotFoundError,
     SessionError,
-)
-from karenina.infrastructure.llm.interface import (
-    ChatOpenAIEndpoint,
-    ChatOpenRouter,
-    ChatRequest,
-    ChatResponse,
-    ChatSession,
-    clear_all_sessions,
-    delete_session,
-    get_session,
-    init_chat_model_unified,
-    list_sessions,
 )
 from karenina.infrastructure.llm.manual_llm import ManualLLM, create_manual_llm
 from karenina.infrastructure.llm.manual_traces import (
@@ -95,384 +83,6 @@ def test_manual_trace_error_is_llm_error() -> None:
     assert issubclass(ManualTraceError, LLMError)
     error = ManualTraceError("trace error")
     assert isinstance(error, LLMError)
-
-
-# =============================================================================
-# ChatRequest Model Tests
-# =============================================================================
-
-
-@pytest.mark.unit
-def test_chat_request_model_validation() -> None:
-    """Test ChatRequest Pydantic model validation."""
-    request = ChatRequest(
-        model="gemini-2.0-flash",
-        provider="google_genai",
-        message="Hello, world!",
-        session_id="test-session",
-        system_message="You are helpful.",
-        temperature=0.5,
-        interface="langchain",
-        endpoint_base_url="http://localhost:8000",
-        endpoint_api_key="test-key",
-    )
-
-    assert request.model == "gemini-2.0-flash"
-    assert request.provider == "google_genai"
-    assert request.message == "Hello, world!"
-    assert request.session_id == "test-session"
-    assert request.system_message == "You are helpful."
-    assert request.temperature == 0.5
-    assert request.interface == "langchain"
-    assert request.endpoint_base_url == "http://localhost:8000"
-    assert request.endpoint_api_key == "test-key"
-
-
-@pytest.mark.unit
-def test_chat_request_defaults() -> None:
-    """Test ChatRequest default values."""
-    request = ChatRequest(
-        model="gpt-4",
-        provider="openai",
-        message="Test message",
-    )
-
-    assert request.session_id is None
-    assert request.system_message is None
-    assert request.temperature == 0.7
-    assert request.interface is None
-    assert request.endpoint_base_url is None
-    assert request.endpoint_api_key is None
-
-
-@pytest.mark.unit
-def test_chat_request_missing_required_fields() -> None:
-    """Test that ChatRequest requires model, provider, and message fields."""
-    with pytest.raises(ValidationError):
-        ChatRequest(message="test")  # missing model and provider
-
-    with pytest.raises(ValidationError):
-        ChatRequest(model="test")  # missing provider and message
-
-
-# =============================================================================
-# ChatResponse Model Tests
-# =============================================================================
-
-
-@pytest.mark.unit
-def test_chat_response_model() -> None:
-    """Test ChatResponse Pydantic model."""
-    response = ChatResponse(
-        session_id="session-123",
-        message="Response text",
-        model="gemini-2.0-flash",
-        provider="google_genai",
-        timestamp="2025-01-11T12:00:00",
-    )
-
-    assert response.session_id == "session-123"
-    assert response.message == "Response text"
-    assert response.model == "gemini-2.0-flash"
-    assert response.provider == "google_genai"
-    assert response.timestamp == "2025-01-11T12:00:00"
-
-
-# =============================================================================
-# ChatSession Class Tests
-# =============================================================================
-
-
-@pytest.mark.unit
-def test_chat_session_initialization() -> None:
-    """Test ChatSession initialization with all parameters."""
-    session = ChatSession(
-        session_id="test-session",
-        model="gemini-2.0-flash",
-        provider="google_genai",
-        temperature=0.5,
-        mcp_urls_dict=None,
-        mcp_tool_filter=None,
-        interface="langchain",
-        endpoint_base_url="http://localhost:8000",
-        endpoint_api_key="test-key",
-    )
-
-    assert session.session_id == "test-session"
-    assert session.model == "gemini-2.0-flash"
-    assert session.provider == "google_genai"
-    assert session.temperature == 0.5
-    assert session.mcp_urls_dict is None
-    assert session.mcp_tool_filter is None
-    assert session.interface == "langchain"
-    assert session.endpoint_base_url == "http://localhost:8000"
-    assert session.endpoint_api_key == "test-key"
-    assert session.messages == []
-    assert session.llm is None
-    assert session.is_agent is False
-
-
-@pytest.mark.unit
-def test_chat_session_defaults() -> None:
-    """Test ChatSession default values."""
-    session = ChatSession(
-        session_id="test",
-        model="gpt-4",
-        provider="openai",
-    )
-
-    assert session.temperature == 0.7
-    assert session.mcp_urls_dict is None
-    assert session.mcp_tool_filter is None
-    assert session.interface == "langchain"
-    assert session.endpoint_base_url is None
-    assert session.endpoint_api_key is None
-    assert session.messages == []
-    assert session.llm is None
-    assert session.is_agent is False
-
-
-@pytest.mark.unit
-def test_chat_session_add_human_message() -> None:
-    """Test adding a human message to the session."""
-    session = ChatSession("test", "gpt-4", "openai")
-    session.add_message("Hello!", is_human=True)
-
-    assert len(session.messages) == 1
-    assert isinstance(session.messages[0], HumanMessage)
-    assert session.messages[0].content == "Hello!"
-
-
-@pytest.mark.unit
-def test_chat_session_add_ai_message() -> None:
-    """Test adding an AI message to the session."""
-    session = ChatSession("test", "gpt-4", "openai")
-    session.add_message("Hi there!", is_human=False)
-
-    assert len(session.messages) == 1
-    assert isinstance(session.messages[0], AIMessage)
-    assert session.messages[0].content == "Hi there!"
-
-
-@pytest.mark.unit
-def test_chat_session_add_system_message_first() -> None:
-    """Test adding a system message when no messages exist."""
-    session = ChatSession("test", "gpt-4", "openai")
-    session.add_system_message("You are helpful.")
-
-    assert len(session.messages) == 1
-    assert isinstance(session.messages[0], SystemMessage)
-    assert session.messages[0].content == "You are helpful."
-
-
-@pytest.mark.unit
-def test_chat_session_add_system_message_inserts_at_beginning() -> None:
-    """Test that system message is inserted at the beginning."""
-    session = ChatSession("test", "gpt-4", "openai")
-    session.add_message("Hello!", is_human=True)
-    session.add_system_message("You are helpful.")
-
-    assert len(session.messages) == 2
-    assert isinstance(session.messages[0], SystemMessage)
-    assert session.messages[0].content == "You are helpful."
-    assert isinstance(session.messages[1], HumanMessage)
-
-
-@pytest.mark.unit
-def test_chat_session_update_existing_system_message() -> None:
-    """Test that adding a system message updates the existing one."""
-    session = ChatSession("test", "gpt-4", "openai")
-    session.add_system_message("You are helpful.")
-    session.add_system_message("You are very helpful.")
-
-    assert len(session.messages) == 1
-    assert session.messages[0].content == "You are very helpful."
-
-
-@pytest.mark.unit
-def test_chat_session_mcp_urls_dict_sets_agent_flag() -> None:
-    """Test that providing MCP URLs sets the agent flag."""
-    session = ChatSession(
-        session_id="test",
-        model="gpt-4",
-        provider="openai",
-        mcp_urls_dict={"tool1": "http://example.com"},
-    )
-
-    # is_agent is only set to True after initialize_llm()
-    assert session.is_agent is False
-    assert session.mcp_urls_dict == {"tool1": "http://example.com"}
-
-
-# =============================================================================
-# Session Management Functions Tests
-# =============================================================================
-
-
-@pytest.mark.unit
-def test_clear_all_sessions() -> None:
-    """Test clearing all chat sessions."""
-    import karenina.infrastructure.llm.interface as interface_module
-
-    # First clear any existing sessions
-    clear_all_sessions()
-
-    # Add a test session by directly accessing the module's global
-    session_id = "test-session"
-    interface_module.chat_sessions[session_id] = ChatSession(session_id, "gpt-4", "openai")
-    assert len(interface_module.chat_sessions) > 0
-
-    clear_all_sessions()
-
-    # Access through the module to see the updated global
-    assert len(interface_module.chat_sessions) == 0
-
-
-@pytest.mark.unit
-def test_get_session_existing() -> None:
-    """Test getting an existing session."""
-    import karenina.infrastructure.llm.interface as interface_module
-
-    clear_all_sessions()
-    session_id = "test-session"
-    session = ChatSession(session_id, "gpt-4", "openai")
-    interface_module.chat_sessions[session_id] = session
-
-    retrieved = get_session(session_id)
-    assert retrieved is session
-
-    clear_all_sessions()
-
-
-@pytest.mark.unit
-def test_get_session_nonexistent() -> None:
-    """Test getting a non-existent session returns None."""
-    retrieved = get_session("nonexistent")
-    assert retrieved is None
-
-
-@pytest.mark.unit
-def test_delete_session_existing() -> None:
-    """Test deleting an existing session."""
-    import karenina.infrastructure.llm.interface as interface_module
-
-    clear_all_sessions()
-    session_id = "test-session"
-    interface_module.chat_sessions[session_id] = ChatSession(session_id, "gpt-4", "openai")
-
-    result = delete_session(session_id)
-
-    assert result is True
-    assert session_id not in interface_module.chat_sessions
-
-
-@pytest.mark.unit
-def test_delete_session_nonexistent() -> None:
-    """Test deleting a non-existent session returns False."""
-    result = delete_session("nonexistent")
-    assert result is False
-
-
-@pytest.mark.unit
-def test_list_sessions_empty() -> None:
-    """Test listing sessions when none exist."""
-    clear_all_sessions()
-    result = list_sessions()
-    assert result == []
-
-
-@pytest.mark.unit
-def test_list_sessions_with_data() -> None:
-    """Test listing sessions with actual data."""
-    import karenina.infrastructure.llm.interface as interface_module
-
-    clear_all_sessions()
-
-    session_id = "test-session"
-    session = ChatSession(session_id, "gpt-4", "openai")
-    session.add_message("Hello", is_human=True)
-    session.add_message("Hi there", is_human=False)
-    interface_module.chat_sessions[session_id] = session
-
-    result = list_sessions()
-
-    assert len(result) == 1
-    assert result[0]["session_id"] == session_id
-    assert result[0]["model"] == "gpt-4"
-    assert result[0]["provider"] == "openai"
-    assert result[0]["message_count"] == 2  # Excludes system messages
-    assert "created_at" in result[0]
-    assert "last_used" in result[0]
-
-    clear_all_sessions()
-
-
-# =============================================================================
-# ChatOpenRouter Class Tests
-# =============================================================================
-
-
-@pytest.mark.unit
-def test_chat_openrouter_initialization() -> None:
-    """Test ChatOpenRouter initialization."""
-    with patch.dict("os.environ", {"OPENROUTER_API_KEY": "test-key"}):
-        model = ChatOpenRouter(model="gpt-4", temperature=0.5)
-
-        assert model.model_name == "gpt-4"
-        assert model.temperature == 0.5
-
-
-@pytest.mark.unit
-def test_chat_openrouter_lc_secrets() -> None:
-    """Test ChatOpenRouter lc_secrets property."""
-    model = ChatOpenRouter(model="gpt-4", openai_api_key="test-key")
-    secrets = model.lc_secrets
-    assert secrets == {"openai_api_key": "OPENROUTER_API_KEY"}
-
-
-# =============================================================================
-# ChatOpenAIEndpoint Class Tests
-# =============================================================================
-
-
-@pytest.mark.unit
-def test_chat_openai_endpoint_requires_api_key() -> None:
-    """Test that ChatOpenAIEndpoint requires an API key."""
-    with pytest.raises(ValueError, match="API key is required"):
-        ChatOpenAIEndpoint(base_url="http://localhost:8000")
-
-
-@pytest.mark.unit
-def test_chat_openai_endpoint_requires_explicit_api_key() -> None:
-    """Test that ChatOpenAIEndpoint does NOT read from environment."""
-    # Even with env var set, it should still fail if no explicit key
-    with (
-        patch.dict("os.environ", {"OPENAI_API_KEY": "env-key"}),
-        pytest.raises(ValueError, match="API key is required"),
-    ):
-        ChatOpenAIEndpoint(base_url="http://localhost:8000")
-
-
-@pytest.mark.unit
-def test_chat_openai_endpoint_initialization_with_key() -> None:
-    """Test ChatOpenAIEndpoint initialization with explicit API key."""
-    model = ChatOpenAIEndpoint(
-        base_url="http://localhost:8000",
-        openai_api_key="explicit-key",
-    )
-
-    assert model is not None
-
-
-@pytest.mark.unit
-def test_chat_openai_endpoint_lc_secrets_empty() -> None:
-    """Test ChatOpenAIEndpoint lc_secrets returns empty dict."""
-    model = ChatOpenAIEndpoint(
-        base_url="http://localhost:8000",
-        openai_api_key="test-key",
-    )
-    secrets = model.lc_secrets
-    assert secrets == {}
 
 
 # =============================================================================
@@ -965,13 +575,6 @@ def test_set_manual_trace_invalid_hash_raises_error() -> None:
 
 
 @pytest.mark.unit
-def test_init_chat_model_unsupported_interface() -> None:
-    """Test that unsupported interface raises ValueError."""
-    with pytest.raises(ValueError, match="Unsupported interface"):
-        init_chat_model_unified("gpt-4", interface="unsupported")
-
-
-@pytest.mark.unit
 def test_init_chat_model_manual_requires_question_hash() -> None:
     """Test that manual interface requires question_hash."""
     with pytest.raises(ValueError, match="question_hash is required"):
@@ -1008,18 +611,6 @@ def test_init_chat_model_openai_endpoint_requires_api_key() -> None:
             "gpt-4",
             interface="openai_endpoint",
             endpoint_base_url="http://localhost:8000",
-        )
-
-
-@pytest.mark.unit
-def test_init_chat_model_mcp_with_manual_raises_error() -> None:
-    """Test that MCP with manual interface raises ValueError."""
-    with pytest.raises(ValueError, match="MCP integration is not supported"):
-        init_chat_model_unified(
-            "gpt-4",
-            interface="manual",
-            question_hash="abc123",
-            mcp_urls_dict={"tool": "http://example.com"},
         )
 
 
