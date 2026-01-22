@@ -244,7 +244,7 @@ class TestLLMAdapterStructuredOutput:
 
         mock_parsed = TestSchema(value="test")
         mock_response = MagicMock()
-        mock_response.parsed = mock_parsed
+        mock_response.parsed_output = mock_parsed
         mock_response.usage = MockUsage()
 
         mock_client = AsyncMock()
@@ -268,7 +268,7 @@ class TestLLMAdapterStructuredOutput:
 
         mock_parsed = TestSchema(answer=42)
         mock_response = MagicMock()
-        mock_response.parsed = mock_parsed
+        mock_response.parsed_output = mock_parsed
         mock_response.usage = MockUsage()
 
         mock_client = AsyncMock()
@@ -291,7 +291,7 @@ class TestLLMAdapterStructuredOutput:
         structured = adapter.with_structured_output(TestSchema, max_retries=0)
 
         mock_response = MagicMock()
-        mock_response.parsed = None
+        mock_response.parsed_output = None
         mock_response.usage = MockUsage()
 
         mock_client = AsyncMock()
@@ -299,7 +299,7 @@ class TestLLMAdapterStructuredOutput:
 
         with (
             patch.object(structured, "_get_async_client", return_value=mock_client),
-            pytest.raises(ValueError, match="did not return parsed output"),
+            pytest.raises(ValueError, match="did not return parsed_output"),
         ):
             await structured.ainvoke([Message.user("Hello")])
 
@@ -317,7 +317,7 @@ class TestLLMAdapterStructuredOutput:
         structured = adapter.with_structured_output(TestSchema, max_retries=0)
 
         mock_response = MagicMock()
-        mock_response.parsed = OtherSchema(other=42)  # Wrong type
+        mock_response.parsed_output = OtherSchema(other=42)  # Wrong type
         mock_response.usage = MockUsage()
 
         mock_client = AsyncMock()

@@ -191,45 +191,44 @@ class TestWrapToolWithExecutor:
 class TestApplyCacheControlToTool:
     """Tests for apply_cache_control_to_tool function."""
 
-    def test_returns_same_tool_without_to_params(self) -> None:
-        """Test returns same tool if it doesn't have to_params method.
+    def test_returns_same_tool_without_to_dict(self) -> None:
+        """Test returns same tool if it doesn't have to_dict method.
 
-        Note: The Anthropic SDK's BetaAsyncFunctionTool uses to_dict, not to_params.
-        This test verifies the function gracefully handles tools without to_params.
+        This test verifies the function gracefully handles tools without to_dict.
         """
-        mock_tool = MagicMock(spec=["to_dict"])  # Has to_dict but not to_params
+        mock_tool = MagicMock(spec=["name", "description"])  # No to_dict method
 
         result = apply_cache_control_to_tool(mock_tool)
 
-        # Should return unchanged since there's no to_params
+        # Should return unchanged since there's no to_dict
         assert result is mock_tool
 
-    def test_patches_to_params_when_present(self) -> None:
-        """Test patches to_params method when present."""
-        # Create a mock with to_params
+    def test_patches_to_dict_when_present(self) -> None:
+        """Test patches to_dict method when present."""
+        # Create a mock with to_dict
         mock_tool = MagicMock()
-        mock_tool.to_params.return_value = {"name": "test", "description": "desc"}
+        mock_tool.to_dict.return_value = {"name": "test", "description": "desc"}
 
-        original_to_params = mock_tool.to_params
+        original_to_dict = mock_tool.to_dict
         cached = apply_cache_control_to_tool(mock_tool)
 
-        # to_params should be patched
-        assert cached.to_params is not original_to_params
-        params = cached.to_params()
+        # to_dict should be patched
+        assert cached.to_dict is not original_to_dict
+        params = cached.to_dict()
         assert "cache_control" in params
         assert params["cache_control"] == {"type": "ephemeral"}
 
     def test_preserves_original_params_in_patch(self) -> None:
         """Test original params are preserved after patching."""
         mock_tool = MagicMock()
-        mock_tool.to_params.return_value = {
+        mock_tool.to_dict.return_value = {
             "name": "my_tool",
             "description": "My description",
             "input_schema": {"type": "object"},
         }
 
         cached = apply_cache_control_to_tool(mock_tool)
-        params = cached.to_params()
+        params = cached.to_dict()
 
         assert params["name"] == "my_tool"
         assert params["description"] == "My description"

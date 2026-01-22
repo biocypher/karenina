@@ -232,11 +232,11 @@ class ClaudeToolLLMAdapter:
         schema = self._structured_schema
         assert schema is not None  # For type checker
 
-        # Extract parsed output - beta.messages.parse always returns this
-        parsed_output = getattr(response, "parsed", None)
+        # Extract parsed output - beta.messages.parse returns this as parsed_output
+        parsed_output = getattr(response, "parsed_output", None)
 
         if parsed_output is None:
-            raise ValueError(f"beta.messages.parse did not return parsed output for {schema.__name__}")
+            raise ValueError(f"beta.messages.parse did not return parsed_output for {schema.__name__}")
 
         if not isinstance(parsed_output, schema):
             raise ValueError(f"Parsed output is {type(parsed_output).__name__}, expected {schema.__name__}")

@@ -162,29 +162,29 @@ def apply_cache_control_to_tool(wrapped_tool: Any) -> Any:
     including the tool with cache_control.
 
     The wrapped tool must have been created with @beta_async_tool decorator.
-    This function patches the tool's to_params() method to include cache_control.
+    This function patches the tool's to_dict() method to include cache_control.
 
     Args:
         wrapped_tool: A tool wrapped with @beta_async_tool decorator.
 
     Returns:
-        The same tool with cache_control added to its params.
+        The same tool with cache_control added to its dict representation.
 
     Note:
         Caching requires minimum 1024 tokens in tool definitions for most
         Claude models (4096 for Opus 4.5 and Haiku 4.5).
     """
-    original_to_params = getattr(wrapped_tool, "to_params", None)
+    original_to_dict = getattr(wrapped_tool, "to_dict", None)
 
-    if original_to_params is None:
-        logger.warning("Tool does not have to_params method, cannot apply cache_control")
+    if original_to_dict is None:
+        logger.warning("Tool does not have to_dict method, cannot apply cache_control")
         return wrapped_tool
 
-    def patched_to_params() -> dict[str, Any]:
-        """Return tool params with cache_control added."""
-        params: dict[str, Any] = original_to_params()
+    def patched_to_dict() -> dict[str, Any]:
+        """Return tool dict with cache_control added."""
+        params: dict[str, Any] = original_to_dict()
         params["cache_control"] = {"type": "ephemeral"}
         return params
 
-    wrapped_tool.to_params = patched_to_params
+    wrapped_tool.to_dict = patched_to_dict
     return wrapped_tool
