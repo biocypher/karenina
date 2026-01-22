@@ -73,7 +73,7 @@ def _build_config_from_cli_args(
     embedding_threshold: float,
     embedding_model: str,
     async_execution: bool,
-    async_workers: int,
+    async_workers: int | None,
     preset_config: VerificationConfig | None = None,
     manual_traces_obj: object | None = None,
 ) -> VerificationConfig:
@@ -134,7 +134,9 @@ def _build_config_from_cli_args(
     config_dict["embedding_similarity_threshold"] = embedding_threshold
     config_dict["embedding_model_name"] = embedding_model
     config_dict["async_enabled"] = async_execution
-    config_dict["async_max_workers"] = async_workers
+    if async_workers is not None:
+        config_dict["async_max_workers"] = async_workers
+    # else: let VerificationConfig read from KARENINA_ASYNC_MAX_WORKERS or use default
 
     # Handle model configuration
     # If ANY optional model CLI arg is provided, we override that model completely
@@ -729,7 +731,7 @@ def _build_config_non_interactive(
     embedding_threshold: float,
     embedding_model: str,
     async_execution: bool,
-    async_workers: int,
+    async_workers: int | None,
     manual_traces: Path | None,
     benchmark: Benchmark,
     progressive_save: bool,
@@ -961,7 +963,9 @@ def verify(
     embedding_threshold: Annotated[float, typer.Option(help="Embedding similarity threshold (0.0-1.0)")] = 0.85,
     embedding_model: Annotated[str, typer.Option(help="Embedding model name")] = "all-MiniLM-L6-v2",
     no_async: Annotated[bool, typer.Option("--no-async", help="Disable async execution")] = False,
-    async_workers: Annotated[int, typer.Option(help="Number of async workers")] = 2,
+    async_workers: Annotated[
+        int | None, typer.Option(help="Number of async workers (default: 2 or KARENINA_ASYNC_MAX_WORKERS)")
+    ] = None,
     # Manual trace support
     manual_traces: Annotated[
         Path | None,
@@ -1117,6 +1121,9 @@ def verify(
         console.print(f"  Answering models: {len(config.answering_models)}")
         console.print(f"  Parsing models: {len(config.parsing_models)}")
         console.print(f"  Replicates: {config.replicate_count}")
+        console.print(
+            f"  Async: {'enabled' if config.async_enabled else 'disabled'} ({config.async_max_workers} workers)"
+        )
         if progressive_manager:
             console.print("  Progressive save: enabled")
         console.print()

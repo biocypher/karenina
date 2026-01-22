@@ -500,6 +500,8 @@ def execute_parallel(
     if max_workers is None:
         max_workers = int(os.getenv("KARENINA_ASYNC_MAX_WORKERS", "2"))
 
+    logger.info(f"Parallel execution: {len(tasks)} tasks with {max_workers} workers")
+
     # Create thread-safe answer cache for sharing traces across judges
     answer_cache = AnswerTraceCache()
 
@@ -820,6 +822,10 @@ def run_verification_batch(
     # Determine async mode
     if async_enabled is None:
         async_enabled = os.getenv("KARENINA_ASYNC_ENABLED", "true").lower() == "true"
+
+    # Determine max workers: explicit arg > config > env var > default
+    if max_workers is None:
+        max_workers = config.async_max_workers  # Uses env var fallback internally
 
     # Generate task queue
     logger.info(f"Generating task queue for {len(templates)} templates...")
