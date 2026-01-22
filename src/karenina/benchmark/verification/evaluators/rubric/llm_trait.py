@@ -127,7 +127,7 @@ class LLMTraitEvaluator:
         Evaluate traits one by one.
 
         When async_enabled is True, the LLM calls run in parallel using
-        AdapterParallelInvoker for significant speedup. Otherwise, calls run
+        LLMParallelInvoker for significant speedup. Otherwise, calls run
         sequentially.
 
         Args:
@@ -170,7 +170,7 @@ class LLMTraitEvaluator:
 
         logger.debug(f"LLMParallelInvoker: Executing {len(tasks)} tasks with max_workers={self._async_max_workers}")
         invoker = LLMParallelInvoker(self.llm, max_workers=self._async_max_workers)
-        raw_results = invoker.invoke_batch(tasks)
+        raw_results = invoker.invoke_batch_structured(tasks)
 
         results: dict[str, int | bool] = {}
         usage_metadata_list: list[dict[str, Any]] = []
@@ -634,7 +634,7 @@ Evaluate this answer for the trait above and return your assessment as JSON: {fo
             f"LLMParallelInvoker: Executing {len(tasks)} literal tasks with max_workers={self._async_max_workers}"
         )
         invoker = LLMParallelInvoker(self.llm, max_workers=self._async_max_workers)
-        raw_results = invoker.invoke_batch(tasks)
+        raw_results = invoker.invoke_batch_structured(tasks)
 
         scores: dict[str, int] = {}
         labels: dict[str, str] = {}

@@ -17,6 +17,10 @@ Factory functions:
     - get_parser: Create a ParserPort implementation for a given model config
     - check_adapter_available: Check if an adapter is available
 
+Parallel invokers:
+    - LLMParallelInvoker: Batch LLMPort invocations (plain text and structured)
+    - AgentParallelInvoker: Batch AgentPort invocations
+
 Example:
     >>> from karenina.adapters import get_agent, get_llm
     >>> from karenina.schemas.workflow.models import ModelConfig
@@ -30,6 +34,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     # Import types for type checking only
+    from karenina.adapters.agent_parallel import AgentParallelInvoker
     from karenina.adapters.factory import (
         build_llm_kwargs,
         check_adapter_available,
@@ -40,7 +45,6 @@ if TYPE_CHECKING:
         validate_model_config,
     )
     from karenina.adapters.llm_parallel import LLMParallelInvoker
-    from karenina.adapters.parallel import AdapterParallelInvoker
     from karenina.adapters.registry import AdapterAvailability
 
 # Note: Factory functions will be exported once lc-008 is implemented.
@@ -58,8 +62,8 @@ __all__ = [
     # Availability checking
     "AdapterAvailability",
     # Parallel invocation
-    "AdapterParallelInvoker",
     "LLMParallelInvoker",
+    "AgentParallelInvoker",
 ]
 
 
@@ -108,14 +112,14 @@ def __getattr__(name: str) -> Any:
 
         return AdapterAvailability
 
-    if name == "AdapterParallelInvoker":
-        from karenina.adapters.parallel import AdapterParallelInvoker
-
-        return AdapterParallelInvoker
-
     if name == "LLMParallelInvoker":
         from karenina.adapters.llm_parallel import LLMParallelInvoker
 
         return LLMParallelInvoker
+
+    if name == "AgentParallelInvoker":
+        from karenina.adapters.agent_parallel import AgentParallelInvoker
+
+        return AgentParallelInvoker
 
     raise AttributeError(f"module 'karenina.adapters' has no attribute '{name}'")

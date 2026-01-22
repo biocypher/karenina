@@ -261,7 +261,7 @@ class QuestionClassifier:
         from karenina.adapters.llm_parallel import LLMParallelInvoker
 
         invoker = LLMParallelInvoker(self.llm, max_workers=self._async_max_workers)
-        results = invoker.invoke_batch(tasks)
+        results = invoker.invoke_batch_structured(tasks)
 
         scores: dict[str, int] = {}
         labels: dict[str, str] = {}

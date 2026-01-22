@@ -1,14 +1,17 @@
-"""Parallel invocation utility for LLMPort adapters with structured output.
+"""Parallel invocation utility for LLMPort adapters.
 
 This module provides a reusable utility for executing multiple LLM invocations
 in parallel using asyncio.gather() with semaphore-based concurrency limiting.
+
+Two modes are supported:
+- Plain text mode: `invoke_batch()` for answer generation using LLMPort.ainvoke()
+- Structured output mode: `invoke_batch_structured()` for rubric evaluation
 
 Key characteristics:
 - Uses asyncio.gather() for true async parallelism
 - Preserves result ordering (critical requirement)
 - Per-task error isolation (failed tasks don't block others)
 - Integrates with existing BlockingPortal from batch_runner.py
-- Same max_workers configuration pattern as AdapterParallelInvoker
 
 Environment Variables:
 - KARENINA_ASYNC_ENABLED: Enable/disable parallel execution (default: true)
@@ -18,69 +21,65 @@ Environment Variables:
 from __future__ import annotations
 
 import asyncio
-import concurrent.futures
-import contextlib
 import logging
-import os
 from collections.abc import Callable, Sequence
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from pydantic import BaseModel
 
+from ._parallel_base import get_max_workers, read_async_config, sync_invoke_via_portal
+
 if TYPE_CHECKING:
-    from ..ports import LLMPort, Message
+    from ..ports import LLMPort, LLMResponse, Message
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
 
-
-def read_async_config() -> tuple[bool, int]:
-    """Read async configuration from environment variables.
-
-    This function implements the standard pattern for reading KARENINA_ASYNC_*
-    environment variables, used by QuestionClassifier and LLMTraitEvaluator.
-
-    Returns:
-        Tuple of (async_enabled, max_workers) with defaults applied.
-    """
-    # Read async_enabled
-    async_enabled = True  # Default
-    env_val = os.getenv("KARENINA_ASYNC_ENABLED")
-    if env_val is not None:
-        async_enabled = env_val.lower() in ("true", "1", "yes")
-
-    # Read max_workers
-    max_workers = 2  # Default
-    env_val = os.getenv("KARENINA_ASYNC_MAX_WORKERS")
-    if env_val is not None:
-        with contextlib.suppress(ValueError):
-            max_workers = int(env_val)
-
-    return async_enabled, max_workers
+# Re-export read_async_config for backward compatibility
+__all__ = ["LLMParallelInvoker", "read_async_config"]
 
 
 class LLMParallelInvoker:
-    """Execute multiple LLMPort invocations with structured output in parallel.
+    """Execute multiple LLMPort invocations in parallel.
 
     This utility is designed for scenarios where multiple independent LLM calls
-    with structured output need to be made (e.g., evaluating traits one-by-one
-    in "sequential" mode). By running these calls in parallel, we achieve
-    significant speedup.
+    need to be made. By running these calls in parallel, we achieve significant
+    speedup.
 
-    Similar to AdapterParallelInvoker but works with LLMPort.with_structured_output():
-    - asyncio.gather() with semaphore for concurrency control
-    - Thread-safe result collection
-    - Per-task error handling (failed tasks don't block others)
+    Provides two separate methods for clean type separation:
 
-    Example usage:
+    1. `invoke_batch()` - Plain text mode (answer generation):
+       - Task: list[Message]
+       - Uses LLMPort.ainvoke() directly
+       - Returns: list[tuple[LLMResponse | None, Exception | None]]
+
+    2. `invoke_batch_structured()` - Structured output mode (rubric evaluation):
+       - Task: tuple[list[Message], type[T]]
+       - Uses LLMPort.with_structured_output().ainvoke()
+       - Returns: list[tuple[T | None, dict | None, Exception | None]]
+
+    Example usage (plain text):
+        invoker = LLMParallelInvoker(llm_adapter, max_workers=4)
+        tasks = [
+            [Message.system("..."), Message.user("Question 1")],
+            [Message.system("..."), Message.user("Question 2")],
+        ]
+        results = invoker.invoke_batch(tasks)
+        for response, error in results:
+            if error:
+                print(f"Task failed: {error}")
+            else:
+                print(f"Response: {response.content}")
+
+    Example usage (structured output):
         invoker = LLMParallelInvoker(llm_adapter, max_workers=4)
         tasks = [
             ([Message.system("..."), Message.user("...")], ResponseModel),
             ([Message.system("..."), Message.user("...")], ResponseModel),
         ]
-        results = invoker.invoke_batch(tasks)
+        results = invoker.invoke_batch_structured(tasks)
         for result, usage, error in results:
             if error:
                 print(f"Task failed: {error}")
@@ -106,22 +105,101 @@ class LLMParallelInvoker:
     @property
     def max_workers(self) -> int:
         """Get the effective max_workers value."""
-        if self._max_workers is not None:
-            return self._max_workers
+        return get_max_workers(self._max_workers)
 
-        env_val = os.getenv("KARENINA_ASYNC_MAX_WORKERS")
-        if env_val is not None:
-            with contextlib.suppress(ValueError):
-                return int(env_val)
-
-        return 2  # Default
+    # =========================================================================
+    # Plain Text Mode (answer generation)
+    # =========================================================================
 
     async def ainvoke_batch(
+        self,
+        tasks: Sequence[list[Message]],
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> list[tuple[LLMResponse | None, Exception | None]]:
+        """Invoke LLM for multiple message lists in parallel (async, plain text).
+
+        Each task is a list of messages. The LLM is invoked for each task,
+        and results are collected in order.
+
+        Args:
+            tasks: Sequence of message lists to send to the LLM.
+            progress_callback: Optional callback(completed, total) for progress.
+
+        Returns:
+            List of (response, error) tuples in same order as input.
+            - response: LLMResponse with content and usage metadata, or None if error
+            - error: Exception if the task failed, or None if success
+        """
+        if not tasks:
+            return []
+
+        total = len(tasks)
+        progress_lock = asyncio.Lock()
+        completed_count = 0
+        semaphore = asyncio.Semaphore(self.max_workers)
+
+        async def execute_task(
+            index: int,
+        ) -> tuple[int, LLMResponse | None, Exception | None]:
+            """Execute a single task and return (index, response, error)."""
+            nonlocal completed_count
+
+            messages = tasks[index]
+
+            async with semaphore:
+                try:
+                    response = await self.llm.ainvoke(messages)
+                    return index, response, None
+                except Exception as e:
+                    logger.debug(f"LLMParallelInvoker: Task {index} failed: {e}")
+                    return index, None, e
+                finally:
+                    if progress_callback:
+                        async with progress_lock:
+                            completed_count += 1
+                            progress_callback(completed_count, total)
+
+        task_coroutines = [execute_task(i) for i in range(total)]
+        raw_results = await asyncio.gather(*task_coroutines, return_exceptions=False)
+
+        # Build ordered results list
+        results: list[tuple[LLMResponse | None, Exception | None]] = [(None, None)] * total
+        for index, response, error in raw_results:
+            results[index] = (response, error)
+
+        return results
+
+    def invoke_batch(
+        self,
+        tasks: Sequence[list[Message]],
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> list[tuple[LLMResponse | None, Exception | None]]:
+        """Invoke LLM for multiple message lists in parallel (sync, plain text).
+
+        This is a sync wrapper around ainvoke_batch(). Uses the shared BlockingPortal
+        if available, otherwise falls back to asyncio.run().
+
+        Args:
+            tasks: Sequence of message lists to send to the LLM.
+            progress_callback: Optional callback(completed, total) for progress.
+
+        Returns:
+            List of (response, error) tuples in same order as input.
+            - response: LLMResponse with content and usage metadata, or None if error
+            - error: Exception if the task failed, or None if success
+        """
+        return sync_invoke_via_portal(self.ainvoke_batch, tasks, progress_callback)
+
+    # =========================================================================
+    # Structured Output Mode (rubric evaluation)
+    # =========================================================================
+
+    async def ainvoke_batch_structured(
         self,
         tasks: Sequence[tuple[list[Message], type[T]]],
         progress_callback: Callable[[int, int], None] | None = None,
     ) -> list[tuple[T | None, dict[str, Any] | None, Exception | None]]:
-        """Invoke LLM for multiple message/schema pairs in parallel (async).
+        """Invoke LLM for multiple message/schema pairs in parallel (async, structured).
 
         Each task is a tuple of (messages, response_model_class). The LLM is
         invoked with structured output for each task, and results are collected.
@@ -194,16 +272,15 @@ class LLMParallelInvoker:
 
         return results
 
-    def invoke_batch(
+    def invoke_batch_structured(
         self,
         tasks: Sequence[tuple[list[Message], type[T]]],
         progress_callback: Callable[[int, int], None] | None = None,
     ) -> list[tuple[T | None, dict[str, Any] | None, Exception | None]]:
-        """Invoke LLM for multiple message/schema pairs in parallel (sync).
+        """Invoke LLM for multiple message/schema pairs in parallel (sync, structured).
 
-        This is a sync wrapper around ainvoke_batch(). Uses the shared BlockingPortal
-        if available, otherwise falls back to asyncio.run() with proper event loop
-        handling.
+        This is a sync wrapper around ainvoke_batch_structured(). Uses the shared
+        BlockingPortal if available, otherwise falls back to asyncio.run().
 
         Args:
             tasks: Sequence of (messages, response_model_class) tuples.
@@ -217,29 +294,4 @@ class LLMParallelInvoker:
             - usage_metadata: Dict of usage info from LLMResponse.usage, or None
             - error: Exception if the task failed, or None if success
         """
-        from ..benchmark.verification.batch_runner import get_async_portal
-
-        portal = get_async_portal()
-
-        if portal is not None:
-            # Use the shared BlockingPortal for proper event loop management
-            return portal.call(self.ainvoke_batch, tasks, progress_callback)
-
-        # No portal available - check if we're already in an async context
-        try:
-            asyncio.get_running_loop()
-            # We're in an async context - use ThreadPoolExecutor to avoid
-            # nested event loop issues
-            logger.debug("LLMParallelInvoker: Running in async context, using ThreadPoolExecutor")
-
-            def run_in_thread() -> list[tuple[T | None, dict[str, Any] | None, Exception | None]]:
-                return asyncio.run(self.ainvoke_batch(tasks, progress_callback))
-
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(run_in_thread)
-                return future.result(timeout=600)  # 10 minute timeout
-
-        except RuntimeError:
-            # No event loop running, safe to use asyncio.run
-            logger.debug("LLMParallelInvoker: No event loop, using asyncio.run()")
-            return asyncio.run(self.ainvoke_batch(tasks, progress_callback))
+        return sync_invoke_via_portal(self.ainvoke_batch_structured, tasks, progress_callback)
