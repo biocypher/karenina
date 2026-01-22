@@ -1,22 +1,27 @@
 """Verification configuration and result models.
 
+DEPRECATED: Import from `karenina.schemas.verification` instead.
+
 This module re-exports all verification-related classes for backward compatibility.
 """
 
-# Re-export configuration and constants
-# Re-export API models
-from .api_models import (
-    FinishedTemplate,
-    VerificationRequest,
-    VerificationStartResponse,
-    VerificationStatusResponse,
-)
-from .config import (
+# Re-export from new location for backward compatibility
+from ...verification import (
     DEFAULT_ANSWERING_SYSTEM_PROMPT,
     DEFAULT_PARSING_SYSTEM_PROMPT,
+    DeepJudgmentTraitConfig,
+    FinishedTemplate,
     VerificationConfig,
-)
-from .config_presets import (
+    VerificationJob,
+    VerificationRequest,
+    VerificationResult,
+    VerificationResultDeepJudgment,
+    VerificationResultDeepJudgmentRubric,
+    VerificationResultMetadata,
+    VerificationResultRubric,
+    VerificationResultTemplate,
+    VerificationStartResponse,
+    VerificationStatusResponse,
     create_preset_structure,
     load_preset,
     sanitize_model_config,
@@ -25,27 +30,13 @@ from .config_presets import (
     validate_preset_metadata,
 )
 
-# Re-export job
-from .job import VerificationJob
-
-# Re-export result
-from .result import VerificationResult
-
-# Re-export result components
-from .result_components import (
-    VerificationResultDeepJudgment,
-    VerificationResultDeepJudgmentRubric,
-    VerificationResultMetadata,
-    VerificationResultRubric,
-    VerificationResultTemplate,
-)
-
 __all__ = [
     # Constants
     "DEFAULT_ANSWERING_SYSTEM_PROMPT",
     "DEFAULT_PARSING_SYSTEM_PROMPT",
     # Configuration
     "VerificationConfig",
+    "DeepJudgmentTraitConfig",
     # Preset utilities
     "sanitize_model_config",
     "sanitize_preset_name",

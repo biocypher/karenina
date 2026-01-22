@@ -19,9 +19,9 @@ from pathlib import Path
 from typing import Any
 
 from ..schemas import VerificationConfig, VerificationResult
-from ..schemas.domain.rubric import Rubric
-from ..schemas.workflow.models import ModelConfig
-from ..schemas.workflow.verification_result_set import VerificationResultSet
+from ..schemas.config import ModelConfig
+from ..schemas.entities import Rubric
+from ..schemas.results import VerificationResultSet
 
 logger = logging.getLogger(__name__)
 
