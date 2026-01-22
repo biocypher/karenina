@@ -134,8 +134,28 @@ class ClaudeSDKAgentAdapter:
         if mcp_servers:
             options_kwargs["mcp_servers"] = mcp_servers
 
-        # Add tool filter if specific tools are requested
-        if tools:
+            # IMPORTANT: When MCP servers are configured, restrict tools to ONLY MCP tools.
+            # This prevents the agent from using default Claude Code tools (Read, Grep, Bash, etc.)
+            # which can distract from the actual MCP tool usage.
+            #
+            # Build allowed_tools list from MCP server names and tool filter.
+            # MCP tools follow naming convention: mcp__<server_name>__<tool_name>
+            mcp_tool_filter = self._config.mcp_tool_filter
+            if mcp_tool_filter:
+                # User specified specific tools - build full MCP tool names
+                allowed_tools = []
+                for server_name in mcp_servers:
+                    for tool_name in mcp_tool_filter:
+                        allowed_tools.append(f"mcp__{server_name}__{tool_name}")
+                options_kwargs["allowed_tools"] = allowed_tools
+                logger.info(f"Restricting SDK to MCP tools: {allowed_tools}")
+            # If no tool filter specified but MCP servers are configured,
+            # we cannot pre-filter (don't know tool names yet).
+            # The agent will have access to all tools including defaults.
+            # TODO: Consider fetching tool list from MCP servers to build filter.
+
+        # Add tool filter if specific tools are requested (non-MCP case)
+        if tools and "allowed_tools" not in options_kwargs:
             # SDK supports tool filtering via allowed_tools
             options_kwargs["allowed_tools"] = [t.name for t in tools]
 
@@ -143,7 +163,7 @@ class ClaudeSDKAgentAdapter:
         if config.extra:
             for key, value in config.extra.items():
                 # Don't override critical options
-                if key not in ("permission_mode", "max_turns", "mcp_servers"):
+                if key not in ("permission_mode", "max_turns", "mcp_servers", "allowed_tools"):
                     options_kwargs[key] = value
 
         return ClaudeAgentOptions(**options_kwargs)

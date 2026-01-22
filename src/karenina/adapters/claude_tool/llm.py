@@ -22,6 +22,7 @@ from pydantic import BaseModel
 
 from karenina.ports import LLMPort, LLMResponse, Message, PortError
 from karenina.schemas.workflow.models import ModelConfig
+from karenina.utils.messages import append_error_feedback
 
 from .messages import build_system_with_cache, convert_to_anthropic, extract_system_prompt
 from .usage import extract_usage_from_response
@@ -176,9 +177,7 @@ class ClaudeToolLLMAdapter:
         last_error: str | None = None
 
         for attempt in range(self._max_retries + 1):
-            effective_messages = (
-                self._add_retry_feedback(messages, last_error) if attempt > 0 and last_error else messages
-            )
+            effective_messages = append_error_feedback(messages, last_error) if attempt > 0 and last_error else messages
 
             try:
                 return await self._try_structured_invocation(effective_messages)
@@ -249,13 +248,6 @@ class ClaudeToolLLMAdapter:
             raw=parsed_output,
         )
 
-    def _add_retry_feedback(self, messages: list[Message], error: str) -> list[Message]:
-        """Add retry feedback to messages after a validation failure."""
-        feedback = Message.user(
-            f"PREVIOUS ATTEMPT FAILED with error: {error}\nPlease fix the validation issues and try again."
-        )
-        return list(messages) + [feedback]
-
     def invoke(self, messages: list[Message]) -> LLMResponse:
         """Invoke the LLM synchronously.
 
@@ -310,7 +302,7 @@ class ClaudeToolLLMAdapter:
         )
 
 
-# Protocol verification
+# Verify protocol compliance at import time
 def _verify_protocol_compliance() -> None:
     """Verify ClaudeToolLLMAdapter implements LLMPort protocol."""
     adapter_instance: LLMPort = None  # type: ignore[assignment]

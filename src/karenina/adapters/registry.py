@@ -286,6 +286,11 @@ class AdapterRegistry:
         except ImportError:
             logger.debug("Manual registration module not available")
 
+        try:
+            from karenina.adapters.claude_tool import registration as _ct  # noqa: F401
+        except ImportError:
+            logger.debug("Claude Tool registration module not available")
+
         cls._initialized = True
 
     @classmethod

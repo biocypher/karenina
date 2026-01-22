@@ -209,6 +209,8 @@ def get_llm(
                 f"Falling back to '{availability.fallback_interface}'."
             )
             interface = cast(InterfaceType, availability.fallback_interface)
+            # Transform the config so the adapter only sees interfaces it handles
+            model_config = model_config.model_copy(update={"interface": interface})
         else:
             raise AdapterUnavailableError(
                 message=f"Adapter for interface '{interface}' is not available",
@@ -283,6 +285,8 @@ def get_agent(
                 f"Falling back to '{availability.fallback_interface}'."
             )
             interface = cast(InterfaceType, availability.fallback_interface)
+            # Transform the config so the adapter only sees interfaces it handles
+            model_config = model_config.model_copy(update={"interface": interface})
         else:
             raise AdapterUnavailableError(
                 message=f"Agent adapter for interface '{interface}' is not available",
@@ -359,6 +363,8 @@ def get_parser(
                 f"Falling back to '{availability.fallback_interface}'."
             )
             interface = cast(InterfaceType, availability.fallback_interface)
+            # Transform the config so the adapter only sees interfaces it handles
+            model_config = model_config.model_copy(update={"interface": interface})
         else:
             raise AdapterUnavailableError(
                 message=f"Parser adapter for interface '{interface}' is not available",
