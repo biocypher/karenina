@@ -82,11 +82,15 @@ def init_chat_model_unified(
         ...     "manual", interface="manual", question_hash="abc123..."
         ... )
     """
+    # Filter out karenina-specific parameters that shouldn't be passed to underlying models
+    # max_context_tokens is used by middleware (summarization trigger), not by LangChain models
+    filtered_kwargs = {k: v for k, v in kwargs.items() if k != "max_context_tokens"}
+
     if interface == "langchain":
-        return init_chat_model(model=model, model_provider=provider, **kwargs)
+        return init_chat_model(model=model, model_provider=provider, **filtered_kwargs)
 
     if interface == "openrouter":
-        return ChatOpenRouter(model=model, **kwargs)
+        return ChatOpenRouter(model=model, **filtered_kwargs)
 
     if interface == "openai_endpoint":
         if endpoint_base_url is None:
@@ -100,17 +104,17 @@ def init_chat_model_unified(
             base_url=endpoint_base_url,
             openai_api_key=endpoint_api_key,
             model=model,
-            **kwargs,
+            **filtered_kwargs,
         )
 
     if interface == "manual":
         if question_hash is None:
             raise ValueError("question_hash is required for manual interface")
-        return create_manual_llm(question_hash=question_hash, **kwargs)
+        return create_manual_llm(question_hash=question_hash, **filtered_kwargs)
 
     # Unknown interface - should not happen if AdapterFactory routes correctly
     logger.warning(
         f"Unknown interface '{interface}' in LangChain adapter; "
         f"falling back to init_chat_model. Check AdapterFactory routing."
     )
-    return init_chat_model(model=model, model_provider=provider, **kwargs)
+    return init_chat_model(model=model, model_provider=provider, **filtered_kwargs)

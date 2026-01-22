@@ -77,7 +77,20 @@ def fetch_openai_endpoint_context_size(
         return None
 
 
-class InvokeSummarizationMiddleware:
+def _get_agent_middleware_base() -> type:
+    """Lazily import AgentMiddleware base class."""
+    try:
+        from langchain.agents.middleware import AgentMiddleware
+
+        return AgentMiddleware
+    except ImportError as e:
+        raise ImportError(
+            "langchain>=1.1.0 and langgraph are required for middleware support. "
+            "Install with: uv add 'langchain>=1.1.0' langgraph"
+        ) from e
+
+
+class InvokeSummarizationMiddleware(_get_agent_middleware_base()):  # type: ignore[misc]
     """Custom middleware that summarizes conversation WITHIN a single invoke.
 
     Unlike built-in SummarizationMiddleware which only triggers between invokes,
@@ -86,8 +99,7 @@ class InvokeSummarizationMiddleware:
     Uses RemoveMessage operations to properly remove summarized messages from
     LangGraph state, since the default message reducer appends rather than replaces.
 
-    Note: This class lazily imports LangChain dependencies in __init__ to avoid
-    import issues when langchain is not installed.
+    Inherits from AgentMiddleware to be compatible with LangChain's create_agent.
     """
 
     def __init__(
@@ -96,18 +108,6 @@ class InvokeSummarizationMiddleware:
         trigger_token_count: int = 4000,
         keep_message_count: int = 5,
     ):
-        # Lazy import to avoid module-level import issues
-        try:
-            from langchain.agents.middleware import AgentMiddleware
-        except ImportError as e:
-            raise ImportError(
-                "langchain>=1.1.0 and langgraph are required for middleware support. "
-                "Install with: uv add 'langchain>=1.1.0' langgraph"
-            ) from e
-
-        # Store base class for isinstance checks if needed
-        self._middleware_base = AgentMiddleware
-
         self.model = summarization_model
         self.trigger_tokens = trigger_token_count
         self.keep_messages = keep_message_count
