@@ -8,7 +8,7 @@ from typing import Any
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
-from ....infrastructure.llm.interface import init_chat_model_unified
+from ....adapters.langchain.initialization import init_chat_model_unified
 from ....schemas.workflow import ModelConfig
 
 # Global cache for embedding models (thread-safe) with LRU eviction

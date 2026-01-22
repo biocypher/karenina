@@ -2,6 +2,7 @@
 
 import json
 import logging
+from functools import partial
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -10,7 +11,8 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 from .....adapters import get_llm
 from .....ports import LLMResponse, Message
 from .....schemas.workflow import ModelConfig
-from ...utils.error_helpers import is_retryable_error
+from .....utils.errors import is_retryable_error
+from .....utils.retry import log_retry
 from ...utils.llm_judge_helpers import extract_judge_result, fallback_json_parse
 from ...utils.prompts import SUFFICIENCY_DETECTION_SYS, SUFFICIENCY_DETECTION_USER
 
@@ -63,17 +65,12 @@ def detect_sufficiency(
         True, True
     """
 
-    def _log_retry(retry_state: Any) -> None:
-        """Log retry attempt with error details."""
-        exc = retry_state.outcome.exception() if retry_state.outcome else None
-        logger.warning(f"Retrying sufficiency detection (attempt {retry_state.attempt_number}/3) after error: {exc}")
-
     @retry(
         retry=retry_if_exception_type(Exception),
         stop=stop_after_attempt(3),  # Try 3 times
         wait=wait_exponential(multiplier=1, min=2, max=10),  # Exponential backoff: 2s, 4s, 8s
         reraise=True,
-        before_sleep=_log_retry,
+        before_sleep=partial(log_retry, context="sufficiency detection"),
     )
     def _detect_with_retry() -> tuple[bool, bool, str | None, dict[str, Any]]:
         """Inner function with retry logic."""

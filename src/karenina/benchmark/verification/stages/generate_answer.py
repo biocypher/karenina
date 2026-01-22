@@ -9,8 +9,8 @@ import logging
 import traceback
 from typing import Any
 
-from ....adapters import get_agent
-from ....ports import AgentConfig, AgentPort, Message
+from ....adapters import get_agent, get_llm
+from ....ports import AgentConfig, AgentPort, LLMPort, Message
 from ..stage import BaseVerificationStage, VerificationContext
 from ..utils.llm_invocation import _construct_few_shot_prompt
 from ..utils.trace_usage_tracker import UsageTracker
@@ -157,14 +157,20 @@ class GenerateAnswerStage(BaseVerificationStage):
         if answering_model.interface == "manual":
             logger.info(f"Manual interface: Using MD5 hash '{question_hash}' from question text for trace lookup")
 
-        # Step 2: Initialize agent adapter (unified path for ALL interfaces)
+        # Step 2: Determine whether to use AgentPort (with MCP) or LLMPort (simple)
+        use_agent = bool(answering_model.mcp_urls_dict)
         answering_agent: AgentPort | None = None
+        answering_llm: LLMPort | None = None
 
         try:
-            # All interfaces use unified adapter factory including manual
-            # ManualAgentAdapter reads from ManualTraceManager using question_hash
-            answering_agent = get_agent(answering_model, auto_fallback=True)
-            logger.info(f"Using {answering_model.interface} adapter for {answering_model_str}")
+            if use_agent:
+                # Use AgentPort for MCP-enabled models
+                answering_agent = get_agent(answering_model, auto_fallback=True)
+                logger.info(f"Using AgentPort ({answering_model.interface}) for {answering_model_str} with MCP")
+            else:
+                # Use LLMPort for simple LLM calls without tools
+                answering_llm = get_llm(answering_model, auto_fallback=True)
+                logger.info(f"Using LLMPort ({answering_model.interface}) for {answering_model_str} (no MCP)")
         except Exception as e:
             error_msg = f"Failed to initialize answering model: {type(e).__name__}: {e}"
             logger.error(error_msg)
@@ -184,72 +190,95 @@ class GenerateAnswerStage(BaseVerificationStage):
         usage_tracker = UsageTracker()
 
         try:
-            # Unified adapter path for ALL interfaces
-            # (langchain, openrouter, openai_endpoint, claude_agent_sdk, manual)
             # Construct messages in unified Message format
             adapter_messages: list[Message] = []
             if answering_model.system_prompt:
                 adapter_messages.append(Message.system(answering_model.system_prompt))
             adapter_messages.append(Message.user(constructed_prompt))
 
-            # Build MCP server config if needed
-            mcp_servers: dict[str, Any] | None = None
-            if answering_model.mcp_urls_dict:
-                # Convert URL-based config to SDK format
-                # The adapter handles this conversion internally
-                mcp_servers = {}
-                for name, url in answering_model.mcp_urls_dict.items():
-                    mcp_servers[name] = {"type": "http", "url": url}
+            if use_agent and answering_agent is not None:
+                # AgentPort path: Use for MCP-enabled models with tool calling
+                # Build MCP server config
+                mcp_servers: dict[str, Any] = {}
+                if answering_model.mcp_urls_dict:
+                    for name, url in answering_model.mcp_urls_dict.items():
+                        mcp_servers[name] = {"type": "http", "url": url}
 
-            # Build agent config with question_hash (used by manual, ignored by others)
-            agent_config = AgentConfig(
-                max_turns=answering_model.agent_middleware.limits.model_call_limit
-                if answering_model.agent_middleware
-                else 25,
-                timeout=120,
-                question_hash=question_hash,
-            )
+                # Build agent config with question_hash (used by manual, ignored by others)
+                agent_config = AgentConfig(
+                    max_turns=answering_model.agent_middleware.limits.model_call_limit
+                    if answering_model.agent_middleware
+                    else 25,
+                    timeout=120,
+                    question_hash=question_hash,
+                )
 
-            # Run the agent
-            result = answering_agent.run_sync(
-                messages=adapter_messages,
-                mcp_servers=mcp_servers,
-                config=agent_config,
-            )
+                # Run the agent
+                result = answering_agent.run_sync(
+                    messages=adapter_messages,
+                    mcp_servers=mcp_servers,
+                    config=agent_config,
+                )
 
-            # Extract results from AgentResult
-            raw_llm_response = result.raw_trace
-            recursion_limit_reached = result.limit_reached
+                # Extract results from AgentResult
+                raw_llm_response = result.raw_trace
+                recursion_limit_reached = result.limit_reached
 
-            # Track usage metadata from adapter
-            if result.usage:
-                # Build inner usage dict
-                inner_usage: dict[str, int | float] = {
-                    "input_tokens": result.usage.input_tokens,
-                    "output_tokens": result.usage.output_tokens,
-                    "total_tokens": result.usage.total_tokens,
+                # Track usage metadata from adapter
+                if result.usage:
+                    inner_usage: dict[str, int | float] = {
+                        "input_tokens": result.usage.input_tokens,
+                        "output_tokens": result.usage.output_tokens,
+                        "total_tokens": result.usage.total_tokens,
+                    }
+                    if result.usage.cost_usd is not None:
+                        inner_usage["cost_usd"] = result.usage.cost_usd
+                    if result.usage.cache_read_tokens is not None:
+                        inner_usage["cache_read_input_tokens"] = result.usage.cache_read_tokens
+                    if result.usage.cache_creation_tokens is not None:
+                        inner_usage["cache_creation_input_tokens"] = result.usage.cache_creation_tokens
+
+                    usage_metadata = {answering_model_str: inner_usage}
+                    usage_tracker.track_call("answer_generation", answering_model_str, usage_metadata)
+
+                # Track agent metrics
+                agent_metrics = {
+                    "iterations": result.turns,
+                    "limit_reached": result.limit_reached,
                 }
-                if result.usage.cost_usd is not None:
-                    inner_usage["cost_usd"] = result.usage.cost_usd
-                if result.usage.cache_read_tokens is not None:
-                    inner_usage["cache_read_input_tokens"] = result.usage.cache_read_tokens
-                if result.usage.cache_creation_tokens is not None:
-                    inner_usage["cache_creation_input_tokens"] = result.usage.cache_creation_tokens
+                usage_tracker.set_agent_metrics(agent_metrics)
 
-                # Wrap in model-keyed format expected by UsageTracker
-                usage_metadata = {answering_model_str: inner_usage}
-                usage_tracker.track_call("answer_generation", answering_model_str, usage_metadata)
+                # Store trace_messages for future use (PR5a)
+                if result.trace_messages:
+                    context.set_artifact("trace_messages", result.trace_messages)
 
-            # Track agent metrics
-            agent_metrics = {
-                "iterations": result.turns,
-                "limit_reached": result.limit_reached,
-            }
-            usage_tracker.set_agent_metrics(agent_metrics)
+            else:
+                # LLMPort path: Use for simple LLM calls without tools
+                assert answering_llm is not None
 
-            # Store trace_messages for future use (PR5a)
-            if result.trace_messages:
-                context.set_artifact("trace_messages", result.trace_messages)
+                # Invoke LLM directly
+                llm_response = answering_llm.invoke(adapter_messages)
+
+                # Format response as a simple trace (Human + AI messages)
+                raw_llm_response = (
+                    f"--- Human Message ---\n{constructed_prompt}\n\n--- AI Message ---\n{llm_response.content}"
+                )
+
+                # Track usage metadata
+                if llm_response.usage:
+                    inner_usage = {
+                        "input_tokens": llm_response.usage.input_tokens,
+                        "output_tokens": llm_response.usage.output_tokens,
+                        "total_tokens": llm_response.usage.total_tokens,
+                    }
+                    if llm_response.usage.cost_usd is not None:
+                        inner_usage["cost_usd"] = llm_response.usage.cost_usd
+
+                    usage_metadata = {answering_model_str: inner_usage}
+                    usage_tracker.track_call("answer_generation", answering_model_str, usage_metadata)
+
+                # No agent metrics for simple LLM calls
+                usage_tracker.set_agent_metrics({"iterations": 1, "limit_reached": False})
 
         except Exception as e:
             # Adapters handle recursion limits internally and return AgentResult with
