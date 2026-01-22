@@ -22,6 +22,7 @@ from karenina.ports import Message, ParseError, ParserPort
 from karenina.schemas.workflow.models import ModelConfig
 
 from .llm import ClaudeToolLLMAdapter
+from .prompts import PARSER_SYSTEM, PARSER_USER
 
 logger = logging.getLogger(__name__)
 
@@ -85,22 +86,9 @@ class ClaudeToolParserAdapter:
         Returns:
             List of Message objects for the parsing request.
         """
-        system_content = """You are an evaluator that extracts structured information from responses.
-
-Extract information according to the schema field descriptions. Each field description specifies what to extract.
-
-Critical rules:
-- Extract only what's actually stated - don't infer or add information not present
-- Use null for information not present (if field allows null)"""
-
-        user_content = f"""Parse the following response and extract structured information according to the schema.
-
-**RESPONSE TO PARSE:**
-{response}"""
-
         return [
-            Message.system(system_content),
-            Message.user(user_content),
+            Message.system(PARSER_SYSTEM),
+            Message.user(PARSER_USER.format(response=response)),
         ]
 
     async def aparse_to_pydantic(self, response: str, schema: type[T]) -> T:

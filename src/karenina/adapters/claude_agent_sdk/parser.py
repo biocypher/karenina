@@ -25,6 +25,8 @@ from pydantic import BaseModel
 
 from karenina.ports import ParseError, ParserPort
 
+from .prompts import PARSER
+
 if TYPE_CHECKING:
     from claude_agent_sdk import ClaudeAgentOptions, ResultMessage
 
@@ -136,32 +138,7 @@ class ClaudeSDKParserAdapter:
         # Generate JSON schema for reference in the prompt
         json_schema = json.dumps(schema.model_json_schema(), indent=2)
 
-        return f"""You are an evaluator that extracts structured information from responses.
-
-# Task
-Parse the following response and extract structured information according to the JSON schema provided.
-
-# Extraction Protocol
-
-## 1. Extract According to Schema
-- Each field description specifies WHAT to extract from the response
-- Follow field descriptions precisely
-- Use `null` for information not present (if field allows null)
-
-## 2. Fidelity
-- Extract only what's actually stated in the response
-- Don't infer or add information not present
-- If uncertain, use your best interpretation based on the text
-
-# Response to Parse
-{response}
-
-# JSON Schema Reference
-```json
-{json_schema}
-```
-
-Extract the structured information from the response above."""
+        return PARSER.format(response=response, json_schema=json_schema)
 
     async def aparse_to_pydantic(self, response: str, schema: type[T]) -> T:
         """Parse an LLM response into a structured Pydantic model.
