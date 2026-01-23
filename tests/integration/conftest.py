@@ -238,7 +238,7 @@ def rubric_evaluator(
                 rubric=sample_rubric,
             )
     """
-    with patch("karenina.benchmark.verification.evaluators.rubric_evaluator.get_llm") as mock_get_llm:
+    with patch("karenina.benchmark.verification.evaluators.rubric.evaluator.get_llm") as mock_get_llm:
         mock_get_llm.return_value = llm_port_adapter
         evaluator = RubricEvaluator(
             model_config=parsing_model_config,

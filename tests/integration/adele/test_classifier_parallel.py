@@ -130,14 +130,14 @@ def test_classifier_sequential_mode_with_parallel_execution(
             mock_result.classification = class_names[i % len(class_names)]
             mock_results.append((mock_result, {"total_tokens": 10}, None))
 
-        mock_invoker.invoke_batch.return_value = mock_results
+        mock_invoker.invoke_batch_structured.return_value = mock_results
 
         # Execute classification
         result = classifier._classify_single_sequential(sample_question, sample_traits, question_id="test-1")
 
         # Verify LLMParallelInvoker was used
         mock_invoker_class.assert_called_once()
-        mock_invoker.invoke_batch.assert_called_once()
+        mock_invoker.invoke_batch_structured.assert_called_once()
 
         # Verify all traits have results
         assert len(result.scores) == len(sample_traits)
@@ -213,7 +213,7 @@ def test_classifier_parallel_handles_partial_errors(
                 mock_result.classification = class_names[0]
                 mock_results.append((mock_result, {"total_tokens": 10}, None))
 
-        mock_invoker.invoke_batch.return_value = mock_results
+        mock_invoker.invoke_batch_structured.return_value = mock_results
 
         result = classifier._classify_single_sequential(sample_question, sample_traits, question_id="test-1")
 
@@ -254,7 +254,7 @@ def test_classifier_parallel_usage_aggregation(
                 (mock_result, {"total_tokens": 10 + i, "input_tokens": 5, "output_tokens": 5 + i}, None)
             )
 
-        mock_invoker.invoke_batch.return_value = mock_results
+        mock_invoker.invoke_batch_structured.return_value = mock_results
 
         result = classifier._classify_single_sequential(sample_question, sample_traits, question_id="test-1")
 

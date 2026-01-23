@@ -219,13 +219,13 @@ def test_evaluate_sequential_uses_parallel_invoker(
             mock_result.result = True  # Boolean result
             mock_results.append((mock_result, {"total_tokens": 10}, None))
 
-        mock_invoker.invoke_batch.return_value = mock_results
+        mock_invoker.invoke_batch_structured.return_value = mock_results
 
         results, usage_list = evaluator.evaluate_sequential(sample_question, sample_answer, boolean_traits)
 
         # Verify LLMParallelInvoker was used
         mock_invoker_class.assert_called_once()
-        mock_invoker.invoke_batch.assert_called_once()
+        mock_invoker.invoke_batch_structured.assert_called_once()
 
         # Verify results
         assert len(results) == len(boolean_traits)
@@ -290,7 +290,7 @@ def test_evaluate_sequential_handles_partial_errors(
                 mock_result.result = True
                 mock_results.append((mock_result, {"total_tokens": 10}, None))
 
-        mock_invoker.invoke_batch.return_value = mock_results
+        mock_invoker.invoke_batch_structured.return_value = mock_results
 
         results, usage_list = evaluator.evaluate_sequential(sample_question, sample_answer, boolean_traits)
 
@@ -325,7 +325,7 @@ def test_evaluate_sequential_score_traits(
             mock_result.score = 3 + i  # Numeric score
             mock_results.append((mock_result, {"total_tokens": 10}, None))
 
-        mock_invoker.invoke_batch.return_value = mock_results
+        mock_invoker.invoke_batch_structured.return_value = mock_results
 
         results, usage_list = evaluator.evaluate_sequential(sample_question, sample_answer, score_traits)
 
@@ -362,7 +362,7 @@ def test_evaluate_literal_sequential_uses_parallel_invoker(
             mock_result.classification = class_names[0]  # First class
             mock_results.append((mock_result, {"total_tokens": 10}, None))
 
-        mock_invoker.invoke_batch.return_value = mock_results
+        mock_invoker.invoke_batch_structured.return_value = mock_results
 
         scores, labels, usage_list = evaluator.evaluate_literal_sequential(
             sample_question, sample_answer, literal_traits
@@ -370,7 +370,7 @@ def test_evaluate_literal_sequential_uses_parallel_invoker(
 
         # Verify LLMParallelInvoker was used
         mock_invoker_class.assert_called_once()
-        mock_invoker.invoke_batch.assert_called_once()
+        mock_invoker.invoke_batch_structured.assert_called_once()
 
         # Verify results
         assert len(scores) == len(literal_traits)
@@ -434,7 +434,7 @@ def test_evaluate_literal_sequential_handles_errors(
                 mock_result.classification = class_names[1] if len(class_names) > 1 else class_names[0]
                 mock_results.append((mock_result, {"total_tokens": 10}, None))
 
-        mock_invoker.invoke_batch.return_value = mock_results
+        mock_invoker.invoke_batch_structured.return_value = mock_results
 
         scores, labels, usage_list = evaluator.evaluate_literal_sequential(
             sample_question, sample_answer, literal_traits
@@ -495,7 +495,7 @@ def test_evaluate_sequential_preserves_usage_metadata(
             mock_result.result = True
             mock_results.append((mock_result, {"total_tokens": 10 + i, "input_tokens": 5}, None))
 
-        mock_invoker.invoke_batch.return_value = mock_results
+        mock_invoker.invoke_batch_structured.return_value = mock_results
 
         results, usage_list = evaluator.evaluate_sequential(sample_question, sample_answer, boolean_traits)
 

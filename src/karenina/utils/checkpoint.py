@@ -326,7 +326,7 @@ def extract_questions_from_benchmark(
 
             # Categorize traits by type to match Rubric schema
             if traits:
-                from ..schemas.domain.rubric import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
+                from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
 
                 llm_traits = [t for t in traits if isinstance(t, LLMRubricTrait)]
                 regex_traits = [t for t in traits if isinstance(t, RegexTrait)]
