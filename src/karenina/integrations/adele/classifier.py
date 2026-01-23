@@ -20,6 +20,12 @@ from typing import TYPE_CHECKING, Any
 from karenina.ports import LLMPort
 from karenina.ports.messages import Message
 
+from .prompts import (
+    SYSTEM_PROMPT_BATCH,
+    SYSTEM_PROMPT_SINGLE_TRAIT,
+    USER_PROMPT_BATCH_TEMPLATE,
+    USER_PROMPT_SINGLE_TRAIT_TEMPLATE,
+)
 from .schemas import QuestionClassificationResult
 from .traits import ADELE_TRAIT_NAMES, get_adele_trait
 
@@ -376,29 +382,7 @@ class QuestionClassifier:
 
     def _build_system_prompt_single_trait(self) -> str:
         """Build system prompt for single-trait question classification."""
-        return """You are an expert evaluator classifying QUESTIONS (not answers) using the ADeLe framework.
-
-ADeLe (Assessment Dimensions for Language Evaluation) characterizes questions by their cognitive complexity. Your task is to analyze the QUESTION ITSELF and classify it for a SINGLE dimension.
-
-**RESPONSE FORMAT:**
-You will receive a JSON Schema specifying the exact output structure. Your response MUST conform to this schema.
-Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
-
-**CRITICAL REQUIREMENTS:**
-1. **Exact Class Name**: Use the EXACT class name from the trait's categories (case-sensitive)
-2. **One Class Only**: Choose exactly one class
-3. **No Invention**: Do NOT invent new categories - only use the provided class names
-
-**CLASSIFICATION GUIDELINES:**
-- You are classifying the QUESTION, not evaluating an answer
-- Consider what cognitive demands the question places on someone trying to answer it
-- Read each class definition carefully - they describe increasing levels of complexity
-- When uncertain, choose the level that best represents the primary cognitive demand
-
-**WHAT NOT TO DO:**
-- Do NOT wrap JSON in markdown code blocks (no ```)
-- Do NOT add explanatory text before or after the JSON
-- Do NOT modify or paraphrase class names"""
+        return SYSTEM_PROMPT_SINGLE_TRAIT
 
     def _build_user_prompt_single_trait(self, question_text: str, trait: Any) -> str:
         """Build user prompt for single-trait question classification."""
@@ -417,59 +401,19 @@ Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
         mid_idx = len(class_names) // 2
         example_json = json.dumps({"classification": class_names[mid_idx]}, indent=2)
 
-        return f"""Classify the following QUESTION for the ADeLe dimension: **{trait.name}**
-
-**QUESTION TO CLASSIFY:**
-{question_text}
-
-**DIMENSION: {trait.name}**
-{trait.description or "Classification dimension"}
-
-Classes (in order of increasing complexity): {", ".join(class_names)}
-
-{chr(10).join(class_details)}
-
-**JSON SCHEMA (your response MUST conform to this):**
-```json
-{json_schema}
-```
-
-**REQUIRED OUTPUT FORMAT:**
-Return a JSON object with a "classification" key containing the exact class name.
-
-Example format (class value is just an example):
-{example_json}
-
-**YOUR JSON RESPONSE:**"""
+        return USER_PROMPT_SINGLE_TRAIT_TEMPLATE.format(
+            trait_name=trait.name,
+            question_text=question_text,
+            trait_description=trait.description or "Classification dimension",
+            class_names=", ".join(class_names),
+            class_details="\n".join(class_details),
+            json_schema=json_schema,
+            example_json=example_json,
+        )
 
     def _build_system_prompt(self) -> str:
         """Build system prompt for batch question classification."""
-        return """You are an expert evaluator classifying QUESTIONS (not answers) using the ADeLe framework.
-
-ADeLe (Assessment Dimensions for Language Evaluation) characterizes questions by their cognitive complexity across multiple dimensions. Your task is to analyze the QUESTION ITSELF and determine what level of each dimension would be required to answer it.
-
-**RESPONSE FORMAT:**
-You will receive a JSON Schema specifying the exact output structure. Your response MUST conform to this schema.
-Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
-
-**CRITICAL REQUIREMENTS:**
-1. **Exact Class Names**: Use the EXACT class names from each trait's categories (case-sensitive)
-2. **One Class Per Trait**: Choose exactly one class for each trait
-3. **All Traits Required**: Include ALL traits in your response
-4. **No Invention**: Do NOT invent new categories - only use the provided class names
-
-**CLASSIFICATION GUIDELINES:**
-- You are classifying the QUESTION, not evaluating an answer
-- Consider what cognitive demands the question places on someone trying to answer it
-- Read each trait's class definitions carefully - they describe increasing levels of complexity
-- When uncertain, choose the level that best represents the primary cognitive demand
-- Consider the question holistically - a simple question in one dimension may be complex in another
-
-**WHAT NOT TO DO:**
-- Do NOT wrap JSON in markdown code blocks (no ```)
-- Do NOT add explanatory text before or after the JSON
-- Do NOT modify or paraphrase class names
-- Do NOT skip any traits"""
+        return SYSTEM_PROMPT_BATCH
 
     def _build_user_prompt(self, question_text: str, traits: list[Any]) -> str:
         """Build user prompt for question classification."""
@@ -502,27 +446,12 @@ Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
         example_json = json.dumps({"classifications": example_classifications}, indent=2)
         json_schema = json.dumps(BatchLiteralClassifications.model_json_schema(), indent=2)
 
-        return f"""Classify the following QUESTION for each ADeLe dimension:
-
-**QUESTION TO CLASSIFY:**
-{question_text}
-
-**ADeLe DIMENSIONS TO CLASSIFY:**
-{chr(10).join(traits_description)}
-
-**JSON SCHEMA (your response MUST conform to this):**
-```json
-{json_schema}
-```
-
-**REQUIRED OUTPUT FORMAT:**
-Return a JSON object with a "classifications" key mapping trait names to class names.
-Use EXACT trait and class names as shown above.
-
-Example format (class values are just examples):
-{example_json}
-
-**YOUR JSON RESPONSE:**"""
+        return USER_PROMPT_BATCH_TEMPLATE.format(
+            question_text=question_text,
+            traits_description="\n".join(traits_description),
+            json_schema=json_schema,
+            example_json=example_json,
+        )
 
     def _validate_classifications(
         self,
