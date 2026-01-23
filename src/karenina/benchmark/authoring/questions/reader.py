@@ -2,7 +2,7 @@ import importlib.util
 import os
 import sys
 
-from karenina.schemas.domain import Question
+from karenina.schemas.entities import Question
 
 
 def read_questions_from_file(questions_py_path: str, return_dict: bool = False) -> list[Question] | dict[str, Question]:

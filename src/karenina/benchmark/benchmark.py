@@ -17,7 +17,6 @@ if TYPE_CHECKING:
     from ..schemas.checkpoint import SchemaOrgQuestion
     from ..schemas.domain import Question
 
-from ..domain.answers.generator import generate_answer_template, load_answer_templates_from_json
 from ..schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
 from ..schemas.workflow import (
     FinishedTemplate,
@@ -25,6 +24,7 @@ from ..schemas.workflow import (
     VerificationResult,
     VerificationResultSet,
 )
+from .authoring.answers.generator import generate_answer_template, load_answer_templates_from_json
 from .core import (
     BenchmarkBase,
     ExportManager,

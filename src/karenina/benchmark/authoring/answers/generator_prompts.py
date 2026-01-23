@@ -11,42 +11,36 @@ generator.py using the port/adapter pattern.
 # ============================================================================
 
 GROUND_TRUTH_SYSTEM_PROMPT = """
-You are an expert evaluation designer extracting ground-truth attributes from a question and its ideal answer. Build a Pydantic-friendly schema capturing what a judge model should read from candidate responses. Apply the following rules when specifying attributes:
+You are an expert evaluation designer extracting ground-truth attributes from a question and its ideal answer. Build a Pydantic-friendly schema capturing what a judge model should read from candidate responses.
 
-- Prefer concise snake_case names that are stable and unambiguous.
-- FORBIDDEN: Never use `str`, `List[str]`, or `Dict[str, str]` types. All text-based evaluations must be converted to boolean checks.
-- Use `bool` whenever the judge needs to confirm whether a concept, entity, or pattern is present. This is the primary type for text-based evaluation.
-- Use numeric types (int, float) only when measurable quantities are required.
-- When the answer implies a categorical classification or grading scheme, use `Literal` types to enumerate all reasonable values in that domain.
-- For lists of items (e.g., multiple drugs, genes, etc.), create separate boolean attributes for each expected item rather than using List[str].
-- When the reference answer contains compound terms or phrases, treat them as single semantic units and create one boolean attribute for the complete concept, not separate attributes for individual words.
-- Avoid redundant attributes; ensure each serves a unique decision-making purpose.
-- Frame every attribute as something the judge can extract by reading the candidate response (e.g., `number_of_interacting_genes` to count genes mentioned, `mentions_control_group` to flag a concept).
-- For each attribute, derive the `ground_truth` value from the reference answer that represents the expected correct response.
-- Ensure the final response is valid JSON without trailing commentary.
+CRITICAL: Use the MINIMUM number of attributes necessary. One attribute per independent piece of information.
+
+Type selection rules (in order of preference):
+1. For YES/NO questions: Use a single `bool` attribute.
+2. For single-value factual answers (IDs, names, numbers): Use a single attribute with the appropriate type:
+   - `Literal['value']` for exact text matches (IDs, codes, specific terms)
+   - `int` or `float` for numeric answers
+   - `bool` for presence/absence checks
+3. For categorical answers with few options: Use `Literal['option1', 'option2', ...]`
+4. For multiple independent items: Create ONE `bool` attribute per item.
+
+FORBIDDEN:
+- Never use `str`, `List[str]`, or `Dict[str, str]` types.
+- Never create redundant attributes that check the same information twice.
+- Never create a "mentions_X" boolean AND a Literal/value check for the same answer.
+
+Examples of CORRECT minimal schemas:
+- Q: "What is the MESH ID for X?" A: "D010300" → ONE attribute: `mesh_id: Literal['D010300']`
+- Q: "Is X a symptom of Y?" A: "Yes" → ONE attribute: `is_symptom: bool`
+- Q: "What genes are involved?" A: "BRCA1, TP53" → TWO attributes: `mentions_brca1: bool`, `mentions_tp53: bool`
 
 Example JSON output:
 {{
   "attributes": [
     {{
-      "name": "count_of_items",
-      "type": "int",
-      "ground_truth": 3
-    }},
-    {{
-      "name": "mentions_first_concept",
-      "type": "bool",
-      "ground_truth": true
-    }},
-    {{
-      "name": "mentions_second_concept",
-      "type": "bool",
-      "ground_truth": false
-    }},
-    {{
-      "name": "classification_level",
-      "type": "Literal['high', 'medium', 'low']",
-      "ground_truth": "high"
+      "name": "mesh_id",
+      "type": "Literal['D010300']",
+      "ground_truth": "D010300"
     }}
   ]
 }}

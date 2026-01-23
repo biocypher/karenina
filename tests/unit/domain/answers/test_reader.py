@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from karenina.domain.answers.reader import read_answer_templates
+from karenina.benchmark.authoring.answers.reader import read_answer_templates
 
 
 class TestReadAnswerTemplates:

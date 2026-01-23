@@ -17,9 +17,9 @@ from pydantic import BaseModel, Field, field_validator
 from tqdm import tqdm
 
 from karenina.adapters import get_llm
-from karenina.domain.questions.reader import read_questions_from_file
+from karenina.benchmark.authoring.questions.reader import read_questions_from_file
 from karenina.ports import Message
-from karenina.schemas.domain import BaseAnswer  # noqa: F401
+from karenina.schemas.entities import BaseAnswer  # noqa: F401
 
 # Import from extracted modules
 from .generator_code import format_ground_truth_value as _format_ground_truth_value
@@ -53,8 +53,9 @@ class GroundTruthField(BaseModel):
 
     name: str = Field(..., description="Attribute identifier suitable for a Pydantic field name.")
     type: str = Field(..., description="Python/Pydantic type annotation such as 'bool', 'str', 'List[str]'.")
-    ground_truth: Any = Field(
-        ..., description="The expected correct value for this attribute based on the reference answer."
+    # Note: Avoid `Any` in unions as it creates invalid JSON schema for some providers (e.g., Anthropic beta.messages.parse).
+    ground_truth: bool | int | float | str | list[bool | int | float | str] | dict[str, bool | int | float | str] = (
+        Field(..., description="The expected correct value for this attribute based on the reference answer.")
     )
 
 
@@ -88,11 +89,22 @@ class GroundTruthSpec(BaseModel):
         return v
 
 
-class AttributeDescriptions(BaseModel):
-    """Schema capturing instructions for each attribute."""
+class FieldDescriptionItem(BaseModel):
+    """A single field description entry."""
 
-    field_descriptions: dict[str, str] = Field(
-        ..., description="Mapping from attribute name to guidance text for judge prompts."
+    name: str = Field(..., description="The attribute name (must match an attribute from the ground-truth spec).")
+    description: str = Field(..., description="Instructional text explaining what to extract from the response.")
+
+
+class AttributeDescriptions(BaseModel):
+    """Schema capturing instructions for each attribute.
+
+    Note: We use a list instead of dict because Anthropic's beta.messages.parse
+    does not properly handle dict[str, str] schemas (returns empty dicts).
+    """
+
+    field_descriptions: list[FieldDescriptionItem] = Field(
+        ..., description="List of field descriptions for judge prompts."
     )
 
 
@@ -201,9 +213,13 @@ def _generate_structured_outputs(
         else AttributeDescriptions.model_validate(fd_result.model_dump())
     )
 
+    # Convert list of FieldDescriptionItem to dict[str, str]
+    # (list format is needed for Anthropic's beta.messages.parse compatibility)
+    field_descriptions_dict = {item.name: item.description for item in fd_typed.field_descriptions}
+
     return {
         "attributes": gt_json["attributes"],
-        "field_descriptions": fd_typed.field_descriptions,
+        "field_descriptions": field_descriptions_dict,
     }
 
 

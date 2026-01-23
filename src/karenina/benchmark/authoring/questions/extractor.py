@@ -10,7 +10,7 @@ generates unique MD5 hash IDs, creates Question objects, and outputs a Python fi
 with all questions as individual variables and a list containing all questions.
 
 Usage:
-    from karenina.question_extractor import extract_and_generate_questions
+    from karenina.benchmark.authoring.questions import extract_and_generate_questions
 
     extract_and_generate_questions(
         file_path="data/questions.xlsx",
@@ -25,7 +25,7 @@ from typing import Any
 
 import pandas as pd
 
-from ...schemas.domain import Question
+from karenina.schemas.entities import Question
 
 
 def read_file_to_dataframe(file_path: str, sheet_name: str | None = None) -> pd.DataFrame:
@@ -268,7 +268,7 @@ def generate_questions_file(
     """Generate the questions.py file with all extracted questions."""
 
     # Create the file content
-    content = """from karenina.schemas.domain import Question
+    content = """from karenina.schemas.entities import Question
 
 # Auto-generated questions from file
 
