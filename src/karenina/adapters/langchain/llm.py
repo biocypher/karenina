@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ValidationError
 
-from karenina.ports import LLMPort, LLMResponse, Message
+from karenina.ports import LLMPort, LLMResponse, Message, ParseError
 from karenina.utils.errors import is_retryable_error
 from karenina.utils.json_extraction import extract_json_from_response
 from karenina.utils.messages import append_error_feedback
@@ -303,7 +303,7 @@ class LangChainLLMAdapter:
             except (ValidationError, ValueError) as e:
                 last_error = str(e)
                 if attempt == self._max_retries:
-                    raise ValueError(
+                    raise ParseError(
                         f"Structured output failed after {self._max_retries + 1} attempts. Last error: {last_error}"
                     ) from None
                 logger.info(
@@ -311,7 +311,7 @@ class LangChainLLMAdapter:
                     "Retrying with error feedback."
                 )
 
-        raise ValueError("Unexpected error in retry logic")
+        raise ParseError("Unexpected error in structured output retry logic")
 
     async def _try_structured_invocation(self, messages: list[Message]) -> LLMResponse:
         """Try native structured output, falling back to manual parsing if needed.

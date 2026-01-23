@@ -10,7 +10,7 @@ import threading
 import time
 from typing import Any
 
-from . import ManualTraceError
+from .exceptions import ManualTraceError
 
 
 class ManualTraceManager:

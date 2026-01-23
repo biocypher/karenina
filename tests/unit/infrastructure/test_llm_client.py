@@ -1,7 +1,6 @@
 """Unit tests for LLM client utilities and infrastructure.
 
 Tests cover:
-- Exception classes (LLMError, LLMNotAvailableError, SessionError)
 - ManualTraceManager class (trace storage, validation, cleanup)
 - Manual trace utilities and helper functions
 - ManualTraces class
@@ -41,40 +40,11 @@ from karenina.adapters.manual import (
     preprocess_message_list,
     set_manual_trace,
 )
-from karenina.infrastructure.llm.exceptions import (
-    LLMError,
-    LLMNotAvailableError,
-    SessionError,
-)
 from karenina.ports.messages import Message, Role, ToolUseContent
 
 # =============================================================================
 # Exception Classes Tests
 # =============================================================================
-
-
-@pytest.mark.unit
-def test_llm_error_is_exception() -> None:
-    """Test that LLMError is an Exception subclass."""
-    assert issubclass(LLMError, Exception)
-    error = LLMError("test error")
-    assert str(error) == "test error"
-
-
-@pytest.mark.unit
-def test_llm_not_available_error_is_llm_error() -> None:
-    """Test that LLMNotAvailableError inherits from LLMError."""
-    assert issubclass(LLMNotAvailableError, LLMError)
-    error = LLMNotAvailableError("not available")
-    assert isinstance(error, LLMError)
-
-
-@pytest.mark.unit
-def test_session_error_is_llm_error() -> None:
-    """Test that SessionError inherits from LLMError."""
-    assert issubclass(SessionError, LLMError)
-    error = SessionError("session error")
-    assert isinstance(error, LLMError)
 
 
 @pytest.mark.unit
@@ -457,14 +427,18 @@ def test_set_manual_trace_invalid_hash_raises_error() -> None:
 @pytest.mark.unit
 def test_init_chat_model_openai_endpoint_requires_base_url() -> None:
     """Test that openai_endpoint interface requires endpoint_base_url."""
-    with pytest.raises(ValueError, match="endpoint_base_url is required"):
+    from karenina.ports import AdapterUnavailableError
+
+    with pytest.raises(AdapterUnavailableError, match="endpoint_base_url is required"):
         init_chat_model_unified("gpt-4", interface="openai_endpoint")
 
 
 @pytest.mark.unit
 def test_init_chat_model_openai_endpoint_requires_api_key() -> None:
     """Test that openai_endpoint interface requires endpoint_api_key."""
-    with pytest.raises(ValueError, match="endpoint_api_key is required"):
+    from karenina.ports import AdapterUnavailableError
+
+    with pytest.raises(AdapterUnavailableError, match="endpoint_api_key is required"):
         init_chat_model_unified(
             "gpt-4",
             interface="openai_endpoint",

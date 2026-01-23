@@ -20,7 +20,7 @@ from typing import Any
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
-from karenina.ports import LLMPort, LLMResponse, Message, PortError
+from karenina.ports import AdapterUnavailableError, LLMPort, LLMResponse, Message, ParseError
 from karenina.schemas.workflow.models import ModelConfig
 from karenina.utils.messages import append_error_feedback
 
@@ -136,7 +136,7 @@ class ClaudeToolLLMAdapter:
 
         # Build kwargs
         if not self._config.model_name:
-            raise PortError("model_name is required in ModelConfig")
+            raise AdapterUnavailableError("model_name is required in ModelConfig", reason="missing_model_name")
 
         kwargs: dict[str, Any] = {
             "model": self._config.model_name,
@@ -184,7 +184,7 @@ class ClaudeToolLLMAdapter:
             except Exception as e:
                 last_error = str(e)
                 if attempt == self._max_retries:
-                    raise ValueError(
+                    raise ParseError(
                         f"Structured output failed after {self._max_retries + 1} attempts. Last error: {last_error}"
                     ) from None
                 logger.info(
@@ -192,7 +192,7 @@ class ClaudeToolLLMAdapter:
                     "Retrying with error feedback."
                 )
 
-        raise ValueError("Unexpected error in retry logic")
+        raise ParseError("Unexpected error in structured output retry logic")
 
     async def _try_structured_invocation(self, messages: list[Message]) -> LLMResponse:
         """Try structured output invocation."""
@@ -204,7 +204,7 @@ class ClaudeToolLLMAdapter:
 
         # Build kwargs for beta.messages.parse
         if not self._config.model_name:
-            raise PortError("model_name is required in ModelConfig")
+            raise AdapterUnavailableError("model_name is required in ModelConfig", reason="missing_model_name")
 
         kwargs: dict[str, Any] = {
             "model": self._config.model_name,
@@ -236,10 +236,10 @@ class ClaudeToolLLMAdapter:
         parsed_output = getattr(response, "parsed_output", None)
 
         if parsed_output is None:
-            raise ValueError(f"beta.messages.parse did not return parsed_output for {schema.__name__}")
+            raise ParseError(f"beta.messages.parse did not return parsed_output for {schema.__name__}")
 
         if not isinstance(parsed_output, schema):
-            raise ValueError(f"Parsed output is {type(parsed_output).__name__}, expected {schema.__name__}")
+            raise ParseError(f"Parsed output is {type(parsed_output).__name__}, expected {schema.__name__}")
 
         usage = extract_usage_from_response(response, model=self._config.model_name)
         return LLMResponse(

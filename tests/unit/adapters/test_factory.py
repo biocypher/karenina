@@ -567,11 +567,11 @@ class TestValidateModelConfig:
 
     def test_validate_model_config_none_raises(self) -> None:
         """Test validate_model_config raises ValueError when config is None."""
-        with pytest.raises(ValueError, match="Model configuration is required"):
+        with pytest.raises(AdapterUnavailableError, match="Model configuration is required"):
             validate_model_config(None)
 
     def test_validate_model_config_empty_model_name_raises(self) -> None:
-        """Test validate_model_config raises ValueError when model_name is empty."""
+        """Test validate_model_config raises AdapterUnavailableError when model_name is empty."""
         from karenina.schemas.workflow.models import ModelConfig
 
         config = ModelConfig(
@@ -580,11 +580,11 @@ class TestValidateModelConfig:
             model_name="",  # Empty model name
         )
 
-        with pytest.raises(ValueError, match="Model name is required"):
+        with pytest.raises(AdapterUnavailableError, match="Model name is required"):
             validate_model_config(config)
 
     def test_validate_model_config_missing_provider_for_langchain_raises(self) -> None:
-        """Test validate_model_config raises ValueError when provider missing for langchain."""
+        """Test validate_model_config raises AdapterUnavailableError when provider missing for langchain."""
         from karenina.schemas.workflow.models import ModelConfig
 
         config = ModelConfig(
@@ -594,7 +594,7 @@ class TestValidateModelConfig:
             interface="langchain",
         )
 
-        with pytest.raises(ValueError, match="Model provider is required"):
+        with pytest.raises(AdapterUnavailableError, match="Model provider is required"):
             validate_model_config(config)
 
     def test_validate_model_config_allows_empty_provider_for_openrouter(self) -> None:
@@ -642,15 +642,15 @@ class TestValidateModelConfig:
 
     def test_get_llm_validates_config(self) -> None:
         """Test get_llm calls validate_model_config and raises for invalid config."""
-        with pytest.raises(ValueError, match="Model configuration is required"):
+        with pytest.raises(AdapterUnavailableError, match="Model configuration is required"):
             get_llm(None)
 
     def test_get_agent_validates_config(self) -> None:
         """Test get_agent calls validate_model_config and raises for invalid config."""
-        with pytest.raises(ValueError, match="Model configuration is required"):
+        with pytest.raises(AdapterUnavailableError, match="Model configuration is required"):
             get_agent(None)
 
     def test_get_parser_validates_config(self) -> None:
         """Test get_parser calls validate_model_config and raises for invalid config."""
-        with pytest.raises(ValueError, match="Model configuration is required"):
+        with pytest.raises(AdapterUnavailableError, match="Model configuration is required"):
             get_parser(None)

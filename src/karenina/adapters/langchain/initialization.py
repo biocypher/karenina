@@ -22,6 +22,8 @@ from typing import Any
 from langchain.chat_models import init_chat_model
 from pydantic import SecretStr
 
+from karenina.ports import AdapterUnavailableError
+
 from .models import ChatOpenAIEndpoint, ChatOpenRouter
 
 logger = logging.getLogger(__name__)
@@ -87,11 +89,15 @@ def init_chat_model_unified(
 
     if interface == "openai_endpoint":
         if endpoint_base_url is None:
-            raise ValueError("endpoint_base_url is required for openai_endpoint interface")
+            raise AdapterUnavailableError(
+                "endpoint_base_url is required for openai_endpoint interface",
+                reason="missing_endpoint_base_url",
+            )
         if endpoint_api_key is None:
-            raise ValueError(
+            raise AdapterUnavailableError(
                 "endpoint_api_key is required for openai_endpoint interface. "
-                "Pass the API key explicitly - this interface does not read from environment."
+                "Pass the API key explicitly - this interface does not read from environment.",
+                reason="missing_endpoint_api_key",
             )
         return ChatOpenAIEndpoint(
             base_url=endpoint_base_url,

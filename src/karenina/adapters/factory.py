@@ -93,16 +93,17 @@ def validate_model_config(model_config: ModelConfig | None) -> None:
         >>> validate_model_config(None)  # Raises ValueError
     """
     if not model_config:
-        raise ValueError("Model configuration is required")
+        raise AdapterUnavailableError("Model configuration is required", reason="missing_config")
 
     if not model_config.model_name:
-        raise ValueError("Model name is required in model configuration")
+        raise AdapterUnavailableError("Model name is required in model configuration", reason="missing_model_name")
 
     # Model provider is optional for OpenRouter, manual, and openai_endpoint interfaces
     if model_config.interface not in INTERFACES_NO_PROVIDER_REQUIRED and not model_config.model_provider:
-        raise ValueError(
+        raise AdapterUnavailableError(
             f"Model provider is required for interface '{model_config.interface}'. "
-            f"Only {list(INTERFACES_NO_PROVIDER_REQUIRED)} interfaces allow empty providers."
+            f"Only {list(INTERFACES_NO_PROVIDER_REQUIRED)} interfaces allow empty providers.",
+            reason="missing_model_provider",
         )
 
 
@@ -448,9 +449,15 @@ def build_llm_kwargs(
     # Interface-specific parameters
     if model_config.interface == "openai_endpoint":
         if not model_config.endpoint_base_url:
-            raise ValueError("endpoint_base_url is required for openai_endpoint interface")
+            raise AdapterUnavailableError(
+                "endpoint_base_url is required for openai_endpoint interface",
+                reason="missing_endpoint_base_url",
+            )
         if not model_config.endpoint_api_key:
-            raise ValueError("endpoint_api_key is required for openai_endpoint interface")
+            raise AdapterUnavailableError(
+                "endpoint_api_key is required for openai_endpoint interface",
+                reason="missing_endpoint_api_key",
+            )
 
         kwargs["endpoint_base_url"] = model_config.endpoint_base_url
         kwargs["endpoint_api_key"] = model_config.endpoint_api_key.get_secret_value()

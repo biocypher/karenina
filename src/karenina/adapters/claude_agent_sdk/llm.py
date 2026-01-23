@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
-from karenina.ports import LLMPort, LLMResponse, Message
+from karenina.ports import LLMPort, LLMResponse, Message, ParseError
 
 from .messages import ClaudeSDKMessageConverter
 from .usage import extract_sdk_usage
@@ -181,7 +181,7 @@ class ClaudeSDKLLMAdapter:
     def _process_structured_result(self, result: ResultMessage) -> LLMResponse:
         """Process a structured output result from the SDK."""
         if not result.structured_output:
-            raise ValueError("No structured output received from SDK")
+            raise ParseError("No structured output received from SDK")
 
         # Assert schema exists (this method only called when _structured_schema is set)
         assert self._structured_schema is not None

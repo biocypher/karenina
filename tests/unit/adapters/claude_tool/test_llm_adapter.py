@@ -12,7 +12,7 @@ import pytest
 from pydantic import BaseModel
 
 from karenina.adapters.claude_tool import ClaudeToolLLMAdapter
-from karenina.ports import Message
+from karenina.ports import Message, ParseError
 
 
 class MockUsage:
@@ -282,7 +282,7 @@ class TestLLMAdapterStructuredOutput:
 
     @pytest.mark.asyncio
     async def test_structured_ainvoke_raises_on_missing_parsed(self, model_config: Any) -> None:
-        """Test raises ValueError when parsed output is missing."""
+        """Test raises ParseError when parsed output is missing."""
 
         class TestSchema(BaseModel):
             value: str
@@ -299,13 +299,13 @@ class TestLLMAdapterStructuredOutput:
 
         with (
             patch.object(structured, "_get_async_client", return_value=mock_client),
-            pytest.raises(ValueError, match="did not return parsed_output"),
+            pytest.raises(ParseError, match="did not return parsed_output"),
         ):
             await structured.ainvoke([Message.user("Hello")])
 
     @pytest.mark.asyncio
     async def test_structured_ainvoke_raises_on_wrong_type(self, model_config: Any) -> None:
-        """Test raises ValueError when parsed output is wrong type."""
+        """Test raises ParseError when parsed output is wrong type."""
 
         class TestSchema(BaseModel):
             value: str
@@ -325,7 +325,7 @@ class TestLLMAdapterStructuredOutput:
 
         with (
             patch.object(structured, "_get_async_client", return_value=mock_client),
-            pytest.raises(ValueError, match="expected TestSchema"),
+            pytest.raises(ParseError, match="expected TestSchema"),
         ):
             await structured.ainvoke([Message.user("Hello")])
 
