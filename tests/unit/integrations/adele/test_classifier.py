@@ -172,7 +172,8 @@ class TestQuestionClassifier:
         # Mock the response from structured LLM
         mock_response = MagicMock()
         mock_result = MagicMock()
-        mock_result.classifications = {
+        # Use to_dict() method to return classifications as dict (matches new list-based schema)
+        mock_result.to_dict.return_value = {
             "attention_and_scan": "none",
             "volume": "very_low",
         }
@@ -209,7 +210,8 @@ class TestQuestionClassifier:
         # Mock response for batch mode
         mock_response = MagicMock()
         mock_result = MagicMock()
-        mock_result.classifications = {
+        # Use to_dict() method to return classifications as dict (matches new list-based schema)
+        mock_result.to_dict.return_value = {
             "attention_and_scan": "intermediate",
             "volume": "high",
         }

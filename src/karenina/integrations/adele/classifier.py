@@ -198,8 +198,8 @@ class QuestionClassifier:
         parsed_result = response.raw
         usage_metadata = asdict(response.usage) if response.usage else {}
 
-        # Validate and convert classifications
-        scores, labels = self._validate_classifications(parsed_result.classifications, traits)
+        # Validate and convert classifications (use to_dict() to convert list format to dict)
+        scores, labels = self._validate_classifications(parsed_result.to_dict(), traits)
 
         return QuestionClassificationResult(
             question_id=question_id,
@@ -420,7 +420,7 @@ class QuestionClassifier:
         from karenina.schemas.workflow.rubric_outputs import BatchLiteralClassifications
 
         traits_description = []
-        example_classifications: dict[str, str] = {}
+        example_classifications: list[dict[str, str]] = []
 
         for trait in traits:
             if trait.kind != "literal" or trait.classes is None:
@@ -441,7 +441,7 @@ class QuestionClassifier:
             traits_description.append(trait_desc)
             # Use middle class as example to avoid bias toward first/last
             mid_idx = len(class_names) // 2
-            example_classifications[trait.name] = class_names[mid_idx]
+            example_classifications.append({"trait_name": trait.name, "class_name": class_names[mid_idx]})
 
         example_json = json.dumps({"classifications": example_classifications}, indent=2)
         json_schema = json.dumps(BatchLiteralClassifications.model_json_schema(), indent=2)

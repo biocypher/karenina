@@ -571,8 +571,9 @@ Evaluate this answer for the trait above and return your assessment as JSON: {fo
         usage_metadata = asdict(response.usage) if response.usage else {}
 
         # Validate classifications and convert to scores + labels
+        # Use to_dict() to convert list format to dict (required for Anthropic beta.messages.parse compatibility)
         parsed_result = response.raw
-        scores, labels = self._validate_literal_classifications(parsed_result.classifications, literal_traits)
+        scores, labels = self._validate_literal_classifications(parsed_result.to_dict(), literal_traits)
         return scores, labels, usage_metadata
 
     def evaluate_literal_sequential(
@@ -794,7 +795,8 @@ Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
         from .....schemas.workflow.rubric_outputs import BatchLiteralClassifications
 
         traits_description = []
-        example_classifications: dict[str, str] = {}
+        # Use list format for classifications (required for Anthropic beta.messages.parse compatibility)
+        example_classifications: list[dict[str, str]] = []
 
         for trait in traits:
             if trait.kind != "literal" or trait.classes is None:
@@ -812,7 +814,7 @@ Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
             )
             traits_description.append(trait_desc)
             # Use first class as example
-            example_classifications[trait.name] = class_names[0]
+            example_classifications.append({"trait_name": trait.name, "class_name": class_names[0]})
 
         example_json = json.dumps({"classifications": example_classifications}, indent=2)
         json_schema = json.dumps(BatchLiteralClassifications.model_json_schema(), indent=2)
@@ -834,7 +836,8 @@ Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
 ```
 
 **REQUIRED OUTPUT FORMAT:**
-Return a JSON object with a "classifications" key mapping trait names to class names.
+Return a JSON object with a "classifications" array containing one object per trait.
+Each object has "trait_name" and "class_name" fields.
 Use EXACT trait and class names as shown above.
 
 Example (using YOUR trait and class names):

@@ -43,7 +43,8 @@ USER_PROMPT_BATCH_TEMPLATE = """Classify the following QUESTION for each ADeLe d
 ```
 
 **REQUIRED OUTPUT FORMAT:**
-Return a JSON object with a "classifications" key mapping trait names to class names.
+Return a JSON object with a "classifications" array containing one object per trait.
+Each object has "trait_name" and "class_name" fields.
 Use EXACT trait and class names as shown above.
 
 Example format (class values are just examples):

@@ -10,6 +10,7 @@ of LLM outputs during rubric evaluation:
 from .rubric import (
     BatchLiteralClassifications,
     BatchRubricScores,
+    ClassificationItem,
     ConfusionMatrixOutput,
     HallucinationRiskOutput,
     SingleBooleanScore,
@@ -31,5 +32,6 @@ __all__ = [
     "HallucinationRiskOutput",
     # Literal trait classification outputs
     "SingleLiteralClassification",
+    "ClassificationItem",
     "BatchLiteralClassifications",
 ]

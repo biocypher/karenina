@@ -117,15 +117,35 @@ class SingleLiteralClassification(BaseModel):
     )
 
 
+class ClassificationItem(BaseModel):
+    """A single trait classification entry.
+
+    Used in BatchLiteralClassifications to represent one trait's classification.
+    We use a list of items instead of dict[str, str] because Anthropic's
+    beta.messages.parse does not properly handle dict schemas (returns empty dicts).
+    """
+
+    trait_name: str = Field(description="The name of the trait being classified")
+    class_name: str = Field(description="The assigned class name for this trait")
+
+
 class BatchLiteralClassifications(BaseModel):
     """Structured output for batch literal trait classification.
 
     Used when evaluating multiple literal (categorical) traits in a single LLM call.
     The LLM classifies the response for each trait into its predefined classes.
 
-    Each key in the classifications dict is a trait name, and the value is the
-    assigned class name for that trait. Class names must exactly match those
-    defined in each trait's classes field.
+    Note: We use a list of ClassificationItem instead of dict[str, str] because
+    Anthropic's beta.messages.parse does not properly handle dict schemas
+    (returns empty dicts). Use to_dict() to convert to the dict format.
     """
 
-    classifications: dict[str, str] = Field(description="Dictionary mapping trait names to assigned class names")
+    classifications: list[ClassificationItem] = Field(description="List of trait classifications, one per trait")
+
+    def to_dict(self) -> dict[str, str]:
+        """Convert classifications list to dict format.
+
+        Returns:
+            Dictionary mapping trait names to class names.
+        """
+        return {item.trait_name: item.class_name for item in self.classifications}
