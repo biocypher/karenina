@@ -421,7 +421,7 @@ def _load_manual_traces(manual_traces: Path, benchmark: Benchmark) -> object:
         manual_traces_obj = load_manual_traces_from_file(trace_file, benchmark)
 
         # Verify traces loaded and report to user
-        from karenina.infrastructure.llm.manual_traces import get_manual_trace_count
+        from karenina.adapters.manual import get_manual_trace_count
 
         trace_count = get_manual_trace_count()
         console.print(f"[green]✓ Loaded {trace_count} manual trace(s)[/green]")

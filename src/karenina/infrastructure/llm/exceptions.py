@@ -1,15 +1,15 @@
 """LLM-related exceptions.
 
-This module provides a centralized location for all LLM-related exceptions,
-avoiding circular imports between interface.py, manual_traces.py, and manual_llm.py.
+This module provides a centralized location for LLM infrastructure exceptions.
+
+Note: Manual trace exceptions (ManualTraceError, ManualTraceNotFoundError) have been
+moved to karenina.adapters.manual as part of the manual trace consolidation.
 """
 
 __all__ = [
     "LLMError",
     "LLMNotAvailableError",
     "SessionError",
-    "ManualTraceError",
-    "ManualTraceNotFoundError",
 ]
 
 
@@ -27,17 +27,5 @@ class LLMNotAvailableError(LLMError):
 
 class SessionError(LLMError):
     """Raised when there's an error with session management."""
-
-    pass
-
-
-class ManualTraceError(LLMError):
-    """Raised when there's an error with manual trace operations."""
-
-    pass
-
-
-class ManualTraceNotFoundError(LLMError):
-    """Raised when a manual trace is not found for a question."""
 
     pass

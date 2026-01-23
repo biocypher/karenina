@@ -354,7 +354,7 @@ def load_manual_traces_from_file(trace_file: Path, benchmark: Any) -> Any:
     """
     import json
 
-    from karenina.infrastructure.llm.manual_traces import ManualTraces, load_manual_traces
+    from karenina.adapters.manual import ManualTraces, load_manual_traces
 
     if not trace_file.exists():
         raise FileNotFoundError(f"Manual traces file not found: {trace_file}")

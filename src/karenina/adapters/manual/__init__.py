@@ -8,6 +8,11 @@ ManualLLMAdapter and ManualParserAdapter remain no-op implementations that raise
 errors if invoked, as these adapters are only used by call sites that need
 live LLM calls (template/rubric evaluation).
 
+This module also exports all manual trace management functionality:
+- ManualTraceManager: Session-based thread-safe storage
+- ManualTraces: High-level API for benchmark-level trace management
+- Helper functions: load_manual_traces, get_manual_trace, etc.
+
 Usage Pattern:
     >>> model_config = ModelConfig(interface="manual", ...)
     >>> agent = get_agent(model_config)  # Returns ManualAgentAdapter
@@ -45,10 +50,59 @@ from karenina.ports import (
     UsageMetadata,
 )
 
+from .helpers import (
+    clear_manual_traces,
+    get_manual_trace,
+    get_manual_trace_count,
+    get_manual_trace_manager,
+    get_manual_trace_with_metrics,
+    get_memory_usage_info,
+    has_manual_trace,
+    load_manual_traces,
+    set_manual_trace,
+)
+from .manager import ManualTraceManager, get_trace_manager
+from .message_utils import (
+    convert_langchain_messages,
+    extract_agent_metrics,
+    extract_agent_metrics_from_langchain,
+    harmonize_messages,
+    is_langchain_message_list,
+    is_port_message_list,
+    preprocess_message_list,
+)
+from .traces import ManualTraces
+
 if TYPE_CHECKING:
     pass
 
 T = TypeVar("T", bound=BaseModel)
+
+
+# =============================================================================
+# Exceptions
+# =============================================================================
+
+
+class ManualTraceError(PortError):
+    """Raised when there's an error with manual trace operations.
+
+    This includes:
+    - Invalid question hash format
+    - Validation errors when loading traces
+    - Preprocessing errors for message lists
+
+    Attributes:
+        message: Description of what went wrong.
+
+    Example:
+        >>> try:
+        ...     set_manual_trace("invalid", "trace")
+        ... except ManualTraceError as e:
+        ...     print(f"Trace error: {e}")
+    """
+
+    pass
 
 
 class ManualInterfaceError(PortError):
@@ -114,6 +168,11 @@ class ManualTraceNotFoundError(PortError):
         )
 
 
+# =============================================================================
+# Adapters
+# =============================================================================
+
+
 class ManualAgentAdapter(AgentPort):
     """AgentPort implementation for manual interface using pre-recorded traces.
 
@@ -125,7 +184,7 @@ class ManualAgentAdapter(AgentPort):
 
     Example:
         >>> # Load traces first
-        >>> from karenina.infrastructure.llm.manual_traces import load_manual_traces
+        >>> from karenina.adapters.manual import load_manual_traces
         >>> load_manual_traces({"abc123...": "The answer is 42."})
         >>>
         >>> # Then use the adapter
@@ -198,11 +257,8 @@ class ManualAgentAdapter(AgentPort):
         if not question_hash:
             raise ManualInterfaceError("agent.run_sync() requires question_hash in AgentConfig for manual interface")
 
-        # Look up trace from manager
-        from karenina.infrastructure.llm.manual_traces import (
-            get_manual_trace_count,
-            get_manual_trace_with_metrics,
-        )
+        # Look up trace from manager (use local imports)
+        from .helpers import get_manual_trace_count, get_manual_trace_with_metrics
 
         trace, agent_metrics = get_manual_trace_with_metrics(question_hash)
 
@@ -293,10 +349,40 @@ class ManualParserAdapter(ParserPort):
         raise ManualInterfaceError("parser.parse_to_pydantic()")
 
 
+# =============================================================================
+# Exports
+# =============================================================================
+
 __all__ = [
+    # Exceptions
+    "ManualTraceError",
     "ManualInterfaceError",
     "ManualTraceNotFoundError",
+    # Adapters
     "ManualAgentAdapter",
     "ManualLLMAdapter",
     "ManualParserAdapter",
+    # Manager
+    "ManualTraceManager",
+    "get_trace_manager",
+    # Traces
+    "ManualTraces",
+    # Helper functions
+    "load_manual_traces",
+    "get_manual_trace",
+    "has_manual_trace",
+    "clear_manual_traces",
+    "get_manual_trace_count",
+    "get_memory_usage_info",
+    "set_manual_trace",
+    "get_manual_trace_with_metrics",
+    "get_manual_trace_manager",
+    # Message utilities
+    "convert_langchain_messages",
+    "is_langchain_message_list",
+    "is_port_message_list",
+    "harmonize_messages",
+    "extract_agent_metrics",
+    "extract_agent_metrics_from_langchain",
+    "preprocess_message_list",
 ]

@@ -1,16 +1,19 @@
 """Unit tests for LLM client utilities and infrastructure.
 
 Tests cover:
-- Exception classes (LLMError, LLMNotAvailableError, SessionError, ManualTraceError, ManualTraceNotFoundError)
-- ManualLLM class (fixture-based testing without API calls)
+- Exception classes (LLMError, LLMNotAvailableError, SessionError)
 - ManualTraceManager class (trace storage, validation, cleanup)
-- Manual trace utilities
+- Manual trace utilities and helper functions
+- ManualTraces class
 - init_chat_model_unified function
 
 Note: Tests for ChatOpenRouter and ChatOpenAIEndpoint are in test_langchain_adapter.py
 since those classes live in karenina.adapters.langchain.models.
 
 Note: Tests do NOT make actual API calls. All LLM interaction is mocked or uses fixture-backed implementations.
+
+Note: ManualLLM class has been removed as dead code. Manual interface now uses
+ManualAgentAdapter which reads traces directly from ManualTraceManager.
 """
 
 from unittest.mock import MagicMock
@@ -19,26 +22,31 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
 from karenina.adapters.langchain.initialization import init_chat_model_unified
-from karenina.infrastructure.llm.exceptions import (
-    LLMError,
-    LLMNotAvailableError,
+from karenina.adapters.manual import (
     ManualTraceError,
-    ManualTraceNotFoundError,
-    SessionError,
-)
-from karenina.infrastructure.llm.manual_llm import ManualLLM, create_manual_llm
-from karenina.infrastructure.llm.manual_traces import (
     ManualTraceManager,
     ManualTraces,
     clear_manual_traces,
+    convert_langchain_messages,
+    extract_agent_metrics,
     get_manual_trace,
     get_manual_trace_count,
     get_manual_trace_with_metrics,
     get_memory_usage_info,
+    harmonize_messages,
     has_manual_trace,
+    is_langchain_message_list,
+    is_port_message_list,
     load_manual_traces,
+    preprocess_message_list,
     set_manual_trace,
 )
+from karenina.infrastructure.llm.exceptions import (
+    LLMError,
+    LLMNotAvailableError,
+    SessionError,
+)
+from karenina.ports.messages import Message, Role, ToolUseContent
 
 # =============================================================================
 # Exception Classes Tests
@@ -70,139 +78,11 @@ def test_session_error_is_llm_error() -> None:
 
 
 @pytest.mark.unit
-def test_manual_trace_not_found_error_inherits_from_llm_error() -> None:
-    """Test that ManualTraceNotFoundError inherits from LLMError."""
-    assert issubclass(ManualTraceNotFoundError, LLMError)
-    error = ManualTraceNotFoundError("trace not found")
-    assert isinstance(error, LLMError)
-
-
-@pytest.mark.unit
-def test_manual_trace_error_is_llm_error() -> None:
-    """Test that ManualTraceError inherits from LLMError."""
-    assert issubclass(ManualTraceError, LLMError)
+def test_manual_trace_error_is_exception() -> None:
+    """Test that ManualTraceError is an Exception subclass."""
+    assert issubclass(ManualTraceError, Exception)
     error = ManualTraceError("trace error")
-    assert isinstance(error, LLMError)
-
-
-# =============================================================================
-# ManualLLM Class Tests
-# =============================================================================
-
-
-@pytest.mark.unit
-def test_manual_llm_initialization() -> None:
-    """Test ManualLLM initialization."""
-    llm = ManualLLM(question_hash="abc123")
-
-    assert llm.question_hash == "abc123"
-
-
-@pytest.mark.unit
-def test_manual_llm_ignores_extra_kwargs() -> None:
-    """Test that ManualLLM ignores extra kwargs."""
-    llm = ManualLLM(question_hash="test", temperature=0.5, max_tokens=100)
-
-    assert llm.question_hash == "test"
-
-
-@pytest.mark.unit
-def test_manual_llm_invoke_returns_trace() -> None:
-    """Test ManualLLM.invoke returns precomputed trace."""
-    # Use a valid 32-character MD5 hash
-    valid_hash = "d41d8cd98f00b204e9800998ecf8427e"
-    set_manual_trace(valid_hash, "This is a precomputed answer.")
-
-    llm = ManualLLM(question_hash=valid_hash)
-    result = llm.invoke([])
-
-    assert isinstance(result, AIMessage)
-    assert result.content == "This is a precomputed answer."
-
-    # Clean up
-    clear_manual_traces()
-
-
-@pytest.mark.unit
-def test_manual_llm_invoke_trace_not_found() -> None:
-    """Test ManualLLM.invoke raises error when trace not found."""
-    clear_manual_traces()
-
-    # Use a valid MD5 hash format that doesn't exist
-    llm = ManualLLM(question_hash="d41d8cd98f00b204e9800998ecf8427e")
-
-    with pytest.raises(ManualTraceNotFoundError, match="No manual trace found"):
-        llm.invoke([])
-
-
-@pytest.mark.unit
-def test_manual_llm_with_structured_output_returns_self() -> None:
-    """Test ManualLLM.with_structured_output returns self."""
-    llm = ManualLLM(question_hash="test")
-    result = llm.with_structured_output(None)
-
-    assert result is llm
-
-
-@pytest.mark.unit
-def test_manual_llm_content_property() -> None:
-    """Test ManualLLM.content property returns trace."""
-    valid_hash = "d41d8cd98f00b204e9800998ecf8427e"
-    set_manual_trace(valid_hash, "Trace content")
-
-    llm = ManualLLM(question_hash=valid_hash)
-    assert llm.content == "Trace content"
-
-    clear_manual_traces()
-
-
-@pytest.mark.unit
-def test_manual_llm_content_not_found_raises_error() -> None:
-    """Test ManualLLM.content raises error when trace not found."""
-    clear_manual_traces()
-
-    llm = ManualLLM(question_hash="d41d8cd98f00b204e9800998ecf8427e")
-
-    with pytest.raises(ManualTraceNotFoundError):
-        _ = llm.content
-
-
-@pytest.mark.unit
-def test_manual_llm_get_agent_metrics() -> None:
-    """Test ManualLLM.get_agent_metrics returns metrics."""
-    valid_hash = "d41d8cd98f00b204e9800998ecf8427e"
-    metrics = {"tool_calls": 5, "failures": 0}
-    set_manual_trace(valid_hash, "Trace", agent_metrics=metrics)
-
-    llm = ManualLLM(question_hash=valid_hash)
-    result = llm.get_agent_metrics()
-
-    assert result == metrics
-
-    clear_manual_traces()
-
-
-@pytest.mark.unit
-def test_manual_llm_get_agent_metrics_none_when_not_set() -> None:
-    """Test ManualLLM.get_agent_metrics returns None when no metrics."""
-    valid_hash = "d41d8cd98f00b204e9800998ecf8427e"
-    set_manual_trace(valid_hash, "Trace")
-
-    llm = ManualLLM(question_hash=valid_hash)
-    result = llm.get_agent_metrics()
-
-    assert result is None
-
-    clear_manual_traces()
-
-
-@pytest.mark.unit
-def test_create_manual_llm() -> None:
-    """Test create_manual_llm factory function."""
-    llm = create_manual_llm(question_hash="test123")
-
-    assert isinstance(llm, ManualLLM)
-    assert llm.question_hash == "test123"
+    assert str(error) == "trace error"
 
 
 # =============================================================================
@@ -575,28 +455,6 @@ def test_set_manual_trace_invalid_hash_raises_error() -> None:
 
 
 @pytest.mark.unit
-def test_init_chat_model_manual_requires_question_hash() -> None:
-    """Test that manual interface requires question_hash."""
-    with pytest.raises(ValueError, match="question_hash is required"):
-        init_chat_model_unified("manual", interface="manual")
-
-
-@pytest.mark.unit
-def test_init_chat_model_manual_with_hash() -> None:
-    """Test manual interface with question_hash."""
-    # Set up a trace with valid MD5 hash
-    valid_hash = "d41d8cd98f00b204e9800998ecf8427e"
-    set_manual_trace(valid_hash, "Test trace")
-
-    model = init_chat_model_unified("manual", interface="manual", question_hash=valid_hash)
-
-    assert isinstance(model, ManualLLM)
-    assert model.question_hash == valid_hash
-
-    clear_manual_traces()
-
-
-@pytest.mark.unit
 def test_init_chat_model_openai_endpoint_requires_base_url() -> None:
     """Test that openai_endpoint interface requires endpoint_base_url."""
     with pytest.raises(ValueError, match="endpoint_base_url is required"):
@@ -703,5 +561,207 @@ def test_manual_traces_register_trace_message_list() -> None:
     result = get_manual_trace("d41d8cd98f00b204e9800998ecf8427e")
     assert isinstance(result, str)
     assert "Answer" in result
+
+    clear_manual_traces()
+
+
+# =============================================================================
+# Message Utilities Tests (Port-based architecture)
+# =============================================================================
+
+
+@pytest.mark.unit
+def test_is_port_message_list() -> None:
+    """Test detection of port Message lists."""
+    # Port messages
+    port_messages = [Message.user("Hello"), Message.assistant("World")]
+    assert is_port_message_list(port_messages) is True
+
+    # Empty list
+    assert is_port_message_list([]) is False
+
+    # LangChain messages
+    lc_messages = [HumanMessage(content="Hello")]
+    assert is_port_message_list(lc_messages) is False
+
+    # Other types
+    assert is_port_message_list(["string"]) is False
+
+
+@pytest.mark.unit
+def test_is_langchain_message_list() -> None:
+    """Test detection of LangChain message lists."""
+    # LangChain messages
+    lc_messages = [HumanMessage(content="Hello"), AIMessage(content="World")]
+    assert is_langchain_message_list(lc_messages) is True
+
+    # Empty list
+    assert is_langchain_message_list([]) is False
+
+    # Port messages
+    port_messages = [Message.user("Hello")]
+    assert is_langchain_message_list(port_messages) is False
+
+
+@pytest.mark.unit
+def test_convert_langchain_messages() -> None:
+    """Test conversion from LangChain to port messages."""
+    lc_messages = [
+        HumanMessage(content="What is 2+2?"),
+        AIMessage(content="The answer is 4."),
+    ]
+
+    port_messages = convert_langchain_messages(lc_messages)
+
+    assert len(port_messages) == 2
+    assert port_messages[0].role == Role.USER
+    assert port_messages[0].text == "What is 2+2?"
+    assert port_messages[1].role == Role.ASSISTANT
+    assert port_messages[1].text == "The answer is 4."
+
+
+@pytest.mark.unit
+def test_harmonize_messages_basic() -> None:
+    """Test basic message harmonization."""
+    messages = [
+        Message.user("Question?"),
+        Message.assistant("Answer!"),
+    ]
+
+    trace = harmonize_messages(messages)
+
+    # Should contain the assistant message but skip the first user message
+    assert "AI Message" in trace
+    assert "Answer!" in trace
+
+
+@pytest.mark.unit
+def test_harmonize_messages_with_tools() -> None:
+    """Test message harmonization with tool calls and results."""
+    messages = [
+        Message.user("Calculate 2+2"),
+        Message.assistant(
+            "I'll calculate that.",
+            tool_calls=[ToolUseContent(id="calc1", name="calculator", input={"expr": "2+2"})],
+        ),
+        Message.tool_result("calc1", "4"),
+        Message.assistant("The answer is 4."),
+    ]
+
+    trace = harmonize_messages(messages)
+
+    assert "Tool Calls:" in trace
+    assert "calculator" in trace
+    assert "Tool Message" in trace
+    assert "The answer is 4." in trace
+
+
+@pytest.mark.unit
+def test_extract_agent_metrics_basic() -> None:
+    """Test basic agent metrics extraction."""
+    messages = [
+        Message.user("Question?"),
+        Message.assistant("Thinking..."),
+        Message.assistant("Final answer."),
+    ]
+
+    metrics = extract_agent_metrics(messages)
+
+    assert metrics["iterations"] == 2
+    assert metrics["tool_calls"] == 0
+    assert metrics["tools_used"] == []
+
+
+@pytest.mark.unit
+def test_extract_agent_metrics_with_tools() -> None:
+    """Test agent metrics extraction with tool usage."""
+    messages = [
+        Message.user("Calculate 2+2"),
+        Message.assistant(
+            "",
+            tool_calls=[
+                ToolUseContent(id="calc1", name="calculator", input={}),
+                ToolUseContent(id="search1", name="search", input={}),
+            ],
+        ),
+        Message.tool_result("calc1", "4"),
+        Message.tool_result("search1", "found it"),
+        Message.assistant("Done."),
+    ]
+
+    metrics = extract_agent_metrics(messages)
+
+    assert metrics["iterations"] == 2
+    assert metrics["tool_calls"] == 2
+    assert set(metrics["tools_used"]) == {"calculator", "search"}
+    assert metrics["tool_call_counts"] == {"calculator": 1, "search": 1}
+
+
+@pytest.mark.unit
+def test_extract_agent_metrics_with_failures() -> None:
+    """Test agent metrics extraction detects suspected failures."""
+    messages = [
+        Message.assistant("", tool_calls=[ToolUseContent(id="api1", name="api", input={})]),
+        Message.tool_result("api1", "Error: Connection timeout"),
+        Message.assistant("There was an error."),
+    ]
+
+    metrics = extract_agent_metrics(messages)
+
+    assert metrics["suspect_failed_tool_calls"] == 1
+    assert len(metrics["suspect_failed_tools"]) == 1
+
+
+@pytest.mark.unit
+def test_preprocess_message_list_port_format() -> None:
+    """Test preprocessing port Message lists."""
+    messages = [
+        Message.user("Question?"),
+        Message.assistant("Answer!"),
+    ]
+
+    trace, metrics = preprocess_message_list(messages)
+
+    assert isinstance(trace, str)
+    assert "Answer!" in trace
+    assert metrics is not None
+    assert metrics["iterations"] == 1
+
+
+@pytest.mark.unit
+def test_preprocess_message_list_langchain_format() -> None:
+    """Test preprocessing LangChain message lists."""
+    messages = [
+        HumanMessage(content="Question?"),
+        AIMessage(content="Answer!"),
+    ]
+
+    trace, metrics = preprocess_message_list(messages)
+
+    assert isinstance(trace, str)
+    assert "Answer!" in trace
+    assert metrics is not None
+
+
+@pytest.mark.unit
+def test_manual_traces_register_port_messages() -> None:
+    """Test registering port Message lists."""
+    clear_manual_traces()
+
+    mock_benchmark = MagicMock()
+    mock_benchmark._questions_cache = {}
+    traces = ManualTraces(mock_benchmark)
+
+    # Create port message list
+    messages = [
+        Message.user("What is 2+2?"),
+        Message.assistant("The answer is 4."),
+    ]
+
+    traces.register_trace("d41d8cd98f00b204e9800998ecf8427e", messages)
+
+    result = get_manual_trace("d41d8cd98f00b204e9800998ecf8427e")
+    assert isinstance(result, str)
+    assert "answer is 4" in result
 
     clear_manual_traces()
