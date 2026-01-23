@@ -234,7 +234,7 @@ class LangChainAgentAdapter:
             from langchain.agents import create_agent
             from langgraph.checkpoint.memory import InMemorySaver
 
-            from karenina.infrastructure.llm.mcp_utils import create_mcp_client_and_tools
+            from karenina.adapters.langchain.mcp import create_mcp_client_and_tools
         except ImportError as e:
             raise ImportError(
                 "langchain>=1.1.0, langgraph, and langchain-mcp-adapters are required. "
@@ -306,7 +306,7 @@ class LangChainAgentAdapter:
             AgentExecutionError: If the agent fails during execution.
             AgentTimeoutError: If execution exceeds the timeout.
         """
-        from karenina.infrastructure.llm.mcp_utils import (
+        from karenina.adapters.langchain.trace import (
             extract_final_ai_message_from_response,
             harmonize_agent_response,
         )

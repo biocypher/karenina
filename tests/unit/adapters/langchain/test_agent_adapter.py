@@ -155,11 +155,11 @@ class TestLangChainAgentAdapter:
         with (
             patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init_model,
             patch("karenina.adapters.langchain.middleware.build_agent_middleware") as mock_middleware,
-            patch("karenina.infrastructure.llm.mcp_utils.create_mcp_client_and_tools") as mock_mcp,
+            patch("karenina.adapters.langchain.mcp.create_mcp_client_and_tools") as mock_mcp,
             patch("langchain.agents.create_agent") as mock_create_agent,
             patch("langgraph.checkpoint.memory.InMemorySaver"),
-            patch("karenina.infrastructure.llm.mcp_utils.harmonize_agent_response") as mock_harmonize,
-            patch("karenina.infrastructure.llm.mcp_utils.extract_final_ai_message_from_response") as mock_extract,
+            patch("karenina.adapters.langchain.trace.harmonize_agent_response") as mock_harmonize,
+            patch("karenina.adapters.langchain.trace.extract_final_ai_message_from_response") as mock_extract,
         ):
             mock_base_model = MagicMock()
             mock_init_model.return_value = mock_base_model

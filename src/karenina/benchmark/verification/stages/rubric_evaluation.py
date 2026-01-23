@@ -6,12 +6,11 @@ Evaluates LLM responses against qualitative rubric criteria.
 import logging
 from typing import Any
 
-from ....infrastructure.llm.mcp_utils import extract_final_ai_message
 from ....schemas.domain import LLMRubricTrait
 from ....schemas.workflow.verification.config import DeepJudgmentTraitConfig
 from ..evaluators import RubricEvaluator
 from ..stage import BaseVerificationStage, VerificationContext
-from ..utils import UsageTracker
+from ..utils import UsageTracker, extract_final_ai_message
 
 # Set up logger
 logger = logging.getLogger(__name__)

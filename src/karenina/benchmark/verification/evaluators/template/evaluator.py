@@ -13,10 +13,10 @@ import os
 from typing import TYPE_CHECKING, Any
 
 from .....adapters import format_model_string, get_llm, get_parser
-from .....infrastructure.llm.mcp_utils import extract_final_ai_message
 from .....ports import LLMPort
 from .....schemas.domain import BaseAnswer
 from .....schemas.workflow import ModelConfig
+from ...utils import extract_final_ai_message
 from .prompts import TemplatePromptBuilder
 from .results import FieldVerificationResult, ParseResult, RegexVerificationResult
 

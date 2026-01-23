@@ -32,6 +32,7 @@ from .trace_agent_metrics import (
     extract_agent_metrics,
     extract_middleware_metrics,
 )
+from .trace_parsing import extract_final_ai_message
 from .trace_usage_tracker import UsageMetadata, UsageTracker
 
 __all__ = [
@@ -72,4 +73,6 @@ __all__ = [
     # LLM judge helpers
     "extract_judge_result",
     "fallback_json_parse",
+    # Trace parsing
+    "extract_final_ai_message",
 ]
