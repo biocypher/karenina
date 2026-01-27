@@ -473,6 +473,14 @@ class LangChainParserAdapter:
             logger.warning(f"Retry parsing failed after format feedback: {e}")
             return None
 
+    async def aclose(self) -> None:
+        """Close underlying resources.
+
+        Delegates to the internal LLM adapter's aclose() method.
+        Safe to call multiple times.
+        """
+        await self._llm_adapter.aclose()
+
 
 # =============================================================================
 # Protocol Verification

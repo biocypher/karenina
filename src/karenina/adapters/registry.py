@@ -8,6 +8,11 @@ Adapters self-register via AdapterSpec, enabling:
 3. Automatic model string formatting per interface
 4. Clean fallback behavior without scattered if-else chains
 
+Additionally, this module provides adapter instance tracking for cleanup:
+- register_adapter(): Track an adapter instance for later cleanup
+- unregister_adapter(): Remove an adapter from tracking
+- cleanup_all_adapters(): Close all tracked adapters
+
 Example:
     >>> from karenina.adapters.registry import AdapterRegistry
     >>>
@@ -23,15 +28,79 @@ Example:
 from __future__ import annotations
 
 import logging
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from karenina.ports import AgentPort, LLMPort, ParserPort
     from karenina.schemas.workflow.models import ModelConfig
 
 logger = logging.getLogger(__name__)
+
+# ============================================================================
+# Adapter Instance Tracking for Resource Cleanup
+# ============================================================================
+
+# List of active adapter instances that need cleanup
+_active_adapters: list[Any] = []
+
+# Lock for thread-safe access to _active_adapters
+_adapters_lock = threading.Lock()
+
+
+def register_adapter(adapter: Any) -> None:
+    """Register an adapter instance for cleanup tracking.
+
+    Call this after creating an adapter to ensure it gets cleaned up
+    when cleanup_all_adapters() is called.
+
+    Args:
+        adapter: An adapter instance with an optional aclose() method.
+    """
+    with _adapters_lock:
+        _active_adapters.append(adapter)
+
+
+def unregister_adapter(adapter: Any) -> None:
+    """Remove an adapter from cleanup tracking.
+
+    Call this if you manually close an adapter and want to remove it
+    from the tracked list.
+
+    Args:
+        adapter: The adapter instance to remove.
+    """
+    with _adapters_lock:
+        if adapter in _active_adapters:
+            _active_adapters.remove(adapter)
+
+
+async def cleanup_all_adapters() -> None:
+    """Close all tracked adapter instances.
+
+    This function iterates through all registered adapters and calls
+    their aclose() method if available. Safe to call multiple times.
+
+    Should be called during application shutdown or after verification
+    completes to release HTTP connections and other resources.
+    """
+    with _adapters_lock:
+        adapters = list(_active_adapters)
+        _active_adapters.clear()
+
+    closed_count = 0
+    for adapter in adapters:
+        if hasattr(adapter, "aclose"):
+            try:
+                await adapter.aclose()
+                closed_count += 1
+            except Exception as e:
+                logger.debug(f"Error closing adapter {type(adapter).__name__}: {e}")
+
+    if closed_count > 0:
+        logger.debug(f"Closed {closed_count} adapter(s)")
 
 
 @dataclass

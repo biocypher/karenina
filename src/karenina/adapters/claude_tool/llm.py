@@ -301,6 +301,20 @@ class ClaudeToolLLMAdapter:
             _max_retries=max_retries if max_retries is not None else 3,
         )
 
+    async def aclose(self) -> None:
+        """Close underlying HTTP client resources.
+
+        This method should be called when the adapter is no longer needed
+        to properly close httpx connection pools and prevent resource leaks.
+        Safe to call multiple times.
+        """
+        if self._async_client is not None:
+            await self._async_client.close()
+            self._async_client = None
+        if self._client is not None:
+            self._client.close()
+            self._client = None
+
 
 # Verify protocol compliance at import time
 def _verify_protocol_compliance() -> None:

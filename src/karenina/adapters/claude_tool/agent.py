@@ -390,6 +390,17 @@ class ClaudeToolAgentAdapter:
         except RuntimeError:
             return asyncio.run(self.run(messages, tools, mcp_servers, config))
 
+    async def aclose(self) -> None:
+        """Close underlying HTTP client resources.
+
+        This method should be called when the adapter is no longer needed
+        to properly close httpx connection pools and prevent resource leaks.
+        Safe to call multiple times.
+        """
+        if self._async_client is not None:
+            await self._async_client.close()
+            self._async_client = None
+
 
 # Protocol verification
 def _verify_protocol_compliance() -> None:

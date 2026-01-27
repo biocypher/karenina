@@ -477,46 +477,44 @@ def auto_save_results(
 
 
 def cleanup_resources() -> None:
-    """
-    Clean up lingering resources that may prevent process exit.
+    """Clean up lingering resources that may prevent process exit.
 
-    This function attempts to close HTTP connection pools, MCP clients,
-    and other resources that might keep background threads alive after
-    verification completes.
+    This function closes:
+    1. All tracked adapter instances (AsyncAnthropic clients, etc.)
+    2. All cached SQLAlchemy database engines
+
+    These resources create non-daemon threads (httpx connection pools)
+    that prevent clean process exit if not properly closed.
     """
+    import asyncio
     import gc
 
-    # Force garbage collection to close unused objects
-    gc.collect()
+    from karenina.adapters.registry import cleanup_all_adapters
 
-    # Try to close httpx default client (used by many LangChain integrations)
+    # Close all tracked adapters (AsyncAnthropic clients, etc.)
     try:
-        import httpx
+        # Try to run in existing event loop if available
+        try:
+            loop = asyncio.get_running_loop()
+            # Schedule cleanup but don't wait (we're in sync context)
+            loop.create_task(cleanup_all_adapters())
+        except RuntimeError:
+            # No event loop running - create one to run cleanup
+            asyncio.run(cleanup_all_adapters())
+    except Exception as e:
+        logger.debug(f"Adapter cleanup encountered error: {e}")
 
-        # Close the singleton/default client if it exists
-        if hasattr(httpx, "_client") and httpx._client:
-            httpx._client.close()  # type: ignore[attr-defined]
-    except (ImportError, AttributeError, Exception):
-        pass
-
-    # Try to close aiohttp default client session
+    # Dispose all cached SQLAlchemy engines
     try:
-        import aiohttp
+        from karenina.storage.engine import close_all_engines
 
-        # Close any default ClientSession instances
-        if hasattr(aiohttp, "_default_session") and aiohttp._default_session:
-            import asyncio
-
-            try:
-                loop = asyncio.get_running_loop()
-                loop.create_task(aiohttp._default_session.close())  # type: ignore[attr-defined]
-            except RuntimeError:
-                # No event loop running
-                pass
-    except (ImportError, AttributeError, Exception):
+        close_all_engines()
+    except ImportError:
         pass
+    except Exception as e:
+        logger.debug(f"Engine cleanup encountered error: {e}")
 
-    # Final garbage collection
+    # Force garbage collection to clean up any remaining objects
     gc.collect()
 
     logger.debug("Resource cleanup completed")

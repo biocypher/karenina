@@ -164,6 +164,14 @@ class ClaudeToolParserAdapter:
         except RuntimeError:
             return asyncio.run(self.aparse_to_pydantic(response, schema))
 
+    async def aclose(self) -> None:
+        """Close underlying HTTP client resources.
+
+        Delegates to the internal LLM adapter's aclose() method.
+        Safe to call multiple times.
+        """
+        await self._llm_adapter.aclose()
+
 
 # Protocol verification
 def _verify_protocol_compliance() -> None:

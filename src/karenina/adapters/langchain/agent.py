@@ -465,6 +465,15 @@ class LangChainAgentAdapter:
             # No event loop running, safe to use asyncio.run
             return asyncio.run(self.run(messages, tools, mcp_servers, config))
 
+    async def aclose(self) -> None:
+        """Close underlying resources.
+
+        LangChain adapters delegate to LangChain's model management which
+        handles its own HTTP client lifecycle. This is a no-op provided
+        for interface consistency with other adapters.
+        """
+        pass
+
 
 # Verify protocol compliance at import time
 def _verify_protocol_compliance() -> None:

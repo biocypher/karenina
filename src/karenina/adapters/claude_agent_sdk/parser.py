@@ -254,6 +254,15 @@ class ClaudeSDKParserAdapter:
             # No event loop running, safe to use asyncio.run
             return asyncio.run(self.aparse_to_pydantic(response, schema))
 
+    async def aclose(self) -> None:
+        """Close underlying resources.
+
+        The Claude SDK parser adapter uses query() which doesn't hold persistent
+        connections, so this is a no-op. Provided for interface consistency
+        with other adapters that do require cleanup.
+        """
+        pass
+
 
 # Verify protocol compliance at import time
 def _verify_protocol_compliance() -> None:

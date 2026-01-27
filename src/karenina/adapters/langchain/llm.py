@@ -468,6 +468,15 @@ class LangChainLLMAdapter:
 
         return await _invoke()
 
+    async def aclose(self) -> None:
+        """Close underlying resources.
+
+        LangChain adapters delegate to LangChain's model management which
+        handles its own HTTP client lifecycle. This is a no-op provided
+        for interface consistency with other adapters.
+        """
+        pass
+
 
 # Verify protocol compliance at import time
 def _verify_protocol_compliance() -> None:

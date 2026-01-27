@@ -450,6 +450,15 @@ class ClaudeSDKAgentAdapter:
             # No event loop running, safe to use asyncio.run
             return asyncio.run(self.run(messages, tools, mcp_servers, config))
 
+    async def aclose(self) -> None:
+        """Close underlying resources.
+
+        The Claude SDK agent adapter uses ClaudeSDKClient as a context manager
+        which handles its own cleanup, so this is a no-op. Provided for
+        interface consistency with other adapters that do require cleanup.
+        """
+        pass
+
 
 # Verify protocol compliance at import time
 def _verify_protocol_compliance() -> None:

@@ -44,7 +44,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any, Literal, cast
 
-from karenina.adapters.registry import AdapterAvailability, AdapterRegistry
+from karenina.adapters.registry import AdapterAvailability, AdapterRegistry, register_adapter
 from karenina.ports import (
     AdapterUnavailableError,
     AgentPort,
@@ -228,7 +228,9 @@ def get_llm(
             fallback_interface="langchain",
         )
 
-    return spec.llm_factory(model_config)
+    adapter = spec.llm_factory(model_config)
+    register_adapter(adapter)
+    return adapter
 
 
 def get_agent(
@@ -304,7 +306,9 @@ def get_agent(
             fallback_interface="langchain",
         )
 
-    return spec.agent_factory(model_config)
+    adapter = spec.agent_factory(model_config)
+    register_adapter(adapter)
+    return adapter
 
 
 def get_parser(
@@ -382,7 +386,9 @@ def get_parser(
             fallback_interface="langchain",
         )
 
-    return spec.parser_factory(model_config)
+    adapter = spec.parser_factory(model_config)
+    register_adapter(adapter)
+    return adapter
 
 
 def build_llm_kwargs(
