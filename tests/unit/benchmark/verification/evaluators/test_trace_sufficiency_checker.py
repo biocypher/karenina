@@ -22,10 +22,10 @@ from karenina.benchmark.verification.evaluators.trace.sufficiency import (
     detect_sufficiency,
 )
 from karenina.benchmark.verification.utils.error_helpers import is_retryable_error
-from karenina.benchmark.verification.utils.json_helpers import strip_markdown_fences as _strip_markdown_fences
 from karenina.ports import LLMResponse
 from karenina.ports.usage import UsageMetadata
 from karenina.schemas.workflow import ModelConfig
+from karenina.utils.json_extraction import strip_markdown_fences as _strip_markdown_fences
 
 
 def _create_mock_llm_response(

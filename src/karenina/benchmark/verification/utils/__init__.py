@@ -1,11 +1,12 @@
 """Utility functions for verification operations."""
 
-from .error_helpers import is_retryable_error
-from .json_helpers import (
+from karenina.utils.json_extraction import (
     extract_balanced_braces,
     extract_json_from_text,
     strip_markdown_fences,
 )
+
+from .error_helpers import is_retryable_error
 from .llm_detection import is_openai_endpoint_llm
 from .llm_judge_helpers import extract_judge_result, fallback_json_parse
 from .prompts import (

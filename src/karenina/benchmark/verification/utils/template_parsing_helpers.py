@@ -9,12 +9,12 @@ import logging
 import re
 from typing import Any, get_args, get_origin
 
+# Re-export shared utilities for backward compatibility
+from karenina.utils.json_extraction import extract_json_from_text as _extract_json_from_text
+from karenina.utils.json_extraction import strip_markdown_fences as _strip_markdown_fences
+
 from ....schemas.domain import BaseAnswer
 from ....schemas.shared import SearchResultItem
-
-# Re-export shared utilities for backward compatibility
-from .json_helpers import extract_json_from_text as _extract_json_from_text
-from .json_helpers import strip_markdown_fences as _strip_markdown_fences
 
 __all__ = [
     "_strip_markdown_fences",

@@ -23,11 +23,12 @@ import json
 import logging
 from typing import Any
 
+from karenina.utils.json_extraction import strip_markdown_fences as _strip_markdown_fences
+
 from .....ports import LLMPort, Message, ParserPort
 from .....schemas.domain import BaseAnswer
 from .....schemas.shared import SearchResultItem
 from .....schemas.workflow import ModelConfig, VerificationConfig
-from ...utils.json_helpers import strip_markdown_fences as _strip_markdown_fences
 from ...utils.search_provider import create_search_tool
 from ...utils.template_parsing_helpers import (
     _extract_attribute_descriptions,
