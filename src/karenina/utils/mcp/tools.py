@@ -127,7 +127,7 @@ def sync_fetch_tool_descriptions(
     """
     # Try to use the shared portal if available (from parallel verification)
     try:
-        from karenina.benchmark.verification.batch_runner import get_async_portal
+        from karenina.benchmark.verification.executor import get_async_portal
 
         portal = get_async_portal()
         if portal is not None:

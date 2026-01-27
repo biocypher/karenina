@@ -259,7 +259,7 @@ class ClaudeToolLLMAdapter:
         Returns:
             LLMResponse with content, usage metadata, and raw response.
         """
-        from karenina.benchmark.verification.batch_runner import get_async_portal
+        from karenina.benchmark.verification.executor import get_async_portal
 
         portal = get_async_portal()
 

@@ -258,7 +258,7 @@ class LangChainParserAdapter:
             ParseError: If the LLM fails to extract valid structured data.
             PortError: If the underlying LLM invocation fails.
         """
-        from karenina.benchmark.verification.batch_runner import get_async_portal
+        from karenina.benchmark.verification.executor import get_async_portal
 
         portal = get_async_portal()
 

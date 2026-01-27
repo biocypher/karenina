@@ -19,7 +19,6 @@ Factory functions:
 
 Parallel invokers:
     - LLMParallelInvoker: Batch LLMPort invocations (plain text and structured)
-    - AgentParallelInvoker: Batch AgentPort invocations
 
 Example:
     >>> from karenina.adapters import get_agent, get_llm
@@ -34,7 +33,6 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     # Import types for type checking only
-    from karenina.adapters.agent_parallel import AgentParallelInvoker
     from karenina.adapters.factory import (
         build_llm_kwargs,
         check_adapter_available,
@@ -63,7 +61,6 @@ __all__ = [
     "AdapterAvailability",
     # Parallel invocation
     "LLMParallelInvoker",
-    "AgentParallelInvoker",
 ]
 
 
@@ -116,10 +113,5 @@ def __getattr__(name: str) -> Any:
         from karenina.adapters.llm_parallel import LLMParallelInvoker
 
         return LLMParallelInvoker
-
-    if name == "AgentParallelInvoker":
-        from karenina.adapters.agent_parallel import AgentParallelInvoker
-
-        return AgentParallelInvoker
 
     raise AttributeError(f"module 'karenina.adapters' has no attribute '{name}'")

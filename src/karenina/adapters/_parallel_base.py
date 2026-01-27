@@ -1,7 +1,7 @@
 """Shared utilities for parallel invokers.
 
-This module provides common utility functions used by all parallel invokers
-(LLMParallelInvoker, AgentParallelInvoker).
+This module provides common utility functions used by parallel invokers
+(LLMParallelInvoker).
 
 Uses composition over inheritance to avoid complex generic typing issues
 while sharing async execution patterns.
@@ -174,7 +174,7 @@ def sync_invoke_via_portal(
         ...     ...
         >>> data = sync_invoke_via_portal(fetch_data, "https://example.com")
     """
-    from ..benchmark.verification.batch_runner import get_async_portal
+    from ..benchmark.verification.executor import get_async_portal
 
     portal = get_async_portal()
 
@@ -212,6 +212,6 @@ def get_portal() -> BlockingPortal | None:
     Returns:
         The BlockingPortal if one is active, None otherwise
     """
-    from ..benchmark.verification.batch_runner import get_async_portal
+    from ..benchmark.verification.executor import get_async_portal
 
     return get_async_portal()

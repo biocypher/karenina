@@ -426,7 +426,7 @@ class ClaudeSDKAgentAdapter:
         Raises:
             Same exceptions as run().
         """
-        from karenina.benchmark.verification.batch_runner import get_async_portal
+        from karenina.benchmark.verification.executor import get_async_portal
 
         portal = get_async_portal()
 
