@@ -14,7 +14,7 @@ from .....schemas.workflow import ModelConfig
 from .....utils.errors import is_retryable_error
 from .....utils.retry import log_retry
 from ...utils.llm_judge_helpers import extract_judge_result, fallback_json_parse
-from ...utils.prompts import SUFFICIENCY_DETECTION_SYS, SUFFICIENCY_DETECTION_USER
+from .prompts import SUFFICIENCY_DETECTION_SYS, SUFFICIENCY_DETECTION_USER
 
 # Set up logger
 logger = logging.getLogger(__name__)
