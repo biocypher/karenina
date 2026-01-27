@@ -6,10 +6,23 @@ from karenina.utils.json_extraction import (
     strip_markdown_fences,
 )
 
+from .cache_helpers import (
+    extract_answer_data_from_result,
+    generate_answer_cache_key,
+    log_cache_stats,
+)
 from .error_helpers import is_retryable_error
 from .llm_detection import is_openai_endpoint_llm
 from .llm_judge_helpers import extract_judge_result, fallback_json_parse
+from .resource_helpers import cleanup_resources
 from .search_helpers import parse_tool_output
+from .storage_helpers import auto_save_results
+from .task_helpers import (
+    create_preview_result,
+    extract_feature_flags,
+    merge_rubrics_for_task,
+    resolve_few_shot_for_task,
+)
 from .template_parsing_helpers import (
     _extract_attribute_descriptions,
     _extract_attribute_names_from_class,
@@ -31,6 +44,19 @@ from .trace_parsing import extract_final_ai_message
 from .trace_usage_tracker import UsageMetadata, UsageTracker
 
 __all__ = [
+    # Cache helpers
+    "generate_answer_cache_key",
+    "extract_answer_data_from_result",
+    "log_cache_stats",
+    # Task helpers
+    "merge_rubrics_for_task",
+    "resolve_few_shot_for_task",
+    "create_preview_result",
+    "extract_feature_flags",
+    # Storage helpers
+    "auto_save_results",
+    # Resource helpers
+    "cleanup_resources",
     # Error helpers
     "is_retryable_error",
     # JSON helpers

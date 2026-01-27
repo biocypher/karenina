@@ -139,7 +139,9 @@ class VerificationExecutor:
         Returns:
             Dictionary mapping result keys to verification results
         """
-        from .batch_runner import _create_preview_result, _log_cache_stats, execute_task
+        from .batch_runner import execute_task
+        from .utils.cache_helpers import log_cache_stats
+        from .utils.task_helpers import create_preview_result
 
         answer_cache = AnswerTraceCache() if self.config.enable_cache else None
         results: dict[str, VerificationResult] = {}
@@ -148,7 +150,7 @@ class VerificationExecutor:
         for idx, task in enumerate(tasks, 1):
             # Call progress callback BEFORE starting task (with preview result)
             if progress_callback:
-                preview_result = _create_preview_result(task)
+                preview_result = create_preview_result(task)
                 progress_callback(idx, total, preview_result)
 
             # Execute the task with answer cache
@@ -161,7 +163,7 @@ class VerificationExecutor:
 
         # Log cache statistics
         if answer_cache:
-            _log_cache_stats(answer_cache, mode="sequential")
+            log_cache_stats(answer_cache, mode="sequential")
 
         return results
 
@@ -185,12 +187,9 @@ class VerificationExecutor:
         Returns:
             Dictionary mapping result keys to verification results (in original task order)
         """
-        from .batch_runner import (
-            _create_preview_result,
-            _generate_answer_cache_key,
-            _log_cache_stats,
-            execute_task,
-        )
+        from .batch_runner import execute_task
+        from .utils.cache_helpers import generate_answer_cache_key, log_cache_stats
+        from .utils.task_helpers import create_preview_result
 
         max_workers = self.config.max_workers
         logger.info(f"Parallel execution: {len(tasks)} tasks with {max_workers} workers")
@@ -247,7 +246,7 @@ class VerificationExecutor:
 
                         # Check answer cache first
                         if answer_cache:
-                            cache_key = _generate_answer_cache_key(task)
+                            cache_key = generate_answer_cache_key(task)
                             status, cached_answer_data = answer_cache.get_or_reserve(cache_key)
 
                             if status == "IN_PROGRESS":
@@ -277,7 +276,7 @@ class VerificationExecutor:
                         # Status is MISS or HIT - ready to execute
                         # Call preview progress callback
                         if progress_callback:
-                            preview_result = _create_preview_result(task)
+                            preview_result = create_preview_result(task)
                             with progress_lock:
                                 progress_callback(completed_count[0] + 1, total, preview_result)
 
@@ -345,7 +344,7 @@ class VerificationExecutor:
 
         # Log cache statistics
         if answer_cache:
-            _log_cache_stats(answer_cache, mode="parallel mode")
+            log_cache_stats(answer_cache, mode="parallel mode")
 
         return results
 
