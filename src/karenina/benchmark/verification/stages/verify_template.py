@@ -30,6 +30,7 @@ class VerifyTemplateStage(BaseVerificationStage):
         - "regex_verification_results": Dict with results, details, success
         - "regex_extraction_results": Dict of actual regex matches
         - "verification_result": Combined field + regex result (bool)
+        - "verify_granular_result": Float (0.0-1.0) for multi-attribute templates only
 
     Note:
         This stage performs the core verification but does NOT apply
@@ -55,6 +56,7 @@ class VerifyTemplateStage(BaseVerificationStage):
             "regex_verification_results",
             "regex_extraction_results",
             "verification_result",
+            "verify_granular_result",  # Only for multi-attribute templates
         ]
 
     def should_run(self, context: VerificationContext) -> bool:
@@ -139,6 +141,17 @@ class VerifyTemplateStage(BaseVerificationStage):
             context.set_result_field("regex_validation_details", regex_verification_results["details"])
             context.set_result_field("regex_overall_success", regex_verification_results["success"])
             context.set_result_field("regex_extraction_results", regex_extraction_results)
+
+            # Step 5: Granular verification for multi-attribute templates
+            # verify_granular() returns a float (0.0-1.0) representing fraction of correct attributes
+            # Only generated for templates with 2+ attributes (see generator_code.py:157-170)
+            if hasattr(parsed_answer, "verify_granular") and callable(parsed_answer.verify_granular):
+                try:
+                    granular_result = parsed_answer.verify_granular()
+                    context.set_result_field("verify_granular_result", granular_result)
+                    logger.debug(f"Granular verification result: {granular_result}")
+                except Exception as e:
+                    logger.warning(f"Granular verification failed: {e}")
 
         except Exception as e:
             error_msg = f"Verification failed: {e}"
