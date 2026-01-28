@@ -109,10 +109,8 @@ class GenerateAnswerStage(BaseVerificationStage):
             agent_metrics = context.cached_answer_data.get("agent_metrics")
 
             # Build model string for result (centralized via adapter registry)
-            from karenina.adapters import format_model_string
-
             answering_model = context.answering_model
-            answering_model_str = format_model_string(answering_model)
+            answering_model_str = self.get_model_string(answering_model)
 
             # Store cached data in context (both artifact and result field)
             self.set_artifact_and_result(context, "raw_llm_response", raw_llm_response)
@@ -134,9 +132,7 @@ class GenerateAnswerStage(BaseVerificationStage):
         answering_model = context.answering_model
 
         # Build model string for result (centralized via adapter registry)
-        from karenina.adapters import format_model_string
-
-        answering_model_str = format_model_string(answering_model)
+        answering_model_str = self.get_model_string(answering_model)
         context.set_artifact("answering_model_str", answering_model_str)
 
         # Extract MCP server names if configured

@@ -102,10 +102,8 @@ class SufficiencyCheckStage(BaseVerificationStage):
         usage_tracker = self.get_or_create_usage_tracker(context)
 
         # Build model string for tracking (centralized via adapter registry)
-        from karenina.adapters import format_model_string
-
         parsing_model = context.parsing_model
-        parsing_model_str = format_model_string(parsing_model)
+        parsing_model_str = self.get_model_string(parsing_model)
 
         # Get the JSON schema from the Answer class
         try:

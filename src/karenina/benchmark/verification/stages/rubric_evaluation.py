@@ -285,10 +285,8 @@ class RubricEvaluationStage(BaseVerificationStage):
         metric_results = None
 
         # Build model string for tracking (centralized via adapter registry)
-        from karenina.adapters import format_model_string
-
         parsing_model = context.parsing_model
-        parsing_model_str = format_model_string(parsing_model)
+        parsing_model_str = self.get_model_string(parsing_model)
 
         try:
             # Create rubric evaluator with parsing model and strategy from config
