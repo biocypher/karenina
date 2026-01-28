@@ -5,7 +5,7 @@ Auto-fails verification when excerpts are missing for attributes.
 
 import logging
 
-from ..stage import BaseVerificationStage, VerificationContext
+from .base import BaseVerificationStage, VerificationContext
 
 # Set up logger
 logger = logging.getLogger(__name__)

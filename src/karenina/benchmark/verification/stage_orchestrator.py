@@ -8,7 +8,6 @@ import time
 
 from ...schemas.domain import Rubric
 from ...schemas.workflow import VerificationResult
-from .stage import StageList, StageRegistry, VerificationContext
 from .stages import (
     AbstentionCheckStage,
     DeepJudgmentAutoFailStage,
@@ -24,6 +23,7 @@ from .stages import (
     ValidateTemplateStage,
     VerifyTemplateStage,
 )
+from .stages.base import StageList, StageRegistry, VerificationContext
 
 # Set up logger
 logger = logging.getLogger(__name__)

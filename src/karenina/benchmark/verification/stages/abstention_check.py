@@ -6,8 +6,8 @@ Detects when LLMs refuse to answer or abstain from responding.
 import logging
 
 from ..evaluators import detect_abstention
-from ..stage import BaseVerificationStage, VerificationContext
 from ..utils import UsageTracker
+from .base import BaseVerificationStage, VerificationContext
 
 # Set up logger
 logger = logging.getLogger(__name__)

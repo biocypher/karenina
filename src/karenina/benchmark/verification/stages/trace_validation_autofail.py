@@ -5,8 +5,8 @@ Auto-fails verification when agent trace doesn't end with an AI message.
 
 import logging
 
-from ..stage import BaseVerificationStage, VerificationContext
 from ..utils import extract_final_ai_message
+from .base import BaseVerificationStage, VerificationContext
 
 # Set up logger
 logger = logging.getLogger(__name__)

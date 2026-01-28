@@ -10,8 +10,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from ...schemas.domain import Rubric
-from ...schemas.workflow import ModelConfig
+from ....schemas.domain import Rubric
+from ....schemas.workflow import ModelConfig
 
 
 @dataclass

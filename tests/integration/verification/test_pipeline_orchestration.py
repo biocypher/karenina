@@ -21,16 +21,16 @@ implementations to verify the pipeline architecture.
 
 import pytest
 
-from karenina.benchmark.verification.stage import (
-    BaseVerificationStage,
-    StageRegistry,
-    VerificationContext,
-)
 from karenina.benchmark.verification.stage_orchestrator import StageOrchestrator
 from karenina.benchmark.verification.stages import (
     FinalizeResultStage,
     RecursionLimitAutoFailStage,
     ValidateTemplateStage,
+)
+from karenina.benchmark.verification.stages.base import (
+    BaseVerificationStage,
+    StageRegistry,
+    VerificationContext,
 )
 from karenina.schemas.domain import LLMRubricTrait, Rubric
 from karenina.schemas.workflow import (

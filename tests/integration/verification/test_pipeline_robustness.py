@@ -21,9 +21,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from karenina.benchmark.verification.stage import (
-    VerificationContext,
-)
 from karenina.benchmark.verification.stage_orchestrator import StageOrchestrator
 from karenina.benchmark.verification.stages import (
     AbstentionCheckStage,
@@ -35,6 +32,9 @@ from karenina.benchmark.verification.stages import (
     RecursionLimitAutoFailStage,
     ValidateTemplateStage,
     VerifyTemplateStage,
+)
+from karenina.benchmark.verification.stages.base import (
+    VerificationContext,
 )
 from karenina.schemas.domain import LLMRubricTrait, RegexTrait, Rubric
 from karenina.schemas.workflow import (

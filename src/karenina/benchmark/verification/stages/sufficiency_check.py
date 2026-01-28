@@ -7,8 +7,8 @@ import logging
 from typing import Any
 
 from ..evaluators import detect_sufficiency
-from ..stage import BaseVerificationStage, VerificationContext
 from ..utils import UsageTracker
+from .base import BaseVerificationStage, VerificationContext
 
 # Set up logger
 logger = logging.getLogger(__name__)

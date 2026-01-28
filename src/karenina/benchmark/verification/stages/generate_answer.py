@@ -11,9 +11,9 @@ from typing import Any
 
 from ....adapters import get_agent, get_llm
 from ....ports import AgentConfig, AgentPort, LLMPort, Message
-from ..stage import BaseVerificationStage, VerificationContext
 from ..utils.llm_invocation import _construct_few_shot_prompt
 from ..utils.trace_usage_tracker import UsageTracker
+from .base import BaseVerificationStage, VerificationContext
 
 # Set up logger
 logger = logging.getLogger(__name__)

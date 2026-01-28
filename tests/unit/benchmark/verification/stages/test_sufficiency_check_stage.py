@@ -15,7 +15,7 @@ from unittest.mock import patch
 import pytest
 from pydantic import Field
 
-from karenina.benchmark.verification.stage import VerificationContext
+from karenina.benchmark.verification.stages.base import VerificationContext
 from karenina.benchmark.verification.stages.sufficiency_check import (
     SufficiencyCheckStage,
 )

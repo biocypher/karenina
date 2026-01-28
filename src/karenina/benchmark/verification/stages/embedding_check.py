@@ -5,9 +5,9 @@ Semantic similarity fallback for field verification failures.
 
 import logging
 
-from ..stage import BaseVerificationStage, VerificationContext
 from ..utils.embedding_check import perform_embedding_check
 from ..utils.llm_invocation import _split_parsed_response
+from .base import BaseVerificationStage, VerificationContext
 
 # Set up logger
 logger = logging.getLogger(__name__)

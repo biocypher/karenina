@@ -6,7 +6,7 @@ after all retry attempts.
 
 import logging
 
-from ..stage import BaseVerificationStage, VerificationContext
+from .base import BaseVerificationStage, VerificationContext
 
 logger = logging.getLogger(__name__)
 

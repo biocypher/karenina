@@ -9,8 +9,8 @@ from typing import Any
 from ....schemas.domain import LLMRubricTrait
 from ....schemas.workflow.verification.config import DeepJudgmentTraitConfig
 from ..evaluators import RubricEvaluator
-from ..stage import BaseVerificationStage, VerificationContext
 from ..utils import UsageTracker, extract_final_ai_message
+from .base import BaseVerificationStage, VerificationContext
 
 # Set up logger
 logger = logging.getLogger(__name__)
