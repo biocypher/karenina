@@ -127,7 +127,7 @@ class EmbeddingCheckStage(BaseVerificationStage):
             context.set_artifact("verify_result", verification_result)
             context.set_result_field("verify_result", verification_result)
 
-            logger.info(
+            logger.warning(
                 f"Embedding check override applied for question {context.question_id} "
                 f"(similarity: {similarity_score:.3f})"
             )

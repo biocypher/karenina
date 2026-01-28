@@ -97,5 +97,5 @@ class DeepJudgmentAutoFailStage(BaseAutoFailStage):
         )
 
     def _get_log_level(self) -> int:
-        """Use INFO level for deep judgment auto-fail."""
-        return logging.INFO
+        """Use WARNING level for auto-fail (matches logging convention)."""
+        return logging.WARNING

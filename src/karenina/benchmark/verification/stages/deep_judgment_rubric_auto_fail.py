@@ -72,7 +72,7 @@ class DeepJudgmentRubricAutoFailStage(BaseAutoFailStage):
         abstention_detected = context.get_result_field("abstention_detected")
         if abstention_detected:
             traits_without_excerpts = context.get_result_field("traits_without_valid_excerpts")
-            logger.info(
+            logger.debug(
                 f"Abstention detected - skipping deep judgment rubric auto-fail "
                 f"for {len(traits_without_excerpts)} trait(s): {', '.join(traits_without_excerpts)}"
             )
@@ -102,4 +102,4 @@ class DeepJudgmentRubricAutoFailStage(BaseAutoFailStage):
         for trait_name in traits_without_excerpts:
             metadata = trait_metadata.get(trait_name, {})
             retry_count = metadata.get("excerpt_retry_count", 0)
-            logger.info(f"  - Trait '{trait_name}' failed after {retry_count} retry attempt(s)")
+            logger.debug(f"  - Trait '{trait_name}' failed after {retry_count} retry attempt(s)")

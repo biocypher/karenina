@@ -93,7 +93,9 @@ class BaseAutoFailStage(BaseVerificationStage):
         """
         Get the logging level for the auto-fail message.
 
-        Override to use INFO instead of WARNING for specific stages.
+        By convention, auto-fails should use WARNING level since they
+        change verify_result due to a detected condition. This follows
+        the logging convention documented in base.py.
 
         Returns:
             Logging level constant (default: logging.WARNING)

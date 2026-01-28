@@ -147,7 +147,7 @@ class BaseCheckStage(BaseVerificationStage):
             context.set_artifact("verify_result", verification_result)
             context.set_result_field("verify_result", verification_result)
 
-            logger.info(f"{self.name} triggered for question {context.question_id} - overriding result to False")
+            logger.warning(f"{self.name} triggered for question {context.question_id} - overriding result to False")
 
         # Store check metadata (both artifact and result field)
         self.set_artifact_and_result(context, f"{prefix}_check_performed", check_performed)

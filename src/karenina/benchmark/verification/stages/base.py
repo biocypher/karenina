@@ -5,6 +5,14 @@ This module provides the core abstractions for the modular verification pipeline
 - VerificationStage: Protocol defining stage interface
 - StageRegistry: Manages stage instances and dependencies
 - ArtifactKeys: Type-safe constants for artifact and result field keys
+
+Logging Convention:
+    All stages should follow this logging level convention:
+    - ERROR: System/code errors (exceptions, failures, unexpected states)
+    - WARNING: Auto-fails and overrides (anything that changes verify_result due
+               to a detected condition like abstention, recursion limit, etc.)
+    - INFO: Important flow events (stage completion, feature enabled, etc.)
+    - DEBUG: Normal flow decisions (skipping stages, validation passed, etc.)
 """
 
 import logging
