@@ -7,7 +7,7 @@ import logging
 
 from ..evaluators import RubricEvaluator
 from ..utils import prepare_evaluation_input
-from .base import BaseVerificationStage, VerificationContext
+from .base import ArtifactKeys, BaseVerificationStage, VerificationContext
 from .deep_judgment_helpers import apply_deep_judgment_config_to_traits
 
 # Set up logger
@@ -50,16 +50,16 @@ class RubricEvaluationStage(BaseVerificationStage):
     @property
     def requires(self) -> list[str]:
         """Artifacts required by this stage."""
-        return ["raw_llm_response"]
+        return [ArtifactKeys.RAW_LLM_RESPONSE]
 
     @property
     def produces(self) -> list[str]:
         """Artifacts produced by this stage."""
         return [
-            "rubric_result",
-            "llm_trait_labels",
-            "metric_confusion_lists",
-            "metric_results",
+            ArtifactKeys.RUBRIC_RESULT,
+            ArtifactKeys.LLM_TRAIT_LABELS,
+            ArtifactKeys.METRIC_CONFUSION_LISTS,
+            ArtifactKeys.METRIC_RESULTS,
         ]
 
     def should_run(self, context: VerificationContext) -> bool:
@@ -88,7 +88,7 @@ class RubricEvaluationStage(BaseVerificationStage):
             return False
 
         # If trace validation failed and we need extraction, skip rubric evaluation
-        trace_validation_failed = context.get_artifact("trace_validation_failed", False)
+        trace_validation_failed = context.get_artifact(ArtifactKeys.TRACE_VALIDATION_FAILED, False)
         if trace_validation_failed and not context.use_full_trace_for_rubric:
             logger.info(
                 f"Skipping rubric evaluation for question {context.question_id}: "
@@ -110,7 +110,7 @@ class RubricEvaluationStage(BaseVerificationStage):
             - Sets result fields for rubric metadata
             - Does NOT set context.error on rubric evaluation failure
         """
-        raw_llm_response = context.get_artifact("raw_llm_response")
+        raw_llm_response = context.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
         rubric = context.rubric
 
         # Retrieve usage tracker from previous stage or create new one
@@ -205,26 +205,30 @@ class RubricEvaluationStage(BaseVerificationStage):
                     llm_trait_labels = dj_result.get("standard_labels")
 
                     # Store deep judgment metadata in result fields
-                    context.set_result_field("deep_judgment_rubric_performed", True)
-                    context.set_result_field("extracted_rubric_excerpts", dj_result["excerpts"])
-                    context.set_result_field("rubric_trait_reasoning", dj_result["reasoning"])
-                    context.set_result_field("deep_judgment_rubric_scores", dj_result["deep_judgment_scores"])
-                    context.set_result_field("standard_rubric_scores", dj_result["standard_scores"])
-                    context.set_result_field("trait_metadata", dj_result["metadata"])
+                    context.set_result_field(ArtifactKeys.DEEP_JUDGMENT_RUBRIC_PERFORMED, True)
+                    context.set_result_field(ArtifactKeys.EXTRACTED_RUBRIC_EXCERPTS, dj_result["excerpts"])
+                    context.set_result_field(ArtifactKeys.RUBRIC_TRAIT_REASONING, dj_result["reasoning"])
                     context.set_result_field(
-                        "traits_without_valid_excerpts", dj_result["traits_without_valid_excerpts"]
+                        ArtifactKeys.DEEP_JUDGMENT_RUBRIC_SCORES, dj_result["deep_judgment_scores"]
+                    )
+                    context.set_result_field(ArtifactKeys.STANDARD_RUBRIC_SCORES, dj_result["standard_scores"])
+                    context.set_result_field(ArtifactKeys.TRAIT_METADATA, dj_result["metadata"])
+                    context.set_result_field(
+                        ArtifactKeys.TRAITS_WITHOUT_VALID_EXCERPTS, dj_result["traits_without_valid_excerpts"]
                     )
                     if dj_result["hallucination_risks"]:
                         context.set_result_field(
-                            "rubric_hallucination_risk_assessment", dj_result["hallucination_risks"]
+                            ArtifactKeys.RUBRIC_HALLUCINATION_RISK_ASSESSMENT, dj_result["hallucination_risks"]
                         )
 
                     # Calculate aggregated statistics
                     total_model_calls = sum(m.get("model_calls", 0) for m in dj_result["metadata"].values())
                     total_retries = sum(m.get("excerpt_retry_count", 0) for m in dj_result["metadata"].values())
-                    context.set_result_field("total_deep_judgment_model_calls", total_model_calls)
-                    context.set_result_field("total_traits_evaluated", len(dj_result["deep_judgment_scores"]))
-                    context.set_result_field("total_excerpt_retries", total_retries)
+                    context.set_result_field(ArtifactKeys.TOTAL_DEEP_JUDGMENT_MODEL_CALLS, total_model_calls)
+                    context.set_result_field(
+                        ArtifactKeys.TOTAL_TRAITS_EVALUATED, len(dj_result["deep_judgment_scores"])
+                    )
+                    context.set_result_field(ArtifactKeys.TOTAL_EXCERPT_RETRIES, total_retries)
 
                     # Track deep judgment usage metadata
                     usage_metadata_list = dj_result.get("usage_metadata_list", [])
@@ -287,20 +291,20 @@ class RubricEvaluationStage(BaseVerificationStage):
             rubric_result = None  # type: ignore[assignment]
 
         # Store results (even if None)
-        context.set_artifact("rubric_result", rubric_result)
-        context.set_artifact("llm_trait_labels", llm_trait_labels)
-        context.set_artifact("metric_confusion_lists", metric_confusion_lists)
-        context.set_artifact("metric_results", metric_results)
+        context.set_artifact(ArtifactKeys.RUBRIC_RESULT, rubric_result)
+        context.set_artifact(ArtifactKeys.LLM_TRAIT_LABELS, llm_trait_labels)
+        context.set_artifact(ArtifactKeys.METRIC_CONFUSION_LISTS, metric_confusion_lists)
+        context.set_artifact(ArtifactKeys.METRIC_RESULTS, metric_results)
 
         # Store updated usage tracker for next stages
-        context.set_artifact("usage_tracker", usage_tracker)
+        context.set_artifact(ArtifactKeys.USAGE_TRACKER, usage_tracker)
 
         # Store in result builder
-        context.set_result_field("verify_rubric", rubric_result)
-        context.set_result_field("llm_trait_labels", llm_trait_labels)
-        context.set_result_field("metric_trait_confusion_lists", metric_confusion_lists)
-        context.set_result_field("metric_trait_metrics", metric_results)
+        context.set_result_field(ArtifactKeys.VERIFY_RUBRIC, rubric_result)
+        context.set_result_field(ArtifactKeys.LLM_TRAIT_LABELS, llm_trait_labels)
+        context.set_result_field(ArtifactKeys.METRIC_TRAIT_CONFUSION_LISTS, metric_confusion_lists)
+        context.set_result_field(ArtifactKeys.METRIC_TRAIT_METRICS, metric_results)
         # Note: evaluation_rubric is now stored in shared_data at export time (not per-result)
-        context.set_result_field("rubric_evaluation_strategy", context.rubric_evaluation_strategy)
+        context.set_result_field(ArtifactKeys.RUBRIC_EVALUATION_STRATEGY, context.rubric_evaluation_strategy)
         # Note: trace filtering fields (evaluation_input, used_full_trace, trace_extraction_error)
         # are stored at root level by parse_template stage, not duplicated here for rubric
