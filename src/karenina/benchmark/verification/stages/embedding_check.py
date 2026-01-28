@@ -28,8 +28,7 @@ class EmbeddingCheckStage(BaseVerificationStage):
     Requires:
         - "parsed_answer": Parsed Pydantic object
         - "field_verification_result": Boolean result of field verification
-        - "verify_result": Combined verification result
-        - "regex_verification_results": Regex results (for recalculation)
+        - "regex_verification_results": Regex results (for recalculation if override applied)
 
     Produces:
         - "embedding_check_performed": Whether check was attempted (bool)
@@ -51,11 +50,14 @@ class EmbeddingCheckStage(BaseVerificationStage):
 
     @property
     def requires(self) -> list[str]:
-        """Artifacts required by this stage."""
+        """Artifacts required by this stage.
+
+        Note: verify_result is NOT required as input - it's only written as output
+        after being recalculated from field_verification_result and regex_verification_results.
+        """
         return [
             "parsed_answer",
             "field_verification_result",
-            "verify_result",
             "regex_verification_results",
         ]
 
