@@ -3,16 +3,14 @@
 Detects when LLMs refuse to answer or abstain from responding.
 """
 
-import logging
+from typing import Any
 
 from ..evaluators import detect_abstention
-from .base import BaseVerificationStage, VerificationContext
-
-# Set up logger
-logger = logging.getLogger(__name__)
+from .base import VerificationContext
+from .check_stage_base import BaseCheckStage
 
 
-class AbstentionCheckStage(BaseVerificationStage):
+class AbstentionCheckStage(BaseCheckStage):
     """
     Detects LLM abstention or refusal to answer.
 
@@ -48,21 +46,16 @@ class AbstentionCheckStage(BaseVerificationStage):
         return "AbstentionCheck"
 
     @property
+    def _artifact_prefix(self) -> str:
+        """Prefix for artifact/result field names."""
+        return "abstention"
+
+    @property
     def requires(self) -> list[str]:
         """Artifacts required by this stage."""
         # Only requires raw_llm_response - verify_result is optional
         # In rubric_only mode, verify_result may not exist yet
         return ["raw_llm_response"]
-
-    @property
-    def produces(self) -> list[str]:
-        """Artifacts produced by this stage."""
-        return [
-            "abstention_check_performed",
-            "abstention_detected",
-            "abstention_override_applied",
-            "abstention_reasoning",
-        ]
 
     def should_run(self, context: VerificationContext) -> bool:
         """Run only if abstention detection is enabled and no recursion limit hit.
@@ -76,57 +69,19 @@ class AbstentionCheckStage(BaseVerificationStage):
             return False
         return context.abstention_enabled
 
-    def execute(self, context: VerificationContext) -> None:
-        """
-        Detect abstention and apply override if needed.
+    def _should_trigger_override(self, detected: bool | None, check_performed: bool) -> bool:
+        """Trigger override if abstention was detected."""
+        return bool(detected) and check_performed
 
-        Args:
-            context: Verification context
-
-        Side Effects:
-            - Sets abstention metadata artifacts
-            - May override verify_result to False if abstention detected
-            - Sets result fields for abstention metadata
-        """
+    def _detect(
+        self,
+        context: VerificationContext,
+    ) -> tuple[bool | None, bool, str | None, dict[str, Any] | None]:
+        """Detect abstention in the raw LLM response."""
         raw_llm_response = context.get_artifact("raw_llm_response")
 
-        # Retrieve usage tracker from previous stage or create new one
-        usage_tracker = self.get_or_create_usage_tracker(context)
-
-        # Build model string for tracking (centralized via adapter registry)
-        parsing_model = context.parsing_model
-        parsing_model_str = self.get_model_string(parsing_model)
-
-        # Detect abstention
-        abstention_detected, abstention_check_performed, abstention_reasoning, usage_metadata = detect_abstention(
+        return detect_abstention(
             raw_llm_response=raw_llm_response,
             parsing_model=context.parsing_model,
             question_text=context.question_text,
         )
-
-        # Track the abstention check call
-        if usage_metadata:
-            usage_tracker.track_call("abstention_check", parsing_model_str, usage_metadata)
-
-        abstention_override_applied = False
-
-        # Apply override if abstention detected
-        if abstention_detected and abstention_check_performed:
-            # Mark as failed since model didn't provide a real answer
-            verification_result = False
-            abstention_override_applied = True
-
-            # Update stored result
-            context.set_artifact("verify_result", verification_result)
-            context.set_result_field("verify_result", verification_result)
-
-            logger.info(f"Abstention detected for question {context.question_id} - overriding result to False")
-
-        # Store abstention metadata (both artifact and result field)
-        self.set_artifact_and_result(context, "abstention_check_performed", abstention_check_performed)
-        self.set_artifact_and_result(context, "abstention_detected", abstention_detected)
-        self.set_artifact_and_result(context, "abstention_override_applied", abstention_override_applied)
-        self.set_artifact_and_result(context, "abstention_reasoning", abstention_reasoning)
-
-        # Store updated usage tracker for next stages (artifact only)
-        context.set_artifact("usage_tracker", usage_tracker)

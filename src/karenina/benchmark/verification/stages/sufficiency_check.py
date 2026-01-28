@@ -7,13 +7,14 @@ import logging
 from typing import Any
 
 from ..evaluators import detect_sufficiency
-from .base import BaseVerificationStage, VerificationContext
+from .base import VerificationContext
+from .check_stage_base import BaseCheckStage
 
 # Set up logger
 logger = logging.getLogger(__name__)
 
 
-class SufficiencyCheckStage(BaseVerificationStage):
+class SufficiencyCheckStage(BaseCheckStage):
     """
     Detects if LLM response has sufficient information for template population.
 
@@ -50,20 +51,15 @@ class SufficiencyCheckStage(BaseVerificationStage):
         return "SufficiencyCheck"
 
     @property
+    def _artifact_prefix(self) -> str:
+        """Prefix for artifact/result field names."""
+        return "sufficiency"
+
+    @property
     def requires(self) -> list[str]:
         """Artifacts required by this stage."""
         # Requires both raw_llm_response and Answer (the template class)
         return ["raw_llm_response", "Answer"]
-
-    @property
-    def produces(self) -> list[str]:
-        """Artifacts produced by this stage."""
-        return [
-            "sufficiency_check_performed",
-            "sufficiency_detected",
-            "sufficiency_override_applied",
-            "sufficiency_reasoning",
-        ]
 
     def should_run(self, context: VerificationContext) -> bool:
         """Run only if sufficiency detection is enabled, no recursion limit hit, and no prior failures.
@@ -83,73 +79,40 @@ class SufficiencyCheckStage(BaseVerificationStage):
             return False
         return context.sufficiency_enabled
 
-    def execute(self, context: VerificationContext) -> None:
+    def _should_trigger_override(self, detected: bool | None, check_performed: bool) -> bool:
+        """Trigger override if response is insufficient (detected=False means insufficient)."""
+        # Note: For sufficiency, detected=True means sufficient (good)
+        # and detected=False means insufficient (trigger override)
+        return not detected and check_performed
+
+    def _detect(
+        self,
+        context: VerificationContext,
+    ) -> tuple[bool | None, bool, str | None, dict[str, Any] | None]:
         """
-        Detect sufficiency and apply override if needed.
+        Detect sufficiency of the raw LLM response for populating the template.
 
-        Args:
-            context: Verification context
-
-        Side Effects:
-            - Sets sufficiency metadata artifacts
-            - May override verify_result to False if insufficient
-            - Sets result fields for sufficiency metadata
+        Returns early with check_performed=False if the template schema cannot be obtained.
         """
         raw_llm_response = context.get_artifact("raw_llm_response")
         Answer = context.get_artifact("Answer")
-
-        # Retrieve usage tracker from previous stage or create new one
-        usage_tracker = self.get_or_create_usage_tracker(context)
-
-        # Build model string for tracking (centralized via adapter registry)
-        parsing_model = context.parsing_model
-        parsing_model_str = self.get_model_string(parsing_model)
 
         # Get the JSON schema from the Answer class
         try:
             template_schema: dict[str, Any] = Answer.model_json_schema()
         except Exception as e:
             logger.warning(f"Failed to get JSON schema from Answer class: {e}")
-            # Cannot perform check without schema, mark as not performed
-            self.set_artifact_and_result(context, "sufficiency_check_performed", False)
-            self.set_artifact_and_result(context, "sufficiency_detected", None)
-            self.set_artifact_and_result(context, "sufficiency_override_applied", False)
-            self.set_artifact_and_result(context, "sufficiency_reasoning", None)
-            return
+            # Cannot perform check without schema, return not performed
+            return (
+                None,  # detected (None since check wasn't performed)
+                False,  # check_performed
+                None,  # reasoning
+                None,  # usage_metadata
+            )
 
-        # Detect sufficiency
-        sufficient, sufficiency_check_performed, sufficiency_reasoning, usage_metadata = detect_sufficiency(
+        return detect_sufficiency(
             raw_llm_response=raw_llm_response,
             parsing_model=context.parsing_model,
             question_text=context.question_text,
             template_schema=template_schema,
         )
-
-        # Track the sufficiency check call
-        if usage_metadata:
-            usage_tracker.track_call("sufficiency_check", parsing_model_str, usage_metadata)
-
-        sufficiency_override_applied = False
-
-        # Apply override if insufficient (sufficient=False means we need to fail)
-        if not sufficient and sufficiency_check_performed:
-            # Mark as failed since response lacks information for template
-            verification_result = False
-            sufficiency_override_applied = True
-
-            # Update stored result
-            context.set_artifact("verify_result", verification_result)
-            context.set_result_field("verify_result", verification_result)
-
-            logger.info(f"Insufficient response for question {context.question_id} - overriding result to False")
-
-        # Store sufficiency metadata (both artifact and result field)
-        self.set_artifact_and_result(context, "sufficiency_check_performed", sufficiency_check_performed)
-        self.set_artifact_and_result(
-            context, "sufficiency_detected", sufficient
-        )  # True = sufficient, False = insufficient
-        self.set_artifact_and_result(context, "sufficiency_override_applied", sufficiency_override_applied)
-        self.set_artifact_and_result(context, "sufficiency_reasoning", sufficiency_reasoning)
-
-        # Store updated usage tracker for next stages (artifact only)
-        context.set_artifact("usage_tracker", usage_tracker)

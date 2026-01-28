@@ -11,6 +11,9 @@ Core Types (from base.py):
 - StageRegistry: Manages stage instances and dependencies
 - StageList: Type alias for list of stages
 
+Base Classes (for extending):
+- BaseCheckStage: Base class for check stages (abstention, sufficiency)
+
 Available Stages:
 - ValidateTemplateStage: Template syntax validation
 - GenerateAnswerStage: LLM answer generation
@@ -37,6 +40,7 @@ from .base import (
     VerificationContext,
     VerificationStage,
 )
+from .check_stage_base import BaseCheckStage
 from .deep_judgment_autofail import DeepJudgmentAutoFailStage
 from .deep_judgment_rubric_auto_fail import DeepJudgmentRubricAutoFailStage
 from .embedding_check import EmbeddingCheckStage
@@ -62,6 +66,7 @@ __all__ = [
     "VerificationContext",
     "VerificationStage",
     "BaseVerificationStage",
+    "BaseCheckStage",
     "StageRegistry",
     "StageList",
     "StageOrchestrator",
