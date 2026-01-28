@@ -443,8 +443,9 @@ class TestStageRegistry:
 
         registry.register(stage)
 
-        assert registry.has("test")
-        assert registry.get("test") is stage
+        # Verify stage is registered via validate_dependencies (only public method)
+        errors = registry.validate_dependencies([stage])
+        assert len(errors) == 0
 
     def test_register_duplicate_raises(self):
         """Verify registering duplicate stage name raises ValueError."""
@@ -456,18 +457,6 @@ class TestStageRegistry:
 
         with pytest.raises(ValueError, match="already registered"):
             registry.register(stage2)
-
-    def test_list_stages(self):
-        """Verify list_stages returns all registered stage names."""
-        registry = StageRegistry()
-        registry.register(MockProducerStage("stage1", "k1", "v1"))
-        registry.register(MockProducerStage("stage2", "k2", "v2"))
-
-        names = registry.list_stages()
-
-        assert "stage1" in names
-        assert "stage2" in names
-        assert len(names) == 2
 
     def test_validate_dependencies_success(self):
         """Verify valid dependency chain passes validation."""

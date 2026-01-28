@@ -421,39 +421,6 @@ class StageRegistry:
             raise ValueError(f"Stage '{stage.name}' is already registered")
         self._stages[stage.name] = stage
 
-    def get(self, name: str) -> VerificationStage | None:
-        """
-        Get a stage by name.
-
-        Args:
-            name: Stage name
-
-        Returns:
-            Stage instance or None if not found
-        """
-        return self._stages.get(name)
-
-    def has(self, name: str) -> bool:
-        """
-        Check if stage is registered.
-
-        Args:
-            name: Stage name
-
-        Returns:
-            True if stage registered, False otherwise
-        """
-        return name in self._stages
-
-    def list_stages(self) -> list[str]:
-        """
-        List all registered stage names.
-
-        Returns:
-            List of stage names
-        """
-        return list(self._stages.keys())
-
     def validate_dependencies(self, stages: list[VerificationStage]) -> list[str]:
         """
         Validate that all stage dependencies can be satisfied.
@@ -485,7 +452,7 @@ class StageRegistry:
 
     def __repr__(self) -> str:
         """String representation for debugging."""
-        return f"StageRegistry(stages={self.list_stages()})"
+        return f"StageRegistry(stages={list(self._stages.keys())})"
 
 
 # Convenience type alias for stage lists
