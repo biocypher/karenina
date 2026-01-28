@@ -5,6 +5,7 @@ verification pipeline. Each stage is a self-contained unit that performs
 a specific verification task.
 
 Core Types (from base.py):
+- ArtifactKeys: Type-safe constants for artifact and result field keys
 - VerificationContext: Shared state across stages
 - VerificationStage: Protocol defining stage interface
 - BaseVerificationStage: Abstract base class for stages
@@ -36,6 +37,7 @@ Available Stages:
 from .abstention_check import AbstentionCheckStage
 from .autofail_stage_base import BaseAutoFailStage
 from .base import (
+    ArtifactKeys,
     BaseVerificationStage,
     StageList,
     StageRegistry,
@@ -69,6 +71,7 @@ from .verify_template import VerifyTemplateStage
 
 __all__ = [
     # Core types
+    "ArtifactKeys",
     "VerificationContext",
     "VerificationStage",
     "BaseVerificationStage",

@@ -4,6 +4,7 @@ This module provides the core abstractions for the modular verification pipeline
 - VerificationContext: Shared state and artifacts across stages
 - VerificationStage: Protocol defining stage interface
 - StageRegistry: Manages stage instances and dependencies
+- ArtifactKeys: Type-safe constants for artifact and result field keys
 """
 
 import logging
@@ -18,6 +19,156 @@ if TYPE_CHECKING:
     from ..utils.trace_usage_tracker import UsageTracker
 
 logger = logging.getLogger(__name__)
+
+
+class ArtifactKeys:
+    """
+    Type-safe constants for artifact and result field keys.
+
+    Using these constants instead of raw strings prevents typos and enables
+    IDE autocomplete. All stage implementations should use these constants
+    when calling context.set_artifact(), context.get_artifact(),
+    context.set_result_field(), and context.get_result_field().
+
+    Naming conventions:
+    - SCREAMING_SNAKE_CASE for constants
+    - Group by functional area (template, rubric, deep judgment, etc.)
+    """
+
+    # ==========================================================================
+    # Core Pipeline Artifacts
+    # ==========================================================================
+
+    # LLM Response & Parsing
+    RAW_LLM_RESPONSE = "raw_llm_response"
+    PARSED_ANSWER = "parsed_answer"
+    USAGE_TRACKER = "usage_tracker"
+    TRACE_MESSAGES = "trace_messages"
+
+    # Template Classes (from validate_template stage)
+    ANSWER = "Answer"
+    RAW_ANSWER = "RawAnswer"
+    TEMPLATE_VALIDATION_ERROR = "template_validation_error"
+    TEMPLATE_EVALUATOR = "template_evaluator"
+
+    # Model Identification
+    ANSWERING_MODEL_STR = "answering_model_str"
+    PARSING_MODEL_STR = "parsing_model_str"
+    ANSWERING_MCP_SERVERS = "answering_mcp_servers"
+
+    # ==========================================================================
+    # Verification Results
+    # ==========================================================================
+
+    # Core Verification
+    VERIFY_RESULT = "verify_result"
+    VERIFY_GRANULAR_RESULT = "verify_granular_result"
+    FIELD_VERIFICATION_RESULT = "field_verification_result"
+    FINAL_RESULT = "final_result"
+
+    # Regex Verification
+    REGEX_VERIFICATION_RESULTS = "regex_verification_results"
+    REGEX_EXTRACTION_RESULTS = "regex_extraction_results"
+    REGEX_VALIDATIONS_PERFORMED = "regex_validations_performed"
+    REGEX_VALIDATION_RESULTS = "regex_validation_results"
+    REGEX_VALIDATION_DETAILS = "regex_validation_details"
+    REGEX_OVERALL_SUCCESS = "regex_overall_success"
+
+    # ==========================================================================
+    # Auto-Fail & Trace Validation
+    # ==========================================================================
+
+    # Recursion Limit
+    RECURSION_LIMIT_REACHED = "recursion_limit_reached"
+
+    # Trace Validation
+    MCP_ENABLED = "mcp_enabled"
+    TRACE_VALIDATION_FAILED = "trace_validation_failed"
+    TRACE_VALIDATION_ERROR = "trace_validation_error"
+    TRACE_EXTRACTION_ERROR = "trace_extraction_error"
+
+    # ==========================================================================
+    # Abstention & Sufficiency Detection
+    # ==========================================================================
+
+    # Abstention
+    ABSTENTION_CHECK_PERFORMED = "abstention_check_performed"
+    ABSTENTION_DETECTED = "abstention_detected"
+    ABSTENTION_OVERRIDE_APPLIED = "abstention_override_applied"
+    ABSTENTION_REASONING = "abstention_reasoning"
+
+    # Sufficiency
+    SUFFICIENCY_CHECK_PERFORMED = "sufficiency_check_performed"
+    SUFFICIENCY_DETECTED = "sufficiency_detected"
+    SUFFICIENCY_OVERRIDE_APPLIED = "sufficiency_override_applied"
+    SUFFICIENCY_REASONING = "sufficiency_reasoning"
+
+    # ==========================================================================
+    # Embedding Check
+    # ==========================================================================
+
+    EMBEDDING_CHECK_PERFORMED = "embedding_check_performed"
+    EMBEDDING_SIMILARITY_SCORE = "embedding_similarity_score"
+    EMBEDDING_OVERRIDE_APPLIED = "embedding_override_applied"
+    EMBEDDING_MODEL_USED = "embedding_model_used"
+
+    # ==========================================================================
+    # Deep Judgment (Template)
+    # ==========================================================================
+
+    DEEP_JUDGMENT_ENABLED = "deep_judgment_enabled"
+    DEEP_JUDGMENT_PERFORMED = "deep_judgment_performed"
+    EXTRACTED_EXCERPTS = "extracted_excerpts"
+    ATTRIBUTE_REASONING = "attribute_reasoning"
+    DEEP_JUDGMENT_STAGES_COMPLETED = "deep_judgment_stages_completed"
+    DEEP_JUDGMENT_MODEL_CALLS = "deep_judgment_model_calls"
+    DEEP_JUDGMENT_EXCERPT_RETRY_COUNT = "deep_judgment_excerpt_retry_count"
+    ATTRIBUTES_WITHOUT_EXCERPTS = "attributes_without_excerpts"
+    DEEP_JUDGMENT_SEARCH_ENABLED = "deep_judgment_search_enabled"
+    HALLUCINATION_RISK_ASSESSMENT = "hallucination_risk_assessment"
+
+    # ==========================================================================
+    # Rubric Evaluation
+    # ==========================================================================
+
+    RUBRIC_RESULT = "rubric_result"
+    VERIFY_RUBRIC = "verify_rubric"
+    LLM_TRAIT_LABELS = "llm_trait_labels"
+    METRIC_CONFUSION_LISTS = "metric_confusion_lists"
+    METRIC_RESULTS = "metric_results"
+    METRIC_TRAIT_CONFUSION_LISTS = "metric_trait_confusion_lists"
+    METRIC_TRAIT_METRICS = "metric_trait_metrics"
+    RUBRIC_EVALUATION_STRATEGY = "rubric_evaluation_strategy"
+
+    # ==========================================================================
+    # Deep Judgment (Rubric)
+    # ==========================================================================
+
+    DEEP_JUDGMENT_RUBRIC_PERFORMED = "deep_judgment_rubric_performed"
+    EXTRACTED_RUBRIC_EXCERPTS = "extracted_rubric_excerpts"
+    RUBRIC_TRAIT_REASONING = "rubric_trait_reasoning"
+    DEEP_JUDGMENT_RUBRIC_SCORES = "deep_judgment_rubric_scores"
+    STANDARD_RUBRIC_SCORES = "standard_rubric_scores"
+    TRAIT_METADATA = "trait_metadata"
+    TRAITS_WITHOUT_VALID_EXCERPTS = "traits_without_valid_excerpts"
+    RUBRIC_HALLUCINATION_RISK_ASSESSMENT = "rubric_hallucination_risk_assessment"
+    TOTAL_DEEP_JUDGMENT_MODEL_CALLS = "total_deep_judgment_model_calls"
+    TOTAL_TRAITS_EVALUATED = "total_traits_evaluated"
+    TOTAL_EXCERPT_RETRIES = "total_excerpt_retries"
+
+    # ==========================================================================
+    # Trace Filtering & Evaluation Input
+    # ==========================================================================
+
+    USED_FULL_TRACE = "used_full_trace"
+    EVALUATION_INPUT = "evaluation_input"
+
+    # ==========================================================================
+    # Result Metadata
+    # ==========================================================================
+
+    TIMESTAMP = "timestamp"
+    EXECUTION_TIME = "execution_time"
 
 
 @dataclass
