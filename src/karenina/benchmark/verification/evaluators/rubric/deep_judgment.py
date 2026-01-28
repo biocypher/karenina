@@ -28,6 +28,7 @@ from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
 from .....ports import LLMPort, Message
+from .prompts import DeepJudgmentPromptBuilder
 
 if TYPE_CHECKING:
     from .....schemas.domain import LLMRubricTrait, Rubric
@@ -62,6 +63,7 @@ class RubricDeepJudgmentHandler:
         """
         self.llm = llm
         self.model_config = model_config
+        self._prompt_builder = DeepJudgmentPromptBuilder()
 
     def _validate_score(self, score: Any, trait: "LLMRubricTrait") -> int | bool:
         """Validate and convert a score for a trait."""
@@ -372,34 +374,20 @@ class RubricDeepJudgmentHandler:
         # Retry loop
         for attempt in range(max_attempts + 1):  # Initial + retries
             # Build prompt (with feedback if retry)
-            prompt = self._build_trait_excerpt_prompt(trait, max_excerpts, answer, validation_feedback)
+            from .....schemas.workflow.rubric_outputs import TraitExcerptsOutput
+
+            system_prompt = self._prompt_builder.build_excerpt_extraction_system_prompt()
+            user_prompt = self._prompt_builder.build_excerpt_extraction_user_prompt(
+                trait, max_excerpts, answer, TraitExcerptsOutput, validation_feedback
+            )
 
             # Call LLM
             messages: list[Message] = [
-                Message.system("""You are an expert at extracting verbatim quotes from text that demonstrate specific qualities.
-
-You will receive a JSON Schema specifying the exact output structure. Your response MUST conform to this schema.
-Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
-
-**CRITICAL REQUIREMENTS:**
-1. **JSON ONLY**: Your entire response must be valid JSON conforming to the provided schema
-2. **VERBATIM QUOTES**: Excerpts must be EXACT text from the answer - do not paraphrase
-3. **Confidence Levels**: Assign confidence based on strength of evidence:
-   - "high": Direct, explicit evidence for the trait
-   - "medium": Reasonable inference or moderate evidence
-   - "low": Weak or ambiguous evidence
-
-**WHAT NOT TO DO:**
-- Do NOT wrap JSON in markdown code blocks (no ```)
-- Do NOT add explanatory text before or after the JSON
-- Do NOT paraphrase or modify quotes
-- Do NOT invent quotes not present in the text"""),
-                Message.user(prompt),
+                Message.system(system_prompt),
+                Message.user(user_prompt),
             ]
 
             # Use LLMPort.with_structured_output() for parsing
-            from .....schemas.workflow.rubric_outputs import TraitExcerptsOutput
-
             try:
                 structured_llm = self.llm.with_structured_output(TraitExcerptsOutput)
                 response = structured_llm.invoke(messages)
@@ -447,7 +435,7 @@ Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
             # All excerpts failed validation
             if attempt < max_attempts:
                 # Build feedback for retry
-                validation_feedback = self._build_retry_feedback(failed, fuzzy_threshold)
+                validation_feedback = self._prompt_builder.build_retry_feedback(failed, fuzzy_threshold)
                 retry_count += 1
                 logger.debug(
                     f"Trait '{trait.name}' excerpt validation failed (attempt {attempt + 1}), retrying with feedback"
@@ -498,76 +486,6 @@ Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
                 failed.append(excerpt)
 
         return valid, failed
-
-    def _build_retry_feedback(self, failed_excerpts: list[dict[str, Any]], fuzzy_threshold: float) -> str:
-        """
-        Build feedback message for retry attempt.
-
-        Same format as template Deep Judgment.
-        """
-        feedback = "The following excerpts failed validation (not found in answer):\n"
-
-        for i, excerpt in enumerate(failed_excerpts, 1):
-            feedback += (
-                f'{i}. "{excerpt.get("text", "")}" '
-                f"(similarity: {excerpt.get('similarity_score', 0):.2f}, "
-                f"threshold: {fuzzy_threshold:.2f})\n"
-            )
-
-        feedback += "\nPlease provide verbatim quotes that exactly match the answer text."
-        return feedback
-
-    def _build_trait_excerpt_prompt(
-        self, trait: "LLMRubricTrait", max_excerpts: int, answer: str, feedback: str | None = None
-    ) -> str:
-        """Build prompt for excerpt extraction (with optional retry feedback)."""
-        from .....schemas.workflow.rubric_outputs import TraitExcerptsOutput
-
-        json_schema = json.dumps(TraitExcerptsOutput.model_json_schema(), indent=2)
-
-        prompt = f"""Extract verbatim quotes from the answer that demonstrate the following quality trait:
-
-**TRAIT:** {trait.name}
-**CRITERIA:** {trait.description or "Assess this quality"}
-
-**ANSWER TO ANALYZE:**
-{answer}
-
-**TASK:**
-Extract up to {max_excerpts} verbatim quotes from the answer that demonstrate or relate to this trait.
-
-**CONFIDENCE LEVELS:**
-- "high": Direct, explicit statement that clearly demonstrates the trait
-- "medium": Indirect evidence or reasonable inference supporting the trait
-- "low": Weak, ambiguous, or tangential evidence
-
-**IMPORTANT RULES:**
-1. Quotes MUST be EXACT verbatim text from the answer above
-2. Do not paraphrase, summarize, or modify the text in any way
-3. If no relevant excerpts exist, return an empty excerpts array: {{"excerpts": []}}
-4. Select the most relevant excerpts - quality over quantity
-"""
-
-        if feedback:
-            prompt += f"""
-**RETRY FEEDBACK (previous excerpts failed validation):**
-{feedback}
-"""
-
-        prompt += f"""
-**JSON SCHEMA (your response MUST conform to this):**
-```json
-{json_schema}
-```
-
-**PARSING NOTES:**
-- We validate excerpts using fuzzy matching against the original answer
-- Excerpts that don't match will be rejected and may trigger a retry
-- Minor whitespace differences are tolerated
-
-**YOUR JSON RESPONSE:**"""
-
-        return prompt
 
     def _parse_excerpt_response(self, response: str) -> list[dict[str, Any]]:
         """Parse the excerpt extraction response."""
@@ -621,58 +539,20 @@ Extract up to {max_excerpts} verbatim quotes from the answer that demonstrate or
             # Build prompt for hallucination assessment
             from .....schemas.workflow.rubric_outputs import HallucinationRiskOutput
 
-            json_schema = json.dumps(HallucinationRiskOutput.model_json_schema(), indent=2)
+            excerpt_text = excerpt.get("text", "")
+            search_result = search_results[i] if i < len(search_results) else "No results available"
 
-            prompt = f"""Assess the hallucination risk for this excerpt by comparing it against external search results.
+            # Ensure search_result is a string
+            search_result_str = str(search_result) if not isinstance(search_result, str) else search_result
 
-**EXCERPT TO VERIFY:**
-"{excerpt.get("text", "")}"
-
-**EXTERNAL SEARCH RESULTS:**
-{search_results[i] if i < len(search_results) else "No results available"}
-
-**RISK LEVELS (choose one):**
-- "none": Strong external evidence supports this - multiple reliable sources confirm
-- "low": Some external evidence, likely accurate - at least one source supports
-- "medium": Weak or ambiguous evidence - sources unclear or partially contradict
-- "high": No supporting evidence or actively contradicted by external sources
-
-**EVALUATION GUIDELINES:**
-1. Compare the excerpt's claims against the search results
-2. Consider the reliability and specificity of sources
-3. When uncertain between adjacent levels, choose the more conservative (higher risk) option
-4. Provide a brief justification explaining your reasoning
-
-**JSON SCHEMA (your response MUST conform to this):**
-```json
-{json_schema}
-```
-
-**PARSING NOTES:**
-- Return ONLY valid JSON - no surrounding text or markdown
-- The "risk" field must be exactly one of: "none", "low", "medium", "high"
-
-**YOUR JSON RESPONSE:**"""
+            system_prompt = self._prompt_builder.build_hallucination_assessment_system_prompt()
+            user_prompt = self._prompt_builder.build_hallucination_assessment_user_prompt(
+                excerpt_text, search_result_str, HallucinationRiskOutput
+            )
 
             messages: list[Message] = [
-                Message.system("""You are an expert at assessing hallucination risk using external evidence.
-
-You will receive a JSON Schema specifying the exact output structure. Your response MUST conform to this schema.
-Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
-
-**YOUR ROLE:**
-Compare excerpts against external search results to determine if the information is factually supported.
-
-**CRITICAL REQUIREMENTS:**
-1. **JSON ONLY**: Your entire response must be valid JSON conforming to the provided schema
-2. **Conservative Assessment**: When uncertain, lean toward higher risk levels
-3. **Evidence-Based**: Base your assessment solely on the search results provided
-
-**WHAT NOT TO DO:**
-- Do NOT wrap JSON in markdown code blocks (no ```)
-- Do NOT add explanatory text before or after the JSON
-- Do NOT assume claims are true without supporting evidence"""),
-                Message.user(prompt),
+                Message.system(system_prompt),
+                Message.user(user_prompt),
             ]
 
             # Use LLMPort.with_structured_output() for parsing
@@ -732,18 +612,20 @@ Compare excerpts against external search results to determine if the information
         Returns:
             Dictionary with: reasoning (string), usage_metadata
         """
+        system_prompt = self._prompt_builder.build_reasoning_system_prompt()
+
         if excerpts is not None:
             # With excerpts
-            prompt = self._build_trait_reasoning_prompt_with_excerpts(
-                question, answer, trait, excerpts, hallucination_risk
+            user_prompt = self._prompt_builder.build_reasoning_user_prompt_with_excerpts(
+                question, trait, excerpts, hallucination_risk
             )
         else:
             # Without excerpts
-            prompt = self._build_trait_reasoning_prompt_without_excerpts(question, answer, trait)
+            user_prompt = self._prompt_builder.build_reasoning_user_prompt_without_excerpts(question, answer, trait)
 
         messages: list[Message] = [
-            Message.system("You are an expert at analyzing text quality and providing clear reasoning."),
-            Message.user(prompt),
+            Message.system(system_prompt),
+            Message.user(user_prompt),
         ]
 
         # Use LLMPort.invoke() for text generation (no structured output needed)
@@ -754,75 +636,6 @@ Compare excerpts against external search results to determine if the information
         # Extract usage metadata
         usage_metadata = asdict(response.usage) if response.usage else {}
         return {"reasoning": reasoning, "usage_metadata": usage_metadata}
-
-    def _build_trait_reasoning_prompt_with_excerpts(
-        self,
-        question: str,
-        answer: str,  # noqa: ARG002 - Excerpts already contain relevant answer portions
-        trait: "LLMRubricTrait",
-        excerpts: list[dict[str, Any]],
-        hallucination_risk: dict[str, Any] | None = None,
-    ) -> str:
-        """Build reasoning prompt with excerpts."""
-        # Format excerpts
-        excerpts_formatted = []
-        for i, excerpt in enumerate(excerpts, 1):
-            conf = excerpt.get("confidence", "unknown")
-            text = excerpt.get("text", "")
-            risk = excerpt.get("hallucination_risk", "")
-            risk_str = f" (hallucination risk: {risk})" if risk else ""
-            excerpts_formatted.append(f'{i}. "{text}" [{conf} confidence]{risk_str}')
-
-        excerpts_text = "\n".join(excerpts_formatted) if excerpts_formatted else "No excerpts found."
-
-        risk_context = ""
-        if hallucination_risk:
-            risk_context = f"\n**Overall Hallucination Risk**: {hallucination_risk.get('overall_risk', 'unknown')}\n"
-
-        return f"""Analyze the extracted excerpts to explain how they demonstrate (or fail to demonstrate) the following trait.
-
-**Trait**: {trait.name}
-**Criteria**: {trait.description or "Assess this quality"}
-
-**Question**: {question}
-
-**Extracted Excerpts**:
-{excerpts_text}
-{risk_context}
-
-**Your Task**:
-Provide 2-3 sentences of reasoning that:
-1. Reference specific excerpts and their content
-2. Connect each excerpt to the trait criteria
-3. Assess whether the excerpts collectively satisfy the trait
-
-This reasoning will be used in a follow-up step to determine the final score.
-
-**Your reasoning:**"""
-
-    def _build_trait_reasoning_prompt_without_excerpts(
-        self, question: str, answer: str, trait: "LLMRubricTrait"
-    ) -> str:
-        """Build reasoning prompt without excerpts (based on full response)."""
-        return f"""Analyze the following answer for the quality trait below and provide your reasoning.
-
-**Trait**: {trait.name}
-**Criteria**: {trait.description or "Assess this quality"}
-
-**Question**: {question}
-
-**Complete Answer**:
-{answer}
-
-**Your Task**:
-Provide 2-3 sentences of reasoning that:
-1. Identify specific aspects of the answer relevant to this trait
-2. Explain how these aspects satisfy or fail to satisfy the criteria
-3. Consider both positive and negative evidence
-
-This reasoning will be used in a follow-up step to determine the final score.
-
-**Your reasoning:**"""
 
     def _extract_score_for_trait(
         self,
@@ -837,40 +650,20 @@ This reasoning will be used in a follow-up step to determine the final score.
         Returns:
             Dictionary with: score (int | bool), usage_metadata
         """
-        prompt = self._build_trait_scoring_prompt(trait, reasoning)
+        from .....schemas.workflow.rubric_outputs import SingleBooleanScore, SingleNumericScore
+
+        schema_class = SingleBooleanScore if trait.kind == "boolean" else SingleNumericScore
+
+        system_prompt = self._prompt_builder.build_score_extraction_system_prompt()
+        user_prompt = self._prompt_builder.build_score_extraction_user_prompt(trait, reasoning, schema_class)
 
         messages: list[Message] = [
-            Message.system("""You are an expert evaluator providing precise trait scores based on prior reasoning.
-
-You will receive a JSON Schema specifying the exact output structure. Your response MUST conform to this schema.
-Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
-
-**YOUR ROLE:**
-Convert analytical reasoning into a final score that accurately reflects the assessment.
-
-**CRITICAL REQUIREMENTS:**
-1. **JSON ONLY**: Your entire response must be valid JSON conforming to the provided schema
-2. **Reasoning-Based**: Base your score solely on the reasoning provided
-3. **Consistency**: Your score should logically follow from the reasoning's conclusions
-
-**SCORING GUIDELINES:**
-- Be consistent: similar reasoning should lead to similar scores
-- When uncertain, choose conservatively based on the trait's nature:
-  - For positive traits (e.g., "is accurate"), lean toward `false` or lower scores
-  - For negative traits (e.g., "contains errors"), lean toward `true` or higher scores
-
-**WHAT NOT TO DO:**
-- Do NOT wrap JSON in markdown code blocks (no ```)
-- Do NOT add explanatory text before or after the JSON
-- Do NOT contradict the reasoning - your score should align with it"""),
-            Message.user(prompt),
+            Message.system(system_prompt),
+            Message.user(user_prompt),
         ]
 
         # Use LLMPort.with_structured_output() for parsing
-        from .....schemas.workflow.rubric_outputs import SingleBooleanScore, SingleNumericScore
-
         try:
-            schema_class = SingleBooleanScore if trait.kind == "boolean" else SingleNumericScore
             structured_llm = self.llm.with_structured_output(schema_class)
             response = structured_llm.invoke(messages)
 
@@ -893,67 +686,6 @@ Convert analytical reasoning into a final score that accurately reflects the ass
             score = self._parse_trait_score_response(raw_response, trait)
             usage_metadata = asdict(response.usage) if response.usage else {}
             return {"score": score, "usage_metadata": usage_metadata}
-
-    def _build_trait_scoring_prompt(self, trait: "LLMRubricTrait", reasoning: str) -> str:
-        """Build prompt for final scoring."""
-        from .....schemas.workflow.rubric_outputs import SingleBooleanScore, SingleNumericScore
-
-        if trait.kind == "boolean":
-            json_schema = json.dumps(SingleBooleanScore.model_json_schema(), indent=2)
-            return f"""Based on the following reasoning, provide a final score for this trait.
-
-**TRAIT:** {trait.name}
-**CRITERIA:** {trait.description or "Boolean evaluation"}
-
-**YOUR PREVIOUS REASONING:**
-{reasoning}
-
-**SCORE REQUIRED:** true or false
-
-Based on your reasoning above, does the answer meet the criteria?
-- `true`: The criteria IS met based on your reasoning
-- `false`: The criteria IS NOT met based on your reasoning
-
-**JSON SCHEMA (your response MUST conform to this):**
-```json
-{json_schema}
-```
-
-**PARSING NOTES:**
-- Return valid JSON: {{"result": true}} or {{"result": false}}
-- We also accept plain text: "true", "yes", "false", "no"
-- Use lowercase boolean values (not "True" or "False")
-
-**YOUR JSON RESPONSE:**"""
-        else:
-            min_score = trait.min_score or 1
-            max_score = trait.max_score or 5
-            mid_score = (min_score + max_score) // 2
-            json_schema = json.dumps(SingleNumericScore.model_json_schema(), indent=2)
-            return f"""Based on the following reasoning, provide a final score for this trait.
-
-**TRAIT:** {trait.name}
-**CRITERIA:** {trait.description or "Score-based evaluation"}
-
-**YOUR PREVIOUS REASONING:**
-{reasoning}
-
-**SCORING SCALE:**
-- {min_score} = Poor - Does not meet criteria at all
-- {mid_score} = Average - Partially meets criteria
-- {max_score} = Excellent - Fully meets or exceeds criteria
-
-**JSON SCHEMA (your response MUST conform to this):**
-```json
-{json_schema}
-```
-
-**PARSING NOTES:**
-- Return valid JSON: {{"score": N}} where N is an integer from {min_score} to {max_score}
-- Scores outside [{min_score}, {max_score}] are automatically clamped to boundaries
-- Use integers only (no decimals)
-
-**YOUR JSON RESPONSE:**"""
 
     def _parse_trait_score_response(self, response: str, trait: "LLMRubricTrait") -> int | bool:
         """Parse a trait score response."""
