@@ -70,9 +70,8 @@ class ParseTemplateStage(BaseVerificationStage):
             "deep_judgment_excerpt_retry_count",
             "attributes_without_excerpts",
             "hallucination_risk_assessment",
-            "template_evaluation_input",
-            "used_full_trace_for_template",
-            "trace_extraction_error",
+            # Note: Also sets root-level trace filtering result fields:
+            # used_full_trace, evaluation_input, trace_extraction_error
         ]
 
     def should_run(self, context: VerificationContext) -> bool:
@@ -158,20 +157,15 @@ class ParseTemplateStage(BaseVerificationStage):
         # Step 3: Handle parse result
         if not parse_result.success:
             context.mark_error(parse_result.error or "Parsing failed")
-            # Store metadata even on failure
-            context.set_artifact("used_full_trace_for_template", use_full_trace)
-            context.set_artifact("template_evaluation_input", None)
+            # Store trace extraction error for diagnostics
             context.set_artifact("trace_extraction_error", parse_result.error)
             context.set_result_field("used_full_trace", use_full_trace)
-            context.set_result_field("used_full_trace_for_template", use_full_trace)
             context.set_result_field("trace_extraction_error", parse_result.error)
             return
 
         # Step 4: Store results
         context.set_artifact("parsed_answer", parse_result.parsed_answer)
         context.set_artifact("deep_judgment_performed", parse_result.deep_judgment_performed)
-        context.set_artifact("used_full_trace_for_template", use_full_trace)
-        context.set_artifact("template_evaluation_input", raw_llm_response if use_full_trace else None)
         context.set_artifact("trace_extraction_error", None)
 
         # Store deep judgment metadata
@@ -201,9 +195,7 @@ class ParseTemplateStage(BaseVerificationStage):
         context.set_result_field("deep_judgment_search_enabled", context.deep_judgment_search_enabled)
         context.set_result_field("hallucination_risk_assessment", parse_result.hallucination_risk_assessment)
 
-        # Store trace filtering metadata in result builder
+        # Store trace filtering metadata in result builder (root-level fields only)
         context.set_result_field("used_full_trace", use_full_trace)
-        context.set_result_field("used_full_trace_for_template", use_full_trace)
         context.set_result_field("evaluation_input", raw_llm_response if use_full_trace else None)
-        context.set_result_field("template_evaluation_input", raw_llm_response if use_full_trace else None)
         context.set_result_field("trace_extraction_error", None)

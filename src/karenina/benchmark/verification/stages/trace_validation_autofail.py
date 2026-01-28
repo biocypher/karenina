@@ -30,9 +30,9 @@ class TraceValidationAutoFailStage(BaseVerificationStage):
         - "raw_llm_response": Raw LLM response text (agent trace)
 
     Produces:
-        - "trace_validation_failed": Whether trace validation failed (bool)
-        - "trace_validation_error": Error message if validation failed
-        - "mcp_enabled": Whether MCP was enabled for this verification (bool)
+        - "trace_validation_failed": Whether trace validation failed (artifact for later stages)
+        - "trace_validation_error": Error message if validation failed (artifact)
+        - "mcp_enabled": Whether MCP was enabled for this verification (artifact)
 
     Side Effects:
         - Sets verify_result to False if MCP trace doesn't end with AI message
@@ -103,7 +103,6 @@ class TraceValidationAutoFailStage(BaseVerificationStage):
             # Regular LLM responses are plain text, manual traces are trusted
             context.set_artifact("trace_validation_failed", False)
             context.set_artifact("trace_validation_error", None)
-            context.set_result_field("trace_validation_failed", False)
 
             if is_manual:
                 logger.debug(
@@ -136,13 +135,11 @@ class TraceValidationAutoFailStage(BaseVerificationStage):
             context.set_artifact("field_verification_result", False)
             context.set_result_field("verify_result", False)
 
-            # Store error in result for diagnostics
+            # Store error in result for diagnostics (root-level field)
             context.set_result_field("trace_extraction_error", error)
-            context.set_result_field("trace_validation_failed", True)
         else:
             # Trace validation passed
             context.set_artifact("trace_validation_failed", False)
             context.set_artifact("trace_validation_error", None)
-            context.set_result_field("trace_validation_failed", False)
 
             logger.debug(f"Trace validation passed for question {context.question_id}")

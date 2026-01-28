@@ -60,9 +60,6 @@ class RubricEvaluationStage(BaseVerificationStage):
             "llm_trait_labels",
             "metric_confusion_lists",
             "metric_results",
-            "rubric_evaluation_input",
-            "used_full_trace_for_rubric",
-            "rubric_trace_extraction_error",
         ]
 
     def should_run(self, context: VerificationContext) -> bool:
@@ -121,7 +118,6 @@ class RubricEvaluationStage(BaseVerificationStage):
 
         # Determine what input to pass to rubric evaluation based on config
         use_full_trace = context.use_full_trace_for_rubric
-        rubric_trace_extraction_error = None
         rubric_evaluation_input = raw_llm_response  # Default to full trace
 
         if not use_full_trace:
@@ -132,25 +128,13 @@ class RubricEvaluationStage(BaseVerificationStage):
                 # Extraction failed - mark as error and stop
                 error_msg = f"Failed to extract final AI message for rubric evaluation: {error}"
                 logger.error(error_msg)
-                rubric_trace_extraction_error = error
                 context.mark_error(error_msg)
-
-                # Store metadata before returning (artifacts only - result fields are at root level)
-                context.set_artifact("used_full_trace_for_rubric", use_full_trace)
-                context.set_artifact("rubric_trace_extraction_error", rubric_trace_extraction_error)
-                context.set_artifact("rubric_evaluation_input", None)
-                # Note: trace filtering fields (evaluation_input, used_full_trace, trace_extraction_error)
-                # are now stored at the root level by parse_template stage
+                # Note: trace filtering fields are stored at root level by parse_template stage
                 return
             else:
                 # Extraction successful - use extracted message
                 rubric_evaluation_input = extracted_message
                 logger.info("Using final AI message only for rubric evaluation")
-
-        # Store trace filtering metadata
-        context.set_artifact("used_full_trace_for_rubric", use_full_trace)
-        context.set_artifact("rubric_evaluation_input", rubric_evaluation_input)
-        context.set_artifact("rubric_trace_extraction_error", rubric_trace_extraction_error)
 
         rubric_result = None
         llm_trait_labels = None
@@ -323,8 +307,5 @@ class RubricEvaluationStage(BaseVerificationStage):
         context.set_result_field("metric_trait_metrics", metric_results)
         # Note: evaluation_rubric is now stored in shared_data at export time (not per-result)
         context.set_result_field("rubric_evaluation_strategy", context.rubric_evaluation_strategy)
-
-        # Store rubric-specific trace filtering fields
-        context.set_result_field("used_full_trace_for_rubric", use_full_trace)
-        context.set_result_field("rubric_evaluation_input", rubric_evaluation_input)
-        context.set_result_field("rubric_trace_extraction_error", rubric_trace_extraction_error)
+        # Note: trace filtering fields (evaluation_input, used_full_trace, trace_extraction_error)
+        # are stored at root level by parse_template stage, not duplicated here for rubric

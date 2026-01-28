@@ -27,7 +27,6 @@ class DeepJudgmentRubricAutoFailStage(BaseAutoFailStage):
 
     Produces:
         - Sets verify_result to False if auto-fail triggered
-        - Sets failure_reason explaining which traits failed
 
     Error Handling:
         Non-fatal: If required fields are missing, stage logs warning and skips.
@@ -91,18 +90,12 @@ class DeepJudgmentRubricAutoFailStage(BaseAutoFailStage):
 
     def _set_additional_failure_fields(self, context: VerificationContext) -> None:
         """
-        Set failure_reason and log retry metadata.
+        Log retry metadata for transparency.
 
-        This stage sets failure_reason with detailed info about which traits failed.
-        Also logs retry counts for transparency.
+        Note: failure_reason is captured in the auto-fail log message via _get_autofail_reason(),
+        not stored as a separate result field since it's not read by finalize_result.
         """
         traits_without_excerpts = context.get_result_field("traits_without_valid_excerpts")
-        trait_names = ", ".join(traits_without_excerpts)
-        failure_reason = (
-            f"Deep judgment rubric auto-fail: {len(traits_without_excerpts)} trait(s) "
-            f"failed to extract valid excerpts after retry attempts: {trait_names}"
-        )
-        context.set_result_field("failure_reason", failure_reason)
 
         # Log retry counts for transparency
         trait_metadata = context.get_result_field("trait_metadata") or {}
