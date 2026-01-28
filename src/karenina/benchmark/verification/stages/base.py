@@ -359,9 +359,15 @@ class VerificationStage(Protocol):
     @property
     def produces(self) -> list[str]:
         """
-        List of artifact keys this stage produces.
+        List of NEW artifact keys this stage produces.
 
-        These artifacts will be available to subsequent stages.
+        These artifacts will be available to subsequent stages via
+        StageRegistry.validate_dependencies().
+
+        Important: Only list artifacts that this stage CREATES. Do not list
+        artifacts that this stage merely MODIFIES (e.g., auto-fail stages
+        that update verify_result should return [] since verify_result is
+        produced by VerifyTemplateStage).
 
         Returns:
             List of artifact keys (e.g., ["verify_result", "regex_metadata"])
@@ -430,10 +436,15 @@ class BaseVerificationStage(ABC):
     @property
     def produces(self) -> list[str]:
         """
-        Artifacts produced by this stage.
+        NEW artifacts produced by this stage.
 
         Override in subclasses to declare outputs.
-        Default: No outputs.
+        Default: No outputs (correct for stages that only modify existing artifacts).
+
+        Important: Only list artifacts that this stage CREATES. Do not list
+        artifacts that this stage merely MODIFIES. For example:
+        - VerifyTemplateStage produces "verify_result" (creates it)
+        - RecursionLimitAutoFailStage returns [] (only modifies verify_result)
         """
         return []
 
