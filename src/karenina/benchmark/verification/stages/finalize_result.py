@@ -237,10 +237,14 @@ class FinalizeResultStage(BaseVerificationStage):
             # Note: trace filtering fields and evaluation_rubric are no longer stored per-result
             # - trace filtering fields are at root level of VerificationResult
             # - evaluation_rubric goes in shared_data at export time
+            # Get llm_trait_labels for literal-kind LLM traits (maps trait name to class name)
+            llm_trait_labels = context.get_result_field("llm_trait_labels")
+
             rubric_result = VerificationResultRubric(
                 rubric_evaluation_performed=rubric_evaluation_performed,
                 rubric_evaluation_strategy=context.get_result_field("rubric_evaluation_strategy"),
                 llm_trait_scores=llm_trait_scores,
+                llm_trait_labels=llm_trait_labels,
                 regex_trait_scores=regex_trait_scores,
                 callable_trait_scores=callable_trait_scores,
                 metric_trait_scores=metric_trait_scores_dict,
