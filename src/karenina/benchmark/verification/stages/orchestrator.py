@@ -6,24 +6,22 @@ Manages stage execution, dependencies, and error handling.
 import logging
 import time
 
-from ...schemas.domain import Rubric
-from ...schemas.workflow import VerificationResult
-from .stages import (
-    AbstentionCheckStage,
-    DeepJudgmentAutoFailStage,
-    DeepJudgmentRubricAutoFailStage,
-    EmbeddingCheckStage,
-    FinalizeResultStage,
-    GenerateAnswerStage,
-    ParseTemplateStage,
-    RecursionLimitAutoFailStage,
-    RubricEvaluationStage,
-    SufficiencyCheckStage,
-    TraceValidationAutoFailStage,
-    ValidateTemplateStage,
-    VerifyTemplateStage,
-)
-from .stages.base import StageList, StageRegistry, VerificationContext
+from ....schemas.domain import Rubric
+from ....schemas.workflow import VerificationResult
+from .abstention_check import AbstentionCheckStage
+from .base import StageList, StageRegistry, VerificationContext
+from .deep_judgment_autofail import DeepJudgmentAutoFailStage
+from .deep_judgment_rubric_auto_fail import DeepJudgmentRubricAutoFailStage
+from .embedding_check import EmbeddingCheckStage
+from .finalize_result import FinalizeResultStage
+from .generate_answer import GenerateAnswerStage
+from .parse_template import ParseTemplateStage
+from .recursion_limit_autofail import RecursionLimitAutoFailStage
+from .rubric_evaluation import RubricEvaluationStage
+from .sufficiency_check import SufficiencyCheckStage
+from .trace_validation_autofail import TraceValidationAutoFailStage
+from .validate_template import ValidateTemplateStage
+from .verify_template import VerifyTemplateStage
 
 # Set up logger
 logger = logging.getLogger(__name__)

@@ -21,10 +21,10 @@ implementations to verify the pipeline architecture.
 
 import pytest
 
-from karenina.benchmark.verification.stage_orchestrator import StageOrchestrator
 from karenina.benchmark.verification.stages import (
     FinalizeResultStage,
     RecursionLimitAutoFailStage,
+    StageOrchestrator,
     ValidateTemplateStage,
 )
 from karenina.benchmark.verification.stages.base import (

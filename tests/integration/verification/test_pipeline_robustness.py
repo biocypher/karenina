@@ -21,7 +21,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from karenina.benchmark.verification.stage_orchestrator import StageOrchestrator
 from karenina.benchmark.verification.stages import (
     AbstentionCheckStage,
     DeepJudgmentAutoFailStage,
@@ -30,6 +29,7 @@ from karenina.benchmark.verification.stages import (
     GenerateAnswerStage,
     ParseTemplateStage,
     RecursionLimitAutoFailStage,
+    StageOrchestrator,
     ValidateTemplateStage,
     VerifyTemplateStage,
 )

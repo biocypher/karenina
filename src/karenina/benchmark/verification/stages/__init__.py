@@ -42,6 +42,7 @@ from .deep_judgment_rubric_auto_fail import DeepJudgmentRubricAutoFailStage
 from .embedding_check import EmbeddingCheckStage
 from .finalize_result import FinalizeResultStage
 from .generate_answer import GenerateAnswerStage
+from .orchestrator import StageOrchestrator
 from .parse_template import ParseTemplateStage
 from .recursion_limit_autofail import RecursionLimitAutoFailStage
 from .rubric_evaluation import RubricEvaluationStage
@@ -57,6 +58,7 @@ __all__ = [
     "BaseVerificationStage",
     "StageRegistry",
     "StageList",
+    "StageOrchestrator",
     # Stage implementations
     "ValidateTemplateStage",
     "GenerateAnswerStage",
