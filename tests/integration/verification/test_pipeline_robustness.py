@@ -369,7 +369,7 @@ class TestStageSkipConditions:
         """EmbeddingCheckStage should run when field verification failed."""
         minimal_context.set_artifact("field_verification_result", False)
         minimal_context.set_artifact("parsed_answer", MagicMock())
-        minimal_context.set_artifact("verification_result", False)
+        minimal_context.set_artifact("verify_result", False)
 
         stage = EmbeddingCheckStage()
 

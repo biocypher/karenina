@@ -213,7 +213,7 @@ class VerificationStage(Protocol):
         These artifacts will be available to subsequent stages.
 
         Returns:
-            List of artifact keys (e.g., ["verification_result", "regex_metadata"])
+            List of artifact keys (e.g., ["verify_result", "regex_metadata"])
         """
         ...
 

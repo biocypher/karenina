@@ -233,7 +233,7 @@ class TestSufficiencyCheckStageExecute:
             # Insufficient response should override verify_result to False
             assert minimal_context.get_artifact("sufficiency_detected") is False
             assert minimal_context.get_artifact("sufficiency_override_applied") is True
-            assert minimal_context.get_artifact("verification_result") is False
+            assert minimal_context.get_artifact("verify_result") is False
             assert minimal_context.get_result_field("verify_result") is False
 
     def test_execute_check_failed_does_not_override(
@@ -260,8 +260,8 @@ class TestSufficiencyCheckStageExecute:
             # Failed check should not override
             assert minimal_context.get_artifact("sufficiency_check_performed") is False
             assert minimal_context.get_artifact("sufficiency_override_applied") is False
-            # verify_result should not be set by this stage
-            assert minimal_context.get_artifact("verification_result") is None
+            # verify_result should not be set by this stage when check failed
+            assert minimal_context.get_artifact("verify_result") is None
 
     def test_execute_tracks_usage_metadata(
         self,

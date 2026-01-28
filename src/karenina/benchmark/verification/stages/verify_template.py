@@ -29,7 +29,7 @@ class VerifyTemplateStage(BaseVerificationStage):
         - "field_verification_result": Boolean result of field verification
         - "regex_verification_results": Dict with results, details, success
         - "regex_extraction_results": Dict of actual regex matches
-        - "verification_result": Combined field + regex result (bool)
+        - "verify_result": Combined field + regex result (bool)
         - "verify_granular_result": Float (0.0-1.0) for multi-attribute templates only
 
     Note:
@@ -55,7 +55,7 @@ class VerifyTemplateStage(BaseVerificationStage):
             "field_verification_result",
             "regex_verification_results",
             "regex_extraction_results",
-            "verification_result",
+            "verify_result",
             "verify_granular_result",  # Only for multi-attribute templates
         ]
 
@@ -80,7 +80,7 @@ class VerifyTemplateStage(BaseVerificationStage):
             - Sets context.artifacts["field_verification_result"]
             - Sets context.artifacts["regex_verification_results"]
             - Sets context.artifacts["regex_extraction_results"]
-            - Sets context.artifacts["verification_result"]
+            - Sets context.artifacts["verify_result"]
             - Sets context.result_field for all verification metadata
             - Sets context.error if verification logic fails
         """
@@ -132,7 +132,7 @@ class VerifyTemplateStage(BaseVerificationStage):
             context.set_artifact("field_verification_result", field_verification_result)
             context.set_artifact("regex_verification_results", regex_verification_results)
             context.set_artifact("regex_extraction_results", regex_extraction_results)
-            context.set_artifact("verification_result", verification_result)
+            context.set_artifact("verify_result", verification_result)
 
             # Store in result builder
             context.set_result_field("verify_result", verification_result)

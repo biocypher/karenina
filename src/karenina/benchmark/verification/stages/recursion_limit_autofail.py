@@ -74,9 +74,8 @@ class RecursionLimitAutoFailStage(BaseVerificationStage):
             context: Verification context
 
         Side Effects:
-            - Sets verify_result to False
-            - Sets verification_result to False
-            - Sets field_verification_result to False (if it exists)
+            - Sets verify_result to False (both artifact and result field)
+            - Sets field_verification_result to False
             - Logs auto-fail reason
         """
         # Auto-fail: Set all verification results to False
@@ -84,7 +83,7 @@ class RecursionLimitAutoFailStage(BaseVerificationStage):
         field_verification_result = False
 
         # Update stored results
-        context.set_artifact("verification_result", verification_result)
+        context.set_artifact("verify_result", verification_result)
         context.set_artifact("field_verification_result", field_verification_result)
         context.set_result_field("verify_result", verification_result)
 

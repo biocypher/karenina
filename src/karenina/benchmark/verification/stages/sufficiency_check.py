@@ -35,7 +35,7 @@ class SufficiencyCheckStage(BaseVerificationStage):
         - "sufficiency_reasoning": LLM's reasoning for determination (str or None)
 
     Side Effects:
-        - Sets "verification_result" to False if response is insufficient
+        - Sets "verify_result" to False if response is insufficient
         - Subsequent parsing stages are skipped if insufficient
 
     Note:
@@ -92,7 +92,7 @@ class SufficiencyCheckStage(BaseVerificationStage):
 
         Side Effects:
             - Sets sufficiency metadata artifacts
-            - May override verification_result to False if insufficient
+            - May override verify_result to False if insufficient
             - Sets result fields for sufficiency metadata
         """
         raw_llm_response = context.get_artifact("raw_llm_response")
@@ -140,7 +140,7 @@ class SufficiencyCheckStage(BaseVerificationStage):
             sufficiency_override_applied = True
 
             # Update stored result
-            context.set_artifact("verification_result", verification_result)
+            context.set_artifact("verify_result", verification_result)
             context.set_result_field("verify_result", verification_result)
 
             logger.info(f"Insufficient response for question {context.question_id} - overriding result to False")

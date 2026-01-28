@@ -132,7 +132,7 @@ class TraceValidationAutoFailStage(BaseVerificationStage):
             context.set_artifact("trace_validation_error", error)
 
             # Auto-fail: Set verification result to False
-            context.set_artifact("verification_result", False)
+            context.set_artifact("verify_result", False)
             context.set_artifact("field_verification_result", False)
             context.set_result_field("verify_result", False)
 

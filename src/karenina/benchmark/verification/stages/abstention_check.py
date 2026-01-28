@@ -33,8 +33,8 @@ class AbstentionCheckStage(BaseVerificationStage):
         - "abstention_reasoning": LLM's reasoning for determination (str or None)
 
     Side Effects:
-        - Sets "verification_result" to False if abstention detected
-        - In rubric_only mode, this may be the first stage to set verification_result
+        - Sets "verify_result" to False if abstention detected
+        - In rubric_only mode, this may be the first stage to set verify_result
 
     Note:
         Abstention detection runs before template parsing. If abstention is detected,
@@ -50,8 +50,8 @@ class AbstentionCheckStage(BaseVerificationStage):
     @property
     def requires(self) -> list[str]:
         """Artifacts required by this stage."""
-        # Only requires raw_llm_response - verification_result is optional
-        # In rubric_only mode, verification_result may not exist yet
+        # Only requires raw_llm_response - verify_result is optional
+        # In rubric_only mode, verify_result may not exist yet
         return ["raw_llm_response"]
 
     @property
@@ -85,7 +85,7 @@ class AbstentionCheckStage(BaseVerificationStage):
 
         Side Effects:
             - Sets abstention metadata artifacts
-            - May override verification_result to False if abstention detected
+            - May override verify_result to False if abstention detected
             - Sets result fields for abstention metadata
         """
         raw_llm_response = context.get_artifact("raw_llm_response")
@@ -119,7 +119,7 @@ class AbstentionCheckStage(BaseVerificationStage):
             abstention_override_applied = True
 
             # Update stored result
-            context.set_artifact("verification_result", verification_result)
+            context.set_artifact("verify_result", verification_result)
             context.set_result_field("verify_result", verification_result)
 
             logger.info(f"Abstention detected for question {context.question_id} - overriding result to False")

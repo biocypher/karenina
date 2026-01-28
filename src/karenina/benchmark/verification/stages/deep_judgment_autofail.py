@@ -24,7 +24,7 @@ class DeepJudgmentAutoFailStage(BaseVerificationStage):
     Requires:
         - "deep_judgment_performed": Whether deep-judgment was used (bool)
         - "attributes_without_excerpts": List of attributes missing excerpts
-        - "verification_result": Current verification result
+        - "verify_result": Current verification result
         - "field_verification_result": Field verification result
 
     Optional (used if available):
@@ -35,7 +35,7 @@ class DeepJudgmentAutoFailStage(BaseVerificationStage):
         - None (only modifies existing verification results)
 
     Side Effects:
-        - May set verification_result and field_verification_result to False
+        - May set verify_result and field_verification_result to False
         - Logs auto-fail reason
 
     Note:
@@ -57,7 +57,7 @@ class DeepJudgmentAutoFailStage(BaseVerificationStage):
         return [
             "deep_judgment_performed",
             "attributes_without_excerpts",
-            "verification_result",
+            "verify_result",
             "field_verification_result",
         ]
 
@@ -92,7 +92,7 @@ class DeepJudgmentAutoFailStage(BaseVerificationStage):
             context: Verification context
 
         Side Effects:
-            - May set verification_result to False
+            - May set verify_result to False
             - May set field_verification_result to False
             - Logs auto-fail reason
         """
@@ -111,7 +111,7 @@ class DeepJudgmentAutoFailStage(BaseVerificationStage):
         field_verification_result = False
 
         # Update stored results
-        context.set_artifact("verification_result", verification_result)
+        context.set_artifact("verify_result", verification_result)
         context.set_artifact("field_verification_result", field_verification_result)
         context.set_result_field("verify_result", verification_result)
 

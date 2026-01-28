@@ -28,7 +28,7 @@ class EmbeddingCheckStage(BaseVerificationStage):
     Requires:
         - "parsed_answer": Parsed Pydantic object
         - "field_verification_result": Boolean result of field verification
-        - "verification_result": Combined verification result
+        - "verify_result": Combined verification result
         - "regex_verification_results": Regex results (for recalculation)
 
     Produces:
@@ -38,7 +38,7 @@ class EmbeddingCheckStage(BaseVerificationStage):
         - "embedding_override_applied": Whether override was applied (bool)
 
     Side Effects:
-        - May update "verification_result" and "field_verification_result" if override applied
+        - May update "verify_result" and "field_verification_result" if override applied
 
     Note:
         Embedding check does NOT override regex validation failures, only field failures.
@@ -55,7 +55,7 @@ class EmbeddingCheckStage(BaseVerificationStage):
         return [
             "parsed_answer",
             "field_verification_result",
-            "verification_result",
+            "verify_result",
             "regex_verification_results",
         ]
 
@@ -92,7 +92,7 @@ class EmbeddingCheckStage(BaseVerificationStage):
 
         Side Effects:
             - Sets embedding metadata artifacts
-            - May override verification_result if semantically equivalent
+            - May override verify_result if semantically equivalent
             - Sets result fields for embedding metadata
         """
         parsed_answer = context.get_artifact("parsed_answer")
@@ -122,7 +122,7 @@ class EmbeddingCheckStage(BaseVerificationStage):
 
             # Update stored results
             context.set_artifact("field_verification_result", field_verification_result)
-            context.set_artifact("verification_result", verification_result)
+            context.set_artifact("verify_result", verification_result)
             context.set_result_field("verify_result", verification_result)
 
             logger.info(
