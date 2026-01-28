@@ -7,7 +7,7 @@ import logging
 from typing import Any
 
 from ..evaluators import TemplateEvaluator
-from .base import BaseVerificationStage, VerificationContext
+from .base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -53,23 +53,27 @@ class ParseTemplateStage(BaseVerificationStage):
     @property
     def requires(self) -> list[str]:
         """Artifacts required by this stage."""
-        return ["RawAnswer", "Answer", "raw_llm_response"]
+        return [
+            ArtifactKeys.RAW_ANSWER,
+            ArtifactKeys.ANSWER,
+            ArtifactKeys.RAW_LLM_RESPONSE,
+        ]
 
     @property
     def produces(self) -> list[str]:
         """Artifacts produced by this stage."""
         return [
-            "parsed_answer",
-            "parsing_model_str",
-            "template_evaluator",
-            "deep_judgment_performed",
-            "extracted_excerpts",
-            "attribute_reasoning",
-            "deep_judgment_stages_completed",
-            "deep_judgment_model_calls",
-            "deep_judgment_excerpt_retry_count",
-            "attributes_without_excerpts",
-            "hallucination_risk_assessment",
+            ArtifactKeys.PARSED_ANSWER,
+            ArtifactKeys.PARSING_MODEL_STR,
+            ArtifactKeys.TEMPLATE_EVALUATOR,
+            ArtifactKeys.DEEP_JUDGMENT_PERFORMED,
+            ArtifactKeys.EXTRACTED_EXCERPTS,
+            ArtifactKeys.ATTRIBUTE_REASONING,
+            ArtifactKeys.DEEP_JUDGMENT_STAGES_COMPLETED,
+            ArtifactKeys.DEEP_JUDGMENT_MODEL_CALLS,
+            ArtifactKeys.DEEP_JUDGMENT_EXCERPT_RETRY_COUNT,
+            ArtifactKeys.ATTRIBUTES_WITHOUT_EXCERPTS,
+            ArtifactKeys.HALLUCINATION_RISK_ASSESSMENT,
             # Note: Also sets root-level trace filtering result fields:
             # used_full_trace, evaluation_input, trace_extraction_error
         ]
@@ -83,19 +87,19 @@ class ParseTemplateStage(BaseVerificationStage):
         if not super().should_run(context):
             return False
         # Skip parsing if recursion limit was reached (response is truncated/unreliable)
-        if context.get_artifact("recursion_limit_reached", False):
+        if context.get_artifact(ArtifactKeys.RECURSION_LIMIT_REACHED, False):
             return False
         # Skip parsing if trace validation failed (trace doesn't end with AI message)
-        if context.get_artifact("trace_validation_failed", False):
+        if context.get_artifact(ArtifactKeys.TRACE_VALIDATION_FAILED, False):
             return False
         # Skip parsing if abstention was detected (model refused to answer)
-        if context.get_artifact("abstention_detected", False):
+        if context.get_artifact(ArtifactKeys.ABSTENTION_DETECTED, False):
             return False
         # Skip parsing if sufficiency check ran and detected insufficient info
         # Note: sufficiency_detected=True means sufficient, False means insufficient
-        if context.get_artifact("sufficiency_detected") is False:
+        if context.get_artifact(ArtifactKeys.SUFFICIENCY_DETECTED) is False:
             return False
-        return context.has_artifact("raw_llm_response") and context.has_artifact("Answer")
+        return context.has_artifact(ArtifactKeys.RAW_LLM_RESPONSE) and context.has_artifact(ArtifactKeys.ANSWER)
 
     def execute(self, context: VerificationContext) -> None:
         """
@@ -112,9 +116,9 @@ class ParseTemplateStage(BaseVerificationStage):
             - Sets context.error if parsing fails
         """
         parsing_model = context.parsing_model
-        raw_llm_response = context.get_artifact("raw_llm_response")
-        Answer = context.get_artifact("Answer")
-        RawAnswer = context.get_artifact("RawAnswer")
+        raw_llm_response = context.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
+        Answer = context.get_artifact(ArtifactKeys.ANSWER)
+        RawAnswer = context.get_artifact(ArtifactKeys.RAW_ANSWER)
 
         # Retrieve usage tracker from previous stage or create new one
         usage_tracker = self.get_or_create_usage_tracker(context)
@@ -136,8 +140,8 @@ class ParseTemplateStage(BaseVerificationStage):
             return
 
         # Store evaluator for reuse by verify stage
-        context.set_artifact("template_evaluator", evaluator)
-        context.set_artifact("parsing_model_str", evaluator.model_str)
+        context.set_artifact(ArtifactKeys.TEMPLATE_EVALUATOR, evaluator)
+        context.set_artifact(ArtifactKeys.PARSING_MODEL_STR, evaluator.model_str)
 
         # Build deep judgment config
         deep_judgment_config: dict[str, Any] = {}
@@ -164,44 +168,50 @@ class ParseTemplateStage(BaseVerificationStage):
         if not parse_result.success:
             context.mark_error(parse_result.error or "Parsing failed")
             # Store trace extraction error for diagnostics
-            context.set_artifact("trace_extraction_error", parse_result.error)
-            context.set_result_field("used_full_trace", use_full_trace)
-            context.set_result_field("trace_extraction_error", parse_result.error)
+            context.set_artifact(ArtifactKeys.TRACE_EXTRACTION_ERROR, parse_result.error)
+            context.set_result_field(ArtifactKeys.USED_FULL_TRACE, use_full_trace)
+            context.set_result_field(ArtifactKeys.TRACE_EXTRACTION_ERROR, parse_result.error)
             return
 
         # Step 4: Store results
-        context.set_artifact("parsed_answer", parse_result.parsed_answer)
-        context.set_artifact("deep_judgment_performed", parse_result.deep_judgment_performed)
-        context.set_artifact("trace_extraction_error", None)
+        context.set_artifact(ArtifactKeys.PARSED_ANSWER, parse_result.parsed_answer)
+        context.set_artifact(ArtifactKeys.DEEP_JUDGMENT_PERFORMED, parse_result.deep_judgment_performed)
+        context.set_artifact(ArtifactKeys.TRACE_EXTRACTION_ERROR, None)
 
         # Store deep judgment metadata
-        context.set_artifact("extracted_excerpts", parse_result.extracted_excerpts)
-        context.set_artifact("attribute_reasoning", parse_result.attribute_reasoning)
-        context.set_artifact("deep_judgment_stages_completed", parse_result.deep_judgment_stages_completed)
-        context.set_artifact("deep_judgment_model_calls", parse_result.deep_judgment_model_calls)
-        context.set_artifact("deep_judgment_excerpt_retry_count", parse_result.deep_judgment_excerpt_retry_count)
-        context.set_artifact("attributes_without_excerpts", parse_result.attributes_without_excerpts)
-        context.set_artifact("hallucination_risk_assessment", parse_result.hallucination_risk_assessment)
+        context.set_artifact(ArtifactKeys.EXTRACTED_EXCERPTS, parse_result.extracted_excerpts)
+        context.set_artifact(ArtifactKeys.ATTRIBUTE_REASONING, parse_result.attribute_reasoning)
+        context.set_artifact(ArtifactKeys.DEEP_JUDGMENT_STAGES_COMPLETED, parse_result.deep_judgment_stages_completed)
+        context.set_artifact(ArtifactKeys.DEEP_JUDGMENT_MODEL_CALLS, parse_result.deep_judgment_model_calls)
+        context.set_artifact(
+            ArtifactKeys.DEEP_JUDGMENT_EXCERPT_RETRY_COUNT, parse_result.deep_judgment_excerpt_retry_count
+        )
+        context.set_artifact(ArtifactKeys.ATTRIBUTES_WITHOUT_EXCERPTS, parse_result.attributes_without_excerpts)
+        context.set_artifact(ArtifactKeys.HALLUCINATION_RISK_ASSESSMENT, parse_result.hallucination_risk_assessment)
 
         # Update usage tracker with any usage from parsing
         for usage_meta in parse_result.usage_metadata_list:
             if usage_meta:
                 usage_tracker.track_call("parsing", evaluator.model_str, usage_meta)
-        context.set_artifact("usage_tracker", usage_tracker)
+        context.set_artifact(ArtifactKeys.USAGE_TRACKER, usage_tracker)
 
         # Store in result builder
-        context.set_result_field("deep_judgment_enabled", context.deep_judgment_enabled)
-        context.set_result_field("deep_judgment_performed", parse_result.deep_judgment_performed)
-        context.set_result_field("extracted_excerpts", parse_result.extracted_excerpts)
-        context.set_result_field("attribute_reasoning", parse_result.attribute_reasoning)
-        context.set_result_field("deep_judgment_stages_completed", parse_result.deep_judgment_stages_completed)
-        context.set_result_field("deep_judgment_model_calls", parse_result.deep_judgment_model_calls)
-        context.set_result_field("deep_judgment_excerpt_retry_count", parse_result.deep_judgment_excerpt_retry_count)
-        context.set_result_field("attributes_without_excerpts", parse_result.attributes_without_excerpts)
-        context.set_result_field("deep_judgment_search_enabled", context.deep_judgment_search_enabled)
-        context.set_result_field("hallucination_risk_assessment", parse_result.hallucination_risk_assessment)
+        context.set_result_field(ArtifactKeys.DEEP_JUDGMENT_ENABLED, context.deep_judgment_enabled)
+        context.set_result_field(ArtifactKeys.DEEP_JUDGMENT_PERFORMED, parse_result.deep_judgment_performed)
+        context.set_result_field(ArtifactKeys.EXTRACTED_EXCERPTS, parse_result.extracted_excerpts)
+        context.set_result_field(ArtifactKeys.ATTRIBUTE_REASONING, parse_result.attribute_reasoning)
+        context.set_result_field(
+            ArtifactKeys.DEEP_JUDGMENT_STAGES_COMPLETED, parse_result.deep_judgment_stages_completed
+        )
+        context.set_result_field(ArtifactKeys.DEEP_JUDGMENT_MODEL_CALLS, parse_result.deep_judgment_model_calls)
+        context.set_result_field(
+            ArtifactKeys.DEEP_JUDGMENT_EXCERPT_RETRY_COUNT, parse_result.deep_judgment_excerpt_retry_count
+        )
+        context.set_result_field(ArtifactKeys.ATTRIBUTES_WITHOUT_EXCERPTS, parse_result.attributes_without_excerpts)
+        context.set_result_field(ArtifactKeys.DEEP_JUDGMENT_SEARCH_ENABLED, context.deep_judgment_search_enabled)
+        context.set_result_field(ArtifactKeys.HALLUCINATION_RISK_ASSESSMENT, parse_result.hallucination_risk_assessment)
 
         # Store trace filtering metadata in result builder (root-level fields only)
-        context.set_result_field("used_full_trace", use_full_trace)
-        context.set_result_field("evaluation_input", raw_llm_response if use_full_trace else None)
-        context.set_result_field("trace_extraction_error", None)
+        context.set_result_field(ArtifactKeys.USED_FULL_TRACE, use_full_trace)
+        context.set_result_field(ArtifactKeys.EVALUATION_INPUT, raw_llm_response if use_full_trace else None)
+        context.set_result_field(ArtifactKeys.TRACE_EXTRACTION_ERROR, None)
