@@ -11,6 +11,10 @@ from .executor import (
     get_async_portal,
     set_async_portal,
 )
+from .stages.results_exporter import (
+    export_verification_results_csv,
+    export_verification_results_json,
+)
 from .utils.embedding_check import clear_embedding_model_cache, preload_embedding_model
 from .utils.storage_helpers import auto_save_results
 
@@ -28,4 +32,7 @@ __all__ = [
     # Embedding check
     "clear_embedding_model_cache",
     "preload_embedding_model",
+    # Results export
+    "export_verification_results_csv",
+    "export_verification_results_json",
 ]

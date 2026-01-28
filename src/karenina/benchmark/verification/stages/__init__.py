@@ -45,6 +45,12 @@ from .generate_answer import GenerateAnswerStage
 from .orchestrator import StageOrchestrator
 from .parse_template import ParseTemplateStage
 from .recursion_limit_autofail import RecursionLimitAutoFailStage
+from .results_exporter import (
+    HasTraitNames,
+    create_export_filename,
+    export_verification_results_csv,
+    export_verification_results_json,
+)
 from .rubric_evaluation import RubricEvaluationStage
 from .sufficiency_check import SufficiencyCheckStage
 from .trace_validation_autofail import TraceValidationAutoFailStage
@@ -73,4 +79,9 @@ __all__ = [
     "DeepJudgmentRubricAutoFailStage",
     "RubricEvaluationStage",
     "FinalizeResultStage",
+    # Export functions
+    "export_verification_results_csv",
+    "export_verification_results_json",
+    "create_export_filename",
+    "HasTraitNames",
 ]
