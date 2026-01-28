@@ -486,6 +486,10 @@ class BaseVerificationStage(ABC):
         """
         Execute stage logic (must be implemented by subclasses).
 
+        Note: Error checking is handled by should_run() before execute() is called.
+        Stages should not check `context.error` at the start of execute() since
+        the orchestrator only calls execute() if should_run() returns True.
+
         Args:
             context: Verification context (modified in-place)
         """

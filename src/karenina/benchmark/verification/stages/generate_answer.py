@@ -73,11 +73,12 @@ class GenerateAnswerStage(BaseVerificationStage):
         - Answer class was successfully validated (template modes), OR
         - No Answer artifact exists (rubric_only mode - template validation skipped)
 
-        Skip only if there's an error.
+        Inherits error-checking from BaseVerificationStage.
+        In rubric_only mode, Answer artifact won't exist but we still need to generate response.
+        In template modes, Answer artifact should exist.
         """
-        # In rubric_only mode, Answer artifact won't exist but we still need to generate response
-        # In template modes, Answer artifact should exist
-        return not context.error
+        # Base class handles error checking via super().should_run()
+        return super().should_run(context)
 
     def execute(self, context: VerificationContext) -> None:
         """

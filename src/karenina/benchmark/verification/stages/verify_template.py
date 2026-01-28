@@ -61,14 +61,20 @@ class VerifyTemplateStage(BaseVerificationStage):
         ]
 
     def should_run(self, context: VerificationContext) -> bool:
-        """Run if we have parsed answer, no errors, no recursion limit, and no abstention."""
+        """
+        Run if we have parsed answer, no errors, no recursion limit, and no abstention.
+
+        Inherits error-checking from BaseVerificationStage.
+        """
+        if not super().should_run(context):
+            return False
         # Skip verification if recursion limit was reached (response is truncated/unreliable)
         if context.get_artifact("recursion_limit_reached", False):
             return False
         # Skip verification if abstention was detected (model refused to answer)
         if context.get_artifact("abstention_detected", False):
             return False
-        return context.has_artifact("parsed_answer") and context.has_artifact("raw_llm_response") and not context.error
+        return context.has_artifact("parsed_answer") and context.has_artifact("raw_llm_response")
 
     def execute(self, context: VerificationContext) -> None:
         """
