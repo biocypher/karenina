@@ -6,7 +6,7 @@ Evaluates LLM responses against qualitative rubric criteria.
 import logging
 
 from ..evaluators import RubricEvaluator
-from ..utils import extract_final_ai_message
+from ..utils import prepare_evaluation_input
 from .base import BaseVerificationStage, VerificationContext
 from .deep_judgment_helpers import apply_deep_judgment_config_to_traits
 
@@ -118,23 +118,18 @@ class RubricEvaluationStage(BaseVerificationStage):
 
         # Determine what input to pass to rubric evaluation based on config
         use_full_trace = context.use_full_trace_for_rubric
-        rubric_evaluation_input = raw_llm_response  # Default to full trace
+        rubric_evaluation_input, extraction_error = prepare_evaluation_input(raw_llm_response, use_full_trace)
+
+        if extraction_error is not None:
+            # Extraction failed - mark as error and stop
+            error_msg = f"Rubric evaluation: {extraction_error}"
+            logger.error(error_msg)
+            context.mark_error(error_msg)
+            # Note: trace filtering fields are stored at root level by parse_template stage
+            return
 
         if not use_full_trace:
-            # Extract only the final AI message
-            extracted_message, error = extract_final_ai_message(raw_llm_response)
-
-            if error is not None:
-                # Extraction failed - mark as error and stop
-                error_msg = f"Failed to extract final AI message for rubric evaluation: {error}"
-                logger.error(error_msg)
-                context.mark_error(error_msg)
-                # Note: trace filtering fields are stored at root level by parse_template stage
-                return
-            else:
-                # Extraction successful - use extracted message
-                rubric_evaluation_input = extracted_message
-                logger.info("Using final AI message only for rubric evaluation")
+            logger.info("Using final AI message only for rubric evaluation")
 
         rubric_result = None
         llm_trait_labels = None

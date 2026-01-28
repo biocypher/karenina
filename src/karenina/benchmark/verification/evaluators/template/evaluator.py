@@ -16,7 +16,7 @@ from .....adapters import format_model_string, get_llm, get_parser
 from .....ports import LLMPort
 from .....schemas.domain import BaseAnswer
 from .....schemas.workflow import ModelConfig
-from ...utils import extract_final_ai_message
+from ...utils import prepare_evaluation_input
 from .prompts import TemplatePromptBuilder
 from .results import FieldVerificationResult, ParseResult, RegexVerificationResult
 
@@ -141,17 +141,11 @@ class TemplateEvaluator:
         # Both LangChain and Claude SDK adapters produce the same string format
         harmonized_response = raw_response
 
-        # Determine template evaluation input
-        template_input: str = harmonized_response
-        if not use_full_trace:
-            extracted_message, error = extract_final_ai_message(harmonized_response)
-            if error is not None:
-                result.error = f"Failed to extract final AI message: {error}"
-                return result
-            if extracted_message is None:
-                result.error = "Failed to extract final AI message: no message found"
-                return result
-            template_input = extracted_message
+        # Determine template evaluation input (optionally extract final AI message)
+        template_input, extraction_error = prepare_evaluation_input(harmonized_response, use_full_trace)
+        if extraction_error is not None:
+            result.error = extraction_error
+            return result
 
         try:
             if deep_judgment_enabled:

@@ -121,3 +121,55 @@ def extract_final_ai_message(harmonized_trace: str) -> tuple[str | None, str | N
         return None, "Final AI message has no text content (only tool calls)"
 
     return content, None
+
+
+def prepare_evaluation_input(
+    raw_response: str,
+    use_full_trace: bool,
+) -> tuple[str, str | None]:
+    """Prepare input for template/rubric evaluation by optionally filtering the trace.
+
+    This is a convenience wrapper around extract_final_ai_message that handles
+    the common pattern of conditionally extracting only the final AI message
+    based on a configuration flag.
+
+    Args:
+        raw_response: The raw LLM response (full trace or plain text)
+        use_full_trace: If True, return raw_response as-is.
+            If False, extract only the final AI message.
+
+    Returns:
+        Tuple of (evaluation_input, error_message) where:
+        - evaluation_input: The filtered input to use for evaluation.
+            Returns raw_response if use_full_trace=True or if extraction fails.
+        - error_message: Error description if extraction failed, or None if successful.
+            Note: If extraction fails, the raw_response is still returned as fallback
+            but the error is surfaced for the caller to decide how to handle.
+
+    Example:
+        >>> # Using full trace
+        >>> input, error = prepare_evaluation_input(trace, use_full_trace=True)
+        >>> assert input == trace
+        >>> assert error is None
+
+        >>> # Extracting final message
+        >>> input, error = prepare_evaluation_input(trace, use_full_trace=False)
+        >>> # If successful, input contains only the final AI message
+        >>> # If failed, input is the full trace and error explains what went wrong
+    """
+    if use_full_trace:
+        return raw_response, None
+
+    extracted_message, error = extract_final_ai_message(raw_response)
+
+    if error is not None:
+        # Extraction failed - return the original response with the error
+        # Caller decides whether to fail or continue with full trace
+        return raw_response, f"Failed to extract final AI message: {error}"
+
+    if extracted_message is None:
+        # Should not happen since extract_final_ai_message returns either
+        # (content, None) or (None, error), but handle defensively
+        return raw_response, "Failed to extract final AI message: no message found"
+
+    return extracted_message, None
