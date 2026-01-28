@@ -7,7 +7,7 @@ import logging
 
 from ..utils.embedding_check import perform_embedding_check
 from ..utils.llm_invocation import _split_parsed_response
-from .base import BaseVerificationStage, VerificationContext
+from .base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -56,19 +56,19 @@ class EmbeddingCheckStage(BaseVerificationStage):
         after being recalculated from field_verification_result and regex_verification_results.
         """
         return [
-            "parsed_answer",
-            "field_verification_result",
-            "regex_verification_results",
+            ArtifactKeys.PARSED_ANSWER,
+            ArtifactKeys.FIELD_VERIFICATION_RESULT,
+            ArtifactKeys.REGEX_VERIFICATION_RESULTS,
         ]
 
     @property
     def produces(self) -> list[str]:
         """Artifacts produced by this stage."""
         return [
-            "embedding_check_performed",
-            "embedding_similarity_score",
-            "embedding_model_used",
-            "embedding_override_applied",
+            ArtifactKeys.EMBEDDING_CHECK_PERFORMED,
+            ArtifactKeys.EMBEDDING_SIMILARITY_SCORE,
+            ArtifactKeys.EMBEDDING_MODEL_USED,
+            ArtifactKeys.EMBEDDING_OVERRIDE_APPLIED,
         ]
 
     def should_run(self, context: VerificationContext) -> bool:
@@ -82,7 +82,7 @@ class EmbeddingCheckStage(BaseVerificationStage):
         if not super().should_run(context):
             return False
 
-        field_verification_result = context.get_artifact("field_verification_result")
+        field_verification_result = context.get_artifact(ArtifactKeys.FIELD_VERIFICATION_RESULT)
         return field_verification_result is False
 
     def execute(self, context: VerificationContext) -> None:
@@ -97,9 +97,9 @@ class EmbeddingCheckStage(BaseVerificationStage):
             - May override verify_result if semantically equivalent
             - Sets result fields for embedding metadata
         """
-        parsed_answer = context.get_artifact("parsed_answer")
-        field_verification_result = context.get_artifact("field_verification_result")
-        regex_verification_results = context.get_artifact("regex_verification_results")
+        parsed_answer = context.get_artifact(ArtifactKeys.PARSED_ANSWER)
+        field_verification_result = context.get_artifact(ArtifactKeys.FIELD_VERIFICATION_RESULT)
+        regex_verification_results = context.get_artifact(ArtifactKeys.REGEX_VERIFICATION_RESULTS)
 
         # Extract ground truth and LLM response for embedding check
         parsed_gt_response, parsed_llm_response = _split_parsed_response(parsed_answer)
@@ -123,9 +123,9 @@ class EmbeddingCheckStage(BaseVerificationStage):
             embedding_override_applied = True
 
             # Update stored results
-            context.set_artifact("field_verification_result", field_verification_result)
-            context.set_artifact("verify_result", verification_result)
-            context.set_result_field("verify_result", verification_result)
+            context.set_artifact(ArtifactKeys.FIELD_VERIFICATION_RESULT, field_verification_result)
+            context.set_artifact(ArtifactKeys.VERIFY_RESULT, verification_result)
+            context.set_result_field(ArtifactKeys.VERIFY_RESULT, verification_result)
 
             logger.warning(
                 f"Embedding check override applied for question {context.question_id} "
@@ -133,7 +133,7 @@ class EmbeddingCheckStage(BaseVerificationStage):
             )
 
         # Store embedding metadata (both artifact and result field)
-        self.set_artifact_and_result(context, "embedding_check_performed", embedding_check_performed)
-        self.set_artifact_and_result(context, "embedding_similarity_score", embedding_similarity_score)
-        self.set_artifact_and_result(context, "embedding_model_used", embedding_model_used)
-        self.set_artifact_and_result(context, "embedding_override_applied", embedding_override_applied)
+        self.set_artifact_and_result(context, ArtifactKeys.EMBEDDING_CHECK_PERFORMED, embedding_check_performed)
+        self.set_artifact_and_result(context, ArtifactKeys.EMBEDDING_SIMILARITY_SCORE, embedding_similarity_score)
+        self.set_artifact_and_result(context, ArtifactKeys.EMBEDDING_MODEL_USED, embedding_model_used)
+        self.set_artifact_and_result(context, ArtifactKeys.EMBEDDING_OVERRIDE_APPLIED, embedding_override_applied)
