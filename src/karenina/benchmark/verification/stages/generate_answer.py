@@ -13,7 +13,7 @@ from ....adapters import get_agent, get_llm
 from ....ports import AgentConfig, AgentPort, LLMPort, Message
 from ..utils.llm_invocation import _construct_few_shot_prompt
 from ..utils.trace_usage_tracker import UsageTracker
-from .base import BaseVerificationStage, VerificationContext
+from .base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -61,10 +61,10 @@ class GenerateAnswerStage(BaseVerificationStage):
     def produces(self) -> list[str]:
         """Artifacts produced by this stage."""
         return [
-            "raw_llm_response",
-            "recursion_limit_reached",
-            "answering_model_str",
-            "answering_mcp_servers",
+            ArtifactKeys.RAW_LLM_RESPONSE,
+            ArtifactKeys.RECURSION_LIMIT_REACHED,
+            ArtifactKeys.ANSWERING_MODEL_STR,
+            ArtifactKeys.ANSWERING_MCP_SERVERS,
         ]
 
     def should_run(self, context: VerificationContext) -> bool:
@@ -117,7 +117,7 @@ class GenerateAnswerStage(BaseVerificationStage):
             self.set_artifact_and_result(context, "raw_llm_response", raw_llm_response)
             self.set_artifact_and_result(context, "recursion_limit_reached", recursion_limit_reached)
             self.set_artifact_and_result(context, "answering_mcp_servers", answering_mcp_servers)
-            context.set_artifact("answering_model_str", answering_model_str)
+            context.set_artifact(ArtifactKeys.ANSWERING_MODEL_STR, answering_model_str)
 
             # Handle usage tracking for cached answers
             usage_tracker = UsageTracker()
@@ -125,7 +125,7 @@ class GenerateAnswerStage(BaseVerificationStage):
                 usage_tracker.track_call("answer_generation", answering_model_str, usage_metadata)
             if agent_metrics:
                 usage_tracker.set_agent_metrics(agent_metrics)
-            context.set_artifact("usage_tracker", usage_tracker)
+            context.set_artifact(ArtifactKeys.USAGE_TRACKER, usage_tracker)
 
             return  # Skip LLM invocation
 
@@ -134,11 +134,11 @@ class GenerateAnswerStage(BaseVerificationStage):
 
         # Build model string for result (centralized via adapter registry)
         answering_model_str = self.get_model_string(answering_model)
-        context.set_artifact("answering_model_str", answering_model_str)
+        context.set_artifact(ArtifactKeys.ANSWERING_MODEL_STR, answering_model_str)
 
         # Extract MCP server names if configured
         answering_mcp_servers = list(answering_model.mcp_urls_dict.keys()) if answering_model.mcp_urls_dict else None
-        context.set_artifact("answering_mcp_servers", answering_mcp_servers)
+        context.set_artifact(ArtifactKeys.ANSWERING_MCP_SERVERS, answering_mcp_servers)
 
         # Log MCP configuration if present
         if answering_mcp_servers:
@@ -242,7 +242,7 @@ class GenerateAnswerStage(BaseVerificationStage):
 
                 # Store trace_messages for future use (PR5a)
                 if result.trace_messages:
-                    context.set_artifact("trace_messages", result.trace_messages)
+                    context.set_artifact(ArtifactKeys.TRACE_MESSAGES, result.trace_messages)
 
             else:
                 # LLMPort path: Use for simple LLM calls without tools
@@ -287,8 +287,8 @@ class GenerateAnswerStage(BaseVerificationStage):
             # Mark as fatal error
             error_msg = f"Adapter call failed: {type(e).__name__}: {e}"
             context.mark_error(error_msg)
-            context.set_artifact("raw_llm_response", "")
-            context.set_artifact("recursion_limit_reached", False)
+            context.set_artifact(ArtifactKeys.RAW_LLM_RESPONSE, "")
+            context.set_artifact(ArtifactKeys.RECURSION_LIMIT_REACHED, False)
             return
 
         # Store results (both artifact and result field)
@@ -297,4 +297,4 @@ class GenerateAnswerStage(BaseVerificationStage):
         self.set_artifact_and_result(context, "answering_mcp_servers", answering_mcp_servers)
 
         # Store usage tracker for next stages to continue tracking (artifact only)
-        context.set_artifact("usage_tracker", usage_tracker)
+        context.set_artifact(ArtifactKeys.USAGE_TRACKER, usage_tracker)

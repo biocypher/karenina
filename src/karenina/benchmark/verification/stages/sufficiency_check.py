@@ -7,7 +7,7 @@ import logging
 from typing import Any
 
 from ..evaluators import detect_sufficiency
-from .base import VerificationContext
+from .base import ArtifactKeys, VerificationContext
 from .check_stage_base import BaseCheckStage
 
 # Set up logger
@@ -59,7 +59,7 @@ class SufficiencyCheckStage(BaseCheckStage):
     def requires(self) -> list[str]:
         """Artifacts required by this stage."""
         # Requires both raw_llm_response and Answer (the template class)
-        return ["raw_llm_response", "Answer"]
+        return [ArtifactKeys.RAW_LLM_RESPONSE, ArtifactKeys.ANSWER]
 
     def should_run(self, context: VerificationContext) -> bool:
         """Run only if sufficiency detection is enabled, no recursion limit hit, and no prior failures.
@@ -69,13 +69,13 @@ class SufficiencyCheckStage(BaseCheckStage):
         if not super().should_run(context):
             return False
         # Skip if recursion limit was reached (response is truncated/unreliable)
-        if context.get_artifact("recursion_limit_reached", False):
+        if context.get_artifact(ArtifactKeys.RECURSION_LIMIT_REACHED, False):
             return False
         # Skip if trace validation failed (trace doesn't end with AI message)
-        if context.get_artifact("trace_validation_failed", False):
+        if context.get_artifact(ArtifactKeys.TRACE_VALIDATION_FAILED, False):
             return False
         # Skip if abstention was detected (already handled by abstention check)
-        if context.get_artifact("abstention_detected", False):
+        if context.get_artifact(ArtifactKeys.ABSTENTION_DETECTED, False):
             return False
         return context.sufficiency_enabled
 
@@ -94,8 +94,8 @@ class SufficiencyCheckStage(BaseCheckStage):
 
         Returns early with check_performed=False if the template schema cannot be obtained.
         """
-        raw_llm_response = context.get_artifact("raw_llm_response")
-        Answer = context.get_artifact("Answer")
+        raw_llm_response = context.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
+        Answer = context.get_artifact(ArtifactKeys.ANSWER)
 
         # Get the JSON schema from the Answer class
         try:

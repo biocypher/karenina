@@ -6,7 +6,7 @@ Auto-fails verification when agent trace doesn't end with an AI message.
 import logging
 
 from ..utils import extract_final_ai_message
-from .base import BaseVerificationStage, VerificationContext
+from .base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -54,12 +54,16 @@ class TraceValidationAutoFailStage(BaseVerificationStage):
     @property
     def requires(self) -> list[str]:
         """Artifacts required by this stage."""
-        return ["raw_llm_response"]
+        return [ArtifactKeys.RAW_LLM_RESPONSE]
 
     @property
     def produces(self) -> list[str]:
         """Artifacts produced by this stage."""
-        return ["trace_validation_failed", "trace_validation_error", "mcp_enabled"]
+        return [
+            ArtifactKeys.TRACE_VALIDATION_FAILED,
+            ArtifactKeys.TRACE_VALIDATION_ERROR,
+            ArtifactKeys.MCP_ENABLED,
+        ]
 
     def should_run(self, context: VerificationContext) -> bool:
         """
@@ -70,7 +74,7 @@ class TraceValidationAutoFailStage(BaseVerificationStage):
         if not super().should_run(context):
             return False
 
-        return context.has_artifact("raw_llm_response")
+        return context.has_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
 
     def execute(self, context: VerificationContext) -> None:
         """
@@ -89,11 +93,11 @@ class TraceValidationAutoFailStage(BaseVerificationStage):
             - Sets verify_result to False (if failed)
             - Logs validation result
         """
-        raw_llm_response = context.get_artifact("raw_llm_response")
+        raw_llm_response = context.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
 
         # Check if MCP is enabled (mcp_urls_dict is configured on answering model)
         mcp_enabled = context.answering_model.mcp_urls_dict is not None
-        context.set_artifact("mcp_enabled", mcp_enabled)
+        context.set_artifact(ArtifactKeys.MCP_ENABLED, mcp_enabled)
 
         # Also check for manual interface
         is_manual = context.answering_model.interface == "manual"
@@ -101,8 +105,8 @@ class TraceValidationAutoFailStage(BaseVerificationStage):
         if not mcp_enabled or is_manual:
             # Non-MCP response or manual trace - skip validation
             # Regular LLM responses are plain text, manual traces are trusted
-            context.set_artifact("trace_validation_failed", False)
-            context.set_artifact("trace_validation_error", None)
+            context.set_artifact(ArtifactKeys.TRACE_VALIDATION_FAILED, False)
+            context.set_artifact(ArtifactKeys.TRACE_VALIDATION_ERROR, None)
 
             if is_manual:
                 logger.debug(
@@ -127,19 +131,19 @@ class TraceValidationAutoFailStage(BaseVerificationStage):
             )
 
             # Store validation failure info
-            context.set_artifact("trace_validation_failed", True)
-            context.set_artifact("trace_validation_error", error)
+            context.set_artifact(ArtifactKeys.TRACE_VALIDATION_FAILED, True)
+            context.set_artifact(ArtifactKeys.TRACE_VALIDATION_ERROR, error)
 
             # Auto-fail: Set verification result to False
-            context.set_artifact("verify_result", False)
-            context.set_artifact("field_verification_result", False)
-            context.set_result_field("verify_result", False)
+            context.set_artifact(ArtifactKeys.VERIFY_RESULT, False)
+            context.set_artifact(ArtifactKeys.FIELD_VERIFICATION_RESULT, False)
+            context.set_result_field(ArtifactKeys.VERIFY_RESULT, False)
 
             # Store error in result for diagnostics (root-level field)
-            context.set_result_field("trace_extraction_error", error)
+            context.set_result_field(ArtifactKeys.TRACE_EXTRACTION_ERROR, error)
         else:
             # Trace validation passed
-            context.set_artifact("trace_validation_failed", False)
-            context.set_artifact("trace_validation_error", None)
+            context.set_artifact(ArtifactKeys.TRACE_VALIDATION_FAILED, False)
+            context.set_artifact(ArtifactKeys.TRACE_VALIDATION_ERROR, None)
 
             logger.debug(f"Trace validation passed for question {context.question_id}")

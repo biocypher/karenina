@@ -7,7 +7,7 @@ after all retry attempts.
 import logging
 
 from .autofail_stage_base import BaseAutoFailStage
-from .base import VerificationContext
+from .base import ArtifactKeys, VerificationContext
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ class DeepJudgmentRubricAutoFailStage(BaseAutoFailStage):
     @property
     def requires(self) -> list[str]:
         """Artifacts required by this stage."""
-        return ["raw_llm_response"]  # Minimal requirement
+        return [ArtifactKeys.RAW_LLM_RESPONSE]  # Minimal requirement
 
     def should_run(self, context: VerificationContext) -> bool:
         """
@@ -55,12 +55,12 @@ class DeepJudgmentRubricAutoFailStage(BaseAutoFailStage):
             return False
 
         # Check if deep judgment rubric was performed
-        deep_judgment_performed = context.get_result_field("deep_judgment_rubric_performed")
+        deep_judgment_performed = context.get_result_field(ArtifactKeys.DEEP_JUDGMENT_RUBRIC_PERFORMED)
         if not deep_judgment_performed:
             return False
 
         # Check if there are traits without excerpts
-        traits_without_excerpts = context.get_result_field("traits_without_valid_excerpts")
+        traits_without_excerpts = context.get_result_field(ArtifactKeys.TRAITS_WITHOUT_VALID_EXCERPTS)
         return bool(traits_without_excerpts)
 
     def _should_skip_due_to_prior_failure(self, context: VerificationContext) -> bool:
@@ -69,9 +69,9 @@ class DeepJudgmentRubricAutoFailStage(BaseAutoFailStage):
 
         Abstention takes priority over deep judgment rubric auto-fail.
         """
-        abstention_detected = context.get_result_field("abstention_detected")
+        abstention_detected = context.get_result_field(ArtifactKeys.ABSTENTION_DETECTED)
         if abstention_detected:
-            traits_without_excerpts = context.get_result_field("traits_without_valid_excerpts")
+            traits_without_excerpts = context.get_result_field(ArtifactKeys.TRAITS_WITHOUT_VALID_EXCERPTS)
             logger.debug(
                 f"Abstention detected - skipping deep judgment rubric auto-fail "
                 f"for {len(traits_without_excerpts)} trait(s): {', '.join(traits_without_excerpts)}"
@@ -81,7 +81,7 @@ class DeepJudgmentRubricAutoFailStage(BaseAutoFailStage):
 
     def _get_autofail_reason(self, context: VerificationContext) -> str:
         """Get the auto-fail reason message."""
-        traits_without_excerpts = context.get_result_field("traits_without_valid_excerpts")
+        traits_without_excerpts = context.get_result_field(ArtifactKeys.TRAITS_WITHOUT_VALID_EXCERPTS)
         trait_names = ", ".join(traits_without_excerpts)
         return (
             f"{len(traits_without_excerpts)} trait(s) failed to extract valid excerpts "
@@ -95,10 +95,10 @@ class DeepJudgmentRubricAutoFailStage(BaseAutoFailStage):
         Note: failure_reason is captured in the auto-fail log message via _get_autofail_reason(),
         not stored as a separate result field since it's not read by finalize_result.
         """
-        traits_without_excerpts = context.get_result_field("traits_without_valid_excerpts")
+        traits_without_excerpts = context.get_result_field(ArtifactKeys.TRAITS_WITHOUT_VALID_EXCERPTS)
 
         # Log retry counts for transparency
-        trait_metadata = context.get_result_field("trait_metadata") or {}
+        trait_metadata = context.get_result_field(ArtifactKeys.TRAIT_METADATA) or {}
         for trait_name in traits_without_excerpts:
             metadata = trait_metadata.get(trait_name, {})
             retry_count = metadata.get("excerpt_retry_count", 0)
