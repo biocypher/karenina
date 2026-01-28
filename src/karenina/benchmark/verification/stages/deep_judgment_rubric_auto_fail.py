@@ -6,12 +6,13 @@ after all retry attempts.
 
 import logging
 
-from .base import BaseVerificationStage, VerificationContext
+from .autofail_stage_base import BaseAutoFailStage
+from .base import VerificationContext
 
 logger = logging.getLogger(__name__)
 
 
-class DeepJudgmentRubricAutoFailStage(BaseVerificationStage):
+class DeepJudgmentRubricAutoFailStage(BaseAutoFailStage):
     """
     Auto-fails verification if deep-judgment rubric traits lack valid excerpts.
 
@@ -45,11 +46,6 @@ class DeepJudgmentRubricAutoFailStage(BaseVerificationStage):
         """Artifacts required by this stage."""
         return ["raw_llm_response"]  # Minimal requirement
 
-    @property
-    def produces(self) -> list[str]:
-        """Artifacts produced by this stage."""
-        return []  # Modifies existing verify_result
-
     def should_run(self, context: VerificationContext) -> bool:
         """
         Run only if deep judgment rubric evaluation was performed.
@@ -61,47 +57,52 @@ class DeepJudgmentRubricAutoFailStage(BaseVerificationStage):
 
         # Check if deep judgment rubric was performed
         deep_judgment_performed = context.get_result_field("deep_judgment_rubric_performed")
-        return bool(deep_judgment_performed)
+        if not deep_judgment_performed:
+            return False
 
-    def execute(self, context: VerificationContext) -> None:
-        """
-        Check for auto-fail condition and update verification result if needed.
-
-        Args:
-            context: Verification context
-
-        Side Effects:
-            - May set verify_result to False
-            - May set failure_reason explaining the failure
-            - Logs warning for each trait that failed
-        """
-        # Get traits without valid excerpts
+        # Check if there are traits without excerpts
         traits_without_excerpts = context.get_result_field("traits_without_valid_excerpts")
+        return bool(traits_without_excerpts)
 
-        # Check if abstention was detected (takes priority over auto-fail)
+    def _should_skip_due_to_prior_failure(self, context: VerificationContext) -> bool:
+        """
+        Skip if abstention was detected.
+
+        Abstention takes priority over deep judgment rubric auto-fail.
+        """
         abstention_detected = context.get_result_field("abstention_detected")
-
-        # Check if there are traits that failed excerpt extraction
-        if not traits_without_excerpts:
-            logger.debug("No traits without excerpts, skipping auto-fail")
-            return
-
-        # Skip auto-fail if abstention was detected
         if abstention_detected:
+            traits_without_excerpts = context.get_result_field("traits_without_valid_excerpts")
             logger.info(
                 f"Abstention detected - skipping deep judgment rubric auto-fail "
                 f"for {len(traits_without_excerpts)} trait(s): {', '.join(traits_without_excerpts)}"
             )
-            return
+            return True
+        return False
 
-        # Auto-fail verification
+    def _get_autofail_reason(self, context: VerificationContext) -> str:
+        """Get the auto-fail reason message."""
+        traits_without_excerpts = context.get_result_field("traits_without_valid_excerpts")
+        trait_names = ", ".join(traits_without_excerpts)
+        return (
+            f"{len(traits_without_excerpts)} trait(s) failed to extract valid excerpts "
+            f"after retry attempts: {trait_names}"
+        )
+
+    def _set_additional_failure_fields(self, context: VerificationContext) -> None:
+        """
+        Set failure_reason and log retry metadata.
+
+        This stage sets failure_reason with detailed info about which traits failed.
+        Also logs retry counts for transparency.
+        """
+        traits_without_excerpts = context.get_result_field("traits_without_valid_excerpts")
         trait_names = ", ".join(traits_without_excerpts)
         failure_reason = (
             f"Deep judgment rubric auto-fail: {len(traits_without_excerpts)} trait(s) "
             f"failed to extract valid excerpts after retry attempts: {trait_names}"
         )
-
-        logger.warning(f"Auto-failing verification for question {context.question_id}: {failure_reason}")
+        context.set_result_field("failure_reason", failure_reason)
 
         # Log retry counts for transparency
         trait_metadata = context.get_result_field("trait_metadata") or {}
@@ -109,7 +110,3 @@ class DeepJudgmentRubricAutoFailStage(BaseVerificationStage):
             metadata = trait_metadata.get(trait_name, {})
             retry_count = metadata.get("excerpt_retry_count", 0)
             logger.info(f"  - Trait '{trait_name}' failed after {retry_count} retry attempt(s)")
-
-        # Set verification result to False
-        context.set_result_field("verify_result", False)
-        context.set_result_field("failure_reason", failure_reason)

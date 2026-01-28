@@ -13,6 +13,7 @@ Core Types (from base.py):
 
 Base Classes (for extending):
 - BaseCheckStage: Base class for check stages (abstention, sufficiency)
+- BaseAutoFailStage: Base class for auto-fail stages (recursion_limit, deep_judgment, etc.)
 
 Available Stages:
 - ValidateTemplateStage: Template syntax validation
@@ -33,6 +34,7 @@ Available Stages:
 # Core types from base module
 # Stage implementations
 from .abstention_check import AbstentionCheckStage
+from .autofail_stage_base import BaseAutoFailStage
 from .base import (
     BaseVerificationStage,
     StageList,
@@ -66,6 +68,7 @@ __all__ = [
     "VerificationContext",
     "VerificationStage",
     "BaseVerificationStage",
+    "BaseAutoFailStage",
     "BaseCheckStage",
     "StageRegistry",
     "StageList",

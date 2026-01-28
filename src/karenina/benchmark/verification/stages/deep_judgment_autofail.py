@@ -5,13 +5,13 @@ Auto-fails verification when excerpts are missing for attributes.
 
 import logging
 
-from .base import BaseVerificationStage, VerificationContext
+from .autofail_stage_base import BaseAutoFailStage
+from .base import VerificationContext
 
-# Set up logger
 logger = logging.getLogger(__name__)
 
 
-class DeepJudgmentAutoFailStage(BaseVerificationStage):
+class DeepJudgmentAutoFailStage(BaseAutoFailStage):
     """
     Auto-fails verification for missing deep-judgment excerpts.
 
@@ -61,11 +61,6 @@ class DeepJudgmentAutoFailStage(BaseVerificationStage):
             "field_verification_result",
         ]
 
-    @property
-    def produces(self) -> list[str]:
-        """Artifacts produced by this stage."""
-        return []  # Only modifies existing results
-
     def should_run(self, context: VerificationContext) -> bool:
         """
         Run only if deep-judgment was performed.
@@ -84,39 +79,23 @@ class DeepJudgmentAutoFailStage(BaseVerificationStage):
             deep_judgment_performed and attributes_without_excerpts is not None and len(attributes_without_excerpts) > 0
         )
 
-    def execute(self, context: VerificationContext) -> None:
+    def _should_skip_due_to_prior_failure(self, context: VerificationContext) -> bool:
         """
-        Apply auto-fail if conditions are met.
+        Skip if abstention was detected.
 
-        Args:
-            context: Verification context
-
-        Side Effects:
-            - May set verify_result to False
-            - May set field_verification_result to False
-            - Logs auto-fail reason
+        If abstention was detected, verification is already failed for a better reason.
         """
         abstention_detected = context.get_artifact("abstention_detected")
         abstention_check_performed = context.get_artifact("abstention_check_performed")
+        return bool(abstention_detected and abstention_check_performed)
+
+    def _get_autofail_reason(self, context: VerificationContext) -> str:
+        """Get the auto-fail reason message."""
         attributes_without_excerpts = context.get_artifact("attributes_without_excerpts")
-
-        # Only auto-fail if abstention was NOT detected
-        # If abstention was detected, verification is already failed for a better reason
-        if abstention_detected and abstention_check_performed:
-            # Abstention already handled, don't override
-            return
-
-        # Auto-fail: Set verification to False
-        verification_result = False
-        field_verification_result = False
-
-        # Update stored results
-        context.set_artifact("verify_result", verification_result)
-        context.set_artifact("field_verification_result", field_verification_result)
-        context.set_result_field("verify_result", verification_result)
-
-        logger.info(
-            f"Deep-judgment auto-fail for question {context.question_id}: "
-            f"{len(attributes_without_excerpts)} attributes without excerpts: "
-            f"{', '.join(attributes_without_excerpts)}"
+        return (
+            f"{len(attributes_without_excerpts)} attributes without excerpts: {', '.join(attributes_without_excerpts)}"
         )
+
+    def _get_log_level(self) -> int:
+        """Use INFO level for deep judgment auto-fail."""
+        return logging.INFO

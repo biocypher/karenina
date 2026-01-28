@@ -3,15 +3,11 @@
 Auto-fails verification when agent hits recursion limit.
 """
 
-import logging
-
-from .base import BaseVerificationStage, VerificationContext
-
-# Set up logger
-logger = logging.getLogger(__name__)
+from .autofail_stage_base import BaseAutoFailStage
+from .base import VerificationContext
 
 
-class RecursionLimitAutoFailStage(BaseVerificationStage):
+class RecursionLimitAutoFailStage(BaseAutoFailStage):
     """
     Auto-fails verification when recursion limit is reached.
 
@@ -49,11 +45,6 @@ class RecursionLimitAutoFailStage(BaseVerificationStage):
         """Artifacts required by this stage."""
         return ["recursion_limit_reached"]
 
-    @property
-    def produces(self) -> list[str]:
-        """Artifacts produced by this stage."""
-        return []  # Only modifies existing results
-
     def should_run(self, context: VerificationContext) -> bool:
         """
         Run only if recursion limit was reached.
@@ -66,29 +57,17 @@ class RecursionLimitAutoFailStage(BaseVerificationStage):
         recursion_limit_reached = context.get_artifact("recursion_limit_reached", False)
         return recursion_limit_reached is True
 
-    def execute(self, context: VerificationContext) -> None:
+    def _should_skip_due_to_prior_failure(self, context: VerificationContext) -> bool:  # noqa: ARG002
         """
-        Apply auto-fail for recursion limit.
+        Recursion limit auto-fail never skips due to prior failure.
 
-        Args:
-            context: Verification context
-
-        Side Effects:
-            - Sets verify_result to False (both artifact and result field)
-            - Sets field_verification_result to False
-            - Logs auto-fail reason
+        This is one of the first checks in the pipeline.
         """
-        # Auto-fail: Set all verification results to False
-        verification_result = False
-        field_verification_result = False
+        return False
 
-        # Update stored results
-        context.set_artifact("verify_result", verification_result)
-        context.set_artifact("field_verification_result", field_verification_result)
-        context.set_result_field("verify_result", verification_result)
-
-        logger.warning(
-            f"Recursion limit auto-fail for question {context.question_id}: "
-            f"Agent hit maximum recursion depth. Verification marked as failed. "
-            f"Trace and token usage preserved for analysis."
+    def _get_autofail_reason(self, context: VerificationContext) -> str:  # noqa: ARG002
+        """Get the auto-fail reason message."""
+        return (
+            "Agent hit maximum recursion depth. Verification marked as failed. "
+            "Trace and token usage preserved for analysis."
         )
