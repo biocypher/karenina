@@ -4,7 +4,12 @@ This package contains individual stage implementations for the modular
 verification pipeline. Each stage is a self-contained unit that performs
 a specific verification task.
 
-Core Types (from base.py):
+Package Structure:
+- core/: Infrastructure (base classes, context, orchestrator)
+- pipeline/: Stage implementations (13 verification stages)
+- helpers/: Utility functions (deep judgment, export)
+
+Core Types (from core/base.py):
 - ArtifactKeys: Type-safe constants for artifact and result field keys
 - VerificationContext: Shared state across stages
 - VerificationStage: Protocol defining stage interface
@@ -32,42 +37,45 @@ Available Stages:
 - FinalizeResultStage: Result object construction
 """
 
-# Core types from base module
-# Stage implementations
-from .abstention_check import AbstentionCheckStage
-from .autofail_stage_base import BaseAutoFailStage
-from .base import (
+# Core infrastructure
+from .core import (
     ArtifactKeys,
+    BaseAutoFailStage,
+    BaseCheckStage,
     BaseVerificationStage,
     StageList,
+    StageOrchestrator,
     StageRegistry,
     VerificationContext,
     VerificationStage,
 )
-from .check_stage_base import BaseCheckStage
-from .deep_judgment_autofail import DeepJudgmentAutoFailStage
-from .deep_judgment_helpers import (
-    apply_deep_judgment_config_to_traits,
-    resolve_deep_judgment_config_for_trait,
-)
-from .deep_judgment_rubric_auto_fail import DeepJudgmentRubricAutoFailStage
-from .embedding_check import EmbeddingCheckStage
-from .finalize_result import FinalizeResultStage
-from .generate_answer import GenerateAnswerStage
-from .orchestrator import StageOrchestrator
-from .parse_template import ParseTemplateStage
-from .recursion_limit_autofail import RecursionLimitAutoFailStage
-from .results_exporter import (
+
+# Helper functions
+from .helpers import (
     HasTraitNames,
+    apply_deep_judgment_config_to_traits,
     create_export_filename,
     export_verification_results_csv,
     export_verification_results_json,
+    resolve_deep_judgment_config_for_trait,
 )
-from .rubric_evaluation import RubricEvaluationStage
-from .sufficiency_check import SufficiencyCheckStage
-from .trace_validation_autofail import TraceValidationAutoFailStage
-from .validate_template import ValidateTemplateStage
-from .verify_template import VerifyTemplateStage
+
+# Pipeline stages
+from .pipeline import (
+    AbstentionCheckStage,
+    DeepJudgmentAutoFailStage,
+    DeepJudgmentRubricAutoFailStage,
+    EmbeddingCheckStage,
+    FinalizeResultStage,
+    GenerateAnswerStage,
+    ParseTemplateStage,
+    RecursionLimitAutoFailStage,
+    RubricEvaluationStage,
+    SufficiencyCheckStage,
+    TraceValidationAutoFailStage,
+    ValidateTemplateStage,
+    VerifyTemplateStage,
+)
 
 __all__ = [
     # Core types

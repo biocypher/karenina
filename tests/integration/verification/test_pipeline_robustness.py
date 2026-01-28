@@ -31,10 +31,8 @@ from karenina.benchmark.verification.stages import (
     RecursionLimitAutoFailStage,
     StageOrchestrator,
     ValidateTemplateStage,
-    VerifyTemplateStage,
-)
-from karenina.benchmark.verification.stages.base import (
     VerificationContext,
+    VerifyTemplateStage,
 )
 from karenina.schemas.domain import LLMRubricTrait, RegexTrait, Rubric
 from karenina.schemas.workflow import (
@@ -547,7 +545,7 @@ class TestArtifactDependencies:
         ValidateTemplateStage().execute(minimal_context)
 
         # Mock get_agent to return a mock agent with run_sync
-        with patch("karenina.benchmark.verification.stages.generate_answer.get_agent") as mock_get_agent:
+        with patch("karenina.benchmark.verification.stages.pipeline.generate_answer.get_agent") as mock_get_agent:
             mock_agent = MagicMock()
             mock_result = MagicMock()
             mock_result.final_response = "The capital is Paris."
@@ -610,8 +608,8 @@ class TestPipelineIntegration:
 
         # Mock agent for answer generation and template parsing
         with (
-            patch("karenina.benchmark.verification.stages.generate_answer.get_agent") as mock_get_agent,
-            patch("karenina.benchmark.verification.stages.parse_template.TemplateEvaluator") as MockEvaluator,
+            patch("karenina.benchmark.verification.stages.pipeline.generate_answer.get_agent") as mock_get_agent,
+            patch("karenina.benchmark.verification.stages.pipeline.parse_template.TemplateEvaluator") as MockEvaluator,
         ):
             # Answer generation mock - return AgentResult-like object
             mock_agent = MagicMock()
@@ -688,8 +686,10 @@ class TestPipelineIntegration:
             return context.get_artifact("final_result")
 
         with (
-            patch("karenina.benchmark.verification.stages.generate_answer.get_agent") as mock_get_agent,
-            patch("karenina.benchmark.verification.stages.abstention_check.detect_abstention") as mock_abstention,
+            patch("karenina.benchmark.verification.stages.pipeline.generate_answer.get_agent") as mock_get_agent,
+            patch(
+                "karenina.benchmark.verification.stages.pipeline.abstention_check.detect_abstention"
+            ) as mock_abstention,
         ):
             # Generate a refusal response - return AgentResult-like object
             mock_agent = MagicMock()

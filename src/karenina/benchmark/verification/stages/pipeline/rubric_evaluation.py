@@ -5,10 +5,10 @@ Evaluates LLM responses against qualitative rubric criteria.
 
 import logging
 
-from ..evaluators import RubricEvaluator
-from ..utils import prepare_evaluation_input
-from .base import ArtifactKeys, BaseVerificationStage, VerificationContext
-from .deep_judgment_helpers import apply_deep_judgment_config_to_traits
+from ...evaluators import RubricEvaluator
+from ...utils import prepare_evaluation_input
+from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
+from ..helpers.deep_judgment_helpers import apply_deep_judgment_config_to_traits
 
 # Set up logger
 logger = logging.getLogger(__name__)

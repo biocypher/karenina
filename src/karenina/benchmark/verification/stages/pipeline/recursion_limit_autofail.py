@@ -3,8 +3,8 @@
 Auto-fails verification when agent hits recursion limit.
 """
 
-from .autofail_stage_base import BaseAutoFailStage
-from .base import ArtifactKeys, VerificationContext
+from ..core.autofail_stage_base import BaseAutoFailStage
+from ..core.base import ArtifactKeys, VerificationContext
 
 
 class RecursionLimitAutoFailStage(BaseAutoFailStage):

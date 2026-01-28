@@ -5,7 +5,7 @@ Verifies parsed response matches template (field + regex validation).
 
 import logging
 
-from .base import ArtifactKeys, BaseVerificationStage, VerificationContext
+from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
 # Set up logger
 logger = logging.getLogger(__name__)

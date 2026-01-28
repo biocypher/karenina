@@ -7,8 +7,8 @@ These are extracted from rubric_evaluation.py to reduce clutter in the stage fil
 import logging
 from typing import Any
 
-from ....schemas.domain import LLMRubricTrait
-from ....schemas.workflow.verification.config import DeepJudgmentTraitConfig
+from .....schemas.domain import LLMRubricTrait
+from .....schemas.workflow.verification.config import DeepJudgmentTraitConfig
 
 # Set up logger
 logger = logging.getLogger(__name__)

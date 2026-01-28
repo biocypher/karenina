@@ -5,9 +5,9 @@ Detects when LLMs refuse to answer or abstain from responding.
 
 from typing import Any
 
-from ..evaluators import detect_abstention
-from .base import ArtifactKeys, VerificationContext
-from .check_stage_base import BaseCheckStage
+from ...evaluators import detect_abstention
+from ..core.base import ArtifactKeys, VerificationContext
+from ..core.check_stage_base import BaseCheckStage
 
 
 class AbstentionCheckStage(BaseCheckStage):

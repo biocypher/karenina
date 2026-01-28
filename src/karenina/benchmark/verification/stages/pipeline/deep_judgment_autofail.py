@@ -5,8 +5,8 @@ Auto-fails verification when excerpts are missing for attributes.
 
 import logging
 
-from .autofail_stage_base import BaseAutoFailStage
-from .base import ArtifactKeys, VerificationContext
+from ..core.autofail_stage_base import BaseAutoFailStage
+from ..core.base import ArtifactKeys, VerificationContext
 
 logger = logging.getLogger(__name__)
 

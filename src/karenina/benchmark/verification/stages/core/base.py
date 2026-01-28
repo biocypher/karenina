@@ -20,11 +20,11 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
 
-from ....schemas.domain import Rubric
-from ....schemas.workflow import ModelConfig
+from .....schemas.domain import Rubric
+from .....schemas.workflow import ModelConfig
 
 if TYPE_CHECKING:
-    from ..utils.trace_usage_tracker import UsageTracker
+    from ...utils.trace_usage_tracker import UsageTracker
 
 logger = logging.getLogger(__name__)
 
@@ -508,7 +508,7 @@ class BaseVerificationStage(ABC):
         Returns:
             UsageTracker instance (from context or newly created)
         """
-        from ..utils.trace_usage_tracker import UsageTracker
+        from ...utils.trace_usage_tracker import UsageTracker
 
         usage_tracker: UsageTracker | None = context.get_artifact("usage_tracker")
         if usage_tracker is None:
@@ -558,7 +558,7 @@ class BaseVerificationStage(ABC):
         Returns:
             Formatted model string for display and tracking
         """
-        from ....adapters import format_model_string
+        from .....adapters import format_model_string
 
         return format_model_string(model_config)
 

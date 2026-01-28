@@ -3,9 +3,9 @@
 Validates the Pydantic template syntax and injects question ID.
 """
 
-from ...authoring.answers.generator import inject_question_id_into_answer_class
-from ..utils.template_validation import validate_answer_template
-from .base import ArtifactKeys, BaseVerificationStage, VerificationContext
+from ....authoring.answers.generator import inject_question_id_into_answer_class
+from ...utils.template_validation import validate_answer_template
+from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
 
 class ValidateTemplateStage(BaseVerificationStage):

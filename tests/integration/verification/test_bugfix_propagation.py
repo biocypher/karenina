@@ -16,10 +16,8 @@ from pydantic import Field
 
 from karenina.benchmark.verification.stages import (
     FinalizeResultStage,
-    VerifyTemplateStage,
-)
-from karenina.benchmark.verification.stages.base import (
     VerificationContext,
+    VerifyTemplateStage,
 )
 from karenina.schemas.domain import BaseAnswer, LLMRubricTrait, Rubric
 from karenina.schemas.workflow import ModelConfig

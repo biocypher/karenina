@@ -6,9 +6,9 @@ Detects when LLM responses lack sufficient information to populate a template.
 import logging
 from typing import Any
 
-from ..evaluators import detect_sufficiency
-from .base import ArtifactKeys, VerificationContext
-from .check_stage_base import BaseCheckStage
+from ...evaluators import detect_sufficiency
+from ..core.base import ArtifactKeys, VerificationContext
+from ..core.check_stage_base import BaseCheckStage
 
 # Set up logger
 logger = logging.getLogger(__name__)

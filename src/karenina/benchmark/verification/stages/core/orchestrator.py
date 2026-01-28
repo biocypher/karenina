@@ -6,22 +6,22 @@ Manages stage execution, dependencies, and error handling.
 import logging
 import time
 
-from ....schemas.domain import Rubric
-from ....schemas.workflow import VerificationResult
-from .abstention_check import AbstentionCheckStage
+from .....schemas.domain import Rubric
+from .....schemas.workflow import VerificationResult
+from ..pipeline.abstention_check import AbstentionCheckStage
+from ..pipeline.deep_judgment_autofail import DeepJudgmentAutoFailStage
+from ..pipeline.deep_judgment_rubric_auto_fail import DeepJudgmentRubricAutoFailStage
+from ..pipeline.embedding_check import EmbeddingCheckStage
+from ..pipeline.finalize_result import FinalizeResultStage
+from ..pipeline.generate_answer import GenerateAnswerStage
+from ..pipeline.parse_template import ParseTemplateStage
+from ..pipeline.recursion_limit_autofail import RecursionLimitAutoFailStage
+from ..pipeline.rubric_evaluation import RubricEvaluationStage
+from ..pipeline.sufficiency_check import SufficiencyCheckStage
+from ..pipeline.trace_validation_autofail import TraceValidationAutoFailStage
+from ..pipeline.validate_template import ValidateTemplateStage
+from ..pipeline.verify_template import VerifyTemplateStage
 from .base import ArtifactKeys, StageList, StageRegistry, VerificationContext
-from .deep_judgment_autofail import DeepJudgmentAutoFailStage
-from .deep_judgment_rubric_auto_fail import DeepJudgmentRubricAutoFailStage
-from .embedding_check import EmbeddingCheckStage
-from .finalize_result import FinalizeResultStage
-from .generate_answer import GenerateAnswerStage
-from .parse_template import ParseTemplateStage
-from .recursion_limit_autofail import RecursionLimitAutoFailStage
-from .rubric_evaluation import RubricEvaluationStage
-from .sufficiency_check import SufficiencyCheckStage
-from .trace_validation_autofail import TraceValidationAutoFailStage
-from .validate_template import ValidateTemplateStage
-from .verify_template import VerifyTemplateStage
 
 # Set up logger
 logger = logging.getLogger(__name__)

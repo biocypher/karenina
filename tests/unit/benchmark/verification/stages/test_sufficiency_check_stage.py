@@ -15,9 +15,9 @@ from unittest.mock import patch
 import pytest
 from pydantic import Field
 
-from karenina.benchmark.verification.stages.base import VerificationContext
-from karenina.benchmark.verification.stages.sufficiency_check import (
+from karenina.benchmark.verification.stages import (
     SufficiencyCheckStage,
+    VerificationContext,
 )
 from karenina.schemas.domain import BaseAnswer
 from karenina.schemas.workflow import ModelConfig
@@ -187,7 +187,9 @@ class TestSufficiencyCheckStageExecute:
         minimal_context.set_artifact("raw_llm_response", "The capital of France is Paris.")
         minimal_context.set_artifact("Answer", sample_answer_class)
 
-        with patch("karenina.benchmark.verification.stages.sufficiency_check.detect_sufficiency") as mock_detect:
+        with patch(
+            "karenina.benchmark.verification.stages.pipeline.sufficiency_check.detect_sufficiency"
+        ) as mock_detect:
             mock_detect.return_value = (
                 True,  # sufficient
                 True,  # check_performed
@@ -219,7 +221,9 @@ class TestSufficiencyCheckStageExecute:
         minimal_context.set_artifact("raw_llm_response", "I don't know.")
         minimal_context.set_artifact("Answer", sample_answer_class)
 
-        with patch("karenina.benchmark.verification.stages.sufficiency_check.detect_sufficiency") as mock_detect:
+        with patch(
+            "karenina.benchmark.verification.stages.pipeline.sufficiency_check.detect_sufficiency"
+        ) as mock_detect:
             mock_detect.return_value = (
                 False,  # sufficient=False (insufficient)
                 True,  # check_performed
@@ -246,7 +250,9 @@ class TestSufficiencyCheckStageExecute:
         minimal_context.set_artifact("raw_llm_response", "Some response.")
         minimal_context.set_artifact("Answer", sample_answer_class)
 
-        with patch("karenina.benchmark.verification.stages.sufficiency_check.detect_sufficiency") as mock_detect:
+        with patch(
+            "karenina.benchmark.verification.stages.pipeline.sufficiency_check.detect_sufficiency"
+        ) as mock_detect:
             mock_detect.return_value = (
                 True,  # sufficient (default on failure)
                 False,  # check_performed=False (failed)
@@ -273,7 +279,9 @@ class TestSufficiencyCheckStageExecute:
         minimal_context.set_artifact("raw_llm_response", "Paris")
         minimal_context.set_artifact("Answer", sample_answer_class)
 
-        with patch("karenina.benchmark.verification.stages.sufficiency_check.detect_sufficiency") as mock_detect:
+        with patch(
+            "karenina.benchmark.verification.stages.pipeline.sufficiency_check.detect_sufficiency"
+        ) as mock_detect:
             mock_detect.return_value = (
                 True,
                 True,
@@ -330,7 +338,9 @@ class TestSufficiencyCheckStageSemantics:
         minimal_context.set_artifact("raw_llm_response", "Paris")
         minimal_context.set_artifact("Answer", sample_answer_class)
 
-        with patch("karenina.benchmark.verification.stages.sufficiency_check.detect_sufficiency") as mock_detect:
+        with patch(
+            "karenina.benchmark.verification.stages.pipeline.sufficiency_check.detect_sufficiency"
+        ) as mock_detect:
             mock_detect.return_value = (True, True, "OK", {})
 
             stage = SufficiencyCheckStage()
@@ -349,7 +359,9 @@ class TestSufficiencyCheckStageSemantics:
         minimal_context.set_artifact("raw_llm_response", "I don't know")
         minimal_context.set_artifact("Answer", sample_answer_class)
 
-        with patch("karenina.benchmark.verification.stages.sufficiency_check.detect_sufficiency") as mock_detect:
+        with patch(
+            "karenina.benchmark.verification.stages.pipeline.sufficiency_check.detect_sufficiency"
+        ) as mock_detect:
             mock_detect.return_value = (False, True, "Insufficient", {})
 
             stage = SufficiencyCheckStage()

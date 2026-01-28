@@ -8,8 +8,7 @@ from typing import Any
 from ...schemas.domain import Rubric
 from ...schemas.workflow import ModelConfig, VerificationResult
 from ...utils.checkpoint import generate_template_id
-from .stages.base import VerificationContext
-from .stages.orchestrator import StageOrchestrator
+from .stages import StageOrchestrator, VerificationContext
 
 
 def run_single_model_verification(
