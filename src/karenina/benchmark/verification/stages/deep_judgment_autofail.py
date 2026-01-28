@@ -6,7 +6,7 @@ Auto-fails verification when excerpts are missing for attributes.
 import logging
 
 from .autofail_stage_base import BaseAutoFailStage
-from .base import VerificationContext
+from .base import ArtifactKeys, VerificationContext
 
 logger = logging.getLogger(__name__)
 
@@ -55,10 +55,10 @@ class DeepJudgmentAutoFailStage(BaseAutoFailStage):
     def requires(self) -> list[str]:
         """Artifacts required by this stage."""
         return [
-            "deep_judgment_performed",
-            "attributes_without_excerpts",
-            "verify_result",
-            "field_verification_result",
+            ArtifactKeys.DEEP_JUDGMENT_PERFORMED,
+            ArtifactKeys.ATTRIBUTES_WITHOUT_EXCERPTS,
+            ArtifactKeys.VERIFY_RESULT,
+            ArtifactKeys.FIELD_VERIFICATION_RESULT,
         ]
 
     def should_run(self, context: VerificationContext) -> bool:
@@ -72,8 +72,8 @@ class DeepJudgmentAutoFailStage(BaseAutoFailStage):
         if not super().should_run(context):
             return False
 
-        deep_judgment_performed = context.get_artifact("deep_judgment_performed", False)
-        attributes_without_excerpts = context.get_artifact("attributes_without_excerpts")
+        deep_judgment_performed = context.get_artifact(ArtifactKeys.DEEP_JUDGMENT_PERFORMED, False)
+        attributes_without_excerpts = context.get_artifact(ArtifactKeys.ATTRIBUTES_WITHOUT_EXCERPTS)
 
         return (
             deep_judgment_performed and attributes_without_excerpts is not None and len(attributes_without_excerpts) > 0
@@ -85,13 +85,13 @@ class DeepJudgmentAutoFailStage(BaseAutoFailStage):
 
         If abstention was detected, verification is already failed for a better reason.
         """
-        abstention_detected = context.get_artifact("abstention_detected")
-        abstention_check_performed = context.get_artifact("abstention_check_performed")
+        abstention_detected = context.get_artifact(ArtifactKeys.ABSTENTION_DETECTED)
+        abstention_check_performed = context.get_artifact(ArtifactKeys.ABSTENTION_CHECK_PERFORMED)
         return bool(abstention_detected and abstention_check_performed)
 
     def _get_autofail_reason(self, context: VerificationContext) -> str:
         """Get the auto-fail reason message."""
-        attributes_without_excerpts = context.get_artifact("attributes_without_excerpts")
+        attributes_without_excerpts = context.get_artifact(ArtifactKeys.ATTRIBUTES_WITHOUT_EXCERPTS)
         return (
             f"{len(attributes_without_excerpts)} attributes without excerpts: {', '.join(attributes_without_excerpts)}"
         )

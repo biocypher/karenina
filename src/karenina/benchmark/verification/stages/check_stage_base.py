@@ -9,7 +9,7 @@ import logging
 from abc import abstractmethod
 from typing import Any
 
-from .base import BaseVerificationStage, VerificationContext
+from .base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
 logger = logging.getLogger(__name__)
 
@@ -144,8 +144,8 @@ class BaseCheckStage(BaseVerificationStage):
             override_applied = True
 
             # Update stored result
-            context.set_artifact("verify_result", verification_result)
-            context.set_result_field("verify_result", verification_result)
+            context.set_artifact(ArtifactKeys.VERIFY_RESULT, verification_result)
+            context.set_result_field(ArtifactKeys.VERIFY_RESULT, verification_result)
 
             logger.warning(f"{self.name} triggered for question {context.question_id} - overriding result to False")
 
@@ -156,4 +156,4 @@ class BaseCheckStage(BaseVerificationStage):
         self.set_artifact_and_result(context, f"{prefix}_reasoning", reasoning)
 
         # Store updated usage tracker for next stages (artifact only)
-        context.set_artifact("usage_tracker", usage_tracker)
+        context.set_artifact(ArtifactKeys.USAGE_TRACKER, usage_tracker)

@@ -13,7 +13,7 @@ Auto-fail stages follow a common pattern:
 import logging
 from abc import abstractmethod
 
-from .base import BaseVerificationStage, VerificationContext
+from .base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
 logger = logging.getLogger(__name__)
 
@@ -131,9 +131,9 @@ class BaseAutoFailStage(BaseVerificationStage):
         field_verification_result = False
 
         # Update stored results
-        context.set_artifact("verify_result", verification_result)
-        context.set_artifact("field_verification_result", field_verification_result)
-        context.set_result_field("verify_result", verification_result)
+        context.set_artifact(ArtifactKeys.VERIFY_RESULT, verification_result)
+        context.set_artifact(ArtifactKeys.FIELD_VERIFICATION_RESULT, field_verification_result)
+        context.set_result_field(ArtifactKeys.VERIFY_RESULT, verification_result)
 
         # Set any additional fields (subclass-specific)
         self._set_additional_failure_fields(context)

@@ -4,7 +4,7 @@ Auto-fails verification when agent hits recursion limit.
 """
 
 from .autofail_stage_base import BaseAutoFailStage
-from .base import VerificationContext
+from .base import ArtifactKeys, VerificationContext
 
 
 class RecursionLimitAutoFailStage(BaseAutoFailStage):
@@ -43,7 +43,7 @@ class RecursionLimitAutoFailStage(BaseAutoFailStage):
     @property
     def requires(self) -> list[str]:
         """Artifacts required by this stage."""
-        return ["recursion_limit_reached"]
+        return [ArtifactKeys.RECURSION_LIMIT_REACHED]
 
     def should_run(self, context: VerificationContext) -> bool:
         """
@@ -54,7 +54,7 @@ class RecursionLimitAutoFailStage(BaseAutoFailStage):
         if not super().should_run(context):
             return False
 
-        recursion_limit_reached = context.get_artifact("recursion_limit_reached", False)
+        recursion_limit_reached = context.get_artifact(ArtifactKeys.RECURSION_LIMIT_REACHED, False)
         return recursion_limit_reached is True
 
     def _should_skip_due_to_prior_failure(self, context: VerificationContext) -> bool:  # noqa: ARG002

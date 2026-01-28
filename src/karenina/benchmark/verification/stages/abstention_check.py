@@ -6,7 +6,7 @@ Detects when LLMs refuse to answer or abstain from responding.
 from typing import Any
 
 from ..evaluators import detect_abstention
-from .base import VerificationContext
+from .base import ArtifactKeys, VerificationContext
 from .check_stage_base import BaseCheckStage
 
 
@@ -55,7 +55,7 @@ class AbstentionCheckStage(BaseCheckStage):
         """Artifacts required by this stage."""
         # Only requires raw_llm_response - verify_result is optional
         # In rubric_only mode, verify_result may not exist yet
-        return ["raw_llm_response"]
+        return [ArtifactKeys.RAW_LLM_RESPONSE]
 
     def should_run(self, context: VerificationContext) -> bool:
         """Run only if abstention detection is enabled and no recursion limit hit.
@@ -65,7 +65,7 @@ class AbstentionCheckStage(BaseCheckStage):
         if not super().should_run(context):
             return False
         # Skip if recursion limit was reached (response is truncated/unreliable)
-        if context.get_artifact("recursion_limit_reached", False):
+        if context.get_artifact(ArtifactKeys.RECURSION_LIMIT_REACHED, False):
             return False
         return context.abstention_enabled
 
@@ -78,7 +78,7 @@ class AbstentionCheckStage(BaseCheckStage):
         context: VerificationContext,
     ) -> tuple[bool | None, bool, str | None, dict[str, Any] | None]:
         """Detect abstention in the raw LLM response."""
-        raw_llm_response = context.get_artifact("raw_llm_response")
+        raw_llm_response = context.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
 
         return detect_abstention(
             raw_llm_response=raw_llm_response,

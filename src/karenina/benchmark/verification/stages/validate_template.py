@@ -5,7 +5,7 @@ Validates the Pydantic template syntax and injects question ID.
 
 from ...authoring.answers.generator import inject_question_id_into_answer_class
 from ..utils.template_validation import validate_answer_template
-from .base import BaseVerificationStage, VerificationContext
+from .base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
 
 class ValidateTemplateStage(BaseVerificationStage):
@@ -38,7 +38,7 @@ class ValidateTemplateStage(BaseVerificationStage):
     @property
     def produces(self) -> list[str]:
         """Artifacts produced by this stage."""
-        return ["RawAnswer", "Answer", "template_validation_error"]
+        return [ArtifactKeys.RAW_ANSWER, ArtifactKeys.ANSWER, ArtifactKeys.TEMPLATE_VALIDATION_ERROR]
 
     def should_run(self, context: VerificationContext) -> bool:  # noqa: ARG002
         """Always run - this is the first stage."""
@@ -65,15 +65,15 @@ class ValidateTemplateStage(BaseVerificationStage):
             # Template validation failed - mark error and stop pipeline
             error_message = f"Template validation failed: {error_msg}"
             context.mark_error(error_message)
-            context.set_artifact("template_validation_error", error_message)
+            context.set_artifact(ArtifactKeys.TEMPLATE_VALIDATION_ERROR, error_message)
             return
 
         # Store the validated RawAnswer class
-        context.set_artifact("RawAnswer", RawAnswer)
+        context.set_artifact(ArtifactKeys.RAW_ANSWER, RawAnswer)
 
         # Inject question ID into the Answer class
         Answer = inject_question_id_into_answer_class(RawAnswer, context.question_id)
-        context.set_artifact("Answer", Answer)
+        context.set_artifact(ArtifactKeys.ANSWER, Answer)
 
         # Mark validation as successful
-        context.set_artifact("template_validation_error", None)
+        context.set_artifact(ArtifactKeys.TEMPLATE_VALIDATION_ERROR, None)

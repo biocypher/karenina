@@ -9,7 +9,7 @@ import time
 from ....schemas.domain import Rubric
 from ....schemas.workflow import VerificationResult
 from .abstention_check import AbstentionCheckStage
-from .base import StageList, StageRegistry, VerificationContext
+from .base import ArtifactKeys, StageList, StageRegistry, VerificationContext
 from .deep_judgment_autofail import DeepJudgmentAutoFailStage
 from .deep_judgment_rubric_auto_fail import DeepJudgmentRubricAutoFailStage
 from .embedding_check import EmbeddingCheckStage
@@ -210,7 +210,7 @@ class StageOrchestrator:
         # Initialize timing
         start_time = time.time()
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-        context.set_result_field("timestamp", timestamp)
+        context.set_result_field(ArtifactKeys.TIMESTAMP, timestamp)
 
         # Validate dependencies before execution
         errors = self.validate_dependencies()
@@ -245,10 +245,10 @@ class StageOrchestrator:
 
             # Update execution time after each stage so FinalizeResultStage has access to it
             execution_time = time.time() - start_time
-            context.set_result_field("execution_time", execution_time)
+            context.set_result_field(ArtifactKeys.EXECUTION_TIME, execution_time)
 
         # Extract final result
-        final_result = context.get_artifact("final_result")
+        final_result = context.get_artifact(ArtifactKeys.FINAL_RESULT)
         if final_result is None:
             error_msg = "FinalizeResultStage did not produce a final_result"
             logger.error(error_msg)
