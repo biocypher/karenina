@@ -24,6 +24,7 @@ class VerifyTemplateStage(BaseVerificationStage):
     Requires:
         - "parsed_answer": Parsed Pydantic object
         - "raw_llm_response": Raw LLM response text (for regex validation)
+        - "template_evaluator": TemplateEvaluator instance (created by ParseTemplateStage)
 
     Produces:
         - "field_verification_result": Boolean result of field verification
@@ -46,7 +47,7 @@ class VerifyTemplateStage(BaseVerificationStage):
     @property
     def requires(self) -> list[str]:
         """Artifacts required by this stage."""
-        return ["parsed_answer", "raw_llm_response"]
+        return ["parsed_answer", "raw_llm_response", "template_evaluator"]
 
     @property
     def produces(self) -> list[str]:
@@ -87,43 +88,34 @@ class VerifyTemplateStage(BaseVerificationStage):
         parsed_answer = context.get_artifact("parsed_answer")
         raw_llm_response = context.get_artifact("raw_llm_response")
 
-        # Get evaluator from context (created by ParseTemplateStage) or use parsed_answer directly
+        # Get evaluator from context (always created by ParseTemplateStage)
+        # ParseTemplateStage always sets template_evaluator when it succeeds,
+        # and if it fails, context.error is set so VerifyTemplateStage won't run.
         evaluator = context.get_artifact("template_evaluator")
+        if evaluator is None:
+            error_msg = "template_evaluator not found in context - ParseTemplateStage must run first"
+            logger.error(error_msg)
+            context.mark_error(error_msg)
+            return
 
         try:
-            if evaluator is not None:
-                # Use evaluator methods for consistency
-                field_result = evaluator.verify_fields(parsed_answer)
-                regex_result = evaluator.verify_regex(parsed_answer, raw_llm_response)
+            # Use evaluator methods for verification
+            field_result = evaluator.verify_fields(parsed_answer)
+            regex_result = evaluator.verify_regex(parsed_answer, raw_llm_response)
 
-                field_verification_result = field_result.success
-                regex_verification_results = {
-                    "success": regex_result.success,
-                    "results": regex_result.results,
-                    "details": regex_result.details,
-                }
-                regex_extraction_results = regex_result.extraction_results
+            field_verification_result = field_result.success
+            regex_verification_results = {
+                "success": regex_result.success,
+                "results": regex_result.results,
+                "details": regex_result.details,
+            }
+            regex_extraction_results = regex_result.extraction_results
 
-                # Check for errors
-                if field_result.error:
-                    logger.warning(f"Field verification error: {field_result.error}")
-                if regex_result.error:
-                    logger.warning(f"Regex verification error: {regex_result.error}")
-            else:
-                # Fallback: call methods directly on parsed_answer (backwards compatibility)
-                logger.debug("No evaluator in context, using parsed_answer methods directly")
-
-                # Step 1: Field verification
-                field_verification_result = parsed_answer.verify()
-
-                # Step 2: Regex verification on raw trace
-                regex_verification_results = parsed_answer.verify_regex(raw_llm_response)
-
-                # Step 3: Extract regex results for display
-                regex_extraction_results = {}
-                if regex_verification_results["details"]:
-                    for field_name, details in regex_verification_results["details"].items():
-                        regex_extraction_results[field_name] = details.get("matches_found", [])
+            # Check for errors
+            if field_result.error:
+                logger.warning(f"Field verification error: {field_result.error}")
+            if regex_result.error:
+                logger.warning(f"Regex verification error: {regex_result.error}")
 
             # Step 4: Combine field and regex verification results
             verification_result = field_verification_result and regex_verification_results["success"]
