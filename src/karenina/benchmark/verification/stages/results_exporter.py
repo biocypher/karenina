@@ -32,7 +32,12 @@ from ....schemas.workflow import VerificationJob, VerificationResultSet
 
 
 class HasTraitNames(Protocol):
-    """Protocol for objects that can provide trait names."""
+    """Protocol for objects that can provide trait names.
+
+    This protocol is local to results_exporter.py and defines the interface
+    for rubric objects that can list their trait names for CSV export.
+    It is not used elsewhere in the codebase.
+    """
 
     def get_trait_names(self) -> list[str]:
         """Get list of trait names from the rubric."""
@@ -436,9 +441,11 @@ def export_verification_results_csv(
                 template.parsed_llm_response if template else None, metadata.question_id, "parsed_llm_response"
             ),
             "template_verification_performed": template.template_verification_performed if template else False,
-            "verify_result": _serialize_verification_result(template.verify_result if template else None),
+            "verify_result": _serialize_verification_result(
+                template.verify_result if template else None, metadata.question_id, "verify_result"
+            ),
             "verify_granular_result": _serialize_verification_result(
-                template.verify_granular_result if template else None
+                template.verify_granular_result if template else None, metadata.question_id, "verify_granular_result"
             ),
             "answering_system_prompt": metadata.answering_system_prompt or "",
             "parsing_system_prompt": metadata.parsing_system_prompt or "",
@@ -596,12 +603,20 @@ def export_verification_results_csv(
     return output.getvalue()
 
 
-def _serialize_verification_result(result: Any) -> str:
+def _serialize_verification_result(
+    result: Any, question_id: str = "unknown", field_name: str = "verification_result"
+) -> str:
     """
     Serialize verification result to string for export.
 
+    This is a specialized wrapper around _safe_json_serialize that handles
+    Pydantic models by converting them to dicts first. Used specifically
+    for verify_result and verify_granular_result fields.
+
     Args:
         result: The verification result (can be any type)
+        question_id: The question ID for logging context (optional)
+        field_name: The field name for logging context (optional)
 
     Returns:
         String representation of the result
@@ -609,22 +624,17 @@ def _serialize_verification_result(result: Any) -> str:
     if result is None:
         return ""
 
-    try:
-        # Try to serialize as JSON if it's a complex object
-        if isinstance(result, dict | list):
-            return json.dumps(result)
-        elif hasattr(result, "model_dump"):
-            # Pydantic model
-            return json.dumps(result.model_dump())
-        elif hasattr(result, "dict"):
-            # Pydantic model (older version)
-            return json.dumps(result.dict())
-        else:
-            # Simple types or string representation
-            return str(result)
-    except Exception:
-        # Fallback to string representation
-        return str(result)
+    # Convert Pydantic models to dict before serializing
+    data_to_serialize = result
+    if hasattr(result, "model_dump"):
+        # Pydantic v2 model
+        data_to_serialize = result.model_dump()
+    elif hasattr(result, "dict"):
+        # Pydantic v1 model (legacy)
+        data_to_serialize = result.dict()
+
+    # Delegate to _safe_json_serialize for consistent handling
+    return _safe_json_serialize(data_to_serialize, question_id, field_name)
 
 
 def create_export_filename(job: VerificationJob, format: str) -> str:
