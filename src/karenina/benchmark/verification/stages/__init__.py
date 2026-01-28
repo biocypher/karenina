@@ -44,6 +44,10 @@ from .base import (
 )
 from .check_stage_base import BaseCheckStage
 from .deep_judgment_autofail import DeepJudgmentAutoFailStage
+from .deep_judgment_helpers import (
+    apply_deep_judgment_config_to_traits,
+    resolve_deep_judgment_config_for_trait,
+)
 from .deep_judgment_rubric_auto_fail import DeepJudgmentRubricAutoFailStage
 from .embedding_check import EmbeddingCheckStage
 from .finalize_result import FinalizeResultStage
@@ -87,6 +91,9 @@ __all__ = [
     "DeepJudgmentRubricAutoFailStage",
     "RubricEvaluationStage",
     "FinalizeResultStage",
+    # Helper functions
+    "resolve_deep_judgment_config_for_trait",
+    "apply_deep_judgment_config_to_traits",
     # Export functions
     "export_verification_results_csv",
     "export_verification_results_json",
