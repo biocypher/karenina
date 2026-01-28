@@ -6,7 +6,6 @@ Detects when LLMs refuse to answer or abstain from responding.
 import logging
 
 from ..evaluators import detect_abstention
-from ..utils import UsageTracker
 from .base import BaseVerificationStage, VerificationContext
 
 # Set up logger
@@ -91,11 +90,8 @@ class AbstentionCheckStage(BaseVerificationStage):
         """
         raw_llm_response = context.get_artifact("raw_llm_response")
 
-        # Retrieve usage tracker from previous stage or initialize new one
-        usage_tracker = context.get_artifact("usage_tracker")
-        if usage_tracker is None:
-            usage_tracker = UsageTracker()
-            logger.warning("No usage tracker found in context, initializing new one")
+        # Retrieve usage tracker from previous stage or create new one
+        usage_tracker = self.get_or_create_usage_tracker(context)
 
         # Build model string for tracking (centralized via adapter registry)
         from karenina.adapters import format_model_string

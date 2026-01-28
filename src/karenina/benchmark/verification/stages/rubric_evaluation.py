@@ -9,7 +9,7 @@ from typing import Any
 from ....schemas.domain import LLMRubricTrait
 from ....schemas.workflow.verification.config import DeepJudgmentTraitConfig
 from ..evaluators import RubricEvaluator
-from ..utils import UsageTracker, extract_final_ai_message
+from ..utils import extract_final_ai_message
 from .base import BaseVerificationStage, VerificationContext
 
 # Set up logger
@@ -243,11 +243,8 @@ class RubricEvaluationStage(BaseVerificationStage):
         raw_llm_response = context.get_artifact("raw_llm_response")
         rubric = context.rubric
 
-        # Retrieve usage tracker from previous stage or initialize new one
-        usage_tracker = context.get_artifact("usage_tracker")
-        if usage_tracker is None:
-            usage_tracker = UsageTracker()
-            logger.warning("No usage tracker found in context, initializing new one")
+        # Retrieve usage tracker from previous stage or create new one
+        usage_tracker = self.get_or_create_usage_tracker(context)
 
         # Determine what input to pass to rubric evaluation based on config
         use_full_trace = context.use_full_trace_for_rubric

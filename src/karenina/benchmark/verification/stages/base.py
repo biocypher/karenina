@@ -6,12 +6,18 @@ This module provides the core abstractions for the modular verification pipeline
 - StageRegistry: Manages stage instances and dependencies
 """
 
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from ....schemas.domain import Rubric
 from ....schemas.workflow import ModelConfig
+
+if TYPE_CHECKING:
+    from ..utils.trace_usage_tracker import UsageTracker
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -314,6 +320,27 @@ class BaseVerificationStage(ABC):
             context: Verification context (modified in-place)
         """
         pass
+
+    def get_or_create_usage_tracker(self, context: VerificationContext) -> "UsageTracker":
+        """
+        Retrieve UsageTracker from context or create a new one.
+
+        This helper consolidates the common pattern of retrieving the usage tracker
+        from the 'usage_tracker' artifact, or creating a new one if it doesn't exist.
+
+        Args:
+            context: Verification context
+
+        Returns:
+            UsageTracker instance (from context or newly created)
+        """
+        from ..utils.trace_usage_tracker import UsageTracker
+
+        usage_tracker: UsageTracker | None = context.get_artifact("usage_tracker")
+        if usage_tracker is None:
+            usage_tracker = UsageTracker()
+            logger.warning("No usage tracker found in context, initializing new one")
+        return usage_tracker
 
     def __repr__(self) -> str:
         """String representation for debugging."""

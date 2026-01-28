@@ -7,7 +7,6 @@ import logging
 from typing import Any
 
 from ..evaluators import TemplateEvaluator
-from ..utils import UsageTracker
 from .base import BaseVerificationStage, VerificationContext
 
 # Set up logger
@@ -112,11 +111,8 @@ class ParseTemplateStage(BaseVerificationStage):
         Answer = context.get_artifact("Answer")
         RawAnswer = context.get_artifact("RawAnswer")
 
-        # Retrieve usage tracker from previous stage or initialize new one
-        usage_tracker = context.get_artifact("usage_tracker")
-        if usage_tracker is None:
-            usage_tracker = UsageTracker()
-            logger.warning("No usage tracker found in context, initializing new one")
+        # Retrieve usage tracker from previous stage or create new one
+        usage_tracker = self.get_or_create_usage_tracker(context)
 
         # Determine what input to pass to template parsing based on config
         use_full_trace = context.use_full_trace_for_template

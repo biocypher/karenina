@@ -7,7 +7,6 @@ import logging
 from typing import Any
 
 from ..evaluators import detect_sufficiency
-from ..utils import UsageTracker
 from .base import BaseVerificationStage, VerificationContext
 
 # Set up logger
@@ -99,11 +98,8 @@ class SufficiencyCheckStage(BaseVerificationStage):
         raw_llm_response = context.get_artifact("raw_llm_response")
         Answer = context.get_artifact("Answer")
 
-        # Retrieve usage tracker from previous stage or initialize new one
-        usage_tracker = context.get_artifact("usage_tracker")
-        if usage_tracker is None:
-            usage_tracker = UsageTracker()
-            logger.warning("No usage tracker found in context, initializing new one")
+        # Retrieve usage tracker from previous stage or create new one
+        usage_tracker = self.get_or_create_usage_tracker(context)
 
         # Build model string for tracking (centralized via adapter registry)
         from karenina.adapters import format_model_string
