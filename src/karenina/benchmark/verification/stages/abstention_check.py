@@ -124,17 +124,11 @@ class AbstentionCheckStage(BaseVerificationStage):
 
             logger.info(f"Abstention detected for question {context.question_id} - overriding result to False")
 
-        # Store abstention metadata
-        context.set_artifact("abstention_check_performed", abstention_check_performed)
-        context.set_artifact("abstention_detected", abstention_detected)
-        context.set_artifact("abstention_override_applied", abstention_override_applied)
-        context.set_artifact("abstention_reasoning", abstention_reasoning)
+        # Store abstention metadata (both artifact and result field)
+        self.set_artifact_and_result(context, "abstention_check_performed", abstention_check_performed)
+        self.set_artifact_and_result(context, "abstention_detected", abstention_detected)
+        self.set_artifact_and_result(context, "abstention_override_applied", abstention_override_applied)
+        self.set_artifact_and_result(context, "abstention_reasoning", abstention_reasoning)
 
-        # Store updated usage tracker for next stages
+        # Store updated usage tracker for next stages (artifact only)
         context.set_artifact("usage_tracker", usage_tracker)
-
-        # Store in result builder
-        context.set_result_field("abstention_check_performed", abstention_check_performed)
-        context.set_result_field("abstention_detected", abstention_detected)
-        context.set_result_field("abstention_override_applied", abstention_override_applied)
-        context.set_result_field("abstention_reasoning", abstention_reasoning)

@@ -130,14 +130,8 @@ class EmbeddingCheckStage(BaseVerificationStage):
                 f"(similarity: {similarity_score:.3f})"
             )
 
-        # Store embedding metadata
-        context.set_artifact("embedding_check_performed", embedding_check_performed)
-        context.set_artifact("embedding_similarity_score", embedding_similarity_score)
-        context.set_artifact("embedding_model_used", embedding_model_used)
-        context.set_artifact("embedding_override_applied", embedding_override_applied)
-
-        # Store in result builder
-        context.set_result_field("embedding_check_performed", embedding_check_performed)
-        context.set_result_field("embedding_similarity_score", embedding_similarity_score)
-        context.set_result_field("embedding_override_applied", embedding_override_applied)
-        context.set_result_field("embedding_model_used", embedding_model_used)
+        # Store embedding metadata (both artifact and result field)
+        self.set_artifact_and_result(context, "embedding_check_performed", embedding_check_performed)
+        self.set_artifact_and_result(context, "embedding_similarity_score", embedding_similarity_score)
+        self.set_artifact_and_result(context, "embedding_model_used", embedding_model_used)
+        self.set_artifact_and_result(context, "embedding_override_applied", embedding_override_applied)

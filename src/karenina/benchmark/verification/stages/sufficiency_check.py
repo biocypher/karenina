@@ -113,14 +113,10 @@ class SufficiencyCheckStage(BaseVerificationStage):
         except Exception as e:
             logger.warning(f"Failed to get JSON schema from Answer class: {e}")
             # Cannot perform check without schema, mark as not performed
-            context.set_artifact("sufficiency_check_performed", False)
-            context.set_artifact("sufficiency_detected", None)
-            context.set_artifact("sufficiency_override_applied", False)
-            context.set_artifact("sufficiency_reasoning", None)
-            context.set_result_field("sufficiency_check_performed", False)
-            context.set_result_field("sufficiency_detected", None)
-            context.set_result_field("sufficiency_override_applied", False)
-            context.set_result_field("sufficiency_reasoning", None)
+            self.set_artifact_and_result(context, "sufficiency_check_performed", False)
+            self.set_artifact_and_result(context, "sufficiency_detected", None)
+            self.set_artifact_and_result(context, "sufficiency_override_applied", False)
+            self.set_artifact_and_result(context, "sufficiency_reasoning", None)
             return
 
         # Detect sufficiency
@@ -149,17 +145,13 @@ class SufficiencyCheckStage(BaseVerificationStage):
 
             logger.info(f"Insufficient response for question {context.question_id} - overriding result to False")
 
-        # Store sufficiency metadata
-        context.set_artifact("sufficiency_check_performed", sufficiency_check_performed)
-        context.set_artifact("sufficiency_detected", sufficient)  # True = sufficient, False = insufficient
-        context.set_artifact("sufficiency_override_applied", sufficiency_override_applied)
-        context.set_artifact("sufficiency_reasoning", sufficiency_reasoning)
+        # Store sufficiency metadata (both artifact and result field)
+        self.set_artifact_and_result(context, "sufficiency_check_performed", sufficiency_check_performed)
+        self.set_artifact_and_result(
+            context, "sufficiency_detected", sufficient
+        )  # True = sufficient, False = insufficient
+        self.set_artifact_and_result(context, "sufficiency_override_applied", sufficiency_override_applied)
+        self.set_artifact_and_result(context, "sufficiency_reasoning", sufficiency_reasoning)
 
-        # Store updated usage tracker for next stages
+        # Store updated usage tracker for next stages (artifact only)
         context.set_artifact("usage_tracker", usage_tracker)
-
-        # Store in result builder
-        context.set_result_field("sufficiency_check_performed", sufficiency_check_performed)
-        context.set_result_field("sufficiency_detected", sufficient)
-        context.set_result_field("sufficiency_override_applied", sufficiency_override_applied)
-        context.set_result_field("sufficiency_reasoning", sufficiency_reasoning)

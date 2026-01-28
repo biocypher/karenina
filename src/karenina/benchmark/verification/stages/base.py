@@ -342,6 +342,26 @@ class BaseVerificationStage(ABC):
             logger.warning("No usage tracker found in context, initializing new one")
         return usage_tracker
 
+    def set_artifact_and_result(self, context: VerificationContext, key: str, value: Any) -> None:
+        """
+        Set both artifact and result field with the same key/value.
+
+        This helper consolidates the common pattern of setting both
+        context.set_artifact(key, value) and context.set_result_field(key, value)
+        with identical key and value parameters.
+
+        Use this when the same data needs to be available as both:
+        - An artifact (for subsequent stages to read)
+        - A result field (for inclusion in the final VerificationResult)
+
+        Args:
+            context: Verification context
+            key: The key for both artifact and result field
+            value: The value to store
+        """
+        context.set_artifact(key, value)
+        context.set_result_field(key, value)
+
     def __repr__(self) -> str:
         """String representation for debugging."""
         return f"{self.__class__.__name__}(name={self.name})"

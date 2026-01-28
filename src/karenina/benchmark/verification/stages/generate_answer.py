@@ -108,22 +108,17 @@ class GenerateAnswerStage(BaseVerificationStage):
             usage_metadata = context.cached_answer_data.get("usage_metadata")
             agent_metrics = context.cached_answer_data.get("agent_metrics")
 
-            # Store cached data in context
-            context.set_artifact("raw_llm_response", raw_llm_response)
-            context.set_artifact("recursion_limit_reached", recursion_limit_reached)
-            context.set_artifact("answering_mcp_servers", answering_mcp_servers)
-
             # Build model string for result (centralized via adapter registry)
             from karenina.adapters import format_model_string
 
             answering_model = context.answering_model
             answering_model_str = format_model_string(answering_model)
-            context.set_artifact("answering_model_str", answering_model_str)
 
-            # Set result fields
-            context.set_result_field("raw_llm_response", raw_llm_response)
-            context.set_result_field("recursion_limit_reached", recursion_limit_reached)
-            context.set_result_field("answering_mcp_servers", answering_mcp_servers)
+            # Store cached data in context (both artifact and result field)
+            self.set_artifact_and_result(context, "raw_llm_response", raw_llm_response)
+            self.set_artifact_and_result(context, "recursion_limit_reached", recursion_limit_reached)
+            self.set_artifact_and_result(context, "answering_mcp_servers", answering_mcp_servers)
+            context.set_artifact("answering_model_str", answering_model_str)
 
             # Handle usage tracking for cached answers
             usage_tracker = UsageTracker()
@@ -299,14 +294,10 @@ class GenerateAnswerStage(BaseVerificationStage):
             context.set_artifact("recursion_limit_reached", False)
             return
 
-        # Store results
-        context.set_artifact("raw_llm_response", raw_llm_response)
-        context.set_artifact("recursion_limit_reached", recursion_limit_reached)
+        # Store results (both artifact and result field)
+        self.set_artifact_and_result(context, "raw_llm_response", raw_llm_response)
+        self.set_artifact_and_result(context, "recursion_limit_reached", recursion_limit_reached)
+        self.set_artifact_and_result(context, "answering_mcp_servers", answering_mcp_servers)
 
-        # Store usage tracker for next stages to continue tracking
+        # Store usage tracker for next stages to continue tracking (artifact only)
         context.set_artifact("usage_tracker", usage_tracker)
-
-        # Also store in result builder for easy access
-        context.set_result_field("raw_llm_response", raw_llm_response)
-        context.set_result_field("recursion_limit_reached", recursion_limit_reached)
-        context.set_result_field("answering_mcp_servers", answering_mcp_servers)
