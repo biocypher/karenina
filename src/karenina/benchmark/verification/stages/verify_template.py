@@ -5,7 +5,7 @@ Verifies parsed response matches template (field + regex validation).
 
 import logging
 
-from .base import BaseVerificationStage, VerificationContext
+from .base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -47,17 +47,21 @@ class VerifyTemplateStage(BaseVerificationStage):
     @property
     def requires(self) -> list[str]:
         """Artifacts required by this stage."""
-        return ["parsed_answer", "raw_llm_response", "template_evaluator"]
+        return [
+            ArtifactKeys.PARSED_ANSWER,
+            ArtifactKeys.RAW_LLM_RESPONSE,
+            ArtifactKeys.TEMPLATE_EVALUATOR,
+        ]
 
     @property
     def produces(self) -> list[str]:
         """Artifacts produced by this stage."""
         return [
-            "field_verification_result",
-            "regex_verification_results",
-            "regex_extraction_results",
-            "verify_result",
-            "verify_granular_result",  # Only for multi-attribute templates
+            ArtifactKeys.FIELD_VERIFICATION_RESULT,
+            ArtifactKeys.REGEX_VERIFICATION_RESULTS,
+            ArtifactKeys.REGEX_EXTRACTION_RESULTS,
+            ArtifactKeys.VERIFY_RESULT,
+            ArtifactKeys.VERIFY_GRANULAR_RESULT,  # Only for multi-attribute templates
         ]
 
     def should_run(self, context: VerificationContext) -> bool:
@@ -69,12 +73,12 @@ class VerifyTemplateStage(BaseVerificationStage):
         if not super().should_run(context):
             return False
         # Skip verification if recursion limit was reached (response is truncated/unreliable)
-        if context.get_artifact("recursion_limit_reached", False):
+        if context.get_artifact(ArtifactKeys.RECURSION_LIMIT_REACHED, False):
             return False
         # Skip verification if abstention was detected (model refused to answer)
-        if context.get_artifact("abstention_detected", False):
+        if context.get_artifact(ArtifactKeys.ABSTENTION_DETECTED, False):
             return False
-        return context.has_artifact("parsed_answer") and context.has_artifact("raw_llm_response")
+        return context.has_artifact(ArtifactKeys.PARSED_ANSWER) and context.has_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
 
     def execute(self, context: VerificationContext) -> None:
         """
@@ -91,13 +95,13 @@ class VerifyTemplateStage(BaseVerificationStage):
             - Sets context.result_field for all verification metadata
             - Sets context.error if verification logic fails
         """
-        parsed_answer = context.get_artifact("parsed_answer")
-        raw_llm_response = context.get_artifact("raw_llm_response")
+        parsed_answer = context.get_artifact(ArtifactKeys.PARSED_ANSWER)
+        raw_llm_response = context.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
 
         # Get evaluator from context (always created by ParseTemplateStage)
         # ParseTemplateStage always sets template_evaluator when it succeeds,
         # and if it fails, context.error is set so VerifyTemplateStage won't run.
-        evaluator = context.get_artifact("template_evaluator")
+        evaluator = context.get_artifact(ArtifactKeys.TEMPLATE_EVALUATOR)
         if evaluator is None:
             error_msg = "template_evaluator not found in context - ParseTemplateStage must run first"
             logger.error(error_msg)
@@ -127,18 +131,20 @@ class VerifyTemplateStage(BaseVerificationStage):
             verification_result = field_verification_result and regex_verification_results["success"]
 
             # Store results
-            context.set_artifact("field_verification_result", field_verification_result)
-            context.set_artifact("regex_verification_results", regex_verification_results)
-            context.set_artifact("regex_extraction_results", regex_extraction_results)
-            context.set_artifact("verify_result", verification_result)
+            context.set_artifact(ArtifactKeys.FIELD_VERIFICATION_RESULT, field_verification_result)
+            context.set_artifact(ArtifactKeys.REGEX_VERIFICATION_RESULTS, regex_verification_results)
+            context.set_artifact(ArtifactKeys.REGEX_EXTRACTION_RESULTS, regex_extraction_results)
+            context.set_artifact(ArtifactKeys.VERIFY_RESULT, verification_result)
 
             # Store in result builder
-            context.set_result_field("verify_result", verification_result)
-            context.set_result_field("regex_validations_performed", bool(regex_verification_results["results"]))
-            context.set_result_field("regex_validation_results", regex_verification_results["results"])
-            context.set_result_field("regex_validation_details", regex_verification_results["details"])
-            context.set_result_field("regex_overall_success", regex_verification_results["success"])
-            context.set_result_field("regex_extraction_results", regex_extraction_results)
+            context.set_result_field(ArtifactKeys.VERIFY_RESULT, verification_result)
+            context.set_result_field(
+                ArtifactKeys.REGEX_VALIDATIONS_PERFORMED, bool(regex_verification_results["results"])
+            )
+            context.set_result_field(ArtifactKeys.REGEX_VALIDATION_RESULTS, regex_verification_results["results"])
+            context.set_result_field(ArtifactKeys.REGEX_VALIDATION_DETAILS, regex_verification_results["details"])
+            context.set_result_field(ArtifactKeys.REGEX_OVERALL_SUCCESS, regex_verification_results["success"])
+            context.set_result_field(ArtifactKeys.REGEX_EXTRACTION_RESULTS, regex_extraction_results)
 
             # Step 5: Granular verification for multi-attribute templates
             # verify_granular() returns a float (0.0-1.0) representing fraction of correct attributes
@@ -146,7 +152,7 @@ class VerifyTemplateStage(BaseVerificationStage):
             if hasattr(parsed_answer, "verify_granular") and callable(parsed_answer.verify_granular):
                 try:
                     granular_result = parsed_answer.verify_granular()
-                    context.set_result_field("verify_granular_result", granular_result)
+                    context.set_result_field(ArtifactKeys.VERIFY_GRANULAR_RESULT, granular_result)
                     logger.debug(f"Granular verification result: {granular_result}")
                 except Exception as e:
                     logger.warning(f"Granular verification failed: {e}")
