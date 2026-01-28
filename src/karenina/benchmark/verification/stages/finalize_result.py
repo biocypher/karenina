@@ -7,7 +7,7 @@ import logging
 
 from ....schemas.workflow import VerificationResult
 from ..utils.llm_invocation import _split_parsed_response
-from .base import BaseVerificationStage, VerificationContext
+from .base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ class FinalizeResultStage(BaseVerificationStage):
     @property
     def produces(self) -> list[str]:
         """Produces the final VerificationResult (not stored in artifacts)."""
-        return ["final_result"]
+        return [ArtifactKeys.FINAL_RESULT]
 
     def should_run(self, context: VerificationContext) -> bool:  # noqa: ARG002
         """Always run - this is the final stage."""
@@ -67,17 +67,17 @@ class FinalizeResultStage(BaseVerificationStage):
             - Sets context.artifacts["final_result"] with VerificationResult
         """
         # Calculate execution time
-        execution_time = context.get_result_field("execution_time", 0.0)
-        timestamp = context.get_result_field("timestamp", "")
+        execution_time = context.get_result_field(ArtifactKeys.EXECUTION_TIME, 0.0)
+        timestamp = context.get_result_field(ArtifactKeys.TIMESTAMP, "")
 
         # Extract model strings
-        answering_model_str = context.get_artifact("answering_model_str", "")
-        parsing_model_str = context.get_artifact("parsing_model_str", "")
+        answering_model_str = context.get_artifact(ArtifactKeys.ANSWERING_MODEL_STR, "")
+        parsing_model_str = context.get_artifact(ArtifactKeys.PARSING_MODEL_STR, "")
 
         # Extract parsed responses if available
         parsed_gt_response = None
         parsed_llm_response = None
-        parsed_answer = context.get_artifact("parsed_answer")
+        parsed_answer = context.get_artifact(ArtifactKeys.PARSED_ANSWER)
         if parsed_answer is not None:
             try:
                 parsed_gt_response, parsed_llm_response = _split_parsed_response(parsed_answer)
@@ -86,13 +86,13 @@ class FinalizeResultStage(BaseVerificationStage):
 
         # Determine which verification types were performed
         # Template verification was performed if VerifyTemplateStage ran and set field_verification_result
-        template_verification_performed = context.get_artifact("field_verification_result") is not None
+        template_verification_performed = context.get_artifact(ArtifactKeys.FIELD_VERIFICATION_RESULT) is not None
 
         # Rubric evaluation was performed if RubricEvaluationStage ran and set verify_rubric
-        rubric_evaluation_performed = context.get_result_field("verify_rubric") is not None
+        rubric_evaluation_performed = context.get_result_field(ArtifactKeys.VERIFY_RUBRIC) is not None
 
         # Aggregate usage tracking metadata
-        usage_tracker = context.get_artifact("usage_tracker")
+        usage_tracker = context.get_artifact(ArtifactKeys.USAGE_TRACKER)
         usage_metadata = None
         agent_metrics = None
 
@@ -125,7 +125,7 @@ class FinalizeResultStage(BaseVerificationStage):
         )
 
         # Get MCP servers for result_id computation (also used in template below)
-        answering_mcp_servers = context.get_result_field("answering_mcp_servers")
+        answering_mcp_servers = context.get_result_field(ArtifactKeys.ANSWERING_MCP_SERVERS)
 
         # Compute deterministic result_id
         result_id = VerificationResultMetadata.compute_result_id(
@@ -161,30 +161,30 @@ class FinalizeResultStage(BaseVerificationStage):
         # Note: trace filtering fields (evaluation_input, used_full_trace, trace_extraction_error)
         # are now stored at the root level of VerificationResult, not in template
         template = VerificationResultTemplate(
-            raw_llm_response=context.get_result_field("raw_llm_response", ""),
+            raw_llm_response=context.get_result_field(ArtifactKeys.RAW_LLM_RESPONSE, ""),
             parsed_gt_response=parsed_gt_response,
             parsed_llm_response=parsed_llm_response,
             template_verification_performed=template_verification_performed,
-            verify_result=context.get_result_field("verify_result"),
-            verify_granular_result=context.get_result_field("verify_granular_result"),
-            embedding_check_performed=context.get_result_field("embedding_check_performed", False),
-            embedding_similarity_score=context.get_result_field("embedding_similarity_score"),
-            embedding_override_applied=context.get_result_field("embedding_override_applied", False),
-            embedding_model_used=context.get_result_field("embedding_model_used"),
-            regex_validations_performed=context.get_result_field("regex_validations_performed", False),
-            regex_validation_results=context.get_result_field("regex_validation_results"),
-            regex_validation_details=context.get_result_field("regex_validation_details"),
-            regex_overall_success=context.get_result_field("regex_overall_success"),
-            regex_extraction_results=context.get_result_field("regex_extraction_results"),
-            recursion_limit_reached=context.get_result_field("recursion_limit_reached", False),
-            abstention_check_performed=context.get_result_field("abstention_check_performed", False),
-            abstention_detected=context.get_result_field("abstention_detected"),
-            abstention_override_applied=context.get_result_field("abstention_override_applied", False),
-            abstention_reasoning=context.get_result_field("abstention_reasoning"),
-            sufficiency_check_performed=context.get_result_field("sufficiency_check_performed", False),
-            sufficiency_detected=context.get_result_field("sufficiency_detected"),
-            sufficiency_override_applied=context.get_result_field("sufficiency_override_applied", False),
-            sufficiency_reasoning=context.get_result_field("sufficiency_reasoning"),
+            verify_result=context.get_result_field(ArtifactKeys.VERIFY_RESULT),
+            verify_granular_result=context.get_result_field(ArtifactKeys.VERIFY_GRANULAR_RESULT),
+            embedding_check_performed=context.get_result_field(ArtifactKeys.EMBEDDING_CHECK_PERFORMED, False),
+            embedding_similarity_score=context.get_result_field(ArtifactKeys.EMBEDDING_SIMILARITY_SCORE),
+            embedding_override_applied=context.get_result_field(ArtifactKeys.EMBEDDING_OVERRIDE_APPLIED, False),
+            embedding_model_used=context.get_result_field(ArtifactKeys.EMBEDDING_MODEL_USED),
+            regex_validations_performed=context.get_result_field(ArtifactKeys.REGEX_VALIDATIONS_PERFORMED, False),
+            regex_validation_results=context.get_result_field(ArtifactKeys.REGEX_VALIDATION_RESULTS),
+            regex_validation_details=context.get_result_field(ArtifactKeys.REGEX_VALIDATION_DETAILS),
+            regex_overall_success=context.get_result_field(ArtifactKeys.REGEX_OVERALL_SUCCESS),
+            regex_extraction_results=context.get_result_field(ArtifactKeys.REGEX_EXTRACTION_RESULTS),
+            recursion_limit_reached=context.get_result_field(ArtifactKeys.RECURSION_LIMIT_REACHED, False),
+            abstention_check_performed=context.get_result_field(ArtifactKeys.ABSTENTION_CHECK_PERFORMED, False),
+            abstention_detected=context.get_result_field(ArtifactKeys.ABSTENTION_DETECTED),
+            abstention_override_applied=context.get_result_field(ArtifactKeys.ABSTENTION_OVERRIDE_APPLIED, False),
+            abstention_reasoning=context.get_result_field(ArtifactKeys.ABSTENTION_REASONING),
+            sufficiency_check_performed=context.get_result_field(ArtifactKeys.SUFFICIENCY_CHECK_PERFORMED, False),
+            sufficiency_detected=context.get_result_field(ArtifactKeys.SUFFICIENCY_DETECTED),
+            sufficiency_override_applied=context.get_result_field(ArtifactKeys.SUFFICIENCY_OVERRIDE_APPLIED, False),
+            sufficiency_reasoning=context.get_result_field(ArtifactKeys.SUFFICIENCY_REASONING),
             answering_mcp_servers=answering_mcp_servers,
             usage_metadata=usage_metadata,
             agent_metrics=agent_metrics,
@@ -194,7 +194,7 @@ class FinalizeResultStage(BaseVerificationStage):
         rubric_result = None
         if rubric_evaluation_performed:
             # Split verify_rubric into separate trait score dicts
-            verify_rubric = context.get_result_field("verify_rubric")
+            verify_rubric = context.get_result_field(ArtifactKeys.VERIFY_RUBRIC)
             # Get rubric definition from context directly (not from result_field)
             # Note: evaluation_rubric is no longer stored per-result, it goes in shared_data at export
             evaluation_rubric = context.rubric
@@ -232,58 +232,66 @@ class FinalizeResultStage(BaseVerificationStage):
                 callable_trait_scores = callable_results if callable_results else None
 
             # Get metric trait scores from context (already in the right format)
-            metric_trait_scores_dict = context.get_result_field("metric_trait_metrics")
+            metric_trait_scores_dict = context.get_result_field(ArtifactKeys.METRIC_TRAIT_METRICS)
 
             # Note: trace filtering fields and evaluation_rubric are no longer stored per-result
             # - trace filtering fields are at root level of VerificationResult
             # - evaluation_rubric goes in shared_data at export time
             # Get llm_trait_labels for literal-kind LLM traits (maps trait name to class name)
-            llm_trait_labels = context.get_result_field("llm_trait_labels")
+            llm_trait_labels = context.get_result_field(ArtifactKeys.LLM_TRAIT_LABELS)
 
             rubric_result = VerificationResultRubric(
                 rubric_evaluation_performed=rubric_evaluation_performed,
-                rubric_evaluation_strategy=context.get_result_field("rubric_evaluation_strategy"),
+                rubric_evaluation_strategy=context.get_result_field(ArtifactKeys.RUBRIC_EVALUATION_STRATEGY),
                 llm_trait_scores=llm_trait_scores,
                 llm_trait_labels=llm_trait_labels,
                 regex_trait_scores=regex_trait_scores,
                 callable_trait_scores=callable_trait_scores,
                 metric_trait_scores=metric_trait_scores_dict,
-                metric_trait_confusion_lists=context.get_result_field("metric_trait_confusion_lists"),
+                metric_trait_confusion_lists=context.get_result_field(ArtifactKeys.METRIC_TRAIT_CONFUSION_LISTS),
             )
 
         # Create deep-judgment subclass (if enabled)
         deep_judgment = None
-        if context.get_result_field("deep_judgment_enabled", False):
+        if context.get_result_field(ArtifactKeys.DEEP_JUDGMENT_ENABLED, False):
             deep_judgment = VerificationResultDeepJudgment(
-                deep_judgment_enabled=context.get_result_field("deep_judgment_enabled", False),
-                deep_judgment_performed=context.get_result_field("deep_judgment_performed", False),
-                extracted_excerpts=context.get_result_field("extracted_excerpts"),
-                attribute_reasoning=context.get_result_field("attribute_reasoning"),
-                deep_judgment_stages_completed=context.get_result_field("deep_judgment_stages_completed"),
-                deep_judgment_model_calls=context.get_result_field("deep_judgment_model_calls", 0),
-                deep_judgment_excerpt_retry_count=context.get_result_field("deep_judgment_excerpt_retry_count", 0),
-                attributes_without_excerpts=context.get_result_field("attributes_without_excerpts"),
-                deep_judgment_search_enabled=context.get_result_field("deep_judgment_search_enabled", False),
-                hallucination_risk_assessment=context.get_result_field("hallucination_risk_assessment"),
+                deep_judgment_enabled=context.get_result_field(ArtifactKeys.DEEP_JUDGMENT_ENABLED, False),
+                deep_judgment_performed=context.get_result_field(ArtifactKeys.DEEP_JUDGMENT_PERFORMED, False),
+                extracted_excerpts=context.get_result_field(ArtifactKeys.EXTRACTED_EXCERPTS),
+                attribute_reasoning=context.get_result_field(ArtifactKeys.ATTRIBUTE_REASONING),
+                deep_judgment_stages_completed=context.get_result_field(ArtifactKeys.DEEP_JUDGMENT_STAGES_COMPLETED),
+                deep_judgment_model_calls=context.get_result_field(ArtifactKeys.DEEP_JUDGMENT_MODEL_CALLS, 0),
+                deep_judgment_excerpt_retry_count=context.get_result_field(
+                    ArtifactKeys.DEEP_JUDGMENT_EXCERPT_RETRY_COUNT, 0
+                ),
+                attributes_without_excerpts=context.get_result_field(ArtifactKeys.ATTRIBUTES_WITHOUT_EXCERPTS),
+                deep_judgment_search_enabled=context.get_result_field(ArtifactKeys.DEEP_JUDGMENT_SEARCH_ENABLED, False),
+                hallucination_risk_assessment=context.get_result_field(ArtifactKeys.HALLUCINATION_RISK_ASSESSMENT),
             )
 
         # Create deep-judgment rubric subclass (if performed)
         deep_judgment_rubric = None
-        if context.get_result_field("deep_judgment_rubric_performed", False):
+        if context.get_result_field(ArtifactKeys.DEEP_JUDGMENT_RUBRIC_PERFORMED, False):
             from karenina.schemas.workflow import VerificationResultDeepJudgmentRubric
 
             deep_judgment_rubric = VerificationResultDeepJudgmentRubric(
-                deep_judgment_rubric_performed=context.get_result_field("deep_judgment_rubric_performed", False),
-                extracted_rubric_excerpts=context.get_result_field("extracted_rubric_excerpts"),
-                rubric_trait_reasoning=context.get_result_field("rubric_trait_reasoning"),
-                deep_judgment_rubric_scores=context.get_result_field("deep_judgment_rubric_scores"),
-                standard_rubric_scores=context.get_result_field("standard_rubric_scores"),
-                trait_metadata=context.get_result_field("trait_metadata"),
-                traits_without_valid_excerpts=context.get_result_field("traits_without_valid_excerpts"),
-                rubric_hallucination_risk_assessment=context.get_result_field("rubric_hallucination_risk_assessment"),
-                total_deep_judgment_model_calls=context.get_result_field("total_deep_judgment_model_calls", 0),
-                total_traits_evaluated=context.get_result_field("total_traits_evaluated", 0),
-                total_excerpt_retries=context.get_result_field("total_excerpt_retries", 0),
+                deep_judgment_rubric_performed=context.get_result_field(
+                    ArtifactKeys.DEEP_JUDGMENT_RUBRIC_PERFORMED, False
+                ),
+                extracted_rubric_excerpts=context.get_result_field(ArtifactKeys.EXTRACTED_RUBRIC_EXCERPTS),
+                rubric_trait_reasoning=context.get_result_field(ArtifactKeys.RUBRIC_TRAIT_REASONING),
+                deep_judgment_rubric_scores=context.get_result_field(ArtifactKeys.DEEP_JUDGMENT_RUBRIC_SCORES),
+                standard_rubric_scores=context.get_result_field(ArtifactKeys.STANDARD_RUBRIC_SCORES),
+                trait_metadata=context.get_result_field(ArtifactKeys.TRAIT_METADATA),
+                traits_without_valid_excerpts=context.get_result_field(ArtifactKeys.TRAITS_WITHOUT_VALID_EXCERPTS),
+                rubric_hallucination_risk_assessment=context.get_result_field(
+                    ArtifactKeys.RUBRIC_HALLUCINATION_RISK_ASSESSMENT
+                ),
+                total_deep_judgment_model_calls=context.get_result_field(
+                    ArtifactKeys.TOTAL_DEEP_JUDGMENT_MODEL_CALLS, 0
+                ),
+                total_traits_evaluated=context.get_result_field(ArtifactKeys.TOTAL_TRAITS_EVALUATED, 0),
+                total_excerpt_retries=context.get_result_field(ArtifactKeys.TOTAL_EXCERPT_RETRIES, 0),
             )
 
         # Create final VerificationResult with nested composition
@@ -295,10 +303,10 @@ class FinalizeResultStage(BaseVerificationStage):
             deep_judgment=deep_judgment,
             deep_judgment_rubric=deep_judgment_rubric,
             # Root-level trace filtering fields (shared by template and rubric evaluation)
-            evaluation_input=context.get_result_field("evaluation_input"),
-            used_full_trace=context.get_result_field("used_full_trace", True),
-            trace_extraction_error=context.get_result_field("trace_extraction_error"),
+            evaluation_input=context.get_result_field(ArtifactKeys.EVALUATION_INPUT),
+            used_full_trace=context.get_result_field(ArtifactKeys.USED_FULL_TRACE, True),
+            trace_extraction_error=context.get_result_field(ArtifactKeys.TRACE_EXTRACTION_ERROR),
         )
 
         # Store final result
-        context.set_artifact("final_result", result)
+        context.set_artifact(ArtifactKeys.FINAL_RESULT, result)
