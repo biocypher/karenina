@@ -280,17 +280,30 @@ class BaseVerificationStage(ABC):
         """
         return []
 
-    def should_run(self, context: VerificationContext) -> bool:  # noqa: ARG002 - Base impl ignores context, subclasses may use it
+    def should_run(self, context: VerificationContext) -> bool:
         """
         Whether this stage should execute.
 
-        Override in subclasses for conditional execution.
-        Default: Always run.
+        Default behavior: Skip if context has an error.
+        This makes error-checking the default for all stages.
+
+        Override in subclasses for additional conditional execution.
+        When overriding, call super().should_run(context) first to preserve
+        the error-checking behavior:
+
+            def should_run(self, context: VerificationContext) -> bool:
+                if not super().should_run(context):
+                    return False
+                # ... additional conditions ...
+                return True
 
         Args:
-            context: Verification context (may be unused in simple stages)
+            context: Verification context
+
+        Returns:
+            False if context has an error, True otherwise
         """
-        return True
+        return not context.error
 
     @abstractmethod
     def execute(self, context: VerificationContext) -> None:

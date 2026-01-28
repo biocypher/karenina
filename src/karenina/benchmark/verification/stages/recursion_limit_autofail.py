@@ -58,9 +58,9 @@ class RecursionLimitAutoFailStage(BaseVerificationStage):
         """
         Run only if recursion limit was reached.
 
-        Skip if there's already an error (to preserve error state).
+        Inherits error-checking from BaseVerificationStage.
         """
-        if context.error:
+        if not super().should_run(context):
             return False
 
         recursion_limit_reached = context.get_artifact("recursion_limit_reached", False)

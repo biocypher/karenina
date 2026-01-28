@@ -63,11 +63,11 @@ class TraceValidationAutoFailStage(BaseVerificationStage):
 
     def should_run(self, context: VerificationContext) -> bool:
         """
-        Run if we have raw_llm_response and no errors yet.
+        Run if we have raw_llm_response.
 
-        Skip if there's already an error (to preserve error state).
+        Inherits error-checking from BaseVerificationStage.
         """
-        if context.error:
+        if not super().should_run(context):
             return False
 
         return context.has_artifact("raw_llm_response")

@@ -84,6 +84,10 @@ class MockFinalizeStage(BaseVerificationStage):
     def produces(self) -> list[str]:
         return ["final_result"]
 
+    def should_run(self, context: VerificationContext) -> bool:  # noqa: ARG002
+        """Always run - this is the final stage (must not skip on errors)."""
+        return True
+
     def execute(self, context: VerificationContext) -> None:
         self.executed = True
         result = create_minimal_result(context)

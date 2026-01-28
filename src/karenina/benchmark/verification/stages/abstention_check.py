@@ -66,11 +66,16 @@ class AbstentionCheckStage(BaseVerificationStage):
         ]
 
     def should_run(self, context: VerificationContext) -> bool:
-        """Run only if abstention detection is enabled, no errors, and no recursion limit hit."""
+        """Run only if abstention detection is enabled and no recursion limit hit.
+
+        Inherits error-checking from BaseVerificationStage.
+        """
+        if not super().should_run(context):
+            return False
         # Skip if recursion limit was reached (response is truncated/unreliable)
         if context.get_artifact("recursion_limit_reached", False):
             return False
-        return context.abstention_enabled and not context.error
+        return context.abstention_enabled
 
     def execute(self, context: VerificationContext) -> None:
         """

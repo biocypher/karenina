@@ -68,12 +68,13 @@ class DeepJudgmentAutoFailStage(BaseVerificationStage):
 
     def should_run(self, context: VerificationContext) -> bool:
         """
-        Run only if deep-judgment was performed and no errors.
+        Run only if deep-judgment was performed.
 
         Also requires that we have attributes_without_excerpts data,
         which is set by deep-judgment parsing.
+        Inherits error-checking from BaseVerificationStage.
         """
-        if context.error:
+        if not super().should_run(context):
             return False
 
         deep_judgment_performed = context.get_artifact("deep_judgment_performed", False)

@@ -54,12 +54,9 @@ class DeepJudgmentRubricAutoFailStage(BaseVerificationStage):
         """
         Run only if deep judgment rubric evaluation was performed.
 
-        This stage only runs when:
-        1. No error has occurred
-        2. Deep judgment rubric evaluation was performed
-        3. There might be traits without valid excerpts
+        Inherits error-checking from BaseVerificationStage.
         """
-        if context.error:
+        if not super().should_run(context):
             return False
 
         # Check if deep judgment rubric was performed

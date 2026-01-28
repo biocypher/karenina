@@ -71,12 +71,13 @@ class EmbeddingCheckStage(BaseVerificationStage):
 
     def should_run(self, context: VerificationContext) -> bool:
         """
-        Run only if field verification failed and no errors.
+        Run only if field verification failed.
 
         Embedding check is only useful when field verification failed,
         as it provides a semantic fallback.
+        Inherits error-checking from BaseVerificationStage.
         """
-        if context.error:
+        if not super().should_run(context):
             return False
 
         field_verification_result = context.get_artifact("field_verification_result")

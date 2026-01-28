@@ -202,8 +202,10 @@ class RubricEvaluationStage(BaseVerificationStage):
         However, if trace validation failed (trace doesn't end with AI message)
         and we need to extract the final AI message (use_full_trace_for_rubric=False),
         then skip rubric evaluation since extraction would fail.
+
+        Inherits error-checking from BaseVerificationStage.
         """
-        if context.error:
+        if not super().should_run(context):
             return False
 
         rubric = context.rubric

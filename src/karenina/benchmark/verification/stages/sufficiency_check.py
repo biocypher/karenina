@@ -67,7 +67,12 @@ class SufficiencyCheckStage(BaseVerificationStage):
         ]
 
     def should_run(self, context: VerificationContext) -> bool:
-        """Run only if sufficiency detection is enabled, no errors, and no recursion limit hit."""
+        """Run only if sufficiency detection is enabled, no recursion limit hit, and no prior failures.
+
+        Inherits error-checking from BaseVerificationStage.
+        """
+        if not super().should_run(context):
+            return False
         # Skip if recursion limit was reached (response is truncated/unreliable)
         if context.get_artifact("recursion_limit_reached", False):
             return False
@@ -77,7 +82,7 @@ class SufficiencyCheckStage(BaseVerificationStage):
         # Skip if abstention was detected (already handled by abstention check)
         if context.get_artifact("abstention_detected", False):
             return False
-        return context.sufficiency_enabled and not context.error
+        return context.sufficiency_enabled
 
     def execute(self, context: VerificationContext) -> None:
         """
