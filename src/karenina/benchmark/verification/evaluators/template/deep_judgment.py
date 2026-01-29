@@ -29,6 +29,14 @@ from .....ports import LLMPort, Message, ParserPort
 from .....schemas.domain import BaseAnswer
 from .....schemas.shared import SearchResultItem
 from .....schemas.workflow import ModelConfig, VerificationConfig
+from ...prompts.deep_judgment.template import (
+    build_assessment_system_prompt,
+    build_assessment_user_prompt,
+    build_excerpt_system_prompt,
+    build_excerpt_user_prompt,
+    build_reasoning_system_prompt,
+    build_reasoning_user_prompt,
+)
 from ...utils.search_provider import create_search_tool
 from ...utils.template_parsing_helpers import (
     _extract_attribute_descriptions,
@@ -126,63 +134,11 @@ def deep_judgment_parse(
     attribute_descriptions = _extract_attribute_descriptions(json_schema, attribute_names)
     attr_guidance = "\n".join([f"- {attr}: {desc}" for attr, desc in attribute_descriptions.items()])
 
-    excerpt_system_prompt = f"""{generic_system_prompt}
-
-You are an expert excerpt extractor for deep-judgment template parsing. Your role is to find verbatim evidence in responses.
-
-# Task Overview
-
-You will receive:
-1. An original question in <original_question> tags
-2. A response to analyze in <response_to_analyze> tags
-
-Your task: Extract **verbatim excerpts** from the response that provide evidence for specific attributes.
-
-# Attribute Definitions
-
-For each attribute below, the description indicates what evidence to look for:
-
-{attr_guidance}
-
-# Extraction Protocol
-
-For each attribute:
-1. **Read the attribute's description** to understand what evidence to look for
-2. **Identify excerpts**: Find up to {config.deep_judgment_max_excerpts_per_attribute} exact quotes that provide evidence
-   - "high" confidence: Direct, explicit statement matching the attribute description
-   - "medium" confidence: Implied information or indirect evidence
-   - "low" confidence: Weak or ambiguous evidence
-3. **If no excerpts exist**: Return ONE entry with empty text and explanation
-
-# Critical Requirements
-
-**Verbatim Only**: Excerpts MUST be exact text spans from the response - copy-paste, no modifications.
-
-**Evidence-Based**: Only extract text that actually provides evidence for the attribute.
-
-**Completeness**: Cover all attributes listed above, even if no excerpts are found.
-
-**JSON Only**: Return ONLY the JSON object - no explanations, no markdown fences.
-
-# What NOT to Do
-
-- Do NOT paraphrase or reword the response text
-- Do NOT invent or hallucinate excerpts that aren't in the response
-- Do NOT include text from other parts of this prompt
-- Do NOT wrap the JSON in markdown code blocks
-- Do NOT add explanatory text before or after the JSON
-
-# Output Format
-
-Return JSON matching this structure exactly:
-{{
-  "attribute_name": [
-    {{"text": "exact quote from response", "confidence": "low|medium|high"}}
-  ],
-  "attribute_without_excerpts": [
-    {{"text": "", "confidence": "none", "explanation": "Brief reason (e.g., 'Model refused', 'No explicit info')"}}
-  ]
-}}"""
+    excerpt_system_prompt = build_excerpt_system_prompt(
+        generic_system_prompt=generic_system_prompt,
+        attr_guidance=attr_guidance,
+        max_excerpts_per_attribute=config.deep_judgment_max_excerpts_per_attribute,
+    )
 
     # ==========================================
     # STAGE 1: EXCERPT EXTRACTION WITH RETRY
@@ -192,13 +148,10 @@ Return JSON matching this structure exactly:
 
     for attempt in range(max_retries + 1):
         # Build excerpt extraction prompt
-        excerpt_prompt = f"""<original_question>
-{question_text}
-</original_question>
-
-<response_to_analyze>
-{raw_llm_response}
-</response_to_analyze>"""
+        excerpt_prompt = build_excerpt_user_prompt(
+            question_text=question_text,
+            raw_llm_response=raw_llm_response,
+        )
 
         # Add error feedback if this is a retry
         if attempt > 0:
@@ -403,90 +356,14 @@ Return JSON matching this structure exactly:
 
         if excerpts_with_search:
             # Build batch assessment prompt
-            assessment_system_prompt = f"""{generic_system_prompt}
+            assessment_system_prompt = build_assessment_system_prompt(
+                generic_system_prompt=generic_system_prompt,
+            )
 
-You are an expert hallucination risk assessor. Your role is to evaluate whether extracted excerpts are grounded in external evidence.
-
-# Task Overview
-
-You will receive excerpts extracted from a response, along with search results used to validate each excerpt.
-
-Your task: Assess the **hallucination risk** for each excerpt by comparing it against search evidence.
-
-# Risk Level Definitions
-
-- **none** (lowest risk): Search strongly supports the excerpt with multiple corroborating sources
-- **low**: Search generally supports the excerpt with minor discrepancies or weak evidence
-- **medium**: Search provides mixed evidence, contradictions, or very weak support
-- **high** (highest risk): Search contradicts the excerpt or provides no supporting evidence
-
-# Assessment Protocol
-
-For each excerpt:
-1. **Read the excerpt text** - understand what claim is being made
-2. **Examine search results** - look for supporting or contradicting evidence
-3. **Assign risk level** - based on how well search supports the excerpt
-4. **Provide justification** - brief explanation of your assessment
-
-# Critical Requirements
-
-**Conservative Assessment**: Only assign "none" when evidence is very strong with multiple sources.
-
-**Evidence-Based**: Base risk assessment solely on the search results provided.
-
-**All Excerpts**: You MUST assess every excerpt provided, no exceptions.
-
-**JSON Only**: Return ONLY the JSON object - no explanations, no markdown fences.
-
-# What NOT to Do
-
-- Do NOT assign "none" unless search strongly corroborates the excerpt
-- Do NOT skip any excerpts in your assessment
-- Do NOT wrap the JSON in markdown code blocks
-- Do NOT add explanatory text before or after the JSON"""
-
-            # Format each excerpt for assessment
-            excerpt_descriptions = []
-            for attr_name, excerpt_obj in excerpts_with_search:
-                excerpt_id = excerpt_obj["_id"]
-                text = excerpt_obj.get("text", "")
-                confidence = excerpt_obj.get("confidence", "unknown")
-                similarity = excerpt_obj.get("similarity_score", 0.0)
-                search_results_raw = excerpt_obj.get("search_results", [])
-
-                # Format search results for LLM (list[dict] -> string)
-                if isinstance(search_results_raw, list):
-                    search_results_formatted = _format_search_results_for_llm(search_results_raw)
-                else:
-                    # Backward compatibility: if stored as string, use as-is
-                    search_results_formatted = search_results_raw
-
-                excerpt_descriptions.append(
-                    f'<excerpt id="{excerpt_id}" attribute="{attr_name}">\n'
-                    f"Text: {text}\n"
-                    f"Extraction Confidence: {confidence}\n"
-                    f"Similarity: {similarity:.3f}\n"
-                    f"Search Results:\n{search_results_formatted}\n"
-                    f"</excerpt>"
-                )
-
-            assessment_prompt = f"""Assess hallucination risk for each of the {len(excerpts_with_search)} excerpts below.
-
-{chr(10).join(excerpt_descriptions)}
-
-**OUTPUT FORMAT** - Return JSON with assessments for ALL {len(excerpts_with_search)} excerpts:
-{{
-  "excerpt_assessments": [
-    {{
-      "excerpt_id": "0",
-      "attribute": "attribute_name",
-      "hallucination_risk": "none|low|medium|high",
-      "justification": "Brief explanation based on search evidence"
-    }}
-  ]
-}}
-
-**YOUR JSON RESPONSE:**"""
+            assessment_prompt = build_assessment_user_prompt(
+                excerpts_with_search=excerpts_with_search,
+                format_search_results_fn=_format_search_results_for_llm,
+            )
 
             # Invoke LLM for batch assessment
             assessment_messages: list[Message] = [
@@ -548,123 +425,16 @@ For each excerpt:
         "search_results" in excerpt_obj for excerpt_list in excerpts.values() for excerpt_obj in excerpt_list
     )
 
-    # Build base reasoning prompt
-    additional_task = (
-        "3. Search results and hallucination risk assessments for each excerpt." if search_performed else ""
+    reasoning_system_prompt = build_reasoning_system_prompt(
+        generic_system_prompt=generic_system_prompt,
+        attr_guidance=attr_guidance,
+        search_performed=search_performed,
     )
-    reasoning_system_prompt = f"""{generic_system_prompt}
 
-You are an expert reasoning generator for deep-judgment template parsing. Your role is to explain how excerpts inform attribute values.
-
-# Task Overview
-
-You will receive:
-1. An original question in <original_question> tags
-2. Extracted excerpts in <extracted_excerpts> tags from the previous stage
-{additional_task}
-
-Your task: Generate **reasoning** explaining how the excerpts should inform each attribute's value.
-
-# Attribute Definitions
-
-For each attribute below, the description indicates what value it expects:
-
-{attr_guidance}"""
-
-    # Conditionally add search context and use nested format when search was performed
-    if search_performed:
-        reasoning_system_prompt += """
-
-# Search Context
-
-Each excerpt has been validated against external search and assigned a hallucination risk score:
-- "Hallucination Risk": Per-excerpt risk (NONE/LOW/MEDIUM/HIGH)
-- "Risk Justification": Explanation for the risk level
-- "Search Results": External validation evidence
-
-Use these risk assessments to inform your reasoning confidence.
-
-# Reasoning Protocol
-
-For each attribute:
-1. **Review the attribute's description** - understand what value it expects
-2. **Analyze the excerpts** - consider their hallucination risk scores
-3. **Generate reasoning** (2-3 sentences) explaining:
-   - How the excerpts relate to the attribute
-   - What value the attribute should have based on evidence
-   - How hallucination risks affect confidence
-   - Any ambiguities or issues
-
-When excerpts are empty: Explain why and how this affects the attribute.
-
-# Critical Requirements
-
-**All Attributes**: Generate reasoning for EVERY attribute listed above.
-
-**Evidence-Based**: Base reasoning on the actual excerpts provided.
-
-**Risk-Aware**: Factor hallucination risks into your confidence assessment.
-
-**JSON Only**: Return ONLY the JSON object - no explanations, no markdown fences.
-
-# What NOT to Do
-
-- Do NOT skip any attributes
-- Do NOT wrap the JSON in markdown code blocks
-- Do NOT add explanatory text before or after the JSON
-
-# Output Format
-
-Return JSON with reasoning for ALL attributes:
-{
-  "attribute_name": {
-    "reasoning": "reasoning text explaining how excerpts inform the attribute value"
-  }
-}"""
-    else:
-        # Use simple string format (backward compatible - no search context)
-        reasoning_system_prompt += """
-
-# Reasoning Protocol
-
-For each attribute:
-1. **Review the attribute's description** - understand what value it expects
-2. **Analyze the excerpts** - determine what they reveal about this attribute
-3. **Generate reasoning** (2-3 sentences) explaining:
-   - How the excerpts relate to the attribute
-   - What value the attribute should have based on evidence
-   - Any ambiguities or confidence issues
-
-When excerpts are empty: Explain why (e.g., "Model refused", "No explicit info") and how this affects the attribute.
-
-# Critical Requirements
-
-**All Attributes**: Generate reasoning for EVERY attribute listed above.
-
-**Evidence-Based**: Base reasoning on the actual excerpts provided.
-
-**JSON Only**: Return ONLY the JSON object - no explanations, no markdown fences.
-
-# What NOT to Do
-
-- Do NOT skip any attributes
-- Do NOT wrap the JSON in markdown code blocks
-- Do NOT add explanatory text before or after the JSON
-
-# Output Format
-
-Return JSON with reasoning for ALL attributes:
-{
-  "attribute_name": "reasoning text explaining how excerpts inform the attribute value"
-}"""
-
-    reasoning_prompt = f"""<original_question>
-{question_text}
-</original_question>
-
-<extracted_excerpts>
-{format_excerpts_for_reasoning(excerpts)}
-</extracted_excerpts>"""
+    reasoning_prompt = build_reasoning_user_prompt(
+        question_text=question_text,
+        formatted_excerpts=format_excerpts_for_reasoning(excerpts),
+    )
 
     reasoning_messages: list[Message] = [Message.system(reasoning_system_prompt), Message.user(reasoning_prompt)]
     llm_response = parsing_llm.invoke(reasoning_messages)
