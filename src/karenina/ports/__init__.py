@@ -17,6 +17,7 @@ from karenina.ports.agent import (
     MCPStdioServerConfig,
     Tool,
 )
+from karenina.ports.capabilities import PortCapabilities
 from karenina.ports.errors import (
     AdapterUnavailableError,
     AgentExecutionError,
@@ -67,6 +68,8 @@ __all__ = [
     # Agent port and result
     "AgentPort",
     "AgentResult",
+    # Port capabilities
+    "PortCapabilities",
     # Error types
     "PortError",
     "AdapterUnavailableError",
