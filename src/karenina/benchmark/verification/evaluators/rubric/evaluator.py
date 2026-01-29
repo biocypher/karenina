@@ -95,7 +95,9 @@ class RubricEvaluator:
     def metric_trait_evaluator(self) -> MetricTraitEvaluator:
         """Get or create the metric trait evaluator."""
         if self._metric_trait_evaluator is None:
-            self._metric_trait_evaluator = MetricTraitEvaluator(self.llm, model_config=self.model_config)
+            self._metric_trait_evaluator = MetricTraitEvaluator(
+                self.llm, model_config=self.model_config, prompt_config=self._prompt_config
+            )
         return self._metric_trait_evaluator
 
     def evaluate_rubric(

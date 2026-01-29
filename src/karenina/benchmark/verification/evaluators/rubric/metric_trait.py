@@ -20,11 +20,13 @@ import re
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
-from .....ports import LLMPort, Message
+from .....ports import LLMPort, PortCapabilities
 from .....schemas.domain import MetricRubricTrait
+from ...prompts import PromptAssembler, PromptTask
 from .prompts import MetricTraitPromptBuilder
 
 if TYPE_CHECKING:
+    from .....schemas.verification import PromptConfig
     from .....schemas.workflow.models import ModelConfig
 
 logger = logging.getLogger(__name__)
@@ -51,16 +53,24 @@ class MetricTraitEvaluator:
         )
     """
 
-    def __init__(self, llm: LLMPort, *, model_config: "ModelConfig"):
+    def __init__(
+        self,
+        llm: LLMPort,
+        *,
+        model_config: "ModelConfig",
+        prompt_config: "PromptConfig | None" = None,
+    ):
         """
         Initialize the metric trait evaluator.
 
         Args:
             llm: LLMPort adapter for LLM operations.
             model_config: Model configuration for reference.
+            prompt_config: Optional per-task-type user instructions for prompt assembly.
         """
         self.llm = llm
         self._model_config = model_config
+        self._prompt_config = prompt_config
         self._prompt_builder = MetricTraitPromptBuilder()
 
     def evaluate_metric_traits(
@@ -124,7 +134,20 @@ class MetricTraitEvaluator:
         system_prompt = self._prompt_builder.build_system_prompt()
         user_prompt = self._prompt_builder.build_user_prompt(question, answer, trait, ConfusionMatrixOutput)
 
-        messages: list[Message] = [Message.system(system_prompt), Message.user(user_prompt)]
+        # Assemble messages via PromptAssembler (applies adapter + user instructions)
+        user_instructions = (
+            self._prompt_config.get_for_task(PromptTask.RUBRIC_METRIC_TRAIT.value) if self._prompt_config else None
+        )
+        assembler = PromptAssembler(
+            task=PromptTask.RUBRIC_METRIC_TRAIT,
+            interface=self._model_config.interface,
+            capabilities=PortCapabilities(),
+        )
+        messages = assembler.assemble(
+            system_text=system_prompt,
+            user_text=user_prompt,
+            user_instructions=user_instructions,
+        )
 
         # Use LLMPort.with_structured_output() for parsing
         structured_llm = self.llm.with_structured_output(ConfusionMatrixOutput)
