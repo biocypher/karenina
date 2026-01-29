@@ -132,6 +132,7 @@ class ParseTemplateStage(BaseVerificationStage):
                 model_config=parsing_model,
                 answer_class=Answer,
                 raw_answer_class=RawAnswer,
+                prompt_config=context.prompt_config,
             )
         except Exception as e:
             error_msg = f"Failed to create TemplateEvaluator: {type(e).__name__}: {e}"

@@ -13,15 +13,17 @@ import os
 from typing import TYPE_CHECKING, Any
 
 from .....adapters import format_model_string, get_llm, get_parser
-from .....ports import LLMPort
+from .....ports import LLMPort, PortCapabilities
 from .....schemas.domain import BaseAnswer
 from .....schemas.workflow import ModelConfig
+from ...prompts import PromptAssembler, PromptTask
 from ...utils import prepare_evaluation_input
 from .prompts import TemplatePromptBuilder
 from .results import FieldVerificationResult, ParseResult, RegexVerificationResult
 
 if TYPE_CHECKING:
     from .....ports import ParserPort
+    from .....schemas.verification import PromptConfig
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +67,7 @@ class TemplateEvaluator:
         model_config: ModelConfig,
         answer_class: type[BaseAnswer],
         raw_answer_class: type[BaseAnswer] | None = None,
+        prompt_config: "PromptConfig | None" = None,
     ):
         """
         Initialize the template evaluator.
@@ -73,12 +76,14 @@ class TemplateEvaluator:
             model_config: Configuration for the parsing model
             answer_class: The Answer class (with question ID injected) for parsing
             raw_answer_class: The RawAnswer class (before ID injection) for ground truth extraction
+            prompt_config: Optional per-task-type user instructions for prompt assembly
 
         Raises:
             ValueError: If model configuration is invalid (validated by adapter factory)
             RuntimeError: If adapter initialization fails
         """
         self.model_config = model_config
+        self._prompt_config = prompt_config
         self.answer_class: type[BaseAnswer] = answer_class
         self.raw_answer_class: type[BaseAnswer] = raw_answer_class or answer_class
 
@@ -336,6 +341,20 @@ class TemplateEvaluator:
             has_tool_traces=False,
             ground_truth=ground_truth,
         )
+
+        # Apply user instructions via PromptAssembler (deep judgment parsing path only)
+        user_instructions = self._prompt_config.get_for_task(PromptTask.PARSING.value) if self._prompt_config else None
+        if user_instructions:
+            assembler = PromptAssembler(
+                task=PromptTask.PARSING,
+                interface=self.model_config.interface,
+                capabilities=PortCapabilities(),
+            )
+            combined_system_prompt, _ = assembler.assemble_text(
+                system_text=combined_system_prompt,
+                user_text="",
+                user_instructions=user_instructions,
+            )
 
         try:
             parsed_answer, extracted_excerpts, attribute_reasoning, dj_metadata = deep_judgment_parse(
