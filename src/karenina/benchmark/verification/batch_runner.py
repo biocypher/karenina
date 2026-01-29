@@ -206,6 +206,8 @@ def execute_task(
             ),
             deep_judgment_rubric_search_enabled=task.get("deep_judgment_rubric_search_enabled", False),
             deep_judgment_rubric_search_tool=task.get("deep_judgment_rubric_search_tool", "tavily"),
+            # Prompt configuration
+            prompt_config=task.get("prompt_config"),
             cached_answer_data=cached_answer_data,
         )
 
