@@ -259,9 +259,8 @@ class TemplateEvaluator:
         result = ParseResult()
 
         try:
-            # 1. Build task instructions (centralized)
+            # 1. Build task instructions (format-agnostic base prompts)
             system_text = self._prompt_builder.build_system_prompt(
-                format_instructions="",
                 has_tool_traces=False,
                 ground_truth=self._get_ground_truth(),
             )
@@ -283,7 +282,10 @@ class TemplateEvaluator:
                 system_text=system_text,
                 user_text=user_text,
                 user_instructions=user_instructions,
-                instruction_context={"json_schema": self.answer_class.model_json_schema()},
+                instruction_context={
+                    "json_schema": self.answer_class.model_json_schema(),
+                    "format_instructions": "",
+                },
             )
 
             # 3. Parse via adapter
@@ -377,7 +379,6 @@ class TemplateEvaluator:
                 logger.warning(f"Could not extract ground truth: {e}")
 
         combined_system_prompt = self._prompt_builder.build_system_prompt(
-            format_instructions=format_instructions,
             has_tool_traces=False,
             ground_truth=ground_truth,
         )
@@ -393,7 +394,10 @@ class TemplateEvaluator:
             system_text=combined_system_prompt,
             user_text="",
             user_instructions=user_instructions,
-            instruction_context={"json_schema": self.answer_class.model_json_schema()},
+            instruction_context={
+                "json_schema": self.answer_class.model_json_schema(),
+                "format_instructions": format_instructions,
+            },
         )
 
         try:

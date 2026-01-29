@@ -3,14 +3,13 @@
 This module registers the claude_agent_sdk interface with the AdapterRegistry.
 The Claude Agent SDK requires the Claude Code CLI to be installed.
 
-Also registers adapter instructions for PARSING that augment the system prompt
-with a best-interpretation directive and strip format_instructions from user text
-(since the SDK uses native structured output via output_format).
+Also registers adapter instructions for PARSING that append a best-interpretation
+directive to the system prompt (the SDK uses native structured output via
+output_format, so no format/schema sections are needed).
 """
 
 from __future__ import annotations
 
-import re
 import shutil
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -98,35 +97,20 @@ AdapterRegistry.register(_claude_sdk_spec)
 
 @dataclass
 class _ClaudeSDKParsingInstruction:
-    """Augment system prompt and strip format sections for Claude Agent SDK.
+    """Append best-interpretation directive for Claude Agent SDK parsing.
 
-    The Claude Agent SDK uses native structured output via output_format, so:
-    - "If uncertain, use your best interpretation" is appended to system text
-    - format_instructions section is stripped from user text
-    - JSON format block (if appended by LangChain-style instruction) is stripped
+    The Claude Agent SDK uses native structured output via output_format,
+    so no format/schema sections are needed. Only a best-interpretation
+    directive is appended.
     """
 
-    def apply(self, system_text: str, user_text: str) -> tuple[str, str]:
-        # Append best-interpretation directive to system
-        system_text = f"{system_text}\n\nIf uncertain, use your best interpretation based on the text."
+    @property
+    def system_addition(self) -> str:
+        return "If uncertain, use your best interpretation based on the text."
 
-        # Strip format_instructions section from system text
-        system_text = re.sub(
-            r"\s*# Output Format\s*\n.*?<format_instructions>.*?</format_instructions>",
-            "",
-            system_text,
-            flags=re.DOTALL,
-        )
-
-        # Strip format instruction block from user text
-        user_text = re.sub(
-            r"\n\nYou must respond with valid JSON that matches this schema:.*?Return ONLY the JSON object, no additional text\.",
-            "",
-            user_text,
-            flags=re.DOTALL,
-        )
-
-        return system_text, user_text
+    @property
+    def user_addition(self) -> str:
+        return ""
 
 
 def _claude_sdk_parsing_instruction_factory(**kwargs: object) -> _ClaudeSDKParsingInstruction:  # noqa: ARG001

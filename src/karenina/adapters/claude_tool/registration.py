@@ -8,15 +8,14 @@ The adapter is registered with:
 - Agent factory: ClaudeToolAgentAdapter
 - Parser factory: ClaudeToolParserAdapter
 
-Also registers adapter instructions for PARSING that replace the system
-prompt with a minimal variant and strip format-related sections from the
-user prompt (since Claude Tool uses native structured output).
+Also registers adapter instructions for PARSING that append extraction
+directives to the system prompt (Claude Tool uses native structured output
+via beta.messages.parse, so no format/schema sections are needed).
 """
 
 from __future__ import annotations
 
 import logging
-import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -142,66 +141,25 @@ logger.debug("Registered claude_tool adapter with AdapterRegistry")
 # Adapter instructions for PARSING
 # =============================================================================
 
-# Minimal system prompt for Claude Tool (native structured output handles format)
-_CLAUDE_TOOL_SYSTEM = (
-    "You are an evaluator that extracts structured information from responses.\n\n"
-    "Extract information according to the schema field descriptions. "
-    "Each field description specifies what to extract.\n\n"
-    "Critical rules:\n"
-    "- Extract only what's actually stated - don't infer or add information not present\n"
-    "- Use null for information not present (if field allows null)"
-)
-
 
 @dataclass
 class _ClaudeToolParsingInstruction:
-    """Replace system prompt and strip format sections for Claude Tool.
+    """Append extraction directives for Claude Tool parsing.
 
-    Claude Tool uses native structured output (beta.messages.parse), so:
-    - System prompt is replaced with a minimal 3-line variant
-    - JSON schema, parsing notes, and format_instructions are stripped from user text
+    Claude Tool uses native structured output (beta.messages.parse), so no
+    format/schema sections are needed. Only critical extraction rules are appended.
     """
 
-    def apply(self, system_text: str, user_text: str) -> tuple[str, str]:  # noqa: ARG002
-        # Replace system with minimal variant
-        system_text = _CLAUDE_TOOL_SYSTEM
-
-        # Strip JSON schema block from user text
-        user_text = re.sub(
-            r"\*\*JSON SCHEMA \(your response MUST conform to this\):\*\*\s*```json\s*.*?```",
-            "",
-            user_text,
-            flags=re.DOTALL,
+    @property
+    def system_addition(self) -> str:
+        return (
+            "Extract only what's actually stated - don't infer or add information not present.\n"
+            "Use null for information not present (if field allows null)."
         )
 
-        # Strip parsing notes
-        user_text = re.sub(
-            r"\*\*PARSING NOTES:\*\*.*?(?=\*\*YOUR JSON RESPONSE:\*\*|\Z)",
-            "",
-            user_text,
-            flags=re.DOTALL,
-        )
-
-        # Strip format_instructions section
-        user_text = re.sub(
-            r"<format_instructions>.*?</format_instructions>",
-            "",
-            user_text,
-            flags=re.DOTALL,
-        )
-
-        # Strip format instruction block appended by LangChain-style instruction
-        user_text = re.sub(
-            r"\n\nYou must respond with valid JSON that matches this schema:.*?Return ONLY the JSON object, no additional text\.",
-            "",
-            user_text,
-            flags=re.DOTALL,
-        )
-
-        # Clean up trailing whitespace
-        user_text = user_text.rstrip()
-
-        return system_text, user_text
+    @property
+    def user_addition(self) -> str:
+        return ""
 
 
 def _claude_tool_parsing_instruction_factory(**kwargs: object) -> _ClaudeToolParsingInstruction:  # noqa: ARG001

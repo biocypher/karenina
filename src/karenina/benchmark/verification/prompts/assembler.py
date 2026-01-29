@@ -2,13 +2,13 @@
 
 The PromptAssembler implements the tri-section prompt assembly pattern:
 1. Task instructions — the base system/user text for a specific pipeline call
-2. Adapter instructions — auto-injected modifications based on the LLM backend
+2. Adapter instructions — text appended based on the LLM backend
 3. User instructions — optional per-task-type text from PromptConfig
 
-The assembler queries the AdapterInstructionRegistry for registered instructions,
-applies them in order, appends user instructions to the system text, and builds
-a list[Message] respecting adapter capabilities (e.g., prepending system text
-to user text when the adapter does not support system prompts).
+All instruction sources are treated uniformly as append operations:
+adapter text is appended first, then user instructions. The assembler
+builds a list[Message] respecting adapter capabilities (e.g., prepending
+system text to user text when the adapter does not support system prompts).
 """
 
 from __future__ import annotations
@@ -103,11 +103,13 @@ class PromptAssembler:
         user_instructions: str | None,
         instruction_context: dict[str, object] | None,
     ) -> tuple[str, str]:
-        """Apply adapter and user instructions to the prompt texts.
+        """Append adapter and user instructions to the prompt texts.
 
         Order of operations:
-        1. Look up and apply adapter instructions from the registry
+        1. Append adapter instruction text (system_addition, user_addition)
         2. Append user instructions to system text
+
+        All instruction sources are treated uniformly as append operations.
 
         Args:
             system_text: Base system prompt text.
@@ -118,11 +120,16 @@ class PromptAssembler:
         Returns:
             Tuple of (modified_system_text, modified_user_text).
         """
-        # 1. Apply adapter instructions
+        # 1. Append adapter instructions
         factories = AdapterInstructionRegistry.get_instructions(self.interface, self.task.value)
         for factory in factories:
             instruction = factory(**(instruction_context or {}))
-            system_text, user_text = instruction.apply(system_text, user_text)
+            if instruction.system_addition:
+                system_text = (
+                    f"{system_text}\n\n{instruction.system_addition}" if system_text else instruction.system_addition
+                )
+            if instruction.user_addition:
+                user_text = f"{user_text}\n\n{instruction.user_addition}" if user_text else instruction.user_addition
 
         # 2. Append user instructions to system text
         if user_instructions:

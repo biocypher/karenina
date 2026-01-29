@@ -1,8 +1,12 @@
 """Adapter instruction protocol and registry.
 
 Adapter instructions allow each LLM backend to inject adapter-specific
-modifications into prompts. For example, a LangChain adapter might add
-JSON schema formatting instructions to parsing prompts.
+text into prompts. For example, a LangChain adapter might add JSON schema
+formatting instructions, while a Claude adapter might add extraction directives.
+
+Instructions are append-only: each adapter provides text to append to the
+system and/or user prompts. The PromptAssembler appends adapter text first,
+then user instructions, treating all instruction sources uniformly.
 
 The registry maps (interface_name, PromptTask value) pairs to lists of
 instruction factories. Adapters register instructions in their registration.py
@@ -18,22 +22,20 @@ from typing import Protocol, runtime_checkable
 
 @runtime_checkable
 class AdapterInstruction(Protocol):
-    """Protocol for adapter-specific prompt modifications.
+    """Protocol for adapter-specific prompt additions.
 
-    An adapter instruction takes system and user text and returns
-    modified versions. Instructions are applied in registration order.
+    An adapter instruction provides text to append to the system and/or
+    user prompts. Instructions are appended in registration order.
     """
 
-    def apply(self, system_text: str, user_text: str) -> tuple[str, str]:  # noqa: vulture
-        """Apply this instruction to the prompt texts.
+    @property
+    def system_addition(self) -> str:  # noqa: vulture
+        """Text to append to the system prompt (empty string for no addition)."""
+        ...
 
-        Args:
-            system_text: The current system prompt text.
-            user_text: The current user prompt text.
-
-        Returns:
-            A tuple of (modified_system_text, modified_user_text).
-        """
+    @property
+    def user_addition(self) -> str:  # noqa: vulture
+        """Text to append to the user prompt (empty string for no addition)."""
         ...
 
 

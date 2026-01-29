@@ -127,14 +127,16 @@ class TestPromptConstruction:
         """Verify base system prompt contains required elements."""
         builder = TemplatePromptBuilder(answer_class=simple_answer)
 
-        system_prompt = builder.build_system_prompt(format_instructions="<format instructions here>")
+        system_prompt = builder.build_system_prompt()
 
         # Check base elements
         assert "evaluator that extracts structured information" in system_prompt
         assert "Extraction Protocol" in system_prompt
         assert "Critical Rules" in system_prompt
-        assert "Output Format" in system_prompt
-        assert "format_instructions" in system_prompt
+
+        # Format-specific sections should NOT be present (appended by adapters)
+        assert "Output Format" not in system_prompt
+        assert "format_instructions" not in system_prompt
 
         # Should NOT have tool trace section by default
         assert "Tool Trace Verification" not in system_prompt
@@ -144,7 +146,6 @@ class TestPromptConstruction:
         builder = TemplatePromptBuilder(answer_class=simple_answer)
 
         system_prompt = builder.build_system_prompt(
-            format_instructions="<format instructions here>",
             has_tool_traces=True,
         )
 
@@ -159,9 +160,7 @@ class TestPromptConstruction:
 
         builder = TemplatePromptBuilder(answer_class=simple_answer)
 
-        system_text = builder.build_system_prompt(
-            format_instructions="<format instructions here>",
-        )
+        system_text = builder.build_system_prompt()
 
         custom_instruction = "Always be concise and extract only the most relevant data."
         assembler = PromptAssembler(
@@ -183,7 +182,6 @@ class TestPromptConstruction:
 
         ground_truth = {"value": "42", "confidence": 0.95}
         system_prompt = builder.build_system_prompt(
-            format_instructions="<format instructions here>",
             ground_truth=ground_truth,
         )
 
@@ -207,11 +205,13 @@ class TestPromptConstruction:
         assert question in user_prompt
         assert "RESPONSE TO PARSE" in user_prompt
         assert response in user_prompt
-        assert "JSON SCHEMA" in user_prompt
-        assert "YOUR JSON RESPONSE" in user_prompt
 
-    def test_user_prompt_includes_schema(self, multi_field_answer: type[BaseAnswer]):
-        """Verify user prompt includes the answer class schema."""
+        # Format-specific sections should NOT be present (appended by adapters)
+        assert "JSON SCHEMA" not in user_prompt
+        assert "YOUR JSON RESPONSE" not in user_prompt
+
+    def test_user_prompt_is_format_agnostic(self, multi_field_answer: type[BaseAnswer]):
+        """Verify user prompt does not include schema (adapters append it)."""
         builder = TemplatePromptBuilder(answer_class=multi_field_answer)
 
         user_prompt = builder.build_user_prompt(
@@ -219,10 +219,12 @@ class TestPromptConstruction:
             response_to_parse="Test response",
         )
 
-        # Should include schema fields
-        assert "main_answer" in user_prompt
-        assert "confidence" in user_prompt
-        assert "keywords" in user_prompt
+        # Base user prompt should NOT include schema fields (adapters append them)
+        assert "JSON SCHEMA" not in user_prompt
+        assert "PARSING NOTES" not in user_prompt
+        # Should still include question and response
+        assert "Test question" in user_prompt
+        assert "Test response" in user_prompt
 
 
 # =============================================================================
@@ -474,16 +476,17 @@ class TestEdgeCases:
         builder = TemplatePromptBuilder(answer_class=simple_answer)
 
         system_prompt = builder.build_system_prompt(
-            format_instructions="<format instructions here>",
             has_tool_traces=True,
             ground_truth={"value": "42"},
         )
 
-        # All sections should be present (user instructions now via PromptAssembler)
+        # All base sections should be present
         assert "Extraction Protocol" in system_prompt
         assert "Tool Trace Verification" in system_prompt
         assert "Ground Truth Reference" in system_prompt
-        assert "Output Format" in system_prompt
+
+        # Format-specific sections should NOT be present (appended by adapters)
+        assert "Output Format" not in system_prompt
 
 
 # =============================================================================

@@ -4,7 +4,7 @@ This module registers the LangChain interface and related routing interfaces
 (openrouter, openai_endpoint) with the AdapterRegistry.
 
 Also registers adapter instructions for PARSING that append format instructions
-to the user prompt (since LangChain does not have native structured output).
+to system and user prompts (since LangChain does not have native structured output).
 """
 
 from __future__ import annotations
@@ -140,32 +140,51 @@ AdapterRegistry.register(_openai_endpoint_spec)
 
 @dataclass
 class _LangChainFormatInstruction:
-    """Append JSON format instructions to user text for LangChain parsing.
+    """Append format instructions for LangChain parsing.
 
-    LangChain does not have native structured output, so the user prompt
-    must include explicit format instructions with the JSON schema.
+    LangChain does not have native structured output, so both system and
+    user prompts need explicit format instructions with the JSON schema.
     """
 
     json_schema: dict[str, Any] | None = None
+    format_instructions: str = ""
 
-    def apply(self, system_text: str, user_text: str) -> tuple[str, str]:
-        if self.json_schema is not None:
-            schema_json = json.dumps(self.json_schema, indent=2)
-            format_block = (
-                "\n\nYou must respond with valid JSON that matches this schema:\n"
-                f"```json\n{schema_json}\n```\n"
-                "Return ONLY the JSON object, no additional text."
-            )
-            user_text = f"{user_text}{format_block}"
-        return system_text, user_text
+    @property
+    def system_addition(self) -> str:
+        if not self.format_instructions:
+            return ""
+        return (
+            "# Output Format\n\n"
+            "Return only the completed JSON object - no surrounding text, no markdown fences:\n\n"
+            f"<format_instructions>\n{self.format_instructions}\n</format_instructions>"
+        )
+
+    @property
+    def user_addition(self) -> str:
+        if self.json_schema is None:
+            return ""
+        schema_json = json.dumps(self.json_schema, indent=2)
+        return (
+            f"**JSON SCHEMA (your response MUST conform to this):**\n"
+            f"```json\n{schema_json}\n```\n\n"
+            f"**PARSING NOTES:**\n"
+            f"- Extract values for each field based on its description in the schema\n"
+            f"- If information for a field is not present, use null (if field allows null) or your best inference\n"
+            f"- Return ONLY the JSON object - no surrounding text\n\n"
+            f"**YOUR JSON RESPONSE:**"
+        )
 
 
 def _langchain_format_instruction_factory(**kwargs: object) -> _LangChainFormatInstruction:
     """Factory producing LangChain format instructions.
 
-    Expects ``json_schema`` in the instruction context dict.
+    Expects ``json_schema`` and optionally ``format_instructions`` in the
+    instruction context dict.
     """
-    return _LangChainFormatInstruction(json_schema=kwargs.get("json_schema"))  # type: ignore[arg-type]
+    return _LangChainFormatInstruction(
+        json_schema=kwargs.get("json_schema"),  # type: ignore[arg-type]
+        format_instructions=kwargs.get("format_instructions", "") or "",  # type: ignore[arg-type]
+    )
 
 
 AdapterInstructionRegistry.register("langchain", "parsing", _langchain_format_instruction_factory)

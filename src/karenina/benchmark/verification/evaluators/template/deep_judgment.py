@@ -133,10 +133,9 @@ def deep_judgment_parse(
     temp_parser = PydanticOutputParser(pydantic_object=RawAnswer)
     json_schema = temp_parser.get_format_instructions()
 
-    # Extract generic system instructions (without format_instructions for stages 1&2)
-    # The combined_system_prompt contains general instructions + format_instructions
-    # For stages 1&2, we only need the general instructions
-    generic_system_prompt = combined_system_prompt.split("<format_instructions>")[0].strip()
+    # The combined_system_prompt is now format-agnostic (no format_instructions section).
+    # Use it directly as the generic system prompt for stages 1&2.
+    generic_system_prompt = combined_system_prompt
 
     # Build stage-specific system prompts
     # Extract attribute descriptions for guidance (without the full schema format)

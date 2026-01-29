@@ -20,17 +20,15 @@ from pydantic import BaseModel
 
 @dataclass
 class TemplatePromptBuilder:
-    """Builds prompts for template parsing operations.
+    """Builds format-agnostic prompts for template parsing operations.
 
-    This class encapsulates all prompt construction logic for template evaluation,
-    providing composable system and user prompts for the judge LLM.
+    This class encapsulates base prompt construction logic for template evaluation.
+    It produces format-agnostic prompts — format-specific sections (output format,
+    JSON schema, parsing notes) are appended by each adapter via AdapterInstruction.
 
     Example:
         builder = TemplatePromptBuilder(answer_class=MyAnswer)
-        system_prompt = builder.build_system_prompt(
-            format_instructions=format_instr,
-            has_tool_traces=True,
-        )
+        system_prompt = builder.build_system_prompt(has_tool_traces=True)
         user_prompt = builder.build_user_prompt(
             question_text="What gene is targeted?",
             response_to_parse="BCL2 is the primary target...",
@@ -42,23 +40,23 @@ class TemplatePromptBuilder:
 
     def build_system_prompt(
         self,
-        format_instructions: str,
         has_tool_traces: bool = False,
         ground_truth: dict[str, Any] | None = None,
     ) -> str:
-        """Build enhanced composable system prompt for template parsing.
+        """Build format-agnostic system prompt for template parsing.
 
         This function creates a composable system prompt with:
         1. Base guidelines (always included) - extraction protocol and critical rules
         2. Tool trace verification section (conditional - only when MCP/tools present)
         3. Ground truth section (optional - for semantic matching assistance)
-        4. Output format section with format instructions
 
-        User instructions are now injected by PromptAssembler (via PromptConfig),
+        Format-specific sections (output format, JSON schema) are NOT included here.
+        Each adapter appends its own format instructions via AdapterInstruction.
+
+        User instructions are injected by PromptAssembler (via PromptConfig),
         not passed directly to this builder.
 
         Args:
-            format_instructions: Pydantic format instructions from PydanticOutputParser
             has_tool_traces: Whether the response includes tool call traces (MCP context)
             ground_truth: Optional ground truth for disambiguation assistance
 
@@ -126,24 +124,12 @@ and template are semantically close but differ in exact wording.
 Ground Truth:
 {ground_truth_str}"""
 
-        # === OUTPUT FORMAT ===
-        output_section = f"""
-
-# Output Format
-
-Return only the completed JSON object - no surrounding text, no markdown fences:
-
-<format_instructions>
-{format_instructions}
-</format_instructions>"""
-
         # Compose final prompt
         sections = [base_guidelines]
         if has_tool_traces:
             sections.append(tool_trace_section)
         if ground_truth_section:
             sections.append(ground_truth_section)
-        sections.append(output_section)
 
         return "".join(sections)
 
@@ -152,10 +138,11 @@ Return only the completed JSON object - no surrounding text, no markdown fences:
         question_text: str,
         response_to_parse: str | Any,
     ) -> str:
-        """Build enhanced user prompt for template parsing.
+        """Build format-agnostic user prompt for template parsing.
 
-        Includes the original question, response to parse, and JSON schema
-        to help the LLM understand the expected output structure.
+        Includes the original question and response to parse. Format-specific
+        sections (JSON schema, parsing notes, response trailer) are NOT included
+        here — each adapter appends its own via AdapterInstruction.
 
         Args:
             question_text: The original question that was asked
@@ -164,25 +151,10 @@ Return only the completed JSON object - no surrounding text, no markdown fences:
         Returns:
             Formatted user prompt string
         """
-        # Generate JSON schema from the Answer class
-        json_schema = json.dumps(self.answer_class.model_json_schema(), indent=2)
-
         return f"""Parse the following response and extract structured information.
 
 **ORIGINAL QUESTION:**
 {question_text}
 
 **RESPONSE TO PARSE:**
-{response_to_parse}
-
-**JSON SCHEMA (your response MUST conform to this):**
-```json
-{json_schema}
-```
-
-**PARSING NOTES:**
-- Extract values for each field based on its description in the schema
-- If information for a field is not present, use null (if field allows null) or your best inference
-- Return ONLY the JSON object - no surrounding text
-
-**YOUR JSON RESPONSE:**"""
+{response_to_parse}"""
