@@ -7,6 +7,10 @@ in rubric trait evaluation operations. Prompts are organized by evaluation type:
 - LiteralTraitPromptBuilder: Categorical classification prompts
 - DeepJudgmentPromptBuilder: Multi-stage deep judgment prompts
 - MetricTraitPromptBuilder: Confusion matrix analysis prompts
+
+NOTE: LLMTraitPromptBuilder, LiteralTraitPromptBuilder, and MetricTraitPromptBuilder
+are re-exported from their canonical location at
+karenina.benchmark.verification.prompts.rubric for backwards compatibility.
 """
 
 from .deep_judgment import DeepJudgmentPromptBuilder
