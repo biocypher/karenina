@@ -21,6 +21,8 @@ All LLM calls use LLMPort.with_structured_output() for consistent backend abstra
 where structured output is needed, and regular LLMPort.invoke() for text generation.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import re
@@ -28,10 +30,14 @@ from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
 from .....ports import LLMPort, Message
+from .....ports.capabilities import PortCapabilities
+from ...prompts.assembler import PromptAssembler
+from ...prompts.task_types import PromptTask
 from .prompts import DeepJudgmentPromptBuilder
 
 if TYPE_CHECKING:
     from .....schemas.domain import LLMRubricTrait, Rubric
+    from .....schemas.verification.prompt_config import PromptConfig
 
 logger = logging.getLogger(__name__)
 
@@ -53,19 +59,40 @@ class RubricDeepJudgmentHandler:
     and regular LLMPort.invoke() for text generation.
     """
 
-    def __init__(self, llm: LLMPort, model_config: Any):
+    def __init__(self, llm: LLMPort, model_config: Any, prompt_config: PromptConfig | None = None):
         """
         Initialize the deep judgment handler.
 
         Args:
             llm: LLMPort adapter for LLM operations.
             model_config: Configuration for the evaluation model.
+            prompt_config: Optional per-task-type user instructions for prompt assembly.
         """
         self.llm = llm
         self.model_config = model_config
+        self._prompt_config = prompt_config
         self._prompt_builder = DeepJudgmentPromptBuilder()
 
-    def _validate_score(self, score: Any, trait: "LLMRubricTrait") -> int | bool:
+    def _get_user_instructions(self, task: PromptTask) -> str | None:
+        """Get user instructions for a given task from prompt_config."""
+        if self._prompt_config is None:
+            return None
+        return self._prompt_config.get_for_task(task.value)
+
+    def _assemble_messages(self, task: PromptTask, system_text: str, user_text: str) -> list[Message]:
+        """Assemble prompt messages using PromptAssembler for a given task."""
+        assembler = PromptAssembler(
+            task=task,
+            interface=self.model_config.interface,
+            capabilities=PortCapabilities(),
+        )
+        return assembler.assemble(
+            system_text=system_text,
+            user_text=user_text,
+            user_instructions=self._get_user_instructions(task),
+        )
+
+    def _validate_score(self, score: Any, trait: LLMRubricTrait) -> int | bool:
         """Validate and convert a score for a trait."""
         if trait.kind == "boolean":
             if isinstance(score, bool):
@@ -92,7 +119,7 @@ class RubricDeepJudgmentHandler:
         self,
         question: str,
         answer: str,
-        rubric: "Rubric",
+        rubric: Rubric,
         config: Any,  # VerificationConfig
         standard_evaluator_fn: Any,  # Callback for standard trait evaluation
     ) -> dict[str, Any]:
@@ -204,7 +231,7 @@ class RubricDeepJudgmentHandler:
         }
 
     def _evaluate_single_trait_with_deep_judgment(
-        self, question: str, answer: str, trait: "LLMRubricTrait", config: Any
+        self, question: str, answer: str, trait: LLMRubricTrait, config: Any
     ) -> dict[str, Any]:
         """
         Evaluate a single trait using deep judgment (sequential multi-stage process).
@@ -230,7 +257,7 @@ class RubricDeepJudgmentHandler:
             return self._evaluate_trait_without_excerpts(question, answer, trait, config, metadata)
 
     def _evaluate_trait_with_excerpts(
-        self, question: str, answer: str, trait: "LLMRubricTrait", config: Any, metadata: dict[str, Any]
+        self, question: str, answer: str, trait: LLMRubricTrait, config: Any, metadata: dict[str, Any]
     ) -> dict[str, Any]:
         """
         Evaluate trait with excerpt extraction (Flow 1: 3-4 stages).
@@ -303,7 +330,7 @@ class RubricDeepJudgmentHandler:
         self,
         question: str,
         answer: str,
-        trait: "LLMRubricTrait",
+        trait: LLMRubricTrait,
         config: Any,  # noqa: ARG002 - Kept for method signature consistency
         metadata: dict[str, Any],
     ) -> dict[str, Any]:
@@ -342,7 +369,7 @@ class RubricDeepJudgmentHandler:
             "usage_metadata_list": usage_metadata_list,
         }
 
-    def _extract_excerpts_for_trait(self, answer: str, trait: "LLMRubricTrait", config: Any) -> dict[str, Any]:
+    def _extract_excerpts_for_trait(self, answer: str, trait: LLMRubricTrait, config: Any) -> dict[str, Any]:
         """
         Extract excerpts for a trait with retry on validation failure.
 
@@ -381,11 +408,8 @@ class RubricDeepJudgmentHandler:
                 trait, max_excerpts, answer, TraitExcerptsOutput, validation_feedback
             )
 
-            # Call LLM
-            messages: list[Message] = [
-                Message.system(system_prompt),
-                Message.user(user_prompt),
-            ]
+            # Assemble messages via PromptAssembler
+            messages = self._assemble_messages(PromptTask.DJ_RUBRIC_EXCERPT_EXTRACTION, system_prompt, user_prompt)
 
             # Use LLMPort.with_structured_output() for parsing
             try:
@@ -506,7 +530,7 @@ class RubricDeepJudgmentHandler:
         return excerpts
 
     def _assess_trait_hallucination(
-        self, excerpts: list[dict[str, Any]], trait: "LLMRubricTrait", config: Any
+        self, excerpts: list[dict[str, Any]], trait: LLMRubricTrait, config: Any
     ) -> dict[str, Any]:
         """
         Assess hallucination risk for trait excerpts using search.
@@ -550,10 +574,7 @@ class RubricDeepJudgmentHandler:
                 excerpt_text, search_result_str, HallucinationRiskOutput
             )
 
-            messages: list[Message] = [
-                Message.system(system_prompt),
-                Message.user(user_prompt),
-            ]
+            messages = self._assemble_messages(PromptTask.DJ_RUBRIC_HALLUCINATION, system_prompt, user_prompt)
 
             # Use LLMPort.with_structured_output() for parsing
             from .....schemas.workflow.rubric_outputs import HallucinationRiskOutput
@@ -602,7 +623,7 @@ class RubricDeepJudgmentHandler:
         self,
         question: str,
         answer: str,
-        trait: "LLMRubricTrait",
+        trait: LLMRubricTrait,
         excerpts: list[dict[str, Any]] | None = None,
         hallucination_risk: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
@@ -623,10 +644,7 @@ class RubricDeepJudgmentHandler:
             # Without excerpts
             user_prompt = self._prompt_builder.build_reasoning_user_prompt_without_excerpts(question, answer, trait)
 
-        messages: list[Message] = [
-            Message.system(system_prompt),
-            Message.user(user_prompt),
-        ]
+        messages = self._assemble_messages(PromptTask.DJ_RUBRIC_REASONING, system_prompt, user_prompt)
 
         # Use LLMPort.invoke() for text generation (no structured output needed)
         response = self.llm.invoke(messages)
@@ -641,7 +659,7 @@ class RubricDeepJudgmentHandler:
         self,
         question: str,  # noqa: ARG002 - Kept for API consistency with other trait methods
         answer: str,  # noqa: ARG002 - Kept for API consistency with other trait methods
-        trait: "LLMRubricTrait",
+        trait: LLMRubricTrait,
         reasoning: str,
     ) -> dict[str, Any]:
         """
@@ -657,10 +675,7 @@ class RubricDeepJudgmentHandler:
         system_prompt = self._prompt_builder.build_score_extraction_system_prompt()
         user_prompt = self._prompt_builder.build_score_extraction_user_prompt(trait, reasoning, schema_class)
 
-        messages: list[Message] = [
-            Message.system(system_prompt),
-            Message.user(user_prompt),
-        ]
+        messages = self._assemble_messages(PromptTask.DJ_RUBRIC_SCORE_EXTRACTION, system_prompt, user_prompt)
 
         # Use LLMPort.with_structured_output() for parsing
         try:
@@ -687,7 +702,7 @@ class RubricDeepJudgmentHandler:
             usage_metadata = asdict(response.usage) if response.usage else {}
             return {"score": score, "usage_metadata": usage_metadata}
 
-    def _parse_trait_score_response(self, response: str, trait: "LLMRubricTrait") -> int | bool:
+    def _parse_trait_score_response(self, response: str, trait: LLMRubricTrait) -> int | bool:
         """Parse a trait score response."""
         response = response.strip().lower()
 

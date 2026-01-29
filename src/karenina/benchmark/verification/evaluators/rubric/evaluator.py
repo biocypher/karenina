@@ -311,7 +311,7 @@ class RubricEvaluator:
                 - traits_without_valid_excerpts: Traits that failed excerpt extraction
         """
         # Create handler with the same LLM instance
-        handler = RubricDeepJudgmentHandler(self.llm, self.model_config)
+        handler = RubricDeepJudgmentHandler(self.llm, self.model_config, prompt_config=self._prompt_config)
 
         # Delegate to handler, providing a callback for standard trait evaluation
         return handler.evaluate_rubric_with_deep_judgment(
