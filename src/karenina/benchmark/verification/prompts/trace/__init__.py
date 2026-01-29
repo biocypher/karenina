@@ -1,7 +1,7 @@
-"""Prompts for verification operations.
+"""Centralized trace analysis prompts for the verification pipeline.
 
-Canonical location: karenina.benchmark.verification.prompts.trace
-This module re-exports from the centralized location for backwards compatibility.
+Contains prompt constants for abstention detection, sufficiency detection,
+and answer evaluation (orphaned - no current consumers).
 """
 
 from karenina.benchmark.verification.prompts.trace.abstention import (
@@ -20,8 +20,8 @@ from karenina.benchmark.verification.prompts.trace.sufficiency import (
 __all__ = [
     "ABSTENTION_DETECTION_SYS",
     "ABSTENTION_DETECTION_USER",
-    "SUFFICIENCY_DETECTION_SYS",
-    "SUFFICIENCY_DETECTION_USER",
     "ANSWER_EVALUATION_SYS",
     "ANSWER_EVALUATION_USER",
+    "SUFFICIENCY_DETECTION_SYS",
+    "SUFFICIENCY_DETECTION_USER",
 ]
