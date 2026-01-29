@@ -79,7 +79,13 @@ class RubricDeepJudgmentHandler:
             return None
         return self._prompt_config.get_for_task(task.value)
 
-    def _assemble_messages(self, task: PromptTask, system_text: str, user_text: str) -> list[Message]:
+    def _assemble_messages(
+        self,
+        task: PromptTask,
+        system_text: str,
+        user_text: str,
+        instruction_context: dict[str, object] | None = None,
+    ) -> list[Message]:
         """Assemble prompt messages using PromptAssembler for a given task."""
         assembler = PromptAssembler(
             task=task,
@@ -90,6 +96,7 @@ class RubricDeepJudgmentHandler:
             system_text=system_text,
             user_text=user_text,
             user_instructions=self._get_user_instructions(task),
+            instruction_context=instruction_context,
         )
 
     def _validate_score(self, score: Any, trait: LLMRubricTrait) -> int | bool:
@@ -405,11 +412,23 @@ class RubricDeepJudgmentHandler:
 
             system_prompt = self._prompt_builder.build_excerpt_extraction_system_prompt()
             user_prompt = self._prompt_builder.build_excerpt_extraction_user_prompt(
-                trait, max_excerpts, answer, TraitExcerptsOutput, validation_feedback
+                trait, max_excerpts, answer, validation_feedback
             )
 
+            # Build instruction_context for adapter instructions
+            instruction_context: dict[str, object] = {
+                "json_schema": TraitExcerptsOutput.model_json_schema(),
+                "parsing_notes": (
+                    "- We validate excerpts using fuzzy matching against the original answer\n"
+                    "- Excerpts that don't match will be rejected and may trigger a retry\n"
+                    "- Minor whitespace differences are tolerated"
+                ),
+            }
+
             # Assemble messages via PromptAssembler
-            messages = self._assemble_messages(PromptTask.DJ_RUBRIC_EXCERPT_EXTRACTION, system_prompt, user_prompt)
+            messages = self._assemble_messages(
+                PromptTask.DJ_RUBRIC_EXCERPT_EXTRACTION, system_prompt, user_prompt, instruction_context
+            )
 
             # Use LLMPort.with_structured_output() for parsing
             try:
@@ -571,10 +590,18 @@ class RubricDeepJudgmentHandler:
 
             system_prompt = self._prompt_builder.build_hallucination_assessment_system_prompt()
             user_prompt = self._prompt_builder.build_hallucination_assessment_user_prompt(
-                excerpt_text, search_result_str, HallucinationRiskOutput
+                excerpt_text, search_result_str
             )
 
-            messages = self._assemble_messages(PromptTask.DJ_RUBRIC_HALLUCINATION, system_prompt, user_prompt)
+            # Build instruction_context for adapter instructions
+            hallucination_instruction_context: dict[str, object] = {
+                "json_schema": HallucinationRiskOutput.model_json_schema(),
+                "parsing_notes": ('- The "risk" field must be exactly one of: "none", "low", "medium", "high"'),
+            }
+
+            messages = self._assemble_messages(
+                PromptTask.DJ_RUBRIC_HALLUCINATION, system_prompt, user_prompt, hallucination_instruction_context
+            )
 
             # Use LLMPort.with_structured_output() for parsing
             from .....schemas.workflow.rubric_outputs import HallucinationRiskOutput
@@ -673,9 +700,31 @@ class RubricDeepJudgmentHandler:
         schema_class = SingleBooleanScore if trait.kind == "boolean" else SingleNumericScore
 
         system_prompt = self._prompt_builder.build_score_extraction_system_prompt()
-        user_prompt = self._prompt_builder.build_score_extraction_user_prompt(trait, reasoning, schema_class)
+        user_prompt = self._prompt_builder.build_score_extraction_user_prompt(trait, reasoning)
 
-        messages = self._assemble_messages(PromptTask.DJ_RUBRIC_SCORE_EXTRACTION, system_prompt, user_prompt)
+        # Build instruction_context for adapter instructions
+        if trait.kind == "boolean":
+            parsing_notes = (
+                '- Return valid JSON: {"result": true} or {"result": false}\n'
+                '- We also accept plain text: "true", "yes", "false", "no"\n'
+                '- Use lowercase boolean values (not "True" or "False")'
+            )
+        else:
+            min_score = trait.min_score or 1
+            max_score = trait.max_score or 5
+            parsing_notes = (
+                f'- Return valid JSON: {{"score": N}} where N is an integer from {min_score} to {max_score}\n'
+                f"- Scores outside [{min_score}, {max_score}] are automatically clamped to boundaries\n"
+                "- Use integers only (no decimals)"
+            )
+        score_instruction_context: dict[str, object] = {
+            "json_schema": schema_class.model_json_schema(),
+            "parsing_notes": parsing_notes,
+        }
+
+        messages = self._assemble_messages(
+            PromptTask.DJ_RUBRIC_SCORE_EXTRACTION, system_prompt, user_prompt, score_instruction_context
+        )
 
         # Use LLMPort.with_structured_output() for parsing
         try:

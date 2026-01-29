@@ -2,6 +2,10 @@
 
 These builders produce the system and user prompts for assessing hallucination
 risk of extracted excerpts against search results.
+
+Format-specific content (JSON Only requirements, markdown fencing rules, output
+format examples) is NOT included here — it is injected by adapter instructions
+registered per-interface. This keeps prompt builders format-agnostic.
 """
 
 from __future__ import annotations
@@ -53,14 +57,10 @@ For each excerpt:
 
 **All Excerpts**: You MUST assess every excerpt provided, no exceptions.
 
-**JSON Only**: Return ONLY the JSON object - no explanations, no markdown fences.
-
 # What NOT to Do
 
 - Do NOT assign "none" unless search strongly corroborates the excerpt
-- Do NOT skip any excerpts in your assessment
-- Do NOT wrap the JSON in markdown code blocks
-- Do NOT add explanatory text before or after the JSON"""
+- Do NOT skip any excerpts in your assessment"""
 
 
 def build_assessment_user_prompt(
@@ -112,16 +112,6 @@ def build_assessment_user_prompt(
 
 {chr(10).join(excerpt_descriptions)}
 
-**OUTPUT FORMAT** - Return JSON with assessments for ALL {num_excerpts} excerpts:
-{{
-  "excerpt_assessments": [
-    {{
-      "excerpt_id": "0",
-      "attribute": "attribute_name",
-      "hallucination_risk": "none|low|medium|high",
-      "justification": "Brief explanation based on search evidence"
-    }}
-  ]
-}}
-
-**YOUR JSON RESPONSE:**"""
+Provide an assessment for ALL {num_excerpts} excerpts. For each excerpt, include
+the excerpt_id, attribute name, hallucination_risk level (none/low/medium/high),
+and a brief justification based on search evidence."""

@@ -132,7 +132,14 @@ class MetricTraitEvaluator:
 
         # Build prompt
         system_prompt = self._prompt_builder.build_system_prompt()
-        user_prompt = self._prompt_builder.build_user_prompt(question, answer, trait, ConfusionMatrixOutput)
+        user_prompt = self._prompt_builder.build_user_prompt(question, answer, trait)
+
+        # Build instruction_context for adapter instructions (format-specific content)
+        instruction_context: dict[str, object] = {
+            "json_schema": ConfusionMatrixOutput.model_json_schema(),
+            "output_format_hint": '{"tp": [...], "fn": [...], "fp": [...]}',
+            "example_json": '{"tp": ["asthma", "bronchitis"], "fn": ["pneumonia"], "fp": ["emphysema"]}',
+        }
 
         # Assemble messages via PromptAssembler (applies adapter + user instructions)
         user_instructions = (
@@ -147,6 +154,7 @@ class MetricTraitEvaluator:
             system_text=system_prompt,
             user_text=user_prompt,
             user_instructions=user_instructions,
+            instruction_context=instruction_context,
         )
 
         # Use LLMPort.with_structured_output() for parsing

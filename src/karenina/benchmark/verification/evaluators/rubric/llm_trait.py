@@ -103,7 +103,13 @@ class LLMTraitEvaluator:
             return None
         return self._prompt_config.get_for_task(task.value)
 
-    def _assemble_messages(self, task: PromptTask, system_text: str, user_text: str) -> list[Message]:
+    def _assemble_messages(
+        self,
+        task: PromptTask,
+        system_text: str,
+        user_text: str,
+        instruction_context: dict[str, object] | None = None,
+    ) -> list[Message]:
         """Assemble messages using PromptAssembler with the given task type."""
         assembler = PromptAssembler(
             task=task,
@@ -114,6 +120,7 @@ class LLMTraitEvaluator:
             system_text=system_text,
             user_text=user_text,
             user_instructions=self._get_user_instructions(task),
+            instruction_context=instruction_context,
         )
 
     def evaluate_batch(
@@ -133,9 +140,18 @@ class LLMTraitEvaluator:
         from .....schemas.workflow.rubric_outputs import BatchRubricScores
 
         system_prompt = self._llm_prompt_builder.build_batch_system_prompt()
-        user_prompt = self._llm_prompt_builder.build_batch_user_prompt(question, answer, traits, BatchRubricScores)
+        user_prompt = self._llm_prompt_builder.build_batch_user_prompt(question, answer, traits)
 
-        messages = self._assemble_messages(PromptTask.RUBRIC_LLM_TRAIT_BATCH, system_prompt, user_prompt)
+        # Build instruction_context for adapter instructions (format-specific content)
+        instruction_context: dict[str, object] = {
+            "json_schema": BatchRubricScores.model_json_schema(),
+            "example_json": self._llm_prompt_builder.build_batch_example_json(traits),
+            "output_format_hint": 'Return a JSON object with a "scores" key. Use EXACT trait names.',
+        }
+
+        messages = self._assemble_messages(
+            PromptTask.RUBRIC_LLM_TRAIT_BATCH, system_prompt, user_prompt, instruction_context
+        )
 
         # Use LLMPort.with_structured_output() for parsing
         # The adapter guarantees response.raw is a validated BatchRubricScores instance
@@ -174,8 +190,18 @@ class LLMTraitEvaluator:
         for trait in traits:
             model_class = SingleBooleanScore if trait.kind == "boolean" else SingleNumericScore
             system_prompt = self._llm_prompt_builder.build_single_trait_system_prompt(trait)
-            user_prompt = self._llm_prompt_builder.build_single_trait_user_prompt(question, answer, trait, model_class)
-            messages = self._assemble_messages(PromptTask.RUBRIC_LLM_TRAIT_SINGLE, system_prompt, user_prompt)
+            user_prompt = self._llm_prompt_builder.build_single_trait_user_prompt(question, answer, trait)
+
+            # Build instruction_context for adapter instructions
+            format_hint = '{"result": true} or {"result": false}' if trait.kind == "boolean" else '{"score": N}'
+            instruction_context: dict[str, object] = {
+                "json_schema": model_class.model_json_schema(),
+                "output_format_hint": f"Evaluate and return your assessment as JSON: {format_hint}",
+            }
+
+            messages = self._assemble_messages(
+                PromptTask.RUBRIC_LLM_TRAIT_SINGLE, system_prompt, user_prompt, instruction_context
+            )
             tasks.append((messages, model_class))
 
         if self._async_enabled:
@@ -419,11 +445,22 @@ class LLMTraitEvaluator:
             return {}, {}, {}
 
         system_prompt = self._literal_prompt_builder.build_batch_system_prompt()
-        user_prompt = self._literal_prompt_builder.build_batch_user_prompt(
-            question, answer, literal_traits, BatchLiteralClassifications
-        )
+        user_prompt = self._literal_prompt_builder.build_batch_user_prompt(question, answer, literal_traits)
 
-        messages = self._assemble_messages(PromptTask.RUBRIC_LITERAL_TRAIT_BATCH, system_prompt, user_prompt)
+        # Build instruction_context for adapter instructions (format-specific content)
+        instruction_context: dict[str, object] = {
+            "json_schema": BatchLiteralClassifications.model_json_schema(),
+            "example_json": self._literal_prompt_builder.build_batch_example_json(literal_traits),
+            "output_format_hint": (
+                'Return a JSON object with a "classifications" array containing one object per trait.\n'
+                'Each object has "trait_name" and "class_name" fields.\n'
+                "Use EXACT trait and class names as shown above."
+            ),
+        }
+
+        messages = self._assemble_messages(
+            PromptTask.RUBRIC_LITERAL_TRAIT_BATCH, system_prompt, user_prompt, instruction_context
+        )
 
         # Use LLMPort.with_structured_output() for parsing
         structured_llm = self.llm.with_structured_output(BatchLiteralClassifications)
@@ -470,10 +507,17 @@ class LLMTraitEvaluator:
         tasks: list[tuple[list[Message], type[SingleLiteralClassification]]] = []
         for trait in literal_traits:
             system_prompt = self._literal_prompt_builder.build_single_trait_system_prompt(trait)
-            user_prompt = self._literal_prompt_builder.build_single_trait_user_prompt(
-                question, answer, trait, SingleLiteralClassification
+            user_prompt = self._literal_prompt_builder.build_single_trait_user_prompt(question, answer, trait)
+
+            # Build instruction_context for adapter instructions
+            instruction_context: dict[str, object] = {
+                "json_schema": SingleLiteralClassification.model_json_schema(),
+                "output_format_hint": 'Classify and return as JSON: {"classification": "<class_name>"}',
+            }
+
+            messages = self._assemble_messages(
+                PromptTask.RUBRIC_LITERAL_TRAIT_SINGLE, system_prompt, user_prompt, instruction_context
             )
-            messages = self._assemble_messages(PromptTask.RUBRIC_LITERAL_TRAIT_SINGLE, system_prompt, user_prompt)
             tasks.append((messages, SingleLiteralClassification))
 
         if self._async_enabled:

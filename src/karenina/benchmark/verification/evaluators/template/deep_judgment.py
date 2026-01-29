@@ -177,6 +177,13 @@ def deep_judgment_parse(
             user_instructions=prompt_config.get_for_task(PromptTask.DJ_TEMPLATE_EXCERPT_EXTRACTION.value)
             if prompt_config
             else None,
+            instruction_context={
+                "json_schema": None,  # Template DJ uses inline format in system prompt
+                "parsing_notes": (
+                    "- We validate excerpts using fuzzy matching against the original response\n"
+                    "- Excerpts that don't match will be rejected and may trigger a retry"
+                ),
+            },
         )
         llm_response = parsing_llm.invoke(excerpt_messages)
         raw_response, usage_metadata = llm_response.content, llm_response.usage.to_dict()
@@ -396,6 +403,12 @@ def deep_judgment_parse(
                 user_instructions=prompt_config.get_for_task(PromptTask.DJ_TEMPLATE_HALLUCINATION.value)
                 if prompt_config
                 else None,
+                instruction_context={
+                    "json_schema": None,  # Template DJ uses inline format in system prompt
+                    "parsing_notes": (
+                        '- The "hallucination_risk" field must be one of: "none", "low", "medium", "high"'
+                    ),
+                },
             )
 
             try:

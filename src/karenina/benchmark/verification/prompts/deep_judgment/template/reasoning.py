@@ -2,6 +2,10 @@
 
 These builders produce the system and user prompts for generating reasoning
 traces that explain how extracted excerpts inform attribute values.
+
+Note: Reasoning tasks produce free-form text (not structured output), so
+format-specific content was already minimal. Remaining JSON format references
+(Output Format sections) are stripped since adapter instructions handle them.
 """
 
 
@@ -79,22 +83,9 @@ When excerpts are empty: Explain why and how this affects the attribute.
 
 **Risk-Aware**: Factor hallucination risks into your confidence assessment.
 
-**JSON Only**: Return ONLY the JSON object - no explanations, no markdown fences.
-
 # What NOT to Do
 
-- Do NOT skip any attributes
-- Do NOT wrap the JSON in markdown code blocks
-- Do NOT add explanatory text before or after the JSON
-
-# Output Format
-
-Return JSON with reasoning for ALL attributes:
-{
-  "attribute_name": {
-    "reasoning": "reasoning text explaining how excerpts inform the attribute value"
-  }
-}"""
+- Do NOT skip any attributes"""
     else:
         base += """
 
@@ -116,20 +107,9 @@ When excerpts are empty: Explain why (e.g., "Model refused", "No explicit info")
 
 **Evidence-Based**: Base reasoning on the actual excerpts provided.
 
-**JSON Only**: Return ONLY the JSON object - no explanations, no markdown fences.
-
 # What NOT to Do
 
-- Do NOT skip any attributes
-- Do NOT wrap the JSON in markdown code blocks
-- Do NOT add explanatory text before or after the JSON
-
-# Output Format
-
-Return JSON with reasoning for ALL attributes:
-{
-  "attribute_name": "reasoning text explaining how excerpts inform the attribute value"
-}"""
+- Do NOT skip any attributes"""
 
     return base
 

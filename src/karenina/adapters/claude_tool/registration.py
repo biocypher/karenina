@@ -8,9 +8,10 @@ The adapter is registered with:
 - Agent factory: ClaudeToolAgentAdapter
 - Parser factory: ClaudeToolParserAdapter
 
-Also registers adapter instructions for PARSING that append extraction
-directives to the system prompt (Claude Tool uses native structured output
-via beta.messages.parse, so no format/schema sections are needed).
+Also registers adapter instructions for PARSING, RUBRIC, and DEEP JUDGMENT
+tasks that append extraction directives to the system prompt (Claude Tool uses
+native structured output via beta.messages.parse, so no format/schema sections
+are needed).
 """
 
 from __future__ import annotations
@@ -167,3 +168,78 @@ def _claude_tool_parsing_instruction_factory(**kwargs: object) -> _ClaudeToolPar
 
 
 AdapterInstructionRegistry.register("claude_tool", "parsing", _claude_tool_parsing_instruction_factory)
+
+
+# =============================================================================
+# Adapter instructions for RUBRIC tasks
+# =============================================================================
+
+
+@dataclass
+class _ClaudeToolRubricInstruction:
+    """Minimal rubric evaluation directives for Claude Tool.
+
+    Claude Tool uses native structured output, so no format/schema sections
+    are needed. Only evaluation guidance is appended.
+    """
+
+    @property
+    def system_addition(self) -> str:
+        return "Evaluate based solely on the provided criteria. Be precise and consistent."
+
+    @property
+    def user_addition(self) -> str:
+        return ""
+
+
+def _claude_tool_rubric_factory(**kwargs: object) -> _ClaudeToolRubricInstruction:  # noqa: ARG001
+    return _ClaudeToolRubricInstruction()
+
+
+# =============================================================================
+# Adapter instructions for DEEP JUDGMENT tasks
+# =============================================================================
+
+
+@dataclass
+class _ClaudeToolDJInstruction:
+    """Minimal deep judgment directives for Claude Tool.
+
+    Claude Tool uses native structured output, so no format/schema sections
+    are needed. Only extraction guidance is appended.
+    """
+
+    @property
+    def system_addition(self) -> str:
+        return "Extract only what's actually stated. Use null for missing information."
+
+    @property
+    def user_addition(self) -> str:
+        return ""
+
+
+def _claude_tool_dj_factory(**kwargs: object) -> _ClaudeToolDJInstruction:  # noqa: ARG001
+    return _ClaudeToolDJInstruction()
+
+
+# Register rubric tasks
+_RUBRIC_TASKS = [
+    "rubric_llm_trait_batch",
+    "rubric_llm_trait_single",
+    "rubric_literal_trait_batch",
+    "rubric_literal_trait_single",
+    "rubric_metric_trait",
+]
+for _task in _RUBRIC_TASKS:
+    AdapterInstructionRegistry.register("claude_tool", _task, _claude_tool_rubric_factory)
+
+# Register DJ tasks (excluding reasoning tasks which produce free-form text)
+_DJ_STRUCTURED_TASKS = [
+    "dj_rubric_excerpt_extraction",
+    "dj_rubric_hallucination",
+    "dj_rubric_score_extraction",
+    "dj_template_excerpt_extraction",
+    "dj_template_hallucination",
+]
+for _task in _DJ_STRUCTURED_TASKS:
+    AdapterInstructionRegistry.register("claude_tool", _task, _claude_tool_dj_factory)

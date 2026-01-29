@@ -2,6 +2,10 @@
 
 These builders produce the system and user prompts for extracting verbatim
 excerpts from LLM responses that corroborate each template attribute.
+
+Format-specific content (JSON Only requirements, markdown fencing rules, output
+format examples) is NOT included here — it is injected by adapter instructions
+registered per-interface. This keeps prompt builders format-agnostic.
 """
 
 
@@ -57,27 +61,11 @@ For each attribute:
 
 **Completeness**: Cover all attributes listed above, even if no excerpts are found.
 
-**JSON Only**: Return ONLY the JSON object - no explanations, no markdown fences.
-
 # What NOT to Do
 
 - Do NOT paraphrase or reword the response text
 - Do NOT invent or hallucinate excerpts that aren't in the response
-- Do NOT include text from other parts of this prompt
-- Do NOT wrap the JSON in markdown code blocks
-- Do NOT add explanatory text before or after the JSON
-
-# Output Format
-
-Return JSON matching this structure exactly:
-{{
-  "attribute_name": [
-    {{"text": "exact quote from response", "confidence": "low|medium|high"}}
-  ],
-  "attribute_without_excerpts": [
-    {{"text": "", "confidence": "none", "explanation": "Brief reason (e.g., 'Model refused', 'No explicit info')"}}
-  ]
-}}"""
+- Do NOT include text from other parts of this prompt"""
 
 
 def build_excerpt_user_prompt(

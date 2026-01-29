@@ -3,8 +3,9 @@
 This module registers the LangChain interface and related routing interfaces
 (openrouter, openai_endpoint) with the AdapterRegistry.
 
-Also registers adapter instructions for PARSING that append format instructions
-to system and user prompts (since LangChain does not have native structured output).
+Also registers adapter instructions for PARSING, RUBRIC, and DEEP JUDGMENT tasks
+that append format instructions to system and user prompts (since LangChain does
+not have native structured output).
 """
 
 from __future__ import annotations
@@ -190,3 +191,136 @@ def _langchain_format_instruction_factory(**kwargs: object) -> _LangChainFormatI
 AdapterInstructionRegistry.register("langchain", "parsing", _langchain_format_instruction_factory)
 AdapterInstructionRegistry.register("openrouter", "parsing", _langchain_format_instruction_factory)
 AdapterInstructionRegistry.register("openai_endpoint", "parsing", _langchain_format_instruction_factory)
+
+
+# =============================================================================
+# Adapter instructions for RUBRIC tasks
+# =============================================================================
+
+
+@dataclass
+class _LangChainRubricFormatInstruction:
+    """Append format instructions for LangChain rubric evaluation.
+
+    LangChain does not have native structured output, so rubric prompts need
+    explicit JSON schema and format sections appended by the adapter.
+    """
+
+    json_schema: dict[str, Any] | None = None
+    example_json: str = ""
+    output_format_hint: str = ""
+
+    @property
+    def system_addition(self) -> str:
+        return (
+            "**RESPONSE FORMAT:**\n"
+            "You will receive a JSON Schema specifying the exact output structure. "
+            "Your response MUST conform to this schema.\n"
+            "Return ONLY a JSON object - no explanations, no markdown, no surrounding text.\n\n"
+            "**WHAT NOT TO DO:**\n"
+            "- Do NOT wrap JSON in markdown code blocks (no ```)\n"
+            "- Do NOT add explanatory text before or after the JSON"
+        )
+
+    @property
+    def user_addition(self) -> str:
+        parts: list[str] = []
+        if self.json_schema is not None:
+            schema_json = json.dumps(self.json_schema, indent=2)
+            parts.append(f"**JSON SCHEMA (your response MUST conform to this):**\n```json\n{schema_json}\n```")
+        if self.example_json:
+            parts.append(
+                f"**REQUIRED OUTPUT FORMAT:**\n"
+                f"Return a JSON object matching the schema above.\n\n"
+                f"Example:\n{self.example_json}"
+            )
+        elif self.output_format_hint:
+            parts.append(f"**REQUIRED OUTPUT FORMAT:**\n{self.output_format_hint}")
+        parts.append("**YOUR JSON RESPONSE:**")
+        return "\n\n".join(parts)
+
+
+def _langchain_rubric_format_factory(**kwargs: object) -> _LangChainRubricFormatInstruction:
+    """Factory producing LangChain rubric format instructions."""
+    return _LangChainRubricFormatInstruction(
+        json_schema=kwargs.get("json_schema"),  # type: ignore[arg-type]
+        example_json=kwargs.get("example_json", "") or "",  # type: ignore[arg-type]
+        output_format_hint=kwargs.get("output_format_hint", "") or "",  # type: ignore[arg-type]
+    )
+
+
+# Register rubric tasks for all LangChain-family interfaces
+_RUBRIC_TASKS = [
+    "rubric_llm_trait_batch",
+    "rubric_llm_trait_single",
+    "rubric_literal_trait_batch",
+    "rubric_literal_trait_single",
+    "rubric_metric_trait",
+]
+_LANGCHAIN_INTERFACES = ["langchain", "openrouter", "openai_endpoint"]
+
+for _task in _RUBRIC_TASKS:
+    for _iface in _LANGCHAIN_INTERFACES:
+        AdapterInstructionRegistry.register(_iface, _task, _langchain_rubric_format_factory)
+
+
+# =============================================================================
+# Adapter instructions for DEEP JUDGMENT tasks
+# =============================================================================
+
+
+@dataclass
+class _LangChainDJFormatInstruction:
+    """Append format instructions for LangChain deep judgment tasks.
+
+    Deep judgment excerpt extraction, hallucination assessment, and score
+    extraction all produce structured JSON output that needs explicit
+    format instructions for LangChain adapters.
+    """
+
+    json_schema: dict[str, Any] | None = None
+    parsing_notes: str = ""
+
+    @property
+    def system_addition(self) -> str:
+        return (
+            "You will receive a JSON Schema specifying the exact output structure. "
+            "Your response MUST conform to this schema.\n"
+            "Return ONLY a JSON object - no explanations, no markdown, no surrounding text.\n\n"
+            "**WHAT NOT TO DO:**\n"
+            "- Do NOT wrap JSON in markdown code blocks (no ```)\n"
+            "- Do NOT add explanatory text before or after the JSON"
+        )
+
+    @property
+    def user_addition(self) -> str:
+        parts: list[str] = []
+        if self.json_schema is not None:
+            schema_json = json.dumps(self.json_schema, indent=2)
+            parts.append(f"**JSON SCHEMA (your response MUST conform to this):**\n```json\n{schema_json}\n```")
+        if self.parsing_notes:
+            parts.append(f"**PARSING NOTES:**\n{self.parsing_notes}")
+        parts.append("**YOUR JSON RESPONSE:**")
+        return "\n\n".join(parts)
+
+
+def _langchain_dj_format_factory(**kwargs: object) -> _LangChainDJFormatInstruction:
+    """Factory producing LangChain deep judgment format instructions."""
+    return _LangChainDJFormatInstruction(
+        json_schema=kwargs.get("json_schema"),  # type: ignore[arg-type]
+        parsing_notes=kwargs.get("parsing_notes", "") or "",  # type: ignore[arg-type]
+    )
+
+
+# Register DJ tasks (excluding reasoning tasks which produce free-form text)
+_DJ_STRUCTURED_TASKS = [
+    "dj_rubric_excerpt_extraction",
+    "dj_rubric_hallucination",
+    "dj_rubric_score_extraction",
+    "dj_template_excerpt_extraction",
+    "dj_template_hallucination",
+]
+
+for _task in _DJ_STRUCTURED_TASKS:
+    for _iface in _LANGCHAIN_INTERFACES:
+        AdapterInstructionRegistry.register(_iface, _task, _langchain_dj_format_factory)
