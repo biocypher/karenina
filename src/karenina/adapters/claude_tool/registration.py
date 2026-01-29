@@ -8,20 +8,16 @@ The adapter is registered with:
 - Agent factory: ClaudeToolAgentAdapter
 - Parser factory: ClaudeToolParserAdapter
 
-Also registers adapter instructions for PARSING, RUBRIC, and DEEP JUDGMENT
-tasks that append extraction directives to the system prompt (Claude Tool uses
-native structured output via beta.messages.parse, so no format/schema sections
-are needed).
+Adapter instructions for PARSING, RUBRIC, and DEEP JUDGMENT tasks are
+registered via the prompts subpackage (imported at the bottom of this module).
 """
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from karenina.adapters.registry import AdapterAvailability, AdapterRegistry, AdapterSpec
-from karenina.ports.adapter_instruction import AdapterInstructionRegistry
 
 if TYPE_CHECKING:
     from karenina.ports import AgentPort, LLMPort, ParserPort
@@ -137,109 +133,7 @@ AdapterRegistry.register(_claude_tool_spec)
 
 logger.debug("Registered claude_tool adapter with AdapterRegistry")
 
-
-# =============================================================================
-# Adapter instructions for PARSING
-# =============================================================================
-
-
-@dataclass
-class _ClaudeToolParsingInstruction:
-    """Append extraction directives for Claude Tool parsing.
-
-    Claude Tool uses native structured output (beta.messages.parse), so no
-    format/schema sections are needed. Only critical extraction rules are appended.
-    """
-
-    @property
-    def system_addition(self) -> str:
-        return (
-            "Extract only what's actually stated - don't infer or add information not present.\n"
-            "Use null for information not present (if field allows null)."
-        )
-
-    @property
-    def user_addition(self) -> str:
-        return ""
-
-
-def _claude_tool_parsing_instruction_factory(**kwargs: object) -> _ClaudeToolParsingInstruction:  # noqa: ARG001
-    return _ClaudeToolParsingInstruction()
-
-
-AdapterInstructionRegistry.register("claude_tool", "parsing", _claude_tool_parsing_instruction_factory)
-
-
-# =============================================================================
-# Adapter instructions for RUBRIC tasks
-# =============================================================================
-
-
-@dataclass
-class _ClaudeToolRubricInstruction:
-    """Minimal rubric evaluation directives for Claude Tool.
-
-    Claude Tool uses native structured output, so no format/schema sections
-    are needed. Only evaluation guidance is appended.
-    """
-
-    @property
-    def system_addition(self) -> str:
-        return "Evaluate based solely on the provided criteria. Be precise and consistent."
-
-    @property
-    def user_addition(self) -> str:
-        return ""
-
-
-def _claude_tool_rubric_factory(**kwargs: object) -> _ClaudeToolRubricInstruction:  # noqa: ARG001
-    return _ClaudeToolRubricInstruction()
-
-
-# =============================================================================
-# Adapter instructions for DEEP JUDGMENT tasks
-# =============================================================================
-
-
-@dataclass
-class _ClaudeToolDJInstruction:
-    """Minimal deep judgment directives for Claude Tool.
-
-    Claude Tool uses native structured output, so no format/schema sections
-    are needed. Only extraction guidance is appended.
-    """
-
-    @property
-    def system_addition(self) -> str:
-        return "Extract only what's actually stated. Use null for missing information."
-
-    @property
-    def user_addition(self) -> str:
-        return ""
-
-
-def _claude_tool_dj_factory(**kwargs: object) -> _ClaudeToolDJInstruction:  # noqa: ARG001
-    return _ClaudeToolDJInstruction()
-
-
-# Register rubric tasks
-_RUBRIC_TASKS = [
-    "rubric_llm_trait_batch",
-    "rubric_llm_trait_single",
-    "rubric_literal_trait_batch",
-    "rubric_literal_trait_single",
-    "rubric_metric_trait",
-]
-for _task in _RUBRIC_TASKS:
-    AdapterInstructionRegistry.register("claude_tool", _task, _claude_tool_rubric_factory)
-
-# Register DJ tasks (excluding reasoning tasks which produce free-form text)
-_DJ_STRUCTURED_TASKS = [
-    "dj_rubric_excerpt_extraction",
-    "dj_rubric_hallucination",
-    "dj_rubric_score_extraction",
-    "dj_template_excerpt_extraction",
-    "dj_template_hallucination",
-]
-for _task in _DJ_STRUCTURED_TASKS:
-    AdapterInstructionRegistry.register("claude_tool", _task, _claude_tool_dj_factory)
+# Import prompt modules to trigger adapter instruction registration
+import karenina.adapters.claude_tool.prompts.deep_judgment  # noqa: E402, F401
+import karenina.adapters.claude_tool.prompts.parsing  # noqa: E402, F401
+import karenina.adapters.claude_tool.prompts.rubric  # noqa: E402, F401

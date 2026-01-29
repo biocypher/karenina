@@ -3,20 +3,16 @@
 This module registers the claude_agent_sdk interface with the AdapterRegistry.
 The Claude Agent SDK requires the Claude Code CLI to be installed.
 
-Also registers adapter instructions for PARSING, RUBRIC, and DEEP JUDGMENT
-tasks that append interpretation directives to the system prompt (the SDK uses
-native structured output via output_format, so no format/schema sections are
-needed).
+Adapter instructions for PARSING, RUBRIC, and DEEP JUDGMENT tasks are
+registered via the prompts subpackage (imported at the bottom of this module).
 """
 
 from __future__ import annotations
 
 import shutil
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from karenina.adapters.registry import AdapterAvailability, AdapterRegistry, AdapterSpec
-from karenina.ports.adapter_instruction import AdapterInstructionRegistry
 
 if TYPE_CHECKING:
     from karenina.ports import AgentPort, LLMPort, ParserPort
@@ -90,107 +86,7 @@ _claude_sdk_spec = AdapterSpec(
 
 AdapterRegistry.register(_claude_sdk_spec)
 
-
-# =============================================================================
-# Adapter instructions for PARSING
-# =============================================================================
-
-
-@dataclass
-class _ClaudeSDKParsingInstruction:
-    """Append best-interpretation directive for Claude Agent SDK parsing.
-
-    The Claude Agent SDK uses native structured output via output_format,
-    so no format/schema sections are needed. Only a best-interpretation
-    directive is appended.
-    """
-
-    @property
-    def system_addition(self) -> str:
-        return "If uncertain, use your best interpretation based on the text."
-
-    @property
-    def user_addition(self) -> str:
-        return ""
-
-
-def _claude_sdk_parsing_instruction_factory(**kwargs: object) -> _ClaudeSDKParsingInstruction:  # noqa: ARG001
-    return _ClaudeSDKParsingInstruction()
-
-
-AdapterInstructionRegistry.register("claude_agent_sdk", "parsing", _claude_sdk_parsing_instruction_factory)
-
-
-# =============================================================================
-# Adapter instructions for RUBRIC tasks
-# =============================================================================
-
-
-@dataclass
-class _ClaudeSDKRubricInstruction:
-    """Minimal rubric evaluation directives for Claude Agent SDK.
-
-    The SDK uses native structured output, so no format/schema sections
-    are needed. Only interpretation guidance is appended.
-    """
-
-    @property
-    def system_addition(self) -> str:
-        return "If uncertain, use your best interpretation based on the response."
-
-    @property
-    def user_addition(self) -> str:
-        return ""
-
-
-def _claude_sdk_rubric_factory(**kwargs: object) -> _ClaudeSDKRubricInstruction:  # noqa: ARG001
-    return _ClaudeSDKRubricInstruction()
-
-
-# =============================================================================
-# Adapter instructions for DEEP JUDGMENT tasks
-# =============================================================================
-
-
-@dataclass
-class _ClaudeSDKDJInstruction:
-    """Minimal deep judgment directives for Claude Agent SDK.
-
-    The SDK uses native structured output, so no format/schema sections
-    are needed. Only interpretation guidance is appended.
-    """
-
-    @property
-    def system_addition(self) -> str:
-        return "If uncertain, use your best interpretation based on the text."
-
-    @property
-    def user_addition(self) -> str:
-        return ""
-
-
-def _claude_sdk_dj_factory(**kwargs: object) -> _ClaudeSDKDJInstruction:  # noqa: ARG001
-    return _ClaudeSDKDJInstruction()
-
-
-# Register rubric tasks
-_RUBRIC_TASKS = [
-    "rubric_llm_trait_batch",
-    "rubric_llm_trait_single",
-    "rubric_literal_trait_batch",
-    "rubric_literal_trait_single",
-    "rubric_metric_trait",
-]
-for _task in _RUBRIC_TASKS:
-    AdapterInstructionRegistry.register("claude_agent_sdk", _task, _claude_sdk_rubric_factory)
-
-# Register DJ tasks (excluding reasoning tasks which produce free-form text)
-_DJ_STRUCTURED_TASKS = [
-    "dj_rubric_excerpt_extraction",
-    "dj_rubric_hallucination",
-    "dj_rubric_score_extraction",
-    "dj_template_excerpt_extraction",
-    "dj_template_hallucination",
-]
-for _task in _DJ_STRUCTURED_TASKS:
-    AdapterInstructionRegistry.register("claude_agent_sdk", _task, _claude_sdk_dj_factory)
+# Import prompt modules to trigger adapter instruction registration
+import karenina.adapters.claude_agent_sdk.prompts.deep_judgment  # noqa: E402, F401
+import karenina.adapters.claude_agent_sdk.prompts.parsing  # noqa: E402, F401
+import karenina.adapters.claude_agent_sdk.prompts.rubric  # noqa: E402, F401

@@ -66,7 +66,7 @@ class TestTemplateEvaluatorInitialization:
 
     def test_init_requires_model_config(self, simple_answer: type[BaseAnswer]):
         """Verify evaluator raises error without model config."""
-        with pytest.raises(ValueError, match="Model configuration is required"):
+        with pytest.raises(RuntimeError, match="Model configuration is required"):
             TemplateEvaluator(
                 model_config=None,
                 answer_class=simple_answer,
@@ -80,7 +80,7 @@ class TestTemplateEvaluatorInitialization:
             model_name="",  # Empty model name
         )
 
-        with pytest.raises(ValueError, match="Model name is required"):
+        with pytest.raises(RuntimeError, match="Model name is required"):
             TemplateEvaluator(
                 model_config=config,
                 answer_class=simple_answer,
