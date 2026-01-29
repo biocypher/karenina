@@ -8,6 +8,11 @@ allowing the core application logic to remain independent of specific
 LLM provider implementations.
 """
 
+from karenina.ports.adapter_instruction import (
+    AdapterInstruction,
+    AdapterInstructionRegistry,
+    InstructionFactory,
+)
 from karenina.ports.agent import (
     AgentConfig,
     AgentPort,
@@ -70,6 +75,10 @@ __all__ = [
     "AgentResult",
     # Port capabilities
     "PortCapabilities",
+    # Adapter instructions
+    "AdapterInstruction",
+    "AdapterInstructionRegistry",
+    "InstructionFactory",
     # Error types
     "PortError",
     "AdapterUnavailableError",
