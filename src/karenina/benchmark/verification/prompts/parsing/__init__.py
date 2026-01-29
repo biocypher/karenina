@@ -5,7 +5,7 @@ Provides TemplatePromptBuilder for building system/user prompts
 used in template evaluation (both standard and deep judgment flows).
 """
 
-from .instructions import TemplatePromptBuilder
+from .parsing_instructions import TemplatePromptBuilder
 
 __all__ = [
     "TemplatePromptBuilder",
