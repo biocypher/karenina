@@ -2,6 +2,15 @@
 
 This module registers the claude_agent_sdk interface with the AdapterRegistry.
 The Claude Agent SDK requires the Claude Code CLI to be installed.
+
+Parsing Architecture Note:
+    The Claude Agent SDK parser builds its own prompts internally via
+    ``_build_parsing_prompt()`` in ``adapters/claude_agent_sdk/parser.py``.  It
+    returns a single combined prompt string and passes the schema via
+    ``output_format`` in ``_build_options()``.  Standard parsing therefore
+    bypasses the PromptAssembler pipeline — adapter instructions registered for
+    PARSING are only applied in assembler-managed flows (e.g. deep judgment
+    parsing).
 """
 
 from __future__ import annotations

@@ -2,6 +2,14 @@
 
 This module registers the LangChain interface and related routing interfaces
 (openrouter, openai_endpoint) with the AdapterRegistry.
+
+Parsing Architecture Note:
+    The LangChain parser builds its own prompts internally via
+    ``_build_parsing_prompt()`` in ``adapters/langchain/parser.py``.  It uses
+    PARSER_SYSTEM and PARSER_USER constants and includes the JSON schema in the
+    user prompt.  Standard parsing therefore bypasses the PromptAssembler
+    pipeline — adapter instructions registered for PARSING are only applied in
+    assembler-managed flows (e.g. deep judgment parsing).
 """
 
 from __future__ import annotations

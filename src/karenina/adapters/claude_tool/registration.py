@@ -7,6 +7,14 @@ The adapter is registered with:
 - LLM factory: ClaudeToolLLMAdapter
 - Agent factory: ClaudeToolAgentAdapter
 - Parser factory: ClaudeToolParserAdapter
+
+Parsing Architecture Note:
+    The Claude Tool parser builds its own prompts internally via
+    ``_build_parsing_messages()`` in ``adapters/claude_tool/parser.py``.  It
+    uses PARSER_SYSTEM and PARSER_USER constants and passes the schema via
+    ``with_structured_output()``.  Standard parsing therefore bypasses the
+    PromptAssembler pipeline — adapter instructions registered for PARSING are
+    only applied in assembler-managed flows (e.g. deep judgment parsing).
 """
 
 from __future__ import annotations
