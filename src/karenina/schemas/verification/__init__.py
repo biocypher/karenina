@@ -30,6 +30,7 @@ from .config_presets import (
 
 # Re-export job
 from .job import VerificationJob
+from .prompt_config import PromptConfig
 
 # Re-export result
 from .result import VerificationResult
@@ -50,6 +51,7 @@ __all__ = [
     # Configuration
     "VerificationConfig",
     "DeepJudgmentTraitConfig",
+    "PromptConfig",
     # Preset utilities
     "sanitize_model_config",
     "sanitize_preset_name",
