@@ -1,17 +1,18 @@
-"""Parser prompt for Claude Agent SDK adapter.
+"""Parser prompts for Claude Agent SDK adapter.
 
-Unlike LangChain/Claude Tool which use separate system/user messages, the SDK
-uses a single prompt string. This combined prompt includes all instructions.
+Split into system and user prompts to leverage ClaudeAgentOptions.system_prompt,
+matching the LangChain adapter's separation of concerns.
 
-Variables:
+Variables (user prompt only):
     {response} - The raw LLM response text to parse
     {json_schema} - JSON schema string (pre-formatted with indent=2)
 """
 
-PROMPT = """You are an evaluator that extracts structured information from responses.
+SYSTEM_PROMPT = """You are an evaluator that extracts structured information from responses.
 
-# Task
-Parse the following response and extract structured information according to the JSON schema provided.
+You will receive:
+1. A response to parse (from an LLM or other source)
+2. A JSON schema with descriptive fields indicating what information to extract
 
 # Extraction Protocol
 
@@ -23,12 +24,14 @@ Parse the following response and extract structured information according to the
 ## 2. Fidelity
 - Extract only what's actually stated in the response
 - Don't infer or add information not present
-- If uncertain, use your best interpretation based on the text
+- If uncertain, use your best interpretation based on the text"""
 
-# Response to Parse
+USER_PROMPT = """Parse the following response and extract structured information.
+
+**RESPONSE TO PARSE:**
 {response}
 
-# JSON Schema Reference
+**JSON SCHEMA (your response MUST conform to this):**
 ```json
 {json_schema}
 ```

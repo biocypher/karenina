@@ -11,6 +11,7 @@ Key differences from LangChain:
 - SDK's structured_output is already a Python dict, NOT a JSON string
 - Use schema.model_validate(result.structured_output) NOT json.loads()
 - SDK needs max_turns>=2 for internal structured output validation
+- System prompt passed via ClaudeAgentOptions.system_prompt (same as LLM adapter)
 """
 
 from __future__ import annotations
@@ -26,7 +27,7 @@ from pydantic import BaseModel
 from karenina.ports import ParseError, ParserPort
 from karenina.ports.capabilities import PortCapabilities
 
-from .prompts import PARSER
+from .prompts import PARSER_SYSTEM, PARSER_USER
 
 if TYPE_CHECKING:
     from claude_agent_sdk import ClaudeAgentOptions, ResultMessage
@@ -93,13 +94,13 @@ class ClaudeSDKParserAdapter:
     def capabilities(self) -> PortCapabilities:
         """Declare what prompt features this parser adapter supports.
 
-        Claude Agent SDK supports native structured output via output_format.
-        System prompts are not used in the SDK's single-prompt interface.
+        Claude Agent SDK supports native structured output via output_format
+        and system prompts via ClaudeAgentOptions.system_prompt.
 
         Returns:
-            PortCapabilities with supports_system_prompt=False, supports_structured_output=True.
+            PortCapabilities with system prompt and structured output support.
         """
-        return PortCapabilities(supports_system_prompt=False, supports_structured_output=True)
+        return PortCapabilities(supports_system_prompt=True, supports_structured_output=True)
 
     def _build_options(self, schema: type[BaseModel]) -> ClaudeAgentOptions:
         """Build ClaudeAgentOptions for structured output parsing.
@@ -108,7 +109,7 @@ class ClaudeSDKParserAdapter:
             schema: The Pydantic schema to use for structured output.
 
         Returns:
-            Configured ClaudeAgentOptions with output_format set.
+            Configured ClaudeAgentOptions with output_format and system_prompt set.
         """
         from claude_agent_sdk import ClaudeAgentOptions
 
@@ -127,6 +128,8 @@ class ClaudeSDKParserAdapter:
             },
             # SDK needs internal turns for structured output validation
             "max_turns": self._max_turns,
+            # System prompt with parsing instructions
+            "system_prompt": PARSER_SYSTEM,
         }
 
         # Add model specification if provided
@@ -136,22 +139,22 @@ class ClaudeSDKParserAdapter:
         return ClaudeAgentOptions(**options_kwargs)
 
     def _build_parsing_prompt(self, response: str, schema: type[BaseModel]) -> str:
-        """Build the prompt for structured output extraction.
+        """Build the user prompt for structured output extraction.
 
-        Unlike LangChain which uses separate system/user messages, the SDK
-        uses a single prompt string. We include all instructions in one prompt.
+        Instructions are in the system prompt (via ClaudeAgentOptions.system_prompt).
+        This user prompt contains only the response to parse and the schema reference.
 
         Args:
             response: The raw text response to parse.
             schema: The Pydantic schema defining expected structure.
 
         Returns:
-            Prompt string for the parsing request.
+            User prompt string for the parsing request.
         """
         # Generate JSON schema for reference in the prompt
         json_schema = json.dumps(schema.model_json_schema(), indent=2)
 
-        return PARSER.format(response=response, json_schema=json_schema)
+        return PARSER_USER.format(response=response, json_schema=json_schema)
 
     async def aparse_to_pydantic(self, response: str, schema: type[T]) -> T:
         """Parse an LLM response into a structured Pydantic model.
