@@ -369,6 +369,7 @@ class TemplateEvaluator:
                 combined_system_prompt=combined_system_prompt,
                 usage_tracker=usage_tracker,
                 parsing_model_str=self.model_str,
+                prompt_config=self._prompt_config,
             )
 
             result.parsed_answer = parsed_answer

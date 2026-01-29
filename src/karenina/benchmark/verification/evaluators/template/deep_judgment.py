@@ -19,16 +19,24 @@ The feature gracefully handles missing excerpts (refusals, no corroborating evid
 and provides detailed metadata about the parsing process.
 """
 
+from __future__ import annotations
+
 import json
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from karenina.utils.json_extraction import strip_markdown_fences as _strip_markdown_fences
 
-from .....ports import LLMPort, Message, ParserPort
+from .....ports import LLMPort, ParserPort
+from .....ports.capabilities import PortCapabilities
 from .....schemas.domain import BaseAnswer
 from .....schemas.shared import SearchResultItem
 from .....schemas.workflow import ModelConfig, VerificationConfig
+from ...prompts.assembler import PromptAssembler
+from ...prompts.task_types import PromptTask
+
+if TYPE_CHECKING:
+    from .....schemas.verification.prompt_config import PromptConfig
 from ...prompts.deep_judgment.template import (
     build_assessment_system_prompt,
     build_assessment_user_prompt,
@@ -62,6 +70,7 @@ def deep_judgment_parse(
     combined_system_prompt: str,  # noqa: ARG001 - No longer needed, ParserPort builds its own
     usage_tracker: Any | None = None,
     parsing_model_str: str | None = None,
+    prompt_config: PromptConfig | None = None,
 ) -> tuple[BaseAnswer, dict[str, list[dict[str, Any]]], dict[str, str], dict[str, Any]]:
     """Execute multi-stage deep-judgment parsing: excerpts → reasoning → parameters.
 
@@ -158,7 +167,18 @@ def deep_judgment_parse(
             excerpt_prompt += "\n\n<error>Some excerpts from the previous attempt were not found verbatim in the response. Please provide EXACT quotes that appear in the text above, or return empty list [] if no valid excerpts exist.</error>"
 
         # Invoke parsing model with excerpt-specific system prompt
-        excerpt_messages: list[Message] = [Message.system(excerpt_system_prompt), Message.user(excerpt_prompt)]
+        excerpt_assembler = PromptAssembler(
+            task=PromptTask.DJ_TEMPLATE_EXCERPT_EXTRACTION,
+            interface=parsing_model.interface,
+            capabilities=PortCapabilities(),
+        )
+        excerpt_messages = excerpt_assembler.assemble(
+            system_text=excerpt_system_prompt,
+            user_text=excerpt_prompt,
+            user_instructions=prompt_config.get_for_task(PromptTask.DJ_TEMPLATE_EXCERPT_EXTRACTION.value)
+            if prompt_config
+            else None,
+        )
         llm_response = parsing_llm.invoke(excerpt_messages)
         raw_response, usage_metadata = llm_response.content, llm_response.usage.to_dict()
         model_calls += 1
@@ -366,10 +386,18 @@ def deep_judgment_parse(
             )
 
             # Invoke LLM for batch assessment
-            assessment_messages: list[Message] = [
-                Message.system(assessment_system_prompt),
-                Message.user(assessment_prompt),
-            ]
+            assessment_assembler = PromptAssembler(
+                task=PromptTask.DJ_TEMPLATE_HALLUCINATION,
+                interface=parsing_model.interface,
+                capabilities=PortCapabilities(),
+            )
+            assessment_messages = assessment_assembler.assemble(
+                system_text=assessment_system_prompt,
+                user_text=assessment_prompt,
+                user_instructions=prompt_config.get_for_task(PromptTask.DJ_TEMPLATE_HALLUCINATION.value)
+                if prompt_config
+                else None,
+            )
 
             try:
                 llm_response = parsing_llm.invoke(assessment_messages)
@@ -436,7 +464,16 @@ def deep_judgment_parse(
         formatted_excerpts=format_excerpts_for_reasoning(excerpts),
     )
 
-    reasoning_messages: list[Message] = [Message.system(reasoning_system_prompt), Message.user(reasoning_prompt)]
+    reasoning_assembler = PromptAssembler(
+        task=PromptTask.DJ_TEMPLATE_REASONING,
+        interface=parsing_model.interface,
+        capabilities=PortCapabilities(),
+    )
+    reasoning_messages = reasoning_assembler.assemble(
+        system_text=reasoning_system_prompt,
+        user_text=reasoning_prompt,
+        user_instructions=prompt_config.get_for_task(PromptTask.DJ_TEMPLATE_REASONING.value) if prompt_config else None,
+    )
     llm_response = parsing_llm.invoke(reasoning_messages)
     raw_response, usage_metadata = llm_response.content, llm_response.usage.to_dict()
     model_calls += 1
