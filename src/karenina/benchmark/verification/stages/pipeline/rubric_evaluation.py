@@ -142,7 +142,11 @@ class RubricEvaluationStage(BaseVerificationStage):
 
         try:
             # Create rubric evaluator with parsing model and strategy from config
-            evaluator = RubricEvaluator(context.parsing_model, evaluation_strategy=context.rubric_evaluation_strategy)
+            evaluator = RubricEvaluator(
+                context.parsing_model,
+                evaluation_strategy=context.rubric_evaluation_strategy,
+                prompt_config=context.prompt_config,
+            )
 
             # Apply deep judgment configuration resolution to LLM traits
             configured_rubric = rubric

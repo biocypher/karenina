@@ -23,11 +23,13 @@ import re
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
-from .....ports import LLMPort, Message
+from .....ports import LLMPort, Message, PortCapabilities
 from .....schemas.domain import LLMRubricTrait
+from ...prompts import PromptAssembler, PromptTask
 from .prompts import LiteralTraitPromptBuilder, LLMTraitPromptBuilder
 
 if TYPE_CHECKING:
+    from .....schemas.verification import PromptConfig
     from .....schemas.workflow.models import ModelConfig
 
 logger = logging.getLogger(__name__)
@@ -64,6 +66,7 @@ class LLMTraitEvaluator:
         async_max_workers: int | None = None,
         *,
         model_config: "ModelConfig",
+        prompt_config: "PromptConfig | None" = None,
     ):
         """
         Initialize the LLM trait evaluator.
@@ -75,11 +78,13 @@ class LLMTraitEvaluator:
             async_max_workers: Max concurrent workers for parallel execution.
                               If None, reads from KARENINA_ASYNC_MAX_WORKERS env var (default: 2).
             model_config: Model configuration for reference.
+            prompt_config: Optional per-task-type user instructions for prompt assembly.
         """
         from .....adapters.llm_parallel import read_async_config
 
         self.llm = llm
         self._model_config = model_config
+        self._prompt_config = prompt_config
 
         # Read async config with env var fallbacks
         default_enabled, default_workers = read_async_config()
@@ -91,6 +96,25 @@ class LLMTraitEvaluator:
         self._literal_prompt_builder = LiteralTraitPromptBuilder()
 
         logger.debug(f"LLMTraitEvaluator: Initialized for interface={model_config.interface}")
+
+    def _get_user_instructions(self, task: PromptTask) -> str | None:
+        """Get user instructions for a given prompt task from prompt_config."""
+        if self._prompt_config is None:
+            return None
+        return self._prompt_config.get_for_task(task.value)
+
+    def _assemble_messages(self, task: PromptTask, system_text: str, user_text: str) -> list[Message]:
+        """Assemble messages using PromptAssembler with the given task type."""
+        assembler = PromptAssembler(
+            task=task,
+            interface=self._model_config.interface,
+            capabilities=PortCapabilities(),
+        )
+        return assembler.assemble(
+            system_text=system_text,
+            user_text=user_text,
+            user_instructions=self._get_user_instructions(task),
+        )
 
     def evaluate_batch(
         self, question: str, answer: str, traits: list[LLMRubricTrait]
@@ -111,7 +135,7 @@ class LLMTraitEvaluator:
         system_prompt = self._llm_prompt_builder.build_batch_system_prompt()
         user_prompt = self._llm_prompt_builder.build_batch_user_prompt(question, answer, traits, BatchRubricScores)
 
-        messages: list[Message] = [Message.system(system_prompt), Message.user(user_prompt)]
+        messages = self._assemble_messages(PromptTask.RUBRIC_LLM_TRAIT_BATCH, system_prompt, user_prompt)
 
         # Use LLMPort.with_structured_output() for parsing
         # The adapter guarantees response.raw is a validated BatchRubricScores instance
@@ -151,10 +175,7 @@ class LLMTraitEvaluator:
             model_class = SingleBooleanScore if trait.kind == "boolean" else SingleNumericScore
             system_prompt = self._llm_prompt_builder.build_single_trait_system_prompt(trait)
             user_prompt = self._llm_prompt_builder.build_single_trait_user_prompt(question, answer, trait, model_class)
-            messages: list[Message] = [
-                Message.system(system_prompt),
-                Message.user(user_prompt),
-            ]
+            messages = self._assemble_messages(PromptTask.RUBRIC_LLM_TRAIT_SINGLE, system_prompt, user_prompt)
             tasks.append((messages, model_class))
 
         if self._async_enabled:
@@ -402,7 +423,7 @@ class LLMTraitEvaluator:
             question, answer, literal_traits, BatchLiteralClassifications
         )
 
-        messages: list[Message] = [Message.system(system_prompt), Message.user(user_prompt)]
+        messages = self._assemble_messages(PromptTask.RUBRIC_LITERAL_TRAIT_BATCH, system_prompt, user_prompt)
 
         # Use LLMPort.with_structured_output() for parsing
         structured_llm = self.llm.with_structured_output(BatchLiteralClassifications)
@@ -452,10 +473,7 @@ class LLMTraitEvaluator:
             user_prompt = self._literal_prompt_builder.build_single_trait_user_prompt(
                 question, answer, trait, SingleLiteralClassification
             )
-            messages: list[Message] = [
-                Message.system(system_prompt),
-                Message.user(user_prompt),
-            ]
+            messages = self._assemble_messages(PromptTask.RUBRIC_LITERAL_TRAIT_SINGLE, system_prompt, user_prompt)
             tasks.append((messages, SingleLiteralClassification))
 
         if self._async_enabled:
