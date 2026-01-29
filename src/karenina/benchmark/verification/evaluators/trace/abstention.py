@@ -17,8 +17,8 @@ from .....utils.errors import is_retryable_error
 from .....utils.retry import log_retry
 from ...prompts.assembler import PromptAssembler
 from ...prompts.task_types import PromptTask
+from ...prompts.trace.abstention import ABSTENTION_DETECTION_SYS, ABSTENTION_DETECTION_USER
 from ...utils.llm_judge_helpers import extract_judge_result, fallback_json_parse
-from .prompts import ABSTENTION_DETECTION_SYS, ABSTENTION_DETECTION_USER
 
 # Set up logger
 logger = logging.getLogger(__name__)

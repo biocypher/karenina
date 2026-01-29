@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any
 from .....ports import LLMPort, PortCapabilities
 from .....schemas.domain import MetricRubricTrait
 from ...prompts import PromptAssembler, PromptTask
-from .prompts import MetricTraitPromptBuilder
+from ...prompts.rubric.metric_trait import MetricTraitPromptBuilder
 
 if TYPE_CHECKING:
     from .....schemas.verification import PromptConfig

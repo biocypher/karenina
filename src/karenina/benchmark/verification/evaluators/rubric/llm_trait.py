@@ -26,7 +26,8 @@ from typing import TYPE_CHECKING, Any
 from .....ports import LLMPort, Message, PortCapabilities
 from .....schemas.domain import LLMRubricTrait
 from ...prompts import PromptAssembler, PromptTask
-from .prompts import LiteralTraitPromptBuilder, LLMTraitPromptBuilder
+from ...prompts.rubric.literal_trait import LiteralTraitPromptBuilder
+from ...prompts.rubric.llm_trait import LLMTraitPromptBuilder
 
 if TYPE_CHECKING:
     from .....schemas.verification import PromptConfig

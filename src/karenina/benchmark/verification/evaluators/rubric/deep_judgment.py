@@ -32,8 +32,8 @@ from typing import TYPE_CHECKING, Any
 from .....ports import LLMPort, Message
 from .....ports.capabilities import PortCapabilities
 from ...prompts.assembler import PromptAssembler
+from ...prompts.deep_judgment.rubric.deep_judgment import DeepJudgmentPromptBuilder
 from ...prompts.task_types import PromptTask
-from .prompts import DeepJudgmentPromptBuilder
 
 if TYPE_CHECKING:
     from .....schemas.domain import LLMRubricTrait, Rubric

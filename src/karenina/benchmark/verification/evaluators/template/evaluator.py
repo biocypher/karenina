@@ -17,8 +17,8 @@ from .....ports import LLMPort
 from .....schemas.domain import BaseAnswer
 from .....schemas.workflow import ModelConfig
 from ...prompts import PromptAssembler, PromptTask
+from ...prompts.parsing.parsing_instructions import TemplatePromptBuilder
 from ...utils import prepare_evaluation_input
-from .prompts import TemplatePromptBuilder
 from .results import FieldVerificationResult, ParseResult, RegexVerificationResult
 
 if TYPE_CHECKING:
