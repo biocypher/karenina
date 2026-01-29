@@ -21,6 +21,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel
 
 from karenina.ports import AdapterUnavailableError, LLMPort, LLMResponse, Message, ParseError
+from karenina.ports.capabilities import PortCapabilities
 from karenina.schemas.workflow.models import ModelConfig
 from karenina.utils.messages import append_error_feedback
 
@@ -107,6 +108,18 @@ class ClaudeToolLLMAdapter:
             # SDK handles retries automatically (default: 2 retries with exponential backoff)
             self._async_client = AsyncAnthropic()
         return self._async_client
+
+    @property
+    def capabilities(self) -> PortCapabilities:
+        """Declare what prompt features this adapter supports.
+
+        Returns:
+            PortCapabilities with system prompt support and structured output support.
+        """
+        return PortCapabilities(
+            supports_system_prompt=True,
+            supports_structured_output=True,
+        )
 
     async def ainvoke(self, messages: list[Message]) -> LLMResponse:
         """Invoke the LLM asynchronously.

@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, ValidationError
 
 from karenina.ports import LLMPort, LLMResponse, Message, ParseError
+from karenina.ports.capabilities import PortCapabilities
 from karenina.utils.errors import is_retryable_error
 from karenina.utils.json_extraction import extract_json_from_response
 from karenina.utils.messages import append_error_feedback
@@ -144,6 +145,18 @@ class LangChainLLMAdapter:
     # =========================================================================
     # Public API
     # =========================================================================
+
+    @property
+    def capabilities(self) -> PortCapabilities:
+        """Declare what prompt features this adapter supports.
+
+        Returns:
+            PortCapabilities with system prompt support and structured output support.
+        """
+        return PortCapabilities(
+            supports_system_prompt=True,
+            supports_structured_output=True,
+        )
 
     async def ainvoke(self, messages: list[Message]) -> LLMResponse:
         """Invoke the LLM asynchronously with automatic retry for transient errors.
