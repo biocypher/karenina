@@ -14,6 +14,8 @@ from typing import Protocol, TypeVar, runtime_checkable
 
 from pydantic import BaseModel
 
+from karenina.ports.capabilities import PortCapabilities
+
 # TypeVar bound to BaseModel for generic schema support
 T = TypeVar("T", bound=BaseModel)
 
@@ -48,6 +50,17 @@ class ParserPort(Protocol):
         >>> print(answer.gene_name)
         'BCL2'
     """
+
+    @property
+    def capabilities(self) -> PortCapabilities:
+        """Declare what prompt features this parser adapter supports.
+
+        Returns:
+            PortCapabilities with adapter-specific feature flags.
+            Defaults to PortCapabilities() (system prompts supported,
+            structured output not supported).
+        """
+        return PortCapabilities()
 
     async def aparse_to_pydantic(self, response: str, schema: type[T]) -> T:
         """Parse an LLM response into a structured Pydantic model.

@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING, TypeVar
 from pydantic import BaseModel
 
 from karenina.ports import Message, ParseError, ParserPort
+from karenina.ports.capabilities import PortCapabilities
 from karenina.utils.json_extraction import extract_json_from_response, is_invalid_json_error
 
 from .llm import LangChainLLMAdapter
@@ -152,6 +153,18 @@ class LangChainParserAdapter:
     # -------------------------------------------------------------------------
     # Public API
     # -------------------------------------------------------------------------
+
+    @property
+    def capabilities(self) -> PortCapabilities:
+        """Declare what prompt features this parser adapter supports.
+
+        LangChain supports system prompts (used in parsing messages).
+        Structured output support depends on the underlying model.
+
+        Returns:
+            PortCapabilities with supports_system_prompt=True, supports_structured_output=False.
+        """
+        return PortCapabilities(supports_system_prompt=True, supports_structured_output=False)
 
     async def aparse_to_pydantic(self, response: str, schema: type[T]) -> T:
         """Parse an LLM response into a structured Pydantic model.

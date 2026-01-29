@@ -19,6 +19,7 @@ from typing import TypeVar
 from pydantic import BaseModel
 
 from karenina.ports import Message, ParseError, ParserPort
+from karenina.ports.capabilities import PortCapabilities
 from karenina.schemas.workflow.models import ModelConfig
 
 from .llm import ClaudeToolLLMAdapter
@@ -71,6 +72,18 @@ class ClaudeToolParserAdapter:
         self._config = model_config
         self._llm_adapter = ClaudeToolLLMAdapter(model_config)
         self._max_retries = max_retries
+
+    @property
+    def capabilities(self) -> PortCapabilities:
+        """Declare what prompt features this parser adapter supports.
+
+        Claude Tool adapter uses Anthropic SDK which supports both
+        system prompts and native structured output.
+
+        Returns:
+            PortCapabilities with supports_system_prompt=True, supports_structured_output=True.
+        """
+        return PortCapabilities(supports_system_prompt=True, supports_structured_output=True)
 
     def _build_parsing_messages(
         self,

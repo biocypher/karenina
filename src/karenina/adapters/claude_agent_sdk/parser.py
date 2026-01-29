@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 from pydantic import BaseModel
 
 from karenina.ports import ParseError, ParserPort
+from karenina.ports.capabilities import PortCapabilities
 
 from .prompts import PARSER
 
@@ -87,6 +88,18 @@ class ClaudeSDKParserAdapter:
         """
         self._config = model_config
         self._max_turns = max_turns if max_turns is not None else self.DEFAULT_STRUCTURED_MAX_TURNS
+
+    @property
+    def capabilities(self) -> PortCapabilities:
+        """Declare what prompt features this parser adapter supports.
+
+        Claude Agent SDK supports native structured output via output_format.
+        System prompts are not used in the SDK's single-prompt interface.
+
+        Returns:
+            PortCapabilities with supports_system_prompt=False, supports_structured_output=True.
+        """
+        return PortCapabilities(supports_system_prompt=False, supports_structured_output=True)
 
     def _build_options(self, schema: type[BaseModel]) -> ClaudeAgentOptions:
         """Build ClaudeAgentOptions for structured output parsing.
