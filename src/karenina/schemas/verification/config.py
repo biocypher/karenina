@@ -21,6 +21,7 @@ from .config_presets import (
     save_preset,
     validate_preset_metadata,
 )
+from .prompt_config import PromptConfig
 
 # Default system prompts for answering and parsing models
 DEFAULT_ANSWERING_SYSTEM_PROMPT = "You are an expert assistant. Answer the question accurately and concisely."
@@ -135,6 +136,9 @@ class VerificationConfig(BaseModel):
 
     # Few-shot prompting settings
     few_shot_config: FewShotConfig | None = None  # New flexible configuration
+
+    # Per-task-type prompt instructions (optional user-injected instructions for each pipeline stage)
+    prompt_config: PromptConfig | None = None
 
     # Database storage settings
     db_config: Any | None = None  # DBConfig instance for automatic result persistence
