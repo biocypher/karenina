@@ -115,4 +115,5 @@ class SufficiencyCheckStage(BaseCheckStage):
             parsing_model=context.parsing_model,
             question_text=context.question_text,
             template_schema=template_schema,
+            prompt_config=context.prompt_config,
         )

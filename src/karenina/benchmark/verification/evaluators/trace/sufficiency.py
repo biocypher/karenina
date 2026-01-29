@@ -9,10 +9,14 @@ from pydantic import BaseModel, Field
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from .....adapters import get_llm
-from .....ports import LLMResponse, Message
+from .....ports import LLMResponse
+from .....ports.capabilities import PortCapabilities
+from .....schemas.verification.prompt_config import PromptConfig
 from .....schemas.workflow import ModelConfig
 from .....utils.errors import is_retryable_error
 from .....utils.retry import log_retry
+from ...prompts.assembler import PromptAssembler
+from ...prompts.task_types import PromptTask
 from ...utils.llm_judge_helpers import extract_judge_result, fallback_json_parse
 from .prompts import SUFFICIENCY_DETECTION_SYS, SUFFICIENCY_DETECTION_USER
 
@@ -34,6 +38,7 @@ def detect_sufficiency(
     parsing_model: ModelConfig,
     question_text: str,
     template_schema: dict[str, Any],
+    prompt_config: PromptConfig | None = None,
 ) -> tuple[bool, bool, str | None, dict[str, Any]]:
     """
     Detect if the response contains sufficient information to populate the template schema.
@@ -90,16 +95,25 @@ def detect_sufficiency(
             # Convert schema to string for prompt
             schema_str = json.dumps(template_schema, indent=2)
 
-            # Build messages using unified Message class
+            # Build messages using PromptAssembler (tri-section pattern)
             user_prompt = SUFFICIENCY_DETECTION_USER.format(
                 question=question_text,
                 response=raw_llm_response,
                 schema=schema_str,
             )
-            messages = [
-                Message.system(SUFFICIENCY_DETECTION_SYS),
-                Message.user(user_prompt),
-            ]
+            assembler = PromptAssembler(
+                task=PromptTask.SUFFICIENCY_DETECTION,
+                interface=parsing_model.interface,
+                capabilities=PortCapabilities(),
+            )
+            user_instructions = (
+                prompt_config.get_for_task(PromptTask.SUFFICIENCY_DETECTION.value) if prompt_config else None
+            )
+            messages = assembler.assemble(
+                system_text=SUFFICIENCY_DETECTION_SYS,
+                user_text=user_prompt,
+                user_instructions=user_instructions,
+            )
 
             # Invoke with structured output
             response: LLMResponse = structured_llm.invoke(messages)
