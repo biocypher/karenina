@@ -23,7 +23,6 @@ from karenina.ports.capabilities import PortCapabilities
 from karenina.schemas.workflow.models import ModelConfig
 
 from .llm import ClaudeToolLLMAdapter
-from .prompts import PARSER_SYSTEM, PARSER_USER
 
 logger = logging.getLogger(__name__)
 
@@ -85,37 +84,14 @@ class ClaudeToolParserAdapter:
         """
         return PortCapabilities(supports_system_prompt=True, supports_structured_output=True)
 
-    def _build_parsing_messages(
-        self,
-        response: str,
-        schema: type[BaseModel],  # noqa: ARG002
-    ) -> list[Message]:
-        """Build the parsing messages with response context.
-
-        Args:
-            response: The raw text response to parse.
-            schema: The Pydantic schema defining expected structure.
-
-        Returns:
-            List of Message objects for the parsing request.
-        """
-        return [
-            Message.system(PARSER_SYSTEM),
-            Message.user(PARSER_USER.format(response=response)),
-        ]
-
-    async def aparse_to_pydantic(self, response: str, schema: type[T]) -> T:
-        """Parse an LLM response into a structured Pydantic model.
-
-        This invokes Claude to extract structured data from the response text.
-        The LLM acts as a "judge" that interprets the natural language and
-        fills in the schema attributes.
+    async def aparse_to_pydantic(self, messages: list[Message], schema: type[T]) -> T:
+        """Parse using pre-assembled prompt messages into a structured Pydantic model.
 
         Uses Anthropic's native structured output API (beta.messages.parse) which
         constrains model output to match the Pydantic schema exactly.
 
         Args:
-            response: The raw text response from an LLM (the "trace" to parse).
+            messages: Pre-assembled prompt messages (system + user).
             schema: A Pydantic model class defining the expected structure.
 
         Returns:
@@ -124,8 +100,6 @@ class ClaudeToolParserAdapter:
         Raises:
             ParseError: If the LLM fails to extract valid structured data.
         """
-        messages = self._build_parsing_messages(response, schema)
-
         try:
             structured_adapter = self._llm_adapter.with_structured_output(schema, max_retries=self._max_retries)
             llm_response = await structured_adapter.ainvoke(messages)
@@ -144,11 +118,11 @@ class ClaudeToolParserAdapter:
                 raise
             raise ParseError(f"Failed to parse response into {schema.__name__}: {e}") from e
 
-    def parse_to_pydantic(self, response: str, schema: type[T]) -> T:
-        """Parse an LLM response into a structured Pydantic model (sync).
+    def parse_to_pydantic(self, messages: list[Message], schema: type[T]) -> T:
+        """Parse using pre-assembled prompt messages (sync).
 
         Args:
-            response: The raw text response from an LLM.
+            messages: Pre-assembled prompt messages (system + user).
             schema: A Pydantic model class defining the expected structure.
 
         Returns:
@@ -162,20 +136,20 @@ class ClaudeToolParserAdapter:
         portal = get_async_portal()
 
         if portal is not None:
-            return portal.call(self.aparse_to_pydantic, response, schema)
+            return portal.call(self.aparse_to_pydantic, messages, schema)
 
         try:
             asyncio.get_running_loop()
 
             def run_in_thread() -> T:
-                return asyncio.run(self.aparse_to_pydantic(response, schema))
+                return asyncio.run(self.aparse_to_pydantic(messages, schema))
 
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 future = executor.submit(run_in_thread)
                 return future.result(timeout=300)
 
         except RuntimeError:
-            return asyncio.run(self.aparse_to_pydantic(response, schema))
+            return asyncio.run(self.aparse_to_pydantic(messages, schema))
 
     async def aclose(self) -> None:
         """Close underlying HTTP client resources.

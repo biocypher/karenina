@@ -24,10 +24,8 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 from pydantic import BaseModel
 
-from karenina.ports import ParseError, ParserPort
+from karenina.ports import Message, ParseError, ParserPort
 from karenina.ports.capabilities import PortCapabilities
-
-from .prompts import PARSER_SYSTEM, PARSER_USER
 
 if TYPE_CHECKING:
     from claude_agent_sdk import ClaudeAgentOptions, ResultMessage
@@ -102,11 +100,12 @@ class ClaudeSDKParserAdapter:
         """
         return PortCapabilities(supports_system_prompt=True, supports_structured_output=True)
 
-    def _build_options(self, schema: type[BaseModel]) -> ClaudeAgentOptions:
+    def _build_options(self, schema: type[BaseModel], system_prompt: str) -> ClaudeAgentOptions:
         """Build ClaudeAgentOptions for structured output parsing.
 
         Args:
             schema: The Pydantic schema to use for structured output.
+            system_prompt: System prompt text extracted from messages.
 
         Returns:
             Configured ClaudeAgentOptions with output_format and system_prompt set.
@@ -128,8 +127,8 @@ class ClaudeSDKParserAdapter:
             },
             # SDK needs internal turns for structured output validation
             "max_turns": self._max_turns,
-            # System prompt with parsing instructions
-            "system_prompt": PARSER_SYSTEM,
+            # System prompt from pre-assembled messages
+            "system_prompt": system_prompt,
         }
 
         # Add model specification if provided
@@ -138,33 +137,30 @@ class ClaudeSDKParserAdapter:
 
         return ClaudeAgentOptions(**options_kwargs)
 
-    def _build_parsing_prompt(self, response: str, schema: type[BaseModel]) -> str:
-        """Build the user prompt for structured output extraction.
-
-        Instructions are in the system prompt (via ClaudeAgentOptions.system_prompt).
-        This user prompt contains only the response to parse and the schema reference.
+    @staticmethod
+    def _extract_from_messages(messages: list[Message]) -> tuple[str, str]:
+        """Extract system and user text from pre-assembled messages.
 
         Args:
-            response: The raw text response to parse.
-            schema: The Pydantic schema defining expected structure.
+            messages: Pre-assembled prompt messages.
 
         Returns:
-            User prompt string for the parsing request.
+            Tuple of (system_text, user_text).
         """
-        # Generate JSON schema for reference in the prompt
-        json_schema = json.dumps(schema.model_json_schema(), indent=2)
+        system_text = ""
+        user_parts: list[str] = []
+        for msg in messages:
+            if msg.role == "system":
+                system_text = msg.text
+            elif msg.role == "user":
+                user_parts.append(msg.text)
+        return system_text, "\n\n".join(user_parts)
 
-        return PARSER_USER.format(response=response, json_schema=json_schema)
-
-    async def aparse_to_pydantic(self, response: str, schema: type[T]) -> T:
-        """Parse an LLM response into a structured Pydantic model.
-
-        This invokes an LLM to extract structured data from the response text.
-        The LLM acts as a "judge" that interprets the natural language and
-        fills in the schema attributes.
+    async def aparse_to_pydantic(self, messages: list[Message], schema: type[T]) -> T:
+        """Parse using pre-assembled prompt messages into a structured Pydantic model.
 
         Args:
-            response: The raw text response from an LLM (the "trace" to parse).
+            messages: Pre-assembled prompt messages (system + user).
             schema: A Pydantic model class defining the expected structure.
                     Field descriptions guide the LLM on what to extract.
 
@@ -178,9 +174,12 @@ class ClaudeSDKParserAdapter:
         from claude_agent_sdk import ResultMessage, query
         from pydantic import ValidationError
 
+        # Extract system and user text from pre-assembled messages
+        system_text, user_text = self._extract_from_messages(messages)
+
         # Build prompt and options
-        prompt = self._build_parsing_prompt(response, schema)
-        options = self._build_options(schema)
+        prompt = user_text
+        options = self._build_options(schema, system_text)
 
         # Execute query and collect result
         result: ResultMessage | None = None
@@ -227,15 +226,15 @@ class ClaudeSDKParserAdapter:
         except ValidationError as e:
             raise ParseError(f"Structured output validation failed: {e}. Raw output: {result.structured_output}") from e
 
-    def parse_to_pydantic(self, response: str, schema: type[T]) -> T:
-        """Parse an LLM response into a structured Pydantic model (sync).
+    def parse_to_pydantic(self, messages: list[Message], schema: type[T]) -> T:
+        """Parse using pre-assembled prompt messages (sync).
 
         This is a convenience wrapper around aparse_to_pydantic() for sync code.
         Uses the shared async portal if available, otherwise falls back to
         asyncio.run() with proper event loop handling.
 
         Args:
-            response: The raw text response from an LLM (the "trace" to parse).
+            messages: Pre-assembled prompt messages (system + user).
             schema: A Pydantic model class defining the expected structure.
 
         Returns:
@@ -250,17 +249,14 @@ class ClaudeSDKParserAdapter:
         portal = get_async_portal()
 
         if portal is not None:
-            # Use the shared BlockingPortal for proper event loop management
-            return portal.call(self.aparse_to_pydantic, response, schema)
+            return portal.call(self.aparse_to_pydantic, messages, schema)
 
         # No portal available - check if we're already in an async context
         try:
             asyncio.get_running_loop()
-            # We're in an async context - use ThreadPoolExecutor to avoid
-            # nested event loop issues
 
             def run_in_thread() -> T:
-                return asyncio.run(self.aparse_to_pydantic(response, schema))
+                return asyncio.run(self.aparse_to_pydantic(messages, schema))
 
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 future = executor.submit(run_in_thread)
@@ -268,7 +264,7 @@ class ClaudeSDKParserAdapter:
 
         except RuntimeError:
             # No event loop running, safe to use asyncio.run
-            return asyncio.run(self.aparse_to_pydantic(response, schema))
+            return asyncio.run(self.aparse_to_pydantic(messages, schema))
 
     async def aclose(self) -> None:
         """Close underlying resources.

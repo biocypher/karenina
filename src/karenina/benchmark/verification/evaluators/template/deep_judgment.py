@@ -544,8 +544,21 @@ Reasoning Traces (explaining how excerpts inform each attribute value):
 
 {format_reasoning_for_parsing(reasoning)}"""
 
+    # Build messages via PromptAssembler for the parser
+    stage3_assembler = PromptAssembler(
+        task=PromptTask.PARSING,
+        interface=parsing_model.interface,
+        capabilities=parser.capabilities,
+    )
+    stage3_messages = stage3_assembler.assemble(
+        system_text=combined_system_prompt,
+        user_text=reasoning_text,
+        user_instructions=prompt_config.get_for_task(PromptTask.PARSING.value) if prompt_config else None,
+        instruction_context={"json_schema": RawAnswer.model_json_schema()},
+    )
+
     # Use ParserPort for parsing - it handles LLM call, JSON parsing, and retry logic internally
-    parsed_answer = parser.parse_to_pydantic(reasoning_text, RawAnswer)
+    parsed_answer = parser.parse_to_pydantic(stage3_messages, RawAnswer)
     model_calls += 1  # ParserPort makes at least one LLM call
 
     stages_completed.append("parameters")

@@ -13,7 +13,7 @@ import os
 from typing import TYPE_CHECKING, Any
 
 from .....adapters import format_model_string, get_llm, get_parser
-from .....ports import LLMPort, PortCapabilities
+from .....ports import LLMPort
 from .....schemas.domain import BaseAnswer
 from .....schemas.workflow import ModelConfig
 from ...prompts import PromptAssembler, PromptTask
@@ -163,6 +163,7 @@ class TemplateEvaluator:
             else:
                 result = self._parse_standard(
                     trace_text=template_input,
+                    question_text=question_text,
                     usage_tracker=usage_tracker,
                 )
         except Exception as e:
@@ -237,19 +238,19 @@ class TemplateEvaluator:
     def _parse_standard(
         self,
         trace_text: str,
+        question_text: str,
         usage_tracker: Any | None = None,  # noqa: ARG002 - kept for interface consistency
     ) -> ParseResult:
         """
-        Standard parsing via ParserPort adapter.
+        Standard parsing via ParserPort adapter with tri-section prompt assembly.
 
-        The adapter handles all fallback strategies internally:
-        1. Native structured output (if supported)
-        2. Manual parsing with json-repair
-        3. Null-value feedback retry
-        4. Format feedback retry
+        Builds prompt messages using PromptAssembler (task + adapter + user
+        instructions), then delegates to ParserPort for LLM invocation and
+        retry/fallback logic.
 
         Args:
             trace_text: Raw trace text to parse
+            question_text: The original question text
             usage_tracker: Kept for interface consistency (ParserPort tracks usage internally)
 
         Returns:
@@ -258,8 +259,35 @@ class TemplateEvaluator:
         result = ParseResult()
 
         try:
-            # Call parser adapter directly - it handles all retries internally
-            parsed = self._parser.parse_to_pydantic(trace_text, self.answer_class)
+            # 1. Build task instructions (centralized)
+            system_text = self._prompt_builder.build_system_prompt(
+                format_instructions="",
+                has_tool_traces=False,
+                ground_truth=self._get_ground_truth(),
+            )
+            user_text = self._prompt_builder.build_user_prompt(
+                question_text=question_text,
+                response_to_parse=trace_text,
+            )
+
+            # 2. Assemble (adapter instructions + user instructions)
+            assembler = PromptAssembler(
+                task=PromptTask.PARSING,
+                interface=self.model_config.interface,
+                capabilities=self._parser.capabilities,
+            )
+            user_instructions = (
+                self._prompt_config.get_for_task(PromptTask.PARSING.value) if self._prompt_config else None
+            )
+            messages = assembler.assemble(
+                system_text=system_text,
+                user_text=user_text,
+                user_instructions=user_instructions,
+                instruction_context={"json_schema": self.answer_class.model_json_schema()},
+            )
+
+            # 3. Parse via adapter
+            parsed = self._parser.parse_to_pydantic(messages, self.answer_class)
 
             if isinstance(parsed, self.answer_class):
                 result.parsed_answer = parsed
@@ -274,6 +302,19 @@ class TemplateEvaluator:
             logger.debug(f"ParserPort parsing failed: {e}")
 
         return result
+
+    def _get_ground_truth(self) -> dict[str, Any] | None:
+        """Extract ground truth if enabled via environment variable."""
+        if not self._should_expose_ground_truth():
+            return None
+        try:
+            from ...utils.template_parsing_helpers import create_test_instance_from_answer_class
+
+            _, ground_truth = create_test_instance_from_answer_class(self.raw_answer_class)
+            return ground_truth
+        except Exception as e:
+            logger.warning(f"Could not extract ground truth: {e}")
+            return None
 
     # ========================================================================
     # Deep Judgment Parsing (via composition)
@@ -337,24 +378,23 @@ class TemplateEvaluator:
 
         combined_system_prompt = self._prompt_builder.build_system_prompt(
             format_instructions=format_instructions,
-            user_system_prompt=self.model_config.system_prompt,
             has_tool_traces=False,
             ground_truth=ground_truth,
         )
 
-        # Apply user instructions via PromptAssembler (deep judgment parsing path only)
+        # Apply adapter + user instructions via PromptAssembler
         user_instructions = self._prompt_config.get_for_task(PromptTask.PARSING.value) if self._prompt_config else None
-        if user_instructions:
-            assembler = PromptAssembler(
-                task=PromptTask.PARSING,
-                interface=self.model_config.interface,
-                capabilities=PortCapabilities(),
-            )
-            combined_system_prompt, _ = assembler.assemble_text(
-                system_text=combined_system_prompt,
-                user_text="",
-                user_instructions=user_instructions,
-            )
+        assembler = PromptAssembler(
+            task=PromptTask.PARSING,
+            interface=self.model_config.interface,
+            capabilities=self._parser.capabilities,
+        )
+        combined_system_prompt, _ = assembler.assemble_text(
+            system_text=combined_system_prompt,
+            user_text="",
+            user_instructions=user_instructions,
+            instruction_context={"json_schema": self.answer_class.model_json_schema()},
+        )
 
         try:
             parsed_answer, extracted_excerpts, attribute_reasoning, dj_metadata = deep_judgment_parse(

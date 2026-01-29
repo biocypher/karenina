@@ -3,22 +3,20 @@
 This module registers the claude_agent_sdk interface with the AdapterRegistry.
 The Claude Agent SDK requires the Claude Code CLI to be installed.
 
-Parsing Architecture Note:
-    The Claude Agent SDK parser builds its own prompts internally via
-    ``_build_parsing_prompt()`` in ``adapters/claude_agent_sdk/parser.py``.  It
-    returns a single combined prompt string and passes the schema via
-    ``output_format`` in ``_build_options()``.  Standard parsing therefore
-    bypasses the PromptAssembler pipeline — adapter instructions registered for
-    PARSING are only applied in assembler-managed flows (e.g. deep judgment
-    parsing).
+Also registers adapter instructions for PARSING that augment the system prompt
+with a best-interpretation directive and strip format_instructions from user text
+(since the SDK uses native structured output via output_format).
 """
 
 from __future__ import annotations
 
+import re
 import shutil
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from karenina.adapters.registry import AdapterAvailability, AdapterRegistry, AdapterSpec
+from karenina.ports.adapter_instruction import AdapterInstructionRegistry
 
 if TYPE_CHECKING:
     from karenina.ports import AgentPort, LLMPort, ParserPort
@@ -91,3 +89,48 @@ _claude_sdk_spec = AdapterSpec(
 )
 
 AdapterRegistry.register(_claude_sdk_spec)
+
+
+# =============================================================================
+# Adapter instructions for PARSING
+# =============================================================================
+
+
+@dataclass
+class _ClaudeSDKParsingInstruction:
+    """Augment system prompt and strip format sections for Claude Agent SDK.
+
+    The Claude Agent SDK uses native structured output via output_format, so:
+    - "If uncertain, use your best interpretation" is appended to system text
+    - format_instructions section is stripped from user text
+    - JSON format block (if appended by LangChain-style instruction) is stripped
+    """
+
+    def apply(self, system_text: str, user_text: str) -> tuple[str, str]:
+        # Append best-interpretation directive to system
+        system_text = f"{system_text}\n\nIf uncertain, use your best interpretation based on the text."
+
+        # Strip format_instructions section from system text
+        system_text = re.sub(
+            r"\s*# Output Format\s*\n.*?<format_instructions>.*?</format_instructions>",
+            "",
+            system_text,
+            flags=re.DOTALL,
+        )
+
+        # Strip format instruction block from user text
+        user_text = re.sub(
+            r"\n\nYou must respond with valid JSON that matches this schema:.*?Return ONLY the JSON object, no additional text\.",
+            "",
+            user_text,
+            flags=re.DOTALL,
+        )
+
+        return system_text, user_text
+
+
+def _claude_sdk_parsing_instruction_factory(**kwargs: object) -> _ClaudeSDKParsingInstruction:  # noqa: ARG001
+    return _ClaudeSDKParsingInstruction()
+
+
+AdapterInstructionRegistry.register("claude_agent_sdk", "parsing", _claude_sdk_parsing_instruction_factory)

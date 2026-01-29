@@ -3,20 +3,18 @@
 This module registers the LangChain interface and related routing interfaces
 (openrouter, openai_endpoint) with the AdapterRegistry.
 
-Parsing Architecture Note:
-    The LangChain parser builds its own prompts internally via
-    ``_build_parsing_prompt()`` in ``adapters/langchain/parser.py``.  It uses
-    PARSER_SYSTEM and PARSER_USER constants and includes the JSON schema in the
-    user prompt.  Standard parsing therefore bypasses the PromptAssembler
-    pipeline — adapter instructions registered for PARSING are only applied in
-    assembler-managed flows (e.g. deep judgment parsing).
+Also registers adapter instructions for PARSING that append format instructions
+to the user prompt (since LangChain does not have native structured output).
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import json
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 from karenina.adapters.registry import AdapterAvailability, AdapterRegistry, AdapterSpec
+from karenina.ports.adapter_instruction import AdapterInstructionRegistry
 
 if TYPE_CHECKING:
     from karenina.ports import AgentPort, LLMPort, ParserPort
@@ -133,3 +131,43 @@ _openai_endpoint_spec = AdapterSpec(
 )
 
 AdapterRegistry.register(_openai_endpoint_spec)
+
+
+# =============================================================================
+# Adapter instructions for PARSING
+# =============================================================================
+
+
+@dataclass
+class _LangChainFormatInstruction:
+    """Append JSON format instructions to user text for LangChain parsing.
+
+    LangChain does not have native structured output, so the user prompt
+    must include explicit format instructions with the JSON schema.
+    """
+
+    json_schema: dict[str, Any] | None = None
+
+    def apply(self, system_text: str, user_text: str) -> tuple[str, str]:
+        if self.json_schema is not None:
+            schema_json = json.dumps(self.json_schema, indent=2)
+            format_block = (
+                "\n\nYou must respond with valid JSON that matches this schema:\n"
+                f"```json\n{schema_json}\n```\n"
+                "Return ONLY the JSON object, no additional text."
+            )
+            user_text = f"{user_text}{format_block}"
+        return system_text, user_text
+
+
+def _langchain_format_instruction_factory(**kwargs: object) -> _LangChainFormatInstruction:
+    """Factory producing LangChain format instructions.
+
+    Expects ``json_schema`` in the instruction context dict.
+    """
+    return _LangChainFormatInstruction(json_schema=kwargs.get("json_schema"))  # type: ignore[arg-type]
+
+
+AdapterInstructionRegistry.register("langchain", "parsing", _langchain_format_instruction_factory)
+AdapterInstructionRegistry.register("openrouter", "parsing", _langchain_format_instruction_factory)
+AdapterInstructionRegistry.register("openai_endpoint", "parsing", _langchain_format_instruction_factory)

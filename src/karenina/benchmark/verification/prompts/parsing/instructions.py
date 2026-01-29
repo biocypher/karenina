@@ -43,7 +43,6 @@ class TemplatePromptBuilder:
     def build_system_prompt(
         self,
         format_instructions: str,
-        user_system_prompt: str | None = None,
         has_tool_traces: bool = False,
         ground_truth: dict[str, Any] | None = None,
     ) -> str:
@@ -52,13 +51,14 @@ class TemplatePromptBuilder:
         This function creates a composable system prompt with:
         1. Base guidelines (always included) - extraction protocol and critical rules
         2. Tool trace verification section (conditional - only when MCP/tools present)
-        3. User customizations (merged as "Additional Instructions")
-        4. Ground truth section (optional - for semantic matching assistance)
-        5. Output format section with format instructions
+        3. Ground truth section (optional - for semantic matching assistance)
+        4. Output format section with format instructions
+
+        User instructions are now injected by PromptAssembler (via PromptConfig),
+        not passed directly to this builder.
 
         Args:
             format_instructions: Pydantic format instructions from PydanticOutputParser
-            user_system_prompt: Optional user-provided system prompt to merge
             has_tool_traces: Whether the response includes tool call traces (MCP context)
             ground_truth: Optional ground truth for disambiguation assistance
 
@@ -111,15 +111,6 @@ When the response includes tool calls and results:
 
 **Grounding Check**: Use the trace to verify the answer's claims are supported by tool calls/results."""
 
-        # === USER CUSTOMIZATIONS SECTION ===
-        user_section = ""
-        if user_system_prompt:
-            user_section = f"""
-
-# Additional Instructions
-
-{user_system_prompt}"""
-
         # === GROUND TRUTH SECTION (optional) ===
         ground_truth_section = ""
         if ground_truth is not None:
@@ -150,8 +141,6 @@ Return only the completed JSON object - no surrounding text, no markdown fences:
         sections = [base_guidelines]
         if has_tool_traces:
             sections.append(tool_trace_section)
-        if user_section:
-            sections.append(user_section)
         if ground_truth_section:
             sections.append(ground_truth_section)
         sections.append(output_section)

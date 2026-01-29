@@ -152,18 +152,30 @@ class TestPromptConstruction:
         assert "Tool Trace Verification" in system_prompt
         assert "Verify Grounding in Tool Results" in system_prompt
 
-    def test_build_system_prompt_with_user_prompt(self, simple_answer: type[BaseAnswer]):
-        """Verify system prompt includes user customizations."""
+    def test_build_system_prompt_user_instructions_via_assembler(self, simple_answer: type[BaseAnswer]):
+        """Verify user instructions are injected via PromptAssembler, not TemplatePromptBuilder."""
+        from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
+        from karenina.ports.capabilities import PortCapabilities
+
         builder = TemplatePromptBuilder(answer_class=simple_answer)
 
-        custom_prompt = "Always be concise and extract only the most relevant data."
-        system_prompt = builder.build_system_prompt(
+        system_text = builder.build_system_prompt(
             format_instructions="<format instructions here>",
-            user_system_prompt=custom_prompt,
         )
 
-        assert "Additional Instructions" in system_prompt
-        assert custom_prompt in system_prompt
+        custom_instruction = "Always be concise and extract only the most relevant data."
+        assembler = PromptAssembler(
+            task=PromptTask.PARSING,
+            interface="langchain",
+            capabilities=PortCapabilities(),
+        )
+        final_system, _ = assembler.assemble_text(
+            system_text=system_text,
+            user_text="",
+            user_instructions=custom_instruction,
+        )
+
+        assert custom_instruction in final_system
 
     def test_build_system_prompt_with_ground_truth(self, simple_answer: type[BaseAnswer]):
         """Verify system prompt includes ground truth when provided."""
@@ -463,15 +475,13 @@ class TestEdgeCases:
 
         system_prompt = builder.build_system_prompt(
             format_instructions="<format instructions here>",
-            user_system_prompt="Custom instructions",
             has_tool_traces=True,
             ground_truth={"value": "42"},
         )
 
-        # All sections should be present
+        # All sections should be present (user instructions now via PromptAssembler)
         assert "Extraction Protocol" in system_prompt
         assert "Tool Trace Verification" in system_prompt
-        assert "Additional Instructions" in system_prompt
         assert "Ground Truth Reference" in system_prompt
         assert "Output Format" in system_prompt
 

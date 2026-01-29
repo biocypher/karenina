@@ -8,21 +8,20 @@ The adapter is registered with:
 - Agent factory: ClaudeToolAgentAdapter
 - Parser factory: ClaudeToolParserAdapter
 
-Parsing Architecture Note:
-    The Claude Tool parser builds its own prompts internally via
-    ``_build_parsing_messages()`` in ``adapters/claude_tool/parser.py``.  It
-    uses PARSER_SYSTEM and PARSER_USER constants and passes the schema via
-    ``with_structured_output()``.  Standard parsing therefore bypasses the
-    PromptAssembler pipeline — adapter instructions registered for PARSING are
-    only applied in assembler-managed flows (e.g. deep judgment parsing).
+Also registers adapter instructions for PARSING that replace the system
+prompt with a minimal variant and strip format-related sections from the
+user prompt (since Claude Tool uses native structured output).
 """
 
 from __future__ import annotations
 
 import logging
+import re
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from karenina.adapters.registry import AdapterAvailability, AdapterRegistry, AdapterSpec
+from karenina.ports.adapter_instruction import AdapterInstructionRegistry
 
 if TYPE_CHECKING:
     from karenina.ports import AgentPort, LLMPort, ParserPort
@@ -137,3 +136,76 @@ _claude_tool_spec = AdapterSpec(
 AdapterRegistry.register(_claude_tool_spec)
 
 logger.debug("Registered claude_tool adapter with AdapterRegistry")
+
+
+# =============================================================================
+# Adapter instructions for PARSING
+# =============================================================================
+
+# Minimal system prompt for Claude Tool (native structured output handles format)
+_CLAUDE_TOOL_SYSTEM = (
+    "You are an evaluator that extracts structured information from responses.\n\n"
+    "Extract information according to the schema field descriptions. "
+    "Each field description specifies what to extract.\n\n"
+    "Critical rules:\n"
+    "- Extract only what's actually stated - don't infer or add information not present\n"
+    "- Use null for information not present (if field allows null)"
+)
+
+
+@dataclass
+class _ClaudeToolParsingInstruction:
+    """Replace system prompt and strip format sections for Claude Tool.
+
+    Claude Tool uses native structured output (beta.messages.parse), so:
+    - System prompt is replaced with a minimal 3-line variant
+    - JSON schema, parsing notes, and format_instructions are stripped from user text
+    """
+
+    def apply(self, system_text: str, user_text: str) -> tuple[str, str]:  # noqa: ARG002
+        # Replace system with minimal variant
+        system_text = _CLAUDE_TOOL_SYSTEM
+
+        # Strip JSON schema block from user text
+        user_text = re.sub(
+            r"\*\*JSON SCHEMA \(your response MUST conform to this\):\*\*\s*```json\s*.*?```",
+            "",
+            user_text,
+            flags=re.DOTALL,
+        )
+
+        # Strip parsing notes
+        user_text = re.sub(
+            r"\*\*PARSING NOTES:\*\*.*?(?=\*\*YOUR JSON RESPONSE:\*\*|\Z)",
+            "",
+            user_text,
+            flags=re.DOTALL,
+        )
+
+        # Strip format_instructions section
+        user_text = re.sub(
+            r"<format_instructions>.*?</format_instructions>",
+            "",
+            user_text,
+            flags=re.DOTALL,
+        )
+
+        # Strip format instruction block appended by LangChain-style instruction
+        user_text = re.sub(
+            r"\n\nYou must respond with valid JSON that matches this schema:.*?Return ONLY the JSON object, no additional text\.",
+            "",
+            user_text,
+            flags=re.DOTALL,
+        )
+
+        # Clean up trailing whitespace
+        user_text = user_text.rstrip()
+
+        return system_text, user_text
+
+
+def _claude_tool_parsing_instruction_factory(**kwargs: object) -> _ClaudeToolParsingInstruction:  # noqa: ARG001
+    return _ClaudeToolParsingInstruction()
+
+
+AdapterInstructionRegistry.register("claude_tool", "parsing", _claude_tool_parsing_instruction_factory)

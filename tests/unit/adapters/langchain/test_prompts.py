@@ -35,15 +35,11 @@ class TestPromptImports:
             FEEDBACK_FORMAT,
             FEEDBACK_NULL,
             FORMAT_INSTRUCTIONS,
-            PARSER_SYSTEM,
-            PARSER_USER,
             SUMMARIZATION,
             build_question_context,
         )
 
         # Verify all are strings (except build_question_context which is a function)
-        assert isinstance(PARSER_SYSTEM, str)
-        assert isinstance(PARSER_USER, str)
         assert isinstance(FEEDBACK_NULL, str)
         assert isinstance(FEEDBACK_FORMAT, str)
         assert isinstance(FORMAT_INSTRUCTIONS, str)
@@ -55,11 +51,9 @@ class TestPromptImports:
         from karenina.adapters.langchain.prompts.feedback_format import PROMPT as ff
         from karenina.adapters.langchain.prompts.feedback_null import PROMPT as fn
         from karenina.adapters.langchain.prompts.format_instructions import PROMPT as fi
-        from karenina.adapters.langchain.prompts.parser_system import PROMPT as ps
-        from karenina.adapters.langchain.prompts.parser_user import PROMPT as pu
         from karenina.adapters.langchain.prompts.summarization import PROMPT as sm
 
-        assert all(isinstance(p, str) for p in [ps, pu, fn, ff, fi, sm])
+        assert all(isinstance(p, str) for p in [fn, ff, fi, sm])
 
     def test_module_all_exports(self) -> None:
         """Test that __all__ contains expected exports."""
@@ -69,8 +63,6 @@ class TestPromptImports:
             "FEEDBACK_FORMAT",
             "FEEDBACK_NULL",
             "FORMAT_INSTRUCTIONS",
-            "PARSER_SYSTEM",
-            "PARSER_USER",
             "SUMMARIZATION",
             "build_question_context",
         ]
@@ -80,78 +72,6 @@ class TestPromptImports:
 # =============================================================================
 # Prompt Content Tests
 # =============================================================================
-
-
-class TestParserSystemPrompt:
-    """Tests for the parser system prompt."""
-
-    def test_contains_evaluator_role(self) -> None:
-        """Test that prompt establishes evaluator role."""
-        from karenina.adapters.langchain.prompts import PARSER_SYSTEM
-
-        assert "evaluator" in PARSER_SYSTEM.lower()
-        assert "extracts structured information" in PARSER_SYSTEM.lower()
-
-    def test_contains_extraction_protocol(self) -> None:
-        """Test that prompt contains extraction protocol section."""
-        from karenina.adapters.langchain.prompts import PARSER_SYSTEM
-
-        assert "Extraction Protocol" in PARSER_SYSTEM
-        assert "Extract According to Schema" in PARSER_SYSTEM
-
-    def test_contains_critical_rules(self) -> None:
-        """Test that prompt contains critical rules."""
-        from karenina.adapters.langchain.prompts import PARSER_SYSTEM
-
-        assert "Critical Rules" in PARSER_SYSTEM
-        assert "Fidelity" in PARSER_SYSTEM
-        assert "JSON Only" in PARSER_SYSTEM
-
-    def test_no_template_variables(self) -> None:
-        """Test that system prompt has no template variables."""
-        from karenina.adapters.langchain.prompts import PARSER_SYSTEM
-
-        # Should not contain any {variable} patterns
-        assert "{" not in PARSER_SYSTEM
-        assert "}" not in PARSER_SYSTEM
-
-
-class TestParserUserPrompt:
-    """Tests for the parser user prompt."""
-
-    def test_contains_response_variable(self) -> None:
-        """Test that prompt contains response variable."""
-        from karenina.adapters.langchain.prompts import PARSER_USER
-
-        assert "{response}" in PARSER_USER
-
-    def test_contains_json_schema_variable(self) -> None:
-        """Test that prompt contains json_schema variable."""
-        from karenina.adapters.langchain.prompts import PARSER_USER
-
-        assert "{json_schema}" in PARSER_USER
-
-    def test_format_with_variables(self) -> None:
-        """Test that prompt can be formatted with variables."""
-        from karenina.adapters.langchain.prompts import PARSER_USER
-
-        result = PARSER_USER.format(
-            response="The answer is BCL2.",
-            json_schema='{"type": "object", "properties": {"gene": {"type": "string"}}}',
-        )
-
-        assert "The answer is BCL2." in result
-        assert '"gene"' in result
-        assert "{response}" not in result
-        assert "{json_schema}" not in result
-
-    def test_contains_parsing_instructions(self) -> None:
-        """Test that prompt contains parsing instructions."""
-        from karenina.adapters.langchain.prompts import PARSER_USER
-
-        assert "RESPONSE TO PARSE" in PARSER_USER
-        assert "JSON SCHEMA" in PARSER_USER
-        assert "PARSING NOTES" in PARSER_USER
 
 
 class TestFeedbackNullPrompt:
@@ -340,8 +260,8 @@ class TestBuildQuestionContext:
 # =============================================================================
 
 
-class TestParserAdapterUsesPrompts:
-    """Tests that LangChainParserAdapter correctly uses extracted prompts."""
+class TestParserAdapterRetryPrompts:
+    """Tests that LangChainParserAdapter retry logic uses correct prompts."""
 
     @pytest.fixture
     def model_config(self) -> Any:
@@ -354,44 +274,6 @@ class TestParserAdapterUsesPrompts:
             model_provider="anthropic",
             interface="langchain",
         )
-
-    def test_build_parsing_prompt_uses_parser_system(self, model_config: Any) -> None:
-        """Test that _build_parsing_prompt uses PARSER_SYSTEM."""
-        from karenina.adapters.langchain import LangChainParserAdapter
-        from karenina.adapters.langchain.prompts import PARSER_SYSTEM
-
-        with patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init:
-            mock_init.return_value = MagicMock()
-            parser = LangChainParserAdapter(model_config)
-
-            class TestSchema(BaseModel):
-                value: str = Field(description="A test value")
-
-            messages = parser._build_parsing_prompt("Test response", TestSchema)
-
-            # First message should be system with PARSER_SYSTEM content
-            assert len(messages) == 2
-            assert messages[0].role.value == "system"
-            assert messages[0].text == PARSER_SYSTEM
-
-    def test_build_parsing_prompt_uses_parser_user(self, model_config: Any) -> None:
-        """Test that _build_parsing_prompt uses PARSER_USER template."""
-        from karenina.adapters.langchain import LangChainParserAdapter
-
-        with patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init:
-            mock_init.return_value = MagicMock()
-            parser = LangChainParserAdapter(model_config)
-
-            class TestSchema(BaseModel):
-                gene: str = Field(description="Gene name")
-
-            messages = parser._build_parsing_prompt("BCL2 is mentioned", TestSchema)
-
-            # Second message should be user with formatted PARSER_USER
-            user_message = messages[1]
-            assert user_message.role.value == "user"
-            assert "BCL2 is mentioned" in user_message.text
-            assert "gene" in user_message.text.lower()
 
     @pytest.mark.asyncio
     async def test_retry_with_null_feedback_uses_feedback_null(self, model_config: Any) -> None:
