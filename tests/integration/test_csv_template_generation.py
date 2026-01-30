@@ -11,8 +11,8 @@ from unittest.mock import patch
 import pytest
 from pydantic import SecretStr
 
-from karenina.domain.answers.generator import generate_answer_template
-from karenina.domain.questions.extractor import extract_questions_from_file
+from karenina.benchmark.authoring.answers.generator import generate_answer_template
+from karenina.benchmark.authoring.questions.extractor import extract_questions_from_file
 from karenina.schemas.workflow import ModelConfig
 
 
@@ -116,7 +116,7 @@ def test_template_generation_with_openai_endpoint(csv_file_path: Path, openai_en
     first_question, _ = questions_with_metadata[0]
 
     # Mock the structured output generation (bypasses LLM calls)
-    with patch("karenina.domain.answers.generator._generate_structured_outputs") as mock_gen:
+    with patch("karenina.benchmark.authoring.answers.generator._generate_structured_outputs") as mock_gen:
         mock_gen.return_value = mock_structured_output
 
         # Generate template using the mocked endpoint
@@ -148,7 +148,7 @@ def test_batch_template_generation(csv_file_path: Path, openai_endpoint_config, 
 
     templates = {}
     # Mock the structured output generation (bypasses LLM calls)
-    with patch("karenina.domain.answers.generator._generate_structured_outputs") as mock_gen:
+    with patch("karenina.benchmark.authoring.answers.generator._generate_structured_outputs") as mock_gen:
         mock_gen.return_value = mock_structured_output
 
         for i in range(num_questions):

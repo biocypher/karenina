@@ -16,14 +16,140 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
+from pydantic import BaseModel
 
-from karenina.benchmark.verification.evaluators.rubric_evaluator import RubricEvaluator
-from karenina.benchmark.verification.evaluators.template_evaluator import TemplateEvaluator
+from karenina.benchmark.verification.evaluators import RubricEvaluator, TemplateEvaluator
+from karenina.ports import LLMPort, LLMResponse
+from karenina.ports.usage import UsageMetadata
 from karenina.schemas.domain import BaseAnswer, LLMRubricTrait, RegexTrait, Rubric
 from karenina.schemas.workflow import ModelConfig
 
 # Import FixtureBackedLLMClient from root conftest
 from tests.conftest import FixtureBackedLLMClient
+
+
+class LLMPortFixtureAdapter:
+    """Adapts FixtureBackedLLMClient to implement LLMPort interface.
+
+    This adapter wraps the fixture-backed client to provide the LLMPort
+    protocol required by evaluators.
+    """
+
+    def __init__(self, fixture_client: FixtureBackedLLMClient):
+        self._client = fixture_client
+
+    def invoke(self, messages: list[Any]) -> LLMResponse:
+        """Invoke LLM and return LLMResponse."""
+        from langchain_core.messages import AIMessage as LCAIMessage
+        from langchain_core.messages import HumanMessage, SystemMessage
+
+        from karenina.ports.messages import Message, Role
+
+        # Convert Message objects to LangChain format
+        langchain_messages = []
+        for msg in messages:
+            if isinstance(msg, Message):
+                # Convert port Message to LangChain message
+                text = msg.text  # Extract text from TextContent blocks
+                if msg.role == Role.SYSTEM:
+                    langchain_messages.append(SystemMessage(content=text))
+                elif msg.role == Role.USER:
+                    langchain_messages.append(HumanMessage(content=text))
+                elif msg.role == Role.ASSISTANT:
+                    langchain_messages.append(LCAIMessage(content=text))
+                else:
+                    # Default to HumanMessage for other roles
+                    langchain_messages.append(HumanMessage(content=text))
+            else:
+                # Already a LangChain message or dict
+                langchain_messages.append(msg)
+
+        ai_message = self._client.invoke(langchain_messages)
+
+        # Convert AIMessage usage to UsageMetadata
+        usage_data = ai_message.usage_metadata or {}
+        usage = UsageMetadata(
+            input_tokens=usage_data.get("input_tokens", 0),
+            output_tokens=usage_data.get("output_tokens", 0),
+            total_tokens=usage_data.get("total_tokens", 0),
+        )
+
+        return LLMResponse(content=ai_message.content, usage=usage, raw=ai_message)
+
+    async def ainvoke(self, messages: list[Any]) -> LLMResponse:
+        """Async invoke - calls sync version."""
+        return self.invoke(messages)
+
+    def with_structured_output(self, schema: type[BaseModel], *, max_retries: int | None = None) -> "LLMPort":
+        """Return a structured output adapter."""
+        return _StructuredOutputFixtureAdapter(self._client, schema, max_retries)
+
+
+class _StructuredOutputFixtureAdapter:
+    """Adapter for structured output using fixture-backed client."""
+
+    def __init__(self, client: FixtureBackedLLMClient, schema: type[BaseModel], max_retries: int | None = None):
+        self._client = client
+        self._schema = schema
+        self._max_retries = max_retries
+
+    def invoke(self, messages: list[Any]) -> LLMResponse:
+        """Invoke and parse response to schema."""
+        import json
+
+        from langchain_core.messages import AIMessage as LCAIMessage
+        from langchain_core.messages import HumanMessage, SystemMessage
+
+        from karenina.ports.messages import Message, Role
+
+        # Convert Message objects to LangChain format
+        langchain_messages = []
+        for msg in messages:
+            if isinstance(msg, Message):
+                # Convert port Message to LangChain message
+                text = msg.text  # Extract text from TextContent blocks
+                if msg.role == Role.SYSTEM:
+                    langchain_messages.append(SystemMessage(content=text))
+                elif msg.role == Role.USER:
+                    langchain_messages.append(HumanMessage(content=text))
+                elif msg.role == Role.ASSISTANT:
+                    langchain_messages.append(LCAIMessage(content=text))
+                else:
+                    # Default to HumanMessage for other roles
+                    langchain_messages.append(HumanMessage(content=text))
+            else:
+                # Already a LangChain message or dict
+                langchain_messages.append(msg)
+
+        ai_message = self._client.invoke(langchain_messages)
+
+        # Convert AIMessage usage to UsageMetadata
+        usage_data = ai_message.usage_metadata or {}
+        usage = UsageMetadata(
+            input_tokens=usage_data.get("input_tokens", 0),
+            output_tokens=usage_data.get("output_tokens", 0),
+            total_tokens=usage_data.get("total_tokens", 0),
+        )
+
+        # Try to parse content as JSON and validate with schema
+        content = ai_message.content
+        try:
+            data = json.loads(content)
+            parsed = self._schema.model_validate(data)
+        except (json.JSONDecodeError, Exception):
+            # Return raw content if parsing fails
+            parsed = None
+
+        return LLMResponse(content=content, usage=usage, raw=parsed)
+
+    async def ainvoke(self, messages: list[Any]) -> LLMResponse:
+        """Async invoke - calls sync version."""
+        return self.invoke(messages)
+
+    def with_structured_output(self, schema: type[BaseModel], *, max_retries: int | None = None) -> "LLMPort":
+        """Chain structured output (replace schema)."""
+        return _StructuredOutputFixtureAdapter(self._client, schema, max_retries)
+
 
 # =============================================================================
 # Model Configuration Fixtures
@@ -52,6 +178,12 @@ def parsing_model_config() -> ModelConfig:
 
 
 @pytest.fixture
+def llm_port_adapter(llm_client: FixtureBackedLLMClient) -> LLMPortFixtureAdapter:
+    """Return an LLMPort adapter wrapping the fixture client."""
+    return LLMPortFixtureAdapter(llm_client)
+
+
+@pytest.fixture
 def template_evaluator(
     parsing_model_config: ModelConfig,
     llm_client: FixtureBackedLLMClient,
@@ -60,6 +192,10 @@ def template_evaluator(
 
     This evaluator uses captured LLM responses for deterministic testing.
     The Answer class must be set per-test using evaluator.answer_class = MyAnswer.
+
+    Note: TemplateEvaluator still uses init_chat_model_unified (not LLMPort),
+    so we patch that function and return the raw fixture client which has
+    the LangChain .invoke() interface.
 
     Example:
         def test_parse(template_evaluator, simple_answer):
@@ -74,15 +210,13 @@ def template_evaluator(
         def verify(self) -> bool:
             return True
 
-    # Create evaluator with mock - we'll patch the LLM
-    with patch("karenina.benchmark.verification.evaluators.template_evaluator.init_chat_model_unified") as mock_init:
-        mock_init.return_value = llm_client
+    # Patch get_llm since TemplateEvaluator uses factory functions
+    with patch("karenina.benchmark.verification.evaluators.template.evaluator.get_llm") as mock_get_llm:
+        mock_get_llm.return_value = llm_client
         evaluator = TemplateEvaluator(
             model_config=parsing_model_config,
             answer_class=MinimalAnswer,
         )
-        # Ensure llm is our fixture client
-        evaluator.llm = llm_client
 
     return evaluator
 
@@ -90,7 +224,7 @@ def template_evaluator(
 @pytest.fixture
 def rubric_evaluator(
     parsing_model_config: ModelConfig,
-    llm_client: FixtureBackedLLMClient,
+    llm_port_adapter: LLMPortFixtureAdapter,
 ) -> RubricEvaluator:
     """Create a RubricEvaluator with fixture-backed LLM.
 
@@ -104,14 +238,12 @@ def rubric_evaluator(
                 rubric=sample_rubric,
             )
     """
-    with patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified") as mock_init:
-        mock_init.return_value = llm_client
+    with patch("karenina.benchmark.verification.evaluators.rubric.evaluator.get_llm") as mock_get_llm:
+        mock_get_llm.return_value = llm_port_adapter
         evaluator = RubricEvaluator(
             model_config=parsing_model_config,
             evaluation_strategy="batch",
         )
-        # Ensure llm is our fixture client
-        evaluator.llm = llm_client
 
     return evaluator
 

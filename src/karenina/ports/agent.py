@@ -117,6 +117,9 @@ class AgentConfig:
             If None, uses the adapter's default system prompt.
         timeout: Optional timeout in seconds for the entire agent run.
             If None, no timeout is applied.
+        question_hash: Optional MD5 hash of the question text. Used by the
+            manual interface to look up pre-recorded traces. Ignored by
+            other adapters.
         extra: Additional adapter-specific configuration options.
             Keys and values depend on the specific adapter implementation.
 
@@ -140,6 +143,7 @@ class AgentConfig:
     max_turns: int = 25
     system_prompt: str | None = None
     timeout: float | None = None
+    question_hash: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
 

@@ -5,6 +5,19 @@ structured output capabilities behind the unified ParserPort interface.
 
 IMPORTANT: This is NOT just JSON parsing. It invokes an LLM to interpret
 natural language responses and extract structured data according to a schema.
+
+Retry Logic:
+    This adapter includes retry-with-feedback strategies for parsing failures:
+    - Null-value feedback: When required fields are null, prompts LLM to provide defaults
+    - Format feedback: When JSON format is invalid, prompts LLM for clean JSON only
+
+    These strategies are applied automatically when initial parsing fails, giving
+    the LLM a chance to correct common mistakes before raising ParseError.
+
+Module Organization:
+    - Helper Functions: _extract_null_fields_from_error (parser-specific)
+    - Main Adapter Class: LangChainParserAdapter
+    - Protocol Verification: Runtime check for ParserPort compliance
 """
 
 from __future__ import annotations
@@ -18,9 +31,11 @@ from typing import TYPE_CHECKING, TypeVar
 from pydantic import BaseModel
 
 from karenina.ports import Message, ParseError, ParserPort
+from karenina.utils.json_extraction import extract_json_from_response, is_invalid_json_error
 
 from .llm import LangChainLLMAdapter
 from .messages import LangChainMessageConverter
+from .prompts import FEEDBACK_FORMAT, FEEDBACK_NULL, PARSER_SYSTEM, PARSER_USER
 
 if TYPE_CHECKING:
     from karenina.schemas.workflow.models import ModelConfig
@@ -28,6 +43,60 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
+
+
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
+
+def _extract_null_fields_from_error(
+    error_str: str,
+    failed_json: str | None = None,
+) -> list[str]:
+    """Extract field names that had null values from a parsing error.
+
+    Used by retry strategies to identify which fields need actual values.
+
+    Args:
+        error_str: Error message string.
+        failed_json: Optional JSON string that failed to parse.
+
+    Returns:
+        List of field names that had null/None values.
+    """
+    null_fields: list[str] = []
+
+    # Approach 1: Try to extract JSON and find null fields
+    if failed_json:
+        try:
+            data = json.loads(failed_json)
+            null_fields = [k for k, v in data.items() if v is None]
+            if null_fields:
+                return null_fields
+        except json.JSONDecodeError:
+            pass
+
+    # Approach 2: Parse Pydantic validation error
+    lines = error_str.split("\n")
+    for i, line in enumerate(lines):
+        if "input_value=None" in line or "input_type=NoneType" in line:
+            for j in range(i - 1, max(i - 3, -1), -1):
+                potential_field = lines[j].strip()
+                if (
+                    potential_field
+                    and " " not in potential_field
+                    and potential_field not in ["Answer", "Input", "For", "Got:", "validation", "error"]
+                ):
+                    null_fields.append(potential_field)
+                    break
+
+    return list(set(null_fields))
+
+
+# =============================================================================
+# Main Adapter Class
+# =============================================================================
 
 
 class LangChainParserAdapter:
@@ -63,182 +132,26 @@ class LangChainParserAdapter:
         'BCL2'
     """
 
-    def __init__(self, model_config: ModelConfig) -> None:
+    # -------------------------------------------------------------------------
+    # Initialization
+    # -------------------------------------------------------------------------
+
+    def __init__(self, model_config: ModelConfig, *, max_retries: int = 2) -> None:
         """Initialize the LangChain parser adapter.
 
         Args:
             model_config: Configuration specifying model, provider, and interface.
+            max_retries: Maximum number of retry attempts with feedback on parsing failure.
+                Default is 2 retries (null-value feedback, then format feedback).
         """
         self._config = model_config
         self._converter = LangChainMessageConverter()
         self._llm_adapter = LangChainLLMAdapter(model_config)
+        self._max_retries = max_retries
 
-    def _build_parsing_prompt(self, response: str, schema: type[BaseModel]) -> list[Message]:
-        """Build the parsing prompt with response and schema.
-
-        Args:
-            response: The raw text response to parse.
-            schema: The Pydantic schema defining expected structure.
-
-        Returns:
-            List of Message objects for the parsing request.
-        """
-        # Generate JSON schema from the Pydantic model
-        json_schema = json.dumps(schema.model_json_schema(), indent=2)
-
-        system_content = """You are an evaluator that extracts structured information from responses.
-
-You will receive:
-1. A response to parse (from an LLM or other source)
-2. A JSON schema with descriptive fields indicating what information to extract
-
-# Extraction Protocol
-
-## 1. Extract According to Schema
-- Each field description specifies WHAT to extract from the response
-- Follow field descriptions precisely
-- Use `null` for information not present (if field allows null)
-
-## 2. Validate Structure
-- Return valid JSON matching the provided schema exactly
-- Use correct data types for each field
-
-# Critical Rules
-
-**Fidelity**: Extract only what's actually stated. Don't infer or add information not present.
-
-**JSON Only**: Return ONLY the JSON object - no explanations, no markdown fences, no surrounding text."""
-
-        user_content = f"""Parse the following response and extract structured information.
-
-**RESPONSE TO PARSE:**
-{response}
-
-**JSON SCHEMA (your response MUST conform to this):**
-```json
-{json_schema}
-```
-
-**PARSING NOTES:**
-- Extract values for each field based on its description in the schema
-- If information for a field is not present, use null (if field allows null) or your best inference
-- Return ONLY the JSON object - no surrounding text
-
-**YOUR JSON RESPONSE:**"""
-
-        return [
-            Message.system(system_content),
-            Message.user(user_content),
-        ]
-
-    def _parse_response_content(self, content: str, schema: type[T]) -> T:
-        """Parse the LLM response content into the schema.
-
-        Uses multiple strategies to extract valid JSON from the response:
-        1. Direct JSON parsing
-        2. Strip markdown fences and retry
-        3. Extract JSON object from mixed text
-        4. JSON repair for malformed JSON
-
-        Args:
-            content: The raw LLM response content.
-            schema: The Pydantic schema to validate against.
-
-        Returns:
-            Validated Pydantic model instance.
-
-        Raises:
-            ParseError: If all parsing strategies fail.
-        """
-        from pydantic import ValidationError
-
-        # Strategy 1: Direct JSON parsing
-        try:
-            data = json.loads(content.strip())
-            return schema.model_validate(data)
-        except (json.JSONDecodeError, ValidationError) as e:
-            logger.debug(f"Direct JSON parse failed: {e}")
-
-        # Strategy 2: Strip markdown fences
-        cleaned = self._strip_markdown_fences(content)
-        if cleaned and cleaned != content:
-            try:
-                data = json.loads(cleaned)
-                return schema.model_validate(data)
-            except (json.JSONDecodeError, ValidationError) as e:
-                logger.debug(f"Cleaned text parse failed: {e}")
-
-        # Strategy 3: Extract JSON object from text
-        json_str = self._extract_json_from_text(content)
-        if json_str:
-            try:
-                data = json.loads(json_str)
-                return schema.model_validate(data)
-            except (json.JSONDecodeError, ValidationError) as e:
-                logger.debug(f"Extracted JSON parse failed: {e}")
-
-        # Strategy 4: JSON repair
-        try:
-            from json_repair import repair_json
-
-            repaired = repair_json(content)
-            data = json.loads(repaired)
-            return schema.model_validate(data)
-        except ImportError:
-            logger.debug("json-repair not installed, skipping repair strategy")
-        except Exception as e:
-            logger.debug(f"JSON repair failed: {e}")
-
-        # All strategies failed
-        preview = content[:200] if len(content) > 200 else content
-        raise ParseError(f"Could not parse response into {schema.__name__}: {preview}")
-
-    def _strip_markdown_fences(self, text: str) -> str | None:
-        """Strip markdown code fences from text.
-
-        Args:
-            text: Text that may contain markdown fences.
-
-        Returns:
-            Text with fences removed, or None if empty.
-        """
-        import re
-
-        # Pattern for ```json ... ``` or ``` ... ```
-        pattern = r"```(?:json)?\s*\n?(.*?)\n?```"
-        match = re.search(pattern, text, re.DOTALL)
-        if match:
-            return match.group(1).strip()
-
-        return text.strip() if text else None
-
-    def _extract_json_from_text(self, text: str) -> str | None:
-        """Extract JSON object from mixed text.
-
-        Finds the first { ... } block that looks like valid JSON.
-
-        Args:
-            text: Text containing embedded JSON.
-
-        Returns:
-            Extracted JSON string, or None if not found.
-        """
-        # Find first { and last } to extract JSON object
-        start = text.find("{")
-        if start == -1:
-            return None
-
-        # Count braces to find matching }
-        depth = 0
-        for i, char in enumerate(text[start:], start):
-            if char == "{":
-                depth += 1
-            elif char == "}":
-                depth -= 1
-                if depth == 0:
-                    return text[start : i + 1]
-
-        return None
+    # -------------------------------------------------------------------------
+    # Public API
+    # -------------------------------------------------------------------------
 
     async def aparse_to_pydantic(self, response: str, schema: type[T]) -> T:
         """Parse an LLM response into a structured Pydantic model.
@@ -246,6 +159,13 @@ You will receive:
         This invokes an LLM to extract structured data from the response text.
         The LLM acts as a "judge" that interprets the natural language and
         fills in the schema attributes.
+
+        Retry Strategy:
+            On parsing failure, the adapter attempts recovery with feedback:
+            1. Native structured output (if supported)
+            2. Manual JSON parsing with json-repair
+            3. Retry with null-value feedback (if error is null-related)
+            4. Retry with format feedback (if error is JSON-format related)
 
         Args:
             response: The raw text response from an LLM (the "trace" to parse).
@@ -256,35 +176,71 @@ You will receive:
             An instance of the schema type with extracted values.
 
         Raises:
-            ParseError: If the LLM fails to extract valid structured data.
+            ParseError: If the LLM fails to extract valid structured data after all retries.
             PortError: If the underlying LLM invocation fails.
         """
-        # First, try using native structured output for more reliable parsing
+        messages = self._build_parsing_prompt(response, schema)
+
+        # Strategy 1: Try native structured output for more reliable parsing
         try:
             structured_adapter = self._llm_adapter.with_structured_output(schema)
-            messages = self._build_parsing_prompt(response, schema)
-
             llm_response = await structured_adapter.ainvoke(messages)
 
             # The raw response should be the parsed schema instance
             if isinstance(llm_response.raw, schema):
+                logger.debug("Template parsing succeeded via native structured output")
                 return llm_response.raw
 
             # Otherwise, try to parse the content
-            return self._parse_response_content(llm_response.content, schema)
+            result = self._parse_response_content(llm_response.content, schema)
+            logger.debug("Template parsing succeeded via structured output content parsing")
+            return result
 
         except Exception as structured_error:
             logger.debug(f"Structured output parsing failed: {structured_error}")
 
-        # Fallback: Use regular LLM invocation with manual parsing
+        # Strategy 2: Fallback to regular LLM invocation with manual JSON parsing
+        llm_response = await self._llm_adapter.ainvoke(messages)
+        raw_content = llm_response.content
+
         try:
-            messages = self._build_parsing_prompt(response, schema)
-            llm_response = await self._llm_adapter.ainvoke(messages)
-            return self._parse_response_content(llm_response.content, schema)
-        except ParseError:
-            raise
-        except Exception as e:
-            raise ParseError(f"Failed to parse response: {e}") from e
+            result = self._parse_response_content(raw_content, schema)
+            logger.debug("Template parsing succeeded via fallback JSON parsing")
+            return result
+        except Exception as parse_error:
+            logger.debug(f"Fallback JSON parsing failed: {parse_error}")
+
+            # Check if retries are disabled
+            if self._max_retries <= 0:
+                raise ParseError(f"Failed to parse response: {parse_error}") from parse_error
+
+            # Strategy 3: Try null-value feedback retry
+            null_retry_result = await self._retry_with_null_feedback(
+                original_messages=messages,
+                failed_response=raw_content,
+                error=parse_error,
+                schema=schema,
+            )
+
+            if null_retry_result is not None:
+                return null_retry_result
+
+            # Strategy 4: Try format feedback retry
+            format_retry_result = await self._retry_with_format_feedback(
+                original_messages=messages,
+                failed_response=raw_content,
+                error=parse_error,
+                schema=schema,
+            )
+
+            if format_retry_result is not None:
+                return format_retry_result
+
+            # All strategies failed
+            preview = raw_content[:200] if len(raw_content) > 200 else raw_content
+            raise ParseError(
+                f"Failed to parse response into {schema.__name__} after all retry strategies: {preview}"
+            ) from parse_error
 
     def parse_to_pydantic(self, response: str, schema: type[T]) -> T:
         """Parse an LLM response into a structured Pydantic model (sync).
@@ -302,7 +258,7 @@ You will receive:
             ParseError: If the LLM fails to extract valid structured data.
             PortError: If the underlying LLM invocation fails.
         """
-        from karenina.benchmark.verification.batch_runner import get_async_portal
+        from karenina.benchmark.verification.executor import get_async_portal
 
         portal = get_async_portal()
 
@@ -325,8 +281,212 @@ You will receive:
             # No event loop running
             return asyncio.run(self.aparse_to_pydantic(response, schema))
 
+    # -------------------------------------------------------------------------
+    # Parsing Logic
+    # -------------------------------------------------------------------------
 
-# Verify protocol compliance at import time
+    def _build_parsing_prompt(self, response: str, schema: type[BaseModel]) -> list[Message]:
+        """Build the parsing prompt with response and schema.
+
+        Args:
+            response: The raw text response to parse.
+            schema: The Pydantic schema defining expected structure.
+
+        Returns:
+            List of Message objects for the parsing request.
+        """
+        # Generate JSON schema from the Pydantic model
+        json_schema = json.dumps(schema.model_json_schema(), indent=2)
+
+        user_content = PARSER_USER.format(response=response, json_schema=json_schema)
+
+        return [
+            Message.system(PARSER_SYSTEM),
+            Message.user(user_content),
+        ]
+
+    def _parse_response_content(self, content: str, schema: type[T]) -> T:
+        """Parse the LLM response content into the schema.
+
+        Uses extract_json_from_response from utils for JSON extraction,
+        with json_repair as a fallback for malformed JSON.
+
+        Args:
+            content: The raw LLM response content.
+            schema: The Pydantic schema to validate against.
+
+        Returns:
+            Validated Pydantic model instance.
+
+        Raises:
+            ParseError: If all parsing strategies fail.
+        """
+        from pydantic import ValidationError
+
+        # Strategy 1: Use shared JSON extraction utility
+        try:
+            json_str = extract_json_from_response(content)
+            data = json.loads(json_str)
+            return schema.model_validate(data)
+        except (json.JSONDecodeError, ValidationError, ValueError) as e:
+            logger.debug(f"JSON extraction failed: {e}")
+
+        # Strategy 2: JSON repair for malformed JSON
+        try:
+            from json_repair import repair_json
+
+            repaired = repair_json(content)
+            data = json.loads(repaired)
+            return schema.model_validate(data)
+        except ImportError:
+            logger.debug("json-repair not installed, skipping repair strategy")
+        except Exception as e:
+            logger.debug(f"JSON repair failed: {e}")
+
+        # All strategies failed
+        preview = content[:200] if len(content) > 200 else content
+        raise ParseError(f"Could not parse response into {schema.__name__}: {preview}")
+
+    # -------------------------------------------------------------------------
+    # Retry Strategies
+    # -------------------------------------------------------------------------
+
+    async def _retry_with_null_feedback(
+        self,
+        original_messages: list[Message],
+        failed_response: str,
+        error: Exception,
+        schema: type[T],
+    ) -> T | None:
+        """Retry parsing with feedback about null values in required fields.
+
+        When parsing fails due to null values, this method:
+        1. Extracts which fields had null values
+        2. Sends feedback to LLM asking for actual values instead of nulls
+        3. Retries parsing once
+
+        Args:
+            original_messages: Original messages that produced failed_response.
+            failed_response: The response that failed to parse.
+            error: The validation error from first parse attempt.
+            schema: The Pydantic schema to parse into.
+
+        Returns:
+            Parsed answer if retry succeeds, None if retry also fails.
+        """
+        # Try to extract JSON from error message
+        failed_json = None
+        error_str = str(error)
+        if "from completion" in error_str:
+            try:
+                json_start = error_str.index("{")
+                json_end = error_str.index("}.", json_start) + 1
+                failed_json = error_str[json_start:json_end]
+            except (ValueError, IndexError):
+                pass
+
+        # Extract null fields
+        null_fields = _extract_null_fields_from_error(error_str, failed_json)
+
+        if not null_fields:
+            logger.debug("Parsing error is not null-related, skipping null-value retry")
+            return None
+
+        logger.info(f"Detected null values in required fields: {null_fields}. Retrying with feedback...")
+
+        # Build feedback message
+        field_list = ", ".join(null_fields)
+        feedback_prompt = FEEDBACK_NULL.format(field_list=field_list, failed_response=failed_response)
+
+        # Create retry messages
+        retry_messages = list(original_messages)
+        retry_messages.append(Message.user(feedback_prompt))
+
+        try:
+            llm_response = await self._llm_adapter.ainvoke(retry_messages)
+            result = self._parse_response_content(llm_response.content, schema)
+            logger.info(f"Successfully parsed after null-value retry. Fixed fields: {field_list}")
+            return result
+
+        except Exception as e:
+            logger.warning(f"Retry parsing failed after null-value feedback: {e}")
+            return None
+
+    async def _retry_with_format_feedback(
+        self,
+        original_messages: list[Message],
+        failed_response: str,
+        error: Exception,
+        schema: type[T],
+    ) -> T | None:
+        """Retry parsing with feedback about JSON format requirements.
+
+        When parsing fails due to invalid JSON (e.g., reasoning text mixed with JSON),
+        this method:
+        1. Detects if the error is JSON-format related
+        2. Sends clear feedback to LLM asking for clean JSON only
+        3. Retries parsing once
+
+        Args:
+            original_messages: Original messages that produced failed_response.
+            failed_response: The response that failed to parse.
+            error: The validation error from first parse attempt.
+            schema: The Pydantic schema to parse into.
+
+        Returns:
+            Parsed answer if retry succeeds, None if retry also fails.
+        """
+        # Only handle JSON format errors
+        if not is_invalid_json_error(error):
+            logger.debug("Error is not JSON-format related, skipping format feedback retry")
+            return None
+
+        logger.info("Detected invalid JSON output. Retrying with format feedback...")
+
+        # Get schema hint
+        schema_hint = ""
+        try:
+            schema_json = json.dumps(schema.model_json_schema(), indent=2)
+            schema_hint = f"\n\nExpected schema:\n{schema_json}"
+        except Exception:
+            pass
+
+        # Build feedback message
+        truncated_response = failed_response[:1000] + ("..." if len(failed_response) > 1000 else "")
+        feedback_prompt = FEEDBACK_FORMAT.format(
+            failed_response=truncated_response,
+            error=str(error)[:500],
+            schema_hint=schema_hint,
+        )
+
+        # Create retry messages
+        retry_messages = list(original_messages)
+        retry_messages.append(Message.user(feedback_prompt))
+
+        try:
+            llm_response = await self._llm_adapter.ainvoke(retry_messages)
+            result = self._parse_response_content(llm_response.content, schema)
+            logger.info("Successfully parsed after format feedback retry")
+            return result
+
+        except Exception as e:
+            logger.warning(f"Retry parsing failed after format feedback: {e}")
+            return None
+
+    async def aclose(self) -> None:
+        """Close underlying resources.
+
+        Delegates to the internal LLM adapter's aclose() method.
+        Safe to call multiple times.
+        """
+        await self._llm_adapter.aclose()
+
+
+# =============================================================================
+# Protocol Verification
+# =============================================================================
+
+
 def _verify_protocol_compliance() -> None:
     """Verify LangChainParserAdapter implements ParserPort protocol."""
     adapter_instance: ParserPort = None  # type: ignore[assignment]

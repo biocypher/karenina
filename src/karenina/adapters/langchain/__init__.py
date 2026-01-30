@@ -36,11 +36,16 @@ __all__ = [
     "langchain_messages_to_trace_messages",
     # Usage extraction (lc-007)
     "extract_langchain_usage",
+    # Agent utilities
+    "extract_partial_agent_state",
 ]
 
 if TYPE_CHECKING:
     # Type hints for IDE support before implementation
-    from karenina.adapters.langchain.agent import LangChainAgentAdapter
+    from karenina.adapters.langchain.agent import (
+        LangChainAgentAdapter,
+        extract_partial_agent_state,
+    )
     from karenina.adapters.langchain.llm import LangChainLLMAdapter
     from karenina.adapters.langchain.messages import LangChainMessageConverter
     from karenina.adapters.langchain.parser import LangChainParserAdapter
@@ -91,5 +96,10 @@ def __getattr__(name: str) -> Any:
         from karenina.adapters.langchain.usage import extract_langchain_usage
 
         return extract_langchain_usage
+
+    if name == "extract_partial_agent_state":
+        from karenina.adapters.langchain.agent import extract_partial_agent_state
+
+        return extract_partial_agent_state
 
     raise AttributeError(f"module 'karenina.adapters.langchain' has no attribute '{name}'")

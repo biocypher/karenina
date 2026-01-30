@@ -168,7 +168,7 @@ model_config = ModelConfig(
 For testing and debugging with pre-computed responses (no LLM API calls). This interface allows you to provide pre-generated answer traces directly to the verification engine.
 
 ```python
-from karenina.infrastructure.llm.manual_traces import ManualTraces
+from karenina.adapters.manual import ManualTraces
 
 # Initialize manual traces
 manual_traces = ManualTraces(benchmark)

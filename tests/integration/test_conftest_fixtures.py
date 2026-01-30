@@ -38,7 +38,7 @@ class TestEvaluatorFixtures:
     def test_template_evaluator_created(self, template_evaluator):
         """Verify template evaluator is created with fixture-backed LLM."""
         assert template_evaluator is not None
-        assert template_evaluator.llm is not None
+        assert template_evaluator._llm is not None  # Private attribute
         assert template_evaluator.model_config is not None
 
     def test_rubric_evaluator_created(self, rubric_evaluator):

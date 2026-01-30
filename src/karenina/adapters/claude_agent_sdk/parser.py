@@ -10,7 +10,7 @@ Key differences from LangChain:
 - Uses query() with output_format={'type': 'json_schema', 'schema': ...}
 - SDK's structured_output is already a Python dict, NOT a JSON string
 - Use schema.model_validate(result.structured_output) NOT json.loads()
-- SDK needs max_turns>=5 for internal structured output validation
+- SDK needs max_turns>=2 for internal structured output validation
 """
 
 from __future__ import annotations
@@ -24,6 +24,8 @@ from typing import TYPE_CHECKING, Any, TypeVar
 from pydantic import BaseModel
 
 from karenina.ports import ParseError, ParserPort
+
+from .prompts import PARSER
 
 if TYPE_CHECKING:
     from claude_agent_sdk import ClaudeAgentOptions, ResultMessage
@@ -72,13 +74,19 @@ class ClaudeSDKParserAdapter:
         'BCL2'
     """
 
-    def __init__(self, model_config: ModelConfig) -> None:
+    # Default max_turns for structured output (minimum needed for SDK validation)
+    DEFAULT_STRUCTURED_MAX_TURNS = 2
+
+    def __init__(self, model_config: ModelConfig, *, max_turns: int | None = None) -> None:
         """Initialize the Claude SDK parser adapter.
 
         Args:
             model_config: Configuration specifying model, provider, and interface.
+            max_turns: Maximum turns for SDK structured output validation.
+                Default is 2 (minimum needed for structured output).
         """
         self._config = model_config
+        self._max_turns = max_turns if max_turns is not None else self.DEFAULT_STRUCTURED_MAX_TURNS
 
     def _build_options(self, schema: type[BaseModel]) -> ClaudeAgentOptions:
         """Build ClaudeAgentOptions for structured output parsing.
@@ -104,9 +112,8 @@ class ClaudeSDKParserAdapter:
                 "type": "json_schema",
                 "schema": json_schema,
             },
-            # CRITICAL: SDK needs internal turns for structured output validation
-            # Setting too low causes failures on retry
-            "max_turns": 5,
+            # SDK needs internal turns for structured output validation
+            "max_turns": self._max_turns,
         }
 
         # Add model specification if provided
@@ -131,32 +138,7 @@ class ClaudeSDKParserAdapter:
         # Generate JSON schema for reference in the prompt
         json_schema = json.dumps(schema.model_json_schema(), indent=2)
 
-        return f"""You are an evaluator that extracts structured information from responses.
-
-# Task
-Parse the following response and extract structured information according to the JSON schema provided.
-
-# Extraction Protocol
-
-## 1. Extract According to Schema
-- Each field description specifies WHAT to extract from the response
-- Follow field descriptions precisely
-- Use `null` for information not present (if field allows null)
-
-## 2. Fidelity
-- Extract only what's actually stated in the response
-- Don't infer or add information not present
-- If uncertain, use your best interpretation based on the text
-
-# Response to Parse
-{response}
-
-# JSON Schema Reference
-```json
-{json_schema}
-```
-
-Extract the structured information from the response above."""
+        return PARSER.format(response=response, json_schema=json_schema)
 
     async def aparse_to_pydantic(self, response: str, schema: type[T]) -> T:
         """Parse an LLM response into a structured Pydantic model.
@@ -247,7 +229,7 @@ Extract the structured information from the response above."""
             ParseError: If the LLM fails to extract valid structured data.
             PortError: If the underlying LLM invocation fails.
         """
-        from karenina.benchmark.verification.batch_runner import get_async_portal
+        from karenina.benchmark.verification.executor import get_async_portal
 
         portal = get_async_portal()
 
@@ -271,6 +253,15 @@ Extract the structured information from the response above."""
         except RuntimeError:
             # No event loop running, safe to use asyncio.run
             return asyncio.run(self.aparse_to_pydantic(response, schema))
+
+    async def aclose(self) -> None:
+        """Close underlying resources.
+
+        The Claude SDK parser adapter uses query() which doesn't hold persistent
+        connections, so this is a no-op. Provided for interface consistency
+        with other adapters that do require cleanup.
+        """
+        pass
 
 
 # Verify protocol compliance at import time

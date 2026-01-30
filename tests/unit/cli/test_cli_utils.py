@@ -809,10 +809,8 @@ def test_load_manual_traces_from_file_valid(tmp_path: Path) -> None:
     mock_benchmark = MagicMock()
 
     with (
-        patch("karenina.infrastructure.llm.manual_traces.load_manual_traces"),
-        patch(
-            "karenina.infrastructure.llm.manual_traces.ManualTraces", return_value="mock_manual_traces"
-        ) as MockManualTraces,
+        patch("karenina.adapters.manual.load_manual_traces"),
+        patch("karenina.adapters.manual.ManualTraces", return_value="mock_manual_traces") as MockManualTraces,
     ):
         result = load_manual_traces_from_file(trace_file, mock_benchmark)
         assert result == "mock_manual_traces"

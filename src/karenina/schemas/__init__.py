@@ -3,14 +3,23 @@
 This module contains Pydantic models for data validation and serialization.
 
 All models are organized into submodules:
-- domain/: Core business entities (Question, Answer, Rubric)
-- workflow/: Verification execution models (Config, Result, Job)
-- shared/: Shared utilities (SearchResultItem)
-- checkpoint/: JSON-LD checkpoint models
+- entities/: Core business entities (Question, Answer, Rubric)
+- verification/: Verification configuration and result models
+- results/: Result containers and aggregation
+- config/: LLM and workflow configuration
+- outputs/: Structured LLM output models
+- dataframes/: DataFrame builder utilities
+- shared: Shared utilities (SearchResultItem)
+- checkpoint: JSON-LD checkpoint models
+
+Deprecated paths (re-export for backward compatibility):
+- domain/: → entities/
+- workflow/: → verification/, results/, config/, outputs/, dataframes/
 """
 
-# Domain models
+# ============================================================================
 # Checkpoint models
+# ============================================================================
 from .checkpoint import (
     DatasetMetadata,
     JsonLdCheckpoint,
@@ -24,7 +33,33 @@ from .checkpoint import (
     SchemaOrgRating,
     SchemaOrgSoftwareSourceCode,
 )
-from .domain import (
+
+# ============================================================================
+# Configuration models (from config/)
+# ============================================================================
+from .config import (
+    INTERFACE_LANGCHAIN,
+    INTERFACE_MANUAL,
+    INTERFACE_OPENROUTER,
+    INTERFACES_NO_PROVIDER_REQUIRED,
+    FewShotConfig,
+    ModelConfig,
+    QuestionFewShotConfig,
+)
+
+# ============================================================================
+# DataFrame builders (from dataframes/)
+# ============================================================================
+from .dataframes import (
+    JudgmentDataFrameBuilder,
+    RubricDataFrameBuilder,
+    TemplateDataFrameBuilder,
+)
+
+# ============================================================================
+# Core entity models (from entities/)
+# ============================================================================
+from .entities import (
     BaseAnswer,
     CallableTrait,
     LLMRubricTrait,
@@ -38,32 +73,73 @@ from .domain import (
     merge_rubrics,
 )
 
+# ============================================================================
+# Structured output models (from outputs/)
+# ============================================================================
+from .outputs import (
+    BatchLiteralClassifications,
+    BatchRubricScores,
+    ConfusionMatrixOutput,
+    HallucinationRiskOutput,
+    SingleBooleanScore,
+    SingleLiteralClassification,
+    SingleNumericScore,
+    TraitExcerpt,
+    TraitExcerptsOutput,
+)
+
+# ============================================================================
+# Result containers (from results/)
+# ============================================================================
+from .results import (
+    AggregatorRegistry,
+    JudgmentResults,
+    ResultAggregator,
+    RubricJudgmentResults,
+    RubricResults,
+    TemplateResults,
+    VerificationResultSet,
+    create_default_registry,
+)
+
+# ============================================================================
 # Shared models
+# ============================================================================
 from .shared import SearchResultItem
 
-# Workflow models
-from .workflow import (
+# ============================================================================
+# Verification models (from verification/)
+# ============================================================================
+from .verification import (
     DEFAULT_ANSWERING_SYSTEM_PROMPT,
     DEFAULT_PARSING_SYSTEM_PROMPT,
-    INTERFACE_LANGCHAIN,
-    INTERFACE_MANUAL,
-    INTERFACE_OPENROUTER,
-    INTERFACES_NO_PROVIDER_REQUIRED,
-    FewShotConfig,
     FinishedTemplate,
-    ModelConfig,
-    QuestionFewShotConfig,
     VerificationConfig,
     VerificationJob,
     VerificationRequest,
     VerificationResult,
-    VerificationResultSet,
+    VerificationResultDeepJudgment,
+    VerificationResultDeepJudgmentRubric,
+    VerificationResultMetadata,
+    VerificationResultRubric,
+    VerificationResultTemplate,
     VerificationStartResponse,
     VerificationStatusResponse,
 )
 
+# ============================================================================
+# Rebuild models to resolve forward references
+# Order matters: result containers before Job
+# ============================================================================
+RubricResults.model_rebuild()
+RubricJudgmentResults.model_rebuild()
+TemplateResults.model_rebuild()
+JudgmentResults.model_rebuild()
+VerificationResultSet.model_rebuild()
+VerificationJob.model_rebuild()  # Rebuild after VerificationResultSet to resolve forward reference
+
 __all__ = [
-    # Domain models
+    # Entity models
     "BaseAnswer",
     "capture_answer_source",
     "Question",
@@ -75,7 +151,7 @@ __all__ = [
     "RubricEvaluation",
     "TraitKind",
     "merge_rubrics",
-    # Workflow models
+    # Configuration models
     "ModelConfig",
     "FewShotConfig",
     "QuestionFewShotConfig",
@@ -83,16 +159,47 @@ __all__ = [
     "INTERFACE_MANUAL",
     "INTERFACE_LANGCHAIN",
     "INTERFACES_NO_PROVIDER_REQUIRED",
+    # Verification configuration
     "DEFAULT_ANSWERING_SYSTEM_PROMPT",
     "DEFAULT_PARSING_SYSTEM_PROMPT",
     "VerificationConfig",
+    # Verification results
     "VerificationResult",
-    "VerificationResultSet",
+    "VerificationResultMetadata",
+    "VerificationResultTemplate",
+    "VerificationResultRubric",
+    "VerificationResultDeepJudgment",
+    "VerificationResultDeepJudgmentRubric",
+    # Verification job and API
     "VerificationJob",
     "FinishedTemplate",
     "VerificationRequest",
     "VerificationStatusResponse",
     "VerificationStartResponse",
+    # Result containers
+    "VerificationResultSet",
+    "RubricResults",
+    "RubricJudgmentResults",
+    "TemplateResults",
+    "JudgmentResults",
+    # DataFrame builders
+    "RubricDataFrameBuilder",
+    "TemplateDataFrameBuilder",
+    "JudgmentDataFrameBuilder",
+    # Aggregation framework
+    "ResultAggregator",
+    "AggregatorRegistry",
+    "create_default_registry",
+    # Structured output models
+    "BatchRubricScores",
+    "SingleBooleanScore",
+    "SingleNumericScore",
+    "ConfusionMatrixOutput",
+    "TraitExcerpt",
+    "TraitExcerptsOutput",
+    "HallucinationRiskOutput",
+    "SingleLiteralClassification",
+    "BatchLiteralClassifications",
     # Shared models
     "SearchResultItem",
     # Checkpoint models

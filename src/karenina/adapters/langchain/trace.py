@@ -1,7 +1,9 @@
-"""Trace conversion utilities for LangChain messages.
+"""Trace conversion and harmonization utilities for LangChain messages.
 
-This module provides utilities to convert LangChain message history to both
-legacy raw_trace string format and new trace_messages structured format.
+This module provides utilities for:
+1. Converting LangChain message history to standardized trace formats
+2. Harmonizing LangGraph agent responses into trace strings
+3. Extracting final AI messages from agent responses
 
 Two output formats:
     - raw_trace: String with "--- Message Type ---" delimiters (legacy/database)
@@ -16,6 +18,8 @@ Example:
     ... ]
     >>> raw = langchain_messages_to_raw_trace(messages)
     >>> structured = langchain_messages_to_trace_messages(messages)
+    >>> # Or harmonize agent response directly
+    >>> trace = harmonize_agent_response({"messages": messages})
 """
 
 from __future__ import annotations
@@ -413,3 +417,287 @@ def _fallback_to_trace_messages(messages: list[Any], include_system: bool) -> li
         block_index += 1
 
     return result
+
+
+# ==============================================================================
+# Agent Response Harmonization
+# ==============================================================================
+
+
+def harmonize_agent_response(response: Any, original_question: str | None = None) -> str:
+    """Harmonize LangGraph agent response into a single trace string.
+
+    LangGraph agents return multiple messages instead of a single response.
+    This function extracts AI and Tool messages (excluding system prompts and
+    the first human message) and returns the complete agent execution trace.
+
+    Args:
+        response: Response from a LangGraph agent, which may be:
+            - A single message with content attribute
+            - List of messages
+            - Dict with 'messages' key (from ainvoke)
+            - Nested dict {'agent': {'messages': [...]}} (from astream)
+        original_question: The original user question. If provided, enables
+            reliable detection of summary messages from SummarizationMiddleware.
+            If the first HumanMessage differs from this, it's treated as a
+            summary and included in the trace.
+
+    Returns:
+        A single string containing the complete agent trace with reasoning
+        and tool usage in the "--- Message Type ---" format.
+
+    Example:
+        >>> from langchain_core.messages import AIMessage, ToolMessage
+        >>> messages = [
+        ...     AIMessage(content="I need to search for information."),
+        ...     ToolMessage(content="Search results: ...", tool_call_id="call_123"),
+        ...     AIMessage(content="Based on the search, the answer is 42.")
+        ... ]
+        >>> trace = harmonize_agent_response({"messages": messages})
+        >>> print("Full agent trace with reasoning and tool usage")
+    """
+    if response is None:
+        return ""
+
+    # Handle single message with content attribute
+    if hasattr(response, "content"):
+        return str(response.content)
+
+    # Handle nested agent state dict (from astream): {'agent': {'messages': [...]}}
+    if isinstance(response, dict):
+        if "agent" in response and isinstance(response["agent"], dict) and "messages" in response["agent"]:
+            messages = response["agent"]["messages"]
+            return _extract_agent_trace(messages, original_question)
+        # Handle flat state dict with 'messages' key (from ainvoke)
+        elif "messages" in response:
+            messages = response["messages"]
+            return _extract_agent_trace(messages, original_question)
+
+    # Handle list of messages directly
+    if isinstance(response, list):
+        return _extract_agent_trace(response, original_question)
+
+    # Fallback: convert to string
+    return str(response)
+
+
+def _is_summary_message(msg: Any, original_question: str | None = None) -> bool:
+    """Check if a message is a summarization middleware summary message.
+
+    Detection methods (in order of reliability):
+    1. If original_question is provided, check if the message content differs from it
+    2. Fall back to pattern matching on known summary prefixes
+
+    Args:
+        msg: A message object to check
+        original_question: The original user question (if known). If the HumanMessage
+            content doesn't match this, it's likely a summary.
+
+    Returns:
+        True if the message appears to be a summary message
+    """
+    if not hasattr(msg, "content") or not msg.content:
+        return False
+
+    content = str(msg.content).strip()
+
+    # Method 1: Compare with original question (most reliable)
+    if original_question is not None:
+        # If content differs significantly from original question, it's a summary
+        original_normalized = original_question.strip()
+        return content != original_normalized
+
+    # Method 2: Fall back to pattern matching (less reliable but works without context)
+    content_lower = content.lower()
+    summary_markers = [
+        "here is a summary of the conversation",
+        "summary of the conversation to date",
+        "previous conversation was too long to summarize",
+        "conversation summary:",
+        "summary of previous conversation",
+    ]
+    return any(marker in content_lower for marker in summary_markers)
+
+
+def _extract_agent_trace(messages: list[Any], original_question: str | None = None) -> str:
+    """Extract the complete agent trace from a list of messages.
+
+    Filters out system messages and the first human message (initial user question),
+    but preserves:
+    - Subsequent human messages that may contain agent reasoning steps
+    - Summary messages from SummarizationMiddleware (detected by comparing with original_question)
+
+    Args:
+        messages: List of LangChain messages
+        original_question: The original user question. If provided, enables reliable
+            detection of summary messages (if first HumanMessage differs from this,
+            it's treated as a summary and included in trace).
+
+    Returns:
+        The formatted trace of AI, Tool, and intermediate Human messages
+        (excluding first unless it's a summary), empty string if none found
+    """
+    try:
+        from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+    except ImportError:
+        # Fallback: use type name checking
+        return _extract_agent_trace_fallback(messages, original_question)
+
+    trace_parts: list[str] = []
+    first_human_found = False
+
+    for msg in messages:
+        # Skip system messages
+        if isinstance(msg, SystemMessage):
+            continue
+
+        # Handle human messages
+        if isinstance(msg, HumanMessage):
+            # Check if this is a summary message (not the original question)
+            if _is_summary_message(msg, original_question):
+                formatted_msg = _format_langchain_message(msg)
+                if formatted_msg.strip():
+                    trace_parts.append(formatted_msg.strip())
+                first_human_found = True
+                continue
+
+            # Skip first human message (initial user question)
+            if not first_human_found:
+                first_human_found = True
+                continue
+            # Continue processing subsequent human messages
+
+        # Include AI, Tool, and subsequent Human messages
+        if isinstance(msg, AIMessage | ToolMessage | HumanMessage):
+            formatted_msg = _format_langchain_message(msg)
+            if formatted_msg.strip():
+                trace_parts.append(formatted_msg.strip())
+
+    return "\n\n".join(trace_parts) if trace_parts else ""
+
+
+def _extract_agent_trace_fallback(messages: list[Any], original_question: str | None = None) -> str:
+    """Fallback trace extraction when langchain_core not available."""
+    trace_parts: list[str] = []
+    first_human_found = False
+
+    for msg in messages:
+        msg_type = type(msg).__name__.lower()
+        role = getattr(msg, "role", "").lower() if hasattr(msg, "role") else ""
+
+        # Skip system messages
+        if "system" in msg_type or role == "system":
+            continue
+
+        # Handle human messages
+        if "human" in msg_type or role in ("user", "human"):
+            # Check if this is a summary message
+            if _is_summary_message(msg, original_question):
+                formatted_msg = _format_langchain_message(msg)
+                if formatted_msg.strip():
+                    trace_parts.append(formatted_msg.strip())
+                first_human_found = True
+                continue
+
+            # Skip first human message
+            if not first_human_found:
+                first_human_found = True
+                continue
+
+        # Include AI, Tool, and subsequent Human messages
+        if (
+            "ai" in msg_type
+            or role == "assistant"
+            or "tool" in msg_type
+            or role == "tool"
+            or "human" in msg_type
+            or role in ("user", "human")
+        ):
+            formatted_msg = _format_langchain_message(msg)
+            if formatted_msg.strip():
+                trace_parts.append(formatted_msg.strip())
+
+    return "\n\n".join(trace_parts) if trace_parts else ""
+
+
+def extract_final_ai_message_from_response(response: Any) -> tuple[str | None, str | None]:
+    """Extract only the final AI text response from an agent response.
+
+    This function works with the original agent response before harmonization,
+    checking message types directly rather than parsing strings.
+
+    Args:
+        response: Response from a LangGraph agent (messages list, dict with
+            'messages', or state dict)
+
+    Returns:
+        Tuple of (extracted_message, error_message) where:
+        - extracted_message: The final AI text content, or None if extraction failed
+        - error_message: Error description if extraction failed, or None if successful
+
+    Error cases:
+        - Empty or no messages
+        - Last message is not an AIMessage
+        - Final AIMessage has no text content (only tool calls)
+
+    Example:
+        >>> from langchain_core.messages import AIMessage
+        >>> messages = [AIMessage(content="Final answer")]
+        >>> message, error = extract_final_ai_message_from_response(messages)
+        >>> print(message)  # "Final answer"
+    """
+    try:
+        from langchain_core.messages import AIMessage
+    except ImportError:
+        return None, "langchain_core not available"
+
+    # Extract messages list from various response formats
+    messages = None
+
+    if response is None:
+        return None, "Empty response"
+
+    # Handle nested agent state dict: {'agent': {'messages': [...]}}
+    if isinstance(response, dict):
+        if "agent" in response and isinstance(response["agent"], dict) and "messages" in response["agent"]:
+            messages = response["agent"]["messages"]
+        elif "messages" in response:
+            messages = response["messages"]
+    # Handle list of messages directly
+    elif isinstance(response, list):
+        messages = response
+    # Handle single message
+    elif isinstance(response, AIMessage):
+        messages = [response]
+
+    if not messages or len(messages) == 0:
+        return None, "No messages found in response"
+
+    # Get the last message
+    last_message = messages[-1]
+
+    # Check if it's an AIMessage
+    if not isinstance(last_message, AIMessage):
+        return None, "Last message is not an AIMessage"
+
+    # Extract content
+    content = last_message.content if last_message.content else ""
+
+    # Handle list content (convert to string)
+    if isinstance(content, list):
+        text_parts = []
+        for item in content:
+            if isinstance(item, str):
+                text_parts.append(item)
+            elif isinstance(item, dict) and "text" in item:
+                text_parts.append(str(item["text"]))
+        content = " ".join(text_parts) if text_parts else ""
+
+    # Check if content is empty
+    if not content or not content.strip():
+        # Check if there are tool calls but no text content
+        if hasattr(last_message, "tool_calls") and last_message.tool_calls:
+            return None, "Final AI message has no text content (only tool calls)"
+        return None, "Final AI message has no content"
+
+    return content.strip(), None

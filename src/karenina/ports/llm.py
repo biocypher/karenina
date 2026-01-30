@@ -93,7 +93,7 @@ class LLMPort(Protocol):
         """
         ...
 
-    def with_structured_output(self, schema: type[BaseModel]) -> "LLMPort":
+    def with_structured_output(self, schema: type[BaseModel], *, max_retries: int | None = None) -> "LLMPort":
         """Return a new LLMPort configured for structured output.
 
         The returned LLMPort will use the provided schema to constrain
@@ -102,6 +102,8 @@ class LLMPort(Protocol):
 
         Args:
             schema: A Pydantic model class defining the output structure.
+            max_retries: Maximum retry attempts on validation failure.
+                Implementation depends on adapter (some may ignore this).
 
         Returns:
             A new LLMPort instance configured for structured output.

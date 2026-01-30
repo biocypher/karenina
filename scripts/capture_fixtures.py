@@ -88,6 +88,7 @@ class CaptureLLMClient:
         output_dir: Path,
         scenario: str,
         model: str,
+        force: bool = False,
     ) -> None:
         """Initialize the capturing LLM client.
 
@@ -96,16 +97,23 @@ class CaptureLLMClient:
             output_dir: Directory to save fixtures
             scenario: Scenario name for subdirectory organization
             model: Model name for metadata
+            force: If True, overwrite existing fixtures
         """
         self._real_client = real_client
         self._output_dir = Path(output_dir)
         self._scenario = scenario
         self._model = model
-        self._captured_count = 0
+        self._force = force
+        # Use a list to share count across wrappers (mutable container)
+        self._captured_count: list[int] = [0]
 
         # Create output directory
         self._scenario_dir = self._output_dir / model / scenario
         self._scenario_dir.mkdir(parents=True, exist_ok=True)
+
+    async def ainvoke(self, messages: list[Any], **kwargs: Any) -> Any:
+        """Async invoke - delegates to sync invoke for capture simplicity."""
+        return self.invoke(messages, **kwargs)
 
     def invoke(self, messages: list[Any], **kwargs: Any) -> Any:
         """Invoke the real LLM and capture the response.
@@ -121,20 +129,31 @@ class CaptureLLMClient:
 
         # Check if fixture already exists
         fixture_path = self._scenario_dir / f"{prompt_hash}.json"
-        if fixture_path.exists():
+        fixture_exists = fixture_path.exists()
+
+        if fixture_exists and not self._force:
             print(f"  [SKIP] Fixture already exists: {prompt_hash[:8]}...")
             # Still call the real LLM to get a proper response object
             # (we can't reconstruct a proper AIMessage from saved data easily)
+            response = self._real_client.invoke(messages, **kwargs)
+            return response
 
         # Call real LLM
         response = self._real_client.invoke(messages, **kwargs)
 
-        # Skip saving if fixture already exists
-        if fixture_path.exists():
-            return response
-
         # Extract response attributes for saving
-        content = response.content if hasattr(response, "content") else str(response)
+        # Handle both AIMessage responses (have .content as string)
+        # and Pydantic model responses from with_structured_output()
+        if hasattr(response, "content") and isinstance(response.content, str):
+            content = response.content
+        elif hasattr(response, "model_dump_json"):
+            # Pydantic model - serialize to JSON
+            content = response.model_dump_json()
+        elif hasattr(response, "model_dump"):
+            # Pydantic model without model_dump_json - use json.dumps
+            content = json.dumps(response.model_dump())
+        else:
+            content = str(response)
 
         response_id = getattr(response, "id", f"captured-{prompt_hash[:8]}")
         model = getattr(response, "model", self._model)
@@ -188,8 +207,8 @@ class CaptureLLMClient:
         with fixture_path.open("w") as f:
             json.dump(fixture_data, f, indent=2)
 
-        self._captured_count += 1
-        print(f"  [CAPTURED] {prompt_hash[:8]}... ({self._captured_count} total)")
+        self._captured_count[0] += 1
+        print(f"  [CAPTURED] {prompt_hash[:8]}... ({self._captured_count[0]} total)")
 
         # Return the actual LLM response for agent compatibility
         return response
@@ -262,8 +281,30 @@ class CaptureLLMClient:
         """
         bound_llm = self._real_client.bind_tools(tools, **kwargs)
         # Create new wrapper that shares our state
-        wrapper = CaptureLLMClient(bound_llm, self._output_dir, self._scenario, self._model)
+        wrapper = CaptureLLMClient(bound_llm, self._output_dir, self._scenario, self._model, self._force)
         # Share the captured count so we track across all invocations
+        wrapper._captured_count = self._captured_count
+        wrapper._scenario_dir = self._scenario_dir
+        return wrapper
+
+    def with_structured_output(self, schema: Any, **kwargs: Any) -> "CaptureLLMClient":
+        """Wrap with_structured_output to maintain capture capability.
+
+        When the LangChainLLMAdapter calls self._model.with_structured_output(schema),
+        we need to return a wrapper that still captures, not the real LLM's
+        structured output model.
+
+        Args:
+            schema: Pydantic schema for structured output
+            **kwargs: Additional arguments
+
+        Returns:
+            A new CaptureLLMClient wrapping the structured-output model
+        """
+        # Create the structured-output version of the real LLM
+        structured_llm = self._real_client.with_structured_output(schema, **kwargs)
+        # Wrap it in a new capture client that shares our state
+        wrapper = CaptureLLMClient(structured_llm, self._output_dir, self._scenario, self._model, self._force)
         wrapper._captured_count = self._captured_count
         wrapper._scenario_dir = self._scenario_dir
         return wrapper
@@ -271,7 +312,7 @@ class CaptureLLMClient:
     @property
     def captured_count(self) -> int:
         """Return the number of fixtures captured."""
-        return self._captured_count
+        return self._captured_count[0]
 
     def __getattr__(self, name: str) -> Any:
         """Forward all other attributes to the wrapped LLM.
@@ -387,7 +428,7 @@ def _create_real_llm(model: str, provider: str = "anthropic") -> Any:
     return init_chat_model(model=model, model_provider=provider, temperature=0.0)
 
 
-def _run_template_parsing_scenario(model: str, provider: str, output_dir: Path) -> int:
+def _run_template_parsing_scenario(model: str, provider: str, output_dir: Path, force: bool = False) -> int:
     """Capture template parsing LLM calls using the ACTUAL TemplateEvaluator.
 
     This uses the real TemplateEvaluator with real Answer templates from our fixtures
@@ -397,7 +438,7 @@ def _run_template_parsing_scenario(model: str, provider: str, output_dir: Path) 
     from karenina.schemas.workflow import ModelConfig
 
     real_llm = _create_real_llm(model, provider)
-    capture_client = CaptureLLMClient(real_llm, output_dir, "template_parsing", model)
+    capture_client = CaptureLLMClient(real_llm, output_dir, "template_parsing", model, force)
 
     print("  Running template parsing scenario using ACTUAL TemplateEvaluator...")
 
@@ -437,7 +478,7 @@ def _run_template_parsing_scenario(model: str, provider: str, output_dir: Path) 
     )
 
     # Patch the LLM to use our capture client
-    with patch.object(evaluator, "llm", capture_client):
+    with patch.object(evaluator.llm, "_model", capture_client):
         try:
             # This triggers the REAL prompt building code path
             evaluator.parse_response(
@@ -517,7 +558,7 @@ def _run_template_parsing_scenario(model: str, provider: str, output_dir: Path) 
     return 0
 
 
-def _run_rubric_evaluation_scenario(model: str, provider: str, output_dir: Path) -> int:
+def _run_rubric_evaluation_scenario(model: str, provider: str, output_dir: Path, force: bool = False) -> int:
     """Capture rubric evaluation LLM calls using the ACTUAL RubricEvaluator.
 
     This uses the real RubricEvaluator with real rubric traits to ensure
@@ -528,7 +569,7 @@ def _run_rubric_evaluation_scenario(model: str, provider: str, output_dir: Path)
     from karenina.schemas.workflow import ModelConfig
 
     real_llm = _create_real_llm(model, provider)
-    capture_client = CaptureLLMClient(real_llm, output_dir, "rubric_evaluation", model)
+    capture_client = CaptureLLMClient(real_llm, output_dir, "rubric_evaluation", model, force)
 
     print("  Running rubric evaluation scenario using ACTUAL RubricEvaluator...")
 
@@ -541,22 +582,27 @@ def _run_rubric_evaluation_scenario(model: str, provider: str, output_dir: Path)
         interface="langchain",
     )
 
-    # Create evaluator using batch strategy (most common)
-    evaluator = RubricEvaluator(
-        model_config=model_config,
-        evaluation_strategy="batch",
-    )
+    # Patch init_chat_model_unified BEFORE creating evaluator.
+    # This ensures the LLMPort adapter wraps our capture client.
+    with patch(
+        "karenina.infrastructure.llm.interface.init_chat_model_unified",
+        return_value=capture_client,
+    ):
+        # Create evaluator using batch strategy (most common)
+        evaluator = RubricEvaluator(
+            model_config=model_config,
+            evaluation_strategy="batch",
+        )
 
-    # --- Scenario 1: Boolean trait (clarity check) ---
-    clarity_trait = LLMRubricTrait(
-        name="clarity",
-        description="The response is clear, unambiguous, and easy to understand",
-        kind="boolean",
-    )
+        # --- Scenario 1: Boolean trait (clarity check) ---
+        clarity_trait = LLMRubricTrait(
+            name="clarity",
+            description="The response is clear, unambiguous, and easy to understand",
+            kind="boolean",
+        )
 
-    rubric1 = Rubric(llm_traits=[clarity_trait])
+        rubric1 = Rubric(llm_traits=[clarity_trait])
 
-    with patch.object(evaluator, "llm", capture_client):
         try:
             evaluator.evaluate_rubric(
                 question="What is the capital of France?",
@@ -566,18 +612,17 @@ def _run_rubric_evaluation_scenario(model: str, provider: str, output_dir: Path)
         except Exception as e:
             print(f"    Note: Evaluation completed with: {type(e).__name__}")
 
-    # --- Scenario 2: Scored trait (quality 1-5) ---
-    quality_trait = LLMRubricTrait(
-        name="completeness",
-        description="The response thoroughly addresses all aspects of the question",
-        kind="score",
-        min_score=1,
-        max_score=5,
-    )
+        # --- Scenario 2: Scored trait (quality 1-5) ---
+        quality_trait = LLMRubricTrait(
+            name="completeness",
+            description="The response thoroughly addresses all aspects of the question",
+            kind="score",
+            min_score=1,
+            max_score=5,
+        )
 
-    rubric2 = Rubric(llm_traits=[quality_trait])
+        rubric2 = Rubric(llm_traits=[quality_trait])
 
-    with patch.object(evaluator, "llm", capture_client):
         try:
             evaluator.evaluate_rubric(
                 question="Explain the process of photosynthesis.",
@@ -587,28 +632,27 @@ def _run_rubric_evaluation_scenario(model: str, provider: str, output_dir: Path)
         except Exception as e:
             print(f"    Note: Evaluation completed with: {type(e).__name__}")
 
-    # --- Scenario 3: Multiple traits (batch evaluation) ---
-    accuracy_trait = LLMRubricTrait(
-        name="accuracy",
-        description="The response contains factually correct information",
-        kind="boolean",
-    )
-    helpfulness_trait = LLMRubricTrait(
-        name="helpfulness",
-        description="The response is helpful and addresses the user's actual need",
-        kind="score",
-        min_score=1,
-        max_score=5,
-    )
-    safety_trait = LLMRubricTrait(
-        name="safety",
-        description="The response does not contain harmful or dangerous advice",
-        kind="boolean",
-    )
+        # --- Scenario 3: Multiple traits (batch evaluation) ---
+        accuracy_trait = LLMRubricTrait(
+            name="accuracy",
+            description="The response contains factually correct information",
+            kind="boolean",
+        )
+        helpfulness_trait = LLMRubricTrait(
+            name="helpfulness",
+            description="The response is helpful and addresses the user's actual need",
+            kind="score",
+            min_score=1,
+            max_score=5,
+        )
+        safety_trait = LLMRubricTrait(
+            name="safety",
+            description="The response does not contain harmful or dangerous advice",
+            kind="boolean",
+        )
 
-    rubric3 = Rubric(llm_traits=[accuracy_trait, helpfulness_trait, safety_trait])
+        rubric3 = Rubric(llm_traits=[accuracy_trait, helpfulness_trait, safety_trait])
 
-    with patch.object(evaluator, "llm", capture_client):
         try:
             evaluator.evaluate_rubric(
                 question="How do I treat a minor burn?",
@@ -622,7 +666,7 @@ def _run_rubric_evaluation_scenario(model: str, provider: str, output_dir: Path)
     return 0
 
 
-def _run_abstention_scenario(model: str, provider: str, output_dir: Path) -> int:
+def _run_abstention_scenario(model: str, provider: str, output_dir: Path, force: bool = False) -> int:
     """Capture abstention detection LLM calls using the ACTUAL detect_abstention function.
 
     This uses the real prompts from ABSTENTION_DETECTION_SYS and ABSTENTION_DETECTION_USER.
@@ -635,7 +679,7 @@ def _run_abstention_scenario(model: str, provider: str, output_dir: Path) -> int
     )
 
     real_llm = _create_real_llm(model, provider)
-    capture_client = CaptureLLMClient(real_llm, output_dir, "abstention", model)
+    capture_client = CaptureLLMClient(real_llm, output_dir, "abstention", model, force)
 
     print("  Running abstention detection scenario using ACTUAL prompts...")
 
@@ -687,7 +731,7 @@ def _run_abstention_scenario(model: str, provider: str, output_dir: Path) -> int
     return 0
 
 
-def _run_full_pipeline_scenario(model: str, provider: str, output_dir: Path) -> int:
+def _run_full_pipeline_scenario(model: str, provider: str, output_dir: Path, force: bool = False) -> int:
     """Capture full verification pipeline LLM calls.
 
     This scenario runs all sub-scenarios in sequence.
@@ -696,14 +740,14 @@ def _run_full_pipeline_scenario(model: str, provider: str, output_dir: Path) -> 
     print("  Note: This runs all sub-scenarios in sequence")
 
     exit_code = 0
-    exit_code |= _run_template_parsing_scenario(model, provider, output_dir)
-    exit_code |= _run_rubric_evaluation_scenario(model, provider, output_dir)
-    exit_code |= _run_abstention_scenario(model, provider, output_dir)
+    exit_code |= _run_template_parsing_scenario(model, provider, output_dir, force)
+    exit_code |= _run_rubric_evaluation_scenario(model, provider, output_dir, force)
+    exit_code |= _run_abstention_scenario(model, provider, output_dir, force)
 
     return exit_code
 
 
-def _run_mcp_agent_scenario(model: str, provider: str, output_dir: Path) -> int:
+def _run_mcp_agent_scenario(model: str, provider: str, output_dir: Path, force: bool = False) -> int:
     """Capture MCP-enabled LangGraph agent LLM calls.
 
     This scenario creates a LangGraph agent with MCP tools and middleware,
@@ -742,7 +786,7 @@ def _run_mcp_agent_scenario(model: str, provider: str, output_dir: Path) -> int:
 
     # Create capturing wrapper for the LLM
     # This captures all LLM calls made by the agent internally
-    capture_client = CaptureLLMClient(real_llm, output_dir, "mcp_agent", model)
+    capture_client = CaptureLLMClient(real_llm, output_dir, "mcp_agent", model, force)
 
     # MCP configuration - use Open Targets Platform
     mcp_urls_dict = {
@@ -834,7 +878,7 @@ def _run_mcp_agent_scenario(model: str, provider: str, output_dir: Path) -> int:
     return 0
 
 
-def _run_literal_evaluation_scenario(model: str, provider: str, output_dir: Path) -> int:
+def _run_literal_evaluation_scenario(model: str, provider: str, output_dir: Path, force: bool = False) -> int:
     """Capture literal kind trait evaluation LLM calls using the ACTUAL LLMTraitEvaluator.
 
     This uses the real LLMTraitEvaluator with literal kind traits to ensure
@@ -850,7 +894,7 @@ def _run_literal_evaluation_scenario(model: str, provider: str, output_dir: Path
     from karenina.schemas.workflow import ModelConfig
 
     real_llm = _create_real_llm(model, provider)
-    capture_client = CaptureLLMClient(real_llm, output_dir, "literal_evaluation", model)
+    capture_client = CaptureLLMClient(real_llm, output_dir, "literal_evaluation", model, force)
 
     print("  Running literal evaluation scenario using ACTUAL LLMTraitEvaluator...")
 
@@ -863,28 +907,33 @@ def _run_literal_evaluation_scenario(model: str, provider: str, output_dir: Path
         interface="langchain",
     )
 
-    # Create evaluator using batch strategy
-    evaluator = RubricEvaluator(
-        model_config=model_config,
-        evaluation_strategy="batch",
-    )
+    # Patch init_chat_model_unified BEFORE creating evaluator.
+    # This ensures the LLMPort adapter wraps our capture client.
+    with patch(
+        "karenina.infrastructure.llm.interface.init_chat_model_unified",
+        return_value=capture_client,
+    ):
+        # Create evaluator using batch strategy
+        evaluator = RubricEvaluator(
+            model_config=model_config,
+            evaluation_strategy="batch",
+        )
 
-    # --- Scenario 1: Single literal trait (sentiment classification) ---
-    sentiment_trait = LLMRubricTrait(
-        name="sentiment",
-        description="Classify the emotional tone of the response",
-        kind="literal",
-        classes={
-            "negative": "Response expresses criticism, disappointment, or pessimism",
-            "neutral": "Response is factual and emotionally neutral",
-            "positive": "Response expresses optimism, satisfaction, or enthusiasm",
-        },
-        higher_is_better=True,  # positive > neutral > negative
-    )
+        # --- Scenario 1: Single literal trait (sentiment classification) ---
+        sentiment_trait = LLMRubricTrait(
+            name="sentiment",
+            description="Classify the emotional tone of the response",
+            kind="literal",
+            classes={
+                "negative": "Response expresses criticism, disappointment, or pessimism",
+                "neutral": "Response is factual and emotionally neutral",
+                "positive": "Response expresses optimism, satisfaction, or enthusiasm",
+            },
+            higher_is_better=True,  # positive > neutral > negative
+        )
 
-    rubric1 = Rubric(llm_traits=[sentiment_trait])
+        rubric1 = Rubric(llm_traits=[sentiment_trait])
 
-    with patch.object(evaluator, "llm", capture_client):
         try:
             evaluator.evaluate_rubric(
                 question="What did you think of the conference?",
@@ -894,34 +943,33 @@ def _run_literal_evaluation_scenario(model: str, provider: str, output_dir: Path
         except Exception as e:
             print(f"    Note: Evaluation completed with: {type(e).__name__}")
 
-    # --- Scenario 2: Multiple literal traits (batch evaluation) ---
-    sentiment_trait2 = LLMRubricTrait(
-        name="sentiment",
-        description="Classify the emotional tone of the response",
-        kind="literal",
-        classes={
-            "negative": "Response expresses criticism, disappointment, or pessimism",
-            "neutral": "Response is factual and emotionally neutral",
-            "positive": "Response expresses optimism, satisfaction, or enthusiasm",
-        },
-        higher_is_better=True,
-    )
-    response_type_trait = LLMRubricTrait(
-        name="response_type",
-        description="Classify the type of response given",
-        kind="literal",
-        classes={
-            "factual": "Response presents objective facts or data",
-            "opinion": "Response expresses subjective views or preferences",
-            "speculative": "Response discusses possibilities or hypotheticals",
-            "refusal": "Response declines to answer or redirects the question",
-        },
-        higher_is_better=False,  # Order doesn't imply quality
-    )
+        # --- Scenario 2: Multiple literal traits (batch evaluation) ---
+        sentiment_trait2 = LLMRubricTrait(
+            name="sentiment",
+            description="Classify the emotional tone of the response",
+            kind="literal",
+            classes={
+                "negative": "Response expresses criticism, disappointment, or pessimism",
+                "neutral": "Response is factual and emotionally neutral",
+                "positive": "Response expresses optimism, satisfaction, or enthusiasm",
+            },
+            higher_is_better=True,
+        )
+        response_type_trait = LLMRubricTrait(
+            name="response_type",
+            description="Classify the type of response given",
+            kind="literal",
+            classes={
+                "factual": "Response presents objective facts or data",
+                "opinion": "Response expresses subjective views or preferences",
+                "speculative": "Response discusses possibilities or hypotheticals",
+                "refusal": "Response declines to answer or redirects the question",
+            },
+            higher_is_better=False,  # Order doesn't imply quality
+        )
 
-    rubric2 = Rubric(llm_traits=[sentiment_trait2, response_type_trait])
+        rubric2 = Rubric(llm_traits=[sentiment_trait2, response_type_trait])
 
-    with patch.object(evaluator, "llm", capture_client):
         try:
             evaluator.evaluate_rubric(
                 question="Will quantum computing replace classical computers?",
@@ -931,10 +979,9 @@ def _run_literal_evaluation_scenario(model: str, provider: str, output_dir: Path
         except Exception as e:
             print(f"    Note: Evaluation completed with: {type(e).__name__}")
 
-    # --- Scenario 3: Literal trait with neutral response ---
-    rubric3 = Rubric(llm_traits=[sentiment_trait])
+        # --- Scenario 3: Literal trait with neutral response ---
+        rubric3 = Rubric(llm_traits=[sentiment_trait])
 
-    with patch.object(evaluator, "llm", capture_client):
         try:
             evaluator.evaluate_rubric(
                 question="What is the capital of France?",
@@ -944,10 +991,9 @@ def _run_literal_evaluation_scenario(model: str, provider: str, output_dir: Path
         except Exception as e:
             print(f"    Note: Evaluation completed with: {type(e).__name__}")
 
-    # --- Scenario 4: Literal trait with negative sentiment ---
-    rubric4 = Rubric(llm_traits=[sentiment_trait])
+        # --- Scenario 4: Literal trait with negative sentiment ---
+        rubric4 = Rubric(llm_traits=[sentiment_trait])
 
-    with patch.object(evaluator, "llm", capture_client):
         try:
             evaluator.evaluate_rubric(
                 question="How was your experience with customer service?",
@@ -1031,7 +1077,7 @@ def run_scenario(
         return 1
 
     try:
-        return runner(model, provider, FIXTURE_DIR)
+        return runner(model, provider, FIXTURE_DIR, force)
     except Exception as e:
         print(f"  Error during capture: {e}")
         import traceback

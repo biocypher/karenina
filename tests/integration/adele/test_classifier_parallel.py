@@ -109,15 +109,15 @@ def test_classifier_sequential_mode_with_parallel_execution(
     sample_question: str,
     sample_traits: list,
 ) -> None:
-    """Test that sequential mode uses ParallelLLMInvoker when async_enabled."""
+    """Test that sequential mode uses LLMParallelInvoker when async_enabled."""
     classifier = QuestionClassifier(
         llm=mock_llm,
         trait_eval_mode="sequential",
         async_enabled=True,
     )
 
-    # Mock the parallel invoker
-    with patch("karenina.infrastructure.llm.parallel_invoker.ParallelLLMInvoker") as mock_invoker_class:
+    # Mock the parallel invoker (now in adapters module)
+    with patch("karenina.adapters.llm_parallel.LLMParallelInvoker") as mock_invoker_class:
         mock_invoker = MagicMock()
         mock_invoker_class.return_value = mock_invoker
 
@@ -130,14 +130,14 @@ def test_classifier_sequential_mode_with_parallel_execution(
             mock_result.classification = class_names[i % len(class_names)]
             mock_results.append((mock_result, {"total_tokens": 10}, None))
 
-        mock_invoker.invoke_batch.return_value = mock_results
+        mock_invoker.invoke_batch_structured.return_value = mock_results
 
         # Execute classification
         result = classifier._classify_single_sequential(sample_question, sample_traits, question_id="test-1")
 
-        # Verify ParallelLLMInvoker was used
+        # Verify LLMParallelInvoker was used
         mock_invoker_class.assert_called_once()
-        mock_invoker.invoke_batch.assert_called_once()
+        mock_invoker.invoke_batch_structured.assert_called_once()
 
         # Verify all traits have results
         assert len(result.scores) == len(sample_traits)
@@ -146,40 +146,43 @@ def test_classifier_sequential_mode_with_parallel_execution(
 
 @pytest.mark.integration
 def test_classifier_sequential_mode_without_parallel_execution(
-    mock_llm: MagicMock,
     sample_question: str,
     sample_traits: list,
 ) -> None:
     """Test that sequential mode falls back when async_enabled=False."""
+    # Create a mock LLM that supports with_structured_output
+    mock_llm = MagicMock()
+    mock_structured_llm = MagicMock()
+    mock_llm.with_structured_output.return_value = mock_structured_llm
+
     classifier = QuestionClassifier(
         llm=mock_llm,
         trait_eval_mode="sequential",
         async_enabled=False,
     )
 
-    # Mock invoke_with_structured_output for sequential path
-    with patch(
-        "karenina.benchmark.verification.evaluators.rubric_parsing.invoke_with_structured_output"
-    ) as mock_invoke:
-        # Setup mock results - one per trait
-        mock_results = []
-        for i, trait in enumerate(sample_traits):
-            mock_result = MagicMock()
-            class_names = list(trait.classes.keys())
-            mock_result.classification = class_names[i % len(class_names)]
-            mock_results.append((mock_result, {"total_tokens": 10}))
+    # Setup mock responses for the structured LLM
+    mock_responses = []
+    for i, trait in enumerate(sample_traits):
+        mock_response = MagicMock()
+        mock_result = MagicMock()
+        class_names = list(trait.classes.keys())
+        mock_result.classification = class_names[i % len(class_names)]
+        mock_response.raw = mock_result
+        mock_response.usage = MagicMock(total_tokens=10, input_tokens=5, output_tokens=5)
+        mock_responses.append(mock_response)
 
-        mock_invoke.side_effect = mock_results
+    mock_structured_llm.invoke.side_effect = mock_responses
 
-        # Execute classification
-        result = classifier._classify_single_sequential(sample_question, sample_traits, question_id="test-1")
+    # Execute classification
+    result = classifier._classify_single_sequential(sample_question, sample_traits, question_id="test-1")
 
-        # Verify invoke_with_structured_output was called for each trait
-        assert mock_invoke.call_count == len(sample_traits)
+    # Verify with_structured_output().invoke() was called for each trait
+    assert mock_structured_llm.invoke.call_count == len(sample_traits)
 
-        # Verify all traits have results
-        assert len(result.scores) == len(sample_traits)
-        assert len(result.labels) == len(sample_traits)
+    # Verify all traits have results
+    assert len(result.scores) == len(sample_traits)
+    assert len(result.labels) == len(sample_traits)
 
 
 @pytest.mark.integration
@@ -195,7 +198,7 @@ def test_classifier_parallel_handles_partial_errors(
         async_enabled=True,
     )
 
-    with patch("karenina.infrastructure.llm.parallel_invoker.ParallelLLMInvoker") as mock_invoker_class:
+    with patch("karenina.adapters.llm_parallel.LLMParallelInvoker") as mock_invoker_class:
         mock_invoker = MagicMock()
         mock_invoker_class.return_value = mock_invoker
 
@@ -210,7 +213,7 @@ def test_classifier_parallel_handles_partial_errors(
                 mock_result.classification = class_names[0]
                 mock_results.append((mock_result, {"total_tokens": 10}, None))
 
-        mock_invoker.invoke_batch.return_value = mock_results
+        mock_invoker.invoke_batch_structured.return_value = mock_results
 
         result = classifier._classify_single_sequential(sample_question, sample_traits, question_id="test-1")
 
@@ -237,7 +240,7 @@ def test_classifier_parallel_usage_aggregation(
         async_enabled=True,
     )
 
-    with patch("karenina.infrastructure.llm.parallel_invoker.ParallelLLMInvoker") as mock_invoker_class:
+    with patch("karenina.adapters.llm_parallel.LLMParallelInvoker") as mock_invoker_class:
         mock_invoker = MagicMock()
         mock_invoker_class.return_value = mock_invoker
 
@@ -251,7 +254,7 @@ def test_classifier_parallel_usage_aggregation(
                 (mock_result, {"total_tokens": 10 + i, "input_tokens": 5, "output_tokens": 5 + i}, None)
             )
 
-        mock_invoker.invoke_batch.return_value = mock_results
+        mock_invoker.invoke_batch_structured.return_value = mock_results
 
         result = classifier._classify_single_sequential(sample_question, sample_traits, question_id="test-1")
 

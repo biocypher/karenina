@@ -19,9 +19,9 @@ from pathlib import Path
 from typing import Any
 
 from ..schemas import VerificationConfig, VerificationResult
-from ..schemas.domain.rubric import Rubric
-from ..schemas.workflow.models import ModelConfig
-from ..schemas.workflow.verification_result_set import VerificationResultSet
+from ..schemas.config import ModelConfig
+from ..schemas.entities import Rubric
+from ..schemas.results import VerificationResultSet
 
 logger = logging.getLogger(__name__)
 
@@ -154,16 +154,12 @@ class TaskIdentifier:
     def _get_model_string(model: ModelConfig) -> str:
         """Get the model string as it appears in result metadata.
 
-        This mirrors the logic in runner.py for computing answering_model_str.
+        Uses centralized formatting via adapter registry.
         """
-        if model.interface == "openrouter":
-            return model.model_name or ""
-        elif model.interface == "openai_endpoint":
-            return f"endpoint/{model.model_name}"
-        elif model.interface == "manual":
-            return "manual"
-        else:
-            return f"{model.model_provider}/{model.model_name}"
+        from karenina.adapters import format_model_string
+
+        result: str = format_model_string(model)
+        return result
 
     @staticmethod
     def compute_mcp_hash(model_config: ModelConfig) -> str:

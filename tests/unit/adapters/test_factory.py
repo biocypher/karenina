@@ -32,6 +32,7 @@ from karenina.adapters.factory import (
     get_agent,
     get_llm,
     get_parser,
+    validate_model_config,
 )
 from karenina.ports import AdapterUnavailableError
 
@@ -76,6 +77,8 @@ def openai_endpoint_model_config() -> Any:
         model_name="gpt-4",
         model_provider="openai",
         interface="openai_endpoint",
+        endpoint_base_url="http://localhost:8000/v1",
+        endpoint_api_key="test-api-key",
     )
 
 
@@ -250,7 +253,7 @@ class TestGetLLM:
 
     def test_get_llm_langchain(self, langchain_model_config: Any) -> None:
         """Test get_llm routes langchain to LangChainLLMAdapter."""
-        with patch("karenina.infrastructure.llm.interface.init_chat_model_unified") as mock_init:
+        with patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init:
             mock_init.return_value = MagicMock()
 
             llm = get_llm(langchain_model_config)
@@ -260,8 +263,8 @@ class TestGetLLM:
 
     def test_get_llm_openrouter(self, openrouter_model_config: Any) -> None:
         """Test get_llm routes openrouter to LangChainLLMAdapter."""
-        with patch("karenina.infrastructure.llm.interface.init_chat_model_unified") as mock_init:
-            mock_init.return_value = MagicMock()
+        with patch("karenina.adapters.langchain.initialization.ChatOpenRouter") as mock_cls:
+            mock_cls.return_value = MagicMock()
 
             llm = get_llm(openrouter_model_config)
 
@@ -270,25 +273,37 @@ class TestGetLLM:
 
     def test_get_llm_openai_endpoint(self, openai_endpoint_model_config: Any) -> None:
         """Test get_llm routes openai_endpoint to LangChainLLMAdapter."""
-        with patch("karenina.infrastructure.llm.interface.init_chat_model_unified") as mock_init:
-            mock_init.return_value = MagicMock()
+        with patch("karenina.adapters.langchain.initialization.ChatOpenAIEndpoint") as mock_cls:
+            mock_cls.return_value = MagicMock()
 
             llm = get_llm(openai_endpoint_model_config)
 
             assert llm is not None
             assert type(llm).__name__ == "LangChainLLMAdapter"
 
-    def test_get_llm_manual_returns_none(self, manual_model_config: Any) -> None:
-        """Test get_llm returns None for manual interface."""
+    def test_get_llm_manual_returns_manual_adapter(self, manual_model_config: Any) -> None:
+        """Test get_llm returns ManualLLMAdapter for manual interface.
+
+        Manual adapters raise ManualInterfaceError if invoked, acting as a safety net.
+        Call sites should check interface != 'manual' before using the adapter.
+        """
+        from karenina.adapters.manual import ManualInterfaceError, ManualLLMAdapter
+
         llm = get_llm(manual_model_config)
 
-        assert llm is None
+        assert llm is not None
+        assert isinstance(llm, ManualLLMAdapter)
+
+        # Verify it raises ManualInterfaceError when invoked
+        with pytest.raises(ManualInterfaceError) as exc_info:
+            llm.invoke([])
+        assert "llm.invoke()" in str(exc_info.value)
 
     def test_get_llm_claude_sdk_fallback_to_langchain(self, claude_sdk_model_config: Any) -> None:
         """Test get_llm falls back to LangChain when Claude SDK unavailable."""
         with (
             patch("shutil.which") as mock_which,
-            patch("karenina.infrastructure.llm.interface.init_chat_model_unified") as mock_init,
+            patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init,
         ):
             mock_which.return_value = None  # Claude CLI not installed
             mock_init.return_value = MagicMock()
@@ -312,7 +327,7 @@ class TestGetLLM:
 
     def test_get_llm_unknown_interface_fallback(self, unknown_interface_model_config: Any) -> None:
         """Test get_llm with unknown interface falls back to langchain."""
-        with patch("karenina.infrastructure.llm.interface.init_chat_model_unified") as mock_init:
+        with patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init:
             mock_init.return_value = MagicMock()
 
             llm = get_llm(unknown_interface_model_config, auto_fallback=True)
@@ -357,11 +372,23 @@ class TestGetAgent:
         assert agent is not None
         assert type(agent).__name__ == "LangChainAgentAdapter"
 
-    def test_get_agent_manual_returns_none(self, manual_model_config: Any) -> None:
-        """Test get_agent returns None for manual interface."""
+    def test_get_agent_manual_returns_manual_adapter(self, manual_model_config: Any) -> None:
+        """Test get_agent returns ManualAgentAdapter for manual interface.
+
+        Manual adapters raise ManualInterfaceError if invoked, acting as a safety net.
+        Call sites should check interface != 'manual' before using the adapter.
+        """
+        from karenina.adapters.manual import ManualAgentAdapter, ManualInterfaceError
+
         agent = get_agent(manual_model_config)
 
-        assert agent is None
+        assert agent is not None
+        assert isinstance(agent, ManualAgentAdapter)
+
+        # Verify it raises ManualInterfaceError when invoked
+        with pytest.raises(ManualInterfaceError) as exc_info:
+            agent.run_sync([])
+        assert "agent.run_sync()" in str(exc_info.value)
 
     def test_get_agent_claude_sdk_fallback_to_langchain(self, claude_sdk_model_config: Any) -> None:
         """Test get_agent falls back to LangChain when Claude SDK unavailable."""
@@ -394,7 +421,7 @@ class TestGetParser:
 
     def test_get_parser_langchain(self, langchain_model_config: Any) -> None:
         """Test get_parser routes langchain to LangChainParserAdapter."""
-        with patch("karenina.infrastructure.llm.interface.init_chat_model_unified") as mock_init:
+        with patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init:
             mock_init.return_value = MagicMock()
 
             parser = get_parser(langchain_model_config)
@@ -404,8 +431,8 @@ class TestGetParser:
 
     def test_get_parser_openrouter(self, openrouter_model_config: Any) -> None:
         """Test get_parser routes openrouter to LangChainParserAdapter."""
-        with patch("karenina.infrastructure.llm.interface.init_chat_model_unified") as mock_init:
-            mock_init.return_value = MagicMock()
+        with patch("karenina.adapters.langchain.initialization.ChatOpenRouter") as mock_cls:
+            mock_cls.return_value = MagicMock()
 
             parser = get_parser(openrouter_model_config)
 
@@ -414,25 +441,42 @@ class TestGetParser:
 
     def test_get_parser_openai_endpoint(self, openai_endpoint_model_config: Any) -> None:
         """Test get_parser routes openai_endpoint to LangChainParserAdapter."""
-        with patch("karenina.infrastructure.llm.interface.init_chat_model_unified") as mock_init:
-            mock_init.return_value = MagicMock()
+        with patch("karenina.adapters.langchain.initialization.ChatOpenAIEndpoint") as mock_cls:
+            mock_cls.return_value = MagicMock()
 
             parser = get_parser(openai_endpoint_model_config)
 
             assert parser is not None
             assert type(parser).__name__ == "LangChainParserAdapter"
 
-    def test_get_parser_manual_returns_none(self, manual_model_config: Any) -> None:
-        """Test get_parser returns None for manual interface."""
+    def test_get_parser_manual_returns_manual_adapter(self, manual_model_config: Any) -> None:
+        """Test get_parser returns ManualParserAdapter for manual interface.
+
+        Manual adapters raise ManualInterfaceError if invoked, acting as a safety net.
+        Call sites should check interface != 'manual' before using the adapter.
+        """
+        from pydantic import BaseModel
+
+        from karenina.adapters.manual import ManualInterfaceError, ManualParserAdapter
+
         parser = get_parser(manual_model_config)
 
-        assert parser is None
+        assert parser is not None
+        assert isinstance(parser, ManualParserAdapter)
+
+        # Verify it raises ManualInterfaceError when invoked
+        class DummySchema(BaseModel):
+            value: str
+
+        with pytest.raises(ManualInterfaceError) as exc_info:
+            parser.parse_to_pydantic("test", DummySchema)
+        assert "parser.parse_to_pydantic()" in str(exc_info.value)
 
     def test_get_parser_claude_sdk_fallback_to_langchain(self, claude_sdk_model_config: Any) -> None:
         """Test get_parser falls back to LangChain when Claude SDK unavailable."""
         with (
             patch("shutil.which") as mock_which,
-            patch("karenina.infrastructure.llm.interface.init_chat_model_unified") as mock_init,
+            patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init,
         ):
             mock_which.return_value = None  # Claude CLI not installed
             mock_init.return_value = MagicMock()
@@ -507,3 +551,106 @@ class TestAdapterUnavailableError:
         assert str(error) == "No fallback available"
         assert error.reason == "Infrastructure missing"
         assert error.fallback_interface is None
+
+
+# =============================================================================
+# validate_model_config Tests
+# =============================================================================
+
+
+class TestValidateModelConfig:
+    """Tests for validate_model_config function.
+
+    This validation is now centralized in the factory and called by
+    get_llm, get_agent, and get_parser before creating adapters.
+    """
+
+    def test_validate_model_config_none_raises(self) -> None:
+        """Test validate_model_config raises ValueError when config is None."""
+        with pytest.raises(AdapterUnavailableError, match="Model configuration is required"):
+            validate_model_config(None)
+
+    def test_validate_model_config_empty_model_name_raises(self) -> None:
+        """Test validate_model_config raises AdapterUnavailableError when model_name is empty."""
+        from karenina.schemas.workflow.models import ModelConfig
+
+        config = ModelConfig(
+            id="test",
+            model_provider="anthropic",
+            model_name="",  # Empty model name
+        )
+
+        with pytest.raises(AdapterUnavailableError, match="Model name is required"):
+            validate_model_config(config)
+
+    def test_validate_model_config_missing_provider_for_langchain_raises(self) -> None:
+        """Test validate_model_config raises AdapterUnavailableError when provider missing for langchain."""
+        from karenina.schemas.workflow.models import ModelConfig
+
+        config = ModelConfig(
+            id="test",
+            model_name="claude-sonnet-4-20250514",
+            model_provider=None,  # Missing provider
+            interface="langchain",
+        )
+
+        with pytest.raises(AdapterUnavailableError, match="Model provider is required"):
+            validate_model_config(config)
+
+    def test_validate_model_config_allows_empty_provider_for_openrouter(self) -> None:
+        """Test validate_model_config allows empty provider for openrouter."""
+        from karenina.schemas.workflow.models import ModelConfig
+
+        config = ModelConfig(
+            id="test",
+            model_name="anthropic/claude-3-sonnet",
+            model_provider=None,  # No provider needed for openrouter
+            interface="openrouter",
+        )
+
+        # Should not raise
+        validate_model_config(config)
+
+    def test_validate_model_config_allows_empty_provider_for_manual(self) -> None:
+        """Test validate_model_config allows empty provider for manual interface."""
+        mock_config = MagicMock()
+        mock_config.interface = "manual"
+        mock_config.model_name = "manual"
+        mock_config.model_provider = None
+
+        # Should not raise
+        validate_model_config(mock_config)
+
+    def test_validate_model_config_allows_empty_provider_for_openai_endpoint(self) -> None:
+        """Test validate_model_config allows empty provider for openai_endpoint."""
+        from karenina.schemas.workflow.models import ModelConfig
+
+        config = ModelConfig(
+            id="test",
+            model_name="gpt-4",
+            model_provider=None,  # No provider needed for openai_endpoint
+            interface="openai_endpoint",
+        )
+
+        # Should not raise
+        validate_model_config(config)
+
+    def test_validate_model_config_valid_config_passes(self, langchain_model_config: Any) -> None:
+        """Test validate_model_config passes for valid config."""
+        # Should not raise
+        validate_model_config(langchain_model_config)
+
+    def test_get_llm_validates_config(self) -> None:
+        """Test get_llm calls validate_model_config and raises for invalid config."""
+        with pytest.raises(AdapterUnavailableError, match="Model configuration is required"):
+            get_llm(None)
+
+    def test_get_agent_validates_config(self) -> None:
+        """Test get_agent calls validate_model_config and raises for invalid config."""
+        with pytest.raises(AdapterUnavailableError, match="Model configuration is required"):
+            get_agent(None)
+
+    def test_get_parser_validates_config(self) -> None:
+        """Test get_parser calls validate_model_config and raises for invalid config."""
+        with pytest.raises(AdapterUnavailableError, match="Model configuration is required"):
+            get_parser(None)

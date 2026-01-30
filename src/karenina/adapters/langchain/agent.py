@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import logging
+import uuid
 from typing import TYPE_CHECKING, Any
 
 from karenina.ports import (
@@ -21,15 +22,69 @@ from karenina.ports import (
     MCPServerConfig,
     Message,
     Tool,
-    UsageMetadata,
 )
 
 from .messages import LangChainMessageConverter
+from .usage import count_agent_turns, extract_usage_cumulative
 
 if TYPE_CHECKING:
     from karenina.schemas.workflow.models import ModelConfig
 
 logger = logging.getLogger(__name__)
+
+
+def extract_partial_agent_state(
+    agent: Any,
+    messages: list[Any],
+    exception: Exception,
+    config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Extract partial agent state after a limit is reached.
+
+    Tries multiple methods to recover accumulated messages:
+    1. Exception's state attribute
+    2. Checkpointer's get_state method
+    3. Exception's messages attribute
+    4. Fallback to input messages
+
+    Args:
+        agent: The LangGraph agent
+        messages: Original input messages
+        exception: The limit exception
+        config: Optional agent config with thread_id for checkpointer
+
+    Returns:
+        Dict with "messages" key containing recovered messages
+    """
+    # Method 1: Check if exception contains state information
+    if hasattr(exception, "state") and exception.state is not None:
+        logger.info("Extracted partial state from exception.state")
+        state = exception.state
+        return state if isinstance(state, dict) else {"messages": messages}
+
+    # Method 2: Try to get current graph state if checkpointer exists
+    if hasattr(agent, "checkpointer") and agent.checkpointer is not None:
+        try:
+            if hasattr(agent, "get_state"):
+                state_config = config or {"configurable": {"thread_id": "default"}}
+                state = agent.get_state(state_config)
+                if state and hasattr(state, "values") and "messages" in state.values:
+                    logger.info("Extracted partial state from graph checkpointer")
+                    return {"messages": state.values["messages"]}
+        except Exception as state_error:
+            logger.debug(f"Could not extract state from checkpointer: {state_error}")
+
+    # Method 3: Check if exception has accumulated messages attribute
+    if hasattr(exception, "messages") and exception.messages is not None:
+        logger.info("Extracted messages from exception.messages attribute")
+        return {"messages": exception.messages}
+
+    # FALLBACK: Return input messages with warning
+    logger.warning(
+        "Could not extract partial agent state after limit reached. "
+        "Returning input messages only. Accumulated trace may be lost."
+    )
+    return {"messages": messages}
 
 
 class LangChainAgentAdapter:
@@ -50,7 +105,7 @@ class LangChainAgentAdapter:
         >>> from karenina.schemas.workflow.models import ModelConfig
         >>> config = ModelConfig(
         ...     id="claude-sonnet",
-        ...     model_name="claude-sonnet-4-20250514",
+        ...     model_name="claude-sonnet-4-5",
         ...     model_provider="anthropic"
         ... )
         >>> adapter = LangChainAgentAdapter(config)
@@ -135,97 +190,99 @@ class LangChainAgentAdapter:
             return None
         return [tool.name for tool in tools]
 
-    def _extract_usage(self, messages: list[Any]) -> UsageMetadata:
-        """Extract cumulative usage metadata from message history.
+    async def _create_agent(
+        self,
+        mcp_urls: dict[str, str],
+        tool_filter: list[str] | None,
+        kwargs: dict[str, Any],
+    ) -> Any:
+        """Create a LangGraph agent with MCP tools.
 
-        LangGraph agents accumulate usage across multiple model calls.
-        This extracts usage from AIMessage response_metadata.
+        This is the canonical agent creation path for the LangChain adapter.
+        It handles:
+        - Base model initialization via init_chat_model_unified
+        - Async MCP tool loading (avoids threading issues)
+        - Full middleware stack from AgentMiddlewareConfig
+
+        The AgentPort is for tool-based interactions. For simple LLM calls
+        without tools, use LLMPort instead.
 
         Args:
-            messages: List of LangChain messages from agent execution.
+            mcp_urls: Dict mapping server names to URLs (required).
+            tool_filter: List of tool names to filter, or None for all tools.
+            kwargs: Additional kwargs for model initialization.
 
         Returns:
-            UsageMetadata with cumulative token counts.
+            A LangGraph agent ready for invocation.
         """
-        total_input = 0
-        total_output = 0
-        total_cache_read = 0
-        total_cache_creation = 0
+        from karenina.adapters.langchain.initialization import init_chat_model_unified
+        from karenina.adapters.langchain.middleware import build_agent_middleware
 
-        try:
-            from langchain_core.messages import AIMessage
-        except ImportError:
-            return UsageMetadata(
-                input_tokens=0,
-                output_tokens=0,
-                total_tokens=0,
-                model=self._config.model_name,
-            )
-
-        for msg in messages:
-            if not isinstance(msg, AIMessage):
-                continue
-
-            # Try response_metadata first
-            usage_data: dict[str, Any] = {}
-            if hasattr(msg, "response_metadata") and msg.response_metadata:
-                metadata = msg.response_metadata
-                usage_data = metadata.get("token_usage") or metadata.get("usage") or {}
-
-            # Fallback to usage_metadata (convert to dict if needed)
-            if not usage_data and hasattr(msg, "usage_metadata") and msg.usage_metadata:
-                um = msg.usage_metadata
-                # Handle both dict and UsageMetadata object
-                if isinstance(um, dict):
-                    usage_data = um  # type: ignore[assignment]
-                else:
-                    # Convert UsageMetadata object to dict
-                    usage_data = {
-                        "input_tokens": getattr(um, "input_tokens", 0),
-                        "output_tokens": getattr(um, "output_tokens", 0),
-                        "cache_read_input_tokens": getattr(um, "cache_read_input_tokens", None),
-                        "cache_creation_input_tokens": getattr(um, "cache_creation_input_tokens", None),
-                    }
-
-            if usage_data:
-                total_input += int(usage_data.get("input_tokens") or usage_data.get("prompt_tokens") or 0)
-                total_output += int(usage_data.get("output_tokens") or usage_data.get("completion_tokens") or 0)
-                cache_read = usage_data.get("cache_read_input_tokens") or usage_data.get("cache_read_tokens")
-                cache_creation = usage_data.get("cache_creation_input_tokens") or usage_data.get(
-                    "cache_creation_tokens"
-                )
-                if cache_read:
-                    total_cache_read += int(cache_read)
-                if cache_creation:
-                    total_cache_creation += int(cache_creation)
-
-        return UsageMetadata(
-            input_tokens=total_input,
-            output_tokens=total_output,
-            total_tokens=total_input + total_output,
-            cache_read_tokens=total_cache_read if total_cache_read else None,
-            cache_creation_tokens=total_cache_creation if total_cache_creation else None,
-            model=self._config.model_name,
+        # Create base chat model using init_chat_model_unified
+        # This handles all interface types: langchain, openrouter, openai_endpoint
+        base_model = init_chat_model_unified(
+            model=self._config.model_name or "",
+            provider=self._config.model_provider,
+            interface=self._config.interface or "langchain",
+            endpoint_base_url=self._config.endpoint_base_url,
+            endpoint_api_key=self._config.endpoint_api_key,
+            **kwargs,
         )
 
-    def _count_turns(self, messages: list[Any]) -> int:
-        """Count the number of agent turns from message history.
-
-        A turn is counted for each AIMessage in the trace.
-
-        Args:
-            messages: List of LangChain messages.
-
-        Returns:
-            Number of turns (AI message count).
-        """
+        # Import agent creation utilities
         try:
-            from langchain_core.messages import AIMessage
-        except ImportError:
-            # Count by checking type name
-            return sum(1 for m in messages if "ai" in type(m).__name__.lower())
+            from langchain.agents import create_agent
+            from langgraph.checkpoint.memory import InMemorySaver
 
-        return sum(1 for m in messages if isinstance(m, AIMessage))
+            from karenina.adapters.langchain.mcp import create_mcp_client_and_tools
+        except ImportError as e:
+            raise ImportError(
+                "langchain>=1.1.0, langgraph, and langchain-mcp-adapters are required. "
+                "Install with: uv add 'langchain>=1.1.0' langgraph langchain-mcp-adapters"
+            ) from e
+
+        # Get MCP client and tools asynchronously (avoids threading issues)
+        _, tools = await create_mcp_client_and_tools(mcp_urls, tool_filter)
+
+        # Auto-detect context size for openai_endpoint interface if not explicitly configured
+        max_context_tokens = self._config.max_context_tokens
+        if (
+            max_context_tokens is None
+            and self._config.interface == "openai_endpoint"
+            and self._config.endpoint_base_url
+        ):
+            from karenina.adapters.langchain.middleware import fetch_openai_endpoint_context_size
+
+            max_context_tokens = fetch_openai_endpoint_context_size(
+                base_url=self._config.endpoint_base_url,
+                api_key=self._config.endpoint_api_key or "",
+                model_name=self._config.model_name or "",
+            )
+
+        # Build middleware from configuration
+        # Pass base_model so summarization uses the same model by default
+        # Pass provider to enable provider-specific middleware (e.g., Anthropic prompt caching)
+        middleware = build_agent_middleware(
+            config=self._config.agent_middleware,
+            max_context_tokens=max_context_tokens,
+            interface=self._config.interface or "langchain",
+            base_model=base_model,
+            provider=self._config.model_provider,
+        )
+
+        # Create agent with tools, middleware, and checkpointer
+        # InMemorySaver enables partial state recovery when limits are hit
+        memory = InMemorySaver()
+        agent: Any = create_agent(
+            model=base_model,
+            tools=tools,
+            middleware=middleware,
+            checkpointer=memory,
+        )
+
+        logger.info(f"Created agent with {len(tools)} MCP tools and {len(middleware)} middleware components")
+
+        return agent
 
     async def run(
         self,
@@ -249,16 +306,20 @@ class LangChainAgentAdapter:
             AgentExecutionError: If the agent fails during execution.
             AgentTimeoutError: If execution exceeds the timeout.
         """
-        from karenina.infrastructure.llm.interface import init_chat_model_unified
-        from karenina.infrastructure.llm.mcp_utils import (
+        from karenina.adapters.langchain.trace import (
             extract_final_ai_message_from_response,
             harmonize_agent_response,
         )
 
         config = config or AgentConfig()
 
-        # Convert MCP servers to URL dict
+        # Convert MCP servers to URL dict - required for agent adapter
         mcp_urls = self._convert_mcp_servers_to_urls(mcp_servers)
+        if mcp_urls is None:
+            raise AgentExecutionError(
+                "AgentPort requires MCP servers or tools. For simple LLM calls without tools, use LLMPort instead."
+            )
+
         tool_filter = self._convert_tools_to_names(tools)
 
         # Build kwargs for model initialization
@@ -268,20 +329,9 @@ class LangChainAgentAdapter:
         if self._config.extra_kwargs:
             kwargs.update(self._config.extra_kwargs)
 
-        # Initialize agent via existing infrastructure
+        # Create agent with MCP tools
         try:
-            agent = init_chat_model_unified(
-                model=self._config.model_name or "",
-                provider=self._config.model_provider,
-                interface=self._config.interface,
-                endpoint_base_url=self._config.endpoint_base_url,
-                endpoint_api_key=self._config.endpoint_api_key,
-                max_context_tokens=self._config.max_context_tokens,
-                mcp_urls_dict=mcp_urls,
-                mcp_tool_filter=tool_filter,
-                agent_middleware_config=self._config.agent_middleware,
-                **kwargs,
-            )
+            agent = await self._create_agent(mcp_urls, tool_filter, kwargs)
         except Exception as e:
             raise AgentExecutionError(f"Failed to initialize agent: {e}") from e
 
@@ -300,29 +350,20 @@ class LangChainAgentAdapter:
         agent_response: dict[str, Any] = {"messages": []}
 
         # Use session-based thread_id for checkpointing
-        import uuid
-
         thread_id = str(uuid.uuid4())
         agent_config = {"configurable": {"thread_id": thread_id}}
 
-        async def invoke_agent() -> tuple[dict[str, Any], bool]:
-            """Invoke agent and handle recursion limit."""
-            local_limit_reached = False
+        # LangGraph agent expects dict with "messages" key
+        coro = agent.ainvoke({"messages": lc_messages}, config=agent_config)
 
-            # Apply timeout if configured
-            coro = agent.ainvoke({"messages": lc_messages}, config=agent_config)
+        try:
             if config.timeout:
                 try:
-                    response = await asyncio.wait_for(coro, timeout=config.timeout)
+                    agent_response = await asyncio.wait_for(coro, timeout=config.timeout)
                 except TimeoutError as e:
                     raise AgentTimeoutError(f"Agent execution timed out after {config.timeout}s") from e
             else:
-                response = await coro
-
-            return response, local_limit_reached
-
-        try:
-            agent_response, recursion_limit_reached = await invoke_agent()
+                agent_response = await coro
 
         except Exception as e:
             # Check if this is a recursion limit error
@@ -333,19 +374,8 @@ class LangChainAgentAdapter:
                 recursion_limit_reached = True
                 logger.warning(f"Agent hit recursion limit: {e}")
 
-                # Try to get partial state from checkpointer
-                if hasattr(agent, "checkpointer") and agent.checkpointer is not None:
-                    try:
-                        if hasattr(agent, "get_state"):
-                            state = agent.get_state(agent_config)
-                            if state and hasattr(state, "values") and "messages" in state.values:
-                                agent_response = {"messages": state.values["messages"]}
-                    except Exception:
-                        pass
-
-                # If we still don't have messages, use input
-                if not agent_response.get("messages"):
-                    agent_response = {"messages": lc_messages}
+                # Extract partial state using the shared recovery function
+                agent_response = extract_partial_agent_state(agent, lc_messages, e, agent_config)
             else:
                 raise AgentExecutionError(f"Agent execution failed: {e}") from e
 
@@ -376,8 +406,8 @@ class LangChainAgentAdapter:
                 final_response = "[No final response extracted]"
 
         # Extract usage and count turns
-        usage = self._extract_usage(response_messages)
-        turns = self._count_turns(response_messages)
+        usage = extract_usage_cumulative(response_messages, model_name=self._config.model_name)
+        turns = count_agent_turns(response_messages)
 
         return AgentResult(
             final_response=final_response,
@@ -411,7 +441,7 @@ class LangChainAgentAdapter:
         Raises:
             Same exceptions as run().
         """
-        from karenina.benchmark.verification.batch_runner import get_async_portal
+        from karenina.benchmark.verification.executor import get_async_portal
 
         portal = get_async_portal()
 
@@ -434,6 +464,15 @@ class LangChainAgentAdapter:
         except RuntimeError:
             # No event loop running, safe to use asyncio.run
             return asyncio.run(self.run(messages, tools, mcp_servers, config))
+
+    async def aclose(self) -> None:
+        """Close underlying resources.
+
+        LangChain adapters delegate to LangChain's model management which
+        handles its own HTTP client lifecycle. This is a no-op provided
+        for interface consistency with other adapters.
+        """
+        pass
 
 
 # Verify protocol compliance at import time

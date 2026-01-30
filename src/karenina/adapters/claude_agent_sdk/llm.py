@@ -10,6 +10,7 @@ Key differences from LangChain:
 - Claude SDK uses string prompts, not message arrays
 - System prompts go in ClaudeAgentOptions.system_prompt
 - Structured output returned in ResultMessage.structured_output (already dict, not JSON)
+- SDK handles retries autonomously via max_turns (no manual retry logic needed)
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
-from karenina.ports import LLMPort, LLMResponse, Message
+from karenina.ports import LLMPort, LLMResponse, Message, ParseError
 
 from .messages import ClaudeSDKMessageConverter
 from .usage import extract_sdk_usage
@@ -45,6 +46,9 @@ class ClaudeSDKLLMAdapter:
     - Sync/async invocation with proper event loop handling
     - Structured output via with_structured_output()
 
+    Note: The SDK handles retries autonomously via max_turns, so no manual
+    retry logic is needed in this adapter.
+
     Example:
         >>> from karenina.schemas.workflow.models import ModelConfig
         >>> config = ModelConfig(
@@ -65,21 +69,27 @@ class ClaudeSDKLLMAdapter:
         >>> response = await structured.ainvoke([Message.user("What is 2+2?")])
     """
 
+    # Default max_turns for structured output (minimum needed for SDK validation)
+    DEFAULT_STRUCTURED_MAX_TURNS = 2
+
     def __init__(
         self,
         model_config: ModelConfig,
         *,
         _structured_schema: type[BaseModel] | None = None,
+        _max_turns: int | None = None,
     ) -> None:
         """Initialize the Claude SDK LLM adapter.
 
         Args:
             model_config: Configuration specifying model, provider, and interface.
             _structured_schema: Internal - schema for structured output mode.
+            _max_turns: Internal - max turns for SDK (handles retries autonomously).
         """
         self._config = model_config
         self._converter = ClaudeSDKMessageConverter()
         self._structured_schema = _structured_schema
+        self._max_turns = _max_turns if _max_turns is not None else self.DEFAULT_STRUCTURED_MAX_TURNS
 
     def _build_options(self, system_prompt: str | None) -> ClaudeAgentOptions:
         """Build ClaudeAgentOptions for the query.
@@ -108,8 +118,6 @@ class ClaudeSDKLLMAdapter:
             options_kwargs["system_prompt"] = self._config.system_prompt
 
         # Add model specification if provided
-        # SDK accepts simple names like "sonnet", "opus", "haiku"
-        # TODO: Verify if it also accepts fully qualified names like "claude-sonnet-4-20250514"
         if self._config.model_name:
             options_kwargs["model"] = self._config.model_name
 
@@ -120,8 +128,8 @@ class ClaudeSDKLLMAdapter:
                 "type": "json_schema",
                 "schema": json_schema,
             }
-            # SDK needs internal turns for structured output validation
-            options_kwargs["max_turns"] = 5
+            # SDK uses max_turns for autonomous retry on structured output
+            options_kwargs["max_turns"] = self._max_turns
 
         return ClaudeAgentOptions(**options_kwargs)
 
@@ -152,30 +160,37 @@ class ClaudeSDKLLMAdapter:
         async for message in query(prompt=prompt_string, options=options):
             if isinstance(message, ResultMessage):
                 result = message
-                # Don't break - let iteration complete naturally per SDK best practices
 
         if result is None:
             from karenina.ports.errors import AgentResponseError
 
             raise AgentResponseError("No ResultMessage received from SDK")
 
-        # Extract content based on mode
-        if self._structured_schema is not None and result.structured_output:
-            # Structured output mode - return as string representation
-            # The actual parsing happens in ParserPort or with_structured_output usage
-            content = str(result.structured_output)
+        # Handle structured vs text output
+        if self._structured_schema is not None:
+            return self._process_structured_result(result)
         else:
-            # Normal text mode
-            content = result.result or ""
+            return self._process_text_result(result)
 
-        # Extract usage metadata
+    def _process_text_result(self, result: ResultMessage) -> LLMResponse:
+        """Process a text (non-structured) result from the SDK."""
+        content = result.result or ""
+        usage = extract_sdk_usage(result, model=self._config.model_name)
+        return LLMResponse(content=content, usage=usage, raw=result)
+
+    def _process_structured_result(self, result: ResultMessage) -> LLMResponse:
+        """Process a structured output result from the SDK."""
+        if not result.structured_output:
+            raise ParseError("No structured output received from SDK")
+
+        # Assert schema exists (this method only called when _structured_schema is set)
+        assert self._structured_schema is not None
+
+        content = str(result.structured_output)
+        parsed_model = self._structured_schema.model_validate(result.structured_output)
         usage = extract_sdk_usage(result, model=self._config.model_name)
 
-        return LLMResponse(
-            content=content,
-            usage=usage,
-            raw=result,
-        )
+        return LLMResponse(content=content, usage=usage, raw=parsed_model)
 
     def invoke(self, messages: list[Message]) -> LLMResponse:
         """Invoke the LLM synchronously.
@@ -193,7 +208,7 @@ class ClaudeSDKLLMAdapter:
         Raises:
             PortError: If the invocation fails.
         """
-        from karenina.benchmark.verification.batch_runner import get_async_portal
+        from karenina.benchmark.verification.executor import get_async_portal
 
         portal = get_async_portal()
 
@@ -218,31 +233,55 @@ class ClaudeSDKLLMAdapter:
             # No event loop running, safe to use asyncio.run
             return asyncio.run(self.ainvoke(messages))
 
-    def with_structured_output(self, schema: type[BaseModel]) -> ClaudeSDKLLMAdapter:
+    def with_structured_output(
+        self,
+        schema: type[BaseModel],
+        *,
+        max_turns: int | None = None,
+        max_retries: int | None = None,  # noqa: ARG002 - Ignored for API compat
+    ) -> ClaudeSDKLLMAdapter:
         """Return a new adapter configured for structured output.
 
         The returned adapter uses SDK's output_format option to constrain
         the LLM's output to match the provided JSON schema.
 
-        IMPORTANT: Unlike LangChain, SDK's structured_output is already a
-        Python dict, not a JSON string. No json.loads() needed.
+        The SDK handles retries autonomously via max_turns - no manual retry
+        logic is needed.
 
         Args:
             schema: A Pydantic model class defining the output structure.
+            max_turns: Maximum turns for SDK (handles retries autonomously).
+                Default is 2 (minimum needed for structured output).
+            max_retries: Ignored for API compatibility with LangChain adapter.
+                The SDK handles retries autonomously via max_turns.
 
         Returns:
             A new ClaudeSDKLLMAdapter instance configured for structured output.
+            The returned adapter guarantees that response.raw will be an instance
+            of the provided schema.
 
         Example:
             >>> class Answer(BaseModel):
             ...     value: str
             ...     confidence: float
             >>> structured = adapter.with_structured_output(Answer)
+            >>> response = await structured.ainvoke(messages)
+            >>> assert isinstance(response.raw, Answer)
         """
         return ClaudeSDKLLMAdapter(
             model_config=self._config,
             _structured_schema=schema,
+            _max_turns=max_turns,
         )
+
+    async def aclose(self) -> None:
+        """Close underlying resources.
+
+        The Claude SDK adapter uses query() which doesn't hold persistent
+        connections, so this is a no-op. Provided for interface consistency
+        with other adapters that do require cleanup.
+        """
+        pass
 
 
 # Verify protocol compliance at import time

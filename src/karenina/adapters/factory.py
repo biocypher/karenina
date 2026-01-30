@@ -13,10 +13,10 @@ Supported Interfaces:
     - openrouter: Routes through LangChain adapter
     - openai_endpoint: Routes through LangChain adapter
     - claude_agent_sdk: Uses Claude Agent SDK adapter (when available)
-    - manual: Returns None (pre-recorded traces, no adapter needed)
+    - manual: Returns ManualAdapter (raises error if invoked)
 
 Example:
-    >>> from karenina.adapters import get_agent, get_llm, get_parser
+    >>> from karenina.adapters import get_agent, get_llm, get_parser, format_model_string
     >>> from karenina.schemas.workflow.models import ModelConfig
     >>>
     >>> config = ModelConfig(
@@ -25,23 +25,26 @@ Example:
     ...     model_provider="anthropic"
     ... )
     >>>
-    >>> # Get adapters
+    >>> # Get adapters (always returns a port, never None)
     >>> agent = get_agent(config)
     >>> llm = get_llm(config)
     >>> parser = get_parser(config)
     >>>
-    >>> # Use them
-    >>> result = await agent.run(messages=[Message.user("Hello!")])
-    >>> response = await llm.ainvoke([Message.user("Hello!")])
+    >>> # Format model string for display
+    >>> model_str = format_model_string(config)
+    >>> # 'anthropic/claude-sonnet-4-20250514'
+    >>>
+    >>> # Use them (check interface before using for manual)
+    >>> if config.interface != "manual":
+    ...     result = await agent.run(messages=[Message.user("Hello!")])
 """
 
 from __future__ import annotations
 
 import logging
-import shutil
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Literal, cast
 
+from karenina.adapters.registry import AdapterAvailability, AdapterRegistry, register_adapter
 from karenina.ports import (
     AdapterUnavailableError,
     AgentPort,
@@ -51,6 +54,12 @@ from karenina.ports import (
 
 if TYPE_CHECKING:
     from karenina.schemas.workflow.models import ModelConfig
+
+# Import at runtime for validation function (not circular since ModelConfig is only TYPE_CHECKING)
+from karenina.schemas.workflow.models import INTERFACES_NO_PROVIDER_REQUIRED
+
+# Type alias for interface values
+InterfaceType = Literal["langchain", "openrouter", "manual", "openai_endpoint", "claude_agent_sdk"]
 
 logger = logging.getLogger(__name__)
 
@@ -64,25 +73,38 @@ LANGCHAIN_ROUTED_INTERFACES = frozenset({"langchain", "openrouter", "openai_endp
 INTERFACE_MANUAL = "manual"
 
 
-@dataclass
-class AdapterAvailability:
-    """Result of checking adapter availability.
+def validate_model_config(model_config: ModelConfig | None) -> None:
+    """Validate that a model configuration has all required fields.
 
-    Attributes:
-        available: Whether the adapter can be used.
-        reason: Human-readable explanation of availability status.
-        fallback_interface: Suggested alternative interface if unavailable.
+    This centralizes validation that was previously duplicated across evaluators.
+    Called by factory functions before creating adapters.
+
+    Args:
+        model_config: The model configuration to validate.
+
+    Raises:
+        ValueError: If model_config is None, model_name is empty, or
+            model_provider is missing for interfaces that require it.
 
     Example:
-        >>> availability = check_adapter_available("claude_agent_sdk")
-        >>> if not availability.available:
-        ...     print(f"Claude SDK unavailable: {availability.reason}")
-        ...     print(f"Suggested fallback: {availability.fallback_interface}")
+        >>> config = ModelConfig(model_name="gpt-4", model_provider="openai")
+        >>> validate_model_config(config)  # OK
+        >>>
+        >>> validate_model_config(None)  # Raises ValueError
     """
+    if not model_config:
+        raise AdapterUnavailableError("Model configuration is required", reason="missing_config")
 
-    available: bool
-    reason: str
-    fallback_interface: str | None = None
+    if not model_config.model_name:
+        raise AdapterUnavailableError("Model name is required in model configuration", reason="missing_model_name")
+
+    # Model provider is optional for OpenRouter, manual, and openai_endpoint interfaces
+    if model_config.interface not in INTERFACES_NO_PROVIDER_REQUIRED and not model_config.model_provider:
+        raise AdapterUnavailableError(
+            f"Model provider is required for interface '{model_config.interface}'. "
+            f"Only {list(INTERFACES_NO_PROVIDER_REQUIRED)} interfaces allow empty providers.",
+            reason="missing_model_provider",
+        )
 
 
 def check_adapter_available(interface: str) -> AdapterAvailability:
@@ -104,62 +126,53 @@ def check_adapter_available(interface: str) -> AdapterAvailability:
         ... else:
         ...     print(f"Not available: {result.reason}")
     """
-    if interface in LANGCHAIN_ROUTED_INTERFACES:
-        # LangChain adapter - check if langchain is importable
-        try:
-            import langchain_core  # noqa: F401
+    return AdapterRegistry.check_availability(interface)
 
-            return AdapterAvailability(
-                available=True,
-                reason="LangChain is installed and available",
-            )
-        except ImportError:
-            return AdapterAvailability(
-                available=False,
-                reason="LangChain packages not installed. Install with: pip install langchain-core langchain-anthropic",
-                fallback_interface=None,  # No fallback if LangChain unavailable
-            )
 
-    if interface == INTERFACE_CLAUDE_AGENT_SDK:
-        # Claude Agent SDK - check if claude CLI is installed
-        # The SDK requires the Claude Code CLI to be available in PATH
-        claude_path = shutil.which("claude")
-        if claude_path is not None:
-            return AdapterAvailability(
-                available=True,
-                reason=f"Claude CLI found at: {claude_path}",
-            )
-        else:
-            return AdapterAvailability(
-                available=False,
-                reason="Claude Code CLI not found in PATH. Install from: https://claude.ai/code",
-                fallback_interface="langchain",
-            )
+def format_model_string(model_config: ModelConfig) -> str:
+    """Format a model string for display and tracking.
 
-    if interface == INTERFACE_MANUAL:
-        # Manual interface always available - uses pre-recorded traces
-        return AdapterAvailability(
-            available=True,
-            reason="Manual interface uses pre-recorded traces",
-        )
+    This centralizes the model string formatting logic that was previously
+    duplicated across multiple files. Each interface has its own formatting:
 
-    # Unknown interface
-    return AdapterAvailability(
-        available=False,
-        reason=f"Unknown interface: {interface}. Supported: langchain, openrouter, openai_endpoint, claude_agent_sdk, manual",
-        fallback_interface="langchain",
-    )
+    - langchain: "provider/model_name" (e.g., "anthropic/claude-sonnet-4-20250514")
+    - openrouter: "model_name" (e.g., "claude-sonnet-4-20250514")
+    - openai_endpoint: "endpoint/model_name" (e.g., "endpoint/gpt-4")
+    - claude_agent_sdk: "claude_sdk/model_name" (e.g., "claude_sdk/claude-sonnet-4-20250514")
+    - manual: "manual" or model_name
+
+    Args:
+        model_config: Model configuration.
+
+    Returns:
+        Formatted model string for display.
+
+    Example:
+        >>> config = ModelConfig(
+        ...     model_name="claude-sonnet-4-20250514",
+        ...     model_provider="anthropic",
+        ...     interface="langchain"
+        ... )
+        >>> format_model_string(config)
+        'anthropic/claude-sonnet-4-20250514'
+    """
+    return AdapterRegistry.format_model_string(model_config)
 
 
 def get_llm(
     model_config: ModelConfig,
     *,
     auto_fallback: bool = True,
-) -> LLMPort | None:
+) -> LLMPort:
     """Create an LLM adapter for the given model configuration.
 
     This factory function returns the appropriate LLMPort implementation
     based on the interface specified in the model configuration.
+
+    IMPORTANT: This function always returns an LLMPort, never None.
+    For manual interface, returns ManualLLMAdapter which raises
+    ManualInterfaceError if invoked. Call sites should check
+    `model_config.interface != "manual"` before using the adapter.
 
     Args:
         model_config: Configuration specifying model, provider, and interface.
@@ -167,7 +180,7 @@ def get_llm(
             when the preferred one is unavailable. If False, raise an error.
 
     Returns:
-        An LLMPort implementation, or None if interface is "manual".
+        An LLMPort implementation.
 
     Raises:
         AdapterUnavailableError: If the adapter is unavailable and auto_fallback=False.
@@ -179,16 +192,16 @@ def get_llm(
         ...     model_provider="anthropic"
         ... )
         >>> llm = get_llm(config)
-        >>> response = await llm.ainvoke([Message.user("Hello!")])
+        >>> if config.interface != "manual":
+        ...     response = await llm.ainvoke([Message.user("Hello!")])
     """
+    # Validate config has required fields
+    validate_model_config(model_config)
+
     interface = model_config.interface
 
-    # Manual interface - no adapter needed
-    if interface == INTERFACE_MANUAL:
-        return None
-
     # Check availability
-    availability = check_adapter_available(interface)
+    availability = AdapterRegistry.check_availability(interface)
 
     if not availability.available:
         if auto_fallback and availability.fallback_interface:
@@ -196,9 +209,9 @@ def get_llm(
                 f"Adapter for interface '{interface}' unavailable: {availability.reason}. "
                 f"Falling back to '{availability.fallback_interface}'."
             )
-            # Create a modified config with fallback interface
-            # We need to handle this without modifying the original config
-            return _create_llm_adapter(model_config, availability.fallback_interface)
+            interface = cast(InterfaceType, availability.fallback_interface)
+            # Transform the config so the adapter only sees interfaces it handles
+            model_config = model_config.model_copy(update={"interface": interface})
         else:
             raise AdapterUnavailableError(
                 message=f"Adapter for interface '{interface}' is not available",
@@ -206,47 +219,35 @@ def get_llm(
                 fallback_interface=availability.fallback_interface,
             )
 
-    return _create_llm_adapter(model_config, interface)
+    # Get adapter spec from registry
+    spec = AdapterRegistry.get_spec(interface)
+    if spec is None or spec.llm_factory is None:
+        raise AdapterUnavailableError(
+            message=f"No LLM adapter implementation for interface: {interface}",
+            reason=f"Interface '{interface}' does not have an LLM factory registered",
+            fallback_interface="langchain",
+        )
 
-
-def _create_llm_adapter(model_config: ModelConfig, interface: str) -> LLMPort:
-    """Create the actual LLM adapter for the given interface.
-
-    Args:
-        model_config: Model configuration.
-        interface: The interface to use (may differ from config if fallback).
-
-    Returns:
-        LLMPort implementation.
-    """
-    if interface in LANGCHAIN_ROUTED_INTERFACES:
-        from karenina.adapters.langchain.llm import LangChainLLMAdapter
-
-        return LangChainLLMAdapter(model_config)
-
-    if interface == INTERFACE_CLAUDE_AGENT_SDK:
-        from karenina.adapters.claude_agent_sdk import ClaudeSDKLLMAdapter
-
-        return ClaudeSDKLLMAdapter(model_config)
-
-    # Should not reach here due to availability check
-    raise AdapterUnavailableError(
-        message=f"No LLM adapter implementation for interface: {interface}",
-        reason=f"Unknown interface type: {interface}",
-        fallback_interface="langchain",
-    )
+    adapter = spec.llm_factory(model_config)
+    register_adapter(adapter)
+    return adapter
 
 
 def get_agent(
     model_config: ModelConfig,
     *,
     auto_fallback: bool = True,
-) -> AgentPort | None:
+) -> AgentPort:
     """Create an Agent adapter for the given model configuration.
 
     This factory function returns the appropriate AgentPort implementation
     based on the interface specified in the model configuration. Agent adapters
     support tool use and MCP server integration.
+
+    IMPORTANT: This function always returns an AgentPort, never None.
+    For manual interface, returns ManualAgentAdapter which raises
+    ManualInterfaceError if invoked. Call sites should check
+    `model_config.interface != "manual"` before using the adapter.
 
     Args:
         model_config: Configuration specifying model, provider, and interface.
@@ -254,7 +255,7 @@ def get_agent(
             when the preferred one is unavailable. If False, raise an error.
 
     Returns:
-        An AgentPort implementation, or None if interface is "manual".
+        An AgentPort implementation.
 
     Raises:
         AdapterUnavailableError: If the adapter is unavailable and auto_fallback=False.
@@ -266,19 +267,19 @@ def get_agent(
         ...     model_provider="anthropic"
         ... )
         >>> agent = get_agent(config)
-        >>> result = await agent.run(
-        ...     messages=[Message.user("What files are in /tmp?")],
-        ...     mcp_servers={"filesystem": {"type": "http", "url": "http://localhost:8080"}}
-        ... )
+        >>> if config.interface != "manual":
+        ...     result = await agent.run(
+        ...         messages=[Message.user("What files are in /tmp?")],
+        ...         mcp_servers={"filesystem": {"type": "http", "url": "http://localhost:8080"}}
+        ...     )
     """
+    # Validate config has required fields
+    validate_model_config(model_config)
+
     interface = model_config.interface
 
-    # Manual interface - no adapter needed
-    if interface == INTERFACE_MANUAL:
-        return None
-
     # Check availability
-    availability = check_adapter_available(interface)
+    availability = AdapterRegistry.check_availability(interface)
 
     if not availability.available:
         if auto_fallback and availability.fallback_interface:
@@ -286,7 +287,9 @@ def get_agent(
                 f"Agent adapter for interface '{interface}' unavailable: {availability.reason}. "
                 f"Falling back to '{availability.fallback_interface}'."
             )
-            return _create_agent_adapter(model_config, availability.fallback_interface)
+            interface = cast(InterfaceType, availability.fallback_interface)
+            # Transform the config so the adapter only sees interfaces it handles
+            model_config = model_config.model_copy(update={"interface": interface})
         else:
             raise AdapterUnavailableError(
                 message=f"Agent adapter for interface '{interface}' is not available",
@@ -294,47 +297,35 @@ def get_agent(
                 fallback_interface=availability.fallback_interface,
             )
 
-    return _create_agent_adapter(model_config, interface)
+    # Get adapter spec from registry
+    spec = AdapterRegistry.get_spec(interface)
+    if spec is None or spec.agent_factory is None:
+        raise AdapterUnavailableError(
+            message=f"No Agent adapter implementation for interface: {interface}",
+            reason=f"Interface '{interface}' does not have an agent factory registered",
+            fallback_interface="langchain",
+        )
 
-
-def _create_agent_adapter(model_config: ModelConfig, interface: str) -> AgentPort:
-    """Create the actual Agent adapter for the given interface.
-
-    Args:
-        model_config: Model configuration.
-        interface: The interface to use (may differ from config if fallback).
-
-    Returns:
-        AgentPort implementation.
-    """
-    if interface in LANGCHAIN_ROUTED_INTERFACES:
-        from karenina.adapters.langchain.agent import LangChainAgentAdapter
-
-        return LangChainAgentAdapter(model_config)
-
-    if interface == INTERFACE_CLAUDE_AGENT_SDK:
-        from karenina.adapters.claude_agent_sdk import ClaudeSDKAgentAdapter
-
-        return ClaudeSDKAgentAdapter(model_config)
-
-    # Should not reach here due to availability check
-    raise AdapterUnavailableError(
-        message=f"No Agent adapter implementation for interface: {interface}",
-        reason=f"Unknown interface type: {interface}",
-        fallback_interface="langchain",
-    )
+    adapter = spec.agent_factory(model_config)
+    register_adapter(adapter)
+    return adapter
 
 
 def get_parser(
     model_config: ModelConfig,
     *,
     auto_fallback: bool = True,
-) -> ParserPort | None:
+) -> ParserPort:
     """Create a Parser adapter for the given model configuration.
 
     This factory function returns the appropriate ParserPort implementation
     based on the interface specified in the model configuration. Parser adapters
     use LLMs to extract structured data from natural language responses.
+
+    IMPORTANT: This function always returns a ParserPort, never None.
+    For manual interface, returns ManualParserAdapter which raises
+    ManualInterfaceError if invoked. Call sites should check
+    `model_config.interface != "manual"` before using the adapter.
 
     Args:
         model_config: Configuration specifying model, provider, and interface.
@@ -342,7 +333,7 @@ def get_parser(
             when the preferred one is unavailable. If False, raise an error.
 
     Returns:
-        A ParserPort implementation, or None if interface is "manual".
+        A ParserPort implementation.
 
     Raises:
         AdapterUnavailableError: If the adapter is unavailable and auto_fallback=False.
@@ -359,16 +350,16 @@ def get_parser(
         ...     model_provider="anthropic"
         ... )
         >>> parser = get_parser(config)
-        >>> answer = await parser.aparse_to_pydantic(trace_text, Answer)
+        >>> if config.interface != "manual":
+        ...     answer = await parser.aparse_to_pydantic(trace_text, Answer)
     """
+    # Validate config has required fields
+    validate_model_config(model_config)
+
     interface = model_config.interface
 
-    # Manual interface - no adapter needed
-    if interface == INTERFACE_MANUAL:
-        return None
-
     # Check availability
-    availability = check_adapter_available(interface)
+    availability = AdapterRegistry.check_availability(interface)
 
     if not availability.available:
         if auto_fallback and availability.fallback_interface:
@@ -376,7 +367,9 @@ def get_parser(
                 f"Parser adapter for interface '{interface}' unavailable: {availability.reason}. "
                 f"Falling back to '{availability.fallback_interface}'."
             )
-            return _create_parser_adapter(model_config, availability.fallback_interface)
+            interface = cast(InterfaceType, availability.fallback_interface)
+            # Transform the config so the adapter only sees interfaces it handles
+            model_config = model_config.model_copy(update={"interface": interface})
         else:
             raise AdapterUnavailableError(
                 message=f"Parser adapter for interface '{interface}' is not available",
@@ -384,32 +377,103 @@ def get_parser(
                 fallback_interface=availability.fallback_interface,
             )
 
-    return _create_parser_adapter(model_config, interface)
+    # Get adapter spec from registry
+    spec = AdapterRegistry.get_spec(interface)
+    if spec is None or spec.parser_factory is None:
+        raise AdapterUnavailableError(
+            message=f"No Parser adapter implementation for interface: {interface}",
+            reason=f"Interface '{interface}' does not have a parser factory registered",
+            fallback_interface="langchain",
+        )
+
+    adapter = spec.parser_factory(model_config)
+    register_adapter(adapter)
+    return adapter
 
 
-def _create_parser_adapter(model_config: ModelConfig, interface: str) -> ParserPort:
-    """Create the actual Parser adapter for the given interface.
+def build_llm_kwargs(
+    model_config: ModelConfig,
+    *,
+    question_hash: str | None = None,
+) -> dict[str, Any]:
+    """Build kwargs dict for init_chat_model_unified from a ModelConfig.
+
+    This centralizes the interface-specific parameter handling that was previously
+    duplicated across call sites (generate_answer.py, template_evaluator.py, etc.).
+
+    Handles:
+    - Base parameters (model, provider, temperature, interface)
+    - OpenAI endpoint configuration (base_url, api_key)
+    - Manual interface (question_hash)
+    - MCP server configuration (urls, tool filter, description overrides)
+    - Agent middleware configuration
+    - Max context tokens
+    - Extra kwargs from model config
 
     Args:
-        model_config: Model configuration.
-        interface: The interface to use (may differ from config if fallback).
+        model_config: Model configuration with all settings.
+        question_hash: MD5 hash of the question (required for manual interface).
 
     Returns:
-        ParserPort implementation.
+        Dict of kwargs ready to pass to init_chat_model_unified().
+
+    Raises:
+        ValueError: If required parameters are missing for the interface.
+
+    Example:
+        >>> config = ModelConfig(
+        ...     model_name="gpt-4",
+        ...     model_provider="openai",
+        ...     interface="langchain"
+        ... )
+        >>> kwargs = build_llm_kwargs(config)
+        >>> llm = init_chat_model_unified(**kwargs)
     """
-    if interface in LANGCHAIN_ROUTED_INTERFACES:
-        from karenina.adapters.langchain.parser import LangChainParserAdapter
+    kwargs: dict[str, Any] = {
+        "model": model_config.model_name,
+        "provider": model_config.model_provider,
+        "temperature": model_config.temperature,
+        "interface": model_config.interface,
+    }
 
-        return LangChainParserAdapter(model_config)
+    # Add MCP configuration if present
+    if model_config.mcp_urls_dict:
+        kwargs["mcp_urls_dict"] = model_config.mcp_urls_dict
+    if model_config.mcp_tool_filter:
+        kwargs["mcp_tool_filter"] = model_config.mcp_tool_filter
+    if model_config.mcp_tool_description_overrides:
+        kwargs["mcp_tool_description_overrides"] = model_config.mcp_tool_description_overrides
 
-    if interface == INTERFACE_CLAUDE_AGENT_SDK:
-        from karenina.adapters.claude_agent_sdk import ClaudeSDKParserAdapter
+    # Agent middleware config (for MCP-enabled agents)
+    if model_config.agent_middleware is not None:
+        kwargs["agent_middleware_config"] = model_config.agent_middleware
 
-        return ClaudeSDKParserAdapter(model_config)
+    # Max context tokens (for summarization middleware)
+    if model_config.max_context_tokens is not None:
+        kwargs["max_context_tokens"] = model_config.max_context_tokens
 
-    # Should not reach here due to availability check
-    raise AdapterUnavailableError(
-        message=f"No Parser adapter implementation for interface: {interface}",
-        reason=f"Unknown interface type: {interface}",
-        fallback_interface="langchain",
-    )
+    # Interface-specific parameters
+    if model_config.interface == "openai_endpoint":
+        if not model_config.endpoint_base_url:
+            raise AdapterUnavailableError(
+                "endpoint_base_url is required for openai_endpoint interface",
+                reason="missing_endpoint_base_url",
+            )
+        if not model_config.endpoint_api_key:
+            raise AdapterUnavailableError(
+                "endpoint_api_key is required for openai_endpoint interface",
+                reason="missing_endpoint_api_key",
+            )
+
+        kwargs["endpoint_base_url"] = model_config.endpoint_base_url
+        kwargs["endpoint_api_key"] = model_config.endpoint_api_key.get_secret_value()
+
+    elif model_config.interface == "manual":
+        if question_hash is not None:
+            kwargs["question_hash"] = question_hash
+
+    # Add extra kwargs if provided
+    if model_config.extra_kwargs:
+        kwargs.update(model_config.extra_kwargs)
+
+    return kwargs
