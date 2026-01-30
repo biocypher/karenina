@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
 
 from .....schemas.domain import Rubric
+from .....schemas.verification import PromptConfig
 from .....schemas.workflow import ModelConfig
 
 if TYPE_CHECKING:
@@ -281,6 +282,9 @@ class VerificationContext:
     deep_judgment_rubric_excerpt_retry_attempts_default: int = 2
     deep_judgment_rubric_search_enabled: bool = False
     deep_judgment_rubric_search_tool: str | Any = "tavily"
+
+    # Prompt Configuration
+    prompt_config: PromptConfig | None = None
 
     # Few-Shot Configuration
     few_shot_examples: list[dict[str, str]] | None = None

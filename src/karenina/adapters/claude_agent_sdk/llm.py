@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel
 
 from karenina.ports import LLMPort, LLMResponse, Message, ParseError
+from karenina.ports.capabilities import PortCapabilities
 
 from .messages import ClaudeSDKMessageConverter
 from .usage import extract_sdk_usage
@@ -132,6 +133,18 @@ class ClaudeSDKLLMAdapter:
             options_kwargs["max_turns"] = self._max_turns
 
         return ClaudeAgentOptions(**options_kwargs)
+
+    @property
+    def capabilities(self) -> PortCapabilities:
+        """Declare what prompt features this adapter supports.
+
+        Returns:
+            PortCapabilities with system prompt support and structured output support.
+        """
+        return PortCapabilities(
+            supports_system_prompt=True,
+            supports_structured_output=True,
+        )
 
     async def ainvoke(self, messages: list[Message]) -> LLMResponse:
         """Invoke the LLM asynchronously.

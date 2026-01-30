@@ -12,7 +12,7 @@ import pytest
 from pydantic import BaseModel, Field
 
 from karenina.adapters.claude_tool import ClaudeToolParserAdapter
-from karenina.ports import LLMResponse, ParseError
+from karenina.ports import LLMResponse, Message, ParseError
 
 
 class SampleParserSchema(BaseModel):
@@ -64,37 +64,6 @@ class TestParserAdapterInitialization:
         assert adapter._max_retries == 5
 
 
-class TestParserAdapterBuildMessages:
-    """Tests for parser adapter message building."""
-
-    def test_build_parsing_messages_includes_response(self, model_config: Any) -> None:
-        """Test _build_parsing_messages includes the response to parse."""
-        adapter = ClaudeToolParserAdapter(model_config)
-
-        messages = adapter._build_parsing_messages(
-            "BCL2 is an anti-apoptotic gene",
-            SampleParserSchema,
-        )
-
-        # Should have system and user messages
-        assert len(messages) == 2
-        assert messages[0].role.value == "system"
-        assert messages[1].role.value == "user"
-
-        # User message should contain the response
-        assert "BCL2 is an anti-apoptotic gene" in messages[1].text
-
-    def test_build_parsing_messages_has_system_instructions(self, model_config: Any) -> None:
-        """Test _build_parsing_messages has system instructions."""
-        adapter = ClaudeToolParserAdapter(model_config)
-
-        messages = adapter._build_parsing_messages("Some response", SampleParserSchema)
-
-        system_text = messages[0].text
-        assert "extract" in system_text.lower()
-        assert "schema" in system_text.lower()
-
-
 class TestParserAdapterAsyncParsing:
     """Tests for async parsing functionality."""
 
@@ -113,7 +82,7 @@ class TestParserAdapterAsyncParsing:
             mock_llm.with_structured_output.return_value = mock_structured
 
             result = await adapter.aparse_to_pydantic(
-                "BCL2 is an anti-apoptotic gene",
+                [Message.system("Extract"), Message.user("BCL2 is an anti-apoptotic gene")],
                 SampleParserSchema,
             )
 
@@ -134,7 +103,7 @@ class TestParserAdapterAsyncParsing:
             mock_structured.ainvoke.return_value = mock_response
             mock_llm.with_structured_output.return_value = mock_structured
 
-            await adapter.aparse_to_pydantic("response", SampleParserSchema)
+            await adapter.aparse_to_pydantic([Message.user("response")], SampleParserSchema)
 
             mock_llm.with_structured_output.assert_called_once_with(
                 SampleParserSchema,
@@ -159,7 +128,7 @@ class TestParserAdapterAsyncParsing:
             mock_llm.with_structured_output.return_value = mock_structured
 
             with pytest.raises(ParseError, match="did not return SampleParserSchema"):
-                await adapter.aparse_to_pydantic("response", SampleParserSchema)
+                await adapter.aparse_to_pydantic([Message.user("response")], SampleParserSchema)
 
     @pytest.mark.asyncio
     async def test_aparse_to_pydantic_raises_parse_error_on_exception(self, model_config: Any) -> None:
@@ -172,7 +141,7 @@ class TestParserAdapterAsyncParsing:
             mock_llm.with_structured_output.return_value = mock_structured
 
             with pytest.raises(ParseError, match="Failed to parse response"):
-                await adapter.aparse_to_pydantic("response", SampleParserSchema)
+                await adapter.aparse_to_pydantic([Message.user("response")], SampleParserSchema)
 
     @pytest.mark.asyncio
     async def test_aparse_to_pydantic_preserves_parse_error(self, model_config: Any) -> None:
@@ -187,7 +156,7 @@ class TestParserAdapterAsyncParsing:
             mock_llm.with_structured_output.return_value = mock_structured
 
             with pytest.raises(ParseError, match="Original parse error"):
-                await adapter.aparse_to_pydantic("response", SampleParserSchema)
+                await adapter.aparse_to_pydantic([Message.user("response")], SampleParserSchema)
 
 
 class TestParserAdapterSyncParsing:
@@ -222,7 +191,7 @@ class TestParserAdapterWithDifferentSchemas:
             mock_structured.ainvoke.return_value = mock_response
             mock_llm.with_structured_output.return_value = mock_structured
 
-            result = await adapter.aparse_to_pydantic("response", OptionalSchema)
+            result = await adapter.aparse_to_pydantic([Message.user("response")], OptionalSchema)
 
             assert result.required_field == "value"
             assert result.optional_field is None
@@ -245,7 +214,7 @@ class TestParserAdapterWithDifferentSchemas:
             mock_structured.ainvoke.return_value = mock_response
             mock_llm.with_structured_output.return_value = mock_structured
 
-            result = await adapter.aparse_to_pydantic("response", NumericSchema)
+            result = await adapter.aparse_to_pydantic([Message.user("response")], NumericSchema)
 
             assert result.count == 42
             assert result.score == 0.95
@@ -267,7 +236,7 @@ class TestParserAdapterWithDifferentSchemas:
             mock_structured.ainvoke.return_value = mock_response
             mock_llm.with_structured_output.return_value = mock_structured
 
-            result = await adapter.aparse_to_pydantic("response", ListSchema)
+            result = await adapter.aparse_to_pydantic([Message.user("response")], ListSchema)
 
             assert result.items == ["a", "b", "c"]
 
@@ -291,6 +260,6 @@ class TestParserAdapterWithDifferentSchemas:
             mock_structured.ainvoke.return_value = mock_response
             mock_llm.with_structured_output.return_value = mock_structured
 
-            result = await adapter.aparse_to_pydantic("response", OuterSchema)
+            result = await adapter.aparse_to_pydantic([Message.user("response")], OuterSchema)
 
             assert result.inner.value == "nested"

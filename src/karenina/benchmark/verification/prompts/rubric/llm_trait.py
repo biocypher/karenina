@@ -1,18 +1,23 @@
 """Prompt construction for LLM-based trait evaluation (boolean and score kinds).
 
+Canonical location for LLM trait prompt building.
+Re-exported by evaluators/rubric/prompts/llm_trait.py for backwards compatibility.
+
 This module provides the LLMTraitPromptBuilder class for constructing prompts
 used in standard LLM trait evaluation, supporting both batch (all traits at once)
 and sequential (one at a time) evaluation modes.
+
+Format-specific content (JSON schema blocks, response format sections, output
+format examples) is NOT included here — it is injected by adapter instructions
+registered per-interface. This keeps prompt builders format-agnostic.
 """
 
 import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel
-
 if TYPE_CHECKING:
-    from ......schemas.domain import LLMRubricTrait
+    from karenina.schemas.domain import LLMRubricTrait
 
 
 @dataclass
@@ -22,6 +27,9 @@ class LLMTraitPromptBuilder:
     This class encapsulates prompt construction for standard LLM trait evaluation,
     supporting both batch (all traits at once) and sequential (one at a time) modes.
 
+    Format-specific content (JSON schema, output format examples) is injected by
+    adapter instructions, not included in the base prompts.
+
     Example:
         builder = LLMTraitPromptBuilder()
         system_prompt = builder.build_batch_system_prompt()
@@ -29,7 +37,6 @@ class LLMTraitPromptBuilder:
             question="What gene is targeted?",
             answer="BCL2 is the primary target...",
             traits=[trait1, trait2],
-            schema_class=BatchRubricScores,
         )
     """
 
@@ -37,20 +44,14 @@ class LLMTraitPromptBuilder:
         """Build system prompt for batch evaluation of boolean/score traits."""
         return """You are an expert evaluator assessing the quality of responses using a structured rubric.
 
-Your task is to evaluate a given answer against multiple evaluation traits and return scores in JSON format.
+Your task is to evaluate a given answer against multiple evaluation traits and return scores.
 
-**RESPONSE FORMAT:**
-You will receive a JSON Schema specifying the exact output structure. Your response MUST conform to this schema.
-Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
-
-**CRITICAL REQUIREMENTS:**
-1. **JSON ONLY**: Your entire response must be valid JSON conforming to the provided schema
-2. **Schema Compliance**: Follow the JSON Schema exactly - it defines the structure for parsing
-3. **Exact Trait Names**: Use the EXACT trait names provided - case-sensitive matching is required
-4. **Boolean Traits**: Use JSON `true` or `false` (lowercase, no quotes around the value)
-5. **Score Traits**: Use integers within the specified range
-6. **Score Clamping**: Scores outside the valid range will be automatically clamped to the nearest boundary
-7. **Missing Traits**: Any trait not included will be recorded as `null` (evaluation failure)
+**TRAIT REQUIREMENTS:**
+1. **Exact Trait Names**: Use the EXACT trait names provided - case-sensitive matching is required
+2. **Boolean Traits**: Use `true` or `false` (lowercase, no quotes around the value)
+3. **Score Traits**: Use integers within the specified range
+4. **Score Clamping**: Scores outside the valid range will be automatically clamped to the nearest boundary
+5. **Missing Traits**: Any trait not included will be recorded as `null` (evaluation failure)
 
 **EVALUATION GUIDELINES:**
 - Evaluate each trait independently based on its specific criteria
@@ -59,20 +60,13 @@ Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
   - For negative traits (e.g., "contains errors"), lean toward `true` when uncertain
   - For scores, lean toward the middle of the scale when uncertain
 - Base assessments solely on the answer content, not assumptions about intent
-- Be consistent: similar answers should receive similar scores
-
-**WHAT NOT TO DO:**
-- Do NOT wrap JSON in markdown code blocks (no ```)
-- Do NOT add explanatory text before or after the JSON
-- Do NOT use string values like "true" - use the boolean `true`
-- Do NOT skip any traits - include ALL traits in your response"""
+- Be consistent: similar answers should receive similar scores"""
 
     def build_batch_user_prompt(
         self,
         question: str,
         answer: str,
         traits: list["LLMRubricTrait"],
-        schema_class: type[BaseModel],
     ) -> str:
         """Build user prompt for batch evaluation of boolean/score traits.
 
@@ -80,16 +74,13 @@ Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
             question: The original question asked
             answer: The LLM's response to evaluate
             traits: List of LLM traits to evaluate
-            schema_class: Pydantic model class for JSON schema generation
 
         Returns:
             Formatted user prompt string
         """
         traits_description = []
-        trait_names = []
 
         for trait in traits:
-            trait_names.append(trait.name)
             if trait.kind == "boolean":
                 trait_desc = f"- **{trait.name}** (boolean): {trait.description or 'Boolean evaluation'}\n  → Return `true` or `false`"
             else:
@@ -97,19 +88,6 @@ Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
                 max_score = trait.max_score or 5
                 trait_desc = f"- **{trait.name}** (score {min_score}-{max_score}): {trait.description or 'Score-based evaluation'}\n  → Return integer from {min_score} to {max_score}"
             traits_description.append(trait_desc)
-
-        # Build example JSON with actual trait names
-        example_scores: dict[str, bool | int] = {}
-        for trait in traits:
-            if trait.kind == "boolean":
-                example_scores[trait.name] = True
-            else:
-                example_scores[trait.name] = (trait.min_score or 1) + 2
-
-        example_json = json.dumps({"scores": example_scores}, indent=2)
-
-        # Get JSON schema from Pydantic model
-        json_schema = json.dumps(schema_class.model_json_schema(), indent=2)
 
         return f"""Evaluate the following answer against these traits:
 
@@ -120,20 +98,27 @@ Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
 {question}
 
 **ANSWER TO EVALUATE:**
-{answer}
+{answer}"""
 
-**JSON SCHEMA (your response MUST conform to this):**
-```json
-{json_schema}
-```
+    def build_batch_example_json(self, traits: list["LLMRubricTrait"]) -> str:
+        """Build example JSON string for batch evaluation.
 
-**REQUIRED OUTPUT FORMAT:**
-Return a JSON object with a "scores" key. Use EXACT trait names as shown above.
+        Used by evaluator callers to pass as instruction_context for adapter
+        instructions to include in format-specific prompt sections.
 
-Example (using YOUR trait names):
-{example_json}
+        Args:
+            traits: List of LLM traits to build example for
 
-**YOUR JSON RESPONSE:**"""
+        Returns:
+            JSON string with example scores
+        """
+        example_scores: dict[str, bool | int] = {}
+        for trait in traits:
+            if trait.kind == "boolean":
+                example_scores[trait.name] = True
+            else:
+                example_scores[trait.name] = (trait.min_score or 1) + 2
+        return json.dumps({"scores": example_scores}, indent=2)
 
     def build_single_trait_system_prompt(self, trait: "LLMRubricTrait") -> str:
         """Build system prompt for single trait evaluation.
@@ -155,22 +140,12 @@ Example (using YOUR trait names):
 
 **Criteria:** {trait.description or "Boolean evaluation"}
 
-**RESPONSE FORMAT:**
-You will receive a JSON Schema specifying the exact output structure. Your response MUST conform to this schema.
-Return valid JSON: {{"result": true}} or {{"result": false}}
-Keep your response concise - the JSON is the primary output.
-
 **EVALUATION GUIDELINES:**
 - `true`: The criteria IS met - answer clearly satisfies the requirement
 - `false`: The criteria IS NOT met - answer fails to satisfy the requirement
 - When uncertain, choose the most conservative value based on the trait's nature:
   - For positive traits (e.g., "is accurate"), lean toward `false`
-  - For negative traits (e.g., "contains errors"), lean toward `true`
-
-**PARSING NOTES:**
-- If JSON parsing fails, we also accept: "true", "yes", "false", "no"
-- Do NOT use string values like "true" with quotes - use the boolean
-- Avoid wrapping in markdown code blocks"""
+  - For negative traits (e.g., "contains errors"), lean toward `true`"""
 
     def _build_single_score_system_prompt(self, trait: "LLMRubricTrait") -> str:
         """Build system prompt for single score trait evaluation."""
@@ -181,11 +156,6 @@ Keep your response concise - the JSON is the primary output.
 
 **Criteria:** {trait.description or "Score-based evaluation"}
 
-**RESPONSE FORMAT:**
-You will receive a JSON Schema specifying the exact output structure. Your response MUST conform to this schema.
-Return valid JSON: {{"score": N}} where N is an integer from {min_score} to {max_score}
-Keep your response concise - the JSON is the primary output.
-
 **SCORING GUIDELINES:**
 - {min_score} = Poor - Does not meet criteria at all
 - {mid_score} = Average - Partially meets criteria
@@ -194,19 +164,13 @@ Keep your response concise - the JSON is the primary output.
 When uncertain about borderline cases, choose conservatively based on the trait's nature:
 - For traits where higher is better (e.g., "quality"), lean toward lower scores
 - For traits where lower is better (e.g., "error severity"), lean toward higher scores
-- When completely uncertain, default to the middle value ({mid_score})
-
-**PARSING NOTES:**
-- Scores outside [{min_score}, {max_score}] are automatically clamped to the nearest boundary
-- Use integers only (no decimals)
-- Avoid wrapping in markdown code blocks"""
+- When completely uncertain, default to the middle value ({mid_score})"""
 
     def build_single_trait_user_prompt(
         self,
         question: str,
         answer: str,
         trait: "LLMRubricTrait",
-        schema_class: type[BaseModel],
     ) -> str:
         """Build user prompt for single trait evaluation.
 
@@ -214,15 +178,10 @@ When uncertain about borderline cases, choose conservatively based on the trait'
             question: The original question asked
             answer: The LLM's response to evaluate
             trait: The LLM trait to evaluate
-            schema_class: Pydantic model class for JSON schema generation
 
         Returns:
             Formatted user prompt string
         """
-        format_hint = '{"result": true} or {"result": false}' if trait.kind == "boolean" else '{"score": N}'
-
-        json_schema = json.dumps(schema_class.model_json_schema(), indent=2)
-
         return f"""**QUESTION:**
 {question}
 
@@ -230,11 +189,4 @@ When uncertain about borderline cases, choose conservatively based on the trait'
 {answer}
 
 **TRAIT:** {trait.name}
-**CRITERIA:** {trait.description or "No description provided"}
-
-**JSON SCHEMA (your response MUST conform to this):**
-```json
-{json_schema}
-```
-
-Evaluate this answer for the trait above and return your assessment as JSON: {format_hint}"""
+**CRITERIA:** {trait.description or "No description provided"}"""

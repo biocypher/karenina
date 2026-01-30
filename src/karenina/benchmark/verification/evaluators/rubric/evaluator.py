@@ -16,7 +16,7 @@ Evaluation is delegated to specialized handlers:
 """
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .....adapters import get_llm
 from .....ports import LLMPort
@@ -25,6 +25,9 @@ from .....schemas.workflow import ModelConfig
 from .deep_judgment import RubricDeepJudgmentHandler
 from .llm_trait import LLMTraitEvaluator
 from .metric_trait import MetricTraitEvaluator
+
+if TYPE_CHECKING:
+    from .....schemas.verification import PromptConfig
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +44,12 @@ class RubricEvaluator:
     - RubricDeepJudgmentHandler: Handles deep judgment with excerpts
     """
 
-    def __init__(self, model_config: ModelConfig, evaluation_strategy: str = "batch"):
+    def __init__(
+        self,
+        model_config: ModelConfig,
+        evaluation_strategy: str = "batch",
+        prompt_config: "PromptConfig | None" = None,
+    ):
         """
         Initialize the rubric evaluator with an LLM model.
 
@@ -50,6 +58,7 @@ class RubricEvaluator:
             evaluation_strategy: Strategy for evaluating LLM traits ("batch" or "sequential")
                 - "batch": Evaluate all traits in single LLM call (efficient)
                 - "sequential": Evaluate traits one-by-one (reliable)
+            prompt_config: Optional per-task-type user instructions for prompt assembly.
 
         Raises:
             ValueError: If model configuration is invalid (validated by adapter factory)
@@ -57,6 +66,7 @@ class RubricEvaluator:
         """
         self.model_config = model_config
         self.evaluation_strategy = evaluation_strategy
+        self._prompt_config = prompt_config
 
         # Note: ValueError from validate_model_config propagates directly;
         # only runtime errors (adapter unavailable, etc.) are wrapped.
@@ -76,14 +86,18 @@ class RubricEvaluator:
     def llm_trait_evaluator(self) -> LLMTraitEvaluator:
         """Get or create the LLM trait evaluator."""
         if self._llm_trait_evaluator is None:
-            self._llm_trait_evaluator = LLMTraitEvaluator(self.llm, model_config=self.model_config)
+            self._llm_trait_evaluator = LLMTraitEvaluator(
+                self.llm, model_config=self.model_config, prompt_config=self._prompt_config
+            )
         return self._llm_trait_evaluator
 
     @property
     def metric_trait_evaluator(self) -> MetricTraitEvaluator:
         """Get or create the metric trait evaluator."""
         if self._metric_trait_evaluator is None:
-            self._metric_trait_evaluator = MetricTraitEvaluator(self.llm, model_config=self.model_config)
+            self._metric_trait_evaluator = MetricTraitEvaluator(
+                self.llm, model_config=self.model_config, prompt_config=self._prompt_config
+            )
         return self._metric_trait_evaluator
 
     def evaluate_rubric(
@@ -297,7 +311,7 @@ class RubricEvaluator:
                 - traits_without_valid_excerpts: Traits that failed excerpt extraction
         """
         # Create handler with the same LLM instance
-        handler = RubricDeepJudgmentHandler(self.llm, self.model_config)
+        handler = RubricDeepJudgmentHandler(self.llm, self.model_config, prompt_config=self._prompt_config)
 
         # Delegate to handler, providing a callback for standard trait evaluation
         return handler.evaluate_rubric_with_deep_judgment(

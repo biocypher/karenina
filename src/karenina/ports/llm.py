@@ -10,6 +10,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel
 
+from karenina.ports.capabilities import PortCapabilities
 from karenina.ports.messages import Message
 from karenina.ports.usage import UsageMetadata
 
@@ -62,6 +63,17 @@ class LLMPort(Protocol):
         >>> structured_llm = llm.with_structured_output(Answer)
         >>> response = await structured_llm.ainvoke([Message.user("What is 2+2?")])
     """
+
+    @property
+    def capabilities(self) -> PortCapabilities:
+        """Declare what prompt features this LLM adapter supports.
+
+        Returns:
+            PortCapabilities with adapter-specific feature flags.
+            Defaults to PortCapabilities() (system prompts supported,
+            structured output not supported).
+        """
+        return PortCapabilities()
 
     async def ainvoke(self, messages: list[Message]) -> LLMResponse:
         """Invoke the LLM asynchronously.

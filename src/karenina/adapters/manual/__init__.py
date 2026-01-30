@@ -48,6 +48,7 @@ from karenina.ports import (
     Tool,
     UsageMetadata,
 )
+from karenina.ports.capabilities import PortCapabilities
 
 # Import exceptions from dedicated module to avoid circular imports
 from .exceptions import ManualInterfaceError, ManualTraceError, ManualTraceNotFoundError
@@ -216,6 +217,11 @@ class ManualLLMAdapter(LLMPort):
         """
         self._model_config = model_config
 
+    @property
+    def capabilities(self) -> PortCapabilities:
+        """Default capabilities for the manual adapter (no-op)."""
+        return PortCapabilities()
+
     async def ainvoke(self, messages: list[Message]) -> LLMResponse:  # noqa: ARG002
         """Raises ManualInterfaceError - manual interface cannot invoke LLM."""
         raise ManualInterfaceError("llm.ainvoke()")
@@ -252,11 +258,16 @@ class ManualParserAdapter(ParserPort):
         """
         self._model_config = model_config
 
-    async def aparse_to_pydantic(self, response: str, schema: type[T]) -> T:  # noqa: ARG002
+    @property
+    def capabilities(self) -> PortCapabilities:
+        """Default capabilities for the manual parser adapter (no-op)."""
+        return PortCapabilities()
+
+    async def aparse_to_pydantic(self, messages: list[Message], schema: type[T]) -> T:  # noqa: ARG002
         """Raises ManualInterfaceError - manual interface cannot parse via LLM."""
         raise ManualInterfaceError("parser.aparse_to_pydantic()")
 
-    def parse_to_pydantic(self, response: str, schema: type[T]) -> T:  # noqa: ARG002
+    def parse_to_pydantic(self, messages: list[Message], schema: type[T]) -> T:  # noqa: ARG002
         """Raises ManualInterfaceError - manual interface cannot parse via LLM."""
         raise ManualInterfaceError("parser.parse_to_pydantic()")
 

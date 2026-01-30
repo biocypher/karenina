@@ -2,6 +2,9 @@
 
 This module registers the LangChain interface and related routing interfaces
 (openrouter, openai_endpoint) with the AdapterRegistry.
+
+Adapter instructions for PARSING, RUBRIC, and DEEP JUDGMENT tasks are
+registered via the prompts subpackage (imported at the bottom of this module).
 """
 
 from __future__ import annotations
@@ -125,3 +128,8 @@ _openai_endpoint_spec = AdapterSpec(
 )
 
 AdapterRegistry.register(_openai_endpoint_spec)
+
+# Import prompt modules to trigger adapter instruction registration
+import karenina.adapters.langchain.prompts.deep_judgment  # noqa: E402, F401
+import karenina.adapters.langchain.prompts.parsing  # noqa: E402, F401
+import karenina.adapters.langchain.prompts.rubric  # noqa: E402, F401

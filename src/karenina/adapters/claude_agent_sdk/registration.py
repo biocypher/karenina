@@ -2,6 +2,9 @@
 
 This module registers the claude_agent_sdk interface with the AdapterRegistry.
 The Claude Agent SDK requires the Claude Code CLI to be installed.
+
+Adapter instructions for PARSING, RUBRIC, and DEEP JUDGMENT tasks are
+registered via the prompts subpackage (imported at the bottom of this module).
 """
 
 from __future__ import annotations
@@ -82,3 +85,8 @@ _claude_sdk_spec = AdapterSpec(
 )
 
 AdapterRegistry.register(_claude_sdk_spec)
+
+# Import prompt modules to trigger adapter instruction registration
+import karenina.adapters.claude_agent_sdk.prompts.deep_judgment  # noqa: E402, F401
+import karenina.adapters.claude_agent_sdk.prompts.parsing  # noqa: E402, F401
+import karenina.adapters.claude_agent_sdk.prompts.rubric  # noqa: E402, F401

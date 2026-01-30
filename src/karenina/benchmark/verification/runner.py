@@ -6,6 +6,7 @@ Main entry point for running verification using the stage-based pipeline archite
 from typing import Any
 
 from ...schemas.domain import Rubric
+from ...schemas.verification import PromptConfig
 from ...schemas.workflow import ModelConfig, VerificationResult
 from ...utils.checkpoint import generate_template_id
 from .stages import StageOrchestrator, VerificationContext
@@ -44,6 +45,8 @@ def run_single_model_verification(
     deep_judgment_rubric_search_tool: str | Any = "tavily",
     evaluation_mode: str = "template_only",
     cached_answer_data: dict[str, Any] | None = None,
+    # Prompt configuration
+    prompt_config: PromptConfig | None = None,
     # Trace filtering configuration (MCP Agent Evaluation)
     use_full_trace_for_template: bool = False,
     use_full_trace_for_rubric: bool = True,
@@ -137,6 +140,8 @@ def run_single_model_verification(
         deep_judgment_rubric_search_tool=deep_judgment_rubric_search_tool,
         # Few-Shot Configuration
         few_shot_examples=few_shot_examples,
+        # Prompt Configuration
+        prompt_config=prompt_config,
         # Trace Filtering Configuration (MCP Agent Evaluation)
         use_full_trace_for_template=use_full_trace_for_template,
         use_full_trace_for_rubric=use_full_trace_for_rubric,

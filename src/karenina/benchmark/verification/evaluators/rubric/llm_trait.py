@@ -23,11 +23,14 @@ import re
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
-from .....ports import LLMPort, Message
+from .....ports import LLMPort, Message, PortCapabilities
 from .....schemas.domain import LLMRubricTrait
-from .prompts import LiteralTraitPromptBuilder, LLMTraitPromptBuilder
+from ...prompts import PromptAssembler, PromptTask
+from ...prompts.rubric.literal_trait import LiteralTraitPromptBuilder
+from ...prompts.rubric.llm_trait import LLMTraitPromptBuilder
 
 if TYPE_CHECKING:
+    from .....schemas.verification import PromptConfig
     from .....schemas.workflow.models import ModelConfig
 
 logger = logging.getLogger(__name__)
@@ -64,6 +67,7 @@ class LLMTraitEvaluator:
         async_max_workers: int | None = None,
         *,
         model_config: "ModelConfig",
+        prompt_config: "PromptConfig | None" = None,
     ):
         """
         Initialize the LLM trait evaluator.
@@ -75,11 +79,13 @@ class LLMTraitEvaluator:
             async_max_workers: Max concurrent workers for parallel execution.
                               If None, reads from KARENINA_ASYNC_MAX_WORKERS env var (default: 2).
             model_config: Model configuration for reference.
+            prompt_config: Optional per-task-type user instructions for prompt assembly.
         """
         from .....adapters.llm_parallel import read_async_config
 
         self.llm = llm
         self._model_config = model_config
+        self._prompt_config = prompt_config
 
         # Read async config with env var fallbacks
         default_enabled, default_workers = read_async_config()
@@ -91,6 +97,32 @@ class LLMTraitEvaluator:
         self._literal_prompt_builder = LiteralTraitPromptBuilder()
 
         logger.debug(f"LLMTraitEvaluator: Initialized for interface={model_config.interface}")
+
+    def _get_user_instructions(self, task: PromptTask) -> str | None:
+        """Get user instructions for a given prompt task from prompt_config."""
+        if self._prompt_config is None:
+            return None
+        return self._prompt_config.get_for_task(task.value)
+
+    def _assemble_messages(
+        self,
+        task: PromptTask,
+        system_text: str,
+        user_text: str,
+        instruction_context: dict[str, object] | None = None,
+    ) -> list[Message]:
+        """Assemble messages using PromptAssembler with the given task type."""
+        assembler = PromptAssembler(
+            task=task,
+            interface=self._model_config.interface,
+            capabilities=PortCapabilities(),
+        )
+        return assembler.assemble(
+            system_text=system_text,
+            user_text=user_text,
+            user_instructions=self._get_user_instructions(task),
+            instruction_context=instruction_context,
+        )
 
     def evaluate_batch(
         self, question: str, answer: str, traits: list[LLMRubricTrait]
@@ -109,9 +141,18 @@ class LLMTraitEvaluator:
         from .....schemas.workflow.rubric_outputs import BatchRubricScores
 
         system_prompt = self._llm_prompt_builder.build_batch_system_prompt()
-        user_prompt = self._llm_prompt_builder.build_batch_user_prompt(question, answer, traits, BatchRubricScores)
+        user_prompt = self._llm_prompt_builder.build_batch_user_prompt(question, answer, traits)
 
-        messages: list[Message] = [Message.system(system_prompt), Message.user(user_prompt)]
+        # Build instruction_context for adapter instructions (format-specific content)
+        instruction_context: dict[str, object] = {
+            "json_schema": BatchRubricScores.model_json_schema(),
+            "example_json": self._llm_prompt_builder.build_batch_example_json(traits),
+            "output_format_hint": 'Return a JSON object with a "scores" key. Use EXACT trait names.',
+        }
+
+        messages = self._assemble_messages(
+            PromptTask.RUBRIC_LLM_TRAIT_BATCH, system_prompt, user_prompt, instruction_context
+        )
 
         # Use LLMPort.with_structured_output() for parsing
         # The adapter guarantees response.raw is a validated BatchRubricScores instance
@@ -150,11 +191,18 @@ class LLMTraitEvaluator:
         for trait in traits:
             model_class = SingleBooleanScore if trait.kind == "boolean" else SingleNumericScore
             system_prompt = self._llm_prompt_builder.build_single_trait_system_prompt(trait)
-            user_prompt = self._llm_prompt_builder.build_single_trait_user_prompt(question, answer, trait, model_class)
-            messages: list[Message] = [
-                Message.system(system_prompt),
-                Message.user(user_prompt),
-            ]
+            user_prompt = self._llm_prompt_builder.build_single_trait_user_prompt(question, answer, trait)
+
+            # Build instruction_context for adapter instructions
+            format_hint = '{"result": true} or {"result": false}' if trait.kind == "boolean" else '{"score": N}'
+            instruction_context: dict[str, object] = {
+                "json_schema": model_class.model_json_schema(),
+                "output_format_hint": f"Evaluate and return your assessment as JSON: {format_hint}",
+            }
+
+            messages = self._assemble_messages(
+                PromptTask.RUBRIC_LLM_TRAIT_SINGLE, system_prompt, user_prompt, instruction_context
+            )
             tasks.append((messages, model_class))
 
         if self._async_enabled:
@@ -398,11 +446,22 @@ class LLMTraitEvaluator:
             return {}, {}, {}
 
         system_prompt = self._literal_prompt_builder.build_batch_system_prompt()
-        user_prompt = self._literal_prompt_builder.build_batch_user_prompt(
-            question, answer, literal_traits, BatchLiteralClassifications
-        )
+        user_prompt = self._literal_prompt_builder.build_batch_user_prompt(question, answer, literal_traits)
 
-        messages: list[Message] = [Message.system(system_prompt), Message.user(user_prompt)]
+        # Build instruction_context for adapter instructions (format-specific content)
+        instruction_context: dict[str, object] = {
+            "json_schema": BatchLiteralClassifications.model_json_schema(),
+            "example_json": self._literal_prompt_builder.build_batch_example_json(literal_traits),
+            "output_format_hint": (
+                'Return a JSON object with a "classifications" array containing one object per trait.\n'
+                'Each object has "trait_name" and "class_name" fields.\n'
+                "Use EXACT trait and class names as shown above."
+            ),
+        }
+
+        messages = self._assemble_messages(
+            PromptTask.RUBRIC_LITERAL_TRAIT_BATCH, system_prompt, user_prompt, instruction_context
+        )
 
         # Use LLMPort.with_structured_output() for parsing
         structured_llm = self.llm.with_structured_output(BatchLiteralClassifications)
@@ -449,13 +508,17 @@ class LLMTraitEvaluator:
         tasks: list[tuple[list[Message], type[SingleLiteralClassification]]] = []
         for trait in literal_traits:
             system_prompt = self._literal_prompt_builder.build_single_trait_system_prompt(trait)
-            user_prompt = self._literal_prompt_builder.build_single_trait_user_prompt(
-                question, answer, trait, SingleLiteralClassification
+            user_prompt = self._literal_prompt_builder.build_single_trait_user_prompt(question, answer, trait)
+
+            # Build instruction_context for adapter instructions
+            instruction_context: dict[str, object] = {
+                "json_schema": SingleLiteralClassification.model_json_schema(),
+                "output_format_hint": 'Classify and return as JSON: {"classification": "<class_name>"}',
+            }
+
+            messages = self._assemble_messages(
+                PromptTask.RUBRIC_LITERAL_TRAIT_SINGLE, system_prompt, user_prompt, instruction_context
             )
-            messages: list[Message] = [
-                Message.system(system_prompt),
-                Message.user(user_prompt),
-            ]
             tasks.append((messages, SingleLiteralClassification))
 
         if self._async_enabled:

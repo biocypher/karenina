@@ -1,18 +1,23 @@
 """Prompt construction for literal (categorical) trait evaluation.
 
+Canonical location for literal trait prompt building.
+Re-exported by evaluators/rubric/prompts/literal_trait.py for backwards compatibility.
+
 This module provides the LiteralTraitPromptBuilder class for constructing prompts
 used in literal trait evaluation, where responses are classified into predefined
 categories.
+
+Format-specific content (JSON schema blocks, response format sections, output
+format examples) is NOT included here — it is injected by adapter instructions
+registered per-interface. This keeps prompt builders format-agnostic.
 """
 
 import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel
-
 if TYPE_CHECKING:
-    from ......schemas.domain import LLMRubricTrait
+    from karenina.schemas.domain import LLMRubricTrait
 
 
 @dataclass
@@ -22,6 +27,9 @@ class LiteralTraitPromptBuilder:
     This class encapsulates prompt construction for literal trait evaluation,
     where responses are classified into predefined categories.
 
+    Format-specific content (JSON schema, output format examples) is injected by
+    adapter instructions, not included in the base prompts.
+
     Example:
         builder = LiteralTraitPromptBuilder()
         system_prompt = builder.build_batch_system_prompt()
@@ -29,7 +37,6 @@ class LiteralTraitPromptBuilder:
             question="What gene is targeted?",
             answer="BCL2 is the primary target...",
             traits=[literal_trait1, literal_trait2],
-            schema_class=BatchLiteralClassifications,
         )
     """
 
@@ -38,10 +45,6 @@ class LiteralTraitPromptBuilder:
         return """You are an expert evaluator classifying responses into predefined categories.
 
 Your task is to classify a given answer into categories for multiple classification traits.
-
-**RESPONSE FORMAT:**
-You will receive a JSON Schema specifying the exact output structure. Your response MUST conform to this schema.
-Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
 
 **CRITICAL REQUIREMENTS:**
 1. **Exact Class Names**: Use the EXACT class names from each trait's categories (case-sensitive)
@@ -53,20 +56,13 @@ Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
 - Read each trait's class definitions carefully
 - Consider the full context of the answer before classifying
 - When a response spans multiple categories, choose the most dominant one
-- When uncertain, choose the category that best captures the primary intent
-
-**WHAT NOT TO DO:**
-- Do NOT wrap JSON in markdown code blocks (no ```)
-- Do NOT add explanatory text before or after the JSON
-- Do NOT modify or paraphrase class names
-- Do NOT skip any traits"""
+- When uncertain, choose the category that best captures the primary intent"""
 
     def build_batch_user_prompt(
         self,
         question: str,
         answer: str,
         traits: list["LLMRubricTrait"],
-        schema_class: type[BaseModel],
     ) -> str:
         """Build user prompt for batch literal trait evaluation.
 
@@ -74,14 +70,11 @@ Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
             question: The original question asked
             answer: The LLM's response to evaluate
             traits: List of literal kind LLM traits to evaluate
-            schema_class: Pydantic model class for JSON schema generation
 
         Returns:
             Formatted user prompt string
         """
         traits_description = []
-        # Use list format for classifications (required for Anthropic beta.messages.parse compatibility)
-        example_classifications: list[dict[str, str]] = []
 
         for trait in traits:
             if trait.kind != "literal" or trait.classes is None:
@@ -98,11 +91,6 @@ Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
                 f"  Classes: {', '.join(class_names)}\n" + "\n".join(class_details)
             )
             traits_description.append(trait_desc)
-            # Use first class as example
-            example_classifications.append({"trait_name": trait.name, "class_name": class_names[0]})
-
-        example_json = json.dumps({"classifications": example_classifications}, indent=2)
-        json_schema = json.dumps(schema_class.model_json_schema(), indent=2)
 
         return f"""Classify the following answer for each trait:
 
@@ -113,22 +101,27 @@ Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
 {question}
 
 **ANSWER TO CLASSIFY:**
-{answer}
+{answer}"""
 
-**JSON SCHEMA (your response MUST conform to this):**
-```json
-{json_schema}
-```
+    def build_batch_example_json(self, traits: list["LLMRubricTrait"]) -> str:
+        """Build example JSON string for batch literal evaluation.
 
-**REQUIRED OUTPUT FORMAT:**
-Return a JSON object with a "classifications" array containing one object per trait.
-Each object has "trait_name" and "class_name" fields.
-Use EXACT trait and class names as shown above.
+        Used by evaluator callers to pass as instruction_context for adapter
+        instructions to include in format-specific prompt sections.
 
-Example (using YOUR trait and class names):
-{example_json}
+        Args:
+            traits: List of literal kind LLM traits
 
-**YOUR JSON RESPONSE:**"""
+        Returns:
+            JSON string with example classifications
+        """
+        example_classifications: list[dict[str, str]] = []
+        for trait in traits:
+            if trait.kind != "literal" or trait.classes is None:
+                continue
+            class_names = list(trait.classes.keys())
+            example_classifications.append({"trait_name": trait.name, "class_name": class_names[0]})
+        return json.dumps({"classifications": example_classifications}, indent=2)
 
     def build_single_trait_system_prompt(self, trait: "LLMRubricTrait") -> str:
         """Build system prompt for single literal trait evaluation.
@@ -157,27 +150,17 @@ Example (using YOUR trait and class names):
 **Available Classes:**
 {chr(10).join(class_details)}
 
-**RESPONSE FORMAT:**
-You will receive a JSON Schema specifying the exact output structure. Your response MUST conform to this schema.
-Return valid JSON: {{"classification": "<class_name>"}}
-
 **CLASSIFICATION GUIDELINES:**
 - You MUST use one of these exact class names: {", ".join(class_names)}
 - Choose the single most appropriate class for the answer
 - Do NOT invent new classes or modify class names
-- When uncertain, choose the class that best captures the primary intent
-
-**PARSING NOTES:**
-- Use the exact class name as provided (case-sensitive)
-- Do NOT wrap in markdown code blocks
-- Do NOT add explanatory text"""
+- When uncertain, choose the class that best captures the primary intent"""
 
     def build_single_trait_user_prompt(
         self,
         question: str,
         answer: str,
         trait: "LLMRubricTrait",
-        schema_class: type[BaseModel],
     ) -> str:
         """Build user prompt for single literal trait evaluation.
 
@@ -185,7 +168,6 @@ Return valid JSON: {{"classification": "<class_name>"}}
             question: The original question asked
             answer: The LLM's response to evaluate
             trait: The literal kind LLM trait to evaluate
-            schema_class: Pydantic model class for JSON schema generation
 
         Returns:
             Formatted user prompt string
@@ -197,7 +179,6 @@ Return valid JSON: {{"classification": "<class_name>"}}
             raise ValueError(f"Trait '{trait.name}' is not a literal kind trait")
 
         class_names = list(trait.classes.keys())
-        json_schema = json.dumps(schema_class.model_json_schema(), indent=2)
 
         return f"""**QUESTION:**
 {question}
@@ -207,11 +188,4 @@ Return valid JSON: {{"classification": "<class_name>"}}
 
 **TRAIT:** {trait.name}
 **DESCRIPTION:** {trait.description or "No description provided"}
-**AVAILABLE CLASSES:** {", ".join(class_names)}
-
-**JSON SCHEMA (your response MUST conform to this):**
-```json
-{json_schema}
-```
-
-Classify this answer and return your classification as JSON: {{"classification": "<class_name>"}}"""
+**AVAILABLE CLASSES:** {", ".join(class_names)}"""

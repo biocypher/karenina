@@ -84,4 +84,5 @@ class AbstentionCheckStage(BaseCheckStage):
             raw_llm_response=raw_llm_response,
             parsing_model=context.parsing_model,
             question_text=context.question_text,
+            prompt_config=context.prompt_config,
         )

@@ -25,6 +25,7 @@ from karenina.ports import (
     Tool,
     UsageMetadata,
 )
+from karenina.ports.capabilities import PortCapabilities
 
 # ruff: noqa: ARG002 - unused arguments are expected in mock implementations
 
@@ -37,8 +38,12 @@ from karenina.ports import (
 class MockLLMPort:
     """Mock implementation of LLMPort for testing isinstance checks.
 
-    Implements all required methods: ainvoke, invoke, with_structured_output.
+    Implements all required members: capabilities, ainvoke, invoke, with_structured_output.
     """
+
+    @property
+    def capabilities(self) -> PortCapabilities:
+        return PortCapabilities()
 
     async def ainvoke(self, messages: list[Message]) -> LLMResponse:
         """Mock async invocation."""
@@ -103,8 +108,12 @@ class MockAgentPort:
 class MockParserPort:
     """Mock implementation of ParserPort for testing isinstance checks.
 
-    Implements all required methods: aparse_to_pydantic, parse_to_pydantic.
+    Implements all required members: capabilities, aparse_to_pydantic, parse_to_pydantic.
     """
+
+    @property
+    def capabilities(self) -> PortCapabilities:
+        return PortCapabilities()
 
     async def aparse_to_pydantic(self, response: str, schema: type[BaseModel]) -> BaseModel:
         """Mock async parsing."""

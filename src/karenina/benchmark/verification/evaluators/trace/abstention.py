@@ -9,12 +9,16 @@ from pydantic import BaseModel, Field
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from .....adapters import get_llm
-from .....ports import LLMResponse, Message
+from .....ports import LLMResponse
+from .....ports.capabilities import PortCapabilities
+from .....schemas.verification.prompt_config import PromptConfig
 from .....schemas.workflow import ModelConfig
 from .....utils.errors import is_retryable_error
 from .....utils.retry import log_retry
+from ...prompts.assembler import PromptAssembler
+from ...prompts.task_types import PromptTask
+from ...prompts.trace.abstention import ABSTENTION_DETECTION_SYS, ABSTENTION_DETECTION_USER
 from ...utils.llm_judge_helpers import extract_judge_result, fallback_json_parse
-from .prompts import ABSTENTION_DETECTION_SYS, ABSTENTION_DETECTION_USER
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -33,6 +37,7 @@ def detect_abstention(
     raw_llm_response: str,
     parsing_model: ModelConfig,
     question_text: str,
+    prompt_config: PromptConfig | None = None,
 ) -> tuple[bool, bool, str | None, dict[str, Any]]:
     """
     Detect if the model refused to answer or abstained from answering.
@@ -82,12 +87,21 @@ def detect_abstention(
             # Configure for structured output
             structured_llm = llm.with_structured_output(AbstentionResult)
 
-            # Build messages using unified Message class
+            # Build messages using PromptAssembler (tri-section pattern)
             user_prompt = ABSTENTION_DETECTION_USER.format(question=question_text, response=raw_llm_response)
-            messages = [
-                Message.system(ABSTENTION_DETECTION_SYS),
-                Message.user(user_prompt),
-            ]
+            assembler = PromptAssembler(
+                task=PromptTask.ABSTENTION_DETECTION,
+                interface=parsing_model.interface,
+                capabilities=PortCapabilities(),
+            )
+            user_instructions = (
+                prompt_config.get_for_task(PromptTask.ABSTENTION_DETECTION.value) if prompt_config else None
+            )
+            messages = assembler.assemble(
+                system_text=ABSTENTION_DETECTION_SYS,
+                user_text=user_prompt,
+                user_instructions=user_instructions,
+            )
 
             # Invoke with structured output
             response: LLMResponse = structured_llm.invoke(messages)

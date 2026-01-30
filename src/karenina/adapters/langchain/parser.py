@@ -31,11 +31,12 @@ from typing import TYPE_CHECKING, TypeVar
 from pydantic import BaseModel
 
 from karenina.ports import Message, ParseError, ParserPort
+from karenina.ports.capabilities import PortCapabilities
 from karenina.utils.json_extraction import extract_json_from_response, is_invalid_json_error
 
 from .llm import LangChainLLMAdapter
 from .messages import LangChainMessageConverter
-from .prompts import FEEDBACK_FORMAT, FEEDBACK_NULL, PARSER_SYSTEM, PARSER_USER
+from .prompts import FEEDBACK_FORMAT, FEEDBACK_NULL
 
 if TYPE_CHECKING:
     from karenina.schemas.workflow.models import ModelConfig
@@ -153,12 +154,23 @@ class LangChainParserAdapter:
     # Public API
     # -------------------------------------------------------------------------
 
-    async def aparse_to_pydantic(self, response: str, schema: type[T]) -> T:
-        """Parse an LLM response into a structured Pydantic model.
+    @property
+    def capabilities(self) -> PortCapabilities:
+        """Declare what prompt features this parser adapter supports.
 
-        This invokes an LLM to extract structured data from the response text.
-        The LLM acts as a "judge" that interprets the natural language and
-        fills in the schema attributes.
+        LangChain supports system prompts (used in parsing messages).
+        Structured output support depends on the underlying model.
+
+        Returns:
+            PortCapabilities with supports_system_prompt=True, supports_structured_output=False.
+        """
+        return PortCapabilities(supports_system_prompt=True, supports_structured_output=False)
+
+    async def aparse_to_pydantic(self, messages: list[Message], schema: type[T]) -> T:
+        """Parse using pre-assembled prompt messages into a structured Pydantic model.
+
+        The caller assembles prompt messages (via PromptAssembler). This adapter
+        invokes the LLM and handles all retry/fallback logic.
 
         Retry Strategy:
             On parsing failure, the adapter attempts recovery with feedback:
@@ -168,7 +180,7 @@ class LangChainParserAdapter:
             4. Retry with format feedback (if error is JSON-format related)
 
         Args:
-            response: The raw text response from an LLM (the "trace" to parse).
+            messages: Pre-assembled prompt messages (system + user).
             schema: A Pydantic model class defining the expected structure.
                     Field descriptions guide the LLM on what to extract.
 
@@ -179,7 +191,6 @@ class LangChainParserAdapter:
             ParseError: If the LLM fails to extract valid structured data after all retries.
             PortError: If the underlying LLM invocation fails.
         """
-        messages = self._build_parsing_prompt(response, schema)
 
         # Strategy 1: Try native structured output for more reliable parsing
         try:
@@ -242,13 +253,13 @@ class LangChainParserAdapter:
                 f"Failed to parse response into {schema.__name__} after all retry strategies: {preview}"
             ) from parse_error
 
-    def parse_to_pydantic(self, response: str, schema: type[T]) -> T:
-        """Parse an LLM response into a structured Pydantic model (sync).
+    def parse_to_pydantic(self, messages: list[Message], schema: type[T]) -> T:
+        """Parse using pre-assembled prompt messages (sync).
 
         This is a convenience wrapper around aparse_to_pydantic() for sync code.
 
         Args:
-            response: The raw text response from an LLM (the "trace" to parse).
+            messages: Pre-assembled prompt messages (system + user).
             schema: A Pydantic model class defining the expected structure.
 
         Returns:
@@ -263,7 +274,7 @@ class LangChainParserAdapter:
         portal = get_async_portal()
 
         if portal is not None:
-            return portal.call(self.aparse_to_pydantic, response, schema)
+            return portal.call(self.aparse_to_pydantic, messages, schema)
 
         # Check if we're in an async context
         try:
@@ -271,7 +282,7 @@ class LangChainParserAdapter:
 
             # Use ThreadPoolExecutor to avoid nested event loop issues
             def run_in_thread() -> T:
-                return asyncio.run(self.aparse_to_pydantic(response, schema))
+                return asyncio.run(self.aparse_to_pydantic(messages, schema))
 
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 future = executor.submit(run_in_thread)
@@ -279,31 +290,11 @@ class LangChainParserAdapter:
 
         except RuntimeError:
             # No event loop running
-            return asyncio.run(self.aparse_to_pydantic(response, schema))
+            return asyncio.run(self.aparse_to_pydantic(messages, schema))
 
     # -------------------------------------------------------------------------
     # Parsing Logic
     # -------------------------------------------------------------------------
-
-    def _build_parsing_prompt(self, response: str, schema: type[BaseModel]) -> list[Message]:
-        """Build the parsing prompt with response and schema.
-
-        Args:
-            response: The raw text response to parse.
-            schema: The Pydantic schema defining expected structure.
-
-        Returns:
-            List of Message objects for the parsing request.
-        """
-        # Generate JSON schema from the Pydantic model
-        json_schema = json.dumps(schema.model_json_schema(), indent=2)
-
-        user_content = PARSER_USER.format(response=response, json_schema=json_schema)
-
-        return [
-            Message.system(PARSER_SYSTEM),
-            Message.user(user_content),
-        ]
 
     def _parse_response_content(self, content: str, schema: type[T]) -> T:
         """Parse the LLM response content into the schema.

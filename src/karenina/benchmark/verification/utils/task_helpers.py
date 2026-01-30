@@ -150,4 +150,6 @@ def extract_feature_flags(config: VerificationConfig) -> dict[str, Any]:
         ),
         "deep_judgment_rubric_search_enabled": getattr(config, "deep_judgment_rubric_search_enabled", False),
         "deep_judgment_rubric_search_tool": getattr(config, "deep_judgment_rubric_search_tool", "tavily"),
+        # Prompt configuration
+        "prompt_config": getattr(config, "prompt_config", None),
     }
