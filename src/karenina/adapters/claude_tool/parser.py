@@ -18,7 +18,7 @@ from typing import TypeVar
 
 from pydantic import BaseModel
 
-from karenina.ports import Message, ParseError, ParserPort
+from karenina.ports import Message, ParseError, ParsePortResult, ParserPort, UsageMetadata
 from karenina.ports.capabilities import PortCapabilities
 from karenina.schemas.workflow.models import ModelConfig
 
@@ -84,7 +84,7 @@ class ClaudeToolParserAdapter:
         """
         return PortCapabilities(supports_system_prompt=True, supports_structured_output=True)
 
-    async def aparse_to_pydantic(self, messages: list[Message], schema: type[T]) -> T:
+    async def aparse_to_pydantic(self, messages: list[Message], schema: type[T]) -> ParsePortResult[T]:
         """Parse using pre-assembled prompt messages into a structured Pydantic model.
 
         Uses Anthropic's native structured output API (beta.messages.parse) which
@@ -95,7 +95,7 @@ class ClaudeToolParserAdapter:
             schema: A Pydantic model class defining the expected structure.
 
         Returns:
-            An instance of the schema type with extracted values.
+            ParsePortResult containing the parsed model and usage metadata.
 
         Raises:
             ParseError: If the LLM fails to extract valid structured data.
@@ -104,9 +104,12 @@ class ClaudeToolParserAdapter:
             structured_adapter = self._llm_adapter.with_structured_output(schema, max_retries=self._max_retries)
             llm_response = await structured_adapter.ainvoke(messages)
 
+            # Capture usage metadata from the LLM response
+            usage = llm_response.usage if llm_response.usage else UsageMetadata()
+
             # The structured output API returns the parsed model in .raw
             if isinstance(llm_response.raw, schema):
-                return llm_response.raw
+                return ParsePortResult(parsed=llm_response.raw, usage=usage)
 
             # Fallback: shouldn't happen with native structured output
             raise ParseError(
@@ -118,7 +121,7 @@ class ClaudeToolParserAdapter:
                 raise
             raise ParseError(f"Failed to parse response into {schema.__name__}: {e}") from e
 
-    def parse_to_pydantic(self, messages: list[Message], schema: type[T]) -> T:
+    def parse_to_pydantic(self, messages: list[Message], schema: type[T]) -> ParsePortResult[T]:
         """Parse using pre-assembled prompt messages (sync).
 
         Args:
@@ -126,7 +129,7 @@ class ClaudeToolParserAdapter:
             schema: A Pydantic model class defining the expected structure.
 
         Returns:
-            An instance of the schema type with extracted values.
+            ParsePortResult containing the parsed model and usage metadata.
 
         Raises:
             ParseError: If parsing fails.
@@ -141,7 +144,7 @@ class ClaudeToolParserAdapter:
         try:
             asyncio.get_running_loop()
 
-            def run_in_thread() -> T:
+            def run_in_thread() -> ParsePortResult[T]:
                 return asyncio.run(self.aparse_to_pydantic(messages, schema))
 
             with concurrent.futures.ThreadPoolExecutor() as executor:

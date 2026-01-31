@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 from pydantic import BaseModel
 
-from karenina.ports import Message, ParseError, ParserPort
+from karenina.ports import Message, ParseError, ParsePortResult, ParserPort, UsageMetadata
 from karenina.ports.capabilities import PortCapabilities
 
 if TYPE_CHECKING:
@@ -156,7 +156,7 @@ class ClaudeSDKParserAdapter:
                 user_parts.append(msg.text)
         return system_text, "\n\n".join(user_parts)
 
-    async def aparse_to_pydantic(self, messages: list[Message], schema: type[T]) -> T:
+    async def aparse_to_pydantic(self, messages: list[Message], schema: type[T]) -> ParsePortResult[T]:
         """Parse using pre-assembled prompt messages into a structured Pydantic model.
 
         Args:
@@ -165,7 +165,7 @@ class ClaudeSDKParserAdapter:
                     Field descriptions guide the LLM on what to extract.
 
         Returns:
-            An instance of the schema type with extracted values.
+            ParsePortResult containing the parsed model and usage metadata.
 
         Raises:
             ParseError: If the LLM fails to extract valid structured data.
@@ -196,6 +196,17 @@ class ClaudeSDKParserAdapter:
         if result is None:
             raise ParseError("No ResultMessage received from SDK")
 
+        # Extract usage from ResultMessage if available
+        usage = UsageMetadata()
+        if hasattr(result, "usage") and result.usage:
+            ru = result.usage
+            usage = UsageMetadata(
+                input_tokens=getattr(ru, "input_tokens", 0),
+                output_tokens=getattr(ru, "output_tokens", 0),
+                total_tokens=getattr(ru, "input_tokens", 0) + getattr(ru, "output_tokens", 0),
+                model=self._config.model_name,
+            )
+
         # Check for structured output failure
         # SDK returns subtype='error_max_structured_output_retries' on validation failure
         if result.subtype and "error" in result.subtype.lower():
@@ -211,7 +222,7 @@ class ClaudeSDKParserAdapter:
             if result.result:
                 try:
                     data = json.loads(result.result)
-                    return schema.model_validate(data)
+                    return ParsePortResult(parsed=schema.model_validate(data), usage=usage)
                 except (json.JSONDecodeError, ValidationError) as e:
                     logger.debug(f"Fallback JSON parsing failed: {e}")
 
@@ -222,11 +233,11 @@ class ClaudeSDKParserAdapter:
 
         # Validate and return the structured output
         try:
-            return schema.model_validate(result.structured_output)
+            return ParsePortResult(parsed=schema.model_validate(result.structured_output), usage=usage)
         except ValidationError as e:
             raise ParseError(f"Structured output validation failed: {e}. Raw output: {result.structured_output}") from e
 
-    def parse_to_pydantic(self, messages: list[Message], schema: type[T]) -> T:
+    def parse_to_pydantic(self, messages: list[Message], schema: type[T]) -> ParsePortResult[T]:
         """Parse using pre-assembled prompt messages (sync).
 
         This is a convenience wrapper around aparse_to_pydantic() for sync code.
@@ -238,7 +249,7 @@ class ClaudeSDKParserAdapter:
             schema: A Pydantic model class defining the expected structure.
 
         Returns:
-            An instance of the schema type with extracted values.
+            ParsePortResult containing the parsed model and usage metadata.
 
         Raises:
             ParseError: If the LLM fails to extract valid structured data.
@@ -255,7 +266,7 @@ class ClaudeSDKParserAdapter:
         try:
             asyncio.get_running_loop()
 
-            def run_in_thread() -> T:
+            def run_in_thread() -> ParsePortResult[T]:
                 return asyncio.run(self.aparse_to_pydantic(messages, schema))
 
             with concurrent.futures.ThreadPoolExecutor() as executor:

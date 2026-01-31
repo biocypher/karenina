@@ -295,9 +295,12 @@ class TestParserAdapterRetryPrompts:
 
             async def capture_ainvoke(messages: list[Message]) -> Any:
                 captured_messages.extend(messages)
-                mock_response = MagicMock()
-                mock_response.content = '{"value": "test"}'
-                return mock_response
+                from karenina.ports import LLMResponse, UsageMetadata
+
+                return LLMResponse(
+                    content='{"value": "test"}',
+                    usage=UsageMetadata(),
+                )
 
             parser._llm_adapter.ainvoke = capture_ainvoke
 
@@ -322,9 +325,9 @@ class TestParserAdapterRetryPrompts:
                 assert "required fields" in feedback_message.text.lower()
                 assert "null" in feedback_message.text.lower()
             else:
-                # If no null fields were detected, the method returns None early
+                # If no null fields were detected, the method returns (None, ...) early
                 # This is expected behavior when the error doesn't indicate null fields
-                assert result is None
+                assert result[0] is None
 
     @pytest.mark.asyncio
     async def test_retry_with_format_feedback_uses_feedback_format(self, model_config: Any) -> None:
@@ -345,9 +348,12 @@ class TestParserAdapterRetryPrompts:
 
             async def capture_ainvoke(messages: list[Message]) -> Any:
                 captured_messages.extend(messages)
-                mock_response = MagicMock()
-                mock_response.content = '{"value": "test"}'
-                return mock_response
+                from karenina.ports import LLMResponse, UsageMetadata
+
+                return LLMResponse(
+                    content='{"value": "test"}',
+                    usage=UsageMetadata(),
+                )
 
             parser._llm_adapter.ainvoke = capture_ainvoke
 
