@@ -386,8 +386,8 @@ SCENARIOS = {
     "mcp_agent": {
         "description": "MCP-enabled LangGraph agent invocation with tool calls",
         "source_files": [
-            "src/karenina/infrastructure/llm/interface.py",
-            "src/karenina/infrastructure/llm/mcp_utils.py",
+            "src/karenina/adapters/langchain/middleware.py",
+            "src/karenina/adapters/langchain/mcp.py",
         ],
         "llm_calls": [
             "create_agent() with middleware",
@@ -768,8 +768,8 @@ def _run_mcp_agent_scenario(model: str, provider: str, output_dir: Path, force: 
         print("  Install with: uv add 'langchain>=1.1.0' langgraph langchain-mcp-adapters")
         return 1
 
-    from karenina.infrastructure.llm.interface import _build_agent_middleware
-    from karenina.infrastructure.llm.mcp_utils import sync_create_mcp_client_and_tools
+    from karenina.adapters.langchain.mcp import sync_create_mcp_client_and_tools
+    from karenina.adapters.langchain.middleware import build_agent_middleware
     from karenina.schemas.workflow.models import AgentMiddlewareConfig
 
     # Create output directory
@@ -817,7 +817,7 @@ def _run_mcp_agent_scenario(model: str, provider: str, output_dir: Path, force: 
 
     # Build middleware (this is what we're testing - the middleware signature)
     middleware_config = AgentMiddlewareConfig()
-    middleware = _build_agent_middleware(
+    middleware = build_agent_middleware(
         middleware_config,
         max_context_tokens=8000,  # Small context to exercise summarization path
         base_model=capture_client,  # Use capturing client for summarization model too
