@@ -120,7 +120,10 @@ class TraceValidationAutoFailStage(BaseVerificationStage):
             return
 
         # MCP agent trace - validate it ends with an AI message
-        _, error = extract_final_ai_message(raw_llm_response)
+        # Prefer structured trace_messages when available (direct Message extraction)
+        trace_messages = context.get_artifact(ArtifactKeys.TRACE_MESSAGES)
+        trace_input = trace_messages if trace_messages else raw_llm_response
+        _, error = extract_final_ai_message(trace_input)
 
         if error is not None:
             # Trace validation failed - auto-fail the test

@@ -34,7 +34,6 @@ from karenina.ports import (
     Tool,
     UsageMetadata,
 )
-from karenina.ports.messages import TextContent
 from karenina.schemas.workflow.models import ModelConfig
 
 from .mcp import connect_all_mcp_servers, get_all_mcp_tools
@@ -45,6 +44,7 @@ from .messages import (
     extract_system_prompt,
 )
 from .tools import apply_cache_control_to_tool, wrap_mcp_tool, wrap_static_tool
+from .trace import claude_tool_messages_to_raw_trace
 from .usage import aggregate_usage, extract_usage_from_response
 
 # Load environment variables from .env file (for ANTHROPIC_API_KEY)
@@ -106,42 +106,6 @@ class ClaudeToolAgentAdapter:
 
             self._async_client = AsyncAnthropic()
         return self._async_client
-
-    def _build_raw_trace(self, trace_messages: list[Message]) -> str:
-        """Build raw_trace string from collected messages.
-
-        Produces a format compatible with existing infrastructure that uses
-        delimiters like "--- AI Message ---".
-
-        Args:
-            trace_messages: List of unified Message objects.
-
-        Returns:
-            Formatted trace string.
-        """
-        parts: list[str] = []
-
-        for msg in trace_messages:
-            if msg.role == Role.ASSISTANT:
-                parts.append("--- AI Message ---")
-                # Add text content
-                for block in msg.content:
-                    if isinstance(block, TextContent):
-                        parts.append(block.text)
-                    elif hasattr(block, "name"):
-                        # Tool use
-                        parts.append(f"[Tool: {block.name}]")
-            elif msg.role == Role.USER:
-                # Skip user messages in trace (original question is known)
-                pass
-            elif msg.role == Role.TOOL:
-                # Tool results
-                for block in msg.content:
-                    if hasattr(block, "content"):
-                        preview = str(block.content)[:200]
-                        parts.append(f"[Tool Result: {preview}...]")
-
-        return "\n".join(parts)
 
     def _extract_final_response(self, trace_messages: list[Message]) -> str:
         """Extract final text response from trace messages.
@@ -327,7 +291,7 @@ class ClaudeToolAgentAdapter:
             raise AgentResponseError("No messages received from tool_runner")
 
         # Build outputs
-        raw_trace = self._build_raw_trace(trace_messages)
+        raw_trace = claude_tool_messages_to_raw_trace(trace_messages)
         if limit_reached:
             raw_trace += "\n\n[Note: Turn limit reached - partial response shown]"
 

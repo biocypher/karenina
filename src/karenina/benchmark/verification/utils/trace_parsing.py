@@ -2,7 +2,8 @@
 
 This module provides utilities for parsing harmonized trace strings.
 These functions work on the standardized "--- Message Type ---" format
-produced by both LangChain and Claude SDK adapters.
+produced by both LangChain and Claude SDK adapters, and also accept
+structured list[Message] objects for direct extraction.
 
 The trace format is:
     --- AI Message ---
@@ -17,8 +18,15 @@ The trace format is:
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 
-def extract_final_ai_message(harmonized_trace: str) -> tuple[str | None, str | None]:
+if TYPE_CHECKING:
+    from karenina.ports.messages import Message
+
+
+def extract_final_ai_message(
+    harmonized_trace: str | list[Message],
+) -> tuple[str | None, str | None]:
     """Extract only the final AI text response from a harmonized agent trace string.
 
     This is an adapter-agnostic function that works on the standardized
@@ -58,6 +66,10 @@ def extract_final_ai_message(harmonized_trace: str) -> tuple[str | None, str | N
         >>> plain, error = extract_final_ai_message("The answer is 42.")
         >>> print(plain)  # "The answer is 42."
     """
+    # Handle list[Message] input — direct extraction without parsing
+    if isinstance(harmonized_trace, list):
+        return _extract_final_ai_message_from_messages(harmonized_trace)
+
     # Check for empty or whitespace-only trace
     if not harmonized_trace or not harmonized_trace.strip():
         return None, "Empty or whitespace-only trace"
@@ -124,7 +136,7 @@ def extract_final_ai_message(harmonized_trace: str) -> tuple[str | None, str | N
 
 
 def prepare_evaluation_input(
-    raw_response: str,
+    raw_response: str | list[Message],
     use_full_trace: bool,
 ) -> tuple[str, str | None]:
     """Prepare input for template/rubric evaluation by optionally filtering the trace.
@@ -158,6 +170,11 @@ def prepare_evaluation_input(
         >>> # If failed, input is the full trace and error explains what went wrong
     """
     if use_full_trace:
+        # For list[Message], convert to string for evaluation
+        if isinstance(raw_response, list):
+            from .trace_formatting import messages_to_raw_trace
+
+            return messages_to_raw_trace(raw_response), None
         return raw_response, None
 
     extracted_message, error = extract_final_ai_message(raw_response)
@@ -165,11 +182,53 @@ def prepare_evaluation_input(
     if error is not None:
         # Extraction failed - return the original response with the error
         # Caller decides whether to fail or continue with full trace
-        return raw_response, f"Failed to extract final AI message: {error}"
+        fallback = raw_response
+        if isinstance(fallback, list):
+            from .trace_formatting import messages_to_raw_trace
+
+            fallback = messages_to_raw_trace(fallback)
+        return fallback, f"Failed to extract final AI message: {error}"
 
     if extracted_message is None:
         # Should not happen since extract_final_ai_message returns either
         # (content, None) or (None, error), but handle defensively
-        return raw_response, "Failed to extract final AI message: no message found"
+        fallback = raw_response
+        if isinstance(fallback, list):
+            from .trace_formatting import messages_to_raw_trace
+
+            fallback = messages_to_raw_trace(fallback)
+        return fallback, "Failed to extract final AI message: no message found"
 
     return extracted_message, None
+
+
+def _extract_final_ai_message_from_messages(
+    messages: list[Message],
+) -> tuple[str | None, str | None]:
+    """Extract the final AI text response from a list of port Message objects.
+
+    This is the structured equivalent of the string-based extraction,
+    operating directly on Message objects without any parsing.
+
+    Args:
+        messages: List of port Message objects.
+
+    Returns:
+        Tuple of (extracted_message, error_message).
+    """
+    from karenina.ports.messages import Role
+
+    if not messages:
+        return None, "Empty message list"
+
+    # Check if the last message is an assistant message (matches string-based behavior)
+    last_msg = messages[-1]
+    if last_msg.role != Role.ASSISTANT:
+        return None, "Last message in trace is not an AI message"
+
+    text = last_msg.text
+    if text:
+        return text, None
+
+    # Assistant message exists but has no text (only tool calls)
+    return None, "Final AI message has no text content (only tool calls)"

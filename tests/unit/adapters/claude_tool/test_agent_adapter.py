@@ -130,29 +130,29 @@ class TestAgentAdapterClientManagement:
 class TestAgentAdapterTraceBuild:
     """Tests for trace building functionality."""
 
-    def test_build_raw_trace_from_assistant_messages(self, model_config: Any) -> None:
-        """Test _build_raw_trace from assistant messages."""
-        adapter = ClaudeToolAgentAdapter(model_config)
+    def test_build_raw_trace_from_assistant_messages(self) -> None:
+        """Test claude_tool_messages_to_raw_trace from assistant messages."""
+        from karenina.adapters.claude_tool.trace import claude_tool_messages_to_raw_trace
 
         messages = [
             Message(role=Role.ASSISTANT, content=[TextContent(text="Hello there!")]),
         ]
 
-        trace = adapter._build_raw_trace(messages)
+        trace = claude_tool_messages_to_raw_trace(messages)
 
         assert "--- AI Message ---" in trace
         assert "Hello there!" in trace
 
-    def test_build_raw_trace_skips_user_messages(self, model_config: Any) -> None:
-        """Test _build_raw_trace skips user messages."""
-        adapter = ClaudeToolAgentAdapter(model_config)
+    def test_build_raw_trace_skips_user_messages(self) -> None:
+        """Test claude_tool_messages_to_raw_trace skips user messages."""
+        from karenina.adapters.claude_tool.trace import claude_tool_messages_to_raw_trace
 
         messages = [
             Message(role=Role.USER, content=[TextContent(text="User question")]),
             Message(role=Role.ASSISTANT, content=[TextContent(text="Response")]),
         ]
 
-        trace = adapter._build_raw_trace(messages)
+        trace = claude_tool_messages_to_raw_trace(messages)
 
         assert "User question" not in trace
         assert "Response" in trace

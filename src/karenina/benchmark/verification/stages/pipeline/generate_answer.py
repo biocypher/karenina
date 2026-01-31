@@ -256,6 +256,13 @@ class GenerateAnswerStage(BaseVerificationStage):
                     f"--- Human Message ---\n{constructed_prompt}\n\n--- AI Message ---\n{llm_response.content}"
                 )
 
+                # Build trace_messages for the LLM path too
+                llm_trace_messages = [
+                    Message.user(constructed_prompt),
+                    Message.assistant(llm_response.content),
+                ]
+                context.set_artifact(ArtifactKeys.TRACE_MESSAGES, llm_trace_messages)
+
                 # Track usage metadata
                 if llm_response.usage:
                     inner_usage = {

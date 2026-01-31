@@ -40,6 +40,7 @@ from .trace_agent_metrics import (
     extract_agent_metrics,
     extract_middleware_metrics,
 )
+from .trace_formatting import TraceFormatConfig, messages_to_raw_trace
 from .trace_parsing import extract_final_ai_message, prepare_evaluation_input
 from .trace_usage_tracker import UsageMetadata, UsageTracker
 
@@ -89,6 +90,9 @@ __all__ = [
     # LLM judge helpers
     "extract_judge_result",
     "fallback_json_parse",
+    # Trace formatting
+    "TraceFormatConfig",
+    "messages_to_raw_trace",
     # Trace parsing
     "extract_final_ai_message",
     "prepare_evaluation_input",

@@ -4,6 +4,7 @@ Builds the final VerificationResult from accumulated context.
 """
 
 import logging
+from typing import Any
 
 from .....schemas.workflow import VerificationResult
 from ...utils.llm_invocation import _split_parsed_response
@@ -157,11 +158,30 @@ class FinalizeResultStage(BaseVerificationStage):
             replicate=context.replicate,
         )
 
+        # Build structured trace_messages for storage
+        trace_messages_dicts: list[dict[str, Any]] = []
+        trace_messages_raw = context.get_artifact(ArtifactKeys.TRACE_MESSAGES)
+        if trace_messages_raw:
+            # trace_messages contains list[Message] — convert to list[dict]
+            for block_index, msg in enumerate(trace_messages_raw):
+                d = msg.to_dict()
+                d["block_index"] = block_index
+                trace_messages_dicts.append(d)
+
+        # Compute raw_llm_response from trace_messages if available,
+        # otherwise fall back to the string stored by generate_answer
+        raw_llm_response = context.get_result_field(ArtifactKeys.RAW_LLM_RESPONSE, "")
+        if trace_messages_raw and not raw_llm_response:
+            from karenina.benchmark.verification.utils.trace_formatting import messages_to_raw_trace
+
+            raw_llm_response = messages_to_raw_trace(trace_messages_raw)
+
         # Create template subclass
         # Note: trace filtering fields (evaluation_input, used_full_trace, trace_extraction_error)
         # are now stored at the root level of VerificationResult, not in template
         template = VerificationResultTemplate(
-            raw_llm_response=context.get_result_field(ArtifactKeys.RAW_LLM_RESPONSE, ""),
+            raw_llm_response=raw_llm_response,
+            trace_messages=trace_messages_dicts,
             parsed_gt_response=parsed_gt_response,
             parsed_llm_response=parsed_llm_response,
             template_verification_performed=template_verification_performed,
