@@ -8,44 +8,18 @@ The utilities here are used by ManualTraces to convert message lists
 to harmonized string traces and extract agent metrics.
 """
 
-import re
-from collections import defaultdict
 from typing import Any
 
+from karenina.benchmark.verification.utils.trace_agent_metrics import (
+    TOOL_FAILURE_PATTERNS,
+    extract_agent_metrics_from_messages,
+)
 from karenina.ports.messages import (
     Message,
     Role,
     ToolResultContent,
     ToolUseContent,
 )
-
-# ============================================================================
-# Tool Call Failure Detection Patterns
-# ============================================================================
-
-# Pre-compiled regex patterns for detecting suspected tool failures in agent traces.
-TOOL_FAILURE_PATTERNS: tuple[re.Pattern[str], ...] = (
-    # Error indicators
-    re.compile(r"\berror\b", re.IGNORECASE),
-    re.compile(r"\bfailed\b", re.IGNORECASE),
-    re.compile(r"\bexception\b", re.IGNORECASE),
-    re.compile(r"\btraceback\b", re.IGNORECASE),
-    re.compile(r"\bstack\s+trace\b", re.IGNORECASE),
-    # HTTP errors
-    re.compile(r"\b404\b", re.IGNORECASE),
-    re.compile(r"\b500\b", re.IGNORECASE),
-    re.compile(r"\b502\b", re.IGNORECASE),
-    re.compile(r"\b503\b", re.IGNORECASE),
-    re.compile(r"\btimeout\b", re.IGNORECASE),
-    # API failures
-    re.compile(r"\binvalid\b", re.IGNORECASE),
-    re.compile(r"\bunauthorized\b", re.IGNORECASE),
-    re.compile(r"\bforbidden\b", re.IGNORECASE),
-    re.compile(r"\bnot\s+found\b", re.IGNORECASE),
-    re.compile(r"\bcannot\b", re.IGNORECASE),
-    re.compile(r"\bunable\s+to\b", re.IGNORECASE),
-)
-
 
 # ============================================================================
 # LangChain Message Conversion
@@ -270,12 +244,9 @@ def extract_agent_metrics(messages: list[Message]) -> dict[str, Any]:
     """
     Extract agent execution metrics from port Message list.
 
-    Tracks:
-    - Iterations (assistant message cycles)
-    - Tool calls (successful tool invocations)
-    - Tools used (unique tool names)
-    - Per-tool call counts
-    - Suspected failed tool calls (tools with error-like output patterns)
+    Delegates to the canonical implementation in
+    ``benchmark.verification.utils.trace_agent_metrics``, which correctly
+    resolves suspect-failed tool names via a tool_use_id → tool_name mapping.
 
     Args:
         messages: List of port Message objects
@@ -283,55 +254,7 @@ def extract_agent_metrics(messages: list[Message]) -> dict[str, Any]:
     Returns:
         Dict with agent metrics
     """
-    iterations = 0
-    tool_calls = 0
-    tools_used: set[str] = set()
-    tool_call_counts: dict[str, int] = defaultdict(int)
-    suspect_failed_tool_calls = 0
-    suspect_failed_tools: set[str] = set()
-
-    for msg in messages:
-        # Count assistant messages as iterations
-        if msg.role == Role.ASSISTANT:
-            iterations += 1
-
-            # Track tool calls requested by assistant
-            for tc in msg.tool_calls:
-                tools_used.add(tc.name)
-                tool_call_counts[tc.name] += 1
-
-        # Count tool result messages
-        elif msg.role == Role.TOOL:
-            for content_block in msg.content:
-                if isinstance(content_block, ToolResultContent):
-                    tool_calls += 1
-
-                    # Check for suspected failures
-                    is_suspect = content_block.is_error
-                    if not is_suspect and content_block.content:
-                        for pattern in TOOL_FAILURE_PATTERNS:
-                            if pattern.search(content_block.content):
-                                is_suspect = True
-                                break
-
-                    if is_suspect:
-                        suspect_failed_tool_calls += 1
-                        # Try to find tool name from the tool_use_id
-                        suspect_failed_tools.add(f"tool_{content_block.tool_use_id}")
-
-    return {
-        "iterations": iterations,
-        "tool_calls": tool_calls,
-        "tools_used": sorted(tools_used),
-        "tool_call_counts": dict(tool_call_counts),
-        "suspect_failed_tool_calls": suspect_failed_tool_calls,
-        "suspect_failed_tools": sorted(suspect_failed_tools),
-        "model_call_limit_reached": False,
-        "tool_call_limit_reached": False,
-        "summarization_triggered": False,
-        "model_retries": 0,
-        "tool_retries": 0,
-    }
+    return extract_agent_metrics_from_messages(messages)
 
 
 def extract_agent_metrics_from_langchain(messages: list[Any]) -> dict[str, Any]:

@@ -12,6 +12,7 @@ from typing import Any
 from .....adapters import get_agent, get_llm
 from .....ports import AgentConfig, AgentPort, LLMPort, Message
 from ...utils.llm_invocation import _construct_few_shot_prompt
+from ...utils.trace_agent_metrics import extract_agent_metrics_from_messages
 from ...utils.trace_usage_tracker import UsageTracker
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
@@ -233,11 +234,15 @@ class GenerateAnswerStage(BaseVerificationStage):
                     usage_metadata = {answering_model_str: inner_usage}
                     usage_tracker.track_call("answer_generation", answering_model_str, usage_metadata)
 
-                # Track agent metrics
-                agent_metrics = {
-                    "iterations": result.turns,
-                    "limit_reached": result.limit_reached,
-                }
+                # Track agent metrics — extract full tool metrics from trace
+                if result.trace_messages:
+                    agent_metrics = extract_agent_metrics_from_messages(result.trace_messages)
+                    agent_metrics["limit_reached"] = result.limit_reached
+                else:
+                    agent_metrics = {
+                        "iterations": result.turns,
+                        "limit_reached": result.limit_reached,
+                    }
                 usage_tracker.set_agent_metrics(agent_metrics)
 
                 # Store trace_messages for future use (PR5a)

@@ -38,6 +38,7 @@ from .template_validation import validate_answer_template
 from .trace_agent_metrics import (
     TOOL_FAILURE_PATTERNS,
     extract_agent_metrics,
+    extract_agent_metrics_from_messages,
     extract_middleware_metrics,
 )
 from .trace_formatting import TraceFormatConfig, messages_to_raw_trace
@@ -71,6 +72,7 @@ __all__ = [
     # Agent metrics
     "TOOL_FAILURE_PATTERNS",
     "extract_agent_metrics",
+    "extract_agent_metrics_from_messages",
     "extract_middleware_metrics",
     # Parsing utilities
     "_extract_attribute_names_from_class",
