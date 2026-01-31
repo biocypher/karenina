@@ -251,14 +251,11 @@ class GenerateAnswerStage(BaseVerificationStage):
                 # Invoke LLM directly
                 llm_response = answering_llm.invoke(adapter_messages)
 
-                # Format response as a simple trace (Human + AI messages)
-                raw_llm_response = (
-                    f"--- Human Message ---\n{constructed_prompt}\n\n--- AI Message ---\n{llm_response.content}"
-                )
+                # Format response as trace (AI message only, question is not part of the trace)
+                raw_llm_response = f"--- AI Message ---\n{llm_response.content}"
 
                 # Build trace_messages for the LLM path too
                 llm_trace_messages = [
-                    Message.user(constructed_prompt),
                     Message.assistant(llm_response.content),
                 ]
                 context.set_artifact(ArtifactKeys.TRACE_MESSAGES, llm_trace_messages)

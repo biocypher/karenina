@@ -1147,7 +1147,7 @@ class Benchmark:
             verbose_logger = VerboseLogger(max_iterations=max_metric_calls)
 
         # Run GEPA optimization with multi-objective Pareto tracking
-        result = gepa.optimize(
+        result: Any = gepa.optimize(  # type: ignore[attr-defined]
             seed_candidate=seed_candidate,
             trainset=split.train,
             valset=split.val,

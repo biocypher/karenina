@@ -21,6 +21,7 @@ from karenina.ports import (
     MCPHttpServerConfig,
     MCPServerConfig,
     Message,
+    Role,
     Tool,
 )
 
@@ -338,13 +339,6 @@ class LangChainAgentAdapter:
         # Convert messages to LangChain format
         lc_messages = self._converter.to_provider(messages)
 
-        # Extract original question for trace processing
-        original_question: str | None = None
-        for msg in messages:
-            if msg.text:
-                original_question = msg.text
-                break
-
         # Prepare agent invocation
         recursion_limit_reached = False
         agent_response: dict[str, Any] = {"messages": []}
@@ -387,12 +381,15 @@ class LangChainAgentAdapter:
             response_messages = agent_response
 
         # Build raw_trace (legacy string format for backward compatibility)
-        raw_trace = harmonize_agent_response(agent_response, original_question)
+        raw_trace = harmonize_agent_response(agent_response)
         if recursion_limit_reached:
             raw_trace += "\n\n[Note: Recursion limit reached - partial response shown]"
 
         # Build trace_messages (new structured format)
-        trace_messages = self._converter.from_provider(response_messages)
+        # Exclude user messages — the trace should only contain assistant and
+        # tool messages, matching the claude_tool adapter behavior.
+        all_trace_messages = self._converter.from_provider(response_messages)
+        trace_messages = [m for m in all_trace_messages if m.role != Role.USER]
 
         # Extract final response
         final_response, error = extract_final_ai_message_from_response(agent_response)
