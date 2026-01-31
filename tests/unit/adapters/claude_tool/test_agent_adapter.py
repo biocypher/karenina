@@ -335,7 +335,9 @@ class TestAgentAdapterWithTools:
                 tools=[tool],
             )
 
-            mock_wrap.assert_called_once_with(tool)
+            mock_wrap.assert_called_once()
+            call_args = mock_wrap.call_args
+            assert call_args[0][0] == tool
 
 
 class TestAgentAdapterWithMCPServers:
