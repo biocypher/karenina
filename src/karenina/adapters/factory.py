@@ -59,7 +59,7 @@ if TYPE_CHECKING:
 from karenina.schemas.workflow.models import INTERFACES_NO_PROVIDER_REQUIRED
 
 # Type alias for interface values
-InterfaceType = Literal["langchain", "openrouter", "manual", "openai_endpoint", "claude_agent_sdk"]
+InterfaceType = Literal["langchain", "openrouter", "manual", "openai_endpoint", "claude_agent_sdk", "claude_tool"]
 
 logger = logging.getLogger(__name__)
 
