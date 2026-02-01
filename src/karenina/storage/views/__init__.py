@@ -18,7 +18,7 @@ Available Views:
     - deep_judgment_rubric_traits_view: Deep judgment rubric traits per result
 
 All views use the flattened column naming scheme from the auto-generated
-VerificationResultModel (e.g., metadata_answering_model, template_verify_result).
+VerificationResultModel (e.g., metadata_answering_interface, metadata_answering_model_name, template_verify_result).
 
 Usage:
     from karenina.storage.views import create_all_views, drop_all_views

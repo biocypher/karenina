@@ -7,13 +7,15 @@ experiment design and filtering by model configuration.
 Columns:
     run_id (TEXT): Unique identifier for the verification run (UUID)
     run_name (TEXT): Name of the verification run
+    answering_interface (TEXT): Interface used for answering (e.g., 'langchain', 'claude_agent_sdk')
     answering_model (TEXT): Name of the model that generated answers
+    parsing_interface (TEXT): Interface used for parsing (e.g., 'langchain', 'claude_tool')
     parsing_model (TEXT): Name of the model that parsed responses
     has_mcp (INTEGER): 1 if MCP servers were configured, 0 otherwise
     replicate_count (INTEGER): Number of replicates used for this combination
 
 Keys:
-    Primary: run_id + answering_model + parsing_model
+    Primary: run_id + answering_interface + answering_model + parsing_interface + parsing_model
     Joins: run_id → template_results_view.run_id
            run_name → template_results_view.run_name
 
@@ -33,7 +35,9 @@ _SQLITE_SQL = """
     SELECT
         run.id as run_id,
         run.run_name,
+        vr.metadata_answering_interface as answering_interface,
         vr.metadata_answering_model_name as answering_model,
+        vr.metadata_parsing_interface as parsing_interface,
         vr.metadata_parsing_model_name as parsing_model,
         MAX(CASE
             WHEN vr.template_answering_mcp_servers IS NOT NULL
@@ -44,7 +48,9 @@ _SQLITE_SQL = """
         COUNT(DISTINCT vr.metadata_replicate) as replicate_count
     FROM verification_results vr
     JOIN verification_runs run ON vr.run_id = run.id
-    GROUP BY run.id, run.run_name, vr.metadata_answering_model_name, vr.metadata_parsing_model_name
+    GROUP BY run.id, run.run_name,
+        vr.metadata_answering_interface, vr.metadata_answering_model_name,
+        vr.metadata_parsing_interface, vr.metadata_parsing_model_name
 """
 
 # PostgreSQL version
@@ -52,7 +58,9 @@ _POSTGRES_SQL = """
     SELECT
         run.id as run_id,
         run.run_name,
+        vr.metadata_answering_interface as answering_interface,
         vr.metadata_answering_model_name as answering_model,
+        vr.metadata_parsing_interface as parsing_interface,
         vr.metadata_parsing_model_name as parsing_model,
         MAX(CASE
             WHEN vr.template_answering_mcp_servers IS NOT NULL
@@ -63,7 +71,9 @@ _POSTGRES_SQL = """
         COUNT(DISTINCT vr.metadata_replicate) as replicate_count
     FROM verification_results vr
     JOIN verification_runs run ON vr.run_id = run.id
-    GROUP BY run.id, run.run_name, vr.metadata_answering_model_name, vr.metadata_parsing_model_name
+    GROUP BY run.id, run.run_name,
+        vr.metadata_answering_interface, vr.metadata_answering_model_name,
+        vr.metadata_parsing_interface, vr.metadata_parsing_model_name
 """
 
 
