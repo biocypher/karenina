@@ -149,19 +149,18 @@ def run_single_model_verification(
         cached_answer_data=cached_answer_data,
     )
 
-    # Compute model strings for result (needed even if validation fails)
+    # Build ModelIdentity objects for pipeline use (needed even if validation fails)
     from karenina.schemas.verification.model_identity import ModelIdentity
 
-    answering_model_str = ModelIdentity.from_model_config(answering_model, role="answering").display_string
-    parsing_model_str = ModelIdentity.from_model_config(parsing_model, role="parsing").display_string
+    answering_identity = ModelIdentity.from_model_config(answering_model, role="answering")
+    parsing_identity = ModelIdentity.from_model_config(parsing_model, role="parsing")
 
-    # Store model strings in context for early access (e.g., in error cases)
-    context.set_artifact("answering_model_str", answering_model_str)
-    context.set_artifact("parsing_model_str", parsing_model_str)
+    # Store ModelIdentity objects in context for downstream stages (e.g., finalize_result)
+    context.set_artifact("answering_model_identity", answering_identity)
+    context.set_artifact("parsing_model_identity", parsing_identity)
 
-    # Extract and store MCP server names for early access (e.g., in error cases)
+    # Store MCP server names as result field for VerificationResultTemplate
     answering_mcp_servers = list(answering_model.mcp_urls_dict.keys()) if answering_model.mcp_urls_dict else None
-    context.set_artifact("answering_mcp_servers", answering_mcp_servers)
     context.set_result_field("answering_mcp_servers", answering_mcp_servers)
 
     # Determine evaluation mode automatically if not explicitly set

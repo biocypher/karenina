@@ -58,7 +58,7 @@ def create_model(model_id: str, system_prompt: str = "Test") -> ModelConfig:
     return ModelConfig(
         id=model_id,
         model_provider="anthropic",
-        model_name="claude-haiku-4-5",
+        model_name=model_id,
         temperature=0.0,
         system_prompt=system_prompt,
     )
@@ -339,7 +339,7 @@ class TestCacheOptimizationIntegration:
         assert question_ids == {"q1", "q2"}
 
         parsing_models = {r.parsing_model for r in result_list}
-        assert parsing_models == {"langchain:claude-haiku-4-5"}
+        assert parsing_models == {"langchain:parser_1", "langchain:parser_2"}
 
 
 @pytest.mark.integration

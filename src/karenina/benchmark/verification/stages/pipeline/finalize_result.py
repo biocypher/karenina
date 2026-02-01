@@ -71,11 +71,17 @@ class FinalizeResultStage(BaseVerificationStage):
         execution_time = context.get_result_field(ArtifactKeys.EXECUTION_TIME, 0.0)
         timestamp = context.get_result_field(ArtifactKeys.TIMESTAMP, "")
 
-        # Build ModelIdentity objects from model configs
+        # Read ModelIdentity objects from pipeline artifacts (set by runner.py)
         from karenina.schemas.verification.model_identity import ModelIdentity
 
-        answering_identity = ModelIdentity.from_model_config(context.answering_model, role="answering")
-        parsing_identity = ModelIdentity.from_model_config(context.parsing_model, role="parsing")
+        answering_identity = context.get_artifact(ArtifactKeys.ANSWERING_MODEL_IDENTITY)
+        parsing_identity = context.get_artifact(ArtifactKeys.PARSING_MODEL_IDENTITY)
+
+        # Fallback: construct from model configs if artifacts not set (e.g., direct context usage)
+        if answering_identity is None:
+            answering_identity = ModelIdentity.from_model_config(context.answering_model, role="answering")
+        if parsing_identity is None:
+            parsing_identity = ModelIdentity.from_model_config(context.parsing_model, role="parsing")
 
         # Get MCP servers for template (still stored as a separate field on VerificationResultTemplate)
         answering_mcp_servers = context.get_result_field(ArtifactKeys.ANSWERING_MCP_SERVERS)

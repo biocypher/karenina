@@ -63,6 +63,8 @@ class ArtifactKeys:
     # Model Identification
     ANSWERING_MODEL_STR = "answering_model_str"
     PARSING_MODEL_STR = "parsing_model_str"
+    ANSWERING_MODEL_IDENTITY = "answering_model_identity"
+    PARSING_MODEL_IDENTITY = "parsing_model_identity"
     ANSWERING_MCP_SERVERS = "answering_mcp_servers"
 
     # ==========================================================================

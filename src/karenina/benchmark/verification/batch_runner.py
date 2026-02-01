@@ -129,13 +129,18 @@ def execute_task(
     Returns:
         Tuple of (result_key, verification_result)
     """
+    # Generate unique result key using canonical_key for full identity (interface+model+tools)
+    from karenina.schemas.verification.model_identity import ModelIdentity
+
     from .runner import run_single_model_verification
 
-    # Generate unique result key
+    answering_key = ModelIdentity.from_model_config(task["answering_model"], role="answering").canonical_key
+    parsing_key = ModelIdentity.from_model_config(task["parsing_model"], role="parsing").canonical_key
+
     key_parts = [
         task["question_id"],
-        task["answering_model"].id,
-        task["parsing_model"].id,
+        answering_key,
+        parsing_key,
     ]
 
     if task["replicate"] is not None:
