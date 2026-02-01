@@ -30,7 +30,6 @@ Abstract base class that all stages inherit from. Provides:
 
 **Helper methods** available to all stages:
 - `get_or_create_usage_tracker(context)` - Retrieve or create UsageTracker
-- `get_model_string(model_config)` - Format ModelConfig to display string
 - `set_artifact_and_result(context, key, value)` - Set both artifact and result field
 
 ### `BaseCheckStage` (check_stage_base.py)

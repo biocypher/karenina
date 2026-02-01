@@ -5,8 +5,7 @@ Adapters self-register via AdapterSpec, enabling:
 
 1. Centralized interface definitions (single source of truth)
 2. Factory functions that always return port implementations (never None)
-3. Automatic model string formatting per interface
-4. Clean fallback behavior without scattered if-else chains
+3. Clean fallback behavior without scattered if-else chains
 
 Additionally, this module provides adapter instance tracking for cleanup:
 - register_adapter(): Track an adapter instance for later cleanup
@@ -19,10 +18,6 @@ Example:
     >>> # Get all registered interfaces
     >>> interfaces = AdapterRegistry.get_interfaces()
     >>> # {'langchain', 'openrouter', 'openai_endpoint', 'claude_agent_sdk', 'manual'}
-    >>>
-    >>> # Format model string for a config
-    >>> model_str = AdapterRegistry.format_model_string(model_config)
-    >>> # 'anthropic/claude-sonnet-4-20250514'
 """
 
 from __future__ import annotations
@@ -129,8 +124,7 @@ class AdapterSpec:
     """Specification for an adapter that handles a specific interface.
 
     Each adapter registers itself with the registry by providing an AdapterSpec.
-    The spec defines how to create adapters for that interface and how to
-    format model strings.
+    The spec defines how to create adapters for that interface.
 
     Attributes:
         interface: The interface identifier (e.g., "langchain", "claude_agent_sdk").
@@ -140,7 +134,6 @@ class AdapterSpec:
         parser_factory: Factory function to create ParserPort for this interface.
         availability_checker: Function to check if this adapter is available.
         fallback_interface: Interface to fall back to if this one is unavailable.
-        model_string_formatter: Function to format model strings for this interface.
         routes_to: If set, this interface routes to another (e.g., "openrouter" -> "langchain").
 
     Example:
@@ -166,9 +159,6 @@ class AdapterSpec:
     availability_checker: Callable[[], AdapterAvailability] | None = None
     fallback_interface: str | None = None
 
-    # Model string formatting
-    model_string_formatter: Callable[[ModelConfig], str] | None = None
-
     # Routing (for interfaces that delegate to another)
     routes_to: str | None = None
 
@@ -191,7 +181,6 @@ class AdapterRegistry:
         get_spec: Get the spec for an interface.
         get_interfaces: Get all registered interface names.
         check_availability: Check if an interface is available.
-        format_model_string: Format a model string for display.
         resolve_interface: Resolve routing (e.g., openrouter -> langchain).
 
     Example:
@@ -286,30 +275,6 @@ class AdapterRegistry:
             available=True,
             reason=f"{spec.description} is available",
         )
-
-    @classmethod
-    def format_model_string(cls, config: ModelConfig) -> str:
-        """Format a model string for the given configuration.
-
-        This centralizes the model string formatting logic that was previously
-        duplicated across multiple files.
-
-        Args:
-            config: Model configuration.
-
-        Returns:
-            Formatted model string (e.g., "anthropic/claude-sonnet-4-20250514").
-        """
-        cls._ensure_initialized()
-        spec = cls._specs.get(config.interface)
-
-        if spec is not None and spec.model_string_formatter is not None:
-            return spec.model_string_formatter(config)
-
-        # Default formatting: provider/model_name
-        if config.model_provider:
-            return f"{config.model_provider}/{config.model_name}"
-        return config.model_name or "unknown"
 
     @classmethod
     def resolve_interface(cls, interface: str) -> str:

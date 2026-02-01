@@ -12,9 +12,10 @@ import logging
 import os
 from typing import TYPE_CHECKING, Any
 
-from .....adapters import format_model_string, get_llm, get_parser
+from .....adapters import get_llm, get_parser
 from .....ports import LLMPort
 from .....schemas.domain import BaseAnswer
+from .....schemas.verification.model_identity import ModelIdentity
 from .....schemas.workflow import ModelConfig
 from ...prompts import PromptAssembler, PromptTask
 from ...prompts.parsing.parsing_instructions import TemplatePromptBuilder
@@ -97,8 +98,8 @@ class TemplateEvaluator:
         except Exception as e:
             raise RuntimeError(f"Failed to initialize LLM for template evaluation: {e}") from e
 
-        # Build model string for tracking (centralized via adapter registry)
-        self.model_str = format_model_string(model_config)
+        # Build model string for tracking via ModelIdentity
+        self.model_str = ModelIdentity.from_model_config(model_config, role="parsing").display_string
 
         # Initialize adapter-based parser via the registry
         # Factory always returns a ParserPort (LangChainParserAdapter, ClaudeSDKParserAdapter,

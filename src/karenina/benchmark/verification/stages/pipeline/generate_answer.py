@@ -11,6 +11,7 @@ from typing import Any
 
 from .....adapters import get_agent, get_llm
 from .....ports import AgentConfig, AgentPort, LLMPort, Message
+from .....schemas.verification.model_identity import ModelIdentity
 from ...utils.llm_invocation import _construct_few_shot_prompt
 from ...utils.trace_agent_metrics import extract_agent_metrics_from_messages
 from ...utils.trace_usage_tracker import UsageTracker
@@ -110,9 +111,9 @@ class GenerateAnswerStage(BaseVerificationStage):
             usage_metadata = context.cached_answer_data.get("usage_metadata")
             agent_metrics = context.cached_answer_data.get("agent_metrics")
 
-            # Build model string for result (centralized via adapter registry)
+            # Build model string for result via ModelIdentity
             answering_model = context.answering_model
-            answering_model_str = self.get_model_string(answering_model)
+            answering_model_str = ModelIdentity.from_model_config(answering_model, role="answering").display_string
 
             # Store cached data in context (both artifact and result field)
             self.set_artifact_and_result(context, "raw_llm_response", raw_llm_response)
@@ -133,8 +134,8 @@ class GenerateAnswerStage(BaseVerificationStage):
         # No cached answer - proceed with normal answer generation
         answering_model = context.answering_model
 
-        # Build model string for result (centralized via adapter registry)
-        answering_model_str = self.get_model_string(answering_model)
+        # Build model string for result via ModelIdentity
+        answering_model_str = ModelIdentity.from_model_config(answering_model, role="answering").display_string
         context.set_artifact(ArtifactKeys.ANSWERING_MODEL_STR, answering_model_str)
 
         # Extract MCP server names if configured

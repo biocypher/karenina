@@ -56,26 +56,6 @@ def _create_langchain_parser(config: ModelConfig) -> ParserPort:
     return LangChainParserAdapter(config)
 
 
-def _format_langchain_model_string(config: ModelConfig) -> str:
-    """Format model string for standard LangChain interface."""
-    if config.model_provider:
-        return f"{config.model_provider}/{config.model_name}"
-    return config.model_name or "unknown"
-
-
-def _format_openrouter_model_string(config: ModelConfig) -> str:
-    """Format model string for OpenRouter interface.
-
-    OpenRouter uses just the model name, not provider/model format.
-    """
-    return config.model_name or "unknown"
-
-
-def _format_openai_endpoint_model_string(config: ModelConfig) -> str:
-    """Format model string for OpenAI endpoint interface."""
-    return f"endpoint/{config.model_name}" if config.model_name else "endpoint/unknown"
-
-
 # Register the langchain adapter (primary interface)
 _langchain_spec = AdapterSpec(
     interface="langchain",
@@ -85,7 +65,6 @@ _langchain_spec = AdapterSpec(
     parser_factory=_create_langchain_parser,
     availability_checker=_check_langchain_availability,
     fallback_interface=None,
-    model_string_formatter=_format_langchain_model_string,
     routes_to=None,
     supports_mcp=True,
     supports_tools=True,
@@ -103,7 +82,6 @@ _openrouter_spec = AdapterSpec(
     parser_factory=_create_langchain_parser,
     availability_checker=_check_langchain_availability,
     fallback_interface=None,
-    model_string_formatter=_format_openrouter_model_string,
     routes_to="langchain",  # Indicates this routes to langchain
     supports_mcp=True,
     supports_tools=True,
@@ -121,7 +99,6 @@ _openai_endpoint_spec = AdapterSpec(
     parser_factory=_create_langchain_parser,
     availability_checker=_check_langchain_availability,
     fallback_interface=None,
-    model_string_formatter=_format_openai_endpoint_model_string,
     routes_to="langchain",  # Indicates this routes to langchain
     supports_mcp=True,
     supports_tools=True,

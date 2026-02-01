@@ -9,6 +9,7 @@ import logging
 from abc import abstractmethod
 from typing import Any
 
+from .....schemas.verification.model_identity import ModelIdentity
 from .base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
 logger = logging.getLogger(__name__)
@@ -124,9 +125,9 @@ class BaseCheckStage(BaseVerificationStage):
         # Retrieve usage tracker from previous stage or create new one
         usage_tracker = self.get_or_create_usage_tracker(context)
 
-        # Build model string for tracking (centralized via adapter registry)
+        # Build model string for tracking via ModelIdentity
         parsing_model = context.parsing_model
-        parsing_model_str = self.get_model_string(parsing_model)
+        parsing_model_str = ModelIdentity.from_model_config(parsing_model, role="parsing").display_string
 
         # Perform the detection
         detected, check_performed, reasoning, usage_metadata = self._detect(context)

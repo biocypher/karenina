@@ -154,12 +154,11 @@ class TaskIdentifier:
     def _get_model_string(model: ModelConfig) -> str:
         """Get the model string as it appears in result metadata.
 
-        Uses centralized formatting via adapter registry.
+        Uses ModelIdentity.display_string for consistent formatting.
         """
-        from karenina.adapters import format_model_string
+        from karenina.schemas.verification.model_identity import ModelIdentity
 
-        result: str = format_model_string(model)
-        return result
+        return ModelIdentity.from_model_config(model, role="answering").display_string
 
     @staticmethod
     def compute_mcp_hash(model_config: ModelConfig) -> str:

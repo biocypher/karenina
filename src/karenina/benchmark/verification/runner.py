@@ -150,11 +150,10 @@ def run_single_model_verification(
     )
 
     # Compute model strings for result (needed even if validation fails)
-    # Centralized formatting via adapter registry
-    from karenina.adapters import format_model_string
+    from karenina.schemas.verification.model_identity import ModelIdentity
 
-    answering_model_str = format_model_string(answering_model)
-    parsing_model_str = format_model_string(parsing_model)
+    answering_model_str = ModelIdentity.from_model_config(answering_model, role="answering").display_string
+    parsing_model_str = ModelIdentity.from_model_config(parsing_model, role="parsing").display_string
 
     # Store model strings in context for early access (e.g., in error cases)
     context.set_artifact("answering_model_str", answering_model_str)

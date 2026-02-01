@@ -14,8 +14,8 @@ class TestTaskIdentifierFromResult:
     def _create_mock_result(
         self,
         question_id: str = "q1",
-        answering_model: str = "anthropic/claude-haiku-4-5",
-        parsing_model: str = "anthropic/claude-haiku-4-5",
+        answering_model: str = "langchain:claude-haiku-4-5",
+        parsing_model: str = "langchain:claude-haiku-4-5",
         replicate: int = 1,
         mcp_servers: list[str] | None = None,
     ) -> VerificationResult:
@@ -68,7 +68,7 @@ class TestTaskIdentifierFromResult:
 
         result = self._create_mock_result(
             question_id="q1",
-            answering_model="anthropic/claude-haiku-4-5",
+            answering_model="langchain:claude-haiku-4-5",
             mcp_servers=None,
         )
 
@@ -95,7 +95,7 @@ class TestTaskIdentifierFromResult:
 
         result = self._create_mock_result(
             question_id="q1",
-            answering_model="anthropic/claude-haiku-4-5",
+            answering_model="langchain:claude-haiku-4-5 +[otar-local]",
             mcp_servers=["otar-local"],
         )
 
@@ -127,10 +127,10 @@ class TestTaskIdentifierFromResult:
             ]
         )
 
-        # Result from first MCP config
+        # Result from first MCP config (display_string includes tools)
         result = self._create_mock_result(
             question_id="q1",
-            answering_model="anthropic/claude-haiku-4-5",
+            answering_model="langchain:claude-haiku-4-5 +[otar-local]",
             mcp_servers=["otar-local"],
         )
 
@@ -144,8 +144,8 @@ class TestTaskIdentifierFromResult:
     def test_multiple_mcp_configs_same_model_second_config(self):
         """Test with multiple MCP configs - result matches second config.
 
-        This is the critical test for the bug fix. Previously, this would
-        incorrectly match the first config because only model string was checked.
+        With ModelIdentity, each MCP config produces a different display_string
+        (tools are included), so matching works directly via string comparison.
         """
         config = self._create_config(
             answering_models=[
@@ -166,11 +166,11 @@ class TestTaskIdentifierFromResult:
             ]
         )
 
-        # Result from SECOND MCP config
+        # Result from SECOND MCP config (display_string includes tools)
         result = self._create_mock_result(
             question_id="q1",
-            answering_model="anthropic/claude-haiku-4-5",
-            mcp_servers=["otar-official"],  # <-- Different MCP server
+            answering_model="langchain:claude-haiku-4-5 +[otar-official]",
+            mcp_servers=["otar-official"],
         )
 
         task_id = TaskIdentifier.from_result(result, config)
@@ -198,14 +198,14 @@ class TestTaskIdentifierFromResult:
         # Result with different MCP server that doesn't match
         result = self._create_mock_result(
             question_id="q1",
-            answering_model="anthropic/claude-haiku-4-5",
+            answering_model="langchain:claude-haiku-4-5",
             mcp_servers=["unknown-server"],
         )
 
         task_id = TaskIdentifier.from_result(result, config)
 
         # Falls back to result value
-        assert task_id.answering_model_id == "anthropic/claude-haiku-4-5"
+        assert task_id.answering_model_id == "langchain:claude-haiku-4-5"
         assert task_id.mcp_hash == ""
 
     def test_task_id_roundtrip_with_mcp(self):
@@ -224,7 +224,7 @@ class TestTaskIdentifierFromResult:
 
         result = self._create_mock_result(
             question_id="urn:uuid:abc123",
-            answering_model="anthropic/claude-haiku-4-5",
+            answering_model="langchain:claude-haiku-4-5 +[otar-official]",
             replicate=2,
             mcp_servers=["otar-official"],
         )

@@ -67,9 +67,9 @@ class TestAdapterRegistry:
         assert result.available is False
         assert "Unknown interface" in result.reason
 
-    def test_format_model_string_langchain(self) -> None:
-        """Test format_model_string for langchain interface."""
-        from karenina.adapters.registry import AdapterRegistry
+    def test_model_identity_display_string_langchain(self) -> None:
+        """Test ModelIdentity.display_string for langchain interface."""
+        from karenina.schemas.verification.model_identity import ModelIdentity
         from karenina.schemas.workflow.models import ModelConfig
 
         config = ModelConfig(
@@ -79,13 +79,13 @@ class TestAdapterRegistry:
             interface="langchain",
         )
 
-        result = AdapterRegistry.format_model_string(config)
+        identity = ModelIdentity.from_model_config(config, role="answering")
 
-        assert result == "anthropic/claude-sonnet-4-20250514"
+        assert identity.display_string == "langchain:claude-sonnet-4-20250514"
 
-    def test_format_model_string_openrouter(self) -> None:
-        """Test format_model_string for openrouter interface."""
-        from karenina.adapters.registry import AdapterRegistry
+    def test_model_identity_display_string_openrouter(self) -> None:
+        """Test ModelIdentity.display_string for openrouter interface."""
+        from karenina.schemas.verification.model_identity import ModelIdentity
         from karenina.schemas.workflow.models import ModelConfig
 
         config = ModelConfig(
@@ -95,13 +95,13 @@ class TestAdapterRegistry:
             interface="openrouter",
         )
 
-        result = AdapterRegistry.format_model_string(config)
+        identity = ModelIdentity.from_model_config(config, role="answering")
 
-        assert result == "anthropic/claude-3-sonnet"
+        assert identity.display_string == "openrouter:anthropic/claude-3-sonnet"
 
-    def test_format_model_string_openai_endpoint(self) -> None:
-        """Test format_model_string for openai_endpoint interface."""
-        from karenina.adapters.registry import AdapterRegistry
+    def test_model_identity_display_string_openai_endpoint(self) -> None:
+        """Test ModelIdentity.display_string for openai_endpoint interface."""
+        from karenina.schemas.verification.model_identity import ModelIdentity
         from karenina.schemas.workflow.models import ModelConfig
 
         config = ModelConfig(
@@ -111,9 +111,9 @@ class TestAdapterRegistry:
             interface="openai_endpoint",
         )
 
-        result = AdapterRegistry.format_model_string(config)
+        identity = ModelIdentity.from_model_config(config, role="answering")
 
-        assert result == "endpoint/gpt-4"
+        assert identity.display_string == "openai_endpoint:gpt-4"
 
     def test_resolve_interface_no_routing(self) -> None:
         """Test resolve_interface for interface without routing."""

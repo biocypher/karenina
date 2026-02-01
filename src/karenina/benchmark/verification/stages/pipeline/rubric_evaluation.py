@@ -5,6 +5,7 @@ Evaluates LLM responses against qualitative rubric criteria.
 
 import logging
 
+from .....schemas.verification.model_identity import ModelIdentity
 from ...evaluators import RubricEvaluator
 from ...utils import prepare_evaluation_input
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
@@ -139,9 +140,9 @@ class RubricEvaluationStage(BaseVerificationStage):
         metric_confusion_lists = None
         metric_results = None
 
-        # Build model string for tracking (centralized via adapter registry)
+        # Build model string for tracking via ModelIdentity
         parsing_model = context.parsing_model
-        parsing_model_str = self.get_model_string(parsing_model)
+        parsing_model_str = ModelIdentity.from_model_config(parsing_model, role="parsing").display_string
 
         try:
             # Create rubric evaluator with parsing model and strategy from config
