@@ -31,6 +31,7 @@ from karenina.benchmark.verification.stages import (
     VerificationContext,
 )
 from karenina.schemas.domain import LLMRubricTrait, Rubric
+from karenina.schemas.verification.model_identity import ModelIdentity
 from karenina.schemas.workflow import (
     ModelConfig,
     VerificationResult,
@@ -45,10 +46,12 @@ from karenina.schemas.workflow import (
 
 def create_minimal_result(context: VerificationContext) -> VerificationResult:
     """Create a minimal valid VerificationResult from context."""
+    _answering = ModelIdentity(interface="langchain", model_name="test/model")
+    _parsing = ModelIdentity(interface="langchain", model_name="test/model")
     result_id = VerificationResultMetadata.compute_result_id(
         question_id=context.question_id,
-        answering_model="test/model",
-        parsing_model="test/model",
+        answering=_answering,
+        parsing=_parsing,
         timestamp="2024-01-01 12:00:00",
     )
 
@@ -58,8 +61,8 @@ def create_minimal_result(context: VerificationContext) -> VerificationResult:
         completed_without_errors=context.completed_without_errors,
         error=context.error,
         question_text=context.question_text,
-        answering_model="test/model",
-        parsing_model="test/model",
+        answering=_answering,
+        parsing=_parsing,
         execution_time=1.0,
         timestamp="2024-01-01 12:00:00",
         result_id=result_id,
@@ -914,8 +917,6 @@ class TestPipelineResults:
 
     def test_result_includes_model_info(self, minimal_context: VerificationContext):
         """Verify result includes model information."""
-        minimal_context.set_artifact("answering_model_str", "anthropic/claude-haiku-4-5")
-        minimal_context.set_artifact("parsing_model_str", "anthropic/claude-haiku-4-5")
         minimal_context.set_result_field("timestamp", "2024-01-01 12:00:00")
 
         stage = FinalizeResultStage()
@@ -923,5 +924,6 @@ class TestPipelineResults:
 
         result = minimal_context.get_artifact("final_result")
 
-        assert result.metadata.answering_model == "anthropic/claude-haiku-4-5"
-        assert result.metadata.parsing_model == "anthropic/claude-haiku-4-5"
+        # FinalizeResultStage builds ModelIdentity from context.answering_model/parsing_model
+        assert result.metadata.answering_model == "langchain:claude-haiku-4-5"
+        assert result.metadata.parsing_model == "langchain:claude-haiku-4-5"

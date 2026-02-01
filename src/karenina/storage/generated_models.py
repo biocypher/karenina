@@ -70,8 +70,9 @@ def _generate_verification_result_model() -> type:
     # Define composite indexes for common query patterns
     composite_indexes = [
         ("run_id", "metadata_question_id"),  # Results for a run
-        ("metadata_answering_model", "metadata_parsing_model"),  # Model comparison
-        ("metadata_question_id", "metadata_answering_model", "metadata_timestamp"),  # Question history
+        ("metadata_answering_interface", "metadata_answering_model_name"),  # Answering model lookup
+        ("metadata_parsing_interface", "metadata_parsing_model_name"),  # Parsing model lookup
+        ("metadata_question_id", "metadata_answering_model_name", "metadata_timestamp"),  # Question history
     ]
 
     # Build table args with indexes

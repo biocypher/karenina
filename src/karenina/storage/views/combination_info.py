@@ -33,8 +33,8 @@ _SQLITE_SQL = """
     SELECT
         run.id as run_id,
         run.run_name,
-        vr.metadata_answering_model as answering_model,
-        vr.metadata_parsing_model as parsing_model,
+        vr.metadata_answering_model_name as answering_model,
+        vr.metadata_parsing_model_name as parsing_model,
         MAX(CASE
             WHEN vr.template_answering_mcp_servers IS NOT NULL
                  AND json_array_length(vr.template_answering_mcp_servers) > 0
@@ -44,7 +44,7 @@ _SQLITE_SQL = """
         COUNT(DISTINCT vr.metadata_replicate) as replicate_count
     FROM verification_results vr
     JOIN verification_runs run ON vr.run_id = run.id
-    GROUP BY run.id, run.run_name, vr.metadata_answering_model, vr.metadata_parsing_model
+    GROUP BY run.id, run.run_name, vr.metadata_answering_model_name, vr.metadata_parsing_model_name
 """
 
 # PostgreSQL version
@@ -52,8 +52,8 @@ _POSTGRES_SQL = """
     SELECT
         run.id as run_id,
         run.run_name,
-        vr.metadata_answering_model as answering_model,
-        vr.metadata_parsing_model as parsing_model,
+        vr.metadata_answering_model_name as answering_model,
+        vr.metadata_parsing_model_name as parsing_model,
         MAX(CASE
             WHEN vr.template_answering_mcp_servers IS NOT NULL
                  AND jsonb_array_length(vr.template_answering_mcp_servers::jsonb) > 0
@@ -63,7 +63,7 @@ _POSTGRES_SQL = """
         COUNT(DISTINCT vr.metadata_replicate) as replicate_count
     FROM verification_results vr
     JOIN verification_runs run ON vr.run_id = run.id
-    GROUP BY run.id, run.run_name, vr.metadata_answering_model, vr.metadata_parsing_model
+    GROUP BY run.id, run.run_name, vr.metadata_answering_model_name, vr.metadata_parsing_model_name
 """
 
 

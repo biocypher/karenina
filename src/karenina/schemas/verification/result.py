@@ -59,12 +59,12 @@ class VerificationResult(BaseModel):
 
     @property
     def answering_model(self) -> str:
-        """Backward compatibility accessor for answering_model."""
+        """Backward compatibility accessor for answering_model display string."""
         return self.metadata.answering_model
 
     @property
     def parsing_model(self) -> str:
-        """Backward compatibility accessor for parsing_model."""
+        """Backward compatibility accessor for parsing_model display string."""
         return self.metadata.parsing_model
 
     @property

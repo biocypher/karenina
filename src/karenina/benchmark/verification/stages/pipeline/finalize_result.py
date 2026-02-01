@@ -71,9 +71,14 @@ class FinalizeResultStage(BaseVerificationStage):
         execution_time = context.get_result_field(ArtifactKeys.EXECUTION_TIME, 0.0)
         timestamp = context.get_result_field(ArtifactKeys.TIMESTAMP, "")
 
-        # Extract model strings
-        answering_model_str = context.get_artifact(ArtifactKeys.ANSWERING_MODEL_STR, "")
-        parsing_model_str = context.get_artifact(ArtifactKeys.PARSING_MODEL_STR, "")
+        # Build ModelIdentity objects from model configs
+        from karenina.schemas.verification.model_identity import ModelIdentity
+
+        answering_identity = ModelIdentity.from_model_config(context.answering_model, role="answering")
+        parsing_identity = ModelIdentity.from_model_config(context.parsing_model, role="parsing")
+
+        # Get MCP servers for template (still stored as a separate field on VerificationResultTemplate)
+        answering_mcp_servers = context.get_result_field(ArtifactKeys.ANSWERING_MCP_SERVERS)
 
         # Extract parsed responses if available
         parsed_gt_response = None
@@ -125,17 +130,13 @@ class FinalizeResultStage(BaseVerificationStage):
             VerificationResultTemplate,
         )
 
-        # Get MCP servers for result_id computation (also used in template below)
-        answering_mcp_servers = context.get_result_field(ArtifactKeys.ANSWERING_MCP_SERVERS)
-
         # Compute deterministic result_id
         result_id = VerificationResultMetadata.compute_result_id(
             question_id=context.question_id,
-            answering_model=answering_model_str,
-            parsing_model=parsing_model_str,
+            answering=answering_identity,
+            parsing=parsing_identity,
             timestamp=timestamp,
             replicate=context.replicate,
-            answering_mcp_servers=answering_mcp_servers,
         )
 
         # Create metadata subclass
@@ -147,8 +148,8 @@ class FinalizeResultStage(BaseVerificationStage):
             keywords=context.keywords,
             question_text=context.question_text,
             raw_answer=context.raw_answer,
-            answering_model=answering_model_str,
-            parsing_model=parsing_model_str,
+            answering=answering_identity,
+            parsing=parsing_identity,
             answering_system_prompt=context.answering_model.system_prompt,
             parsing_system_prompt=context.parsing_model.system_prompt,
             execution_time=execution_time,

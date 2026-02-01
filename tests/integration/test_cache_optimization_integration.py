@@ -14,6 +14,7 @@ from unittest.mock import patch
 import pytest
 
 from karenina.benchmark.verification.executor import ExecutorConfig, VerificationExecutor
+from karenina.schemas.verification.model_identity import ModelIdentity
 from karenina.schemas.workflow import ModelConfig, VerificationResult
 from karenina.schemas.workflow.verification import (
     VerificationResultMetadata,
@@ -25,10 +26,12 @@ from karenina.schemas.workflow.verification import (
 def create_mock_result(kwargs: dict) -> VerificationResult:
     """Create a standard mock VerificationResult from kwargs."""
     timestamp = "2025-01-01"
+    _answering = ModelIdentity.from_model_config(kwargs["answering_model"], role="answering")
+    _parsing = ModelIdentity.from_model_config(kwargs["parsing_model"], role="parsing")
     result_id = VerificationResultMetadata.compute_result_id(
         question_id=kwargs["question_id"],
-        answering_model=kwargs["answering_model"].id,
-        parsing_model=kwargs["parsing_model"].id,
+        answering=_answering,
+        parsing=_parsing,
         timestamp=timestamp,
     )
     return VerificationResult(
@@ -37,8 +40,8 @@ def create_mock_result(kwargs: dict) -> VerificationResult:
             template_id="test_template",
             completed_without_errors=True,
             question_text=kwargs["question_text"],
-            answering_model=kwargs["answering_model"].id,
-            parsing_model=kwargs["parsing_model"].id,
+            answering=_answering,
+            parsing=_parsing,
             execution_time=0.1,
             timestamp=timestamp,
             result_id=result_id,
@@ -336,7 +339,7 @@ class TestCacheOptimizationIntegration:
         assert question_ids == {"q1", "q2"}
 
         parsing_models = {r.parsing_model for r in result_list}
-        assert parsing_models == {"parser_1", "parser_2"}
+        assert parsing_models == {"langchain:claude-haiku-4-5"}
 
 
 @pytest.mark.integration

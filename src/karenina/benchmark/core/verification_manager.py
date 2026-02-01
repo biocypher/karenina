@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from .results import ResultsManager
     from .rubrics import RubricManager
 
+from ...schemas.verification.model_identity import ModelIdentity
 from ...schemas.workflow import (
     FinishedTemplate,
     VerificationConfig,
@@ -19,6 +20,8 @@ from ...schemas.workflow import (
 from ...utils.checkpoint import generate_template_id
 from ..verification import run_verification_batch
 from ..verification.utils.template_validation import validate_answer_template
+
+_UNKNOWN_IDENTITY = ModelIdentity(interface="unknown", model_name="unknown")
 
 
 class VerificationManager:
@@ -413,8 +416,8 @@ class VerificationManager:
                 error_timestamp = datetime.now().isoformat()
                 error_result_id = VerificationResultMetadata.compute_result_id(
                     question_id=question_id,
-                    answering_model="unknown",
-                    parsing_model="unknown",
+                    answering=_UNKNOWN_IDENTITY,
+                    parsing=_UNKNOWN_IDENTITY,
                     timestamp=error_timestamp,
                 )
                 error_result = VerificationResult(
@@ -424,8 +427,8 @@ class VerificationManager:
                         completed_without_errors=False,
                         error=f"Mixed config verification failed: {str(e)}",
                         question_text=self.base._questions_cache.get(question_id, {}).get("question", ""),
-                        answering_model="unknown",
-                        parsing_model="unknown",
+                        answering=_UNKNOWN_IDENTITY,
+                        parsing=_UNKNOWN_IDENTITY,
                         execution_time=0.0,
                         timestamp=error_timestamp,
                         result_id=error_result_id,
@@ -487,8 +490,8 @@ class VerificationManager:
                     error_timestamp = datetime.now().isoformat()
                     error_result_id = VerificationResultMetadata.compute_result_id(
                         question_id=q_id,
-                        answering_model="unknown",
-                        parsing_model="unknown",
+                        answering=_UNKNOWN_IDENTITY,
+                        parsing=_UNKNOWN_IDENTITY,
                         timestamp=error_timestamp,
                     )
                     error_result = VerificationResult(
@@ -498,8 +501,8 @@ class VerificationManager:
                             completed_without_errors=False,
                             error=f"Comparative verification failed: {str(e)}",
                             question_text=self.base._questions_cache.get(q_id, {}).get("question", ""),
-                            answering_model="unknown",
-                            parsing_model="unknown",
+                            answering=_UNKNOWN_IDENTITY,
+                            parsing=_UNKNOWN_IDENTITY,
                             execution_time=0.0,
                             timestamp=error_timestamp,
                             result_id=error_result_id,

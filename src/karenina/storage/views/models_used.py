@@ -32,18 +32,18 @@ _VIEW_SQL = """
         MAX(is_parsing) as used_for_parsing
     FROM (
         SELECT
-            metadata_answering_model as model_name,
+            metadata_answering_model_name as model_name,
             1 as is_answering,
             0 as is_parsing
         FROM verification_results
-        WHERE metadata_answering_model IS NOT NULL
+        WHERE metadata_answering_model_name IS NOT NULL
         UNION ALL
         SELECT
-            metadata_parsing_model as model_name,
+            metadata_parsing_model_name as model_name,
             0 as is_answering,
             1 as is_parsing
         FROM verification_results
-        WHERE metadata_parsing_model IS NOT NULL
+        WHERE metadata_parsing_model_name IS NOT NULL
     )
     GROUP BY model_name
 """
