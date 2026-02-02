@@ -1165,12 +1165,13 @@ def verify(
         # Step 12: Display summary
         _display_summary(final_results, duration)
 
-        # Force exit to cleanup lingering resources (HTTP clients, MCP connections, etc.)
-        import sys
+        raise typer.Exit(code=0)
 
-        time.sleep(0.5)
-        sys.exit(0)
-
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Interrupted by user.[/yellow]")
+        if progressive_manager is not None and output is not None:
+            console.print(f"[dim]To resume: karenina verify --resume {output}[/dim]")
+        raise typer.Exit(code=130) from None
     except typer.Exit:
         raise
     except Exception as e:
