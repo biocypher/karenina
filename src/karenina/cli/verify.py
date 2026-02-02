@@ -29,8 +29,8 @@ from karenina.benchmark.verification import (
 )
 from karenina.benchmark.verification.batch_runner import generate_task_queue, run_verification_batch
 from karenina.schemas import FinishedTemplate, VerificationConfig, VerificationResult, VerificationResultSet
+from karenina.utils.progressive_save import ProgressiveSaveManager, TaskIdentifier, generate_task_manifest
 
-from .progressive_save import ProgressiveSaveManager, TaskIdentifier, generate_task_manifest
 from .utils import (
     create_export_job,
     filter_templates_by_ids,

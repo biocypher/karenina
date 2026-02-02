@@ -1,8 +1,8 @@
 """Tests for progressive save functionality, specifically TaskIdentifier."""
 
-from karenina.cli.progressive_save import TaskIdentifier
 from karenina.schemas.verification.model_identity import ModelIdentity
 from karenina.schemas.workflow.models import ModelConfig
+from karenina.utils.progressive_save import TaskIdentifier
 
 
 class TestTaskIdentifierFromResult:

@@ -14,7 +14,7 @@ from rich.panel import Panel
 from rich.progress import BarColumn, Progress, TextColumn
 from rich.table import Table
 
-from .progressive_save import ProgressiveJobStatus, inspect_state_file
+from karenina.utils.progressive_save import ProgressiveJobStatus, inspect_state_file
 
 console = Console()
 

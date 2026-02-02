@@ -1,4 +1,4 @@
-"""Progressive save functionality for CLI verification with resume support.
+"""Progressive save functionality for verification with resume support.
 
 This module provides incremental saving of verification results and the ability
 to resume interrupted verification runs.
@@ -8,23 +8,22 @@ Key Components:
 - ProgressiveSaveManager: Manages .tmp and .state files for progressive saving
 """
 
-import contextlib
 import hashlib
 import json
 import logging
-import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ..benchmark.verification.stages.helpers.results_exporter import export_verification_results_json
-from ..schemas import VerificationConfig, VerificationResult
-from ..schemas.config import ModelConfig
-from ..schemas.entities import Rubric
-from ..schemas.results import VerificationResultSet
-from ..schemas.verification.model_identity import ModelIdentity
-from ..schemas.workflow.verification.job import VerificationJob
+from karenina.benchmark.verification.stages.helpers.results_exporter import export_verification_results_json
+from karenina.schemas import VerificationConfig, VerificationResult
+from karenina.schemas.config import ModelConfig
+from karenina.schemas.entities import Rubric
+from karenina.schemas.results import VerificationResultSet
+from karenina.schemas.verification.model_identity import ModelIdentity
+from karenina.schemas.workflow.verification.job import VerificationJob
+from karenina.utils.file_ops import atomic_write
 
 logger = logging.getLogger(__name__)
 
@@ -352,7 +351,7 @@ class ProgressiveSaveManager:
             "start_time": self._start_time,
         }
 
-        self._atomic_write(self.state_path, json.dumps(state_data, indent=2))
+        atomic_write(self.state_path, json.dumps(state_data, indent=2))
 
     def _save_results(self) -> None:
         """Save results file in standard export format with atomic write.
@@ -371,28 +370,7 @@ class ProgressiveSaveManager:
         )
         result_set = VerificationResultSet(results=list(self._results))
         json_str = export_verification_results_json(job, result_set, self.global_rubric)
-        self._atomic_write(self.tmp_path, json_str)
-
-    def _atomic_write(self, path: Path, content: str) -> None:
-        """Write content to file atomically using write-rename pattern."""
-        partial_path = path.with_suffix(path.suffix + ".partial")
-
-        try:
-            # Write to partial file
-            with open(partial_path, "w", encoding="utf-8") as f:
-                f.write(content)
-                f.flush()
-                os.fsync(f.fileno())
-
-            # Atomic rename
-            partial_path.replace(path)
-
-        except Exception as e:
-            # Clean up partial file on error
-            if partial_path.exists():
-                with contextlib.suppress(OSError):
-                    partial_path.unlink()
-            raise e
+        atomic_write(self.tmp_path, json_str)
 
 
 def generate_task_manifest(tasks: list[dict[str, Any]]) -> list[str]:
