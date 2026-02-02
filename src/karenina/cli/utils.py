@@ -161,21 +161,6 @@ def filter_templates_by_indices(templates: list[FinishedTemplate], indices: list
     return [template for i, template in enumerate(templates) if i in indices_set]
 
 
-def filter_templates_by_ids(templates: list[FinishedTemplate], ids: list[str]) -> list[FinishedTemplate]:
-    """
-    Filter templates by question IDs.
-
-    Args:
-        templates: List of all templates
-        ids: List of question IDs to keep
-
-    Returns:
-        Filtered list of templates
-    """
-    ids_set = set(ids)
-    return [template for template in templates if template.question_id in ids_set]
-
-
 def create_export_job(
     result_set: VerificationResultSet,
     config: VerificationConfig,

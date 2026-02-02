@@ -115,16 +115,19 @@ class TemplateManager:
         template = self.get_template(from_id)
         self.add_answer_template(to_id, template)
 
-    def get_finished_templates(self) -> list[FinishedTemplate]:
+    def get_finished_templates(self, question_ids: set[str] | None = None) -> list[FinishedTemplate]:
         """
         Get all finished templates for verification.
+
+        Args:
+            question_ids: Optional set of question IDs to filter by. If None, returns all finished templates.
 
         Returns:
             List of FinishedTemplate objects ready for verification
         """
         templates = []
         for q_id, q_data in self.base._questions_cache.items():
-            if q_data.get("finished", False):
+            if q_data.get("finished", False) and (question_ids is None or q_id in question_ids):
                 # Convert question rubric to dict format if present
                 question_rubric = None
                 if q_data.get("question_rubric"):

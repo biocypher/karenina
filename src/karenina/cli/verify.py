@@ -36,7 +36,6 @@ from karenina.utils.progressive_save import ProgressiveSaveManager, TaskIdentifi
 from .utils import (
     cli_error,
     create_export_job,
-    filter_templates_by_ids,
     filter_templates_by_indices,
     get_preset_path,
     get_traces_path,
@@ -378,10 +377,11 @@ def _filter_templates(
     all_templates: list[FinishedTemplate],
     selected_question_indices: list[int] | None,
     questions: str | None,
-    question_ids: str | None,
 ) -> list[FinishedTemplate]:
     """
-    Filter templates based on provided criteria.
+    Filter templates based on index-based criteria.
+
+    Note: Question ID filtering is handled upstream via Benchmark.get_finished_templates(question_ids=...).
 
     Returns:
         Filtered list of templates
@@ -404,10 +404,6 @@ def _filter_templates(
             console.print(f"[dim]Filtered to {len(templates)} question(s) by indices[/dim]")
         except ValueError as e:
             cli_error(f"parsing question indices: {e}", e)
-    elif question_ids:
-        ids = [id.strip() for id in question_ids.split(",")]
-        templates = filter_templates_by_ids(all_templates, ids)
-        console.print(f"[dim]Filtered to {len(templates)} question(s) by IDs[/dim]")
 
     if not templates:
         cli_error("No templates to verify after filtering")
@@ -1004,8 +1000,13 @@ def verify(
             cli_error("Failed to build verification configuration")
 
         # Step 5: Get and filter templates
-        all_templates = benchmark.get_finished_templates()
-        templates = _filter_templates(all_templates, selected_question_indices, questions, question_ids)
+        ids_filter = None
+        if question_ids:
+            ids_filter = {id.strip() for id in question_ids.split(",")}
+        all_templates = benchmark.get_finished_templates(question_ids=ids_filter)
+        if ids_filter:
+            console.print(f"[dim]Filtered to {len(all_templates)} question(s) by IDs[/dim]")
+        templates = _filter_templates(all_templates, selected_question_indices, questions)
 
         # Step 6: Prompt for output in interactive mode (if not already specified)
         if not output and interactive:
