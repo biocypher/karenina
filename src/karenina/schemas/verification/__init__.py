@@ -30,6 +30,9 @@ from .config_presets import (
 
 # Re-export job
 from .job import VerificationJob
+
+# Re-export result components
+from .model_identity import ModelIdentity
 from .prompt_config import PromptConfig
 
 # Re-export result
@@ -59,6 +62,8 @@ __all__ = [
     "create_preset_structure",
     "save_preset",
     "load_preset",
+    # Model identity
+    "ModelIdentity",
     # Result components
     "VerificationResultMetadata",
     "VerificationResultTemplate",

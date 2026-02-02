@@ -62,7 +62,7 @@ class TestTemplateEvaluatorInitialization:
 
         assert evaluator.model_config == parsing_model_config
         assert evaluator.answer_class == simple_answer
-        assert evaluator.model_str == "anthropic/claude-haiku-4-5"
+        assert evaluator.model_str == "langchain:claude-haiku-4-5"
 
     def test_init_requires_model_config(self, simple_answer: type[BaseAnswer]):
         """Verify evaluator raises error without model config."""
@@ -102,7 +102,7 @@ class TestTemplateEvaluatorInitialization:
                 interface="langchain",
             )
             evaluator = TemplateEvaluator(model_config=config, answer_class=simple_answer)
-            assert evaluator.model_str == "anthropic/claude-haiku-4-5"
+            assert evaluator.model_str == "langchain:claude-haiku-4-5"
 
             # OpenRouter interface (no provider in string)
             config_openrouter = ModelConfig(
@@ -111,7 +111,7 @@ class TestTemplateEvaluatorInitialization:
                 interface="openrouter",
             )
             evaluator_or = TemplateEvaluator(model_config=config_openrouter, answer_class=simple_answer)
-            assert evaluator_or.model_str == "anthropic/claude-haiku-4-5"
+            assert evaluator_or.model_str == "openrouter:anthropic/claude-haiku-4-5"
 
 
 # =============================================================================

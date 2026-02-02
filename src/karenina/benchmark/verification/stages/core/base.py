@@ -63,6 +63,8 @@ class ArtifactKeys:
     # Model Identification
     ANSWERING_MODEL_STR = "answering_model_str"
     PARSING_MODEL_STR = "parsing_model_str"
+    ANSWERING_MODEL_IDENTITY = "answering_model_identity"
+    PARSING_MODEL_IDENTITY = "parsing_model_identity"
     ANSWERING_MCP_SERVERS = "answering_mcp_servers"
 
     # ==========================================================================
@@ -539,32 +541,6 @@ class BaseVerificationStage(ABC):
         """
         context.set_artifact(key, value)
         context.set_result_field(key, value)
-
-    @staticmethod
-    def get_model_string(model_config: "ModelConfig") -> str:
-        """
-        Format a model configuration into a display string.
-
-        This helper centralizes the pattern of importing format_model_string
-        inline and calling it on a ModelConfig. By using this method, stages
-        avoid inline imports and get consistent model string formatting.
-
-        The returned string format depends on the interface:
-        - langchain: "provider/model_name" (e.g., "anthropic/claude-sonnet-4-20250514")
-        - openrouter: "model_name" (e.g., "claude-sonnet-4-20250514")
-        - openai_endpoint: "endpoint/model_name"
-        - claude_agent_sdk: "claude_sdk/model_name"
-        - manual: "manual" or model_name
-
-        Args:
-            model_config: Model configuration to format
-
-        Returns:
-            Formatted model string for display and tracking
-        """
-        from .....adapters import format_model_string
-
-        return format_model_string(model_config)
 
     def __repr__(self) -> str:
         """String representation for debugging."""

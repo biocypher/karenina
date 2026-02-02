@@ -223,3 +223,116 @@ class Message:
             role=Role.TOOL,
             content=[ToolResultContent(tool_use_id=tool_use_id, content=content, is_error=is_error)],
         )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize this Message to a flat dict matching the TraceMessage format.
+
+        Produces the structured format stored in VerificationResultTemplate.trace_messages
+        and consumed by the frontend TraceMessage TypeScript interface.
+
+        Returns:
+            Dict with keys: role, content, block_index (always 0; caller should set),
+            and optional tool_calls, tool_result, thinking.
+        """
+        # For tool messages, content is in ToolResultContent, not TextContent
+        if self.role == Role.TOOL:
+            tool_content = ""
+            for block in self.content:
+                if isinstance(block, ToolResultContent):
+                    tool_content = block.content
+                    break
+            content = tool_content
+        else:
+            content = self.text
+
+        result: dict[str, Any] = {
+            "role": self.role.value,
+            "content": content,
+            "block_index": 0,  # Caller sets the actual index
+        }
+
+        # Add tool_calls for assistant messages
+        tool_calls = []
+        for block in self.content:
+            if isinstance(block, ToolUseContent):
+                tool_calls.append(
+                    {
+                        "id": block.id,
+                        "name": block.name,
+                        "input": block.input,
+                    }
+                )
+        if tool_calls:
+            result["tool_calls"] = tool_calls
+
+        # Add tool_result for tool messages
+        for block in self.content:
+            if isinstance(block, ToolResultContent):
+                result["tool_result"] = {
+                    "tool_use_id": block.tool_use_id,
+                    "is_error": block.is_error,
+                }
+                break
+
+        # Add thinking for messages with thinking blocks
+        for block in self.content:
+            if isinstance(block, ThinkingContent):
+                thinking: dict[str, Any] = {"thinking": block.thinking}
+                if block.signature:
+                    thinking["signature"] = block.signature
+                result["thinking"] = thinking
+                break
+
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "Message":
+        """Deserialize a flat TraceMessage dict back to a Message.
+
+        Args:
+            data: Dict with role, content, and optional tool_calls/tool_result/thinking.
+
+        Returns:
+            Reconstructed Message object.
+        """
+        role = Role(data["role"])
+        content_blocks: list[Content] = []
+
+        # Add thinking block if present
+        if "thinking" in data:
+            thinking_data = data["thinking"]
+            content_blocks.append(
+                ThinkingContent(
+                    thinking=thinking_data["thinking"],
+                    signature=thinking_data.get("signature"),
+                )
+            )
+
+        # Add text content if present
+        text = data.get("content", "")
+        if text:
+            content_blocks.append(TextContent(text=text))
+
+        # Add tool calls if present
+        if "tool_calls" in data:
+            for tc in data["tool_calls"]:
+                content_blocks.append(
+                    ToolUseContent(
+                        id=tc["id"],
+                        name=tc["name"],
+                        input=tc.get("input", {}),
+                    )
+                )
+
+        # Add tool result if present
+        if "tool_result" in data:
+            tr = data["tool_result"]
+            content_blocks.append(
+                ToolResultContent(
+                    tool_use_id=tr["tool_use_id"],
+                    content=text,  # Tool result content is in the main content field
+                    is_error=tr.get("is_error", False),
+                )
+            )
+
+        return cls(role=role, content=content_blocks)

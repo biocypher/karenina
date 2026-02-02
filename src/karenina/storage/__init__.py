@@ -35,7 +35,6 @@ from .operations import (
 from .queries import (
     get_benchmark_summary,
     get_database_statistics,
-    get_failed_verifications,
     get_latest_verification_results,
     get_model_performance,
     get_question_usage,
@@ -90,7 +89,6 @@ __all__ = [
     "get_model_performance",
     "get_rubric_scores_aggregate",
     "get_verification_history_timeline",
-    "get_failed_verifications",
     "get_rubric_traits_by_type",
     "get_database_statistics",
 ]

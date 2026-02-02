@@ -16,7 +16,7 @@ Supported Interfaces:
     - manual: Returns ManualAdapter (raises error if invoked)
 
 Example:
-    >>> from karenina.adapters import get_agent, get_llm, get_parser, format_model_string
+    >>> from karenina.adapters import get_agent, get_llm, get_parser
     >>> from karenina.schemas.workflow.models import ModelConfig
     >>>
     >>> config = ModelConfig(
@@ -29,10 +29,6 @@ Example:
     >>> agent = get_agent(config)
     >>> llm = get_llm(config)
     >>> parser = get_parser(config)
-    >>>
-    >>> # Format model string for display
-    >>> model_str = format_model_string(config)
-    >>> # 'anthropic/claude-sonnet-4-20250514'
     >>>
     >>> # Use them (check interface before using for manual)
     >>> if config.interface != "manual":
@@ -59,7 +55,7 @@ if TYPE_CHECKING:
 from karenina.schemas.workflow.models import INTERFACES_NO_PROVIDER_REQUIRED
 
 # Type alias for interface values
-InterfaceType = Literal["langchain", "openrouter", "manual", "openai_endpoint", "claude_agent_sdk"]
+InterfaceType = Literal["langchain", "openrouter", "manual", "openai_endpoint", "claude_agent_sdk", "claude_tool"]
 
 logger = logging.getLogger(__name__)
 
@@ -127,36 +123,6 @@ def check_adapter_available(interface: str) -> AdapterAvailability:
         ...     print(f"Not available: {result.reason}")
     """
     return AdapterRegistry.check_availability(interface)
-
-
-def format_model_string(model_config: ModelConfig) -> str:
-    """Format a model string for display and tracking.
-
-    This centralizes the model string formatting logic that was previously
-    duplicated across multiple files. Each interface has its own formatting:
-
-    - langchain: "provider/model_name" (e.g., "anthropic/claude-sonnet-4-20250514")
-    - openrouter: "model_name" (e.g., "claude-sonnet-4-20250514")
-    - openai_endpoint: "endpoint/model_name" (e.g., "endpoint/gpt-4")
-    - claude_agent_sdk: "claude_sdk/model_name" (e.g., "claude_sdk/claude-sonnet-4-20250514")
-    - manual: "manual" or model_name
-
-    Args:
-        model_config: Model configuration.
-
-    Returns:
-        Formatted model string for display.
-
-    Example:
-        >>> config = ModelConfig(
-        ...     model_name="claude-sonnet-4-20250514",
-        ...     model_provider="anthropic",
-        ...     interface="langchain"
-        ... )
-        >>> format_model_string(config)
-        'anthropic/claude-sonnet-4-20250514'
-    """
-    return AdapterRegistry.format_model_string(model_config)
 
 
 def get_llm(

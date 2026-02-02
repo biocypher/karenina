@@ -21,6 +21,7 @@ from karenina.ports import (
     LLMResponse,
     MCPServerConfig,
     Message,
+    ParsePortResult,
     ParserPort,
     Tool,
     UsageMetadata,
@@ -115,13 +116,13 @@ class MockParserPort:
     def capabilities(self) -> PortCapabilities:
         return PortCapabilities()
 
-    async def aparse_to_pydantic(self, response: str, schema: type[BaseModel]) -> BaseModel:
+    async def aparse_to_pydantic(self, response: str, schema: type[BaseModel]) -> ParsePortResult:
         """Mock async parsing."""
-        return schema()
+        return ParsePortResult(parsed=schema())
 
-    def parse_to_pydantic(self, response: str, schema: type[BaseModel]) -> BaseModel:
+    def parse_to_pydantic(self, response: str, schema: type[BaseModel]) -> ParsePortResult:
         """Mock sync parsing."""
-        return schema()
+        return ParsePortResult(parsed=schema())
 
 
 # =============================================================================
@@ -172,8 +173,8 @@ class IncompleteAgentPort:
 class IncompleteParserPort:
     """Parser implementation missing parse_to_pydantic method."""
 
-    async def aparse_to_pydantic(self, response: str, schema: type[BaseModel]) -> BaseModel:
-        return schema()
+    async def aparse_to_pydantic(self, response: str, schema: type[BaseModel]) -> ParsePortResult:
+        return ParsePortResult(parsed=schema())
 
     # Missing: parse_to_pydantic
 
@@ -391,8 +392,8 @@ class TestParserPortMethodSignatures:
     """Tests verifying ParserPort method signatures work correctly."""
 
     @pytest.mark.asyncio
-    async def test_mock_parser_port_aparse_returns_pydantic_model(self) -> None:
-        """Test that MockParserPort.aparse_to_pydantic returns a Pydantic model."""
+    async def test_mock_parser_port_aparse_returns_parse_port_result(self) -> None:
+        """Test that MockParserPort.aparse_to_pydantic returns a ParsePortResult."""
 
         class TestSchema(BaseModel):
             value: str = "parsed"
@@ -400,10 +401,11 @@ class TestParserPortMethodSignatures:
         mock = MockParserPort()
         result = await mock.aparse_to_pydantic("Some response text", TestSchema)
 
-        assert isinstance(result, BaseModel)
+        assert isinstance(result, ParsePortResult)
+        assert isinstance(result.parsed, BaseModel)
 
-    def test_mock_parser_port_parse_returns_pydantic_model(self) -> None:
-        """Test that MockParserPort.parse_to_pydantic returns a Pydantic model."""
+    def test_mock_parser_port_parse_returns_parse_port_result(self) -> None:
+        """Test that MockParserPort.parse_to_pydantic returns a ParsePortResult."""
 
         class TestSchema(BaseModel):
             value: str = "parsed"
@@ -411,7 +413,8 @@ class TestParserPortMethodSignatures:
         mock = MockParserPort()
         result = mock.parse_to_pydantic("Some response text", TestSchema)
 
-        assert isinstance(result, BaseModel)
+        assert isinstance(result, ParsePortResult)
+        assert isinstance(result.parsed, BaseModel)
 
 
 # =============================================================================

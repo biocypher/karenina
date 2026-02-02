@@ -24,7 +24,7 @@ DEFAULT_ASYNC_ENABLED = True
 DEFAULT_MAX_WORKERS = 8
 
 try:
-    from gepa import EvaluationBatch, GEPAAdapter
+    from gepa import EvaluationBatch, GEPAAdapter  # type: ignore[attr-defined]
 
     GEPA_AVAILABLE = True
 except ImportError:
@@ -54,7 +54,7 @@ if TYPE_CHECKING:
     from karenina.schemas.workflow.verification.result_set import VerificationResultSet
 
 
-class KareninaAdapter(GEPAAdapter):  # type: ignore[misc]
+class KareninaAdapter(GEPAAdapter):  # type: ignore[type-arg]
     """GEPA adapter using karenina verification as evaluation metric.
 
     This adapter enables GEPA to optimize text components (prompts, instructions,
@@ -215,7 +215,7 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[misc]
         batch: list[KareninaDataInst],
         candidate: dict[str, str],
         capture_traces: bool = False,
-    ) -> EvaluationBatch:
+    ) -> EvaluationBatch:  # type: ignore[type-arg]
         """Evaluate a candidate using karenina verification.
 
         This is the main GEPA interface method. For each candidate, it:
@@ -300,7 +300,7 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[misc]
     def make_reflective_dataset(
         self,
         candidate: dict[str, str],
-        eval_batch: EvaluationBatch,
+        eval_batch: EvaluationBatch,  # type: ignore[type-arg]
         components_to_update: list[str],
         async_enabled: bool | None = None,
         max_workers: int | None = None,

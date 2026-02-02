@@ -64,11 +64,6 @@ def _create_parser(config: ModelConfig) -> ParserPort:
     return ClaudeSDKParserAdapter(config)
 
 
-def _format_model_string(config: ModelConfig) -> str:
-    """Format model string for Claude SDK interface."""
-    return f"claude_sdk/{config.model_name}" if config.model_name else "claude_sdk/unknown"
-
-
 # Register the Claude Agent SDK adapter
 _claude_sdk_spec = AdapterSpec(
     interface="claude_agent_sdk",
@@ -78,7 +73,6 @@ _claude_sdk_spec = AdapterSpec(
     parser_factory=_create_parser,
     availability_checker=_check_availability,
     fallback_interface="langchain",  # Fall back to langchain if CLI unavailable
-    model_string_formatter=_format_model_string,
     routes_to=None,
     supports_mcp=True,
     supports_tools=True,

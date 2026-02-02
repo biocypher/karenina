@@ -4,6 +4,7 @@ Builds the final VerificationResult from accumulated context.
 """
 
 import logging
+from typing import Any
 
 from .....schemas.workflow import VerificationResult
 from ...utils.llm_invocation import _split_parsed_response
@@ -70,9 +71,20 @@ class FinalizeResultStage(BaseVerificationStage):
         execution_time = context.get_result_field(ArtifactKeys.EXECUTION_TIME, 0.0)
         timestamp = context.get_result_field(ArtifactKeys.TIMESTAMP, "")
 
-        # Extract model strings
-        answering_model_str = context.get_artifact(ArtifactKeys.ANSWERING_MODEL_STR, "")
-        parsing_model_str = context.get_artifact(ArtifactKeys.PARSING_MODEL_STR, "")
+        # Read ModelIdentity objects from pipeline artifacts (set by runner.py)
+        from karenina.schemas.verification.model_identity import ModelIdentity
+
+        answering_identity = context.get_artifact(ArtifactKeys.ANSWERING_MODEL_IDENTITY)
+        parsing_identity = context.get_artifact(ArtifactKeys.PARSING_MODEL_IDENTITY)
+
+        # Fallback: construct from model configs if artifacts not set (e.g., direct context usage)
+        if answering_identity is None:
+            answering_identity = ModelIdentity.from_model_config(context.answering_model, role="answering")
+        if parsing_identity is None:
+            parsing_identity = ModelIdentity.from_model_config(context.parsing_model, role="parsing")
+
+        # Get MCP servers for template (still stored as a separate field on VerificationResultTemplate)
+        answering_mcp_servers = context.get_result_field(ArtifactKeys.ANSWERING_MCP_SERVERS)
 
         # Extract parsed responses if available
         parsed_gt_response = None
@@ -124,17 +136,13 @@ class FinalizeResultStage(BaseVerificationStage):
             VerificationResultTemplate,
         )
 
-        # Get MCP servers for result_id computation (also used in template below)
-        answering_mcp_servers = context.get_result_field(ArtifactKeys.ANSWERING_MCP_SERVERS)
-
         # Compute deterministic result_id
         result_id = VerificationResultMetadata.compute_result_id(
             question_id=context.question_id,
-            answering_model=answering_model_str,
-            parsing_model=parsing_model_str,
+            answering=answering_identity,
+            parsing=parsing_identity,
             timestamp=timestamp,
             replicate=context.replicate,
-            answering_mcp_servers=answering_mcp_servers,
         )
 
         # Create metadata subclass
@@ -146,8 +154,8 @@ class FinalizeResultStage(BaseVerificationStage):
             keywords=context.keywords,
             question_text=context.question_text,
             raw_answer=context.raw_answer,
-            answering_model=answering_model_str,
-            parsing_model=parsing_model_str,
+            answering=answering_identity,
+            parsing=parsing_identity,
             answering_system_prompt=context.answering_model.system_prompt,
             parsing_system_prompt=context.parsing_model.system_prompt,
             execution_time=execution_time,
@@ -157,11 +165,30 @@ class FinalizeResultStage(BaseVerificationStage):
             replicate=context.replicate,
         )
 
+        # Build structured trace_messages for storage
+        trace_messages_dicts: list[dict[str, Any]] = []
+        trace_messages_raw = context.get_artifact(ArtifactKeys.TRACE_MESSAGES)
+        if trace_messages_raw:
+            # trace_messages contains list[Message] — convert to list[dict]
+            for block_index, msg in enumerate(trace_messages_raw):
+                d = msg.to_dict()
+                d["block_index"] = block_index
+                trace_messages_dicts.append(d)
+
+        # Compute raw_llm_response from trace_messages if available,
+        # otherwise fall back to the string stored by generate_answer
+        raw_llm_response = context.get_result_field(ArtifactKeys.RAW_LLM_RESPONSE, "")
+        if trace_messages_raw and not raw_llm_response:
+            from karenina.benchmark.verification.utils.trace_formatting import messages_to_raw_trace
+
+            raw_llm_response = messages_to_raw_trace(trace_messages_raw)
+
         # Create template subclass
         # Note: trace filtering fields (evaluation_input, used_full_trace, trace_extraction_error)
         # are now stored at the root level of VerificationResult, not in template
         template = VerificationResultTemplate(
-            raw_llm_response=context.get_result_field(ArtifactKeys.RAW_LLM_RESPONSE, ""),
+            raw_llm_response=raw_llm_response,
+            trace_messages=trace_messages_dicts,
             parsed_gt_response=parsed_gt_response,
             parsed_llm_response=parsed_llm_response,
             template_verification_performed=template_verification_performed,

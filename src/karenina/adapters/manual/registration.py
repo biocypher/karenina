@@ -13,7 +13,7 @@ from karenina.adapters.registry import AdapterAvailability, AdapterRegistry, Ada
 from . import ManualAgentAdapter, ManualLLMAdapter, ManualParserAdapter
 
 if TYPE_CHECKING:
-    from karenina.schemas.workflow.models import ModelConfig
+    pass
 
 
 def _check_availability() -> AdapterAvailability:
@@ -22,11 +22,6 @@ def _check_availability() -> AdapterAvailability:
         available=True,
         reason="Manual interface uses pre-recorded traces",
     )
-
-
-def _format_model_string(config: ModelConfig) -> str:
-    """Format model string for manual interface."""
-    return config.model_name or "manual"
 
 
 # Register the manual adapter
@@ -38,7 +33,6 @@ _manual_spec = AdapterSpec(
     parser_factory=ManualParserAdapter,
     availability_checker=_check_availability,
     fallback_interface=None,  # No fallback - manual is intentional
-    model_string_formatter=_format_model_string,
     routes_to=None,
     supports_mcp=False,
     supports_tools=False,

@@ -12,9 +12,10 @@ import logging
 import os
 from typing import TYPE_CHECKING, Any
 
-from .....adapters import format_model_string, get_llm, get_parser
+from .....adapters import get_llm, get_parser
 from .....ports import LLMPort
 from .....schemas.domain import BaseAnswer
+from .....schemas.verification.model_identity import ModelIdentity
 from .....schemas.workflow import ModelConfig
 from ...prompts import PromptAssembler, PromptTask
 from ...prompts.parsing.parsing_instructions import TemplatePromptBuilder
@@ -97,8 +98,8 @@ class TemplateEvaluator:
         except Exception as e:
             raise RuntimeError(f"Failed to initialize LLM for template evaluation: {e}") from e
 
-        # Build model string for tracking (centralized via adapter registry)
-        self.model_str = format_model_string(model_config)
+        # Build model string for tracking via ModelIdentity
+        self.model_str = ModelIdentity.from_model_config(model_config, role="parsing").display_string
 
         # Initialize adapter-based parser via the registry
         # Factory always returns a ParserPort (LangChainParserAdapter, ClaudeSDKParserAdapter,
@@ -239,7 +240,7 @@ class TemplateEvaluator:
         self,
         trace_text: str,
         question_text: str,
-        usage_tracker: Any | None = None,  # noqa: ARG002 - kept for interface consistency
+        usage_tracker: Any | None = None,
     ) -> ParseResult:
         """
         Standard parsing via ParserPort adapter with tri-section prompt assembly.
@@ -251,7 +252,7 @@ class TemplateEvaluator:
         Args:
             trace_text: Raw trace text to parse
             question_text: The original question text
-            usage_tracker: Kept for interface consistency (ParserPort tracks usage internally)
+            usage_tracker: Optional UsageTracker for tracking parsing token usage
 
         Returns:
             ParseResult with parsed answer
@@ -288,13 +289,20 @@ class TemplateEvaluator:
                 },
             )
 
-            # 3. Parse via adapter
-            parsed = self._parser.parse_to_pydantic(messages, self.answer_class)
+            # 3. Parse via adapter (returns ParsePortResult with usage)
+            parse_port_result = self._parser.parse_to_pydantic(messages, self.answer_class)
+            parsed = parse_port_result.parsed
 
             if isinstance(parsed, self.answer_class):
                 result.parsed_answer = parsed
                 result.success = True
                 logger.debug("Template parsing succeeded via ParserPort adapter")
+
+                # Track parsing token usage if tracker provided
+                if usage_tracker is not None and parse_port_result.usage:
+                    usage_dict = parse_port_result.usage.to_dict()
+                    if usage_dict.get("input_tokens", 0) > 0 or usage_dict.get("output_tokens", 0) > 0:
+                        usage_tracker.track_call("parsing", self.model_str, usage_dict)
             else:
                 result.error = f"Unexpected parse result type: {type(parsed)}"
                 logger.error(result.error)

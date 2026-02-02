@@ -11,7 +11,9 @@ from typing import Any
 
 from .....adapters import get_agent, get_llm
 from .....ports import AgentConfig, AgentPort, LLMPort, Message
+from .....schemas.verification.model_identity import ModelIdentity
 from ...utils.llm_invocation import _construct_few_shot_prompt
+from ...utils.trace_agent_metrics import extract_agent_metrics_from_messages
 from ...utils.trace_usage_tracker import UsageTracker
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
@@ -109,9 +111,9 @@ class GenerateAnswerStage(BaseVerificationStage):
             usage_metadata = context.cached_answer_data.get("usage_metadata")
             agent_metrics = context.cached_answer_data.get("agent_metrics")
 
-            # Build model string for result (centralized via adapter registry)
+            # Build model string for result via ModelIdentity
             answering_model = context.answering_model
-            answering_model_str = self.get_model_string(answering_model)
+            answering_model_str = ModelIdentity.from_model_config(answering_model, role="answering").display_string
 
             # Store cached data in context (both artifact and result field)
             self.set_artifact_and_result(context, "raw_llm_response", raw_llm_response)
@@ -132,8 +134,8 @@ class GenerateAnswerStage(BaseVerificationStage):
         # No cached answer - proceed with normal answer generation
         answering_model = context.answering_model
 
-        # Build model string for result (centralized via adapter registry)
-        answering_model_str = self.get_model_string(answering_model)
+        # Build model string for result via ModelIdentity
+        answering_model_str = ModelIdentity.from_model_config(answering_model, role="answering").display_string
         context.set_artifact(ArtifactKeys.ANSWERING_MODEL_STR, answering_model_str)
 
         # Extract MCP server names if configured
@@ -233,11 +235,15 @@ class GenerateAnswerStage(BaseVerificationStage):
                     usage_metadata = {answering_model_str: inner_usage}
                     usage_tracker.track_call("answer_generation", answering_model_str, usage_metadata)
 
-                # Track agent metrics
-                agent_metrics = {
-                    "iterations": result.turns,
-                    "limit_reached": result.limit_reached,
-                }
+                # Track agent metrics — extract full tool metrics from trace
+                if result.trace_messages:
+                    agent_metrics = extract_agent_metrics_from_messages(result.trace_messages)
+                    agent_metrics["limit_reached"] = result.limit_reached
+                else:
+                    agent_metrics = {
+                        "iterations": result.turns,
+                        "limit_reached": result.limit_reached,
+                    }
                 usage_tracker.set_agent_metrics(agent_metrics)
 
                 # Store trace_messages for future use (PR5a)
@@ -251,10 +257,14 @@ class GenerateAnswerStage(BaseVerificationStage):
                 # Invoke LLM directly
                 llm_response = answering_llm.invoke(adapter_messages)
 
-                # Format response as a simple trace (Human + AI messages)
-                raw_llm_response = (
-                    f"--- Human Message ---\n{constructed_prompt}\n\n--- AI Message ---\n{llm_response.content}"
-                )
+                # Format response as trace (AI message only, question is not part of the trace)
+                raw_llm_response = f"--- AI Message ---\n{llm_response.content}"
+
+                # Build trace_messages for the LLM path too
+                llm_trace_messages = [
+                    Message.assistant(llm_response.content),
+                ]
+                context.set_artifact(ArtifactKeys.TRACE_MESSAGES, llm_trace_messages)
 
                 # Track usage metadata
                 if llm_response.usage:

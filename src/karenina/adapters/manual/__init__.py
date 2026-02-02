@@ -44,6 +44,7 @@ from karenina.ports import (
     LLMResponse,
     MCPServerConfig,
     Message,
+    ParsePortResult,
     ParserPort,
     Tool,
     UsageMetadata,
@@ -263,11 +264,11 @@ class ManualParserAdapter(ParserPort):
         """Default capabilities for the manual parser adapter (no-op)."""
         return PortCapabilities()
 
-    async def aparse_to_pydantic(self, messages: list[Message], schema: type[T]) -> T:  # noqa: ARG002
+    async def aparse_to_pydantic(self, messages: list[Message], schema: type[T]) -> ParsePortResult[T]:  # noqa: ARG002
         """Raises ManualInterfaceError - manual interface cannot parse via LLM."""
         raise ManualInterfaceError("parser.aparse_to_pydantic()")
 
-    def parse_to_pydantic(self, messages: list[Message], schema: type[T]) -> T:  # noqa: ARG002
+    def parse_to_pydantic(self, messages: list[Message], schema: type[T]) -> ParsePortResult[T]:  # noqa: ARG002
         """Raises ManualInterfaceError - manual interface cannot parse via LLM."""
         raise ManualInterfaceError("parser.parse_to_pydantic()")
 

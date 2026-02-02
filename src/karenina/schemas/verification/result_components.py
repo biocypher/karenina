@@ -1,8 +1,12 @@
 """Component classes for verification results."""
 
+from __future__ import annotations
+
 from typing import Any
 
 from pydantic import BaseModel, Field
+
+from .model_identity import ModelIdentity
 
 
 class VerificationResultMetadata(BaseModel):
@@ -17,8 +21,8 @@ class VerificationResultMetadata(BaseModel):
     question_text: str
     raw_answer: str | None = None  # Ground truth answer from checkpoint
     keywords: list[str] | None = None  # Keywords associated with the question
-    answering_model: str = Field(..., json_schema_extra={"index": True, "max_length": 255})
-    parsing_model: str = Field(..., json_schema_extra={"index": True, "max_length": 255})
+    answering: ModelIdentity
+    parsing: ModelIdentity
     answering_system_prompt: str | None = None  # System prompt used for answering model
     parsing_system_prompt: str | None = None  # System prompt used for parsing model
     execution_time: float
@@ -31,14 +35,23 @@ class VerificationResultMetadata(BaseModel):
     run_name: str | None = None
     replicate: int | None = None  # Replicate number (1, 2, 3, ...) for repeated runs of the same question
 
+    @property
+    def answering_model(self) -> str:
+        """Backward-compatible accessor returning answering model display string."""
+        return self.answering.display_string
+
+    @property
+    def parsing_model(self) -> str:
+        """Backward-compatible accessor returning parsing model display string."""
+        return self.parsing.display_string
+
     @staticmethod
     def compute_result_id(
         question_id: str,
-        answering_model: str,
-        parsing_model: str,
+        answering: ModelIdentity,
+        parsing: ModelIdentity,
         timestamp: str,
         replicate: int | None = None,
-        answering_mcp_servers: list[str] | None = None,
     ) -> str:
         """
         Compute deterministic 16-char SHA256 hash from verification parameters.
@@ -48,11 +61,10 @@ class VerificationResultMetadata(BaseModel):
 
         Args:
             question_id: Question identifier
-            answering_model: Full answering model string (e.g., "anthropic/claude-haiku-4-5")
-            parsing_model: Full parsing model string
+            answering: ModelIdentity for the answering model
+            parsing: ModelIdentity for the parsing model
             timestamp: ISO timestamp string
             replicate: Replicate number (None for single run)
-            answering_mcp_servers: List of MCP server names (None or empty for no MCP)
 
         Returns:
             16-character hex string (first 16 chars of SHA256 hash)
@@ -62,9 +74,8 @@ class VerificationResultMetadata(BaseModel):
 
         # Create canonical representation with sorted keys
         data = {
-            "answering_mcp_servers": sorted(answering_mcp_servers or []),
-            "answering_model": answering_model,
-            "parsing_model": parsing_model,
+            "answering": answering.canonical_key,
+            "parsing": parsing.canonical_key,
             "question_id": question_id,
             "replicate": replicate,
             "timestamp": timestamp,
@@ -81,7 +92,8 @@ class VerificationResultMetadata(BaseModel):
 class VerificationResultTemplate(BaseModel):
     """Template verification and answer generation fields."""
 
-    raw_llm_response: str
+    raw_llm_response: str = ""
+    trace_messages: list[dict[str, Any]] = Field(default_factory=list)
     parsed_gt_response: dict[str, Any] | None = None  # Ground truth from 'correct' field
     parsed_llm_response: dict[str, Any] | None = None  # LLM extracted fields (excluding 'id' and 'correct')
 

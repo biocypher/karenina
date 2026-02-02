@@ -36,7 +36,7 @@ from karenina.utils.retry import TRANSIENT_RETRY
 
 from .messages import LangChainMessageConverter
 from .prompts import FORMAT_INSTRUCTIONS
-from .usage import extract_usage_from_response
+from .usage import extract_langchain_usage, extract_usage_from_response
 
 logger = logging.getLogger(__name__)
 
@@ -342,12 +342,23 @@ class LangChainLLMAdapter:
         # Try native structured output first (if available)
         if self._structured_model is not None:
             try:
+                from langchain_core.callbacks import get_usage_metadata_callback
+
                 lc_messages = self._converter.to_provider(messages)
-                response = await self._invoke_model_with_retry(self._structured_model, lc_messages)
+
+                # Use callback to capture usage since with_structured_output
+                # may return a BaseModel directly (losing response_metadata)
+                with get_usage_metadata_callback() as cb:
+                    response = await self._invoke_model_with_retry(self._structured_model, lc_messages)
+
                 if isinstance(response, BaseModel):
+                    # Prefer callback usage (reliable), fall back to response extraction
+                    usage = extract_langchain_usage(cb.usage_metadata, model_name=self._config.model_name)
+                    if usage.total_tokens == 0:
+                        usage = extract_usage_from_response(response, model_name=self._config.model_name)
                     return LLMResponse(
                         content=str(response),
-                        usage=extract_usage_from_response(response, model_name=self._config.model_name),
+                        usage=usage,
                         raw=response,
                     )
                 raise TypeError(f"Native structured output returned unexpected type: {type(response).__name__}")

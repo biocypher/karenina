@@ -21,11 +21,13 @@ from karenina.ports import (
     MCPHttpServerConfig,
     MCPServerConfig,
     Message,
+    Role,
     Tool,
+    UsageMetadata,
 )
 
 from .messages import LangChainMessageConverter
-from .usage import count_agent_turns, extract_usage_cumulative
+from .usage import count_agent_turns, extract_langchain_usage, extract_usage_cumulative
 
 if TYPE_CHECKING:
     from karenina.schemas.workflow.models import ModelConfig
@@ -338,13 +340,6 @@ class LangChainAgentAdapter:
         # Convert messages to LangChain format
         lc_messages = self._converter.to_provider(messages)
 
-        # Extract original question for trace processing
-        original_question: str | None = None
-        for msg in messages:
-            if msg.text:
-                original_question = msg.text
-                break
-
         # Prepare agent invocation
         recursion_limit_reached = False
         agent_response: dict[str, Any] = {"messages": []}
@@ -354,30 +349,59 @@ class LangChainAgentAdapter:
         agent_config = {"configurable": {"thread_id": thread_id}}
 
         # LangGraph agent expects dict with "messages" key
-        coro = agent.ainvoke({"messages": lc_messages}, config=agent_config)
-
+        # Use usage metadata callback to reliably capture cumulative token usage
+        # across all LLM calls (LangGraph doesn't reliably propagate response_metadata)
+        callback_usage: UsageMetadata | None = None
         try:
-            if config.timeout:
+            from langchain_core.callbacks import get_usage_metadata_callback
+
+            use_callback = True
+        except ImportError:
+            use_callback = False
+
+        if use_callback:
+            with get_usage_metadata_callback() as cb:
                 try:
-                    agent_response = await asyncio.wait_for(coro, timeout=config.timeout)
-                except TimeoutError as e:
-                    raise AgentTimeoutError(f"Agent execution timed out after {config.timeout}s") from e
-            else:
-                agent_response = await coro
+                    coro = agent.ainvoke({"messages": lc_messages}, config=agent_config)
+                    if config.timeout:
+                        try:
+                            agent_response = await asyncio.wait_for(coro, timeout=config.timeout)
+                        except TimeoutError as e:
+                            raise AgentTimeoutError(f"Agent execution timed out after {config.timeout}s") from e
+                    else:
+                        agent_response = await coro
+                except Exception as e:
+                    error_str = str(e).lower()
+                    error_type = type(e).__name__
+                    if "graphrecursionerror" in error_type.lower() or "recursion_limit" in error_str:
+                        recursion_limit_reached = True
+                        logger.warning(f"Agent hit recursion limit: {e}")
+                        agent_response = extract_partial_agent_state(agent, lc_messages, e, agent_config)
+                    else:
+                        raise AgentExecutionError(f"Agent execution failed: {e}") from e
 
-        except Exception as e:
-            # Check if this is a recursion limit error
-            error_str = str(e).lower()
-            error_type = type(e).__name__
-
-            if "graphrecursionerror" in error_type.lower() or "recursion_limit" in error_str:
-                recursion_limit_reached = True
-                logger.warning(f"Agent hit recursion limit: {e}")
-
-                # Extract partial state using the shared recovery function
-                agent_response = extract_partial_agent_state(agent, lc_messages, e, agent_config)
-            else:
-                raise AgentExecutionError(f"Agent execution failed: {e}") from e
+                # Extract cumulative usage from callback (reliable across all turns)
+                if hasattr(cb, "usage_metadata") and cb.usage_metadata:
+                    callback_usage = extract_langchain_usage(cb.usage_metadata, model_name=self._config.model_name)
+        else:
+            try:
+                coro = agent.ainvoke({"messages": lc_messages}, config=agent_config)
+                if config.timeout:
+                    try:
+                        agent_response = await asyncio.wait_for(coro, timeout=config.timeout)
+                    except TimeoutError as e:
+                        raise AgentTimeoutError(f"Agent execution timed out after {config.timeout}s") from e
+                else:
+                    agent_response = await coro
+            except Exception as e:
+                error_str = str(e).lower()
+                error_type = type(e).__name__
+                if "graphrecursionerror" in error_type.lower() or "recursion_limit" in error_str:
+                    recursion_limit_reached = True
+                    logger.warning(f"Agent hit recursion limit: {e}")
+                    agent_response = extract_partial_agent_state(agent, lc_messages, e, agent_config)
+                else:
+                    raise AgentExecutionError(f"Agent execution failed: {e}") from e
 
         # Extract messages from response
         response_messages: list[Any] = []
@@ -387,12 +411,15 @@ class LangChainAgentAdapter:
             response_messages = agent_response
 
         # Build raw_trace (legacy string format for backward compatibility)
-        raw_trace = harmonize_agent_response(agent_response, original_question)
+        raw_trace = harmonize_agent_response(agent_response)
         if recursion_limit_reached:
             raw_trace += "\n\n[Note: Recursion limit reached - partial response shown]"
 
         # Build trace_messages (new structured format)
-        trace_messages = self._converter.from_provider(response_messages)
+        # Exclude user messages — the trace should only contain assistant and
+        # tool messages, matching the claude_tool adapter behavior.
+        all_trace_messages = self._converter.from_provider(response_messages)
+        trace_messages = [m for m in all_trace_messages if m.role != Role.USER]
 
         # Extract final response
         final_response, error = extract_final_ai_message_from_response(agent_response)
@@ -405,8 +432,11 @@ class LangChainAgentAdapter:
             if not final_response:
                 final_response = "[No final response extracted]"
 
-        # Extract usage and count turns
-        usage = extract_usage_cumulative(response_messages, model_name=self._config.model_name)
+        # Extract usage: prefer callback-based usage (reliable) over message-based (may under-count)
+        if callback_usage is not None and callback_usage.total_tokens > 0:
+            usage = callback_usage
+        else:
+            usage = extract_usage_cumulative(response_messages, model_name=self._config.model_name)
         turns = count_agent_turns(response_messages)
 
         return AgentResult(

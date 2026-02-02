@@ -22,6 +22,7 @@ from datetime import UTC, datetime
 
 import pandas as pd
 
+from karenina.schemas.verification.model_identity import ModelIdentity
 from karenina.schemas.workflow import (
     JudgmentResults,
     RubricResults,
@@ -49,6 +50,8 @@ def create_metadata(
         VerificationResultMetadata instance with computed result_id
     """
     timestamp = datetime.now(UTC).isoformat()
+    _answering = ModelIdentity(interface="langchain", model_name=answering_model)
+    _parsing = ModelIdentity(interface="langchain", model_name="claude-haiku-4-5")
     return VerificationResultMetadata(
         question_id=question_id,
         template_id="test-template-id",
@@ -56,14 +59,14 @@ def create_metadata(
         error=error,
         question_text=f"Question text for {question_id}",
         raw_answer="Expected answer",
-        answering_model=answering_model,
-        parsing_model="claude-haiku-4-5",
+        answering=_answering,
+        parsing=_parsing,
         execution_time=1.5,
         timestamp=timestamp,
         result_id=VerificationResultMetadata.compute_result_id(
             question_id=question_id,
-            answering_model=answering_model,
-            parsing_model="claude-haiku-4-5",
+            answering=_answering,
+            parsing=_parsing,
             timestamp=timestamp,
         ),
     )

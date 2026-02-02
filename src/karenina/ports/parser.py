@@ -12,15 +12,33 @@ Use this for:
 
 from __future__ import annotations
 
-from typing import Protocol, TypeVar, runtime_checkable
+from dataclasses import dataclass, field
+from typing import Generic, Protocol, TypeVar, runtime_checkable
 
 from pydantic import BaseModel
 
 from karenina.ports.capabilities import PortCapabilities
 from karenina.ports.messages import Message
+from karenina.ports.usage import UsageMetadata
 
 # TypeVar bound to BaseModel for generic schema support
 T = TypeVar("T", bound=BaseModel)
+
+
+@dataclass
+class ParsePortResult(Generic[T]):
+    """Result from a ParserPort parsing operation.
+
+    Wraps the parsed Pydantic model together with token usage metadata
+    from the underlying LLM call(s), enabling callers to track parsing costs.
+
+    Attributes:
+        parsed: The validated Pydantic model instance.
+        usage: Token usage metadata from the LLM call(s) used for parsing.
+    """
+
+    parsed: T
+    usage: UsageMetadata = field(default_factory=lambda: UsageMetadata())
 
 
 @runtime_checkable
@@ -65,7 +83,7 @@ class ParserPort(Protocol):
         """
         return PortCapabilities()
 
-    async def aparse_to_pydantic(self, messages: list[Message], schema: type[T]) -> T:
+    async def aparse_to_pydantic(self, messages: list[Message], schema: type[T]) -> ParsePortResult[T]:
         """Parse using pre-assembled prompt messages into a structured Pydantic model.
 
         The caller is responsible for assembling the prompt messages
@@ -78,7 +96,7 @@ class ParserPort(Protocol):
                     Field descriptions guide the LLM on what to extract.
 
         Returns:
-            An instance of the schema type with extracted values.
+            ParsePortResult containing the parsed model instance and usage metadata.
 
         Raises:
             ParseError: If the LLM fails to extract valid structured data.
@@ -90,12 +108,12 @@ class ParserPort(Protocol):
             ...     mechanism: str = Field(description="Mechanism of action")
             >>> messages = assembler.assemble(system_text=..., user_text=...)
             >>> result = await parser.aparse_to_pydantic(messages, DrugTarget)
-            >>> result.target
+            >>> result.parsed.target
             'BCL2'
         """
         ...
 
-    def parse_to_pydantic(self, messages: list[Message], schema: type[T]) -> T:
+    def parse_to_pydantic(self, messages: list[Message], schema: type[T]) -> ParsePortResult[T]:
         """Parse using pre-assembled prompt messages (sync).
 
         This is a convenience wrapper around aparse_to_pydantic() for sync code.
@@ -106,7 +124,7 @@ class ParserPort(Protocol):
             schema: A Pydantic model class defining the expected structure.
 
         Returns:
-            An instance of the schema type with extracted values.
+            ParsePortResult containing the parsed model instance and usage metadata.
 
         Raises:
             ParseError: If the LLM fails to extract valid structured data.

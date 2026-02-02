@@ -386,13 +386,25 @@ SCENARIOS = {
     "mcp_agent": {
         "description": "MCP-enabled LangGraph agent invocation with tool calls",
         "source_files": [
-            "src/karenina/infrastructure/llm/interface.py",
-            "src/karenina/infrastructure/llm/mcp_utils.py",
+            "src/karenina/adapters/langchain/middleware.py",
+            "src/karenina/adapters/langchain/mcp.py",
         ],
         "llm_calls": [
             "create_agent() with middleware",
             "Agent invoke with MCP tools",
             "InvokeSummarizationMiddleware.before_model()",
+        ],
+    },
+    "claude_tool_trace": {
+        "description": "Claude Tool adapter trace with MCP tool calls (trace_messages + raw_trace)",
+        "source_files": [
+            "src/karenina/adapters/claude_tool/agent.py",
+            "src/karenina/adapters/claude_tool/tools.py",
+            "src/karenina/adapters/claude_tool/trace.py",
+        ],
+        "llm_calls": [
+            "tool_runner with MCP tools (answer generation)",
+            "Template parsing (judge LLM)",
         ],
     },
 }
@@ -768,8 +780,8 @@ def _run_mcp_agent_scenario(model: str, provider: str, output_dir: Path, force: 
         print("  Install with: uv add 'langchain>=1.1.0' langgraph langchain-mcp-adapters")
         return 1
 
-    from karenina.infrastructure.llm.interface import _build_agent_middleware
-    from karenina.infrastructure.llm.mcp_utils import sync_create_mcp_client_and_tools
+    from karenina.adapters.langchain.mcp import sync_create_mcp_client_and_tools
+    from karenina.adapters.langchain.middleware import build_agent_middleware
     from karenina.schemas.workflow.models import AgentMiddlewareConfig
 
     # Create output directory
@@ -817,7 +829,7 @@ def _run_mcp_agent_scenario(model: str, provider: str, output_dir: Path, force: 
 
     # Build middleware (this is what we're testing - the middleware signature)
     middleware_config = AgentMiddlewareConfig()
-    middleware = _build_agent_middleware(
+    middleware = build_agent_middleware(
         middleware_config,
         max_context_tokens=8000,  # Small context to exercise summarization path
         base_model=capture_client,  # Use capturing client for summarization model too
@@ -876,6 +888,157 @@ def _run_mcp_agent_scenario(model: str, provider: str, output_dir: Path, force: 
 
     print(f"  MCP agent scenario complete: {capture_client.captured_count} fixtures captured")
     return 0
+
+
+def _run_claude_tool_trace_scenario(model: str, provider: str, output_dir: Path, force: bool = False) -> int:
+    """Capture claude_tool adapter trace with MCP tool calls.
+
+    This scenario runs a real verification using the claude_tool adapter with MCP tools,
+    then captures the full trace output (trace_messages and raw_trace) as a fixture.
+
+    Unlike other scenarios that capture individual LLM calls via CaptureLLMClient, this
+    captures the complete agent execution trace including tool result messages injected
+    by the ToolResultCollector. This tests the trace collection fix end-to-end.
+
+    Requires:
+        - A checkpoint file with at least one finished template
+        - A preset file configured for claude_tool interface with MCP servers
+        - ANTHROPIC_API_KEY environment variable set
+    """
+    print("  Running claude_tool trace scenario using ACTUAL verification pipeline...")
+
+    from karenina.benchmark import Benchmark
+    from karenina.benchmark.verification.batch_runner import run_verification_batch
+    from karenina.schemas.verification.config import VerificationConfig
+
+    # Paths to test data
+    checkpoint_path = Path("local_data/data/checkpoints/karenina_checkpoint_ot_bench_v5.5.jsonld")
+    preset_path = Path("local_data/presets/haiku-claude-tool-mcp.json")
+
+    # Check for required files
+    if not checkpoint_path.exists():
+        # Try from project root
+        project_root = Path(__file__).parent.parent.parent
+        checkpoint_path = project_root / checkpoint_path
+        preset_path = project_root / preset_path
+
+    if not checkpoint_path.exists():
+        print(f"  Error: Checkpoint file not found: {checkpoint_path}")
+        print("  This scenario requires local_data/data/checkpoints/karenina_checkpoint_ot_bench_v5.5.jsonld")
+        return 1
+
+    if not preset_path.exists():
+        print(f"  Error: Preset file not found: {preset_path}")
+        print("  This scenario requires local_data/presets/haiku-claude-tool-mcp.json")
+        return 1
+
+    # Create output directory
+    scenario_dir = output_dir / model / "claude_tool_trace"
+    scenario_dir.mkdir(parents=True, exist_ok=True)
+
+    # Check existing fixtures
+    existing = list(scenario_dir.glob("*.json"))
+    if existing and not force:
+        print(f"  Found {len(existing)} existing claude_tool_trace fixtures")
+        print("  Use --force to overwrite")
+        return 0
+
+    try:
+        print(f"  Loading benchmark from {checkpoint_path}...")
+        benchmark = Benchmark.load(checkpoint_path)
+
+        print(f"  Loading preset from {preset_path}...")
+        config = VerificationConfig.from_preset(preset_path)
+
+        all_templates = benchmark.get_finished_templates()
+        print(f"  Found {len(all_templates)} finished templates")
+
+        if not all_templates:
+            print("  Error: No finished templates found in checkpoint")
+            return 1
+
+        # Use just one template to keep fixture size reasonable
+        single_template = [all_templates[0]]
+        q_id = single_template[0].question_id
+        print(f"  Using question: {q_id}")
+        print(f"  Question text: {single_template[0].question_text[:80]}...")
+
+        print("  Running verification...")
+        results = run_verification_batch(
+            templates=single_template,
+            config=config,
+            run_name="fixture-capture-claude-tool-trace",
+            global_rubric=benchmark.get_global_rubric(),
+        )
+
+        print(f"  Got {len(results)} results")
+
+        captured = 0
+        for result in results:
+            if not result.template:
+                print(f"  Warning: No template result for {result.metadata.question_id}")
+                continue
+
+            trace_msgs = result.template.trace_messages
+            raw_trace = result.template.raw_llm_response
+            verify_result = result.template.verify_result
+
+            # Count roles
+            roles = [m.get("role", "?") for m in trace_msgs] if trace_msgs else []
+            n_assistant = roles.count("assistant")
+            n_tool = roles.count("tool")
+
+            print(f"  trace_messages: {len(trace_msgs)} ({n_assistant} assistant, {n_tool} tool)")
+            print(f"  raw_trace: {len(raw_trace)} chars")
+            print(f"  verify_result: {verify_result}")
+
+            if not trace_msgs:
+                print("  Warning: trace_messages is empty!")
+
+            # Build fixture data
+            fixture_data = {
+                "metadata": {
+                    "scenario": "claude_tool_trace",
+                    "model": model,
+                    "timestamp": datetime.now().isoformat(),
+                    "question_id": result.metadata.question_id,
+                    "question_text": result.metadata.question_text,
+                    "description": (
+                        "Complete trace from claude_tool adapter with MCP tool calls. "
+                        "Contains interleaved assistant and tool result messages."
+                    ),
+                },
+                "trace_messages": trace_msgs,
+                "raw_trace": raw_trace,
+                "verify_result": verify_result,
+                "result_metadata": {
+                    "completed_without_errors": result.metadata.completed_without_errors,
+                    "error": result.metadata.error,
+                    "answering_model": result.metadata.answering_model,
+                    "parsing_model": result.metadata.parsing_model,
+                    "execution_time": result.metadata.execution_time,
+                },
+            }
+
+            # Use question_id hash as filename for consistency
+            q_hash = hashlib.sha256(q_id.encode()).hexdigest()[:16]
+            fixture_path = scenario_dir / f"trace_{q_hash}.json"
+
+            with fixture_path.open("w") as f:
+                json.dump(fixture_data, f, indent=2, default=str)
+
+            captured += 1
+            print(f"  [CAPTURED] {fixture_path.name}")
+
+        print(f"  claude_tool_trace scenario complete: {captured} fixtures captured")
+        return 0
+
+    except Exception as e:
+        print(f"  Error during claude_tool_trace capture: {e}")
+        import traceback
+
+        traceback.print_exc()
+        return 1
 
 
 def _run_literal_evaluation_scenario(model: str, provider: str, output_dir: Path, force: bool = False) -> int:
@@ -1015,6 +1178,7 @@ SCENARIO_RUNNERS = {
     "abstention": _run_abstention_scenario,
     "full_pipeline": _run_full_pipeline_scenario,
     "mcp_agent": _run_mcp_agent_scenario,
+    "claude_tool_trace": _run_claude_tool_trace_scenario,
 }
 
 

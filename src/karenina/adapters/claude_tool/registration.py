@@ -101,19 +101,6 @@ def _create_parser(config: ModelConfig) -> ParserPort:
     return ClaudeToolParserAdapter(config)
 
 
-def _format_model_string(config: ModelConfig) -> str:
-    """Format the model string for display.
-
-    Args:
-        config: Model configuration.
-
-    Returns:
-        Formatted model string.
-    """
-    # For claude_tool, just use the model name directly
-    return config.model_name or "unknown"
-
-
 # Create and register the adapter spec
 _claude_tool_spec = AdapterSpec(
     interface="claude_tool",
@@ -123,7 +110,6 @@ _claude_tool_spec = AdapterSpec(
     parser_factory=_create_parser,
     availability_checker=_check_availability,
     fallback_interface="langchain",
-    model_string_formatter=_format_model_string,
     supports_mcp=True,
     supports_tools=True,
 )

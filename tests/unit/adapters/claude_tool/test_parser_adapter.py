@@ -12,7 +12,7 @@ import pytest
 from pydantic import BaseModel, Field
 
 from karenina.adapters.claude_tool import ClaudeToolParserAdapter
-from karenina.ports import LLMResponse, Message, ParseError
+from karenina.ports import LLMResponse, Message, ParseError, ParsePortResult
 
 
 class SampleParserSchema(BaseModel):
@@ -86,9 +86,10 @@ class TestParserAdapterAsyncParsing:
                 SampleParserSchema,
             )
 
-            assert isinstance(result, SampleParserSchema)
-            assert result.gene_name == "BCL2"
-            assert result.is_oncogene is False
+            assert isinstance(result, ParsePortResult)
+            assert isinstance(result.parsed, SampleParserSchema)
+            assert result.parsed.gene_name == "BCL2"
+            assert result.parsed.is_oncogene is False
 
     @pytest.mark.asyncio
     async def test_aparse_to_pydantic_passes_max_retries(self, model_config: Any) -> None:
@@ -193,8 +194,8 @@ class TestParserAdapterWithDifferentSchemas:
 
             result = await adapter.aparse_to_pydantic([Message.user("response")], OptionalSchema)
 
-            assert result.required_field == "value"
-            assert result.optional_field is None
+            assert result.parsed.required_field == "value"
+            assert result.parsed.optional_field is None
 
     @pytest.mark.asyncio
     async def test_parsing_with_numeric_fields(self, model_config: Any) -> None:
@@ -216,8 +217,8 @@ class TestParserAdapterWithDifferentSchemas:
 
             result = await adapter.aparse_to_pydantic([Message.user("response")], NumericSchema)
 
-            assert result.count == 42
-            assert result.score == 0.95
+            assert result.parsed.count == 42
+            assert result.parsed.score == 0.95
 
     @pytest.mark.asyncio
     async def test_parsing_with_list_fields(self, model_config: Any) -> None:
@@ -238,7 +239,7 @@ class TestParserAdapterWithDifferentSchemas:
 
             result = await adapter.aparse_to_pydantic([Message.user("response")], ListSchema)
 
-            assert result.items == ["a", "b", "c"]
+            assert result.parsed.items == ["a", "b", "c"]
 
     @pytest.mark.asyncio
     async def test_parsing_with_nested_schema(self, model_config: Any) -> None:
@@ -262,4 +263,4 @@ class TestParserAdapterWithDifferentSchemas:
 
             result = await adapter.aparse_to_pydantic([Message.user("response")], OuterSchema)
 
-            assert result.inner.value == "nested"
+            assert result.parsed.inner.value == "nested"

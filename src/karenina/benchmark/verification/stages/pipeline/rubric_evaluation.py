@@ -5,6 +5,7 @@ Evaluates LLM responses against qualitative rubric criteria.
 
 import logging
 
+from .....schemas.verification.model_identity import ModelIdentity
 from ...evaluators import RubricEvaluator
 from ...utils import prepare_evaluation_input
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
@@ -117,8 +118,11 @@ class RubricEvaluationStage(BaseVerificationStage):
         usage_tracker = self.get_or_create_usage_tracker(context)
 
         # Determine what input to pass to rubric evaluation based on config
+        # Prefer structured trace_messages when available
         use_full_trace = context.use_full_trace_for_rubric
-        rubric_evaluation_input, extraction_error = prepare_evaluation_input(raw_llm_response, use_full_trace)
+        trace_messages = context.get_artifact(ArtifactKeys.TRACE_MESSAGES)
+        trace_input = trace_messages if trace_messages else raw_llm_response
+        rubric_evaluation_input, extraction_error = prepare_evaluation_input(trace_input, use_full_trace)
 
         if extraction_error is not None:
             # Extraction failed - mark as error and stop
@@ -136,9 +140,9 @@ class RubricEvaluationStage(BaseVerificationStage):
         metric_confusion_lists = None
         metric_results = None
 
-        # Build model string for tracking (centralized via adapter registry)
+        # Build model string for tracking via ModelIdentity
         parsing_model = context.parsing_model
-        parsing_model_str = self.get_model_string(parsing_model)
+        parsing_model_str = ModelIdentity.from_model_config(parsing_model, role="parsing").display_string
 
         try:
             # Create rubric evaluator with parsing model and strategy from config

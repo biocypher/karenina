@@ -95,10 +95,15 @@ def create_preview_result(task: dict[str, Any]) -> VerificationResult:
     Returns:
         VerificationResult with preview metadata
     """
+    from karenina.schemas.verification.model_identity import ModelIdentity
+
+    answering_identity = ModelIdentity.from_model_config(task["answering_model"], role="answering")
+    parsing_identity = ModelIdentity.from_model_config(task["parsing_model"], role="parsing")
+
     preview_result_id = VerificationResultMetadata.compute_result_id(
         question_id=task["question_id"],
-        answering_model=task["answering_model"].id,
-        parsing_model=task["parsing_model"].id,
+        answering=answering_identity,
+        parsing=parsing_identity,
         timestamp="",  # Empty timestamp indicates "starting" event
     )
     return VerificationResult(
@@ -107,8 +112,8 @@ def create_preview_result(task: dict[str, Any]) -> VerificationResult:
             template_id="no_template",
             completed_without_errors=False,
             question_text=task["question_text"],
-            answering_model=task["answering_model"].id,
-            parsing_model=task["parsing_model"].id,
+            answering=answering_identity,
+            parsing=parsing_identity,
             execution_time=0.0,
             timestamp="",  # Empty timestamp indicates "starting" event
             result_id=preview_result_id,

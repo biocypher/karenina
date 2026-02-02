@@ -19,6 +19,7 @@ import logging
 from contextlib import AsyncExitStack
 from typing import Any
 
+from anthropic import Omit
 from dotenv import load_dotenv
 
 from karenina.ports import (
@@ -34,7 +35,6 @@ from karenina.ports import (
     Tool,
     UsageMetadata,
 )
-from karenina.ports.messages import TextContent
 from karenina.schemas.workflow.models import ModelConfig
 
 from .mcp import connect_all_mcp_servers, get_all_mcp_tools
@@ -44,7 +44,8 @@ from .messages import (
     convert_to_anthropic,
     extract_system_prompt,
 )
-from .tools import apply_cache_control_to_tool, wrap_mcp_tool, wrap_static_tool
+from .tools import ToolResultCollector, apply_cache_control_to_tool, wrap_mcp_tool, wrap_static_tool
+from .trace import claude_tool_messages_to_raw_trace
 from .usage import aggregate_usage, extract_usage_from_response
 
 # Load environment variables from .env file (for ANTHROPIC_API_KEY)
@@ -107,42 +108,6 @@ class ClaudeToolAgentAdapter:
             self._async_client = AsyncAnthropic()
         return self._async_client
 
-    def _build_raw_trace(self, trace_messages: list[Message]) -> str:
-        """Build raw_trace string from collected messages.
-
-        Produces a format compatible with existing infrastructure that uses
-        delimiters like "--- AI Message ---".
-
-        Args:
-            trace_messages: List of unified Message objects.
-
-        Returns:
-            Formatted trace string.
-        """
-        parts: list[str] = []
-
-        for msg in trace_messages:
-            if msg.role == Role.ASSISTANT:
-                parts.append("--- AI Message ---")
-                # Add text content
-                for block in msg.content:
-                    if isinstance(block, TextContent):
-                        parts.append(block.text)
-                    elif hasattr(block, "name"):
-                        # Tool use
-                        parts.append(f"[Tool: {block.name}]")
-            elif msg.role == Role.USER:
-                # Skip user messages in trace (original question is known)
-                pass
-            elif msg.role == Role.TOOL:
-                # Tool results
-                for block in msg.content:
-                    if hasattr(block, "content"):
-                        preview = str(block.content)[:200]
-                        parts.append(f"[Tool Result: {preview}...]")
-
-        return "\n".join(parts)
-
     def _extract_final_response(self, trace_messages: list[Message]) -> str:
         """Extract final text response from trace messages.
 
@@ -190,13 +155,14 @@ class ClaudeToolAgentAdapter:
         exit_stack = AsyncExitStack()
 
         try:
-            # Build tool list
+            # Build tool list with result collector for trace capture
             all_tools: list[Any] = []
+            collector = ToolResultCollector()
 
             # Wrap static tools (if any)
             if tools:
                 for tool in tools:
-                    all_tools.append(wrap_static_tool(tool))
+                    all_tools.append(wrap_static_tool(tool, collector=collector))
 
             # Connect to MCP servers and wrap their tools
             if mcp_servers:
@@ -204,7 +170,7 @@ class ClaudeToolAgentAdapter:
                 mcp_tool_list = await get_all_mcp_tools(sessions)
 
                 for server_name, session, mcp_tool in mcp_tool_list:
-                    wrapped = wrap_mcp_tool(session, mcp_tool, server_name)
+                    wrapped = wrap_mcp_tool(session, mcp_tool, server_name, collector=collector)
                     all_tools.append(wrapped)
                     logger.debug(f"Added MCP tool '{mcp_tool.name}' from server '{server_name}'")
 
@@ -221,6 +187,7 @@ class ClaudeToolAgentAdapter:
                 messages=messages,
                 tools=all_tools,
                 config=config,
+                collector=collector,
             )
 
             return result
@@ -239,6 +206,7 @@ class ClaudeToolAgentAdapter:
         messages: list[Message],
         tools: list[Any],
         config: AgentConfig,
+        collector: ToolResultCollector | None = None,
     ) -> AgentResult:
         """Execute the agent loop using tool_runner.
 
@@ -246,6 +214,7 @@ class ClaudeToolAgentAdapter:
             messages: Input messages.
             tools: List of wrapped tool functions.
             config: Agent configuration.
+            collector: Optional collector capturing tool results for trace.
 
         Returns:
             AgentResult with execution results.
@@ -270,6 +239,11 @@ class ClaudeToolAgentAdapter:
             "model": self._config.model_name,
             "max_tokens": self._config.max_tokens,
             "messages": anthropic_messages,
+            # Workaround for anthropic SDK 0.77.0 bug: tool_runner -> parse()
+            # reassigns betas=[] when not given, then is_given([]) returns True,
+            # producing an empty "anthropic-beta: " header that the API rejects.
+            # Using Omit() removes the header during _merge_mappings.
+            "extra_headers": {"anthropic-beta": Omit()},
         }
 
         # Add tools if any
@@ -293,8 +267,13 @@ class ClaudeToolAgentAdapter:
         turns = 0
         limit_reached = False
 
+        # Track tool_use blocks from previous assistant message to inject
+        # tool result messages after the tool_runner executes them
+        prev_tool_uses: list[Any] = []
+
         async def execute_loop() -> None:
             nonlocal collected_responses, trace_messages, total_usage, turns, limit_reached
+            nonlocal prev_tool_uses
 
             # Create the tool_runner
             runner = client.beta.messages.tool_runner(**kwargs)
@@ -303,9 +282,37 @@ class ClaudeToolAgentAdapter:
                 turns += 1
                 collected_responses.append(response)
 
+                # Inject tool result messages from previous turn's tool_use blocks.
+                # By the time tool_runner yields the next response, it has already
+                # executed the tools from the previous response.
+                if prev_tool_uses and collector is not None:
+                    collected_results = collector.drain()
+                    # Match by order — tool_runner executes tools in the order
+                    # they appear in the assistant message
+                    for i, tool_use in enumerate(prev_tool_uses):
+                        if i < len(collected_results):
+                            record = collected_results[i]
+                            tool_msg = Message.tool_result(
+                                tool_use_id=tool_use.id,
+                                content=record.content,
+                                is_error=record.is_error,
+                            )
+                        else:
+                            # Fallback if collector missed a result
+                            tool_msg = Message.tool_result(
+                                tool_use_id=tool_use.id,
+                                content="[Tool result not captured]",
+                                is_error=False,
+                            )
+                        trace_messages.append(tool_msg)
+                    prev_tool_uses = []
+
                 # Convert response to unified Message
                 unified_msg = convert_from_anthropic_message(response)
                 trace_messages.append(unified_msg)
+
+                # Track tool_use blocks for next iteration
+                prev_tool_uses = unified_msg.tool_calls
 
                 # Aggregate usage
                 response_usage = extract_usage_from_response(response, model=self._config.model_name)
@@ -327,7 +334,7 @@ class ClaudeToolAgentAdapter:
             raise AgentResponseError("No messages received from tool_runner")
 
         # Build outputs
-        raw_trace = self._build_raw_trace(trace_messages)
+        raw_trace = claude_tool_messages_to_raw_trace(trace_messages)
         if limit_reached:
             raw_trace += "\n\n[Note: Turn limit reached - partial response shown]"
 

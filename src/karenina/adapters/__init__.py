@@ -36,7 +36,6 @@ if TYPE_CHECKING:
     from karenina.adapters.factory import (
         build_llm_kwargs,
         check_adapter_available,
-        format_model_string,
         get_agent,
         get_llm,
         get_parser,
@@ -54,7 +53,6 @@ __all__ = [
     "get_agent",
     "get_parser",
     "check_adapter_available",
-    "format_model_string",
     "build_llm_kwargs",
     "validate_model_config",
     # Availability checking
@@ -75,7 +73,6 @@ def __getattr__(name: str) -> Any:
         "get_agent",
         "get_parser",
         "check_adapter_available",
-        "format_model_string",
         "build_llm_kwargs",
         "validate_model_config",
     ):
@@ -83,7 +80,6 @@ def __getattr__(name: str) -> Any:
             from karenina.adapters.factory import (
                 build_llm_kwargs,
                 check_adapter_available,
-                format_model_string,
                 get_agent,
                 get_llm,
                 get_parser,
@@ -95,7 +91,6 @@ def __getattr__(name: str) -> Any:
                 "get_agent": get_agent,
                 "get_parser": get_parser,
                 "check_adapter_available": check_adapter_available,
-                "format_model_string": format_model_string,
                 "build_llm_kwargs": build_llm_kwargs,
                 "validate_model_config": validate_model_config,
             }[name]

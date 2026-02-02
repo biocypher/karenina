@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING, TypeVar
 
 from pydantic import BaseModel
 
-from karenina.ports import Message, ParseError, ParserPort
+from karenina.ports import Message, ParseError, ParsePortResult, ParserPort, UsageMetadata
 from karenina.ports.capabilities import PortCapabilities
 from karenina.utils.json_extraction import extract_json_from_response, is_invalid_json_error
 
@@ -166,7 +166,7 @@ class LangChainParserAdapter:
         """
         return PortCapabilities(supports_system_prompt=True, supports_structured_output=False)
 
-    async def aparse_to_pydantic(self, messages: list[Message], schema: type[T]) -> T:
+    async def aparse_to_pydantic(self, messages: list[Message], schema: type[T]) -> ParsePortResult[T]:
         """Parse using pre-assembled prompt messages into a structured Pydantic model.
 
         The caller assembles prompt messages (via PromptAssembler). This adapter
@@ -185,39 +185,54 @@ class LangChainParserAdapter:
                     Field descriptions guide the LLM on what to extract.
 
         Returns:
-            An instance of the schema type with extracted values.
+            ParsePortResult containing the parsed model and usage metadata.
 
         Raises:
             ParseError: If the LLM fails to extract valid structured data after all retries.
             PortError: If the underlying LLM invocation fails.
         """
 
+        def _aggregate_usage(a: UsageMetadata, b: UsageMetadata) -> UsageMetadata:
+            """Sum two UsageMetadata instances."""
+            return UsageMetadata(
+                input_tokens=a.input_tokens + b.input_tokens,
+                output_tokens=a.output_tokens + b.output_tokens,
+                total_tokens=a.total_tokens + b.total_tokens,
+                model=a.model or b.model,
+            )
+
+        total_usage = UsageMetadata()
+
         # Strategy 1: Try native structured output for more reliable parsing
         try:
             structured_adapter = self._llm_adapter.with_structured_output(schema)
             llm_response = await structured_adapter.ainvoke(messages)
+            usage = llm_response.usage if llm_response.usage else UsageMetadata()
+            total_usage = _aggregate_usage(total_usage, usage)
 
             # The raw response should be the parsed schema instance
             if isinstance(llm_response.raw, schema):
                 logger.debug("Template parsing succeeded via native structured output")
-                return llm_response.raw
+                return ParsePortResult(parsed=llm_response.raw, usage=total_usage)
 
             # Otherwise, try to parse the content
             result = self._parse_response_content(llm_response.content, schema)
             logger.debug("Template parsing succeeded via structured output content parsing")
-            return result
+            return ParsePortResult(parsed=result, usage=total_usage)
 
         except Exception as structured_error:
             logger.debug(f"Structured output parsing failed: {structured_error}")
 
         # Strategy 2: Fallback to regular LLM invocation with manual JSON parsing
         llm_response = await self._llm_adapter.ainvoke(messages)
+        usage = llm_response.usage if llm_response.usage else UsageMetadata()
+        total_usage = _aggregate_usage(total_usage, usage)
         raw_content = llm_response.content
 
         try:
             result = self._parse_response_content(raw_content, schema)
             logger.debug("Template parsing succeeded via fallback JSON parsing")
-            return result
+            return ParsePortResult(parsed=result, usage=total_usage)
         except Exception as parse_error:
             logger.debug(f"Fallback JSON parsing failed: {parse_error}")
 
@@ -226,26 +241,28 @@ class LangChainParserAdapter:
                 raise ParseError(f"Failed to parse response: {parse_error}") from parse_error
 
             # Strategy 3: Try null-value feedback retry
-            null_retry_result = await self._retry_with_null_feedback(
+            null_retry_result, null_retry_usage = await self._retry_with_null_feedback(
                 original_messages=messages,
                 failed_response=raw_content,
                 error=parse_error,
                 schema=schema,
             )
+            total_usage = _aggregate_usage(total_usage, null_retry_usage)
 
             if null_retry_result is not None:
-                return null_retry_result
+                return ParsePortResult(parsed=null_retry_result, usage=total_usage)
 
             # Strategy 4: Try format feedback retry
-            format_retry_result = await self._retry_with_format_feedback(
+            format_retry_result, format_retry_usage = await self._retry_with_format_feedback(
                 original_messages=messages,
                 failed_response=raw_content,
                 error=parse_error,
                 schema=schema,
             )
+            total_usage = _aggregate_usage(total_usage, format_retry_usage)
 
             if format_retry_result is not None:
-                return format_retry_result
+                return ParsePortResult(parsed=format_retry_result, usage=total_usage)
 
             # All strategies failed
             preview = raw_content[:200] if len(raw_content) > 200 else raw_content
@@ -253,7 +270,7 @@ class LangChainParserAdapter:
                 f"Failed to parse response into {schema.__name__} after all retry strategies: {preview}"
             ) from parse_error
 
-    def parse_to_pydantic(self, messages: list[Message], schema: type[T]) -> T:
+    def parse_to_pydantic(self, messages: list[Message], schema: type[T]) -> ParsePortResult[T]:
         """Parse using pre-assembled prompt messages (sync).
 
         This is a convenience wrapper around aparse_to_pydantic() for sync code.
@@ -263,7 +280,7 @@ class LangChainParserAdapter:
             schema: A Pydantic model class defining the expected structure.
 
         Returns:
-            An instance of the schema type with extracted values.
+            ParsePortResult containing the parsed model and usage metadata.
 
         Raises:
             ParseError: If the LLM fails to extract valid structured data.
@@ -281,7 +298,7 @@ class LangChainParserAdapter:
             asyncio.get_running_loop()
 
             # Use ThreadPoolExecutor to avoid nested event loop issues
-            def run_in_thread() -> T:
+            def run_in_thread() -> ParsePortResult[T]:
                 return asyncio.run(self.aparse_to_pydantic(messages, schema))
 
             with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -348,7 +365,7 @@ class LangChainParserAdapter:
         failed_response: str,
         error: Exception,
         schema: type[T],
-    ) -> T | None:
+    ) -> tuple[T | None, UsageMetadata]:
         """Retry parsing with feedback about null values in required fields.
 
         When parsing fails due to null values, this method:
@@ -363,8 +380,10 @@ class LangChainParserAdapter:
             schema: The Pydantic schema to parse into.
 
         Returns:
-            Parsed answer if retry succeeds, None if retry also fails.
+            Tuple of (parsed answer or None, usage from retry call).
         """
+        empty_usage = UsageMetadata()
+
         # Try to extract JSON from error message
         failed_json = None
         error_str = str(error)
@@ -381,7 +400,7 @@ class LangChainParserAdapter:
 
         if not null_fields:
             logger.debug("Parsing error is not null-related, skipping null-value retry")
-            return None
+            return None, empty_usage
 
         logger.info(f"Detected null values in required fields: {null_fields}. Retrying with feedback...")
 
@@ -395,13 +414,14 @@ class LangChainParserAdapter:
 
         try:
             llm_response = await self._llm_adapter.ainvoke(retry_messages)
+            retry_usage = llm_response.usage if llm_response.usage else empty_usage
             result = self._parse_response_content(llm_response.content, schema)
             logger.info(f"Successfully parsed after null-value retry. Fixed fields: {field_list}")
-            return result
+            return result, retry_usage
 
         except Exception as e:
             logger.warning(f"Retry parsing failed after null-value feedback: {e}")
-            return None
+            return None, empty_usage
 
     async def _retry_with_format_feedback(
         self,
@@ -409,7 +429,7 @@ class LangChainParserAdapter:
         failed_response: str,
         error: Exception,
         schema: type[T],
-    ) -> T | None:
+    ) -> tuple[T | None, UsageMetadata]:
         """Retry parsing with feedback about JSON format requirements.
 
         When parsing fails due to invalid JSON (e.g., reasoning text mixed with JSON),
@@ -425,12 +445,14 @@ class LangChainParserAdapter:
             schema: The Pydantic schema to parse into.
 
         Returns:
-            Parsed answer if retry succeeds, None if retry also fails.
+            Tuple of (parsed answer or None, usage from retry call).
         """
+        empty_usage = UsageMetadata()
+
         # Only handle JSON format errors
         if not is_invalid_json_error(error):
             logger.debug("Error is not JSON-format related, skipping format feedback retry")
-            return None
+            return None, empty_usage
 
         logger.info("Detected invalid JSON output. Retrying with format feedback...")
 
@@ -456,13 +478,14 @@ class LangChainParserAdapter:
 
         try:
             llm_response = await self._llm_adapter.ainvoke(retry_messages)
+            retry_usage = llm_response.usage if llm_response.usage else empty_usage
             result = self._parse_response_content(llm_response.content, schema)
             logger.info("Successfully parsed after format feedback retry")
-            return result
+            return result, retry_usage
 
         except Exception as e:
             logger.warning(f"Retry parsing failed after format feedback: {e}")
-            return None
+            return None, empty_usage
 
     async def aclose(self) -> None:
         """Close underlying resources.

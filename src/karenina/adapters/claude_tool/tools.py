@@ -4,12 +4,16 @@ This module provides utilities for converting tools between karenina's Tool form
 and the Anthropic SDK's @beta_async_tool decorator format. It handles both:
 1. Static Tool definitions from karenina's ports
 2. Dynamic MCP tools from connected MCP servers
+
+It also provides ToolResultCollector for capturing tool execution results
+so they can be included in the trace as tool-role messages.
 """
 
 from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Coroutine
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -20,10 +24,43 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class ToolResultRecord:
+    """A single captured tool execution result."""
+
+    tool_name: str
+    content: str
+    is_error: bool
+
+
+class ToolResultCollector:
+    """Collects tool execution results for trace reconstruction.
+
+    The Anthropic tool_runner handles tool execution internally and only
+    yields assistant messages. This collector captures tool results as they
+    flow through wrapper functions so they can be injected into the trace
+    as tool-role messages.
+    """
+
+    def __init__(self) -> None:
+        self._results: list[ToolResultRecord] = []
+
+    def record(self, tool_name: str, content: str, is_error: bool = False) -> None:
+        """Record a tool execution result."""
+        self._results.append(ToolResultRecord(tool_name=tool_name, content=content, is_error=is_error))
+
+    def drain(self) -> list[ToolResultRecord]:
+        """Return and clear all collected results."""
+        results = self._results.copy()
+        self._results.clear()
+        return results
+
+
 def create_mcp_tool_function(
     session: Any,
     mcp_tool: Any,
     server_name: str,
+    collector: ToolResultCollector | None = None,
 ) -> Callable[..., Coroutine[Any, Any, str]]:
     """Create an async tool function that wraps an MCP tool.
 
@@ -34,6 +71,7 @@ def create_mcp_tool_function(
         session: The MCP ClientSession for this server.
         mcp_tool: The MCP tool definition (has name, description, inputSchema).
         server_name: Name of the MCP server (used for logging).
+        collector: Optional collector to capture tool results for trace.
 
     Returns:
         An async function that executes the MCP tool.
@@ -54,11 +92,19 @@ def create_mcp_tool_function(
 
             response = "\n".join(text_parts)
             logger.debug(f"MCP tool '{mcp_tool.name}' returned: {response[:200]}...")
+
+            if collector is not None:
+                collector.record(tool_name=mcp_tool.name, content=response, is_error=False)
+
             return response
 
         except Exception as e:
             error_msg = f"Error calling MCP tool '{mcp_tool.name}': {e}"
             logger.error(error_msg)
+
+            if collector is not None:
+                collector.record(tool_name=mcp_tool.name, content=error_msg, is_error=True)
+
             return error_msg
 
     return tool_fn
@@ -68,6 +114,7 @@ def wrap_mcp_tool(
     session: ClientSession,
     mcp_tool: Any,
     server_name: str,
+    collector: ToolResultCollector | None = None,
 ) -> Any:
     """Wrap an MCP tool with the @beta_async_tool decorator.
 
@@ -77,6 +124,7 @@ def wrap_mcp_tool(
         session: The MCP ClientSession for this server.
         mcp_tool: The MCP tool definition from session.list_tools().
         server_name: Name of the MCP server (used for namespacing).
+        collector: Optional collector to capture tool results for trace.
 
     Returns:
         A decorated async function ready for use with tool_runner.
@@ -84,7 +132,7 @@ def wrap_mcp_tool(
     from anthropic import beta_async_tool
 
     # Create the tool function
-    tool_fn = create_mcp_tool_function(session, mcp_tool, server_name)
+    tool_fn = create_mcp_tool_function(session, mcp_tool, server_name, collector=collector)
 
     # Apply the beta_async_tool decorator
     decorated = beta_async_tool(
@@ -96,7 +144,7 @@ def wrap_mcp_tool(
     return decorated
 
 
-def wrap_static_tool(tool: Tool) -> Any:
+def wrap_static_tool(tool: Tool, collector: ToolResultCollector | None = None) -> Any:
     """Wrap a static Tool definition with @beta_async_tool decorator.
 
     Creates a callable for tools that don't need MCP session execution.
@@ -105,6 +153,7 @@ def wrap_static_tool(tool: Tool) -> Any:
 
     Args:
         tool: A Tool definition from karenina's ports.
+        collector: Optional collector to capture tool results for trace.
 
     Returns:
         A decorated async function ready for use with tool_runner.
@@ -119,7 +168,10 @@ def wrap_static_tool(tool: Tool) -> Any:
     async def tool_fn(**kwargs: Any) -> str:
         """Placeholder tool function."""
         # Static tools without MCP backing don't have execution logic
-        return f"Tool '{tool.name}' was called with arguments: {kwargs}"
+        response = f"Tool '{tool.name}' was called with arguments: {kwargs}"
+        if collector is not None:
+            collector.record(tool_name=tool.name, content=response, is_error=False)
+        return response
 
     decorated = beta_async_tool(
         name=tool.name,

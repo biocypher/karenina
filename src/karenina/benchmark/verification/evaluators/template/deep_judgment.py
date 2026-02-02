@@ -570,8 +570,15 @@ Reasoning Traces (explaining how excerpts inform each attribute value):
     )
 
     # Use ParserPort for parsing - it handles LLM call, JSON parsing, and retry logic internally
-    parsed_answer = parser.parse_to_pydantic(stage3_messages, RawAnswer)
+    parse_port_result = parser.parse_to_pydantic(stage3_messages, RawAnswer)
+    parsed_answer = parse_port_result.parsed
     model_calls += 1  # ParserPort makes at least one LLM call
+
+    # Track parsing usage from deep judgment if tracker provided
+    if usage_tracker is not None and parse_port_result.usage:
+        usage_dict = parse_port_result.usage.to_dict()
+        if usage_dict.get("input_tokens", 0) > 0 or usage_dict.get("output_tokens", 0) > 0:
+            usage_tracker.track_call("parsing", parsing_model_str, usage_dict)
 
     stages_completed.append("parameters")
     logger.info("Stage 3 completed: Parameter extraction finished")
