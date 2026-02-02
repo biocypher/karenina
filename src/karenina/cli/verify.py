@@ -80,6 +80,9 @@ def _build_config_from_cli_args(
     """
     Build VerificationConfig respecting hierarchy: CLI > preset > env > defaults.
 
+    Handles CLI-specific concerns (file loading for deep_judgment_rubric_config)
+    then delegates to VerificationConfig.from_overrides() for config construction.
+
     Args:
         CLI argument values (all optional)
         preset_config: Optional preset configuration to use as base
@@ -87,154 +90,61 @@ def _build_config_from_cli_args(
     Returns:
         VerificationConfig with CLI overrides applied
     """
-    from karenina.schemas.workflow.models import ModelConfig
-
-    # Start with preset if provided, otherwise create new config
-    config_dict = preset_config.model_dump() if preset_config else {}
-
-    # Override replicate_count only if explicitly provided via CLI
-    if replicate_count is not None:
-        config_dict["replicate_count"] = replicate_count
-    elif not preset_config:
-        config_dict["replicate_count"] = 1
-
-    # Override feature flags (always override since they have defaults)
-    config_dict["abstention_enabled"] = abstention
-    config_dict["sufficiency_enabled"] = sufficiency
-    config_dict["embedding_check_enabled"] = embedding_check
-    config_dict["deep_judgment_enabled"] = deep_judgment
-
-    # Override deep judgment rubric settings (always override since they have defaults)
-    config_dict["deep_judgment_rubric_mode"] = deep_judgment_rubric_mode
-    config_dict["deep_judgment_rubric_global_excerpts"] = deep_judgment_rubric_excerpts
-    config_dict["deep_judgment_rubric_max_excerpts_default"] = deep_judgment_rubric_max_excerpts
-    config_dict["deep_judgment_rubric_fuzzy_match_threshold_default"] = deep_judgment_rubric_fuzzy_threshold
-    config_dict["deep_judgment_rubric_excerpt_retry_attempts_default"] = deep_judgment_rubric_retry_attempts
-    config_dict["deep_judgment_rubric_search_enabled"] = deep_judgment_rubric_search
-    config_dict["deep_judgment_rubric_search_tool"] = deep_judgment_rubric_search_tool
-
-    # Load custom config JSON if provided (for custom mode)
+    # CLI-specific: load custom rubric config JSON if a file path was provided
+    rubric_config_dict = None
     if deep_judgment_rubric_config is not None:
         import json
 
         try:
             with open(deep_judgment_rubric_config) as f:
-                custom_config = json.load(f)
-            config_dict["deep_judgment_rubric_config"] = custom_config
+                rubric_config_dict = json.load(f)
         except Exception as e:
             raise ValueError(f"Failed to load custom rubric config from {deep_judgment_rubric_config}: {e}") from e
 
-    # Override MCP trace filtering settings (always override since they have defaults)
-    config_dict["use_full_trace_for_template"] = use_full_trace_for_template
-    config_dict["use_full_trace_for_rubric"] = use_full_trace_for_rubric
+    # Resolve interface for answering vs parsing:
+    # Parsing model should NOT use manual interface (only answering model can)
+    answering_interface = interface
+    parsing_interface = interface if interface != "manual" else "langchain"
 
-    # Override advanced settings (always override since they have defaults)
-    config_dict["evaluation_mode"] = evaluation_mode
-    # Set rubric_enabled based on evaluation_mode
-    config_dict["rubric_enabled"] = evaluation_mode in ["template_and_rubric", "rubric_only"]
-    config_dict["embedding_similarity_threshold"] = embedding_threshold
-    config_dict["embedding_model_name"] = embedding_model
-    config_dict["async_enabled"] = async_execution
-    if async_workers is not None:
-        config_dict["async_max_workers"] = async_workers
-    # else: let VerificationConfig read from KARENINA_ASYNC_MAX_WORKERS or use default
-
-    # Handle model configuration
-    # If ANY optional model CLI arg is provided, we override that model completely
-    # Note: answering_id, parsing_id, and temperature now have defaults so always count as provided
-    answering_has_cli_args = any(
-        [
-            answering_model is not None,
-            answering_provider is not None,
-            interface is not None,
-        ]
+    return VerificationConfig.from_overrides(
+        base=preset_config,
+        # Model configuration
+        answering_model=answering_model,
+        answering_provider=answering_provider,
+        answering_id=answering_id,
+        answering_interface=answering_interface,
+        parsing_model=parsing_model,
+        parsing_provider=parsing_provider,
+        parsing_id=parsing_id,
+        parsing_interface=parsing_interface,
+        temperature=temperature,
+        manual_traces=manual_traces_obj,
+        # Execution settings
+        replicate_count=replicate_count,
+        # Feature flags
+        abstention=abstention,
+        sufficiency=sufficiency,
+        embedding_check=embedding_check,
+        deep_judgment=deep_judgment,
+        # Evaluation settings
+        evaluation_mode=evaluation_mode,
+        embedding_threshold=embedding_threshold,
+        embedding_model=embedding_model,
+        async_execution=async_execution,
+        async_workers=async_workers,
+        # Trace filtering
+        use_full_trace_for_template=use_full_trace_for_template,
+        use_full_trace_for_rubric=use_full_trace_for_rubric,
+        # Deep judgment rubric settings
+        deep_judgment_rubric_mode=deep_judgment_rubric_mode,
+        deep_judgment_rubric_excerpts=deep_judgment_rubric_excerpts,
+        deep_judgment_rubric_max_excerpts=deep_judgment_rubric_max_excerpts,
+        deep_judgment_rubric_fuzzy_threshold=deep_judgment_rubric_fuzzy_threshold,
+        deep_judgment_rubric_retry_attempts=deep_judgment_rubric_retry_attempts,
+        deep_judgment_rubric_search=deep_judgment_rubric_search,
+        deep_judgment_rubric_search_tool=deep_judgment_rubric_search_tool,
+        deep_judgment_rubric_config=rubric_config_dict,
     )
-
-    parsing_has_cli_args = any(
-        [
-            parsing_model is not None,
-            parsing_provider is not None,
-            interface is not None,
-        ]
-    )
-
-    if answering_has_cli_args:
-        # Build answering model from CLI args
-        # Use preset values as defaults if available
-        if preset_config and preset_config.answering_models:
-            base_model = preset_config.answering_models[0].model_dump()
-        else:
-            # No preset - start with minimal required fields
-            # For manual interface, only interface and manual_traces are required
-            if interface == "manual":
-                base_model = {
-                    "interface": "manual",
-                    # id, model_name, model_provider will be set by ModelConfig defaults
-                }
-            else:
-                # Validation ensures model_name and provider are provided when no preset
-                base_model = {
-                    "model_name": answering_model or "gpt-4.1-mini",
-                    "model_provider": answering_provider or "openai",
-                    "interface": interface or "langchain",
-                    "temperature": temperature if temperature is not None else 0.1,
-                    "id": answering_id,
-                }
-
-        # Apply CLI overrides if preset was used
-        if preset_config:
-            if answering_model is not None:
-                base_model["model_name"] = answering_model
-            if answering_provider is not None:
-                base_model["model_provider"] = answering_provider
-            base_model["id"] = answering_id
-            if temperature is not None:
-                base_model["temperature"] = temperature
-            if interface is not None:
-                base_model["interface"] = interface
-
-        # Create ModelConfig
-        if base_model.get("interface") == "manual":
-            if manual_traces_obj is None:
-                raise ValueError("manual_traces_obj is None but interface is manual")
-            # Create ModelConfig directly with required parameters for manual interface
-            model_config = ModelConfig(interface="manual", manual_traces=manual_traces_obj)
-            config_dict["answering_models"] = [model_config]
-        else:
-            config_dict["answering_models"] = [ModelConfig(**base_model)]
-
-    if parsing_has_cli_args:
-        # Build parsing model from CLI args
-        if preset_config and preset_config.parsing_models:
-            base_model = preset_config.parsing_models[0].model_dump()
-        else:
-            # No preset - start with minimal required fields
-            # Validation ensures model_name and provider are provided when no preset
-            # Note: Parsing model should NOT use manual interface (only answering model can)
-            parsing_interface = interface if interface != "manual" else "langchain"
-            base_model = {
-                "model_name": parsing_model or "gpt-4.1-mini",
-                "model_provider": parsing_provider or "openai",
-                "interface": parsing_interface,
-                "temperature": temperature if temperature is not None else 0.1,
-                "id": parsing_id,
-            }
-
-        # Apply CLI overrides if preset was used
-        if preset_config:
-            if parsing_model is not None:
-                base_model["model_name"] = parsing_model
-            if parsing_provider is not None:
-                base_model["model_provider"] = parsing_provider
-            base_model["id"] = parsing_id
-            if temperature is not None:
-                base_model["temperature"] = temperature
-            if interface is not None and interface != "manual":
-                base_model["interface"] = interface
-
-        config_dict["parsing_models"] = [ModelConfig(**base_model)]
-
-    return VerificationConfig(**config_dict)
 
 
 def _validate_output_and_prompt(
