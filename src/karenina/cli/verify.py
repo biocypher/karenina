@@ -52,9 +52,9 @@ def _build_config_from_cli_args(
     parsing_model: str | None,
     parsing_provider: str | None,
     parsing_id: str,
-    temperature: float,
+    temperature: float | None,
     interface: str | None,
-    replicate_count: int,
+    replicate_count: int | None,
     abstention: bool,
     sufficiency: bool,
     embedding_check: bool,
@@ -92,10 +92,11 @@ def _build_config_from_cli_args(
     # Start with preset if provided, otherwise create new config
     config_dict = preset_config.model_dump() if preset_config else {}
 
-    # Override replicate_count only if no preset OR if explicitly different from default
-    # (This preserves preset value unless user explicitly passes --replicate-count)
-    if not preset_config or replicate_count != 1:
+    # Override replicate_count only if explicitly provided via CLI
+    if replicate_count is not None:
         config_dict["replicate_count"] = replicate_count
+    elif not preset_config:
+        config_dict["replicate_count"] = 1
 
     # Override feature flags (always override since they have defaults)
     config_dict["abstention_enabled"] = abstention
@@ -176,7 +177,7 @@ def _build_config_from_cli_args(
                     "model_name": answering_model or "gpt-4.1-mini",
                     "model_provider": answering_provider or "openai",
                     "interface": interface or "langchain",
-                    "temperature": temperature,
+                    "temperature": temperature if temperature is not None else 0.1,
                     "id": answering_id,
                 }
 
@@ -187,7 +188,8 @@ def _build_config_from_cli_args(
             if answering_provider is not None:
                 base_model["model_provider"] = answering_provider
             base_model["id"] = answering_id
-            base_model["temperature"] = temperature
+            if temperature is not None:
+                base_model["temperature"] = temperature
             if interface is not None:
                 base_model["interface"] = interface
 
@@ -214,7 +216,7 @@ def _build_config_from_cli_args(
                 "model_name": parsing_model or "gpt-4.1-mini",
                 "model_provider": parsing_provider or "openai",
                 "interface": parsing_interface,
-                "temperature": temperature,
+                "temperature": temperature if temperature is not None else 0.1,
                 "id": parsing_id,
             }
 
@@ -225,7 +227,8 @@ def _build_config_from_cli_args(
             if parsing_provider is not None:
                 base_model["model_provider"] = parsing_provider
             base_model["id"] = parsing_id
-            base_model["temperature"] = temperature
+            if temperature is not None:
+                base_model["temperature"] = temperature
             if interface is not None and interface != "manual":
                 base_model["interface"] = interface
 
@@ -711,8 +714,8 @@ def _build_config_non_interactive(
     parsing_model: str | None,
     parsing_provider: str | None,
     parsing_id: str,
-    temperature: float,
-    replicate_count: int,
+    temperature: float | None,
+    replicate_count: int | None,
     abstention: bool,
     sufficiency: bool,
     embedding_check: bool,
@@ -904,12 +907,12 @@ def verify(
         str | None, typer.Option(help="Parsing model provider for langchain (required without preset)")
     ] = None,
     parsing_id: Annotated[str, typer.Option(help="Parsing model ID")] = "parsing-1",
-    temperature: Annotated[float, typer.Option(help="Model temperature (0.0-2.0)")] = 0.1,
+    temperature: Annotated[float | None, typer.Option(help="Model temperature (0.0-2.0)")] = None,
     interface: Annotated[
         str | None, typer.Option(help="Model interface: langchain/openrouter/openai_endpoint (required without preset)")
     ] = None,
     # General settings
-    replicate_count: Annotated[int, typer.Option(help="Number of replicates per verification")] = 1,
+    replicate_count: Annotated[int | None, typer.Option(help="Number of replicates per verification")] = None,
     # Feature flags
     abstention: Annotated[bool, typer.Option("--abstention", help="Enable abstention detection")] = False,
     sufficiency: Annotated[bool, typer.Option("--sufficiency", help="Enable trace sufficiency detection")] = False,
