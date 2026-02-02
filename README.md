@@ -13,6 +13,8 @@
 
 </div>
 
+> **Note:** Karenina is still experimental and under active, fast-paced development. APIs and features may change without notice. A first stable release will be available soon — stay tuned!
+
 ---
 
 ## 📑 Table of Contents
@@ -52,6 +54,16 @@ At the heart of Karenina are two key concepts: **templates** and **rubrics**. Te
 ## 🏗️ Architecture
 
 Karenina is a **standalone Python library** that can be used independently for all benchmarking workflows through Python code.
+
+### Ports & Adapters
+
+Karenina uses a **hexagonal architecture** (Ports & Adapters) for LLM interactions. Three protocol interfaces define what the application needs:
+
+- **LLMPort** — Basic LLM text generation
+- **AgentPort** — Agentic LLM with tool use and MCP support
+- **ParserPort** — Structured output parsing into Pydantic models
+
+Each supported interface (`langchain`, `claude_agent_sdk`, `claude_tool`, `openrouter`, `openai_endpoint`, `manual`) provides adapter implementations for these ports. An **adapter factory** handles instantiation, and an **AdapterInstructionRegistry** manages interface-specific prompt transformations — keeping adapters as pure executors that receive pre-assembled prompts.
 
 ### Graphical User Interface
 
@@ -250,18 +262,15 @@ benchmark.generate_all_templates(model_config=model_config)
 ### 4. Add Rubrics (Optional)
 
 ```python
-from karenina.schemas import RubricTrait
+from karenina.schemas import LLMRubricTrait
 
-# Create a global rubric to assess answer quality
-benchmark.create_global_rubric(
-    name="Answer Quality",
-    traits=[
-        RubricTrait(
-            name="Conciseness",
-            description="Rate how concise the answer is (1-5)",
-            kind="score"
-        )
-    ]
+# Add a global rubric trait to assess answer quality
+benchmark.add_global_rubric_trait(
+    LLMRubricTrait(
+        name="Conciseness",
+        description="Rate how concise the answer is (1-5)",
+        kind="score"
+    )
 )
 ```
 
@@ -281,7 +290,7 @@ config = VerificationConfig(
 results = benchmark.run_verification(config)
 
 # Analyze results
-passed = sum(1 for r in results.values() if r.verify_result)
+passed = sum(1 for r in results if r.template.verify_result)
 print(f"Pass Rate: {(passed/len(results)*100):.1f}%")
 ```
 
@@ -345,6 +354,23 @@ karenina preset show gpt-oss
 
 # Delete a preset
 karenina preset delete old-config
+```
+
+### Web Server
+
+```bash
+# Start the web server (serves GUI + API)
+karenina serve --port 8080
+
+# Initialize the webapp (first-time setup)
+karenina init
+```
+
+### Verification Status
+
+```bash
+# Inspect progressive save state from a previous run
+karenina verify-status results/
 ```
 
 ### Key Features
@@ -413,7 +439,7 @@ While templates excel at verifying **factual correctness**, many evaluation scen
 | **Evaluation Method** | Programmatic field comparison | Four approaches:<br>• LLM judgment<br>• Regex patterns<br>• Custom Python functions<br>• Term extraction + metrics |
 | **Best for** | Precise, unambiguous answers | Subjective qualities, format validation, custom logic, quantitative analysis |
 | **Trait Types** | Single verification method | **Four types:**<br>• LLM-based (qualitative)<br>• Regex-based (format)<br>• Callable (custom Python)<br>• Metric-based (term extraction) |
-| **Output** | Pass/fail per field | • Boolean (binary traits)<br>• Scores 1-5 (score traits)<br>• Precision/Recall/F1 (metric traits) |
+| **Output** | Pass/fail per field | • Boolean (binary traits)<br>• Scores 1-5 (score traits)<br>• Class index (literal traits)<br>• Precision/Recall/F1 (metric traits) |
 | **Examples** | `"BCL2"`, `"46 chromosomes"` | • "Is the answer concise?" (LLM)<br>• Match email pattern (regex)<br>• Extract diseases for F1 score (metric) |
 | **Scope** | Per question | Global or per question |
 
@@ -427,6 +453,7 @@ AI-evaluated qualitative assessments where a judge LLM evaluates subjective qual
 
 - **Score-based (1-5):** "Rate the scientific accuracy of the answer"
 - **Binary (pass/fail):** "Does the answer mention safety concerns?"
+- **Literal (classification):** "Classify the tone as: formal, casual, or technical"
 
 **2. Regex Pattern Traits**
 
@@ -475,11 +502,19 @@ Karenina provides comprehensive tools for every stage of the benchmarking workfl
   - Regex-based traits (pattern matching for format validation)
   - Callable traits (custom Python functions)
   - Metric-based traits (precision, recall, F1, accuracy)
-- **Benchmark Verification**: Run evaluations with four supported interfaces:
-  - `langchain` (OpenAI, Google Gemini, Anthropic Claude)
+- **Benchmark Verification**: Run evaluations with six supported interfaces:
+  - `langchain` (OpenAI, Google Gemini, Anthropic Claude via LangChain)
+  - `claude_agent_sdk` (Native Anthropic Agent SDK)
+  - `claude_tool` (Claude-specific tool use with native structured output)
   - `openrouter` (OpenRouter platform)
   - `openai_endpoint` (OpenAI-compatible endpoints for local models)
   - `manual` (Manual trace replay for testing/debugging)
+
+### Pipeline & Architecture
+
+- **13-Stage Verification Pipeline**: Modular, configurable pipeline from template validation through answer generation, parsing, verification, embedding checks, rubric evaluation, and deep-judgment — each stage can be enabled/disabled independently
+- **Ports & Adapters Architecture**: Hexagonal design with protocol interfaces (LLMPort, AgentPort, ParserPort) decoupled from backend implementations, enabling easy addition of new LLM providers
+- **Sufficiency Check**: Validate response quality before parsing (optional stage)
 
 ### Advanced Features
 
@@ -496,6 +531,7 @@ Karenina provides comprehensive tools for every stage of the benchmarking workfl
 - **Database Persistence**: SQLite storage with versioning and 10+ analytical views
 - **Export & Reporting**: CSV and JSON formats for analysis with selective column export
 - **Preset Management**: Save and reuse verification configurations with full hierarchy support
+- **Progressive Save**: Automatic checkpointing during long verification runs with resume capability
 
 [View complete feature catalog →](docs/features.md)
 
