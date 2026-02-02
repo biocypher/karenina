@@ -87,6 +87,7 @@ KARENINA_ASYNC_MAX_WORKERS={DEFAULTS["async_max_workers"]}
 # GOOGLE_API_KEY=
 """
     env_file.write_text(env_content)
+    os.chmod(env_file, 0o600)
 
     # Show summary
     console.print("\n[bold]Configuration Summary:[/bold]")
@@ -207,6 +208,7 @@ def run_advanced_setup(working_dir: Path) -> dict[str, Path]:
             env_lines.append(f"# {key}=")
 
     env_file.write_text("\n".join(env_lines) + "\n")
+    os.chmod(env_file, 0o600)
     console.print("[green]✓[/green] Created .env")
 
     console.print("\n[bold green]Advanced setup complete![/bold green]\n")

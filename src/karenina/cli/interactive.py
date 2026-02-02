@@ -256,6 +256,8 @@ def build_config_interactively(
     # Step 6: Optionally save as preset
     if Confirm.ask("\nSave this configuration as a preset?", default=False):
         preset_name = Prompt.ask("Preset name")
+        if not preset_name.strip():
+            cli_error("Preset name cannot be empty")
         preset_description = Prompt.ask("Description (optional)", default="")
 
         try:
@@ -499,7 +501,11 @@ def _prompt_for_model(model_type: str, mode: str = "basic") -> ModelConfig:
             while True:
                 console.print("\n[cyan]Add MCP Server:[/cyan]")
                 server_name = Prompt.ask("MCP server name")
+                if not server_name.strip():
+                    cli_error("MCP server name cannot be empty")
                 server_url = Prompt.ask("MCP server URL")
+                if not server_url.strip():
+                    cli_error("MCP server URL cannot be empty")
 
                 # Add to dictionary
                 temp_mcp_urls[server_name] = server_url
@@ -540,6 +546,7 @@ def _prompt_for_model(model_type: str, mode: str = "basic") -> ModelConfig:
                 console.print("[yellow]No MCP servers configured.[/yellow]")
 
             # MCP tool filter
+            # Note: mypy incorrectly infers Confirm.ask default parameter type
             if mcp_urls_dict and Confirm.ask("\nFilter specific MCP tools?", default=False):  # type: ignore[arg-type]
                 tools_str = Prompt.ask("MCP tool names (comma-separated)")
                 mcp_tool_filter = [t.strip() for t in tools_str.split(",")]

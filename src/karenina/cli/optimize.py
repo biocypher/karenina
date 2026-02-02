@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal, cast
 
 import typer
 from rich.console import Console
@@ -372,7 +372,7 @@ def optimize(
                 seed=seed,
                 reflection_model=reflection_model,
                 max_metric_calls=max_calls,
-                frontier_type=frontier_type,  # type: ignore[arg-type]
+                frontier_type=cast(Literal["instance", "objective", "hybrid", "cartesian"], frontier_type),
                 seed_prompts=seed_prompts if seed_prompts else None,
                 tracker_path=tracker_path,
                 export_preset_path=output,

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
+from pydantic import ValidationError
 from rich.console import Console
 from rich.progress import (
     BarColumn,
@@ -99,7 +100,7 @@ def _build_config_from_cli_args(
         try:
             with open(deep_judgment_rubric_config) as f:
                 rubric_config_dict = json.load(f)
-        except Exception as e:
+        except (FileNotFoundError, json.JSONDecodeError, ValueError) as e:
             raise ValueError(f"Failed to load custom rubric config from {deep_judgment_rubric_config}: {e}") from e
 
     # Resolve interface for answering vs parsing:
@@ -245,7 +246,7 @@ def _load_benchmark(benchmark_path: str) -> Benchmark:
     console.print("[cyan]Loading benchmark...[/cyan]")
     try:
         benchmark = Benchmark.load(Path(benchmark_path))
-    except Exception as e:
+    except (FileNotFoundError, ValidationError) as e:
         cli_error(f"loading benchmark: {e}", e)
 
     console.print(f"[green]✓ Loaded benchmark: {benchmark.name or 'Unnamed'}[/green]")
@@ -655,7 +656,7 @@ def _build_config_non_interactive(
             preset_path = get_preset_path(str(preset))
             preset_config = VerificationConfig.from_preset(preset_path)
             console.print(f"[green]✓ Loaded preset from: {preset_path}[/green]")
-        except Exception as e:
+        except (FileNotFoundError, ValueError, ValidationError) as e:
             cli_error(f"loading preset: {e}", e)
 
     # Validate required parameters when no preset is used
