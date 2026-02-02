@@ -13,6 +13,8 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
+from .utils import cli_error
+
 console = Console()
 
 
@@ -170,8 +172,7 @@ def optimize(
     """
     # Check GEPA availability
     if not _check_gepa_available():
-        console.print("[red]Error:[/red] GEPA is not installed. Install with: pip install karenina[gepa]")
-        raise typer.Exit(code=1)
+        cli_error("GEPA is not installed. Install with: pip install karenina[gepa]")
 
     # Set default targets if none provided
     if target is None:
@@ -180,15 +181,13 @@ def optimize(
     # Validate ratios
     total_ratio = train_ratio + val_ratio + (test_ratio or 0.0)
     if abs(total_ratio - 1.0) > 0.001:
-        console.print(f"[red]Error:[/red] Split ratios must sum to 1.0, got {total_ratio}")
-        raise typer.Exit(code=1)
+        cli_error(f"Split ratios must sum to 1.0, got {total_ratio}")
 
     # Validate targets
     valid_targets = {"answering_system_prompt", "parsing_instructions", "mcp_tool_descriptions"}
     for t in target:
         if t not in valid_targets:
-            console.print(f"[red]Error:[/red] Invalid target '{t}'. Valid targets: {', '.join(valid_targets)}")
-            raise typer.Exit(code=1)
+            cli_error(f"Invalid target '{t}'. Valid targets: {', '.join(valid_targets)}")
 
     # Load benchmark
     from karenina.benchmark import Benchmark
@@ -198,11 +197,9 @@ def optimize(
         try:
             benchmark = Benchmark.load(checkpoint)
         except FileNotFoundError:
-            console.print(f"[red]Error: Benchmark file not found: {checkpoint}[/red]")
-            raise typer.Exit(code=1) from None
+            cli_error(f"Benchmark file not found: {checkpoint}")
         except Exception as e:
-            console.print(f"[red]Error loading benchmark: {e}[/red]")
-            raise typer.Exit(code=1) from e
+            cli_error(f"loading benchmark: {e}", e)
         console.print(f"  {benchmark.question_count} questions, {benchmark.finished_count} finished")
 
         # Load preset if provided
@@ -217,11 +214,9 @@ def optimize(
                 with open(preset) as f:
                     preset_data = json.load(f)
             except FileNotFoundError:
-                console.print(f"[red]Error: Preset file not found: {preset}[/red]")
-                raise typer.Exit(code=1) from None
+                cli_error(f"Preset file not found: {preset}")
             except json.JSONDecodeError as e:
-                console.print(f"[red]Error: Invalid JSON in preset: {e}[/red]")
-                raise typer.Exit(code=1) from e
+                cli_error(f"Invalid JSON in preset: {e}", e)
             config = VerificationConfig.model_validate(preset_data)
 
         # Prepare seed prompts
@@ -346,8 +341,7 @@ def optimize(
     except typer.Exit:
         raise
     except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(code=1) from e
+        cli_error(str(e), e)
 
 
 def optimize_history(
@@ -407,8 +401,7 @@ def optimize_history(
     """
     # Check GEPA availability
     if not _check_gepa_available():
-        console.print("[red]Error:[/red] GEPA integration not available. Install with: pip install karenina[gepa]")
-        raise typer.Exit(code=1)
+        cli_error("GEPA integration not available. Install with: pip install karenina[gepa]")
 
     try:
         from karenina.integrations.gepa import OptimizationTracker
@@ -459,8 +452,7 @@ def optimize_history(
                 console.print(history_str)
 
         else:
-            console.print(f"[red]Error:[/red] Invalid format '{format}'. Use: table, json, csv")
-            raise typer.Exit(code=1)
+            cli_error(f"Invalid format '{format}'. Use: table, json, csv")
 
     except KeyboardInterrupt:
         console.print("\n[yellow]Interrupted.[/yellow]")
@@ -468,8 +460,7 @@ def optimize_history(
     except typer.Exit:
         raise
     except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(code=1) from e
+        cli_error(str(e), e)
 
 
 def optimize_compare(
@@ -497,25 +488,21 @@ def optimize_compare(
         karenina optimize-compare abc123 def456 ghi789
     """
     if len(run_ids) < 2:
-        console.print("[red]Error:[/red] Need at least 2 run IDs to compare")
-        raise typer.Exit(code=1)
+        cli_error("Need at least 2 run IDs to compare")
 
     if len(run_ids) > 5:
-        console.print("[red]Error:[/red] Maximum 5 runs can be compared at once")
-        raise typer.Exit(code=1)
+        cli_error("Maximum 5 runs can be compared at once")
 
     # Check GEPA availability
     if not _check_gepa_available():
-        console.print("[red]Error:[/red] GEPA integration not available. Install with: pip install karenina[gepa]")
-        raise typer.Exit(code=1)
+        cli_error("GEPA integration not available. Install with: pip install karenina[gepa]")
 
     try:
         from karenina.integrations.gepa import OptimizationTracker
 
         tracker_path = tracker_path.expanduser()
         if not tracker_path.exists():
-            console.print(f"[red]Error:[/red] No optimization history found at {tracker_path}")
-            raise typer.Exit(code=1)
+            cli_error(f"No optimization history found at {tracker_path}")
 
         tracker = OptimizationTracker(tracker_path)
         comparison = tracker.compare_runs(run_ids)
@@ -580,8 +567,7 @@ def optimize_compare(
     except typer.Exit:
         raise
     except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(code=1) from e
+        cli_error(str(e), e)
 
 
 # Create sub-app for optimize commands

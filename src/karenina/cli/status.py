@@ -16,6 +16,8 @@ from rich.table import Table
 
 from karenina.utils.progressive_save import ProgressiveJobStatus, inspect_state_file
 
+from .utils import cli_error
+
 console = Console()
 
 
@@ -96,11 +98,9 @@ def verify_status(
     try:
         status = inspect_state_file(state_file)
     except FileNotFoundError as e:
-        console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(code=1) from e
+        cli_error(str(e), e)
     except ValueError as e:
-        console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(code=1) from e
+        cli_error(str(e), e)
 
     if json_output:
         _output_json(status)

@@ -10,9 +10,27 @@ This module contains helper functions for the Karenina CLI:
 """
 
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
+
+import typer
+from rich.console import Console
 
 from karenina.schemas import FinishedTemplate, VerificationConfig, VerificationJob, VerificationResultSet
+
+_console = Console()
+
+
+def cli_error(message: str, exception: Exception | None = None) -> NoReturn:
+    """Print a red error message and exit with code 1.
+
+    Args:
+        message: Error message to display (without 'Error: ' prefix — it's added automatically).
+        exception: Optional exception to chain with `raise ... from exception`.
+    """
+    _console.print(f"[red]Error: {message}[/red]")
+    if exception is not None:
+        raise typer.Exit(code=1) from exception
+    raise typer.Exit(code=1)
 
 
 def _get_presets_directory(presets_dir: Path | None = None) -> Path:

@@ -248,7 +248,7 @@ def init(
         console.print("[yellow]Configuration already exists.[/yellow]")
         console.print("Use --force to overwrite, or --advanced to reconfigure.")
         if not Confirm.ask("Overwrite existing configuration?", default=False):
-            raise typer.Exit(0)
+            raise typer.Exit(code=0)
 
     if advanced:
         run_advanced_setup(working_dir)
@@ -292,9 +292,9 @@ def serve(
             start_fastapi_server,
         )
     except ImportError as e:
-        console.print("[red]Error:[/red] Webapp dependencies not installed.", style="bold")
+        console.print("[red]Error: Webapp dependencies not installed.[/red]")
         console.print("Install with: [cyan]pip install karenina[webapp][/cyan]")
-        raise typer.Exit(1) from e
+        raise typer.Exit(code=1) from e
 
     # Check if first-time setup is needed
     defaults_file = working_dir / "defaults.json"

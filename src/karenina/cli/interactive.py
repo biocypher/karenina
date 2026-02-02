@@ -8,7 +8,6 @@ This module implements the interactive configuration builder with two modes:
 
 from typing import Any, Literal, cast
 
-import typer
 from pydantic import SecretStr
 from rich.console import Console
 from rich.prompt import Confirm, Prompt
@@ -27,7 +26,7 @@ from karenina.schemas.workflow.verification import (
     DEFAULT_PARSING_SYSTEM_PROMPT,
 )
 
-from .utils import parse_question_indices
+from .utils import cli_error, parse_question_indices
 
 console = Console()
 
@@ -40,8 +39,7 @@ def _prompt_float_range(prompt_text: str, min_val: float, max_val: float, defaul
         if not min_val <= value <= max_val:
             raise ValueError(f"Value must be between {min_val} and {max_val}")
     except ValueError as e:
-        console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(code=1) from e
+        cli_error(str(e), e)
     return value
 
 
@@ -56,8 +54,7 @@ def _prompt_int_min(prompt_text: str, min_val: int, default: str) -> int:
             else:
                 raise ValueError(f"Value must be at least {min_val}")
     except ValueError as e:
-        console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(code=1) from e
+        cli_error(str(e), e)
     return value
 
 
@@ -87,8 +84,7 @@ def build_config_interactively(
     templates = benchmark.get_finished_templates()
 
     if not templates:
-        console.print("[red]Error: No finished templates found in benchmark[/red]")
-        raise typer.Exit(code=1)
+        cli_error("No finished templates found in benchmark")
 
     # Step 1: Display questions and select subset
     console.print("[bold]Step 1: Question Selection[/bold]")
@@ -105,8 +101,7 @@ def build_config_interactively(
         try:
             selected_indices = parse_question_indices(question_selection, len(templates))
         except ValueError as e:
-            console.print(f"[red]Error: {e}[/red]")
-            raise typer.Exit(code=1) from e
+            cli_error(str(e), e)
 
     console.print(f"[green]✓ Selected {len(selected_indices)} question(s)[/green]\n")
 
@@ -369,8 +364,7 @@ def _configure_deep_judgment_rubric(rubric_enabled: bool) -> dict[str, Any]:
                 result["config"] = json.load(f)
             console.print(f"[green]✓ Loaded custom config from {config_path}[/green]")
         except Exception as e:
-            console.print(f"[red]Error loading config: {e}[/red]")
-            raise typer.Exit(code=1) from e
+            cli_error(f"loading config: {e}", e)
 
     elif result["mode"] == "use_checkpoint":
         console.print("[dim]Using deep judgment settings from checkpoint file[/dim]")

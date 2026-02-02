@@ -33,6 +33,7 @@ from karenina.schemas import FinishedTemplate, VerificationConfig, VerificationR
 from karenina.utils.progressive_save import ProgressiveSaveManager, TaskIdentifier, generate_task_manifest
 
 from .utils import (
+    cli_error,
     create_export_job,
     filter_templates_by_ids,
     filter_templates_by_indices,
@@ -166,13 +167,11 @@ def _validate_output_and_prompt(
         try:
             output_format = validate_output_path(output)
         except ValueError as e:
-            console.print(f"[red]Error: {e}[/red]")
-            raise typer.Exit(code=1) from e
+            cli_error(str(e), e)
 
     # Validate progressive save requires output
     if progressive_save and not output:
-        console.print("[red]Error: --progressive-save requires --output to be specified[/red]")
-        raise typer.Exit(code=1)
+        cli_error("--progressive-save requires --output to be specified")
 
     # Prompt for output file if not specified (and not resuming or interactive)
     if not output and not resume and not interactive:
@@ -187,8 +186,7 @@ def _validate_output_and_prompt(
         try:
             output_format = validate_output_path(output)
         except ValueError as e:
-            console.print(f"[red]Error: {e}[/red]")
-            raise typer.Exit(code=1) from e
+            cli_error(str(e), e)
 
     return output, output_format
 
@@ -206,8 +204,7 @@ def _handle_resume_mode(
         typer.Exit: If state file not found, load error, or all tasks completed
     """
     if not resume.exists():
-        console.print(f"[red]Error: State file not found: {resume}[/red]")
-        raise typer.Exit(code=1)
+        cli_error(f"State file not found: {resume}")
 
     console.print(f"[cyan]Loading resume state from {resume}...[/cyan]")
     try:
@@ -232,8 +229,7 @@ def _handle_resume_mode(
     except typer.Exit:
         raise
     except Exception as e:
-        console.print(f"[red]Error loading resume state: {e}[/red]")
-        raise typer.Exit(code=1) from e
+        cli_error(f"loading resume state: {e}", e)
 
 
 def _load_benchmark(benchmark_path: str) -> Benchmark:
@@ -250,8 +246,7 @@ def _load_benchmark(benchmark_path: str) -> Benchmark:
     try:
         benchmark = Benchmark.load(Path(benchmark_path))
     except Exception as e:
-        console.print(f"[red]Error loading benchmark: {e}[/red]")
-        raise typer.Exit(code=1) from e
+        cli_error(f"loading benchmark: {e}", e)
 
     console.print(f"[green]✓ Loaded benchmark: {benchmark.name or 'Unnamed'}[/green]")
     console.print(f"  Total questions: {len(benchmark.get_all_questions())}")
@@ -341,11 +336,9 @@ def _load_manual_traces(manual_traces: Path, benchmark: Benchmark) -> object:
         return manual_traces_obj
 
     except FileNotFoundError as e:
-        console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(code=1) from e
+        cli_error(str(e), e)
     except Exception as e:
-        console.print(f"[red]Error loading manual traces: {e}[/red]")
-        raise typer.Exit(code=1) from e
+        cli_error(f"loading manual traces: {e}", e)
 
 
 def _validate_deep_judgment_rubric_settings(
@@ -361,13 +354,12 @@ def _validate_deep_judgment_rubric_settings(
     """
     valid_modes = ["disabled", "enable_all", "use_checkpoint", "custom"]
     if deep_judgment_rubric_mode not in valid_modes:
-        console.print(f"[red]Error: Invalid deep_judgment_rubric_mode '{deep_judgment_rubric_mode}'[/red]")
-        console.print(f"[red]Valid modes: {', '.join(valid_modes)}[/red]")
-        raise typer.Exit(code=1)
+        cli_error(
+            f"Invalid deep_judgment_rubric_mode '{deep_judgment_rubric_mode}'. Valid modes: {', '.join(valid_modes)}"
+        )
 
     if not 0.0 <= deep_judgment_rubric_fuzzy_threshold <= 1.0:
-        console.print("[red]Error: deep_judgment_rubric_fuzzy_threshold must be between 0.0 and 1.0[/red]")
-        raise typer.Exit(code=1)
+        cli_error("deep_judgment_rubric_fuzzy_threshold must be between 0.0 and 1.0")
 
     if deep_judgment_rubric_mode == "use_checkpoint":
         console.print(
@@ -378,8 +370,7 @@ def _validate_deep_judgment_rubric_settings(
         )
 
     if deep_judgment_rubric_mode == "custom" and not deep_judgment_rubric_config:
-        console.print("[red]Error: custom mode requires --deep-judgment-rubric-config to be specified[/red]")
-        raise typer.Exit(code=1)
+        cli_error("custom mode requires --deep-judgment-rubric-config to be specified")
 
 
 def _filter_templates(
@@ -411,16 +402,14 @@ def _filter_templates(
             templates = filter_templates_by_indices(all_templates, indices)
             console.print(f"[dim]Filtered to {len(templates)} question(s) by indices[/dim]")
         except ValueError as e:
-            console.print(f"[red]Error parsing question indices: {e}[/red]")
-            raise typer.Exit(code=1) from e
+            cli_error(f"parsing question indices: {e}", e)
     elif question_ids:
         ids = [id.strip() for id in question_ids.split(",")]
         templates = filter_templates_by_ids(all_templates, ids)
         console.print(f"[dim]Filtered to {len(templates)} question(s) by IDs[/dim]")
 
     if not templates:
-        console.print("[red]Error: No templates to verify after filtering[/red]")
-        raise typer.Exit(code=1)
+        cli_error("No templates to verify after filtering")
 
     return templates
 
@@ -667,8 +656,7 @@ def _build_config_non_interactive(
             preset_config = VerificationConfig.from_preset(preset_path)
             console.print(f"[green]✓ Loaded preset from: {preset_path}[/green]")
         except Exception as e:
-            console.print(f"[red]Error loading preset: {e}[/red]")
-            raise typer.Exit(code=1) from e
+            cli_error(f"loading preset: {e}", e)
 
     # Validate required parameters when no preset is used
     if not preset_config:
@@ -749,8 +737,7 @@ def _build_config_non_interactive(
             console.print("[dim]Building configuration from CLI arguments[/dim]")
 
     except Exception as e:
-        console.print(f"[red]Error building configuration: {e}[/red]")
-        raise typer.Exit(code=1) from e
+        cli_error(f"building configuration: {e}", e)
 
     # Validate deep judgment rubric settings
     _validate_deep_judgment_rubric_settings(
@@ -940,8 +927,7 @@ def verify(
 
         # Validate benchmark_path is provided unless resuming
         if not resume and not benchmark_path:
-            console.print("[red]Error: BENCHMARK_PATH is required (unless using --resume)[/red]")
-            raise typer.Exit(code=1)
+            cli_error("BENCHMARK_PATH is required (unless using --resume)")
 
         # Initialize state variables
         progressive_manager: ProgressiveSaveManager | None = None
@@ -958,8 +944,7 @@ def verify(
 
         # Step 3: Load benchmark
         if benchmark_path is None:
-            console.print("[red]Error: benchmark_path must be set (not resuming or resume should have set it)[/red]")
-            raise typer.Exit(code=1)
+            cli_error("benchmark_path must be set (not resuming or resume should have set it)")
         benchmark = _load_benchmark(benchmark_path)
 
         # Set global rubric on progressive manager if resuming
@@ -1015,8 +1000,7 @@ def verify(
 
         # Validate config was built successfully
         if config is None:
-            console.print("[red]Error: Failed to build verification configuration[/red]")
-            raise typer.Exit(code=1)
+            cli_error("Failed to build verification configuration")
 
         # Step 5: Get and filter templates
         all_templates = benchmark.get_finished_templates()
@@ -1029,8 +1013,7 @@ def verify(
         # Step 7: Initialize progressive save (if enabled and not resuming)
         if progressive_save and not resume:
             if output is None:
-                console.print("[red]Error: output path is required for progressive save[/red]")
-                raise typer.Exit(code=1)
+                cli_error("output path is required for progressive save")
             progressive_manager = _initialize_progressive_save(output, config, benchmark_path, templates, benchmark)
 
         # Step 8: Filter templates for resume (only pending tasks)
