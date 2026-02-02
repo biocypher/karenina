@@ -19,6 +19,9 @@ from rich.table import Table
 
 console = Console()
 
+# Server defaults
+DEFAULT_PORT = 8080
+
 # Default configuration values
 DEFAULTS: dict[str, Any] = {
     "provider": "openai",
@@ -259,7 +262,7 @@ def init(
 
 
 def serve(
-    port: int = typer.Option(8080, "--port", "-p", help="Port to serve on"),
+    port: int = typer.Option(DEFAULT_PORT, "--port", "-p", help="Port to serve on"),
     host: str = typer.Option("localhost", "--host", help="Host to bind to"),
     dev: bool = typer.Option(False, "--dev", help="Run in development mode"),
     working_dir: Path = typer.Option(

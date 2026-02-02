@@ -30,6 +30,23 @@ from .utils import cli_error, parse_question_indices
 
 console = Console()
 
+# Display constants
+TEXT_TRUNCATION_LENGTH = 80
+MCP_TOOL_PREVIEW_COUNT = 10
+MCP_TOOL_DESC_PREVIEW_LENGTH = 60
+
+# Default deep judgment settings
+DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS = 3
+DEFAULT_FUZZY_THRESHOLD = 0.80
+DEFAULT_RETRY_ATTEMPTS = 2
+
+# Default rubric deep judgment settings
+DEFAULT_RUBRIC_MAX_EXCERPTS = 7
+
+# Default embedding settings
+DEFAULT_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+DEFAULT_EMBEDDING_THRESHOLD = 0.85
+
 
 def _prompt_float_range(prompt_text: str, min_val: float, max_val: float, default: str) -> float:
     """Prompt for a float value within a range, exiting on invalid input."""
@@ -133,12 +150,14 @@ def build_config_interactively(
 
     # Embedding check
     embedding_check_enabled = Confirm.ask("Enable embedding check?", default=False)
-    embedding_check_model = "all-MiniLM-L6-v2"
-    embedding_check_threshold = 0.85
+    embedding_check_model = DEFAULT_EMBEDDING_MODEL
+    embedding_check_threshold = DEFAULT_EMBEDDING_THRESHOLD
 
     if embedding_check_enabled:
-        embedding_check_model = Prompt.ask("Embedding model", default="all-MiniLM-L6-v2")
-        embedding_check_threshold = _prompt_float_range("Embedding similarity threshold (0.0-1.0)", 0.0, 1.0, "0.85")
+        embedding_check_model = Prompt.ask("Embedding model", default=DEFAULT_EMBEDDING_MODEL)
+        embedding_check_threshold = _prompt_float_range(
+            "Embedding similarity threshold (0.0-1.0)", 0.0, 1.0, str(DEFAULT_EMBEDDING_THRESHOLD)
+        )
 
     deep_judgment_enabled = Confirm.ask("Enable deep judgment?", default=False)
 
@@ -146,9 +165,9 @@ def build_config_interactively(
 
     # Advanced mode: Additional configuration
     rubric_trait_names = None
-    deep_judgment_max_excerpts = 3
-    deep_judgment_fuzzy_threshold = 0.80
-    deep_judgment_retry_attempts = 2
+    deep_judgment_max_excerpts = DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS
+    deep_judgment_fuzzy_threshold = DEFAULT_FUZZY_THRESHOLD
+    deep_judgment_retry_attempts = DEFAULT_RETRY_ATTEMPTS
     deep_judgment_search_enabled = False
     deep_judgment_search_tool = "tavily"
     few_shot_config = None
@@ -295,9 +314,11 @@ def build_config_interactively(
 def _configure_deep_judgment() -> dict[str, Any]:
     """Prompt for deep judgment settings. Returns dict with max_excerpts, fuzzy_threshold, retry_attempts, search_enabled, search_tool."""
     console.print("\n[cyan]Deep Judgment Settings:[/cyan]")
-    max_excerpts = _prompt_int_min("Max excerpts per attribute", min_val=1, default="3")
-    fuzzy_threshold = _prompt_float_range("Fuzzy match threshold (0.0-1.0)", 0.0, 1.0, "0.80")
-    retry_attempts = _prompt_int_min("Excerpt retry attempts", min_val=0, default="2")
+    max_excerpts = _prompt_int_min(
+        "Max excerpts per attribute", min_val=1, default=str(DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS)
+    )
+    fuzzy_threshold = _prompt_float_range("Fuzzy match threshold (0.0-1.0)", 0.0, 1.0, str(DEFAULT_FUZZY_THRESHOLD))
+    retry_attempts = _prompt_int_min("Excerpt retry attempts", min_val=0, default=str(DEFAULT_RETRY_ATTEMPTS))
 
     search_enabled = Confirm.ask("Enable search validation?", default=False)
     search_tool = "tavily"
@@ -318,9 +339,9 @@ def _configure_deep_judgment_rubric(rubric_enabled: bool) -> dict[str, Any]:
     result: dict[str, Any] = {
         "mode": "disabled",
         "global_excerpts": True,
-        "max_excerpts_default": 7,
-        "fuzzy_match_threshold_default": 0.80,
-        "excerpt_retry_attempts_default": 2,
+        "max_excerpts_default": DEFAULT_RUBRIC_MAX_EXCERPTS,
+        "fuzzy_match_threshold_default": DEFAULT_FUZZY_THRESHOLD,
+        "excerpt_retry_attempts_default": DEFAULT_RETRY_ATTEMPTS,
         "search_enabled": False,
         "search_tool": "tavily",
         "config": None,
@@ -344,11 +365,15 @@ def _configure_deep_judgment_rubric(rubric_enabled: bool) -> dict[str, Any]:
 
     if result["mode"] == "enable_all":
         result["global_excerpts"] = Confirm.ask("Enable excerpts for all rubric traits?", default=True)
-        result["max_excerpts_default"] = _prompt_int_min("Max excerpts per rubric trait", min_val=1, default="7")
-        result["fuzzy_match_threshold_default"] = _prompt_float_range(
-            "Fuzzy match threshold (0.0-1.0)", 0.0, 1.0, "0.80"
+        result["max_excerpts_default"] = _prompt_int_min(
+            "Max excerpts per rubric trait", min_val=1, default=str(DEFAULT_RUBRIC_MAX_EXCERPTS)
         )
-        result["excerpt_retry_attempts_default"] = _prompt_int_min("Excerpt retry attempts", min_val=0, default="2")
+        result["fuzzy_match_threshold_default"] = _prompt_float_range(
+            "Fuzzy match threshold (0.0-1.0)", 0.0, 1.0, str(DEFAULT_FUZZY_THRESHOLD)
+        )
+        result["excerpt_retry_attempts_default"] = _prompt_int_min(
+            "Excerpt retry attempts", min_val=0, default=str(DEFAULT_RETRY_ATTEMPTS)
+        )
 
         result["search_enabled"] = Confirm.ask("Enable search validation?", default=False)
         if result["search_enabled"]:
@@ -415,7 +440,9 @@ def _display_questions_table(templates: list[Any]) -> None:
         question_id = template.question_id
         # Truncate question text if too long
         question_text = (
-            template.question_text[:80] + "..." if len(template.question_text) > 80 else template.question_text
+            template.question_text[:TEXT_TRUNCATION_LENGTH] + "..."
+            if len(template.question_text) > TEXT_TRUNCATION_LENGTH
+            else template.question_text
         )
         table.add_row(str(i), question_id, question_text)
 
@@ -521,11 +548,15 @@ def _prompt_for_model(model_type: str, mode: str = "basic") -> ModelConfig:
                         console.print(f"[green]✓ Successfully connected to '{server_name}'[/green]")
                         console.print(f"[dim]Found {len(tool_descriptions)} available tool(s):[/dim]")
                         tool_items = list(tool_descriptions.items())
-                        for name, desc in tool_items[:10]:  # Show first 10 tools
-                            desc_preview = (desc[:60] + "...") if len(desc) > 60 else desc
+                        for name, desc in tool_items[:MCP_TOOL_PREVIEW_COUNT]:
+                            desc_preview = (
+                                (desc[:MCP_TOOL_DESC_PREVIEW_LENGTH] + "...")
+                                if len(desc) > MCP_TOOL_DESC_PREVIEW_LENGTH
+                                else desc
+                            )
                             console.print(f"  [dim]• {name}: {desc_preview}[/dim]")
-                        if len(tool_items) > 10:
-                            console.print(f"  [dim]... and {len(tool_items) - 10} more[/dim]")
+                        if len(tool_items) > MCP_TOOL_PREVIEW_COUNT:
+                            console.print(f"  [dim]... and {len(tool_items) - MCP_TOOL_PREVIEW_COUNT} more[/dim]")
                     else:
                         console.print(f"[yellow]Warning: No tools found from server '{server_name}'[/yellow]")
 

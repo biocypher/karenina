@@ -26,6 +26,23 @@ console = Console()
 
 VALID_TARGETS = {"answering_system_prompt", "parsing_instructions", "mcp_tool_descriptions"}
 
+# Default optimization parameters
+DEFAULT_REFLECTION_MODEL = "openai/gpt-4o"
+DEFAULT_MAX_CALLS = 150
+DEFAULT_TRAIN_RATIO = 0.8
+DEFAULT_VAL_RATIO = 0.2
+RATIO_TOLERANCE = 0.001
+DEFAULT_HISTORY_LIMIT = 20
+
+# Display constants
+RESULT_TRUNCATION_LENGTH = 200
+HISTORY_NAME_TRUNCATION_LENGTH = 20
+HISTORY_TARGETS_TRUNCATION_LENGTH = 30
+
+# Compare constraints
+MIN_COMPARE_RUNS = 2
+MAX_COMPARE_RUNS = 5
+
 
 def _check_gepa_available() -> bool:
     """Check if GEPA is available."""
@@ -45,7 +62,7 @@ def _validate_optimize_params(
 ) -> None:
     """Validate optimization parameters. Exits on invalid input."""
     total_ratio = train_ratio + val_ratio + (test_ratio or 0.0)
-    if abs(total_ratio - 1.0) > 0.001:
+    if abs(total_ratio - 1.0) > RATIO_TOLERANCE:
         cli_error(f"Split ratios must sum to 1.0, got {total_ratio}")
 
     for t in target:
@@ -116,14 +133,20 @@ def _display_optimize_results(result: Any) -> None:
         console.print("")
         console.print("[bold]Optimized Answering System Prompt:[/bold]")
         prompt = result.answering_system_prompt
-        console.print(f"[dim]{prompt[:200]}...[/dim]" if len(prompt) > 200 else f"[dim]{prompt}[/dim]")
+        console.print(
+            f"[dim]{prompt[:RESULT_TRUNCATION_LENGTH]}...[/dim]"
+            if len(prompt) > RESULT_TRUNCATION_LENGTH
+            else f"[dim]{prompt}[/dim]"
+        )
 
     if result.parsing_instructions:
         console.print("")
         console.print("[bold]Optimized Parsing Instructions:[/bold]")
         instructions = result.parsing_instructions
         console.print(
-            f"[dim]{instructions[:200]}...[/dim]" if len(instructions) > 200 else f"[dim]{instructions}[/dim]"
+            f"[dim]{instructions[:RESULT_TRUNCATION_LENGTH]}...[/dim]"
+            if len(instructions) > RESULT_TRUNCATION_LENGTH
+            else f"[dim]{instructions}[/dim]"
         )
 
 
@@ -179,8 +202,10 @@ def _display_history_table(runs: list[Any]) -> None:
         table.add_row(
             run.run_id,
             run.timestamp.strftime("%Y-%m-%d %H:%M"),
-            run.benchmark_name[:20] + "..." if len(run.benchmark_name) > 20 else run.benchmark_name,
-            ", ".join(run.targets)[:30],
+            run.benchmark_name[:HISTORY_NAME_TRUNCATION_LENGTH] + "..."
+            if len(run.benchmark_name) > HISTORY_NAME_TRUNCATION_LENGTH
+            else run.benchmark_name,
+            ", ".join(run.targets)[:HISTORY_TARGETS_TRUNCATION_LENGTH],
             f"{run.val_score:.3f}",
             f"{run.improvement:+.1%}",
         )
@@ -249,7 +274,7 @@ def optimize(
             "-r",
             help="Model for GEPA's reflection LLM",
         ),
-    ] = "openai/gpt-4o",
+    ] = DEFAULT_REFLECTION_MODEL,
     max_calls: Annotated[
         int,
         typer.Option(
@@ -257,21 +282,21 @@ def optimize(
             "-m",
             help="Maximum number of GEPA optimization iterations",
         ),
-    ] = 150,
+    ] = DEFAULT_MAX_CALLS,
     train_ratio: Annotated[
         float,
         typer.Option(
             "--train-ratio",
             help="Fraction of questions for training (0-1)",
         ),
-    ] = 0.8,
+    ] = DEFAULT_TRAIN_RATIO,
     val_ratio: Annotated[
         float,
         typer.Option(
             "--val-ratio",
             help="Fraction of questions for validation (0-1)",
         ),
-    ] = 0.2,
+    ] = DEFAULT_VAL_RATIO,
     test_ratio: Annotated[
         float | None,
         typer.Option(
@@ -415,7 +440,7 @@ def optimize_history(
             "-n",
             help="Maximum number of runs to show",
         ),
-    ] = 20,
+    ] = DEFAULT_HISTORY_LIMIT,
     format: Annotated[
         str,
         typer.Option(
@@ -519,11 +544,11 @@ def optimize_compare(
 
         karenina optimize-compare abc123 def456 ghi789
     """
-    if len(run_ids) < 2:
-        cli_error("Need at least 2 run IDs to compare")
+    if len(run_ids) < MIN_COMPARE_RUNS:
+        cli_error(f"Need at least {MIN_COMPARE_RUNS} run IDs to compare")
 
-    if len(run_ids) > 5:
-        cli_error("Maximum 5 runs can be compared at once")
+    if len(run_ids) > MAX_COMPARE_RUNS:
+        cli_error(f"Maximum {MAX_COMPARE_RUNS} runs can be compared at once")
 
     # Check GEPA availability
     if not _check_gepa_available():
