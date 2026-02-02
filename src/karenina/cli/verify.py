@@ -1036,7 +1036,7 @@ def verify(
         # Initialize state variables
         progressive_manager: ProgressiveSaveManager | None = None
         pending_task_ids: set[str] | None = None
-        config: VerificationConfig
+        config: VerificationConfig | None = None
         selected_question_indices: list[int] | None = None
         show_progress_bar_interactive: bool | None = None
 
@@ -1047,7 +1047,9 @@ def verify(
             )
 
         # Step 3: Load benchmark
-        assert benchmark_path is not None, "benchmark_path should be set"
+        if benchmark_path is None:
+            console.print("[red]Error: benchmark_path must be set (not resuming or resume should have set it)[/red]")
+            raise typer.Exit(code=1)
         benchmark = _load_benchmark(benchmark_path)
 
         # Set global rubric on progressive manager if resuming
@@ -1101,6 +1103,11 @@ def verify(
                 progressive_save=progressive_save,
             )
 
+        # Validate config was built successfully
+        if config is None:
+            console.print("[red]Error: Failed to build verification configuration[/red]")
+            raise typer.Exit(code=1)
+
         # Step 5: Get and filter templates
         all_templates = benchmark.get_finished_templates()
         templates = _filter_templates(all_templates, selected_question_indices, questions, question_ids)
@@ -1111,7 +1118,9 @@ def verify(
 
         # Step 7: Initialize progressive save (if enabled and not resuming)
         if progressive_save and not resume:
-            assert output is not None, "output should be set for progressive save"
+            if output is None:
+                console.print("[red]Error: output path is required for progressive save[/red]")
+                raise typer.Exit(code=1)
             progressive_manager = _initialize_progressive_save(output, config, benchmark_path, templates, benchmark)
 
         # Step 8: Filter templates for resume (only pending tasks)
