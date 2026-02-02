@@ -16,6 +16,11 @@ import typer
 from rich.console import Console
 
 from karenina.schemas import FinishedTemplate, VerificationConfig, VerificationJob, VerificationResultSet
+from karenina.schemas.verification.config_presets import (
+    get_default_presets_dir,
+    list_preset_files,
+    resolve_preset_path,
+)
 
 _console = Console()
 
@@ -34,111 +39,20 @@ def cli_error(message: str, exception: Exception | None = None) -> NoReturn:
 
 
 def _get_presets_directory(presets_dir: Path | None = None) -> Path:
-    """
-    Get presets directory, using provided path, env var, or default.
-
-    Args:
-        presets_dir: Optional directory override
-
-    Returns:
-        Path to presets directory
-    """
-    import os
-
+    """Get presets directory. Delegates to config_presets.get_default_presets_dir()."""
     if presets_dir is not None:
         return presets_dir
-
-    # Check environment variable
-    env_dir = os.getenv("KARENINA_PRESETS_DIR")
-    if env_dir:
-        return Path(env_dir)
-
-    # Default to presets/ in current directory
-    return Path("presets")
+    return get_default_presets_dir()
 
 
 def list_presets(presets_dir: Path | None = None) -> list[dict[str, Any]]:
-    """
-    List all available presets.
-
-    Args:
-        presets_dir: Directory containing presets. If None, uses default location.
-
-    Returns:
-        List of preset info dictionaries with name and filepath, sorted by name.
-    """
-    import os
-
-    preset_dir = _get_presets_directory(presets_dir)
-
-    if not preset_dir.exists():
-        return []
-
-    presets = []
-    for preset_file in preset_dir.glob("*.json"):
-        try:
-            # Use filename (without .json extension) as the preset name
-            name = preset_file.stem
-
-            # Get file modification time for display
-            mtime = os.path.getmtime(preset_file)
-            from datetime import datetime
-
-            modified = datetime.fromtimestamp(mtime).isoformat()
-
-            preset_info = {
-                "name": name,
-                "filepath": str(preset_file),
-                "modified": modified,
-            }
-            presets.append(preset_info)
-        except Exception:
-            # Skip invalid files
-            continue
-
-    # Sort by name
-    presets.sort(key=lambda p: p["name"])
-    return presets
+    """List all available presets. Delegates to config_presets.list_preset_files()."""
+    return list_preset_files(presets_dir)
 
 
 def get_preset_path(name_or_path: str, presets_dir: Path | None = None) -> Path:
-    """
-    Resolve preset name to filepath.
-
-    Args:
-        name_or_path: Preset name (e.g., "gpt-oss-tools") or direct file path
-        presets_dir: Directory to search for presets
-
-    Returns:
-        Path to preset file
-
-    Raises:
-        FileNotFoundError: If preset not found
-
-    Examples:
-        >>> get_preset_path("gpt-oss-tools")  # Finds presets/gpt-oss-tools.json
-        >>> get_preset_path("/path/to/config.json")  # Uses direct path
-    """
-    # First, check if it's already a valid path
-    path = Path(name_or_path)
-    if path.exists() and path.is_file():
-        return path.resolve()
-
-    # Try to find by name in presets directory
-    preset_dir = _get_presets_directory(presets_dir)
-
-    if not preset_dir.exists():
-        raise FileNotFoundError(f"Presets directory not found: {preset_dir}")
-
-    # Try exact match (e.g., "gpt-oss-tools.json" or "gpt-oss-tools")
-    candidate = preset_dir / name_or_path if name_or_path.endswith(".json") else preset_dir / f"{name_or_path}.json"
-
-    if candidate.exists():
-        return candidate.resolve()
-
-    raise FileNotFoundError(
-        f"Preset '{name_or_path}' not found in {preset_dir}. Use 'karenina preset list' to see available presets."
-    )
+    """Resolve preset name to filepath. Delegates to config_presets.resolve_preset_path()."""
+    return resolve_preset_path(name_or_path, presets_dir)
 
 
 def parse_question_indices(indices_str: str, total_questions: int) -> list[int]:

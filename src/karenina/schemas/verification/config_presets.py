@@ -16,6 +16,104 @@ if TYPE_CHECKING:
     from .config import VerificationConfig
 
 
+def get_default_presets_dir() -> Path:
+    """Get the default presets directory.
+
+    Resolution order:
+    1. KARENINA_PRESETS_DIR environment variable
+    2. ./presets/ (relative to current directory)
+
+    Returns:
+        Path to presets directory
+    """
+    env_dir = os.getenv("KARENINA_PRESETS_DIR")
+    if env_dir:
+        return Path(env_dir)
+    return Path("presets")
+
+
+def list_preset_files(presets_dir: Path | None = None) -> list[dict[str, Any]]:
+    """Scan a presets directory for .json files.
+
+    Returns metadata about each preset file found. Does not load
+    or validate the full preset content — only reads filenames and
+    modification times.
+
+    Args:
+        presets_dir: Directory to scan. If None, uses get_default_presets_dir().
+
+    Returns:
+        List of dicts with keys: name (stem), filepath (str), modified (ISO timestamp).
+        Sorted by name.
+    """
+    from datetime import datetime
+
+    if presets_dir is None:
+        presets_dir = get_default_presets_dir()
+
+    if not presets_dir.exists():
+        return []
+
+    presets = []
+    for preset_file in presets_dir.glob("*.json"):
+        try:
+            name = preset_file.stem
+            mtime = os.path.getmtime(preset_file)
+            modified = datetime.fromtimestamp(mtime).isoformat()
+            presets.append(
+                {
+                    "name": name,
+                    "filepath": str(preset_file),
+                    "modified": modified,
+                }
+            )
+        except Exception:
+            # Skip files that can't be read (permissions, etc.)
+            continue
+
+    presets.sort(key=lambda p: p["name"])
+    return presets
+
+
+def resolve_preset_path(name_or_path: str, presets_dir: Path | None = None) -> Path:
+    """Resolve a preset name or path to an absolute file path.
+
+    Resolution order:
+    1. If name_or_path is an existing file, return it
+    2. Look in presets_dir for {name_or_path}.json (or exact name if already .json)
+
+    Args:
+        name_or_path: Preset name (e.g., "gpt-oss-tools") or direct file path
+        presets_dir: Directory to search. If None, uses get_default_presets_dir().
+
+    Returns:
+        Absolute Path to the preset file
+
+    Raises:
+        FileNotFoundError: If preset cannot be resolved
+    """
+    # Try as a direct path first
+    path = Path(name_or_path)
+    if path.exists() and path.is_file():
+        return path.resolve()
+
+    # Search in presets directory
+    if presets_dir is None:
+        presets_dir = get_default_presets_dir()
+
+    if not presets_dir.exists():
+        raise FileNotFoundError(f"Presets directory not found: {presets_dir}")
+
+    candidate = presets_dir / name_or_path if name_or_path.endswith(".json") else presets_dir / f"{name_or_path}.json"
+
+    if candidate.exists():
+        return candidate.resolve()
+
+    raise FileNotFoundError(
+        f"Preset '{name_or_path}' not found in {presets_dir}. Use 'karenina preset list' to see available presets."
+    )
+
+
 def sanitize_model_config(model: dict[str, Any]) -> dict[str, Any]:
     """
     Sanitize model configuration to remove interface-specific fields.

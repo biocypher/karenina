@@ -21,7 +21,10 @@ from .config import (
 )
 from .config_presets import (
     create_preset_structure,
+    get_default_presets_dir,
+    list_preset_files,
     load_preset,
+    resolve_preset_path,
     sanitize_model_config,
     sanitize_preset_name,
     save_preset,
@@ -56,6 +59,9 @@ __all__ = [
     "DeepJudgmentTraitConfig",
     "PromptConfig",
     # Preset utilities
+    "get_default_presets_dir",
+    "list_preset_files",
+    "resolve_preset_path",
     "sanitize_model_config",
     "sanitize_preset_name",
     "validate_preset_metadata",
