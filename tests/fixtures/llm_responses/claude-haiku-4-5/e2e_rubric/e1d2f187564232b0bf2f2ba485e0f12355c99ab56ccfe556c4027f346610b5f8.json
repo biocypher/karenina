@@ -1,0 +1,39 @@
+{
+  "metadata": {
+    "scenario": "e2e_rubric",
+    "model": "claude-haiku-4-5",
+    "timestamp": "2026-01-13T21:42:58.925956",
+    "prompt_hash": "e1d2f187564232b0bf2f2ba485e0f12355c99ab56ccfe556c4027f346610b5f8"
+  },
+  "request": {
+    "messages": [
+      {
+        "content": "You are evaluating responses for the trait: **completeness**\n\n**Criteria:** The response thoroughly addresses all aspects of the question\n\n**RESPONSE FORMAT:**\nYou will receive a JSON Schema specifying the exact output structure. Your response MUST conform to this schema.\nReturn valid JSON: {\"score\": N} where N is an integer from 1 to 5\nKeep your response concise - the JSON is the primary output.\n\n**SCORING GUIDELINES:**\n- 1 = Poor - Does not meet criteria at all\n- 3 = Average - Partially meets criteria\n- 5 = Excellent - Fully meets or exceeds criteria\n\nWhen uncertain about borderline cases, choose conservatively based on the trait's nature:\n- For traits where higher is better (e.g., \"quality\"), lean toward lower scores\n- For traits where lower is better (e.g., \"error severity\"), lean toward higher scores\n- When completely uncertain, default to the middle value (3)\n\n**PARSING NOTES:**\n- Scores outside [1, 5] are automatically clamped to the nearest boundary\n- Use integers only (no decimals)\n- Avoid wrapping in markdown code blocks",
+        "additional_kwargs": {},
+        "response_metadata": {},
+        "type": "system",
+        "name": null,
+        "id": null
+      },
+      {
+        "content": "**QUESTION:**\nWhat is 15 multiplied by 7?\n\n**ANSWER TO EVALUATE:**\nThe answer to 15 multiplied by 7 is 105.\n\n**TRAIT:** completeness\n**CRITERIA:** The response thoroughly addresses all aspects of the question\n\n**JSON SCHEMA (your response MUST conform to this):**\n```json\n{\n  \"description\": \"Structured output for numeric trait evaluation.\\n\\nUsed for single-trait evaluation where the trait is a score\\nwithin a defined range (e.g., 1-5).\",\n  \"properties\": {\n    \"score\": {\n      \"description\": \"Numeric score within the valid range\",\n      \"title\": \"Score\",\n      \"type\": \"integer\"\n    }\n  },\n  \"required\": [\n    \"score\"\n  ],\n  \"title\": \"SingleNumericScore\",\n  \"type\": \"object\"\n}\n```\n\nEvaluate this answer for the trait above and return your assessment as JSON: {\"score\": N}",
+        "additional_kwargs": {},
+        "response_metadata": {},
+        "type": "human",
+        "name": null,
+        "id": null
+      }
+    ],
+    "kwargs": {}
+  },
+  "response": {
+    "content": "```json\n{\"score\": 5}\n```",
+    "id": "lc_run--4ee108d9-d40a-4413-8455-e7afbb03cb78-0",
+    "model": "claude-haiku-4-5",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    }
+  }
+}

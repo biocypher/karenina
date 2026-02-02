@@ -10,12 +10,14 @@ from Pydantic BaseModel classes, with support for:
 
 from __future__ import annotations
 
-import types
-from typing import TYPE_CHECKING, Any, Union, get_args, get_origin, get_type_hints
+from typing import TYPE_CHECKING, Any, get_type_hints
 
 from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 from sqlalchemy import JSON, Boolean, Column, Float, Index, Integer, String, Text
+
+from .utils import is_pydantic_model as _is_pydantic_model
+from .utils import unwrap_optional as _unwrap_optional
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import DeclarativeBase
@@ -42,39 +44,6 @@ def _get_field_metadata(field_info: FieldInfo | None) -> dict[str, Any]:
         # If it's a callable, we can't extract metadata
         return {}
     return extra or {}
-
-
-def _unwrap_optional(field_type: type) -> tuple[type, bool]:
-    """Unwrap Optional[T] or T | None to get the inner type.
-
-    Returns:
-        Tuple of (inner_type, is_optional)
-    """
-    origin = get_origin(field_type)
-
-    # Handle Union types - both typing.Union (Optional[T]) and types.UnionType (T | None)
-    # Python 3.10+ uses types.UnionType for the T | None syntax
-    if origin is Union or origin is types.UnionType:
-        args = get_args(field_type)
-        non_none_args = [a for a in args if a is not type(None)]
-        if len(non_none_args) == 1:
-            return non_none_args[0], True
-        elif len(non_none_args) > 1:
-            # Complex union - treat as JSON
-            return dict, True
-        else:
-            # Only None - shouldn't happen but handle gracefully
-            return type(None), True
-
-    return field_type, False
-
-
-def _is_pydantic_model(field_type: type) -> bool:
-    """Check if a type is a Pydantic BaseModel subclass."""
-    try:
-        return isinstance(field_type, type) and issubclass(field_type, BaseModel)
-    except TypeError:
-        return False
 
 
 def _get_sqlalchemy_type(python_type: type, metadata: dict[str, Any]) -> Any:

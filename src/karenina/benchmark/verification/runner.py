@@ -6,10 +6,10 @@ Main entry point for running verification using the stage-based pipeline archite
 from typing import Any
 
 from ...schemas.domain import Rubric
+from ...schemas.verification import PromptConfig
 from ...schemas.workflow import ModelConfig, VerificationResult
 from ...utils.checkpoint import generate_template_id
-from .stage import VerificationContext
-from .stage_orchestrator import StageOrchestrator
+from .stages import StageOrchestrator, VerificationContext
 
 
 def run_single_model_verification(
@@ -19,14 +19,14 @@ def run_single_model_verification(
     answering_model: ModelConfig,
     parsing_model: ModelConfig,
     run_name: str | None = None,
-    answering_replicate: int | None = None,
-    parsing_replicate: int | None = None,
+    replicate: int | None = None,
     rubric: Rubric | None = None,
     keywords: list[str] | None = None,
     raw_answer: str | None = None,
     few_shot_examples: list[dict[str, str]] | None = None,
     few_shot_enabled: bool = False,
     abstention_enabled: bool = False,
+    sufficiency_enabled: bool = False,
     deep_judgment_enabled: bool = False,
     rubric_evaluation_strategy: str = "batch",
     deep_judgment_max_excerpts_per_attribute: int = 3,
@@ -45,6 +45,8 @@ def run_single_model_verification(
     deep_judgment_rubric_search_tool: str | Any = "tavily",
     evaluation_mode: str = "template_only",
     cached_answer_data: dict[str, Any] | None = None,
+    # Prompt configuration
+    prompt_config: PromptConfig | None = None,
     # Trace filtering configuration (MCP Agent Evaluation)
     use_full_trace_for_template: bool = False,
     use_full_trace_for_rubric: bool = True,
@@ -64,13 +66,13 @@ def run_single_model_verification(
         answering_model: Configuration for the answering model
         parsing_model: Configuration for the parsing model
         run_name: Optional run name for tracking
-        answering_replicate: Optional replicate number for answering model
-        parsing_replicate: Optional replicate number for parsing model
+        replicate: Optional replicate number for repeated runs of the same question
         rubric: Optional rubric for qualitative evaluation
         keywords: Optional keywords associated with the question
         few_shot_examples: Optional list of question-answer pairs for few-shot prompting
         few_shot_enabled: Whether to use few-shot prompting (disabled by default)
         abstention_enabled: Whether to enable abstention detection
+        sufficiency_enabled: Whether to enable trace sufficiency detection
         deep_judgment_enabled: Whether to enable deep-judgment parsing
         rubric_evaluation_strategy: Strategy for evaluating LLM rubric traits:
             - "batch": All traits evaluated in single LLM call (default, efficient)
@@ -113,11 +115,11 @@ def run_single_model_verification(
         raw_answer=raw_answer,
         # Run Metadata
         run_name=run_name,
-        answering_replicate=answering_replicate,
-        parsing_replicate=parsing_replicate,
+        replicate=replicate,
         # Feature Flags
         few_shot_enabled=few_shot_enabled,
         abstention_enabled=abstention_enabled,
+        sufficiency_enabled=sufficiency_enabled,
         deep_judgment_enabled=deep_judgment_enabled,
         # Rubric Configuration
         rubric_evaluation_strategy=rubric_evaluation_strategy,
@@ -138,6 +140,8 @@ def run_single_model_verification(
         deep_judgment_rubric_search_tool=deep_judgment_rubric_search_tool,
         # Few-Shot Configuration
         few_shot_examples=few_shot_examples,
+        # Prompt Configuration
+        prompt_config=prompt_config,
         # Trace Filtering Configuration (MCP Agent Evaluation)
         use_full_trace_for_template=use_full_trace_for_template,
         use_full_trace_for_rubric=use_full_trace_for_rubric,
@@ -145,30 +149,18 @@ def run_single_model_verification(
         cached_answer_data=cached_answer_data,
     )
 
-    # Compute model strings for result (needed even if validation fails)
-    # For OpenRouter interface, don't include provider in the model string
-    # For OpenAI Endpoint interface, use "endpoint/" prefix
-    if answering_model.interface == "openrouter":
-        answering_model_str = answering_model.model_name
-    elif answering_model.interface == "openai_endpoint":
-        answering_model_str = f"endpoint/{answering_model.model_name}"
-    else:
-        answering_model_str = f"{answering_model.model_provider}/{answering_model.model_name}"
+    # Build ModelIdentity objects for pipeline use (needed even if validation fails)
+    from karenina.schemas.verification.model_identity import ModelIdentity
 
-    if parsing_model.interface == "openrouter":
-        parsing_model_str = parsing_model.model_name
-    elif parsing_model.interface == "openai_endpoint":
-        parsing_model_str = f"endpoint/{parsing_model.model_name}"
-    else:
-        parsing_model_str = f"{parsing_model.model_provider}/{parsing_model.model_name}"
+    answering_identity = ModelIdentity.from_model_config(answering_model, role="answering")
+    parsing_identity = ModelIdentity.from_model_config(parsing_model, role="parsing")
 
-    # Store model strings in context for early access (e.g., in error cases)
-    context.set_artifact("answering_model_str", answering_model_str)
-    context.set_artifact("parsing_model_str", parsing_model_str)
+    # Store ModelIdentity objects in context for downstream stages (e.g., finalize_result)
+    context.set_artifact("answering_model_identity", answering_identity)
+    context.set_artifact("parsing_model_identity", parsing_identity)
 
-    # Extract and store MCP server names for early access (e.g., in error cases)
+    # Store MCP server names as result field for VerificationResultTemplate
     answering_mcp_servers = list(answering_model.mcp_urls_dict.keys()) if answering_model.mcp_urls_dict else None
-    context.set_artifact("answering_mcp_servers", answering_mcp_servers)
     context.set_result_field("answering_mcp_servers", answering_mcp_servers)
 
     # Determine evaluation mode automatically if not explicitly set
@@ -182,10 +174,9 @@ def run_single_model_verification(
 
     # Build stage orchestrator from configuration
     orchestrator = StageOrchestrator.from_config(
-        answering_model=answering_model,
-        parsing_model=parsing_model,
         rubric=rubric,
         abstention_enabled=abstention_enabled,
+        sufficiency_enabled=sufficiency_enabled,
         deep_judgment_enabled=deep_judgment_enabled,
         evaluation_mode=evaluation_mode,
     )

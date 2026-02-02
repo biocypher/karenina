@@ -1,0 +1,51 @@
+{
+  "@context": {
+    "@version": 1.1,
+    "@vocab": "http://schema.org/",
+    "DataFeed": "DataFeed",
+    "DataFeedItem": "DataFeedItem",
+    "Question": "Question",
+    "Answer": "Answer",
+    "SoftwareSourceCode": "SoftwareSourceCode",
+    "text": "text",
+    "acceptedAnswer": {"@id": "acceptedAnswer", "@type": "@id"},
+    "hasPart": {"@id": "hasPart", "@type": "@id"},
+    "dataFeedElement": {"@id": "dataFeedElement", "@container": "@set"},
+    "item": {"@id": "item", "@type": "@id"}
+  },
+  "@type": "DataFeed",
+  "@id": "test-minimal-benchmark",
+  "name": "minimal-test",
+  "description": "A minimal benchmark for testing with one simple question",
+  "version": "0.1.0",
+  "creator": "Karenina Test Suite",
+  "dateCreated": "2025-01-11T00:00:00Z",
+  "dateModified": "2025-01-11T00:00:00Z",
+  "dataFeedElement": [
+    {
+      "@type": "DataFeedItem",
+      "@id": "q001",
+      "dateCreated": "2025-01-11T00:00:00Z",
+      "dateModified": "2025-01-11T00:00:00Z",
+      "item": {
+        "@type": "Question",
+        "@id": "q001-question",
+        "text": "What is 2+2?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "@id": "q001-answer",
+          "text": "4"
+        },
+        "hasPart": {
+          "@type": "SoftwareSourceCode",
+          "@id": "q001-template",
+          "name": "Simple Addition Answer Template",
+          "text": "from karenina.schemas.domain import BaseAnswer\nfrom pydantic import Field\n\nclass Answer(BaseAnswer):\n    \"\"\"Answer template for simple arithmetic.\"\"\"\n    result: int = Field(description=\"The numerical result\")\n\n    def model_post_init(self, __context):\n        self.correct = {\"result\": 4}\n\n    def verify(self) -> bool:\n        return self.result == self.correct[\"result\"]\n",
+          "programmingLanguage": "Python",
+          "codeRepository": "karenina-test-fixtures"
+        }
+      },
+      "keywords": ["arithmetic", "math"]
+    }
+  ]
+}

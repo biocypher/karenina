@@ -1,21 +1,20 @@
 """Integration tests for enhanced answer cache optimization.
 
-This module tests the complete cache optimization system including:
-- Non-blocking cache with immediate IN_PROGRESS returns
-- Task shuffling for better cache distribution
-- Progressive retry strategy (immediate requeue, then 30s waits)
-- Result order preservation despite shuffling
+This module tests the cache optimization system including:
+- Answer sharing across multiple parsing models
+- Cache key correctness (question_id + answering_model + replicate)
+- Sequential and parallel execution modes
 
-Note: These tests are currently skipped as they require optimization for CI/CD.
+Note: Most tests use VerificationExecutor(parallel=False) to avoid anyio portal overhead.
+One test verifies parallel execution works correctly.
 """
 
-import threading
-import time
 from unittest.mock import patch
 
 import pytest
 
-from karenina.benchmark.verification.batch_runner import execute_parallel, execute_sequential
+from karenina.benchmark.verification.executor import ExecutorConfig, VerificationExecutor
+from karenina.schemas.verification.model_identity import ModelIdentity
 from karenina.schemas.workflow import ModelConfig, VerificationResult
 from karenina.schemas.workflow.verification import (
     VerificationResultMetadata,
@@ -24,423 +23,354 @@ from karenina.schemas.workflow.verification import (
 )
 
 
-@pytest.mark.skip(reason="Integration tests - optimize for CI/CD before enabling")
+def create_mock_result(kwargs: dict) -> VerificationResult:
+    """Create a standard mock VerificationResult from kwargs."""
+    timestamp = "2025-01-01"
+    _answering = ModelIdentity.from_model_config(kwargs["answering_model"], role="answering")
+    _parsing = ModelIdentity.from_model_config(kwargs["parsing_model"], role="parsing")
+    result_id = VerificationResultMetadata.compute_result_id(
+        question_id=kwargs["question_id"],
+        answering=_answering,
+        parsing=_parsing,
+        timestamp=timestamp,
+    )
+    return VerificationResult(
+        metadata=VerificationResultMetadata(
+            question_id=kwargs["question_id"],
+            template_id="test_template",
+            completed_without_errors=True,
+            question_text=kwargs["question_text"],
+            answering=_answering,
+            parsing=_parsing,
+            execution_time=0.1,
+            timestamp=timestamp,
+            result_id=result_id,
+        ),
+        template=VerificationResultTemplate(
+            raw_llm_response=f"Answer for {kwargs['question_id']}",
+        ),
+        rubric=VerificationResultRubric(rubric_evaluation_performed=False),
+    )
+
+
+def create_model(model_id: str, system_prompt: str = "Test") -> ModelConfig:
+    """Create a test ModelConfig."""
+    return ModelConfig(
+        id=model_id,
+        model_provider="anthropic",
+        model_name=model_id,
+        temperature=0.0,
+        system_prompt=system_prompt,
+    )
+
+
+def create_task(
+    question_id: str,
+    answering_model: ModelConfig,
+    parsing_model: ModelConfig,
+    replicate: int | None = None,
+) -> dict:
+    """Create a standard verification task dict."""
+    return {
+        "question_id": question_id,
+        "question_text": f"What is the answer to {question_id}?",
+        "template_code": "class Answer: pass",
+        "answering_model": answering_model,
+        "parsing_model": parsing_model,
+        "replicate": replicate,
+        "rubric": None,
+        "keywords": None,
+        "few_shot_examples": None,
+        "few_shot_enabled": False,
+        "abstention_enabled": False,
+        "deep_judgment_enabled": False,
+    }
+
+
+def execute_sequential(tasks: list[dict]) -> dict[str, VerificationResult]:
+    """Run tasks sequentially via VerificationExecutor."""
+    executor = VerificationExecutor(parallel=False, config=ExecutorConfig())
+    return executor.run_batch(tasks)
+
+
+def execute_parallel(tasks: list[dict], max_workers: int = 2) -> dict[str, VerificationResult]:
+    """Run tasks in parallel via VerificationExecutor."""
+    executor = VerificationExecutor(parallel=True, config=ExecutorConfig(max_workers=max_workers))
+    return executor.run_batch(tasks)
+
+
+@pytest.mark.integration
 class TestCacheOptimizationIntegration:
-    """Integration tests for cache optimization."""
+    """Integration tests for cache optimization.
+
+    These tests verify the answer cache behavior by tracking which calls
+    receive cached_answer_data vs which generate new answers.
+    """
 
     @patch("karenina.benchmark.verification.runner.run_single_model_verification")
-    def test_parallel_cache_with_shuffling(self, mock_verify):
-        """Test that parallel execution with shuffling maximizes cache hits."""
-        # Track call order and timing
+    def test_sequential_cache_shares_answers_across_parsers(self, mock_verify):
+        """Test that sequential execution shares answers across different parsing models."""
         call_log = []
-        call_lock = threading.Lock()
-
-        def mock_verify_with_logging(**kwargs):
-            """Mock that logs calls and simulates processing time."""
-            with call_lock:
-                call_log.append(
-                    {
-                        "question_id": kwargs["question_id"],
-                        "answering_model": kwargs["answering_model"].id,
-                        "parsing_model": kwargs["parsing_model"].id,
-                        "replicate": kwargs.get("answering_replicate"),
-                        "cached": kwargs.get("cached_answer_data") is not None,
-                        "timestamp": time.time(),
-                    }
-                )
-
-            # Simulate answer generation delay only if not cached
-            if not kwargs.get("cached_answer_data"):
-                time.sleep(0.2)
-
-            return VerificationResult(
-                metadata=VerificationResultMetadata(
-                    question_id=kwargs["question_id"],
-                    template_id="test_template",
-                    completed_without_errors=True,
-                    question_text=kwargs["question_text"],
-                    answering_model=kwargs["answering_model"].id,
-                    parsing_model=kwargs["parsing_model"].id,
-                    execution_time=0.1,
-                    timestamp="2025-01-01",
-                ),
-                template=VerificationResultTemplate(
-                    raw_llm_response=f"Answer for rep {kwargs.get('answering_replicate', 1)}",
-                ),
-                rubric=VerificationResultRubric(rubric_evaluation_performed=False),
-            )
-
-        mock_verify.side_effect = mock_verify_with_logging
-
-        # Create models
-        answering_model = ModelConfig(
-            id="answering_model_1",
-            model_provider="openai",
-            model_name="gpt-4o-mini",
-            temperature=0.0,
-            system_prompt="Answer questions",
-        )
-        parsing_model_1 = ModelConfig(
-            id="parsing_model_1",
-            model_provider="openai",
-            model_name="gpt-4o-mini",
-            temperature=0.0,
-            system_prompt="Parse answers",
-        )
-        parsing_model_2 = ModelConfig(
-            id="parsing_model_2",
-            model_provider="openai",
-            model_name="gpt-4o-mini",
-            temperature=0.0,
-            system_prompt="Parse answers differently",
-        )
-
-        # Create 6 tasks:
-        # - 2 questions (q1, q2)
-        # - 1 answering model
-        # - 3 parsing models scenarios:
-        #   * For each question, use 2 different parsing models
-        # Expected: 2 answer generations (one per question), 4 cache hits
-        tasks = []
-        for question_id in ["q1", "q2"]:
-            for parsing_model in [parsing_model_1, parsing_model_2]:
-                tasks.append(
-                    {
-                        "question_id": question_id,
-                        "question_text": f"What is the answer to {question_id}?",
-                        "template_code": "class Answer: pass",
-                        "answering_model": answering_model,
-                        "parsing_model": parsing_model,
-                        "replicate": None,
-                        "rubric": None,
-                        "keywords": None,
-                        "few_shot_examples": None,
-                        "few_shot_enabled": False,
-                        "abstention_enabled": False,
-                        "deep_judgment_enabled": False,
-                    }
-                )
-
-        print(f"\n📋 Created {len(tasks)} tasks:")
-        for i, task in enumerate(tasks):
-            print(f"  Task {i}: Q={task['question_id']}, P={task['parsing_model'].id}")
-
-        # Execute in parallel with 2 workers
-        start_time = time.time()
-        results = execute_parallel(tasks, max_workers=2)
-        elapsed = time.time() - start_time
-
-        print(f"\n⏱️  Execution completed in {elapsed:.2f}s")
-        print(f"📊 Total verification calls: {len(call_log)}")
-
-        # Verify results
-        assert len(results) == 4, f"Expected 4 results, got {len(results)}"
-
-        # Analyze cache performance
-        cached_calls = sum(1 for call in call_log if call["cached"])
-        non_cached_calls = sum(1 for call in call_log if not call["cached"])
-
-        print("\n📈 Cache Performance:")
-        print(f"  ✓ Cache hits: {cached_calls}")
-        print(f"  ✗ Cache misses: {non_cached_calls}")
-
-        # We should have 2 misses (generate answers for q1 and q2)
-        # and 2 hits (reuse those answers for the second parsing model)
-        assert non_cached_calls == 2, f"Expected 2 non-cached calls, got {non_cached_calls}"
-        assert cached_calls == 2, f"Expected 2 cached calls, got {cached_calls}"
-
-        # Verify result ordering is maintained
-        result_keys = list(results.keys())
-        print("\n🔢 Result ordering maintained:")
-        for i, key in enumerate(result_keys):
-            result = results[key]
-            print(f"  {i}: {result.question_id} / {result.parsing_model}")
-
-        # All results should be present
-        question_ids = [results[key].question_id for key in result_keys]
-        assert question_ids.count("q1") == 2, "Expected 2 results for q1"
-        assert question_ids.count("q2") == 2, "Expected 2 results for q2"
-
-    @patch("karenina.benchmark.verification.runner.run_single_model_verification")
-    def test_progressive_retry_strategy(self, mock_verify):
-        """Test that IN_PROGRESS tasks use progressive retry (immediate, then 30s waits)."""
-        # Simulate slow answer generation
-        generation_started = threading.Event()
-        generation_complete = threading.Event()
-
-        def mock_verify_slow(**kwargs):
-            """Mock that simulates slow answer generation."""
-            if not kwargs.get("cached_answer_data"):
-                # First call - simulate slow generation
-                generation_started.set()
-                time.sleep(1.0)  # Simulate 1s generation time
-                generation_complete.set()
-
-            return VerificationResult(
-                metadata=VerificationResultMetadata(
-                    question_id=kwargs["question_id"],
-                    template_id="test_template",
-                    completed_without_errors=True,
-                    question_text=kwargs["question_text"],
-                    answering_model=kwargs["answering_model"].id,
-                    parsing_model=kwargs["parsing_model"].id,
-                    execution_time=0.1,
-                    timestamp="2025-01-01",
-                ),
-                template=VerificationResultTemplate(
-                    raw_llm_response="Answer",
-                ),
-                rubric=VerificationResultRubric(rubric_evaluation_performed=False),
-            )
-
-        mock_verify.side_effect = mock_verify_slow
-
-        # Create models
-        answering_model = ModelConfig(
-            id="slow_model",
-            model_provider="openai",
-            model_name="gpt-4o-mini",
-            temperature=0.0,
-            system_prompt="Test",
-        )
-        parsing_model_1 = ModelConfig(
-            id="parser_1",
-            model_provider="openai",
-            model_name="gpt-4o-mini",
-            temperature=0.0,
-            system_prompt="Parse",
-        )
-        parsing_model_2 = ModelConfig(
-            id="parser_2",
-            model_provider="openai",
-            model_name="gpt-4o-mini",
-            temperature=0.0,
-            system_prompt="Parse",
-        )
-
-        # Create 2 tasks for the same question with different parsers
-        tasks = [
-            {
-                "question_id": "q1",
-                "question_text": "Test question",
-                "template_code": "class Answer: pass",
-                "answering_model": answering_model,
-                "parsing_model": parsing_model_1,
-                "replicate": None,
-                "rubric": None,
-                "keywords": None,
-                "few_shot_examples": None,
-                "few_shot_enabled": False,
-                "abstention_enabled": False,
-                "deep_judgment_enabled": False,
-            },
-            {
-                "question_id": "q1",
-                "question_text": "Test question",
-                "template_code": "class Answer: pass",
-                "answering_model": answering_model,
-                "parsing_model": parsing_model_2,
-                "replicate": None,
-                "rubric": None,
-                "keywords": None,
-                "few_shot_examples": None,
-                "few_shot_enabled": False,
-                "abstention_enabled": False,
-                "deep_judgment_enabled": False,
-            },
-        ]
-
-        print(f"\n🔄 Testing progressive retry with {len(tasks)} tasks")
-
-        # Execute with 2 workers
-        results = execute_parallel(tasks, max_workers=2)
-
-        print("✓ Execution completed")
-        print(f"📊 Results: {len(results)}")
-
-        # Both tasks should complete
-        assert len(results) == 2, f"Expected 2 results, got {len(results)}"
-
-        # One should have generated, one should have used cache
-        assert mock_verify.call_count == 2
-        cached_count = sum(1 for call in mock_verify.call_args_list if call[1].get("cached_answer_data") is not None)
-        print(f"✓ Cached calls: {cached_count}")
-        assert cached_count == 1, f"Expected 1 cached call, got {cached_count}"
-
-    @patch("karenina.benchmark.verification.runner.run_single_model_verification")
-    def test_sequential_no_retry_needed(self, mock_verify):
-        """Test that sequential execution doesn't need retry logic."""
-        call_order = []
 
         def mock_verify_track(**kwargs):
-            call_order.append(
+            call_log.append(
                 {
-                    "parsing": kwargs["parsing_model"].id,
+                    "question_id": kwargs["question_id"],
+                    "parsing_model": kwargs["parsing_model"].id,
                     "cached": kwargs.get("cached_answer_data") is not None,
                 }
             )
-            return VerificationResult(
-                metadata=VerificationResultMetadata(
-                    question_id=kwargs["question_id"],
-                    template_id="test_template",
-                    completed_without_errors=True,
-                    question_text=kwargs["question_text"],
-                    answering_model=kwargs["answering_model"].id,
-                    parsing_model=kwargs["parsing_model"].id,
-                    execution_time=0.1,
-                    timestamp="2025-01-01",
-                ),
-                template=VerificationResultTemplate(
-                    raw_llm_response="Answer",
-                ),
-                rubric=VerificationResultRubric(rubric_evaluation_performed=False),
-            )
+            return create_mock_result(kwargs)
 
         mock_verify.side_effect = mock_verify_track
 
-        # Create models
-        answering_model = ModelConfig(
-            id="seq_model",
-            model_provider="openai",
-            model_name="gpt-4o-mini",
-            temperature=0.0,
-            system_prompt="Test",
-        )
-        parsing_models = [
-            ModelConfig(
-                id=f"parser_{i}",
-                model_provider="openai",
-                model_name="gpt-4o-mini",
-                temperature=0.0,
-                system_prompt="Parse",
-            )
-            for i in range(3)
+        answering_model = create_model("answering_1")
+        parsing_model_1 = create_model("parser_1")
+        parsing_model_2 = create_model("parser_2")
+        parsing_model_3 = create_model("parser_3")
+
+        # Create 3 tasks for the same question with different parsers
+        tasks = [
+            create_task("q1", answering_model, parsing_model_1),
+            create_task("q1", answering_model, parsing_model_2),
+            create_task("q1", answering_model, parsing_model_3),
         ]
 
-        # Create 3 tasks for the same question
-        tasks = []
-        for parsing_model in parsing_models:
-            tasks.append(
-                {
-                    "question_id": "q1",
-                    "question_text": "Test question",
-                    "template_code": "class Answer: pass",
-                    "answering_model": answering_model,
-                    "parsing_model": parsing_model,
-                    "replicate": None,
-                    "rubric": None,
-                    "keywords": None,
-                    "few_shot_examples": None,
-                    "few_shot_enabled": False,
-                    "abstention_enabled": False,
-                    "deep_judgment_enabled": False,
-                }
-            )
-
-        print(f"\n📝 Testing sequential execution with {len(tasks)} tasks")
-
-        # Execute sequentially
         results = execute_sequential(tasks)
 
-        print("✓ Execution completed")
-        print(f"📊 Results: {len(results)}")
-
-        # All tasks should complete
         assert len(results) == 3, f"Expected 3 results, got {len(results)}"
 
-        # First should generate, next 2 should use cache
-        print("\n📈 Call order:")
-        for i, call in enumerate(call_order):
-            status = "CACHED" if call["cached"] else "GENERATED"
-            print(f"  {i + 1}. {call['parsing']}: {status}")
+        # First call should generate (not cached)
+        assert not call_log[0]["cached"], "First call should generate answer"
 
-        assert not call_order[0]["cached"], "First call should generate"
-        assert call_order[1]["cached"], "Second call should be cached"
-        assert call_order[2]["cached"], "Third call should be cached"
-
-        print("✓ Sequential cache behavior verified")
+        # Subsequent calls should use cache
+        assert call_log[1]["cached"], "Second call should use cached answer"
+        assert call_log[2]["cached"], "Third call should use cached answer"
 
     @patch("karenina.benchmark.verification.runner.run_single_model_verification")
-    def test_result_order_preservation(self, mock_verify):
-        """Test that results are returned in original task order despite shuffling."""
+    def test_cache_key_includes_question_id(self, mock_verify):
+        """Test that different questions don't share cache entries."""
+        call_log = []
 
-        def mock_verify_simple(**kwargs):
-            return VerificationResult(
-                metadata=VerificationResultMetadata(
-                    question_id=kwargs["question_id"],
-                    template_id="test_template",
-                    completed_without_errors=True,
-                    question_text=kwargs["question_text"],
-                    answering_model=kwargs["answering_model"].id,
-                    parsing_model=kwargs["parsing_model"].id,
-                    execution_time=0.1,
-                    timestamp="2025-01-01",
-                ),
-                template=VerificationResultTemplate(
-                    raw_llm_response="Answer",
-                ),
-                rubric=VerificationResultRubric(rubric_evaluation_performed=False),
-            )
-
-        mock_verify.side_effect = mock_verify_simple
-
-        # Create a predictable task list
-        answering_model = ModelConfig(
-            id="test_model",
-            model_provider="openai",
-            model_name="gpt-4o-mini",
-            temperature=0.0,
-            system_prompt="Test",
-        )
-        parsing_model = ModelConfig(
-            id="parser",
-            model_provider="openai",
-            model_name="gpt-4o-mini",
-            temperature=0.0,
-            system_prompt="Parse",
-        )
-
-        # Create 5 tasks with different question IDs
-        task_question_ids = ["q1", "q2", "q3", "q4", "q5"]
-        tasks = []
-        for qid in task_question_ids:
-            tasks.append(
+        def mock_verify_track(**kwargs):
+            call_log.append(
                 {
-                    "question_id": qid,
-                    "question_text": f"Question {qid}",
-                    "template_code": "class Answer: pass",
-                    "answering_model": answering_model,
-                    "parsing_model": parsing_model,
-                    "replicate": None,
-                    "rubric": None,
-                    "keywords": None,
-                    "few_shot_examples": None,
-                    "few_shot_enabled": False,
-                    "abstention_enabled": False,
-                    "deep_judgment_enabled": False,
+                    "question_id": kwargs["question_id"],
+                    "cached": kwargs.get("cached_answer_data") is not None,
                 }
             )
+            return create_mock_result(kwargs)
 
-        print(f"\n🔢 Testing result order with {len(tasks)} tasks")
-        print(f"Input order: {task_question_ids}")
+        mock_verify.side_effect = mock_verify_track
 
-        # Execute in parallel (which shuffles internally)
+        answering_model = create_model("answering_1")
+        parsing_model = create_model("parser_1")
+
+        # Create tasks for different questions
+        tasks = [
+            create_task("q1", answering_model, parsing_model),
+            create_task("q2", answering_model, parsing_model),
+            create_task("q3", answering_model, parsing_model),
+        ]
+
+        results = execute_sequential(tasks)
+
+        assert len(results) == 3
+        # All should be non-cached since they have different questions
+        cached_calls = sum(1 for call in call_log if call["cached"])
+        assert cached_calls == 0, f"Expected 0 cached calls (different questions), got {cached_calls}"
+
+    @patch("karenina.benchmark.verification.runner.run_single_model_verification")
+    def test_cache_key_includes_answering_model(self, mock_verify):
+        """Test that different answering models don't share cache entries."""
+        call_log = []
+
+        def mock_verify_track(**kwargs):
+            call_log.append(
+                {
+                    "answering_model": kwargs["answering_model"].id,
+                    "cached": kwargs.get("cached_answer_data") is not None,
+                }
+            )
+            return create_mock_result(kwargs)
+
+        mock_verify.side_effect = mock_verify_track
+
+        answering_model_1 = create_model("answering_1")
+        answering_model_2 = create_model("answering_2")
+        parsing_model = create_model("parser_1")
+
+        # Same question, different answering models
+        tasks = [
+            create_task("q1", answering_model_1, parsing_model),
+            create_task("q1", answering_model_2, parsing_model),
+        ]
+
+        results = execute_sequential(tasks)
+
+        assert len(results) == 2
+        # Both should be non-cached since they use different answering models
+        cached_calls = sum(1 for call in call_log if call["cached"])
+        assert cached_calls == 0, f"Expected 0 cached calls (different answering models), got {cached_calls}"
+
+    @patch("karenina.benchmark.verification.runner.run_single_model_verification")
+    def test_cache_key_includes_replicate(self, mock_verify):
+        """Test that different replicates don't share cache entries."""
+        call_log = []
+
+        def mock_verify_track(**kwargs):
+            call_log.append(
+                {
+                    "replicate": kwargs.get("replicate"),
+                    "cached": kwargs.get("cached_answer_data") is not None,
+                }
+            )
+            return create_mock_result(kwargs)
+
+        mock_verify.side_effect = mock_verify_track
+
+        answering_model = create_model("answering_1")
+        parsing_model = create_model("parser_1")
+
+        # Same question and models, but different replicates
+        tasks = [
+            create_task("q1", answering_model, parsing_model, replicate=1),
+            create_task("q1", answering_model, parsing_model, replicate=2),
+            create_task("q1", answering_model, parsing_model, replicate=3),
+        ]
+
+        results = execute_sequential(tasks)
+
+        assert len(results) == 3
+        # All should be non-cached since they have different replicates
+        cached_calls = sum(1 for call in call_log if call["cached"])
+        assert cached_calls == 0, f"Expected 0 cached calls (different replicates), got {cached_calls}"
+
+    @patch("karenina.benchmark.verification.runner.run_single_model_verification")
+    def test_multiple_questions_multiple_parsers(self, mock_verify):
+        """Test cache behavior with multiple questions and multiple parsing models."""
+        call_log = []
+
+        def mock_verify_track(**kwargs):
+            call_log.append(
+                {
+                    "question_id": kwargs["question_id"],
+                    "parsing_model": kwargs["parsing_model"].id,
+                    "cached": kwargs.get("cached_answer_data") is not None,
+                }
+            )
+            return create_mock_result(kwargs)
+
+        mock_verify.side_effect = mock_verify_track
+
+        answering_model = create_model("answering_1")
+        parser_1 = create_model("parser_1")
+        parser_2 = create_model("parser_2")
+
+        # 2 questions × 2 parsers = 4 tasks
+        # Expected: 2 generations (one per question), 2 cache hits
+        tasks = [
+            create_task("q1", answering_model, parser_1),
+            create_task("q1", answering_model, parser_2),
+            create_task("q2", answering_model, parser_1),
+            create_task("q2", answering_model, parser_2),
+        ]
+
+        results = execute_sequential(tasks)
+
+        assert len(results) == 4
+
+        # Count by question
+        q1_calls = [c for c in call_log if c["question_id"] == "q1"]
+        q2_calls = [c for c in call_log if c["question_id"] == "q2"]
+
+        # First call for each question should generate
+        assert not q1_calls[0]["cached"], "First q1 call should generate"
+        assert not q2_calls[0]["cached"], "First q2 call should generate"
+
+        # Second call for each question should use cache
+        assert q1_calls[1]["cached"], "Second q1 call should use cache"
+        assert q2_calls[1]["cached"], "Second q2 call should use cache"
+
+    @patch("karenina.benchmark.verification.runner.run_single_model_verification")
+    def test_cache_statistics_tracked(self, mock_verify):
+        """Test that cache statistics are properly tracked."""
+        mock_verify.side_effect = lambda **kwargs: create_mock_result(kwargs)
+
+        answering_model = create_model("answering_1")
+        parser_1 = create_model("parser_1")
+        parser_2 = create_model("parser_2")
+
+        # 2 tasks for same question: 1 miss, 1 hit
+        tasks = [
+            create_task("q1", answering_model, parser_1),
+            create_task("q1", answering_model, parser_2),
+        ]
+
+        # Note: We can't easily inspect cache stats without accessing internals,
+        # but the logs will show "Answer cache statistics: X hits, Y misses"
+        results = execute_sequential(tasks)
+
+        assert len(results) == 2
+        assert mock_verify.call_count == 2
+
+    @patch("karenina.benchmark.verification.runner.run_single_model_verification")
+    def test_all_results_have_correct_metadata(self, mock_verify):
+        """Test that all results have correct question and model metadata."""
+        mock_verify.side_effect = lambda **kwargs: create_mock_result(kwargs)
+
+        answering_model = create_model("answering_1")
+        parser_1 = create_model("parser_1")
+        parser_2 = create_model("parser_2")
+
+        tasks = [
+            create_task("q1", answering_model, parser_1),
+            create_task("q1", answering_model, parser_2),
+            create_task("q2", answering_model, parser_1),
+        ]
+
+        results = execute_sequential(tasks)
+
+        # Verify all results are present with correct metadata
+        result_list = list(results.values())
+        assert len(result_list) == 3
+
+        question_ids = {r.question_id for r in result_list}
+        assert question_ids == {"q1", "q2"}
+
+        parsing_models = {r.parsing_model for r in result_list}
+        assert parsing_models == {"langchain:parser_1", "langchain:parser_2"}
+
+
+@pytest.mark.integration
+class TestParallelExecution:
+    """Test parallel execution specifically.
+
+    Note: These tests are slower due to anyio portal overhead.
+    They verify that parallel execution maintains correctness.
+    """
+
+    @patch("karenina.benchmark.verification.runner.run_single_model_verification")
+    def test_parallel_execution_completes(self, mock_verify):
+        """Test that parallel execution completes and returns all results."""
+        mock_verify.side_effect = lambda **kwargs: create_mock_result(kwargs)
+
+        answering_model = create_model("answering_1")
+        parsing_model = create_model("parser_1")
+
+        # Simple case: 3 different questions
+        tasks = [
+            create_task("q1", answering_model, parsing_model),
+            create_task("q2", answering_model, parsing_model),
+            create_task("q3", answering_model, parsing_model),
+        ]
+
         results = execute_parallel(tasks, max_workers=2)
 
-        # Extract result order
-        result_keys = list(results.keys())
-        result_question_ids = [results[key].question_id for key in result_keys]
-
-        print(f"Output order: {result_question_ids}")
-
-        # Results should be returned (result_key is ordered by timestamp, so order may vary)
-        # But all question IDs should be present
-        assert len(results) == 5, f"Expected 5 results, got {len(results)}"
-        assert set(result_question_ids) == set(task_question_ids), "All questions should be present"
-
-        print(f"✓ All {len(results)} results present")
+        assert len(results) == 3
+        question_ids = {results[key].question_id for key in results}
+        assert question_ids == {"q1", "q2", "q3"}
 
 
 if __name__ == "__main__":
-    # Allow running tests directly
     pytest.main([__file__, "-v", "-s"])

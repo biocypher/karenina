@@ -32,7 +32,8 @@ dependencies = [
     "tenacity>=8.0.0",
     "httpx>=0.24.0",
     "tiktoken>=0.5.0",
-    "anthropic>=0.18.0",
+    "anthropic>=0.76.0",  # For beta.messages.parse and tool_runner
+    "mcp>=1.25.0,<2",  # MCP client for HTTP/SSE transport
     "langchain>=1.1.0",
     "langchain-openai>=0.3.25",
     "langchain-core>=0.3.66",
@@ -44,10 +45,12 @@ dependencies = [
     "alembic>=1.12.0",
     "tavily-python>=0.7.12",
     "langchain-community>=0.3.27",
-    "typer>=0.9.0",  # CLI framework
-    "rich>=13.0.0",  # Beautiful terminal output
-    "cloudpickle>=3.0.0",  # For CallableTrait serialization
-    "json-repair>=0.30.0",  # For fixing malformed JSON in LLM responses
+    "typer>=0.9.0", # CLI framework
+    "rich>=13.0.0", # Beautiful terminal output
+    "cloudpickle>=3.0.0", # For CallableTrait serialization
+    "json-repair>=0.30.0", # For fixing malformed JSON in LLM responses
+    "gepa>=0.0.24",
+    "litellm>=1.80.11",
 ]
 
 [project.optional-dependencies]
@@ -74,11 +77,15 @@ examples = [
     "jupyter>=1.0.0",  # For running example notebooks
     "ipykernel>=6.0.0",  # Jupyter kernel support
 ]
-webapp = [
-    "karenina-server>=0.1.0",  # Webapp server with bundled GUI
-]
+# webapp extra disabled until karenina-server is published to PyPI
+# webapp = [
+#     "karenina-server>=0.1.0",  # Webapp server with bundled GUI
+# ]
 embeddings = [
     "sentence-transformers>=5.1.0",  # For embedding similarity checks
+]
+gepa = [
+    "gepa>=0.0.24",  # For GEPA prompt optimization integration
 ]
 
 [project.scripts]
@@ -93,6 +100,10 @@ Documentation = "https://karenina.readthedocs.io"
 [tool.hatch.build.targets.wheel]
 packages = ["src/karenina"]
 
+# Include ADeLe rubric data files in the wheel
+[tool.hatch.build.targets.wheel.force-include]
+"src/karenina/integrations/adele/data" = "karenina/integrations/adele/data"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
@@ -100,12 +111,22 @@ filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::PendingDeprecationWarning",
 ]
-addopts = "-v --tb=short -m 'not integration'"
+addopts = "-v --tb=short"
 markers = [
-    "integration: marks tests as integration tests (slow, requires real resources)",
+    # By test layer
+    "unit: Pure logic tests - no I/O, no LLM calls",
+    "integration: Multiple components working together - may use fixture-backed LLM",
+    "e2e: End-to-end workflow tests - full CLI workflows",
+    # By speed
+    "slow: Tests taking > 1 second to run",
+    # By feature area
+    "pipeline: Verification pipeline tests",
+    "rubric: Rubric evaluation tests",
+    "storage: Checkpoint I/O and storage tests",
+    "cli: CLI command tests",
+    # Legacy markers (for backward compatibility)
     "requires_api: marks tests that require API keys (OpenAI, etc.)",
     "deep_judgment: marks tests that use deep judgment verification mode",
-    "rubric: marks tests that use rubric evaluation mode",
 ]
 
 [tool.coverage.run]
@@ -140,6 +161,10 @@ warn_unused_ignores = true
 warn_no_return = true
 follow_imports = "normal"
 ignore_missing_imports = true
+# Exclude directories with invalid Python package names (hyphens)
+exclude = [
+    "tests/fixtures/llm_responses/claude-haiku-4-5",
+]
 
 # Relax strictness for optional dependencies (search tools)
 [[tool.mypy.overrides]]
@@ -196,18 +221,18 @@ ignore_decorators = ["@pytest.fixture", "@property", "@abstractmethod"]
 ignore_names = ["test_*", "setUp", "tearDown"]
 make_whitelist = true
 
-[tool.uv.sources]
-# Local development: resolve karenina-server from sibling directory
-karenina-server = { path = "../karenina-server", editable = true }
-
 [dependency-groups]
 dev = [
     "build>=1.2.2.post1",
     "deptree>=0.0.12",
+    "ipykernel>=6.31.0",
     "ipython>=9.6.0",
+    "jupyter>=1.1.1",
     "mkdocs>=1.6.1",
+    "mkdocs-jupyter>=0.25.1",
     "mkdocs-material>=9.6.14",
     "mkdocstrings[python]>=0.29.1",
+    "nbconvert>=7.16.6",
     "pytest-asyncio>=1.0.0",
     "pytest-testmon>=2.1.3",
     "python-semantic-release>=10.1.0",

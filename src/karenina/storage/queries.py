@@ -190,35 +190,6 @@ def get_verification_history_timeline(
         return [dict(row._mapping) for row in result]
 
 
-def get_failed_verifications(
-    db_config: DBConfig,
-    benchmark_name: str | None = None,
-    model_name: str | None = None,
-    limit: int = 100,
-) -> list[dict[str, Any]]:
-    """Get failed verifications from the failed_verifications_view.
-
-    Args:
-        db_config: Database configuration
-        benchmark_name: Optional benchmark name to filter by
-        model_name: Optional model name to filter by (answering or parsing)
-        limit: Maximum number of records to return
-
-    Returns:
-        List of failed verification dictionaries
-    """
-    with get_session(db_config) as session:
-        query = "SELECT * FROM failed_verifications_view WHERE 1=1"
-        if benchmark_name:
-            query += f" AND benchmark_name = '{benchmark_name}'"
-        if model_name:
-            query += f" AND (answering_model = '{model_name}' OR parsing_model = '{model_name}')"
-        query += f" ORDER BY created_at DESC LIMIT {limit}"
-
-        result = session.execute(text(query))
-        return [dict(row._mapping) for row in result]
-
-
 def get_rubric_traits_by_type(
     db_config: DBConfig,
     benchmark_name: str | None = None,

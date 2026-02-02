@@ -12,6 +12,7 @@ import json
 import pytest
 
 # Import and rebuild RubricJudgmentResults to resolve forward references
+from karenina.schemas.verification.model_identity import ModelIdentity
 from karenina.schemas.workflow.rubric_judgment_results import RubricJudgmentResults
 from karenina.schemas.workflow.rubric_results import RubricResults
 from karenina.schemas.workflow.verification import (
@@ -30,12 +31,14 @@ class TestRubricResultsStandardExport:
     @pytest.fixture
     def basic_metadata(self) -> VerificationResultMetadata:
         """Create basic metadata for testing."""
+        _answering = ModelIdentity(interface="langchain", model_name="gpt-4")
+        _parsing = ModelIdentity(interface="langchain", model_name="gpt-4-mini")
         result_id = VerificationResultMetadata.compute_result_id(
             question_id="q1",
-            answering_model="gpt-4",
-            parsing_model="gpt-4-mini",
+            answering=_answering,
+            parsing=_parsing,
             timestamp="2024-01-15T10:30:00",
-            answering_replicate=1,
+            replicate=1,
         )
         return VerificationResultMetadata(
             question_id="q1",
@@ -44,12 +47,12 @@ class TestRubricResultsStandardExport:
             error=None,
             question_text="What is photosynthesis?",
             keywords=["biology"],
-            answering_model="gpt-4",
-            parsing_model="gpt-4-mini",
+            answering=_answering,
+            parsing=_parsing,
             execution_time=2.5,
             timestamp="2024-01-15T10:30:00",
             result_id=result_id,
-            answering_replicate=1,
+            replicate=1,
         )
 
     def test_get_rubrics_default_no_deep_judgment(self, basic_metadata):
@@ -174,12 +177,14 @@ class TestRubricJudgmentResultsCreation:
     @pytest.fixture
     def basic_metadata(self) -> VerificationResultMetadata:
         """Create basic metadata."""
+        _answering = ModelIdentity(interface="langchain", model_name="gpt-4")
+        _parsing = ModelIdentity(interface="langchain", model_name="gpt-4-mini")
         result_id = VerificationResultMetadata.compute_result_id(
             question_id="q1",
-            answering_model="gpt-4",
-            parsing_model="gpt-4-mini",
+            answering=_answering,
+            parsing=_parsing,
             timestamp="2024-01-15T10:30:00",
-            answering_replicate=1,
+            replicate=1,
         )
         return VerificationResultMetadata(
             question_id="q1",
@@ -188,12 +193,12 @@ class TestRubricJudgmentResultsCreation:
             error=None,
             question_text="Test question",
             keywords=None,
-            answering_model="gpt-4",
-            parsing_model="gpt-4-mini",
+            answering=_answering,
+            parsing=_parsing,
             execution_time=1.0,
             timestamp="2024-01-15T10:30:00",
             result_id=result_id,
-            answering_replicate=1,
+            replicate=1,
         )
 
     def test_rubric_judgment_results_creation(self, basic_metadata):
@@ -225,12 +230,14 @@ class TestRubricJudgmentResultsExcerptExplosion:
     @pytest.fixture
     def basic_metadata(self) -> VerificationResultMetadata:
         """Create basic metadata."""
+        _answering = ModelIdentity(interface="langchain", model_name="gpt-4")
+        _parsing = ModelIdentity(interface="langchain", model_name="gpt-4-mini")
         result_id = VerificationResultMetadata.compute_result_id(
             question_id="q1",
-            answering_model="gpt-4",
-            parsing_model="gpt-4-mini",
+            answering=_answering,
+            parsing=_parsing,
             timestamp="2024-01-15T10:30:00",
-            answering_replicate=1,
+            replicate=1,
         )
         return VerificationResultMetadata(
             question_id="q1",
@@ -239,12 +246,12 @@ class TestRubricJudgmentResultsExcerptExplosion:
             error=None,
             question_text="Test question",
             keywords=None,
-            answering_model="gpt-4",
-            parsing_model="gpt-4-mini",
+            answering=_answering,
+            parsing=_parsing,
             execution_time=1.0,
             timestamp="2024-01-15T10:30:00",
             result_id=result_id,
-            answering_replicate=1,
+            replicate=1,
         )
 
     def test_rubric_judgment_results_excerpt_explosion(self, basic_metadata):
@@ -347,12 +354,14 @@ class TestRubricJudgmentResultsMetadata:
     @pytest.fixture
     def basic_metadata(self) -> VerificationResultMetadata:
         """Create basic metadata."""
+        _answering = ModelIdentity(interface="langchain", model_name="gpt-4")
+        _parsing = ModelIdentity(interface="langchain", model_name="gpt-4-mini")
         result_id = VerificationResultMetadata.compute_result_id(
             question_id="q1",
-            answering_model="gpt-4",
-            parsing_model="gpt-4-mini",
+            answering=_answering,
+            parsing=_parsing,
             timestamp="2024-01-15T10:30:00",
-            answering_replicate=1,
+            replicate=1,
         )
         return VerificationResultMetadata(
             question_id="q1",
@@ -361,12 +370,12 @@ class TestRubricJudgmentResultsMetadata:
             error=None,
             question_text="Test question",
             keywords=None,
-            answering_model="gpt-4",
-            parsing_model="gpt-4-mini",
+            answering=_answering,
+            parsing=_parsing,
             execution_time=1.0,
             timestamp="2024-01-15T10:30:00",
             result_id=result_id,
-            answering_replicate=1,
+            replicate=1,
         )
 
     def test_rubric_judgment_results_metadata(self, basic_metadata):
@@ -424,12 +433,14 @@ class TestRubricJudgmentResultsMixedTraits:
     @pytest.fixture
     def basic_metadata(self) -> VerificationResultMetadata:
         """Create basic metadata."""
+        _answering = ModelIdentity(interface="langchain", model_name="gpt-4")
+        _parsing = ModelIdentity(interface="langchain", model_name="gpt-4-mini")
         result_id = VerificationResultMetadata.compute_result_id(
             question_id="q1",
-            answering_model="gpt-4",
-            parsing_model="gpt-4-mini",
+            answering=_answering,
+            parsing=_parsing,
             timestamp="2024-01-15T10:30:00",
-            answering_replicate=1,
+            replicate=1,
         )
         return VerificationResultMetadata(
             question_id="q1",
@@ -438,12 +449,12 @@ class TestRubricJudgmentResultsMixedTraits:
             error=None,
             question_text="Test question",
             keywords=None,
-            answering_model="gpt-4",
-            parsing_model="gpt-4-mini",
+            answering=_answering,
+            parsing=_parsing,
             execution_time=1.0,
             timestamp="2024-01-15T10:30:00",
             result_id=result_id,
-            answering_replicate=1,
+            replicate=1,
         )
 
     def test_mixed_dj_and_standard_traits(self, basic_metadata):
@@ -491,12 +502,14 @@ class TestJSONSerializationComplexFields:
     @pytest.fixture
     def basic_metadata(self) -> VerificationResultMetadata:
         """Create basic metadata."""
+        _answering = ModelIdentity(interface="langchain", model_name="gpt-4")
+        _parsing = ModelIdentity(interface="langchain", model_name="gpt-4-mini")
         result_id = VerificationResultMetadata.compute_result_id(
             question_id="q1",
-            answering_model="gpt-4",
-            parsing_model="gpt-4-mini",
+            answering=_answering,
+            parsing=_parsing,
             timestamp="2024-01-15T10:30:00",
-            answering_replicate=1,
+            replicate=1,
         )
         return VerificationResultMetadata(
             question_id="q1",
@@ -505,12 +518,12 @@ class TestJSONSerializationComplexFields:
             error=None,
             question_text="Test question",
             keywords=None,
-            answering_model="gpt-4",
-            parsing_model="gpt-4-mini",
+            answering=_answering,
+            parsing=_parsing,
             execution_time=1.0,
             timestamp="2024-01-15T10:30:00",
             result_id=result_id,
-            answering_replicate=1,
+            replicate=1,
         )
 
     def test_json_serialization_excerpts_list(self, basic_metadata):

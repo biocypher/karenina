@@ -1,9 +1,6 @@
 """Results management functionality for benchmarks."""
 
-import csv
-import json
 from datetime import datetime
-from io import StringIO
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -12,6 +9,7 @@ if TYPE_CHECKING:
     from .base import BenchmarkBase
 
 from ...schemas.workflow import VerificationResult
+from .results_io import ResultsIOHandler
 
 
 class ResultsManager:
@@ -171,21 +169,9 @@ class ResultsManager:
         results = self.get_verification_results(question_ids, run_name)
 
         if format.lower() == "json":
-            # Convert to frontend JSON format (array with row_index)
-            results_array = []
-            for index, (_, result) in enumerate(results.items(), 1):
-                result_dict = result.model_dump()
-                result_dict["row_index"] = index
-                # Replace success with "abstained" when abstention is detected
-                if result.abstention_detected and result.abstention_override_applied:
-                    result_dict["success"] = "abstained"
-                results_array.append(result_dict)
-            return json.dumps(results_array, indent=2, ensure_ascii=False)
-
+            return ResultsIOHandler.export_to_json(results)
         elif format.lower() == "csv":
-            # Convert to frontend CSV format
-            return self._export_to_frontend_csv(results, global_rubric)
-
+            return ResultsIOHandler.export_to_csv(results, global_rubric)
         else:
             raise ValueError(f"Unsupported export format: {format}. Supported formats: json, csv")
 
@@ -392,317 +378,13 @@ class ResultsManager:
         if not file_path.exists():
             raise FileNotFoundError(f"Results file not found: {file_path}")
 
-        # Determine format from extension
+        # Determine format from extension and delegate to handler
         if file_path.suffix.lower() == ".json":
-            return self._load_results_from_json(file_path, run_name)
+            results = ResultsIOHandler.load_from_json(file_path)
         elif file_path.suffix.lower() == ".csv":
-            return self._load_results_from_csv(file_path, run_name)
+            results = ResultsIOHandler.load_from_csv(file_path)
         else:
             raise ValueError(f"Unsupported file format: {file_path.suffix}. Supported formats: .json, .csv")
-
-    def _export_to_frontend_csv(
-        self, results: dict[str, VerificationResult], global_rubric: "Rubric | None" = None
-    ) -> str:
-        """
-        Export results to CSV format matching frontend format exactly.
-
-        Args:
-            results: Dictionary of verification results
-            global_rubric: Optional global rubric for trait separation
-
-        Returns:
-            CSV string in frontend format
-        """
-        if not results:
-            return "row_index,question_id,question_text,success,error,execution_time,timestamp,embedding_check_performed,embedding_similarity_score,embedding_override_applied,embedding_model_used\n"
-
-        # Extract all unique rubric trait names from results
-        all_rubric_trait_names: set[str] = set()
-        for result in results.values():
-            if result.verify_rubric:
-                all_rubric_trait_names.update(result.verify_rubric.keys())
-
-        # Determine global vs question-specific rubrics
-        global_trait_names = set()
-        if global_rubric and hasattr(global_rubric, "traits"):
-            for trait in global_rubric.llm_traits:
-                global_trait_names.add(trait.name)
-
-        # Separate traits into global and question-specific
-        global_traits: list[str] = sorted([trait for trait in all_rubric_trait_names if trait in global_trait_names])
-        question_specific_traits: list[str] = sorted(
-            [trait for trait in all_rubric_trait_names if trait not in global_trait_names]
-        )
-
-        # Create headers for global rubrics only
-        global_rubric_headers = [f"rubric_{trait}" for trait in global_traits]
-
-        headers = [
-            "row_index",
-            "question_id",
-            "question_text",
-            "raw_llm_response",
-            "parsed_gt_response",
-            "parsed_llm_response",
-            "verify_result",
-            "verify_granular_result",
-            *global_rubric_headers,
-            *(["question_specific_rubrics"] if question_specific_traits else []),
-            "rubric_summary",
-            "answering_model",
-            "parsing_model",
-            "answering_replicate",
-            "parsing_replicate",
-            "answering_system_prompt",
-            "parsing_system_prompt",
-            "success",
-            "error",
-            "execution_time",
-            "timestamp",
-            "run_name",
-            "job_id",
-            # Embedding check fields
-            "embedding_check_performed",
-            "embedding_similarity_score",
-            "embedding_override_applied",
-            "embedding_model_used",
-        ]
-
-        output = StringIO()
-        writer = csv.writer(output)
-        writer.writerow(headers)
-
-        for index, result in enumerate(results.values(), start=1):
-            # Extract global rubric trait values
-            global_rubric_values: list[str] = []
-            for trait_name in global_traits:
-                if result.verify_rubric and trait_name in result.verify_rubric:
-                    value = result.verify_rubric[trait_name]
-                    global_rubric_values.append(str(value) if value is not None else "")
-                else:
-                    global_rubric_values.append("")
-
-            # Create question-specific rubrics JSON
-            question_specific_rubrics: dict[str, int | bool] = {}
-            if result.verify_rubric:
-                for trait_name in question_specific_traits:
-                    if trait_name in result.verify_rubric:
-                        question_specific_rubrics[trait_name] = result.verify_rubric[trait_name]
-
-            question_specific_rubrics_value = json.dumps(question_specific_rubrics) if question_specific_traits else ""
-
-            # Create rubric summary
-            rubric_summary = ""
-            if result.verify_rubric:
-                traits = list(result.verify_rubric.items())
-                passed_traits = sum(
-                    1
-                    for name, value in traits
-                    if (isinstance(value, bool) and value) or (isinstance(value, int | float) and value >= 3)
-                )
-                rubric_summary = f"{passed_traits}/{len(traits)}"
-
-            row = [
-                index,  # row_index
-                self._escape_csv_field(result.metadata.question_id),
-                self._escape_csv_field(result.metadata.question_text),
-                self._escape_csv_field(result.template.raw_llm_response if result.template else ""),
-                self._escape_csv_field(
-                    json.dumps(result.template.parsed_gt_response)
-                    if result.template and result.template.parsed_gt_response
-                    else ""
-                ),
-                self._escape_csv_field(
-                    json.dumps(result.template.parsed_llm_response)
-                    if result.template and result.template.parsed_llm_response
-                    else ""
-                ),
-                self._escape_csv_field(
-                    json.dumps(result.template.verify_result)
-                    if result.template and result.template.verify_result is not None
-                    else "N/A"
-                ),
-                self._escape_csv_field(
-                    json.dumps(result.template.verify_granular_result)
-                    if result.template and result.template.verify_granular_result is not None
-                    else "N/A"
-                ),
-                *[self._escape_csv_field(value) for value in global_rubric_values],
-                *([question_specific_rubrics_value] if question_specific_traits else []),
-                self._escape_csv_field(rubric_summary),
-                self._escape_csv_field(result.metadata.answering_model),
-                self._escape_csv_field(result.metadata.parsing_model),
-                self._escape_csv_field(result.metadata.answering_replicate or ""),
-                self._escape_csv_field(result.metadata.parsing_replicate or ""),
-                self._escape_csv_field(result.metadata.answering_system_prompt or ""),
-                self._escape_csv_field(result.metadata.parsing_system_prompt or ""),
-                self._escape_csv_field(
-                    "abstained"
-                    if result.template
-                    and result.template.abstention_detected
-                    and result.template.abstention_override_applied
-                    else result.metadata.completed_without_errors
-                ),
-                self._escape_csv_field(result.metadata.error or ""),
-                self._escape_csv_field(result.metadata.execution_time),
-                self._escape_csv_field(result.metadata.timestamp),
-                self._escape_csv_field(result.metadata.run_name or ""),
-                # Embedding check fields
-                self._escape_csv_field(result.template.embedding_check_performed if result.template else False),
-                self._escape_csv_field(result.template.embedding_similarity_score if result.template else ""),
-                self._escape_csv_field(result.template.embedding_override_applied if result.template else False),
-                self._escape_csv_field(result.template.embedding_model_used if result.template else ""),
-            ]
-            writer.writerow(row)
-
-        return output.getvalue()
-
-    def _escape_csv_field(self, field: Any) -> str:
-        """
-        Escape CSV field content matching frontend logic.
-
-        Args:
-            field: Field value to escape
-
-        Returns:
-            Escaped string value
-        """
-        if field is None:
-            return ""
-        str_field = str(field)
-        if "," in str_field or '"' in str_field or "\n" in str_field:
-            return '"' + str_field.replace('"', '""') + '"'
-        return str_field
-
-    def _load_results_from_json(self, file_path: Path, run_name: str | None = None) -> dict[str, VerificationResult]:
-        """Load results from JSON file supporting multiple formats."""
-        with open(file_path, encoding="utf-8") as f:
-            data = json.load(f)
-
-        results = {}
-
-        # Handle different JSON formats
-        if isinstance(data, list):
-            # Frontend format: array with row_index
-            for item in data:
-                if isinstance(item, dict):
-                    # Remove row_index if present and create key
-                    item_copy = dict(item)
-                    row_index = item_copy.pop("row_index", None)
-                    question_id = item_copy.get("question_id", "unknown")
-                    result_key = f"{question_id}_{row_index}" if row_index else question_id
-                    try:
-                        results[result_key] = VerificationResult(**item_copy)
-                    except Exception:
-                        # Skip malformed items
-                        continue
-        elif isinstance(data, dict):
-            # Handle server format with metadata wrapper
-            results_data = data["results"] if "results" in data and "metadata" in data else data
-
-            # Reconstruct VerificationResult objects
-            for result_key, result_data in results_data.items():
-                if isinstance(result_data, dict):
-                    try:
-                        results[result_key] = VerificationResult(**result_data)
-                    except Exception:
-                        # Skip malformed results
-                        continue
-
-        # Store in memory if run_name provided
-        if run_name:
-            self._in_memory_results[run_name] = results
-
-        return results
-
-    def _load_results_from_csv(self, file_path: Path, run_name: str | None = None) -> dict[str, VerificationResult]:
-        """Load results from CSV file supporting frontend format."""
-        results = {}
-
-        with open(file_path, encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-
-            for row in reader:
-                # Get row_index for key generation
-                row_index = row.get("row_index", "")
-                question_id = row.get("question_id", "unknown")
-                result_key = f"{question_id}_{row_index}" if row_index else question_id
-
-                # Process rubric data
-                verify_rubric = {}
-
-                # Extract global rubric traits (columns starting with "rubric_")
-                for key, value in row.items():
-                    if key.startswith("rubric_") and value:
-                        trait_name = key[len("rubric_") :]
-                        try:
-                            # Try to convert to number first, then boolean
-                            if isinstance(value, str) and value.isdigit():
-                                verify_rubric[trait_name] = int(value)
-                            elif isinstance(value, str) and value.lower() in ("true", "false"):
-                                verify_rubric[trait_name] = value.lower() == "true"
-                            else:
-                                verify_rubric[trait_name] = value  # type: ignore[assignment]
-                        except (ValueError, AttributeError):
-                            verify_rubric[trait_name] = value  # type: ignore[assignment]
-
-                # Extract question-specific rubrics from JSON column
-                if "question_specific_rubrics" in row and row["question_specific_rubrics"]:
-                    try:
-                        question_specific = json.loads(row["question_specific_rubrics"])
-                        if isinstance(question_specific, dict):
-                            verify_rubric.update(question_specific)
-                    except json.JSONDecodeError:
-                        pass
-
-                # Convert JSON strings back to objects
-                processed_row = {}
-                for field, value in row.items():
-                    if field.startswith("rubric_") or field in [
-                        "row_index",
-                        "question_specific_rubrics",
-                        "rubric_summary",
-                    ]:
-                        continue  # Skip these fields as they're processed separately
-
-                    if (
-                        field
-                        in ["parsed_gt_response", "parsed_llm_response", "verify_result", "verify_granular_result"]
-                        and value
-                        and value != "N/A"
-                    ):
-                        try:
-                            processed_row[field] = json.loads(value)
-                        except (json.JSONDecodeError, TypeError):
-                            processed_row[field] = value
-                    elif field == "execution_time" and value:
-                        try:
-                            processed_row[field] = float(value)
-                        except ValueError:
-                            processed_row[field] = 0.0
-                    elif field == "success" and value:
-                        # Handle "abstained" status as True (since abstention overrides are successful responses)
-                        if value.lower() == "abstained":
-                            processed_row[field] = True
-                        else:
-                            processed_row[field] = value.lower() in ("true", "1", "yes")
-                    elif field in ["answering_replicate", "parsing_replicate"] and value:
-                        try:
-                            processed_row[field] = int(value)
-                        except ValueError:
-                            processed_row[field] = None
-                    else:
-                        processed_row[field] = value if value else None
-
-                # Add the processed rubric data
-                if verify_rubric:
-                    processed_row["verify_rubric"] = verify_rubric
-
-                try:
-                    results[result_key] = VerificationResult(**processed_row)
-                except Exception:
-                    # Skip malformed rows
-                    continue
 
         # Store in memory if run_name provided
         if run_name:

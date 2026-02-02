@@ -1,514 +1,335 @@
 """Integration tests for DataFrame functionality with rubric evaluation.
 
-This test module runs actual verification with rubric evaluation enabled using real
-checkpoints and presets, then validates that RubricResults DataFrame methods
-work correctly with real data.
+This test module validates that RubricResults DataFrame methods work correctly
+using fixture-created VerificationResult objects.
 
 Tests are marked with:
-- @pytest.mark.integration: Slow tests that run real verification
-- @pytest.mark.requires_api: Tests that need API access (e.g., OpenAI or custom endpoints)
+- @pytest.mark.integration: Tests that combine multiple components
 - @pytest.mark.rubric: Tests specific to rubric evaluation mode
 
-Run with: pytest tests/test_dataframe_integration_rubrics.py -v
-Skip with: pytest -m "not integration"
+Run with: pytest tests/integration/test_dataframe_integration_rubrics.py -v
 """
-
-from pathlib import Path
 
 import pandas as pd
 import pytest
 
-from karenina.benchmark import Benchmark
-from karenina.schemas import VerificationConfig
-from karenina.schemas.workflow import RubricResults, TemplateResults
+from karenina.schemas.workflow import (
+    RubricResults,
+    VerificationResult,
+    VerificationResultRubric,
+    VerificationResultTemplate,
+)
+from tests.integration.dataframe_helpers import (
+    CommonColumnTestMixin,
+    PandasOperationsTestMixin,
+    create_metadata,
+)
 
-# Paths
-CHECKPOINT_PATH = Path("/Users/carli/Projects/karenina_dev/checkpoints/latest_rubric_advanced.jsonld")
-RUBRIC_PRESET = Path("/Users/carli/Projects/karenina_dev/presets/gpt-oss-003-8000-rubrics.json")
-
-
-@pytest.fixture(scope="module")
-def checkpoint_exists():
-    """Check if checkpoint file exists."""
-    if not CHECKPOINT_PATH.exists():
-        pytest.skip(f"Checkpoint not found at {CHECKPOINT_PATH}")
-    return True
-
-
-@pytest.fixture(scope="module")
-def api_key_available():
-    """Check if API key or endpoint is available.
-
-    The rubric preset uses a custom endpoint (codon-gpu-003.ebi.ac.uk:8000)
-    which may not require OPENAI_API_KEY.
-    We assume the endpoint is accessible and will let the test fail if auth is needed.
-    """
-    # For custom endpoints, we assume they're accessible
-    # The actual verification will fail if authentication is required but not provided
-    return True
+# =============================================================================
+# Fixtures
+# =============================================================================
 
 
-@pytest.fixture(scope="module")
-def loaded_benchmark(checkpoint_exists):  # noqa: ARG001
-    """Load benchmark from checkpoint."""
-    return Benchmark.load(CHECKPOINT_PATH)
+@pytest.fixture
+def rubric_result_with_all_traits() -> VerificationResultRubric:
+    """Create a rubric result with all trait types."""
+    return VerificationResultRubric(
+        rubric_evaluation_performed=True,
+        rubric_evaluation_strategy="batch",
+        llm_trait_scores={
+            "Clarity": 4,
+            "Completeness": 5,
+            "Accuracy": True,
+        },
+        regex_trait_scores={
+            "HasCitations": True,
+            "HasNumbers": True,
+        },
+        callable_trait_scores={
+            "ContainsCitations": True,
+            "ResponseLength": 3,
+        },
+        metric_trait_scores={
+            "EntityExtraction": {
+                "precision": 0.85,
+                "recall": 0.90,
+                "f1": 0.87,
+            }
+        },
+    )
 
 
-@pytest.fixture(scope="module")
-def rubric_config():
-    """Load rubric-enabled verification config."""
-    if not RUBRIC_PRESET.exists():
-        pytest.skip(f"Rubric preset not found at {RUBRIC_PRESET}")
+@pytest.fixture
+def template_result_success() -> VerificationResultTemplate:
+    """Create a successful template result."""
+    return VerificationResultTemplate(
+        raw_llm_response="BCL2 is an anti-apoptotic gene.",
+        parsed_gt_response={"gene_name": "BCL2"},
+        parsed_llm_response={"gene_name": "BCL2"},
+        template_verification_performed=True,
+        verify_result=True,
+        verify_granular_result={"gene_name": True},
+    )
 
-    return VerificationConfig.from_preset(RUBRIC_PRESET)
+
+@pytest.fixture
+def verification_result_with_rubric(
+    rubric_result_with_all_traits: VerificationResultRubric,
+    template_result_success: VerificationResultTemplate,
+) -> VerificationResult:
+    """Create a verification result with rubric data."""
+    return VerificationResult(
+        metadata=create_metadata("rubric_q1", "gpt-4"),
+        template=template_result_success,
+        rubric=rubric_result_with_all_traits,
+    )
 
 
-@pytest.fixture(scope="module")
-def verification_results(loaded_benchmark, rubric_config, api_key_available):  # noqa: ARG001
-    """Run verification with rubric evaluation and return results (cached for module)."""
-    # Get a subset of questions to verify (limit to 2 for speed and cost)
-    all_questions = loaded_benchmark.get_all_questions(ids_only=False)
-    finished_questions = [q for q in all_questions if q.get("finished") and q.get("answer_template")]
+@pytest.fixture
+def verification_result_different_model(
+    rubric_result_with_all_traits: VerificationResultRubric,
+    template_result_success: VerificationResultTemplate,
+) -> VerificationResult:
+    """Create a verification result with a different model."""
+    return VerificationResult(
+        metadata=create_metadata("rubric_q2", "claude-sonnet-4"),
+        template=template_result_success,
+        rubric=rubric_result_with_all_traits,
+    )
 
-    if len(finished_questions) < 2:
-        pytest.skip("Not enough finished questions in checkpoint")
 
-    # Select first 2 questions
-    question_ids = [finished_questions[0]["id"], finished_questions[1]["id"]]
+@pytest.fixture
+def verification_results_list(
+    verification_result_with_rubric: VerificationResult,
+    verification_result_different_model: VerificationResult,
+) -> list[VerificationResult]:
+    """Create a list of verification results."""
+    return [verification_result_with_rubric, verification_result_different_model]
 
-    # Run verification with rubrics
-    results = loaded_benchmark.run_verification(config=rubric_config, question_ids=question_ids)
 
-    if not results:
-        pytest.fail("Verification returned no results")
-
-    return results
+# =============================================================================
+# RubricResults DataFrame Tests
+# =============================================================================
 
 
 @pytest.mark.integration
-@pytest.mark.requires_api
 @pytest.mark.rubric
-class TestRubricResultsIntegrationFull:
-    """Integration tests for RubricResults with real rubric evaluation data."""
+class TestRubricResultsDataFrame:
+    """Test RubricResults DataFrame conversion."""
 
-    def test_to_dataframe_with_real_rubric_evaluation(self, verification_results):
-        """Test RubricResults.to_dataframe() with real rubric evaluation results."""
-        # Filter to results with rubric data
-        rubric_results_list = [
-            r for r in verification_results.results if r.rubric and r.rubric.rubric_evaluation_performed
-        ]
-
-        if not rubric_results_list:
-            pytest.skip("No rubric results in verification data")
-
-        rubric_results = RubricResults(results=rubric_results_list)
-
-        # Convert to DataFrame (all traits)
+    def test_to_dataframe_all_traits(self, verification_results_list: list[VerificationResult]):
+        """Test DataFrame export with all trait types."""
+        rubric_results = RubricResults(results=verification_results_list)
         df = rubric_results.to_dataframe(trait_type="all")
 
-        # Validate DataFrame
         assert isinstance(df, pd.DataFrame)
-        assert len(df) > 0, "DataFrame should not be empty"
+        assert len(df) > 0
 
-        # Check required columns
-        required_columns = [
-            "completed_without_errors",
-            "question_id",
-            "answering_model",
-            "parsing_model",
-            "trait_name",
-            "trait_type",
-            "trait_score",
-        ]
+        # Should have trait rows for each result
+        # 3 LLM + 2 regex + 2 callable + 3 metric (exploded) = 10 per result
+        # 2 results = 20 rows total
+        assert len(df) >= 10  # At least one result's traits
 
-        for col in required_columns:
-            assert col in df.columns, f"Missing required column: {col}"
-
-        # Validate trait_type values
-        valid_trait_types = {"llm_score", "llm_binary", "manual", "metric"}
-        trait_types = set(df["trait_type"].dropna().unique())
-        assert trait_types.issubset(valid_trait_types), f"Invalid trait types: {trait_types - valid_trait_types}"
-
-        # Check trait explosion - should have multiple rows per result
-        assert "trait_name" in df.columns
-        assert df["trait_name"].notna().any(), "Should have trait data"
-
-    def test_to_dataframe_llm_traits_only(self, verification_results):
-        """Test RubricResults.to_dataframe() with trait_type='llm' filter."""
-        rubric_results_list = [
-            r for r in verification_results.results if r.rubric and r.rubric.rubric_evaluation_performed
-        ]
-
-        if not rubric_results_list:
-            pytest.skip("No rubric results")
-
-        rubric_results = RubricResults(results=rubric_results_list)
-
-        # Convert to DataFrame (LLM traits only)
+    def test_to_dataframe_llm_traits_only(self, verification_results_list: list[VerificationResult]):
+        """Test DataFrame export with LLM traits only."""
+        rubric_results = RubricResults(results=verification_results_list)
         df = rubric_results.to_dataframe(trait_type="llm")
 
-        # Validate DataFrame
-        assert isinstance(df, pd.DataFrame)
+        # Should have LLM trait rows only
+        assert len(df) > 0
+        assert all(df["trait_type"].str.startswith("llm"))
 
-        if len(df) > 0:
-            # All trait_type values should be llm_score or llm_binary
-            valid_llm_types = {"llm_score", "llm_binary"}
-            trait_types = set(df["trait_type"].dropna().unique())
-            assert trait_types.issubset(valid_llm_types), f"Non-LLM trait types found: {trait_types - valid_llm_types}"
+        # Check columns
+        assert "trait_name" in df.columns
+        assert "trait_score" in df.columns
+        assert "question_id" in df.columns
 
-    def test_to_dataframe_regex_traits_only(self, verification_results):
-        """Test RubricResults.to_dataframe() with trait_type='regex' filter."""
-        rubric_results_list = [
-            r for r in verification_results.results if r.rubric and r.rubric.rubric_evaluation_performed
-        ]
-
-        if not rubric_results_list:
-            pytest.skip("No rubric results")
-
-        rubric_results = RubricResults(results=rubric_results_list)
-
-        # Convert to DataFrame (regex traits only)
+    def test_to_dataframe_regex_traits_only(self, verification_results_list: list[VerificationResult]):
+        """Test DataFrame export with regex traits only."""
+        rubric_results = RubricResults(results=verification_results_list)
         df = rubric_results.to_dataframe(trait_type="regex")
 
-        # Validate DataFrame
-        assert isinstance(df, pd.DataFrame)
+        # Should have regex trait rows only
+        assert len(df) > 0
+        assert all(df["trait_type"] == "regex")
 
-        if len(df) > 0:
-            # All trait_type values should be regex
-            trait_types = set(df["trait_type"].dropna().unique())
-            assert trait_types == {"regex"}, f"Non-regex trait types found: {trait_types - {'regex'}}"
+        # Should have 2 regex traits per result
+        assert len(df) == 4  # 2 traits * 2 results
 
-    def test_to_dataframe_metric_traits_only(self, verification_results):
-        """Test RubricResults.to_dataframe() with trait_type='metric' filter."""
-        rubric_results_list = [
-            r for r in verification_results.results if r.rubric and r.rubric.rubric_evaluation_performed
-        ]
+    def test_to_dataframe_callable_traits_only(self, verification_results_list: list[VerificationResult]):
+        """Test DataFrame export with callable traits only."""
+        rubric_results = RubricResults(results=verification_results_list)
+        df = rubric_results.to_dataframe(trait_type="callable")
 
-        if not rubric_results_list:
-            pytest.skip("No rubric results")
+        # Should have callable trait rows only
+        assert len(df) > 0
+        assert all(df["trait_type"] == "callable")
 
-        rubric_results = RubricResults(results=rubric_results_list)
-
-        # Convert to DataFrame (metric traits only)
+    def test_to_dataframe_metric_traits_only(self, verification_results_list: list[VerificationResult]):
+        """Test DataFrame export with metric traits only (exploded by metric)."""
+        rubric_results = RubricResults(results=verification_results_list)
         df = rubric_results.to_dataframe(trait_type="metric")
 
-        # Validate DataFrame
-        assert isinstance(df, pd.DataFrame)
+        # Should have metric trait rows, exploded by metric type
+        assert len(df) > 0
+        assert all(df["trait_type"] == "metric")
 
-        if len(df) > 0:
-            # All trait_type values should be metric
-            trait_types = set(df["trait_type"].dropna().unique())
-            assert trait_types == {"metric"}, f"Non-metric trait types found: {trait_types - {'metric'}}"
+        # Should have metric_name column
+        assert "metric_name" in df.columns
 
-    def test_aggregate_llm_traits_with_real_data(self, verification_results):
-        """Test aggregate_llm_traits() with real rubric evaluation results."""
-        # Filter to results with LLM traits
-        rubric_results_list = [r for r in verification_results.results if r.rubric and r.rubric.llm_trait_scores]
+        # Each metric (precision, recall, f1) should be a separate row
+        metric_names = df["metric_name"].unique()
+        assert "precision" in metric_names
+        assert "recall" in metric_names
+        assert "f1" in metric_names
 
-        if not rubric_results_list:
-            pytest.skip("No LLM trait data in verification results")
 
-        rubric_results = RubricResults(results=rubric_results_list)
+@pytest.mark.integration
+@pytest.mark.rubric
+class TestRubricResultsAggregation:
+    """Test RubricResults aggregation methods."""
 
-        # Aggregate LLM traits by question
+    def test_aggregate_llm_traits_by_question(self, verification_results_list: list[VerificationResult]):
+        """Test aggregating LLM traits by question."""
+        rubric_results = RubricResults(results=verification_results_list)
         aggregated = rubric_results.aggregate_llm_traits(strategy="mean", by="question_id")
 
-        # Validate results
         assert isinstance(aggregated, dict)
-        assert len(aggregated) > 0, "Should have aggregated LLM trait data"
+        assert len(aggregated) > 0
 
-        for question_id, traits in aggregated.items():
-            assert isinstance(question_id, str)
+        # Each question should have trait scores
+        for _question_id, traits in aggregated.items():
             assert isinstance(traits, dict)
+            # Should have the LLM traits we defined
+            assert "Clarity" in traits or "Completeness" in traits
 
-            for trait_name, score in traits.items():
-                assert isinstance(trait_name, str)
-                # LLM scores should be 1-5 for llm_score or boolean for llm_binary
-                assert isinstance(score, int | float | bool)
-                if isinstance(score, int | float):
-                    # Check if it's within expected range (1-5 for LLM scores)
-                    # Note: After aggregation with mean, scores might be floats
-                    assert score >= 1 and score <= 5, f"LLM score out of range: {score}"
-
-    def test_aggregate_llm_traits_by_model(self, verification_results):
-        """Test aggregate_llm_traits() grouped by model."""
-        rubric_results_list = [r for r in verification_results.results if r.rubric and r.rubric.llm_trait_scores]
-
-        if not rubric_results_list:
-            pytest.skip("No LLM trait data")
-
-        rubric_results = RubricResults(results=rubric_results_list)
-
-        # Aggregate by model
+    def test_aggregate_llm_traits_by_model(self, verification_results_list: list[VerificationResult]):
+        """Test aggregating LLM traits by model."""
+        rubric_results = RubricResults(results=verification_results_list)
         aggregated = rubric_results.aggregate_llm_traits(strategy="mean", by="answering_model")
 
-        # Validate results
         assert isinstance(aggregated, dict)
 
+        # Should have entries for each model
         for model_name, traits in aggregated.items():
             assert isinstance(model_name, str)
             assert isinstance(traits, dict)
 
-            for trait_name, score in traits.items():
-                assert isinstance(trait_name, str)
-                assert isinstance(score, int | float | bool)
+    def test_aggregate_regex_traits(self, verification_results_list: list[VerificationResult]):
+        """Test aggregating regex traits."""
+        rubric_results = RubricResults(results=verification_results_list)
+        aggregated = rubric_results.aggregate_regex_traits(strategy="majority_vote", by="question_id")
 
-    def test_aggregate_regex_traits_with_real_data(self, verification_results):
-        """Test aggregate_regex_traits() with real rubric evaluation results."""
-        # Filter to results with regex traits
-        rubric_results_list = [r for r in verification_results.results if r.rubric and r.rubric.regex_trait_scores]
-
-        if not rubric_results_list:
-            pytest.skip("No regex trait data in verification results")
-
-        rubric_results = RubricResults(results=rubric_results_list)
-
-        # Aggregate regex traits by question
-        aggregated = rubric_results.aggregate_regex_traits(strategy="mean", by="question_id")
-
-        # Validate results
         assert isinstance(aggregated, dict)
-        assert len(aggregated) > 0, "Should have aggregated regex trait data"
 
-        for question_id, traits in aggregated.items():
-            assert isinstance(question_id, str)
+        for _question_id, traits in aggregated.items():
+            assert isinstance(traits, dict)
+            # Regex traits are boolean
+            for _trait_name, value in traits.items():
+                assert isinstance(value, bool)
+
+    def test_aggregate_callable_traits(self, verification_results_list: list[VerificationResult]):
+        """Test aggregating callable traits."""
+        rubric_results = RubricResults(results=verification_results_list)
+        aggregated = rubric_results.aggregate_callable_traits(strategy="majority_vote", by="question_id")
+
+        assert isinstance(aggregated, dict)
+
+        for _question_id, traits in aggregated.items():
             assert isinstance(traits, dict)
 
-            for trait_name, score in traits.items():
-                assert isinstance(trait_name, str)
-                # Regex scores are boolean
-                assert isinstance(score, bool | int | float)
+    def test_aggregate_metric_traits(self, verification_results_list: list[VerificationResult]):
+        """Test aggregating metric traits."""
+        rubric_results = RubricResults(results=verification_results_list)
+        aggregated = rubric_results.aggregate_metric_traits(
+            metric_name="f1",
+            strategy="mean",
+            by="question_id",
+        )
 
-    def test_aggregate_metric_traits_with_real_data(self, verification_results):
-        """Test aggregate_metric_traits() with real rubric evaluation results."""
-        # Filter to results with metric traits
-        rubric_results_list = [r for r in verification_results.results if r.rubric and r.rubric.metric_trait_scores]
-
-        if not rubric_results_list:
-            pytest.skip("No metric trait data in verification results")
-
-        rubric_results = RubricResults(results=rubric_results_list)
-
-        # Aggregate metric traits by question
-        aggregated = rubric_results.aggregate_metric_traits(strategy="mean", by="question_id")
-
-        # Validate results
         assert isinstance(aggregated, dict)
-        assert len(aggregated) > 0, "Should have aggregated metric trait data"
 
-        for question_id, traits in aggregated.items():
-            assert isinstance(question_id, str)
+        for _question_id, traits in aggregated.items():
             assert isinstance(traits, dict)
+            # Should have the EntityExtraction trait
+            if "EntityExtraction" in traits:
+                assert isinstance(traits["EntityExtraction"], float)
+                assert 0.0 <= traits["EntityExtraction"] <= 1.0
 
-            for trait_name, score in traits.items():
-                assert isinstance(trait_name, str)
-                # Metric scores should be numeric
-                assert isinstance(score, int | float)
 
-    def test_rubric_columns_present(self, verification_results):
-        """Test that rubric-specific columns are present in DataFrame."""
-        rubric_results_list = [
-            r for r in verification_results.results if r.rubric and r.rubric.rubric_evaluation_performed
-        ]
-
-        if not rubric_results_list:
-            pytest.skip("No rubric results")
-
-        rubric_results = RubricResults(results=rubric_results_list)
-        df = rubric_results.to_dataframe(trait_type="all")
-
-        # Rubric-specific columns (trait explosion columns)
-        rubric_columns = [
-            "trait_name",
-            "trait_type",
-            "trait_score",
-            "evaluation_rubric",  # The rubric used for evaluation
-        ]
-
-        for col in rubric_columns:
-            assert col in df.columns, f"Missing rubric column: {col}"
-
-    def test_trait_explosion_in_dataframe(self, verification_results):
-        """Test that traits are properly exploded in DataFrame."""
-        rubric_results_list = [
-            r for r in verification_results.results if r.rubric and r.rubric.rubric_evaluation_performed
-        ]
-
-        if not rubric_results_list:
-            pytest.skip("No rubric results")
-
-        rubric_results = RubricResults(results=rubric_results_list)
-        df = rubric_results.to_dataframe(trait_type="all")
-
-        # Should have trait-related columns
-        assert "trait_name" in df.columns
-        assert "trait_type" in df.columns
-
-        # Check that we have multiple rows per result (due to trait explosion)
-        # Each result should have multiple traits
-        question_counts = df.groupby("question_id").size()
-        assert (question_counts > 1).any(), "Should have multiple traits per question"
+# =============================================================================
+# Rubric Consistency Tests (uses mixin)
+# =============================================================================
 
 
 @pytest.mark.integration
-@pytest.mark.requires_api
 @pytest.mark.rubric
-class TestRubricConsistency:
-    """Integration tests for consistency of rubric DataFrames."""
+class TestRubricConsistency(CommonColumnTestMixin):
+    """Test consistency between RubricResults and TemplateResults.
 
-    def test_common_columns_with_template_results(self, verification_results):
-        """Test that rubric results share common columns with template results."""
-        results_list = list(verification_results.results)
+    Inherits common column and status tests from CommonColumnTestMixin.
+    """
 
-        # Get both DataFrames
-        template_results = TemplateResults(results=results_list)
-        template_df = template_results.to_dataframe()
+    test_template = True
+    test_rubric = True
+    test_judgment = False  # No deep judgment data in these fixtures
 
-        rubric_results_list = [r for r in results_list if r.rubric and r.rubric.rubric_evaluation_performed]
 
-        if not rubric_results_list:
-            pytest.skip("No rubric results")
-
-        rubric_results = RubricResults(results=rubric_results_list)
-        rubric_df = rubric_results.to_dataframe(trait_type="all")
-
-        # Common columns that should exist in both
-        common_columns = [
-            "completed_without_errors",
-            "question_id",
-            "answering_model",
-            "parsing_model",
-            "execution_time",
-            "timestamp",
-        ]
-
-        for col in common_columns:
-            assert col in template_df.columns, f"TemplateResults missing common column: {col}"
-            assert col in rubric_df.columns, f"RubricResults missing common column: {col}"
-
-    def test_status_column_first(self, verification_results):
-        """Test that status column appears first in RubricResults DataFrame."""
-        rubric_results_list = [
-            r for r in verification_results.results if r.rubric and r.rubric.rubric_evaluation_performed
-        ]
-
-        if not rubric_results_list:
-            pytest.skip("No rubric results")
-
-        rubric_results = RubricResults(results=rubric_results_list)
-        rubric_df = rubric_results.to_dataframe(trait_type="all")
-
-        # First column should be status
-        assert rubric_df.columns[0] == "completed_without_errors"
+# =============================================================================
+# Rubric Pandas Operations Tests (uses mixin)
+# =============================================================================
 
 
 @pytest.mark.integration
-@pytest.mark.requires_api
 @pytest.mark.rubric
-class TestRubricPandasOperations:
-    """Integration tests for pandas operations on rubric DataFrames."""
+class TestRubricPandasOperations(PandasOperationsTestMixin):
+    """Test pandas operations on RubricResults DataFrames.
 
-    def test_groupby_operations(self, verification_results):
-        """Test pandas groupby operations on RubricResults DataFrame."""
-        rubric_results_list = [
-            r for r in verification_results.results if r.rubric and r.rubric.rubric_evaluation_performed
-        ]
+    Inherits groupby and filtering tests from PandasOperationsTestMixin.
+    """
 
-        if not rubric_results_list:
-            pytest.skip("No rubric results")
+    def _get_test_dataframe(self, verification_results_list: list[VerificationResult]) -> pd.DataFrame:
+        """Override to return RubricResults DataFrame with LLM traits."""
+        rubric_results = RubricResults(results=verification_results_list)
+        return rubric_results.to_dataframe(trait_type="llm")
 
-        rubric_results = RubricResults(results=rubric_results_list)
+    def test_filtering_by_trait(self, verification_results_list: list[VerificationResult]):
+        """Test filtering DataFrame by trait name."""
+        rubric_results = RubricResults(results=verification_results_list)
         df = rubric_results.to_dataframe(trait_type="all")
 
-        # Test groupby question_id
-        grouped = df.groupby("question_id")
-        assert len(grouped) > 0
+        # Filter to specific trait
+        clarity_df = df[df["trait_name"] == "Clarity"]
+        assert len(clarity_df) > 0
 
-        # Test aggregation on trait scores
-        if "trait_score" in df.columns:
-            # Filter numeric scores only
-            numeric_df = df[df["trait_score"].apply(lambda x: isinstance(x, int | float))]
-            if len(numeric_df) > 0:
-                score_means = numeric_df.groupby("question_id")["trait_score"].mean()
-                assert isinstance(score_means, pd.Series)
-
-    def test_filtering_operations(self, verification_results):
-        """Test pandas filtering operations on RubricResults DataFrame."""
-        rubric_results_list = [
-            r for r in verification_results.results if r.rubric and r.rubric.rubric_evaluation_performed
-        ]
-
-        if not rubric_results_list:
-            pytest.skip("No rubric results")
-
-        rubric_results = RubricResults(results=rubric_results_list)
-        df = rubric_results.to_dataframe(trait_type="all")
-
-        # Filter to successful results only
-        successful = df[df["completed_without_errors"] == True]  # noqa: E712
-        assert len(successful) >= 0
-
-        # Filter to specific trait type
-        if len(df) > 0 and "trait_type" in df.columns:
-            trait_types = df["trait_type"].unique()
-            if len(trait_types) > 0:
-                first_type = trait_types[0]
-                type_df = df[df["trait_type"] == first_type]
-                assert len(type_df) > 0
-                assert (type_df["trait_type"] == first_type).all()
-
-    def test_pivot_operations_on_traits(self, verification_results):
-        """Test pandas pivot operations on RubricResults DataFrame."""
-        rubric_results_list = [
-            r for r in verification_results.results if r.rubric and r.rubric.rubric_evaluation_performed
-        ]
-
-        if not rubric_results_list:
-            pytest.skip("No rubric results")
-
-        rubric_results = RubricResults(results=rubric_results_list)
-        df = rubric_results.to_dataframe(trait_type="llm")  # Use LLM traits for pivot
+    def test_pivot_operations_on_traits(self, verification_results_list: list[VerificationResult]):
+        """Test pandas pivot operations on traits."""
+        df = self._get_test_dataframe(verification_results_list)
 
         if len(df) == 0:
             pytest.skip("No LLM trait data for pivot testing")
 
-        # Filter to numeric scores only for pivot
-        numeric_df = df[df["trait_score"].apply(lambda x: isinstance(x, int | float))]
-
-        if len(numeric_df) == 0:
-            pytest.skip("No numeric trait scores for pivot testing")
-
-        # Try pivot: questions × traits
+        # Pivot: questions x traits
         try:
-            pivot = numeric_df.pivot_table(
-                values="trait_score", index="question_id", columns="trait_name", aggfunc="mean"
+            pivot = df.pivot_table(
+                values="trait_score",
+                index="question_id",
+                columns="trait_name",
+                aggfunc="mean",
             )
             assert isinstance(pivot, pd.DataFrame)
-            assert len(pivot) > 0
         except Exception as e:
-            # Pivot may fail if data structure doesn't support it
-            pytest.skip(f"Pivot not applicable to this data structure: {e}")
+            pytest.skip(f"Pivot not applicable: {e}")
 
-    def test_multi_level_groupby(self, verification_results):
-        """Test multi-level groupby operations (question + trait)."""
-        rubric_results_list = [
-            r for r in verification_results.results if r.rubric and r.rubric.rubric_evaluation_performed
-        ]
-
-        if not rubric_results_list:
-            pytest.skip("No rubric results")
-
-        rubric_results = RubricResults(results=rubric_results_list)
+    def test_multi_level_groupby(self, verification_results_list: list[VerificationResult]):
+        """Test multi-level groupby operations."""
+        rubric_results = RubricResults(results=verification_results_list)
         df = rubric_results.to_dataframe(trait_type="all")
 
-        if len(df) == 0:
-            pytest.skip("No data for multi-level groupby")
+        # Group by model and trait name
+        grouped = df.groupby(["answering_model", "trait_name"])["trait_score"].mean()
+        assert isinstance(grouped, pd.Series)
 
-        # Test groupby multiple columns
-        grouped = df.groupby(["question_id", "trait_name"])
-        assert len(grouped) > 0
 
-        # Get group keys
-        group_keys = list(grouped.groups.keys())
-        assert len(group_keys) > 0
-        assert all(len(key) == 2 for key in group_keys)  # Each key should be (question_id, trait_name)
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

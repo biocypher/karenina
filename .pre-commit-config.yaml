@@ -33,8 +33,9 @@ repos:
         name: vulture-dead-code
         entry: uv run vulture
         language: system
-        files: ^(src/|tests/)
-        args: [src/karenina, tests]
+        files: ^(src/|tests/).*\.py$
+        types: [python]
+        args: [src/karenina, tests, vulture_whitelist.py]
 
   # Note: pytest-testmon available via 'make test-changed' command
   # Excluded from pre-commit due to 0-test runs being treated as modifications

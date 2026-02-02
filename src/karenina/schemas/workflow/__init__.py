@@ -1,8 +1,19 @@
-"""Workflow models for verification execution."""
+"""Workflow models for verification execution.
 
-from .aggregation import AggregatorRegistry, ResultAggregator, create_default_registry
-from .judgment_results import JudgmentResults
-from .models import (
+DEPRECATED: This module is deprecated. Import from the following modules instead:
+- schemas.verification: VerificationConfig, VerificationResult, VerificationJob
+- schemas.results: VerificationResultSet, RubricResults, TemplateResults, JudgmentResults
+- schemas.config: ModelConfig, FewShotConfig
+- schemas.outputs: BatchRubricScores, ConfusionMatrixOutput, etc.
+- schemas.dataframes: RubricDataFrameBuilder, TemplateDataFrameBuilder, JudgmentDataFrameBuilder
+
+This module re-exports from new locations for backward compatibility.
+"""
+
+import warnings
+
+# Re-export from new locations for backward compatibility
+from ..config import (
     INTERFACE_LANGCHAIN,
     INTERFACE_MANUAL,
     INTERFACE_OPENROUTER,
@@ -11,19 +22,33 @@ from .models import (
     ModelConfig,
     QuestionFewShotConfig,
 )
-from .rubric_judgment_results import RubricJudgmentResults
-from .rubric_outputs import (
+from ..dataframes import (
+    JudgmentDataFrameBuilder,
+    RubricDataFrameBuilder,
+    TemplateDataFrameBuilder,
+)
+from ..outputs import (
+    BatchLiteralClassifications,
     BatchRubricScores,
     ConfusionMatrixOutput,
     HallucinationRiskOutput,
     SingleBooleanScore,
+    SingleLiteralClassification,
     SingleNumericScore,
     TraitExcerpt,
     TraitExcerptsOutput,
 )
-from .rubric_results import RubricResults
-from .template_results import TemplateResults
-from .verification import (
+from ..results import (
+    AggregatorRegistry,
+    JudgmentResults,
+    ResultAggregator,
+    RubricJudgmentResults,
+    RubricResults,
+    TemplateResults,
+    VerificationResultSet,
+    create_default_registry,
+)
+from ..verification import (
     DEFAULT_ANSWERING_SYSTEM_PROMPT,
     DEFAULT_PARSING_SYSTEM_PROMPT,
     FinishedTemplate,
@@ -39,15 +64,6 @@ from .verification import (
     VerificationStartResponse,
     VerificationStatusResponse,
 )
-from .verification_result_set import VerificationResultSet
-
-# Rebuild models to resolve forward references
-RubricResults.model_rebuild()
-RubricJudgmentResults.model_rebuild()
-TemplateResults.model_rebuild()
-JudgmentResults.model_rebuild()
-VerificationResultSet.model_rebuild()
-VerificationJob.model_rebuild()  # Rebuild after VerificationResultSet to resolve forward reference
 
 __all__ = [
     # Model configuration
@@ -78,9 +94,12 @@ __all__ = [
     # Result set and specialized results
     "VerificationResultSet",
     "RubricResults",
+    "RubricDataFrameBuilder",
     "RubricJudgmentResults",
     "TemplateResults",
+    "TemplateDataFrameBuilder",
     "JudgmentResults",
+    "JudgmentDataFrameBuilder",
     # Aggregation framework
     "ResultAggregator",
     "AggregatorRegistry",
@@ -94,4 +113,20 @@ __all__ = [
     "TraitExcerpt",
     "TraitExcerptsOutput",
     "HallucinationRiskOutput",
+    # Literal trait classification models
+    "SingleLiteralClassification",
+    "BatchLiteralClassifications",
 ]
+
+
+def __getattr__(name: str) -> object:
+    """Emit deprecation warning when accessing this module."""
+    if name in __all__:
+        warnings.warn(
+            f"Importing {name} from 'karenina.schemas.workflow' is deprecated. "
+            f"Use 'karenina.schemas' or the specific submodule instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return globals()[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

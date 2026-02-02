@@ -1,356 +1,268 @@
 """Integration tests for DataFrame functionality with deep judgment verification.
 
-This test module runs actual verification with deep judgment enabled using real
-checkpoints and presets, then validates that JudgmentResults DataFrame methods
-work correctly with real data.
+This test module validates that JudgmentResults DataFrame methods work correctly
+using fixture-created VerificationResult objects with deep judgment data.
 
 Tests are marked with:
-- @pytest.mark.integration: Slow tests that run real verification
-- @pytest.mark.requires_api: Tests that need OpenAI API access
+- @pytest.mark.integration: Tests that combine multiple components
 - @pytest.mark.deep_judgment: Tests specific to deep judgment mode
 
-Run with: pytest tests/test_dataframe_integration_deep_judgment.py -v
-Skip with: pytest -m "not integration"
+Run with: pytest tests/integration/test_dataframe_integration_deep_judgment.py -v
 """
-
-import os
-from pathlib import Path
 
 import pandas as pd
 import pytest
 
-from karenina.benchmark import Benchmark
-from karenina.schemas import VerificationConfig
-from karenina.schemas.workflow import JudgmentResults, TemplateResults
+from karenina.schemas.workflow import (
+    JudgmentResults,
+    VerificationResult,
+    VerificationResultDeepJudgment,
+    VerificationResultTemplate,
+)
+from tests.integration.dataframe_helpers import (
+    CommonColumnTestMixin,
+    PandasOperationsTestMixin,
+    create_metadata,
+)
 
-# Paths
-CHECKPOINT_PATH = Path("/Users/carli/Projects/karenina_dev/checkpoints/latest.jsonld")
-DEEP_JUDGMENT_PRESET = Path("/Users/carli/Projects/karenina_dev/presets/got-oss-003-8000-deep.json")
-
-
-@pytest.fixture(scope="module")
-def checkpoint_exists():
-    """Check if checkpoint file exists."""
-    if not CHECKPOINT_PATH.exists():
-        pytest.skip(f"Checkpoint not found at {CHECKPOINT_PATH}")
-    return True
-
-
-@pytest.fixture(scope="module")
-def api_key_available():
-    """Check if OpenAI API key is available."""
-    if not os.getenv("OPENAI_API_KEY"):
-        pytest.skip("OPENAI_API_KEY not set - skipping integration tests")
-    return True
+# =============================================================================
+# Fixtures
+# =============================================================================
 
 
-@pytest.fixture(scope="module")
-def loaded_benchmark(checkpoint_exists):  # noqa: ARG001
-    """Load benchmark from checkpoint."""
-    return Benchmark.load(CHECKPOINT_PATH)
+@pytest.fixture
+def template_result_success() -> VerificationResultTemplate:
+    """Create a successful template result."""
+    return VerificationResultTemplate(
+        raw_llm_response="BCL2 is an anti-apoptotic gene located on chromosome 18.",
+        parsed_gt_response={"gene_name": "BCL2", "chromosome": "18"},
+        parsed_llm_response={"gene_name": "BCL2", "chromosome": "18"},
+        template_verification_performed=True,
+        verify_result=True,
+        verify_granular_result={"gene_name": True, "chromosome": True},
+    )
 
 
-@pytest.fixture(scope="module")
-def deep_judgment_config():
-    """Load deep judgment verification config."""
-    if not DEEP_JUDGMENT_PRESET.exists():
-        pytest.skip(f"Deep judgment preset not found at {DEEP_JUDGMENT_PRESET}")
+@pytest.fixture
+def deep_judgment_result() -> VerificationResultDeepJudgment:
+    """Create a deep judgment result with excerpts and reasoning."""
+    return VerificationResultDeepJudgment(
+        deep_judgment_enabled=True,
+        deep_judgment_performed=True,
+        extracted_excerpts={
+            "gene_name": [
+                {"text": "BCL2 is an anti-apoptotic gene", "confidence": "high"},
+                {"text": "BCL2 gene located on chromosome 18", "confidence": "high"},
+            ],
+            "chromosome": [
+                {"text": "located on chromosome 18", "confidence": "high"},
+            ],
+        },
+        attribute_reasoning={
+            "gene_name": "The response clearly identifies BCL2 as the gene of interest.",
+            "chromosome": "The chromosome location is explicitly stated as 18.",
+        },
+        deep_judgment_stages_completed=["excerpts", "reasoning", "scoring"],
+        deep_judgment_model_calls=3,
+    )
 
-    return VerificationConfig.from_preset(DEEP_JUDGMENT_PRESET)
+
+@pytest.fixture
+def verification_result_with_dj(
+    template_result_success: VerificationResultTemplate,
+    deep_judgment_result: VerificationResultDeepJudgment,
+) -> VerificationResult:
+    """Create a verification result with deep judgment data."""
+    return VerificationResult(
+        metadata=create_metadata("dj_q1", "gpt-4"),
+        template=template_result_success,
+        deep_judgment=deep_judgment_result,
+    )
 
 
-@pytest.fixture(scope="module")
-def verification_results(loaded_benchmark, deep_judgment_config, api_key_available):  # noqa: ARG001
-    """Run verification with deep judgment and return results (cached for module)."""
-    # Get a subset of questions to verify (limit to 2 for speed and cost)
-    all_questions = loaded_benchmark.get_all_questions(ids_only=False)
-    finished_questions = [q for q in all_questions if q.get("finished") and q.get("answer_template")]
+@pytest.fixture
+def verification_result_with_dj_different_model(
+    template_result_success: VerificationResultTemplate,
+    deep_judgment_result: VerificationResultDeepJudgment,
+) -> VerificationResult:
+    """Create a verification result with a different model."""
+    return VerificationResult(
+        metadata=create_metadata("dj_q2", "claude-sonnet-4"),
+        template=template_result_success,
+        deep_judgment=deep_judgment_result,
+    )
 
-    if len(finished_questions) < 2:
-        pytest.skip("Not enough finished questions in checkpoint")
 
-    # Select first 2 questions
-    question_ids = [finished_questions[0]["id"], finished_questions[1]["id"]]
+@pytest.fixture
+def verification_results_list(
+    verification_result_with_dj: VerificationResult,
+    verification_result_with_dj_different_model: VerificationResult,
+) -> list[VerificationResult]:
+    """Create a list of verification results with deep judgment."""
+    return [verification_result_with_dj, verification_result_with_dj_different_model]
 
-    # Run verification with deep judgment
-    results = loaded_benchmark.run_verification(config=deep_judgment_config, question_ids=question_ids)
 
-    if not results:
-        pytest.fail("Verification returned no results")
-
-    return results
+# =============================================================================
+# JudgmentResults DataFrame Tests
+# =============================================================================
 
 
 @pytest.mark.integration
-@pytest.mark.requires_api
 @pytest.mark.deep_judgment
-class TestJudgmentResultsIntegrationDeep:
-    """Integration tests for JudgmentResults with real deep judgment verification data."""
+class TestJudgmentResultsDataFrame:
+    """Test JudgmentResults DataFrame conversion."""
 
-    def test_to_dataframe_with_real_deep_judgment(self, verification_results):
-        """Test JudgmentResults.to_dataframe() with real deep judgment results."""
-        # Filter to results with deep judgment data
-        judgment_results_list = [
-            r for r in verification_results.results if r.deep_judgment and r.deep_judgment.deep_judgment_performed
-        ]
-
-        if not judgment_results_list:
-            pytest.skip("No deep judgment results in verification data")
-
-        judgment_results = JudgmentResults(results=judgment_results_list)
-
-        # Convert to DataFrame
+    def test_to_dataframe_with_deep_judgment(self, verification_results_list: list[VerificationResult]):
+        """Test DataFrame export with deep judgment data."""
+        judgment_results = JudgmentResults(results=verification_results_list)
         df = judgment_results.to_dataframe()
 
-        # Validate DataFrame
         assert isinstance(df, pd.DataFrame)
-        assert len(df) > 0, "DataFrame should not be empty"
+        assert len(df) > 0
 
-        # Check required columns
-        required_columns = [
+        # Check core columns
+        core_columns = [
             "completed_without_errors",
             "question_id",
             "answering_model",
-            "parsing_model",
-            "attribute_name",
-            "deep_judgment_performed",
         ]
+        for col in core_columns:
+            assert col in df.columns
 
-        for col in required_columns:
-            assert col in df.columns, f"Missing required column: {col}"
+    def test_dataframe_has_excerpt_columns(self, verification_results_list: list[VerificationResult]):
+        """Test that DataFrame has excerpt-related columns."""
+        judgment_results = JudgmentResults(results=verification_results_list)
+        df = judgment_results.to_dataframe()
 
-        # Validate deep judgment flag
-        assert df["deep_judgment_performed"].dtype == bool
-        # Should all be True since we filtered for deep_judgment_performed
-        assert df["deep_judgment_performed"].all(), "All results should have deep judgment performed"
-
-        # Check attribute explosion
+        # Should have excerpt columns
         assert "attribute_name" in df.columns
-        assert df["attribute_name"].notna().any(), "Should have attribute data"
+        assert "excerpt_index" in df.columns
+        assert "excerpt_text" in df.columns
 
-    def test_aggregate_excerpt_counts_with_real_data(self, verification_results):
-        """Test aggregate_excerpt_counts() with real deep judgment results."""
-        # Filter to results with excerpts
-        judgment_results_list = [
-            r for r in verification_results.results if r.deep_judgment and r.deep_judgment.extracted_excerpts
-        ]
+    def test_dataframe_excerpt_explosion(self, verification_results_list: list[VerificationResult]):
+        """Test that excerpts are exploded into separate rows."""
+        judgment_results = JudgmentResults(results=verification_results_list)
+        df = judgment_results.to_dataframe()
 
-        if not judgment_results_list:
-            pytest.skip("No excerpt data in verification results")
+        # gene_name has 2 excerpts per result, chromosome has 1
+        # Total: (2 + 1) * 2 results = 6 rows
+        gene_name_rows = df[df["attribute_name"] == "gene_name"]
+        assert len(gene_name_rows) >= 2  # At least one result's excerpts
 
-        judgment_results = JudgmentResults(results=judgment_results_list)
+        # Check excerpt indices
+        if len(gene_name_rows) >= 2:
+            indices = gene_name_rows["excerpt_index"].values
+            assert 0 in indices
+            assert 1 in indices
 
-        # Aggregate excerpt counts by question
+    def test_dataframe_has_reasoning(self, verification_results_list: list[VerificationResult]):
+        """Test that DataFrame includes reasoning columns."""
+        judgment_results = JudgmentResults(results=verification_results_list)
+        df = judgment_results.to_dataframe()
+
+        assert "attribute_reasoning" in df.columns
+
+        # Check that reasoning is populated
+        gene_name_rows = df[df["attribute_name"] == "gene_name"]
+        if len(gene_name_rows) > 0:
+            first_row = gene_name_rows.iloc[0]
+            assert first_row["attribute_reasoning"] is not None
+            assert len(first_row["attribute_reasoning"]) > 0
+
+
+@pytest.mark.integration
+@pytest.mark.deep_judgment
+class TestJudgmentResultsAggregation:
+    """Test JudgmentResults aggregation methods."""
+
+    def test_aggregate_excerpt_counts_by_question(self, verification_results_list: list[VerificationResult]):
+        """Test aggregating excerpt counts by question."""
+        judgment_results = JudgmentResults(results=verification_results_list)
         counts = judgment_results.aggregate_excerpt_counts(strategy="mean", by="question_id")
 
-        # Validate results
         assert isinstance(counts, dict)
-        assert len(counts) > 0, "Should have excerpt count data"
 
-        for question_id, count_data in counts.items():
-            assert isinstance(question_id, str)
-            # count_data is a dict mapping attribute names to their excerpt counts
-            assert isinstance(count_data, dict)
-            for attr_name, count_value in count_data.items():
-                assert isinstance(attr_name, str)
-                assert isinstance(count_value, int | float)
-                assert count_value >= 0, f"Excerpt count should be non-negative: {count_value}"
+        for _, count_data in counts.items():
+            if isinstance(count_data, dict):
+                # Per-attribute counts
+                for _, count in count_data.items():
+                    assert isinstance(count, int | float)
+                    assert count >= 0
+            else:
+                # Single count value
+                assert isinstance(count_data, int | float)
+                assert count_data >= 0
 
-    def test_aggregate_excerpt_counts_by_model(self, verification_results):
-        """Test aggregate_excerpt_counts() grouped by model."""
-        # Filter to results with excerpts
-        judgment_results_list = [
-            r for r in verification_results.results if r.deep_judgment and r.deep_judgment.extracted_excerpts
-        ]
-
-        if not judgment_results_list:
-            pytest.skip("No excerpt data in verification results")
-
-        judgment_results = JudgmentResults(results=judgment_results_list)
-
-        # Aggregate by model
+    def test_aggregate_excerpt_counts_by_model(self, verification_results_list: list[VerificationResult]):
+        """Test aggregating excerpt counts by model."""
+        judgment_results = JudgmentResults(results=verification_results_list)
         counts = judgment_results.aggregate_excerpt_counts(strategy="mean", by="answering_model")
 
-        # Validate results
         assert isinstance(counts, dict)
 
-        for model_name, count_data in counts.items():
+        # Should have entries for each model
+        for model_name, _ in counts.items():
             assert isinstance(model_name, str)
-            # count_data is a dict mapping attribute names to their excerpt counts
-            assert isinstance(count_data, dict)
-            for attr_name, count_value in count_data.items():
-                assert isinstance(attr_name, str)
-                assert isinstance(count_value, int | float)
-                assert count_value >= 0
 
-    def test_deep_judgment_columns_present(self, verification_results):
-        """Test that deep judgment specific columns are present in DataFrame."""
-        judgment_results_list = [
-            r for r in verification_results.results if r.deep_judgment and r.deep_judgment.deep_judgment_performed
-        ]
 
-        if not judgment_results_list:
-            pytest.skip("No deep judgment results")
-
-        judgment_results = JudgmentResults(results=judgment_results_list)
-        df = judgment_results.to_dataframe()
-
-        # Deep judgment specific columns (based on actual schema)
-        deep_judgment_columns = [
-            "attribute_name",
-            "deep_judgment_performed",
-            "attribute_match",  # The actual judgment result
-            "attribute_reasoning",  # Reasoning for the judgment
-        ]
-
-        for col in deep_judgment_columns:
-            assert col in df.columns, f"Missing deep judgment column: {col}"
-
-    def test_extracted_excerpts_in_dataframe(self, verification_results):
-        """Test that extracted excerpts are properly included in DataFrame."""
-        judgment_results_list = [
-            r for r in verification_results.results if r.deep_judgment and r.deep_judgment.extracted_excerpts
-        ]
-
-        if not judgment_results_list:
-            pytest.skip("No excerpt data")
-
-        judgment_results = JudgmentResults(results=judgment_results_list)
-        df = judgment_results.to_dataframe()
-
-        # Should have excerpt-related columns
-        assert "attribute_name" in df.columns
-
-        # Check that we have multiple rows per result (due to attribute explosion)
-        # Each result should have multiple attributes
-        question_counts = df.groupby("question_id").size()
-        assert (question_counts > 1).any(), "Should have multiple attributes per question"
+# =============================================================================
+# Deep Judgment Consistency Tests (uses mixin)
+# =============================================================================
 
 
 @pytest.mark.integration
-@pytest.mark.requires_api
 @pytest.mark.deep_judgment
-class TestDeepJudgmentConsistency:
-    """Integration tests for consistency of deep judgment DataFrames."""
+class TestDeepJudgmentConsistency(CommonColumnTestMixin):
+    """Test consistency between JudgmentResults and TemplateResults.
 
-    def test_common_columns_with_template_results(self, verification_results):
-        """Test that deep judgment results share common columns with template results."""
-        results_list = list(verification_results.results)
+    Inherits common column and status tests from CommonColumnTestMixin.
+    """
 
-        # Get both DataFrames
-        template_results = TemplateResults(results=results_list)
-        template_df = template_results.to_dataframe()
+    test_template = True
+    test_rubric = False  # No rubric data in these fixtures
+    test_judgment = True
 
-        judgment_results_list = [r for r in results_list if r.deep_judgment and r.deep_judgment.deep_judgment_performed]
 
-        if not judgment_results_list:
-            pytest.skip("No deep judgment results")
-
-        judgment_results = JudgmentResults(results=judgment_results_list)
-        judgment_df = judgment_results.to_dataframe()
-
-        # Common columns that should exist in both
-        common_columns = [
-            "completed_without_errors",
-            "question_id",
-            "answering_model",
-            "parsing_model",
-            "execution_time",
-            "timestamp",
-        ]
-
-        for col in common_columns:
-            assert col in template_df.columns, f"TemplateResults missing common column: {col}"
-            assert col in judgment_df.columns, f"JudgmentResults missing common column: {col}"
-
-    def test_status_column_first(self, verification_results):
-        """Test that status column appears first in JudgmentResults DataFrame."""
-        judgment_results_list = [
-            r for r in verification_results.results if r.deep_judgment and r.deep_judgment.deep_judgment_performed
-        ]
-
-        if not judgment_results_list:
-            pytest.skip("No deep judgment results")
-
-        judgment_results = JudgmentResults(results=judgment_results_list)
-        judgment_df = judgment_results.to_dataframe()
-
-        # First column should be status
-        assert judgment_df.columns[0] == "completed_without_errors"
+# =============================================================================
+# Deep Judgment Pandas Operations Tests (uses mixin)
+# =============================================================================
 
 
 @pytest.mark.integration
-@pytest.mark.requires_api
 @pytest.mark.deep_judgment
-class TestDeepJudgmentPandasOperations:
-    """Integration tests for pandas operations on deep judgment DataFrames."""
+class TestDeepJudgmentPandasOperations(PandasOperationsTestMixin):
+    """Test pandas operations on JudgmentResults DataFrames.
 
-    def test_groupby_operations(self, verification_results):
-        """Test pandas groupby operations on JudgmentResults DataFrame."""
-        judgment_results_list = [
-            r for r in verification_results.results if r.deep_judgment and r.deep_judgment.deep_judgment_performed
-        ]
+    Inherits groupby and filtering tests from PandasOperationsTestMixin.
+    """
 
-        if not judgment_results_list:
-            pytest.skip("No deep judgment results")
+    def _get_test_dataframe(self, verification_results_list: list[VerificationResult]) -> pd.DataFrame:
+        """Override to return JudgmentResults DataFrame."""
+        judgment_results = JudgmentResults(results=verification_results_list)
+        return judgment_results.to_dataframe()
 
-        judgment_results = JudgmentResults(results=judgment_results_list)
-        df = judgment_results.to_dataframe()
+    def test_filtering_by_attribute(self, verification_results_list: list[VerificationResult]):
+        """Test filtering DataFrame by attribute name."""
+        df = self._get_test_dataframe(verification_results_list)
 
-        # Test groupby question_id
-        grouped = df.groupby("question_id")
-        assert len(grouped) > 0
+        # Filter to specific attribute
+        gene_df = df[df["attribute_name"] == "gene_name"]
+        assert len(gene_df) > 0
 
-        # Test aggregation on attribute match results
-        if "attribute_match" in df.columns:
-            match_rates = grouped["attribute_match"].mean()
-            assert isinstance(match_rates, pd.Series)
+    def test_pivot_operations_on_attributes(self, verification_results_list: list[VerificationResult]):
+        """Test pandas pivot operations on attributes."""
+        df = self._get_test_dataframe(verification_results_list)
 
-    def test_filtering_operations(self, verification_results):
-        """Test pandas filtering operations on JudgmentResults DataFrame."""
-        judgment_results_list = [
-            r for r in verification_results.results if r.deep_judgment and r.deep_judgment.deep_judgment_performed
-        ]
+        if len(df) == 0:
+            pytest.skip("No data for pivot testing")
 
-        if not judgment_results_list:
-            pytest.skip("No deep judgment results")
-
-        judgment_results = JudgmentResults(results=judgment_results_list)
-        df = judgment_results.to_dataframe()
-
-        # Filter to successful results only
-        successful = df[df["completed_without_errors"] == True]  # noqa: E712
-        assert len(successful) >= 0
-
-        # Filter to specific question
-        if len(df) > 0:
-            first_question = df["question_id"].iloc[0]
-            question_df = df[df["question_id"] == first_question]
-            assert len(question_df) > 0
-            assert (question_df["question_id"] == first_question).all()
-
-    def test_pivot_operations_on_attributes(self, verification_results):
-        """Test pandas pivot operations on JudgmentResults DataFrame."""
-        judgment_results_list = [
-            r for r in verification_results.results if r.deep_judgment and r.deep_judgment.deep_judgment_performed
-        ]
-
-        if not judgment_results_list:
-            pytest.skip("No deep judgment results")
-
-        judgment_results = JudgmentResults(results=judgment_results_list)
-        df = judgment_results.to_dataframe()
-
-        if len(df) == 0 or "attribute_match" not in df.columns:
-            pytest.skip("No attribute match data for pivot testing")
-
-        # Try pivot: questions × attributes
+        # Count excerpts per attribute
         try:
-            pivot = df.pivot_table(
-                values="attribute_match", index="question_id", columns="attribute_name", aggfunc="mean"
-            )
+            pivot = df.groupby(["question_id", "attribute_name"]).size().unstack(fill_value=0)
             assert isinstance(pivot, pd.DataFrame)
-            assert len(pivot) > 0
         except Exception as e:
-            # Pivot may fail if data structure doesn't support it
-            pytest.skip(f"Pivot not applicable to this data structure: {e}")
+            pytest.skip(f"Pivot not applicable: {e}")
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

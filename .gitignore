@@ -133,3 +133,8 @@ SEMANTIC_VERSIONING.md
 
 # Local test scripts
 scripts/
+
+src/karenina/integrations/gepa/README.md
+src/karenina/**/CLAUDE.md
+
+.serena/

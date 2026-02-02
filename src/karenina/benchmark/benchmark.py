@@ -13,10 +13,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Union
 
 if TYPE_CHECKING:
+    from ..integrations.gepa import FrontierType, KareninaOutput, ObjectiveConfig, OptimizationRun
     from ..schemas.checkpoint import SchemaOrgQuestion
     from ..schemas.domain import Question
 
-from ..domain.answers.generator import generate_answer_template, load_answer_templates_from_json
 from ..schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
 from ..schemas.workflow import (
     FinishedTemplate,
@@ -24,6 +24,7 @@ from ..schemas.workflow import (
     VerificationResult,
     VerificationResultSet,
 )
+from .authoring.answers.generator import generate_answer_template, load_answer_templates_from_json
 from .core import (
     BenchmarkBase,
     ExportManager,
@@ -76,8 +77,6 @@ class Benchmark:
         self._template_manager = TemplateManager(self._base)
         self._results_manager = ResultsManager(self._base)
         self._verification_manager = VerificationManager(self._base, self._rubric_manager)
-        # Set the results manager on verification manager for auto-storage
-        self._verification_manager._results_manager = self._results_manager
         self._export_manager = ExportManager(self._base, self._template_manager, self._rubric_manager)
 
     @classmethod
@@ -131,8 +130,6 @@ class Benchmark:
         instance._template_manager = TemplateManager(instance._base)
         instance._results_manager = ResultsManager(instance._base)
         instance._verification_manager = VerificationManager(instance._base, instance._rubric_manager)
-        # Set the results manager on verification manager for auto-storage
-        instance._verification_manager._results_manager = instance._results_manager
         instance._export_manager = ExportManager(instance._base, instance._template_manager, instance._rubric_manager)
 
         return instance
@@ -459,6 +456,8 @@ class Benchmark:
         temperature: float = 0,
         interface: str = "langchain",
         force_regenerate: bool = False,
+        endpoint_base_url: str | None = None,
+        endpoint_api_key: str | None = None,
     ) -> dict[str, Any]:
         """
         Generate an answer template for a specific question using LLM.
@@ -470,6 +469,8 @@ class Benchmark:
             temperature: The temperature for generation (default: 0)
             interface: The interface to use (default: langchain)
             force_regenerate: If True, regenerate even if template exists (default: False)
+            endpoint_base_url: Base URL for openai_endpoint interface (e.g., http://localhost:11434/v1)
+            endpoint_api_key: API key for openai_endpoint interface (required, not read from env)
 
         Returns:
             Dict with 'success', 'template_code', 'error', and 'raw_response' keys
@@ -504,6 +505,8 @@ class Benchmark:
                 model_provider=model_provider,
                 temperature=temperature,
                 interface=interface,
+                endpoint_base_url=endpoint_base_url,
+                endpoint_api_key=endpoint_api_key,
             )
 
             # Template code is now returned directly from the generator
@@ -549,6 +552,8 @@ class Benchmark:
         interface: str = "langchain",
         force_regenerate: bool = False,
         progress_callback: Callable[[float, str], None] | None = None,
+        endpoint_base_url: str | None = None,
+        endpoint_api_key: str | None = None,
     ) -> dict[str, dict[str, Any]]:
         """
         Generate templates for multiple questions using LLM.
@@ -561,6 +566,8 @@ class Benchmark:
             interface: The interface to use
             force_regenerate: If True, regenerate even if templates exist
             progress_callback: Optional callback for progress updates (percentage, message)
+            endpoint_base_url: Base URL for openai_endpoint interface (e.g., http://localhost:11434/v1)
+            endpoint_api_key: API key for openai_endpoint interface (required, not read from env)
 
         Returns:
             Dict mapping question_id to generation result dict
@@ -592,6 +599,8 @@ class Benchmark:
                 temperature=temperature,
                 interface=interface,
                 force_regenerate=force_regenerate,
+                endpoint_base_url=endpoint_base_url,
+                endpoint_api_key=endpoint_api_key,
             )
             results[question_id] = result
 
@@ -610,6 +619,8 @@ class Benchmark:
         force_regenerate: bool = False,
         progress_callback: Callable[[float, str], None] | None = None,
         only_missing: bool = True,
+        endpoint_base_url: str | None = None,
+        endpoint_api_key: str | None = None,
     ) -> dict[str, dict[str, Any]]:
         """
         Generate templates for all questions in the benchmark using LLM.
@@ -622,6 +633,8 @@ class Benchmark:
             force_regenerate: If True, regenerate even if templates exist
             progress_callback: Optional callback for progress updates
             only_missing: If True, only generate for questions without templates
+            endpoint_base_url: Base URL for openai_endpoint interface (e.g., http://localhost:11434/v1)
+            endpoint_api_key: API key for openai_endpoint interface (required, not read from env)
 
         Returns:
             Dict mapping question_id to generation result dict
@@ -646,6 +659,8 @@ class Benchmark:
             interface=interface,
             force_regenerate=force_regenerate,
             progress_callback=progress_callback,
+            endpoint_base_url=endpoint_base_url,
+            endpoint_api_key=endpoint_api_key,
         )
 
     def export_generated_templates(self, file_path: Path) -> None:
@@ -770,76 +785,6 @@ class Benchmark:
         return self._rubric_manager.validate_rubrics()
 
     # Verification methods - delegate to VerificationManager
-    def verify_question(
-        self,
-        question_id: str,
-        config: VerificationConfig,
-        run_name: str | None = None,
-        async_enabled: bool | None = None,
-    ) -> dict[str, VerificationResult]:
-        """Verify a single question."""
-        return self._verification_manager.verify_question(question_id, config, run_name, async_enabled)
-
-    def verify_questions(
-        self,
-        question_ids: list[str],
-        config: VerificationConfig,
-        run_name: str | None = None,
-        async_enabled: bool | None = None,
-        progress_callback: Callable[[float, str], None] | None = None,
-    ) -> dict[str, VerificationResult]:
-        """Verify multiple specific questions."""
-        return self._verification_manager.verify_questions(
-            question_ids, config, run_name, async_enabled, progress_callback
-        )
-
-    def verify_filtered(
-        self,
-        config: VerificationConfig,
-        finished: bool | None = True,
-        has_template: bool | None = True,
-        has_rubric: bool | None = None,
-        author: str | None = None,
-        run_name: str | None = None,
-        async_enabled: bool | None = None,
-        progress_callback: Callable[[float, str], None] | None = None,
-    ) -> dict[str, VerificationResult]:
-        """Verify questions matching specific criteria."""
-        return self._verification_manager.verify_filtered(
-            config, finished, has_template, has_rubric, author, run_name, async_enabled, progress_callback
-        )
-
-    def verify_all_finished(
-        self,
-        config: VerificationConfig,
-        run_name: str | None = None,
-        async_enabled: bool | None = None,
-        progress_callback: Callable[[float, str], None] | None = None,
-    ) -> dict[str, VerificationResult]:
-        """Verify all finished questions in the benchmark."""
-        return self._verification_manager.verify_all_finished(config, run_name, async_enabled, progress_callback)
-
-    def verify_custom(
-        self,
-        question_selector: Callable[[dict[str, Any]], bool],
-        config: VerificationConfig,
-        run_name: str | None = None,
-        async_enabled: bool | None = None,
-        progress_callback: Callable[[float, str], None] | None = None,
-    ) -> dict[str, VerificationResult]:
-        """Verify questions selected by a custom function."""
-        return self._verification_manager.verify_custom(
-            question_selector, config, run_name, async_enabled, progress_callback
-        )
-
-    def verify_dry_run(
-        self,
-        config: VerificationConfig,
-        question_ids: list[str] | None = None,
-    ) -> dict[str, bool]:
-        """Perform a dry run verification (validate without executing)."""
-        return self._verification_manager.verify_dry_run(config, question_ids)
-
     def run_verification(
         self,
         config: VerificationConfig,
@@ -851,37 +796,6 @@ class Benchmark:
         """Run verification on the benchmark using existing execution system."""
         return self._verification_manager.run_verification(
             config, question_ids, run_name, async_enabled, progress_callback
-        )
-
-    def verify_with_mixed_configs(
-        self,
-        question_configs: dict[str, VerificationConfig],
-        progress_callback: Callable[[float, str], None] | None = None,
-    ) -> dict[str, dict[str, VerificationResult]]:
-        """Verify different questions with different configurations."""
-        return self._verification_manager.verify_with_mixed_configs(question_configs, progress_callback)
-
-    def verify_comparative(
-        self,
-        question_ids: list[str],
-        configs: list[VerificationConfig],
-        run_names: list[str],
-        progress_callback: Callable[[float, str], None] | None = None,
-    ) -> dict[str, dict[str, VerificationResult]]:
-        """Run same questions with multiple configurations for comparison."""
-        return self._verification_manager.verify_comparative(question_ids, configs, run_names, progress_callback)
-
-    def verify_progressive(
-        self,
-        config: VerificationConfig,
-        batch_size: int = 5,
-        run_name: str | None = None,
-        resume_from: str | None = None,
-        progress_callback: Callable[[float, str], None] | None = None,
-    ) -> dict[str, VerificationResult]:
-        """Verify questions in batches with ability to resume from interruptions."""
-        return self._verification_manager.verify_progressive(
-            config, batch_size, run_name, resume_from, progress_callback
         )
 
     # Results management methods - delegate to ResultsManager
@@ -904,8 +818,8 @@ class Benchmark:
             for i, result in enumerate(results):
                 # Create a key similar to the old format
                 key = f"{result.metadata.question_id}_{result.metadata.answering_model}_{result.metadata.parsing_model}"
-                if result.metadata.answering_replicate is not None:
-                    key += f"_rep{result.metadata.answering_replicate}"
+                if result.metadata.replicate is not None:
+                    key += f"_rep{result.metadata.replicate}"
                 if result.metadata.timestamp:
                     key += f"_{result.metadata.timestamp}"
                 # Handle potential duplicates by appending index
@@ -977,6 +891,262 @@ class Benchmark:
         """Get verification statistics for each run."""
         return self._results_manager.get_results_statistics_by_run()
 
+    # GEPA optimization methods
+    def optimize(
+        self,
+        targets: list[str],
+        config: VerificationConfig | None = None,
+        train_ratio: float = 0.8,
+        val_ratio: float = 0.2,
+        test_ratio: float | None = None,
+        seed: int | None = None,
+        reflection_model: str = "openai/gpt-4o",
+        max_metric_calls: int = 150,
+        objective_config: "ObjectiveConfig | None" = None,
+        frontier_type: "FrontierType" = "objective",
+        seed_prompts: dict[str, str] | None = None,
+        tracker_path: Path | str | None = None,
+        export_preset_path: Path | str | None = None,
+        progress_callback: Callable[[float, str], None] | None = None,
+        verbose: bool = False,
+    ) -> "KareninaOutput":
+        """
+        Optimize text components using GEPA with karenina verification as the metric.
+
+        This high-level method handles the full optimization workflow:
+        1. Splits the benchmark into train/val (and optional test) sets
+        2. Creates a KareninaAdapter for GEPA
+        3. Runs GEPA optimization with multi-objective Pareto tracking
+        4. Tracks results and optionally exports preset
+
+        Requires the 'gepa' optional dependency: pip install karenina[gepa]
+
+        Args:
+            targets: List of components to optimize. Valid values:
+                     "answering_system_prompt", "parsing_instructions", "mcp_tool_descriptions"
+            config: Base VerificationConfig to use. If None, uses default minimal config.
+            train_ratio: Fraction of questions for training (default 0.8)
+            val_ratio: Fraction of questions for validation (default 0.2)
+            test_ratio: Optional fraction for testing. If None, no test set created.
+            seed: Random seed for reproducibility
+            reflection_model: Model for GEPA's reflection LLM (default: openai/gpt-4o)
+            max_metric_calls: Maximum GEPA optimization iterations (default: 150)
+            objective_config: Configuration for multi-objective optimization dimensions.
+                If None, uses default (template + all rubric traits as objectives).
+            frontier_type: GEPA Pareto frontier tracking strategy:
+                'instance' (per example), 'objective' (per metric - recommended),
+                'hybrid' (both), or 'cartesian' (per example × metric).
+            seed_prompts: Optional initial prompts. If None, uses empty strings.
+            tracker_path: Optional path to SQLite file for tracking optimization history
+            export_preset_path: Optional path to export optimized config as preset
+            progress_callback: Optional callback for progress updates (percentage, message)
+            verbose: If True, display detailed progress during optimization including
+                     iteration updates, score improvements, and a final summary
+
+        Returns:
+            KareninaOutput with optimized prompts and metrics
+
+        Raises:
+            ImportError: If GEPA is not installed
+            ValueError: If invalid targets or split ratios
+
+        Example:
+            >>> result = benchmark.optimize(
+            ...     targets=["answering_system_prompt"],
+            ...     reflection_model="openai/gpt-4o",
+            ...     max_metric_calls=100,
+            ... )
+            >>> print(f"Improvement: {result.improvement:.1%}")
+            >>> print(f"Optimized prompt: {result.answering_system_prompt}")
+        """
+        # Import GEPA integration components
+        try:
+            from karenina.integrations.gepa import (
+                GEPA_AVAILABLE,
+                KareninaAdapter,
+                KareninaOutput,
+                ObjectiveConfig,
+                OptimizationRun,
+                OptimizationTarget,
+                OptimizationTracker,
+                VerboseLogger,
+                export_to_preset,
+                split_benchmark,
+            )
+        except ImportError as e:
+            raise ImportError(
+                "GEPA integration components not available. Install with: pip install karenina[gepa]"
+            ) from e
+
+        if not GEPA_AVAILABLE:
+            raise ImportError("gepa package is required for optimization. Install with: pip install gepa")
+
+        # Import GEPA
+        try:
+            import gepa
+        except ImportError as e:
+            raise ImportError("gepa package is required for optimization. Install with: pip install gepa") from e
+
+        # Validate targets
+        valid_targets = {t.value for t in OptimizationTarget}
+        for target in targets:
+            if target not in valid_targets:
+                raise ValueError(f"Invalid target '{target}'. Valid targets: {valid_targets}")
+
+        # Convert string targets to OptimizationTarget enum
+        opt_targets = [OptimizationTarget(t) for t in targets]
+
+        # Create default config if not provided
+        if config is None:
+            from karenina.schemas.workflow import ModelConfig
+
+            config = VerificationConfig(
+                answering_models=[ModelConfig(id="answerer-gpt4o", model_name="gpt-4o", model_provider="openai")],
+                parsing_models=[ModelConfig(id="parser-gpt4o-mini", model_name="gpt-4o-mini", model_provider="openai")],
+                evaluation_mode="template_only",
+            )
+
+        # Split benchmark
+        split = split_benchmark(
+            self,
+            train_ratio=train_ratio,
+            val_ratio=val_ratio,
+            test_ratio=test_ratio,
+            seed=seed,
+        )
+
+        if progress_callback:
+            progress_callback(5.0, f"Split benchmark: {len(split.train)} train, {len(split.val)} val")
+
+        # Create adapter with multi-objective config
+        if objective_config is None:
+            objective_config = ObjectiveConfig()  # Default: template + all rubric traits
+        adapter = KareninaAdapter(
+            benchmark=self,
+            base_config=config,
+            targets=opt_targets,
+            objective_config=objective_config,
+        )
+
+        # Prepare seed candidate
+        seed_candidate = seed_prompts or {}
+        for target in targets:
+            if target not in seed_candidate:
+                seed_candidate[target] = ""
+
+        if progress_callback:
+            progress_callback(10.0, "Starting GEPA optimization...")
+
+        # Create verbose logger if enabled
+        verbose_logger: VerboseLogger | None = None
+        if verbose:
+            verbose_logger = VerboseLogger(max_iterations=max_metric_calls)
+
+        # Run GEPA optimization with multi-objective Pareto tracking
+        result: Any = gepa.optimize(  # type: ignore[attr-defined]
+            seed_candidate=seed_candidate,
+            trainset=split.train,
+            valset=split.val,
+            adapter=adapter,
+            reflection_lm=reflection_model,
+            max_metric_calls=max_metric_calls,
+            frontier_type=frontier_type,
+            logger=verbose_logger,
+            display_progress_bar=verbose,
+        )
+
+        # Print verbose summary if enabled
+        if verbose_logger:
+            verbose_logger.print_summary()
+
+        # Build output from GEPAResult
+        optimized_prompts = result.best_candidate if hasattr(result, "best_candidate") else {}
+        # GEPAResult tracks val_aggregate_scores; best_idx gives the best candidate index
+        best_idx = result.best_idx if hasattr(result, "best_idx") else 0
+        val_score = result.val_aggregate_scores[best_idx] if result.val_aggregate_scores else 0.0
+        # Get baseline (seed) score - it's the first candidate's score
+        baseline_score = result.val_aggregate_scores[0] if result.val_aggregate_scores else 0.0
+        # Train score not directly available from GEPAResult; use val_score as proxy
+        train_score = val_score
+
+        # Calculate improvement relative to baseline
+        improvement = (val_score - baseline_score) / baseline_score if baseline_score > 0 else val_score
+
+        # Run test set evaluation if available
+        test_score: float | None = None
+        if split.test:
+            if progress_callback:
+                progress_callback(90.0, "Evaluating on test set...")
+
+            test_results = adapter.evaluate(split.test, optimized_prompts, capture_traces=False)
+            test_score = sum(test_results.scores) / len(test_results.scores) if test_results.scores else 0.0
+
+        output = KareninaOutput(
+            answering_system_prompt=optimized_prompts.get("answering_system_prompt"),
+            parsing_instructions=optimized_prompts.get("parsing_instructions"),
+            mcp_tool_descriptions={k[9:]: v for k, v in optimized_prompts.items() if k.startswith("mcp_tool_")} or None,
+            train_score=train_score,
+            val_score=val_score,
+            test_score=test_score,
+            improvement=improvement,
+        )
+
+        # Track results if path provided
+        if tracker_path:
+            tracker = OptimizationTracker(tracker_path)
+            run = OptimizationRun(
+                benchmark_name=self.name,
+                targets=targets,
+                seed_prompts=seed_prompts or {},
+                optimized_prompts=optimized_prompts,
+                train_score=train_score,
+                val_score=val_score,
+                test_score=test_score,
+                improvement=improvement,
+                reflection_model=reflection_model,
+                metric_calls=max_metric_calls,
+                best_generation=getattr(result, "best_generation", 0),
+                total_generations=getattr(result, "total_generations", 0),
+            )
+            tracker.log_run(run)
+
+        # Export preset if path provided
+        if export_preset_path:
+            export_to_preset(
+                optimized_prompts,
+                config,
+                Path(export_preset_path),
+                opt_targets,
+            )
+
+        if progress_callback:
+            progress_callback(100.0, f"Optimization complete. Improvement: {improvement:.1%}")
+
+        return output
+
+    def optimization_history(
+        self,
+        tracker_path: Path | str = "~/.karenina/optimization_history.db",
+        limit: int = 20,
+    ) -> list["OptimizationRun"]:
+        """
+        Get optimization history for this benchmark.
+
+        Args:
+            tracker_path: Path to SQLite database with optimization history
+            limit: Maximum number of runs to return
+
+        Returns:
+            List of OptimizationRun records for this benchmark
+        """
+        try:
+            from karenina.integrations.gepa import OptimizationTracker
+        except ImportError:
+            return []
+
+        tracker = OptimizationTracker(tracker_path)
+        return tracker.list_runs(benchmark_name=self.name, limit=limit)
+
     # Metadata management methods - delegate to MetadataManager
     def get_custom_property(self, name: str) -> Any:
         """Get a custom property from benchmark metadata."""
@@ -1042,8 +1212,6 @@ class Benchmark:
         instance._template_manager = TemplateManager(instance._base)
         instance._results_manager = ResultsManager(instance._base)
         instance._verification_manager = VerificationManager(instance._base, instance._rubric_manager)
-        # Set the results manager on verification manager for auto-storage
-        instance._verification_manager._results_manager = instance._results_manager
         instance._export_manager = ExportManager(instance._base, instance._template_manager, instance._rubric_manager)
 
         return instance

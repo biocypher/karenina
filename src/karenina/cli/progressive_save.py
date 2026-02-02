@@ -19,9 +19,10 @@ from pathlib import Path
 from typing import Any
 
 from ..schemas import VerificationConfig, VerificationResult
-from ..schemas.domain.rubric import Rubric
-from ..schemas.workflow.models import ModelConfig
-from ..schemas.workflow.verification_result_set import VerificationResultSet
+from ..schemas.config import ModelConfig
+from ..schemas.entities import Rubric
+from ..schemas.results import VerificationResultSet
+from ..schemas.verification.model_identity import ModelIdentity
 
 logger = logging.getLogger(__name__)
 
@@ -42,37 +43,40 @@ class TaskIdentifier:
 
     A task is uniquely identified by:
     - question_id: The question being verified
-    - answering_model_id: The model generating answers
-    - mcp_hash: Hash of MCP config (urls + tool filter), empty if no MCP
-    - parsing_model_id: The model parsing responses
+    - answering_canonical_key: ModelIdentity canonical_key for the answering model
+      (encodes interface, model_name, and tools)
+    - parsing_canonical_key: ModelIdentity canonical_key for the parsing model
     - replicate: Replicate number (None for single replicate)
     """
 
     question_id: str
-    answering_model_id: str
-    mcp_hash: str  # 8-char hash or empty string
-    parsing_model_id: str
+    answering_canonical_key: str
+    parsing_canonical_key: str
     replicate: int | None
+
+    # Separator between key parts — chosen to avoid conflicts with canonical_key
+    # characters (:, |) and common ID characters (-, _)
+    _SEP = "\t"
 
     def to_key(self) -> str:
         """Generate unique string key for this task.
 
-        Format: {question_id}_{answering_id}_{mcp_hash}_{parsing_id}[_repN]
+        Format: {question_id}\\t{answering_canonical_key}\\t{parsing_canonical_key}[\\trepN]
+        Uses tab separator to avoid conflicts with canonical_key's : and | characters.
         """
         parts = [
             self.question_id,
-            self.answering_model_id,
-            self.mcp_hash,  # Empty string if no MCP
-            self.parsing_model_id,
+            self.answering_canonical_key,
+            self.parsing_canonical_key,
         ]
         if self.replicate is not None:
             parts.append(f"rep{self.replicate}")
-        return "_".join(parts)
+        return self._SEP.join(parts)
 
     @classmethod
     def from_key(cls, key: str) -> "TaskIdentifier":
         """Parse a task key back into a TaskIdentifier."""
-        parts = key.split("_")
+        parts = key.split(cls._SEP)
 
         # Check if last part is a replicate marker
         replicate = None
@@ -80,14 +84,13 @@ class TaskIdentifier:
             replicate = int(parts[-1][3:])
             parts = parts[:-1]
 
-        if len(parts) != 4:
+        if len(parts) != 3:
             raise ValueError(f"Invalid task key format: {key}")
 
         return cls(
             question_id=parts[0],
-            answering_model_id=parts[1],
-            mcp_hash=parts[2],
-            parsing_model_id=parts[3],
+            answering_canonical_key=parts[1],
+            parsing_canonical_key=parts[2],
             replicate=replicate,
         )
 
@@ -99,89 +102,20 @@ class TaskIdentifier:
 
         return cls(
             question_id=task["question_id"],
-            answering_model_id=answering_model.id or "unknown",
-            mcp_hash=cls.compute_mcp_hash(answering_model),
-            parsing_model_id=parsing_model.id or "unknown",
+            answering_canonical_key=ModelIdentity.from_model_config(answering_model, role="answering").canonical_key,
+            parsing_canonical_key=ModelIdentity.from_model_config(parsing_model, role="parsing").canonical_key,
             replicate=task.get("replicate"),
         )
 
     @classmethod
-    def from_result(cls, result: VerificationResult, config: VerificationConfig) -> "TaskIdentifier":
-        """Create TaskIdentifier from a VerificationResult.
-
-        Args:
-            result: The verification result
-            config: The verification config (needed to look up model config ID and MCP hash)
-        """
-        # The result metadata stores model as "provider/model_name" (e.g., "anthropic/claude-haiku-4-5-20251001")
-        # We need to find the matching config to get the config ID (e.g., "answering-1")
-        result_answering_model = result.metadata.answering_model
-        result_parsing_model = result.metadata.parsing_model
-
-        # Get MCP servers from result for matching (needed when multiple configs have same model)
-        result_mcp_servers = set(result.answering_mcp_servers or [])
-
-        # Find matching answering model config
-        answering_model_id = result_answering_model  # fallback to result value
-        mcp_hash = ""
-        for model in config.answering_models:
-            model_str = cls._get_model_string(model)
-            if model_str == result_answering_model:
-                # Also check MCP servers match to handle multiple configs with same model
-                config_mcp_servers = set(model.mcp_urls_dict.keys()) if model.mcp_urls_dict else set()
-                if result_mcp_servers == config_mcp_servers:
-                    answering_model_id = model.id or result_answering_model
-                    mcp_hash = cls.compute_mcp_hash(model)
-                    break
-
-        # Find matching parsing model config
-        parsing_model_id = result_parsing_model  # fallback to result value
-        for model in config.parsing_models:
-            model_str = cls._get_model_string(model)
-            if model_str == result_parsing_model:
-                parsing_model_id = model.id or result_parsing_model
-                break
-
+    def from_result(cls, result: VerificationResult) -> "TaskIdentifier":
+        """Create TaskIdentifier from a VerificationResult."""
         return cls(
             question_id=result.metadata.question_id,
-            answering_model_id=answering_model_id,
-            mcp_hash=mcp_hash,
-            parsing_model_id=parsing_model_id,
-            replicate=result.metadata.answering_replicate,
+            answering_canonical_key=result.metadata.answering.canonical_key,
+            parsing_canonical_key=result.metadata.parsing.canonical_key,
+            replicate=result.metadata.replicate,
         )
-
-    @staticmethod
-    def _get_model_string(model: ModelConfig) -> str:
-        """Get the model string as it appears in result metadata.
-
-        This mirrors the logic in runner.py for computing answering_model_str.
-        """
-        if model.interface == "openrouter":
-            return model.model_name or ""
-        elif model.interface == "openai_endpoint":
-            return f"endpoint/{model.model_name}"
-        elif model.interface == "manual":
-            return "manual"
-        else:
-            return f"{model.model_provider}/{model.model_name}"
-
-    @staticmethod
-    def compute_mcp_hash(model_config: ModelConfig) -> str:
-        """Compute hash from mcp_urls_dict and mcp_tool_filter.
-
-        Returns:
-            8-character MD5 hash, or empty string if no MCP config
-        """
-        if not model_config.mcp_urls_dict:
-            return ""
-
-        # Create deterministic representation
-        data = {
-            "urls": dict(sorted(model_config.mcp_urls_dict.items())),
-            "filter": sorted(model_config.mcp_tool_filter or []),
-        }
-        json_str = json.dumps(data, sort_keys=True)
-        return hashlib.md5(json_str.encode()).hexdigest()[:8]
 
 
 class ProgressiveSaveManager:
@@ -359,7 +293,7 @@ class ProgressiveSaveManager:
         Uses atomic write pattern for crash safety.
         """
         # Generate task ID from result
-        task_id = TaskIdentifier.from_result(result, self.config).to_key()
+        task_id = TaskIdentifier.from_result(result).to_key()
 
         # Add to results
         self._results.append(result)
@@ -577,8 +511,8 @@ class ProgressiveJobStatus:
         """Extract unique question IDs from task IDs."""
         question_ids = set()
         for task_id in task_ids:
-            # Task ID format: {question_id}_{answering_id}_{mcp_hash}_{parsing_id}[_repN]
-            parts = task_id.split("_")
+            # Task ID format: {question_id}\t{answering_key}\t{parsing_key}[\trepN]
+            parts = task_id.split("\t")
             if parts:
                 question_ids.add(parts[0])
         return sorted(question_ids)

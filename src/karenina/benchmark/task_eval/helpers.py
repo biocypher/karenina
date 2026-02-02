@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from ...schemas.domain import Rubric
 
 from ...schemas.workflow import ModelConfig
-from ..verification.evaluators.rubric_evaluator import RubricEvaluator
+from ..verification.evaluators import RubricEvaluator
 
 # Import the shared function from utils.parsing
 
@@ -85,7 +85,7 @@ def evaluate_standalone_rubrics(
         try:
             evaluator = RubricEvaluator(parsing_model)
             question = f"Evaluate the overall quality of the {context} outputs."
-            rubric_scores, _ = evaluator.evaluate_rubric(
+            rubric_scores, _, _ = evaluator.evaluate_rubric(
                 question=question, answer=concatenated_logs, rubric=merged_rubric
             )
         except Exception as e:

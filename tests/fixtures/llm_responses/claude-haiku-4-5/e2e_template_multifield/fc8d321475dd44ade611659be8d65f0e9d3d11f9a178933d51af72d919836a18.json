@@ -1,0 +1,39 @@
+{
+  "metadata": {
+    "scenario": "e2e_template_multifield",
+    "model": "claude-haiku-4-5",
+    "timestamp": "2026-01-13T21:08:32.167856",
+    "prompt_hash": "fc8d321475dd44ade611659be8d65f0e9d3d11f9a178933d51af72d919836a18"
+  },
+  "request": {
+    "messages": [
+      {
+        "content": "You are an evaluator that extracts structured information from responses.\n\nYou will receive:\n1. A response to parse (either a final answer or a complete trace)\n2. A JSON schema with descriptive fields indicating what information to extract\n\n# Extraction Protocol\n\n## 1. Focus on the Final Answer\n- Your primary extraction source is the **final answer** given to the user\n- Extract information from this answer according to the schema field descriptions\n\n## 2. Extract According to Schema\n- Each field description specifies WHAT to extract from the answer and HOW\n- Follow field descriptions precisely\n- Use `null` for information not present in the final answer (if field allows null)\n\n## 3. Validate Structure\n- Return valid JSON matching the provided schema exactly\n- Use correct data types for each field\n\n# Critical Rules\n\n**Answer-First**: Extract primarily from the final answer content.\n\n**Description Adherence**: Each field's description is authoritative for what and how to extract.\n\n**Fidelity**: Extract only what's actually stated. Don't infer or add information not present.\n\n**JSON Only**: Return ONLY the JSON object - no explanations, no markdown fences, no surrounding text.\n\n# Output Format\n\nReturn only the completed JSON object - no surrounding text, no markdown fences:\n\n<format_instructions>\nThe output should be formatted as a JSON instance that conforms to the JSON schema below.\n\nAs an example, for the schema {\"properties\": {\"foo\": {\"title\": \"Foo\", \"description\": \"a list of strings\", \"type\": \"array\", \"items\": {\"type\": \"string\"}}}, \"required\": [\"foo\"]}\nthe object {\"foo\": [\"bar\", \"baz\"]} is a well-formatted instance of the schema. The object {\"properties\": {\"foo\": [\"bar\", \"baz\"]}} is not well-formatted.\n\nHere is the output schema:\n```\n{\"additionalProperties\": true, \"properties\": {\"id\": {\"anyOf\": [{\"type\": \"string\"}, {\"type\": \"null\"}], \"default\": null, \"title\": \"Id\"}, \"gene_symbol\": {\"description\": \"The official gene symbol\", \"title\": \"Gene Symbol\", \"type\": \"string\"}, \"chromosome\": {\"description\": \"The chromosome location\", \"title\": \"Chromosome\", \"type\": \"string\"}, \"function\": {\"description\": \"The primary function\", \"title\": \"Function\", \"type\": \"string\"}}, \"required\": [\"gene_symbol\", \"chromosome\", \"function\"]}\n```\n</format_instructions>",
+        "additional_kwargs": {},
+        "response_metadata": {},
+        "type": "system",
+        "name": null,
+        "id": null
+      },
+      {
+        "content": "Parse the following response and extract structured information.\n\n**ORIGINAL QUESTION:**\nWhat is the approved gene symbol, chromosome location, and primary function of the BCL2 gene?\n\n**RESPONSE TO PARSE:**\nBCL2 is located on chromosome 18q21.33 and its primary function is to inhibit apoptosis, thereby promoting cell survival.\n\n**JSON SCHEMA (your response MUST conform to this):**\n```json\n{\n  \"additionalProperties\": true,\n  \"properties\": {\n    \"id\": {\n      \"anyOf\": [\n        {\n          \"type\": \"string\"\n        },\n        {\n          \"type\": \"null\"\n        }\n      ],\n      \"default\": null,\n      \"title\": \"Id\"\n    },\n    \"gene_symbol\": {\n      \"description\": \"The official gene symbol\",\n      \"title\": \"Gene Symbol\",\n      \"type\": \"string\"\n    },\n    \"chromosome\": {\n      \"description\": \"The chromosome location\",\n      \"title\": \"Chromosome\",\n      \"type\": \"string\"\n    },\n    \"function\": {\n      \"description\": \"The primary function\",\n      \"title\": \"Function\",\n      \"type\": \"string\"\n    }\n  },\n  \"required\": [\n    \"gene_symbol\",\n    \"chromosome\",\n    \"function\"\n  ],\n  \"title\": \"Answer\",\n  \"type\": \"object\"\n}\n```\n\n**PARSING NOTES:**\n- Extract values for each field based on its description in the schema\n- If information for a field is not present, use null (if field allows null) or your best inference\n- Return ONLY the JSON object - no surrounding text\n\n**YOUR JSON RESPONSE:**",
+        "additional_kwargs": {},
+        "response_metadata": {},
+        "type": "human",
+        "name": null,
+        "id": null
+      }
+    ],
+    "kwargs": {}
+  },
+  "response": {
+    "content": "```json\n{\n  \"id\": null,\n  \"gene_symbol\": \"BCL2\",\n  \"chromosome\": \"18q21.33\",\n  \"function\": \"inhibit apoptosis, thereby promoting cell survival\"\n}\n```",
+    "id": "lc_run--92296e39-e33e-486e-8f3e-ea58337e209d-0",
+    "model": "claude-haiku-4-5",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    }
+  }
+}

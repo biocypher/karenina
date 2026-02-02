@@ -1,0 +1,39 @@
+{
+  "metadata": {
+    "scenario": "e2e_deep_judgment",
+    "model": "claude-haiku-4-5",
+    "timestamp": "2026-01-13T21:08:44.776364",
+    "prompt_hash": "13b945f2fc4c81b644b2f29a40a398c63a14eee8ea9af5e66258ae01eb7d63f5"
+  },
+  "request": {
+    "messages": [
+      {
+        "content": "You are an evaluator that extracts structured information from responses.\n\nYou will receive:\n1. A response to parse (either a final answer or a complete trace)\n2. A JSON schema with descriptive fields indicating what information to extract\n\n# Extraction Protocol\n\n## 1. Focus on the Final Answer\n- Your primary extraction source is the **final answer** given to the user\n- Extract information from this answer according to the schema field descriptions\n\n## 2. Extract According to Schema\n- Each field description specifies WHAT to extract from the answer and HOW\n- Follow field descriptions precisely\n- Use `null` for information not present in the final answer (if field allows null)\n\n## 3. Validate Structure\n- Return valid JSON matching the provided schema exactly\n- Use correct data types for each field\n\n# Critical Rules\n\n**Answer-First**: Extract primarily from the final answer content.\n\n**Description Adherence**: Each field's description is authoritative for what and how to extract.\n\n**Fidelity**: Extract only what's actually stated. Don't infer or add information not present.\n\n**JSON Only**: Return ONLY the JSON object - no explanations, no markdown fences, no surrounding text.\n\n# Output Format\n\nReturn only the completed JSON object - no surrounding text, no markdown fences:\n\nYou are an expert excerpt extractor for deep-judgment template parsing. Your role is to find verbatim evidence in responses.\n\n# Task Overview\n\nYou will receive:\n1. An original question in <original_question> tags\n2. A response to analyze in <response_to_analyze> tags\n\nYour task: Extract **verbatim excerpts** from the response that provide evidence for specific attributes.\n\n# Attribute Definitions\n\nFor each attribute below, the description indicates what evidence to look for:\n\n- celsius: Temperature in Celsius\n- fahrenheit: Temperature in Fahrenheit\n\n# Extraction Protocol\n\nFor each attribute:\n1. **Read the attribute's description** to understand what evidence to look for\n2. **Identify excerpts**: Find up to 3 exact quotes that provide evidence\n   - \"high\" confidence: Direct, explicit statement matching the attribute description\n   - \"medium\" confidence: Implied information or indirect evidence\n   - \"low\" confidence: Weak or ambiguous evidence\n3. **If no excerpts exist**: Return ONE entry with empty text and explanation\n\n# Critical Requirements\n\n**Verbatim Only**: Excerpts MUST be exact text spans from the response - copy-paste, no modifications.\n\n**Evidence-Based**: Only extract text that actually provides evidence for the attribute.\n\n**Completeness**: Cover all attributes listed above, even if no excerpts are found.\n\n**JSON Only**: Return ONLY the JSON object - no explanations, no markdown fences.\n\n# What NOT to Do\n\n- Do NOT paraphrase or reword the response text\n- Do NOT invent or hallucinate excerpts that aren't in the response\n- Do NOT include text from other parts of this prompt\n- Do NOT wrap the JSON in markdown code blocks\n- Do NOT add explanatory text before or after the JSON\n\n# Output Format\n\nReturn JSON matching this structure exactly:\n{\n  \"attribute_name\": [\n    {\"text\": \"exact quote from response\", \"confidence\": \"low|medium|high\"}\n  ],\n  \"attribute_without_excerpts\": [\n    {\"text\": \"\", \"confidence\": \"none\", \"explanation\": \"Brief reason (e.g., 'Model refused', 'No explicit info')\"}\n  ]\n}",
+        "additional_kwargs": {},
+        "response_metadata": {},
+        "type": "system",
+        "name": null,
+        "id": null
+      },
+      {
+        "content": "<original_question>\nWhat is the boiling point of water at sea level?\n</original_question>\n\n<response_to_analyze>\nWater boils at 100 degrees Celsius, which is equivalent to 212 degrees Fahrenheit at standard atmospheric pressure (sea level). This is a fundamental physical property that is used as a calibration point for temperature scales.\n</response_to_analyze>",
+        "additional_kwargs": {},
+        "response_metadata": {},
+        "type": "human",
+        "name": null,
+        "id": null
+      }
+    ],
+    "kwargs": {}
+  },
+  "response": {
+    "content": "```json\n{\n  \"celsius\": [\n    {\"text\": \"Water boils at 100 degrees Celsius\", \"confidence\": \"high\"},\n    {\"text\": \"100 degrees Celsius, which is equivalent to 212 degrees Fahrenheit at standard atmospheric pressure (sea level)\", \"confidence\": \"high\"}\n  ],\n  \"fahrenheit\": [\n    {\"text\": \"212 degrees Fahrenheit at standard atmospheric pressure (sea level)\", \"confidence\": \"high\"},\n    {\"text\": \"100 degrees Celsius, which is equivalent to 212 degrees Fahrenheit\", \"confidence\": \"high\"}\n  ]\n}\n```",
+    "id": "lc_run--81072b6e-9b07-42b9-b49e-ca91f8a81df2-0",
+    "model": "claude-haiku-4-5",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    }
+  }
+}

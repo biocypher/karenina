@@ -13,6 +13,8 @@
 
 </div>
 
+> **Note:** Karenina is still experimental and under active, fast-paced development. APIs and features may change without notice. A first stable release will be available soon — stay tuned!
+
 ---
 
 ## 📑 Table of Contents
@@ -52,6 +54,16 @@ At the heart of Karenina are two key concepts: **templates** and **rubrics**. Te
 ## 🏗️ Architecture
 
 Karenina is a **standalone Python library** that can be used independently for all benchmarking workflows through Python code.
+
+### Ports & Adapters
+
+Karenina uses a **hexagonal architecture** (Ports & Adapters) for LLM interactions. Three protocol interfaces define what the application needs:
+
+- **LLMPort** — Basic LLM text generation
+- **AgentPort** — Agentic LLM with tool use and MCP support
+- **ParserPort** — Structured output parsing into Pydantic models
+
+Each supported interface (`langchain`, `claude_agent_sdk`, `claude_tool`, `openrouter`, `openai_endpoint`, `manual`) provides adapter implementations for these ports. An **adapter factory** handles instantiation, and an **AdapterInstructionRegistry** manages interface-specific prompt transformations — keeping adapters as pure executors that receive pre-assembled prompts.
 
 ### Graphical User Interface
 
@@ -139,7 +151,7 @@ This setup allows the judge to flexibly interpret free text while ensuring that 
 **1. Define a Pydantic template:**
 
 ```python
-from karenina.domain.answers import BaseAnswer
+from karenina.schemas.entities import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -250,18 +262,15 @@ benchmark.generate_all_templates(model_config=model_config)
 ### 4. Add Rubrics (Optional)
 
 ```python
-from karenina.schemas import RubricTrait
+from karenina.schemas import LLMRubricTrait
 
-# Create a global rubric to assess answer quality
-benchmark.create_global_rubric(
-    name="Answer Quality",
-    traits=[
-        RubricTrait(
-            name="Conciseness",
-            description="Rate how concise the answer is (1-5)",
-            kind="score"
-        )
-    ]
+# Add a global rubric trait to assess answer quality
+benchmark.add_global_rubric_trait(
+    LLMRubricTrait(
+        name="Conciseness",
+        description="Rate how concise the answer is (1-5)",
+        kind="score"
+    )
 )
 ```
 
@@ -281,7 +290,7 @@ config = VerificationConfig(
 results = benchmark.run_verification(config)
 
 # Analyze results
-passed = sum(1 for r in results.values() if r.verify_result)
+passed = sum(1 for r in results if r.template.verify_result)
 print(f"Pass Rate: {(passed/len(results)*100):.1f}%")
 ```
 
@@ -347,6 +356,23 @@ karenina preset show gpt-oss
 karenina preset delete old-config
 ```
 
+### Web Server
+
+```bash
+# Start the web server (serves GUI + API)
+karenina serve --port 8080
+
+# Initialize the webapp (first-time setup)
+karenina init
+```
+
+### Verification Status
+
+```bash
+# Inspect progressive save state from a previous run
+karenina verify-status results/
+```
+
 ### Key Features
 
 - **Flexible Configuration**: Use presets, CLI arguments, or interactive mode
@@ -410,16 +436,16 @@ While templates excel at verifying **factual correctness**, many evaluation scen
 | Aspect | Answer Templates | Rubrics |
 |--------|-----------------|---------|
 | **Purpose** | Verify factual correctness | Assess qualitative traits, format, and metrics |
-| **Evaluation Method** | Programmatic field comparison | Three approaches:<br>• LLM judgment<br>• Regex patterns<br>• Term extraction + metrics |
-| **Best for** | Precise, unambiguous answers | Subjective qualities, format validation, quantitative analysis |
-| **Trait Types** | Single verification method | **Three types:**<br>• LLM-based (qualitative)<br>• Regex-based (format)<br>• Metric-based (term extraction) |
-| **Output** | Pass/fail per field | • Boolean (binary traits)<br>• Scores 1-5 (score traits)<br>• Precision/Recall/F1 (metric traits) |
+| **Evaluation Method** | Programmatic field comparison | Four approaches:<br>• LLM judgment<br>• Regex patterns<br>• Custom Python functions<br>• Term extraction + metrics |
+| **Best for** | Precise, unambiguous answers | Subjective qualities, format validation, custom logic, quantitative analysis |
+| **Trait Types** | Single verification method | **Four types:**<br>• LLM-based (qualitative)<br>• Regex-based (format)<br>• Callable (custom Python)<br>• Metric-based (term extraction) |
+| **Output** | Pass/fail per field | • Boolean (binary traits)<br>• Scores 1-5 (score traits)<br>• Class index (literal traits)<br>• Precision/Recall/F1 (metric traits) |
 | **Examples** | `"BCL2"`, `"46 chromosomes"` | • "Is the answer concise?" (LLM)<br>• Match email pattern (regex)<br>• Extract diseases for F1 score (metric) |
 | **Scope** | Per question | Global or per question |
 
 ### Rubric Types
 
-Karenina supports **three types of rubric traits**, each suited for different evaluation needs:
+Karenina supports **four types of rubric traits**, each suited for different evaluation needs:
 
 **1. LLM-Based Traits**
 
@@ -427,6 +453,7 @@ AI-evaluated qualitative assessments where a judge LLM evaluates subjective qual
 
 - **Score-based (1-5):** "Rate the scientific accuracy of the answer"
 - **Binary (pass/fail):** "Does the answer mention safety concerns?"
+- **Literal (classification):** "Classify the tone as: formal, casual, or technical"
 
 **2. Regex Pattern Traits**
 
@@ -435,19 +462,28 @@ Deterministic validation using regular expressions for format compliance:
 - "Answer must contain a DNA sequence (pattern: `[ATCG]+`)"
 - "Response must include enzyme names (pattern: `\w+ase\b`)"
 
-**3. Metric-Based Traits**
+**3. Callable Traits**
+
+Custom Python functions for domain-specific evaluation logic:
+
+- Word count validation: "Is the response between 50-500 words?"
+- Custom scoring: "Count technical terms from a predefined list"
+- Complex business rules that can't be expressed as regex
+
+**4. Metric-Based Traits**
 
 Quantitative evaluation using confusion matrix metrics:
 
 - Define terms that SHOULD appear (True Positives)
 - Define terms that SHOULD NOT appear (False Positives)
-- System computes precision, recall, and F1 scores
+- System computes precision, recall, F1, and optionally specificity/accuracy
 
 **When to use what:**
 
 - Use **templates** when you need to verify specific factual content or structured data
 - Use **LLM-based rubrics** for subjective quality assessment (clarity, conciseness, tone)
 - Use **regex rubrics** for format compliance and deterministic keyword checks
+- Use **callable rubrics** for custom logic that requires programmatic evaluation
 - Use **metric rubrics** when evaluating classification accuracy by extracting and measuring term coverage
 - Use **both together** for comprehensive evaluation covering correctness AND quality
 
@@ -461,25 +497,41 @@ Karenina provides comprehensive tools for every stage of the benchmarking workfl
 
 - **Question Management**: Extract questions from files (Excel, CSV, TSV) with rich metadata support
 - **Answer Templates**: Pydantic-based templates for structured evaluation and programmatic verification
-- **Rubric Evaluation**: Assess qualitative traits using three types:
+- **Rubric Evaluation**: Assess qualitative traits using four types:
   - LLM-based traits (binary pass/fail or 1-5 scale)
   - Regex-based traits (pattern matching for format validation)
+  - Callable traits (custom Python functions)
   - Metric-based traits (precision, recall, F1, accuracy)
-- **Benchmark Verification**: Run evaluations with four supported interfaces:
-  - `langchain` (OpenAI, Google Gemini, Anthropic Claude)
+- **Benchmark Verification**: Run evaluations with six supported interfaces:
+  - `langchain` (OpenAI, Google Gemini, Anthropic Claude via LangChain)
+  - `claude_agent_sdk` (Native Anthropic Agent SDK)
+  - `claude_tool` (Claude-specific tool use with native structured output)
   - `openrouter` (OpenRouter platform)
   - `openai_endpoint` (OpenAI-compatible endpoints for local models)
   - `manual` (Manual trace replay for testing/debugging)
 
+### Pipeline & Architecture
+
+- **13-Stage Verification Pipeline**: Modular, configurable pipeline from template validation through answer generation, parsing, verification, embedding checks, rubric evaluation, and deep-judgment — each stage can be enabled/disabled independently
+- **Ports & Adapters Architecture**: Hexagonal design with protocol interfaces (LLMPort, AgentPort, ParserPort) decoupled from backend implementations, enabling easy addition of new LLM providers
+- **Sufficiency Check**: Validate response quality before parsing (optional stage)
+
 ### Advanced Features
 
-- **Deep-Judgment Parsing**: Extract verbatim excerpts, reasoning traces, and confidence scores
+- **Deep-Judgment Parsing**: Extract verbatim excerpts, reasoning traces, and confidence scores with configurable modes (disabled, enable_all, per-trait custom)
 - **Abstention Detection**: Identify when models refuse to answer questions
-- **Embedding Check**: Semantic similarity fallback for false negatives
-- **Few-Shot Prompting**: Configure examples globally or per question
-- **Database Persistence**: SQLite storage with versioning
-- **Export & Reporting**: CSV and JSON formats for analysis
-- **Preset Management**: Save and reuse verification configurations
+- **Embedding Check**: Semantic similarity fallback using SentenceTransformers to reduce false negatives
+- **Few-Shot Prompting**: Configure examples globally or per question with flexible selection modes
+- **Task-Centric Evaluation (TaskEval)**: Attach verification criteria to existing agent traces for evaluation without re-running
+- **Multi-Model Comparison**: Run evaluations across multiple answering models in a single batch
+- **Async Execution**: Parallel processing with configurable worker pools for faster batch runs
+- **GEPA Integration**: Prompt optimization framework with train/test splitting, feedback generation, and improvement tracking
+- **MCP Integration**: Support for Model Context Protocol servers and tool use tracking
+- **Search-Enhanced Validation**: Tavily search integration for hallucination detection and evidence cross-referencing
+- **Database Persistence**: SQLite storage with versioning and 10+ analytical views
+- **Export & Reporting**: CSV and JSON formats for analysis with selective column export
+- **Preset Management**: Save and reuse verification configurations with full hierarchy support
+- **Progressive Save**: Automatic checkpointing during long verification runs with resume capability
 
 [View complete feature catalog →](docs/features.md)
 

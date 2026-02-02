@@ -32,6 +32,22 @@ theme:
 
 plugins:
   - search
+  - mkdocs-jupyter:
+      include_source: true
+      execute: false  # We pre-execute notebooks
+      allow_errors: false
+      include: ["notebooks/*.ipynb", "notebooks/**/*.ipynb"]
+      ignore: []
+      kernel_name: python3
+      theme: auto
+      show_input: true
+      remove_tag_config:
+        remove_cell_tags:
+          - hide-cell
+        remove_input_tags:
+          - hide-input
+        remove_all_outputs_tags:
+          - hide-output
   - mkdocstrings:
       handlers:
         python:

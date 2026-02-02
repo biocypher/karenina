@@ -35,7 +35,6 @@ from .operations import (
 from .queries import (
     get_benchmark_summary,
     get_database_statistics,
-    get_failed_verifications,
     get_latest_verification_results,
     get_model_performance,
     get_question_usage,
@@ -43,6 +42,12 @@ from .queries import (
     get_rubric_traits_by_type,
     get_verification_history_timeline,
     get_verification_run_summary,
+)
+from .rubric_serializer import (
+    deserialize_rubric_from_dict,
+    serialize_question_rubric_from_cache,
+    serialize_rubric,
+    serialize_rubric_to_dict,
 )
 
 __all__ = [
@@ -71,6 +76,11 @@ __all__ = [
     "save_verification_results",
     "load_verification_results",
     "import_verification_results",
+    # Rubric serialization
+    "serialize_rubric",
+    "serialize_rubric_to_dict",
+    "serialize_question_rubric_from_cache",
+    "deserialize_rubric_from_dict",
     # Query helpers
     "get_benchmark_summary",
     "get_verification_run_summary",
@@ -79,7 +89,6 @@ __all__ = [
     "get_model_performance",
     "get_rubric_scores_aggregate",
     "get_verification_history_timeline",
-    "get_failed_verifications",
     "get_rubric_traits_by_type",
     "get_database_statistics",
 ]

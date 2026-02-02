@@ -62,6 +62,8 @@ class SchemaOrgRating(BaseModel):
         "QuestionSpecificCallableTrait",
         "GlobalMetricRubricTrait",
         "QuestionSpecificMetricRubricTrait",
+        "GlobalLLMRubricTrait",  # For literal kind LLM traits
+        "QuestionSpecificLLMRubricTrait",  # For literal kind LLM traits
     ]
     additionalProperty: list[SchemaOrgPropertyValue] | None = None  # For metric trait instructions
 
