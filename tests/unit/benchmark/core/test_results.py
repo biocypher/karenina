@@ -17,6 +17,7 @@ import pytest
 from karenina import Benchmark
 from karenina.benchmark.core.results import ResultsManager
 from karenina.benchmark.core.results_io import ResultsIOHandler
+from karenina.schemas.verification.model_identity import ModelIdentity
 from karenina.schemas.workflow import VerificationResult, VerificationResultMetadata, VerificationResultTemplate
 
 
@@ -29,10 +30,12 @@ def create_sample_result(
 ) -> VerificationResult:
     """Create a sample VerificationResult for testing."""
     timestamp = datetime.now().isoformat()
+    _answering = ModelIdentity(interface="langchain", model_name="claude-3-5-sonnet")
+    _parsing = ModelIdentity(interface="langchain", model_name="claude-3-5-sonnet")
     result_id = VerificationResultMetadata.compute_result_id(
         question_id=question_id,
-        answering_model="claude-3-5-sonnet",
-        parsing_model="claude-3-5-sonnet",
+        answering=_answering,
+        parsing=_parsing,
         timestamp=timestamp,
     )
 
@@ -43,8 +46,8 @@ def create_sample_result(
             completed_without_errors=success,
             error=None if success else "Test error",
             question_text=question_text,
-            answering_model="claude-3-5-sonnet",
-            parsing_model="claude-3-5-sonnet",
+            answering=_answering,
+            parsing=_parsing,
             execution_time=execution_time,
             timestamp=timestamp,
             result_id=result_id,

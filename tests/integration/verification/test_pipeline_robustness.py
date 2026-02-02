@@ -21,10 +21,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from karenina.benchmark.verification.stage import (
-    VerificationContext,
-)
-from karenina.benchmark.verification.stage_orchestrator import StageOrchestrator
 from karenina.benchmark.verification.stages import (
     AbstentionCheckStage,
     DeepJudgmentAutoFailStage,
@@ -33,7 +29,9 @@ from karenina.benchmark.verification.stages import (
     GenerateAnswerStage,
     ParseTemplateStage,
     RecursionLimitAutoFailStage,
+    StageOrchestrator,
     ValidateTemplateStage,
+    VerificationContext,
     VerifyTemplateStage,
 )
 from karenina.schemas.domain import LLMRubricTrait, RegexTrait, Rubric
@@ -369,7 +367,7 @@ class TestStageSkipConditions:
         """EmbeddingCheckStage should run when field verification failed."""
         minimal_context.set_artifact("field_verification_result", False)
         minimal_context.set_artifact("parsed_answer", MagicMock())
-        minimal_context.set_artifact("verification_result", False)
+        minimal_context.set_artifact("verify_result", False)
 
         stage = EmbeddingCheckStage()
 
@@ -543,14 +541,20 @@ class TestArtifactDependencies:
 
     def test_generate_answer_produces_raw_response(self, minimal_context: VerificationContext):
         """GenerateAnswerStage should produce raw_llm_response artifact."""
+        from karenina.ports.llm import LLMResponse
+        from karenina.ports.usage import UsageMetadata
+
         # Validate first to get Answer class
         ValidateTemplateStage().execute(minimal_context)
 
-        # Mock the unified LLM initialization to use fixture client
-        with patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified") as mock_init:
+        # Mock get_llm (no MCP URLs → LLMPort path, not AgentPort)
+        with patch("karenina.benchmark.verification.stages.pipeline.generate_answer.get_llm") as mock_get_llm:
             mock_llm = MagicMock()
-            mock_llm.invoke.return_value = MagicMock(content="The capital is Paris.")
-            mock_init.return_value = mock_llm
+            mock_llm.invoke.return_value = LLMResponse(
+                content="The capital is Paris.",
+                usage=UsageMetadata(input_tokens=10, output_tokens=10, total_tokens=20),
+            )
+            mock_get_llm.return_value = mock_llm
 
             stage = GenerateAnswerStage()
             stage.execute(minimal_context)
@@ -587,6 +591,9 @@ class TestPipelineIntegration:
         This test requires careful mocking because FinalizeResultStage has
         strict Pydantic validation. The mocks must return proper data types.
         """
+        from karenina.ports.llm import LLMResponse
+        from karenina.ports.usage import UsageMetadata
+
         # Build pipeline
         orchestrator = StageOrchestrator.from_config(
             evaluation_mode="template_only",
@@ -602,15 +609,18 @@ class TestPipelineIntegration:
         # Create a real parsed answer instance
         parsed_answer = Answer(capital="Paris")
 
-        # Mock LLM for answer generation and template parsing
+        # Mock LLM for answer generation (no MCP URLs → LLMPort path) and template parsing
         with (
-            patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified") as mock_gen,
-            patch("karenina.benchmark.verification.stages.parse_template.TemplateEvaluator") as MockEvaluator,
+            patch("karenina.benchmark.verification.stages.pipeline.generate_answer.get_llm") as mock_get_llm,
+            patch("karenina.benchmark.verification.stages.pipeline.parse_template.TemplateEvaluator") as MockEvaluator,
         ):
-            # Answer generation mock
-            mock_gen_llm = MagicMock()
-            mock_gen_llm.invoke.return_value = MagicMock(content="The capital of France is Paris.")
-            mock_gen.return_value = mock_gen_llm
+            # Answer generation mock - return LLMResponse
+            mock_llm = MagicMock()
+            mock_llm.invoke.return_value = LLMResponse(
+                content="The capital of France is Paris.",
+                usage=UsageMetadata(input_tokens=10, output_tokens=10, total_tokens=20),
+            )
+            mock_get_llm.return_value = mock_llm
 
             # Template parsing mock - use proper return types
             mock_evaluator = MagicMock()
@@ -655,6 +665,9 @@ class TestPipelineIntegration:
 
     def test_pipeline_with_abstention_early_exit(self, minimal_context: VerificationContext):
         """Test pipeline exits early when abstention detected."""
+        from karenina.ports.llm import LLMResponse
+        from karenina.ports.usage import UsageMetadata
+
         minimal_context.abstention_enabled = True
 
         orchestrator = StageOrchestrator.from_config(
@@ -676,15 +689,18 @@ class TestPipelineIntegration:
             return context.get_artifact("final_result")
 
         with (
-            patch("karenina.benchmark.verification.stages.generate_answer.init_chat_model_unified") as mock_gen,
-            patch("karenina.benchmark.verification.stages.abstention_check.detect_abstention") as mock_abstention,
+            patch("karenina.benchmark.verification.stages.pipeline.generate_answer.get_llm") as mock_get_llm,
+            patch(
+                "karenina.benchmark.verification.stages.pipeline.abstention_check.detect_abstention"
+            ) as mock_abstention,
         ):
-            # Generate a refusal response
-            mock_gen_llm = MagicMock()
-            mock_gen_llm.invoke.return_value = MagicMock(
-                content="I'm sorry, but I cannot provide information about that topic."
+            # Generate a refusal response - return LLMResponse (no MCP URLs → LLMPort path)
+            mock_llm = MagicMock()
+            mock_llm.invoke.return_value = LLMResponse(
+                content="I'm sorry, but I cannot provide information about that topic.",
+                usage=UsageMetadata(input_tokens=10, output_tokens=10, total_tokens=20),
             )
-            mock_gen.return_value = mock_gen_llm
+            mock_get_llm.return_value = mock_llm
 
             # Abstention detector returns (detected, check_performed, reasoning, usage_metadata)
             mock_abstention.return_value = (

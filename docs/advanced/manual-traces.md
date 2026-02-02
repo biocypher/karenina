@@ -13,7 +13,10 @@ The Manual Trace System enables you to provide pre-generated answer traces direc
 - Test verification/rubric systems with controlled answers
 - Integrate external LLM outputs into Karenina's evaluation framework
 
-The system supports both simple string traces and rich LangChain message lists with automatic tool call metrics extraction.
+The system supports multiple trace formats:
+- Simple string traces (plain text answers)
+- Port Message lists (new architecture using `karenina.ports.messages.Message`)
+- LangChain message lists (backward compatibility with automatic conversion)
 
 ---
 
@@ -21,9 +24,10 @@ The system supports both simple string traces and rich LangChain message lists w
 
 - **Programmatic Trace Management**: `ManualTraces` class for managing traces tied to benchmarks
 - **Flexible Registration**: Register traces by question hash (MD5) or question text with automatic mapping
-- **Dual Format Support**:
+- **Multi-Format Support**:
   - Simple string traces (plain text answers)
-  - LangChain message lists (AIMessage, ToolMessage, etc.) with automatic preprocessing
+  - Port Message lists (`karenina.ports.messages.Message`) - native format
+  - LangChain message lists (AIMessage, ToolMessage, etc.) - backward compatibility
 - **Agent Metrics Extraction**: Automatic tool call counting, failure detection from message lists
 - **Batch Registration**: Efficient bulk trace registration with `register_traces()`
 - **Post-Config Population**: Populate traces after `ModelConfig` creation for flexible workflows
@@ -39,7 +43,7 @@ The system supports both simple string traces and rich LangChain message lists w
 
 ```python
 from karenina.benchmark import Benchmark
-from karenina.infrastructure.llm.manual_traces import ManualTraces
+from karenina.adapters.manual import ManualTraces
 from karenina.schemas import ModelConfig, VerificationConfig
 from pydantic import Field
 from karenina.schemas.domain import BaseAnswer
@@ -100,7 +104,7 @@ benchmark.run_verification(config)
 ### Core Components
 
 #### 1. `ManualTraces` Class
-**Location**: `karenina/src/karenina/infrastructure/llm/manual_traces.py` (Lines 403-573)
+**Location**: `karenina/src/karenina/adapters/manual/traces.py`
 
 **Purpose**: High-level API for managing manual traces for a specific benchmark
 
@@ -110,10 +114,10 @@ benchmark.run_verification(config)
 - `register_trace(question_identifier, trace, map_to_id=False)` - Register single trace
 - `register_traces(traces_dict, map_to_id=False)` - Batch register traces
 - `_question_text_to_hash(question_text)` - Convert text to MD5 hash with validation
-- `_preprocess_trace(trace)` - Handle both string and LangChain message formats
+- `_preprocess_trace(trace)` - Handle string, port Message, and LangChain formats
 
 #### 2. `ManualTraceManager` Class
-**Location**: `karenina/src/karenina/infrastructure/llm/manual_traces.py` (Lines 21-296)
+**Location**: `karenina/src/karenina/adapters/manual/manager.py`
 
 **Purpose**: Session-based thread-safe storage for manual traces
 
@@ -131,19 +135,22 @@ benchmark.run_verification(config)
 - `get_trace_with_metrics(question_hash)` - Retrieve trace and metrics
 - `load_traces_from_json(json_data)` - Load from JSON (GUI upload compatibility)
 
-#### 3. `ManualLLM` Class
-**Location**: `karenina/src/karenina/infrastructure/llm/manual_llm.py`
+#### 3. Message Utilities
+**Location**: `karenina/src/karenina/adapters/manual/message_utils.py`
 
-**Purpose**: LangChain-compatible LLM that returns precomputed traces
+**Purpose**: Message processing utilities using port-based architecture
 
-**Key Methods**:
+**Key Functions**:
 
-- `invoke(messages)` - Return precomputed trace as AIMessage
-- `get_agent_metrics()` - Retrieve agent metrics for trace
-- `with_structured_output(schema)` - Compatibility method
+- `convert_langchain_messages(messages)` - Convert LangChain messages to port format
+- `harmonize_messages(messages)` - Convert message list to string trace
+- `extract_agent_metrics(messages)` - Extract tool call counts, failures, iterations
+- `preprocess_message_list(messages)` - Main entry point for message preprocessing
+- `is_port_message_list(messages)` - Detect port Message format
+- `is_langchain_message_list(messages)` - Detect LangChain format
 
 #### 4. `ModelConfig` Integration
-**Location**: `karenina/src/karenina/schemas/workflow/models.py` (Lines 357-406)
+**Location**: `karenina/src/karenina/schemas/workflow/models.py`
 
 **New Field**: `manual_traces: Any = Field(default=None, exclude=True)`
 
@@ -161,7 +168,7 @@ benchmark.run_verification(config)
 
 ```python
 from karenina.benchmark import Benchmark
-from karenina.infrastructure.llm.manual_traces import ManualTraces
+from karenina.adapters.manual import ManualTraces
 from karenina.schemas import ModelConfig, VerificationConfig
 
 # Create benchmark
@@ -215,7 +222,7 @@ benchmark.run_verification(config)
 
 ```python
 from langchain_core.messages import AIMessage, ToolMessage
-from karenina.infrastructure.llm.manual_traces import ManualTraces
+from karenina.adapters.manual import ManualTraces
 
 # Assume benchmark already created
 manual_traces = ManualTraces(benchmark)
@@ -246,6 +253,37 @@ manual_traces.register_trace(
 # - tool_calls: 2
 # - unique_tools_used: 2 (calculator, validator)
 # - iterations: 1
+```
+
+---
+
+### Workflow 3: Port Message Lists (New Architecture)
+
+```python
+from karenina.ports.messages import Message, ToolUseContent
+from karenina.adapters.manual import ManualTraces
+
+# Assume benchmark already created
+manual_traces = ManualTraces(benchmark)
+
+# Register trace using port Message format (native architecture)
+messages = [
+    Message.user("What is 6 times 7?"),
+    Message.assistant(
+        "I'll calculate that.",
+        tool_calls=[ToolUseContent(id="calc1", name="calculator", input={"expr": "6*7"})]
+    ),
+    Message.tool_result("calc1", "42"),
+    Message.assistant("The answer is 42.")
+]
+
+manual_traces.register_trace(
+    "What is 6 times 7?",
+    messages,
+    map_to_id=True
+)
+
+# Works exactly like LangChain messages, with same metrics extraction
 ```
 
 ---
@@ -517,7 +555,7 @@ ValueError: MCP tools are not supported with manual interface
 
 **Before Running Verification**:
 ```python
-from karenina.infrastructure.llm.manual_traces import has_manual_trace, get_manual_trace
+from karenina.adapters.manual import has_manual_trace, get_manual_trace
 import hashlib
 
 # Verify trace was registered
@@ -531,7 +569,7 @@ print(f"Registered trace: {trace[:100]}...")
 
 **Validate Trace Count**:
 ```python
-from karenina.infrastructure.llm.manual_traces import get_manual_trace_count
+from karenina.adapters.manual import get_manual_trace_count
 
 expected_count = len(benchmark._questions_cache)
 actual_count = get_manual_trace_count()
@@ -580,7 +618,7 @@ benchmark.run_verification(loaded_config)
 
 ```python
 from karenina.benchmark import Benchmark
-from karenina.infrastructure.llm.manual_traces import ManualTraces
+from karenina.adapters.manual import ManualTraces
 from karenina.schemas import ModelConfig, VerificationConfig
 
 # Create benchmark

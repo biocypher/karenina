@@ -2,16 +2,20 @@
 
 Tests verify that the parallel invocation feature works correctly
 with LLMTraitEvaluator when using sequential trait evaluation mode.
+
+The evaluator uses LLMParallelInvoker for concurrent execution and
+LLMPort.with_structured_output() for structured parsing.
 """
 
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from karenina.benchmark.verification.evaluators.rubric_llm_trait_evaluator import (
+from karenina.benchmark.verification.evaluators.rubric.llm_trait import (
     LLMTraitEvaluator,
 )
 from karenina.schemas.domain.rubric import LLMRubricTrait
+from karenina.schemas.workflow.models import ModelConfig
 
 # =============================================================================
 # Test Fixtures
@@ -20,8 +24,28 @@ from karenina.schemas.domain.rubric import LLMRubricTrait
 
 @pytest.fixture
 def mock_llm() -> MagicMock:
-    """Create a mock LLM for testing."""
-    return MagicMock()
+    """Create a mock LLM (LLMPort) for testing."""
+    mock = MagicMock()
+    # Setup with_structured_output chain for serial mode
+    mock_structured = MagicMock()
+    mock_response = MagicMock()
+    mock_response.content = '{"result": true}'
+    mock_response.usage = None
+    mock_response.raw = MagicMock(result=True)
+    mock_structured.invoke.return_value = mock_response
+    mock.with_structured_output.return_value = mock_structured
+    return mock
+
+
+@pytest.fixture
+def mock_model_config() -> ModelConfig:
+    """Create a mock model config."""
+    return ModelConfig(
+        id="test-model",
+        model_name="claude-sonnet-4-20250514",
+        model_provider="anthropic",
+        interface="claude_agent_sdk",
+    )
 
 
 @pytest.fixture
@@ -119,50 +143,50 @@ def literal_traits() -> list[LLMRubricTrait]:
 
 
 @pytest.mark.integration
-def test_evaluator_parallel_mode_enabled_by_default(mock_llm: MagicMock) -> None:
+def test_evaluator_parallel_mode_enabled_by_default(mock_llm: MagicMock, mock_model_config: ModelConfig) -> None:
     """Test that parallel mode is enabled by default."""
-    evaluator = LLMTraitEvaluator(mock_llm)
+    evaluator = LLMTraitEvaluator(mock_llm, model_config=mock_model_config)
 
     assert evaluator._async_enabled is True
 
 
 @pytest.mark.integration
-def test_evaluator_parallel_mode_explicit_disabled(mock_llm: MagicMock) -> None:
+def test_evaluator_parallel_mode_explicit_disabled(mock_llm: MagicMock, mock_model_config: ModelConfig) -> None:
     """Test disabling parallel mode explicitly."""
-    evaluator = LLMTraitEvaluator(mock_llm, async_enabled=False)
+    evaluator = LLMTraitEvaluator(mock_llm, async_enabled=False, model_config=mock_model_config)
 
     assert evaluator._async_enabled is False
 
 
 @pytest.mark.integration
-def test_evaluator_parallel_mode_custom_workers(mock_llm: MagicMock) -> None:
+def test_evaluator_parallel_mode_custom_workers(mock_llm: MagicMock, mock_model_config: ModelConfig) -> None:
     """Test setting custom max_workers."""
-    evaluator = LLMTraitEvaluator(mock_llm, async_max_workers=8)
+    evaluator = LLMTraitEvaluator(mock_llm, async_max_workers=8, model_config=mock_model_config)
 
     assert evaluator._async_max_workers == 8
 
 
 @pytest.mark.integration
-def test_evaluator_env_var_overrides(mock_llm: MagicMock) -> None:
+def test_evaluator_env_var_overrides(mock_llm: MagicMock, mock_model_config: ModelConfig) -> None:
     """Test that env vars are respected when params not provided."""
     with patch.dict(
         "os.environ",
         {"KARENINA_ASYNC_ENABLED": "false", "KARENINA_ASYNC_MAX_WORKERS": "16"},
     ):
-        evaluator = LLMTraitEvaluator(mock_llm)
+        evaluator = LLMTraitEvaluator(mock_llm, model_config=mock_model_config)
 
         assert evaluator._async_enabled is False
         assert evaluator._async_max_workers == 16
 
 
 @pytest.mark.integration
-def test_evaluator_explicit_params_override_env(mock_llm: MagicMock) -> None:
+def test_evaluator_explicit_params_override_env(mock_llm: MagicMock, mock_model_config: ModelConfig) -> None:
     """Test that explicit params override env vars."""
     with patch.dict(
         "os.environ",
         {"KARENINA_ASYNC_ENABLED": "false", "KARENINA_ASYNC_MAX_WORKERS": "16"},
     ):
-        evaluator = LLMTraitEvaluator(mock_llm, async_enabled=True, async_max_workers=4)
+        evaluator = LLMTraitEvaluator(mock_llm, async_enabled=True, async_max_workers=4, model_config=mock_model_config)
 
         assert evaluator._async_enabled is True
         assert evaluator._async_max_workers == 4
@@ -176,14 +200,15 @@ def test_evaluator_explicit_params_override_env(mock_llm: MagicMock) -> None:
 @pytest.mark.integration
 def test_evaluate_sequential_uses_parallel_invoker(
     mock_llm: MagicMock,
+    mock_model_config: ModelConfig,
     sample_question: str,
     sample_answer: str,
     boolean_traits: list[LLMRubricTrait],
 ) -> None:
-    """Test that evaluate_sequential uses ParallelLLMInvoker when async_enabled."""
-    evaluator = LLMTraitEvaluator(mock_llm, async_enabled=True)
+    """Test that evaluate_sequential uses LLMParallelInvoker when async_enabled."""
+    evaluator = LLMTraitEvaluator(mock_llm, async_enabled=True, model_config=mock_model_config)
 
-    with patch("karenina.infrastructure.llm.parallel_invoker.ParallelLLMInvoker") as mock_invoker_class:
+    with patch("karenina.adapters.llm_parallel.LLMParallelInvoker") as mock_invoker_class:
         mock_invoker = MagicMock()
         mock_invoker_class.return_value = mock_invoker
 
@@ -194,13 +219,13 @@ def test_evaluate_sequential_uses_parallel_invoker(
             mock_result.result = True  # Boolean result
             mock_results.append((mock_result, {"total_tokens": 10}, None))
 
-        mock_invoker.invoke_batch.return_value = mock_results
+        mock_invoker.invoke_batch_structured.return_value = mock_results
 
         results, usage_list = evaluator.evaluate_sequential(sample_question, sample_answer, boolean_traits)
 
-        # Verify ParallelLLMInvoker was used
+        # Verify LLMParallelInvoker was used
         mock_invoker_class.assert_called_once()
-        mock_invoker.invoke_batch.assert_called_once()
+        mock_invoker.invoke_batch_structured.assert_called_once()
 
         # Verify results
         assert len(results) == len(boolean_traits)
@@ -211,45 +236,47 @@ def test_evaluate_sequential_uses_parallel_invoker(
 @pytest.mark.integration
 def test_evaluate_sequential_falls_back_when_disabled(
     mock_llm: MagicMock,
+    mock_model_config: ModelConfig,
     sample_question: str,
     sample_answer: str,
     boolean_traits: list[LLMRubricTrait],
 ) -> None:
-    """Test that evaluate_sequential falls back when async_enabled=False."""
-    evaluator = LLMTraitEvaluator(mock_llm, async_enabled=False)
+    """Test that evaluate_sequential uses true sequential when async_enabled=False."""
+    # Setup mock LLM for serial mode (with_structured_output chain)
+    mock_structured = MagicMock()
+    mock_response = MagicMock()
+    mock_response.usage = None
+    mock_result = MagicMock()
+    mock_result.result = True
+    mock_response.raw = mock_result
+    mock_structured.invoke.return_value = mock_response
+    mock_llm.with_structured_output.return_value = mock_structured
 
-    with patch(
-        "karenina.benchmark.verification.evaluators.rubric_parsing.invoke_with_structured_output"
-    ) as mock_invoke:
-        # Setup mock results
-        mock_results = []
-        for _ in boolean_traits:
-            mock_result = MagicMock()
-            mock_result.result = True
-            mock_results.append((mock_result, {"total_tokens": 10}))
+    evaluator = LLMTraitEvaluator(mock_llm, async_enabled=False, model_config=mock_model_config)
 
-        mock_invoke.side_effect = mock_results
+    results, usage_list = evaluator.evaluate_sequential(sample_question, sample_answer, boolean_traits)
 
-        results, usage_list = evaluator.evaluate_sequential(sample_question, sample_answer, boolean_traits)
+    # Verify with_structured_output was called for each trait
+    assert mock_llm.with_structured_output.call_count == len(boolean_traits)
 
-        # Verify invoke was called for each trait
-        assert mock_invoke.call_count == len(boolean_traits)
-
-        # Verify results
-        assert len(results) == len(boolean_traits)
+    # Verify results
+    assert len(results) == len(boolean_traits)
+    for trait in boolean_traits:
+        assert results[trait.name] is True
 
 
 @pytest.mark.integration
 def test_evaluate_sequential_handles_partial_errors(
     mock_llm: MagicMock,
+    mock_model_config: ModelConfig,
     sample_question: str,
     sample_answer: str,
     boolean_traits: list[LLMRubricTrait],
 ) -> None:
     """Test that parallel evaluation handles partial errors gracefully."""
-    evaluator = LLMTraitEvaluator(mock_llm, async_enabled=True)
+    evaluator = LLMTraitEvaluator(mock_llm, async_enabled=True, model_config=mock_model_config)
 
-    with patch("karenina.infrastructure.llm.parallel_invoker.ParallelLLMInvoker") as mock_invoker_class:
+    with patch("karenina.adapters.llm_parallel.LLMParallelInvoker") as mock_invoker_class:
         mock_invoker = MagicMock()
         mock_invoker_class.return_value = mock_invoker
 
@@ -263,7 +290,7 @@ def test_evaluate_sequential_handles_partial_errors(
                 mock_result.result = True
                 mock_results.append((mock_result, {"total_tokens": 10}, None))
 
-        mock_invoker.invoke_batch.return_value = mock_results
+        mock_invoker.invoke_batch_structured.return_value = mock_results
 
         results, usage_list = evaluator.evaluate_sequential(sample_question, sample_answer, boolean_traits)
 
@@ -279,14 +306,15 @@ def test_evaluate_sequential_handles_partial_errors(
 @pytest.mark.integration
 def test_evaluate_sequential_score_traits(
     mock_llm: MagicMock,
+    mock_model_config: ModelConfig,
     sample_question: str,
     sample_answer: str,
     score_traits: list[LLMRubricTrait],
 ) -> None:
     """Test parallel evaluation of score traits."""
-    evaluator = LLMTraitEvaluator(mock_llm, async_enabled=True)
+    evaluator = LLMTraitEvaluator(mock_llm, async_enabled=True, model_config=mock_model_config)
 
-    with patch("karenina.infrastructure.llm.parallel_invoker.ParallelLLMInvoker") as mock_invoker_class:
+    with patch("karenina.adapters.llm_parallel.LLMParallelInvoker") as mock_invoker_class:
         mock_invoker = MagicMock()
         mock_invoker_class.return_value = mock_invoker
 
@@ -297,7 +325,7 @@ def test_evaluate_sequential_score_traits(
             mock_result.score = 3 + i  # Numeric score
             mock_results.append((mock_result, {"total_tokens": 10}, None))
 
-        mock_invoker.invoke_batch.return_value = mock_results
+        mock_invoker.invoke_batch_structured.return_value = mock_results
 
         results, usage_list = evaluator.evaluate_sequential(sample_question, sample_answer, score_traits)
 
@@ -314,14 +342,15 @@ def test_evaluate_sequential_score_traits(
 @pytest.mark.integration
 def test_evaluate_literal_sequential_uses_parallel_invoker(
     mock_llm: MagicMock,
+    mock_model_config: ModelConfig,
     sample_question: str,
     sample_answer: str,
     literal_traits: list[LLMRubricTrait],
 ) -> None:
-    """Test that evaluate_literal_sequential uses ParallelLLMInvoker."""
-    evaluator = LLMTraitEvaluator(mock_llm, async_enabled=True)
+    """Test that evaluate_literal_sequential uses LLMParallelInvoker."""
+    evaluator = LLMTraitEvaluator(mock_llm, async_enabled=True, model_config=mock_model_config)
 
-    with patch("karenina.infrastructure.llm.parallel_invoker.ParallelLLMInvoker") as mock_invoker_class:
+    with patch("karenina.adapters.llm_parallel.LLMParallelInvoker") as mock_invoker_class:
         mock_invoker = MagicMock()
         mock_invoker_class.return_value = mock_invoker
 
@@ -333,15 +362,15 @@ def test_evaluate_literal_sequential_uses_parallel_invoker(
             mock_result.classification = class_names[0]  # First class
             mock_results.append((mock_result, {"total_tokens": 10}, None))
 
-        mock_invoker.invoke_batch.return_value = mock_results
+        mock_invoker.invoke_batch_structured.return_value = mock_results
 
         scores, labels, usage_list = evaluator.evaluate_literal_sequential(
             sample_question, sample_answer, literal_traits
         )
 
-        # Verify ParallelLLMInvoker was used
+        # Verify LLMParallelInvoker was used
         mock_invoker_class.assert_called_once()
-        mock_invoker.invoke_batch.assert_called_once()
+        mock_invoker.invoke_batch_structured.assert_called_once()
 
         # Verify results
         assert len(scores) == len(literal_traits)
@@ -351,49 +380,46 @@ def test_evaluate_literal_sequential_uses_parallel_invoker(
 @pytest.mark.integration
 def test_evaluate_literal_sequential_falls_back_when_disabled(
     mock_llm: MagicMock,
+    mock_model_config: ModelConfig,
     sample_question: str,
     sample_answer: str,
     literal_traits: list[LLMRubricTrait],
 ) -> None:
-    """Test that evaluate_literal_sequential falls back when async_enabled=False."""
-    evaluator = LLMTraitEvaluator(mock_llm, async_enabled=False)
+    """Test that evaluate_literal_sequential uses true sequential when async_enabled=False."""
+    # Setup mock LLM for serial mode
+    mock_structured = MagicMock()
+    mock_response = MagicMock()
+    mock_response.usage = None
+    mock_result = MagicMock()
+    mock_result.classification = "positive"  # First class name
+    mock_response.raw = mock_result
+    mock_structured.invoke.return_value = mock_response
+    mock_llm.with_structured_output.return_value = mock_structured
 
-    with patch(
-        "karenina.benchmark.verification.evaluators.rubric_parsing.invoke_with_structured_output"
-    ) as mock_invoke:
-        # Setup mock results
-        mock_results = []
-        for trait in literal_traits:
-            mock_result = MagicMock()
-            class_names = list(trait.classes.keys())
-            mock_result.classification = class_names[0]
-            mock_results.append((mock_result, {"total_tokens": 10}))
+    evaluator = LLMTraitEvaluator(mock_llm, async_enabled=False, model_config=mock_model_config)
 
-        mock_invoke.side_effect = mock_results
+    scores, labels, usage_list = evaluator.evaluate_literal_sequential(sample_question, sample_answer, literal_traits)
 
-        scores, labels, usage_list = evaluator.evaluate_literal_sequential(
-            sample_question, sample_answer, literal_traits
-        )
+    # Verify with_structured_output was called for each literal trait
+    assert mock_llm.with_structured_output.call_count == len(literal_traits)
 
-        # Verify invoke was called for each trait
-        assert mock_invoke.call_count == len(literal_traits)
-
-        # Verify results
-        assert len(scores) == len(literal_traits)
-        assert len(labels) == len(literal_traits)
+    # Verify results
+    assert len(scores) == len(literal_traits)
+    assert len(labels) == len(literal_traits)
 
 
 @pytest.mark.integration
 def test_evaluate_literal_sequential_handles_errors(
     mock_llm: MagicMock,
+    mock_model_config: ModelConfig,
     sample_question: str,
     sample_answer: str,
     literal_traits: list[LLMRubricTrait],
 ) -> None:
     """Test that literal parallel evaluation handles errors gracefully."""
-    evaluator = LLMTraitEvaluator(mock_llm, async_enabled=True)
+    evaluator = LLMTraitEvaluator(mock_llm, async_enabled=True, model_config=mock_model_config)
 
-    with patch("karenina.infrastructure.llm.parallel_invoker.ParallelLLMInvoker") as mock_invoker_class:
+    with patch("karenina.adapters.llm_parallel.LLMParallelInvoker") as mock_invoker_class:
         mock_invoker = MagicMock()
         mock_invoker_class.return_value = mock_invoker
 
@@ -408,7 +434,7 @@ def test_evaluate_literal_sequential_handles_errors(
                 mock_result.classification = class_names[1] if len(class_names) > 1 else class_names[0]
                 mock_results.append((mock_result, {"total_tokens": 10}, None))
 
-        mock_invoker.invoke_batch.return_value = mock_results
+        mock_invoker.invoke_batch_structured.return_value = mock_results
 
         scores, labels, usage_list = evaluator.evaluate_literal_sequential(
             sample_question, sample_answer, literal_traits
@@ -425,10 +451,11 @@ def test_evaluate_literal_sequential_handles_errors(
 
 
 @pytest.mark.integration
-def test_evaluate_literal_sequential_empty_list() -> None:
+def test_evaluate_literal_sequential_empty_list(mock_model_config: ModelConfig) -> None:
     """Test that empty literal traits list returns empty results."""
     mock_llm = MagicMock()
-    evaluator = LLMTraitEvaluator(mock_llm, async_enabled=True)
+
+    evaluator = LLMTraitEvaluator(mock_llm, async_enabled=True, model_config=mock_model_config)
 
     # Pass empty list or list with no literal traits
     non_literal_traits = [LLMRubricTrait(name="test", description="test", kind="boolean")]
@@ -449,14 +476,15 @@ def test_evaluate_literal_sequential_empty_list() -> None:
 @pytest.mark.integration
 def test_evaluate_sequential_preserves_usage_metadata(
     mock_llm: MagicMock,
+    mock_model_config: ModelConfig,
     sample_question: str,
     sample_answer: str,
     boolean_traits: list[LLMRubricTrait],
 ) -> None:
     """Test that usage metadata is preserved per-trait in sequential evaluation."""
-    evaluator = LLMTraitEvaluator(mock_llm, async_enabled=True)
+    evaluator = LLMTraitEvaluator(mock_llm, async_enabled=True, model_config=mock_model_config)
 
-    with patch("karenina.infrastructure.llm.parallel_invoker.ParallelLLMInvoker") as mock_invoker_class:
+    with patch("karenina.adapters.llm_parallel.LLMParallelInvoker") as mock_invoker_class:
         mock_invoker = MagicMock()
         mock_invoker_class.return_value = mock_invoker
 
@@ -467,7 +495,7 @@ def test_evaluate_sequential_preserves_usage_metadata(
             mock_result.result = True
             mock_results.append((mock_result, {"total_tokens": 10 + i, "input_tokens": 5}, None))
 
-        mock_invoker.invoke_batch.return_value = mock_results
+        mock_invoker.invoke_batch_structured.return_value = mock_results
 
         results, usage_list = evaluator.evaluate_sequential(sample_question, sample_answer, boolean_traits)
 

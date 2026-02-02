@@ -4,6 +4,8 @@ ADeLe Question Classifier.
 Classifies questions using ADeLe rubrics via LLM-as-judge.
 This module adapts the existing LLMTraitEvaluator infrastructure
 to evaluate questions (instead of answers) against ADeLe dimensions.
+
+All LLM calls use LLMPort.with_structured_output() for consistent backend abstraction.
 """
 
 from __future__ import annotations
@@ -11,16 +13,24 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Callable
+from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from karenina.ports import LLMPort
+from karenina.ports.messages import Message
 
+from .prompts import (
+    SYSTEM_PROMPT_BATCH,
+    SYSTEM_PROMPT_SINGLE_TRAIT,
+    USER_PROMPT_BATCH_TEMPLATE,
+    USER_PROMPT_SINGLE_TRAIT_TEMPLATE,
+)
 from .schemas import QuestionClassificationResult
 from .traits import ADELE_TRAIT_NAMES, get_adele_trait
 
 if TYPE_CHECKING:
-    from langchain_core.language_models import BaseChatModel
+    from karenina.schemas.workflow.models import ModelConfig
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +53,7 @@ class QuestionClassifier:
 
     def __init__(
         self,
-        llm: BaseChatModel | None = None,
+        llm: LLMPort | None = None,
         model_name: str = "claude-3-5-haiku-latest",
         provider: str = "anthropic",
         temperature: float = 0.0,
@@ -53,13 +63,15 @@ class QuestionClassifier:
         trait_eval_mode: str = "batch",
         async_enabled: bool | None = None,
         async_max_workers: int | None = None,
+        *,
+        model_config: ModelConfig | None = None,
     ):
         """
         Initialize the question classifier.
 
         Args:
-            llm: Optional pre-initialized LLM instance. If not provided,
-                 one will be created using model_name and provider.
+            llm: Optional pre-initialized LLMPort instance. If not provided,
+                 one will be created using model_config or individual params.
             model_name: Model name to use if llm not provided.
                        Defaults to claude-3-5-haiku-latest for efficiency.
             provider: Model provider to use if llm not provided.
@@ -80,10 +92,13 @@ class QuestionClassifier:
                           If None, reads from KARENINA_ASYNC_ENABLED env var (default: True).
             async_max_workers: Max concurrent workers for parallel execution.
                               If None, reads from KARENINA_ASYNC_MAX_WORKERS env var (default: 2).
+            model_config: Optional ModelConfig to use for creating the LLM.
+                         Takes precedence over individual model params.
         """
-        from karenina.infrastructure.llm.parallel_invoker import read_async_config
+        from karenina.adapters.llm_parallel import read_async_config
 
         self._llm = llm
+        self._model_config = model_config
         self._model_name = model_name
         self._provider = provider
         self._temperature = temperature
@@ -98,19 +113,30 @@ class QuestionClassifier:
         self._async_max_workers = async_max_workers if async_max_workers is not None else default_workers
 
     @property
-    def llm(self) -> BaseChatModel:
+    def llm(self) -> LLMPort:
         """Lazily initialize and return the LLM instance."""
         if self._llm is None:
-            from karenina.infrastructure.llm.interface import init_chat_model_unified
+            from pydantic import SecretStr
 
-            self._llm = init_chat_model_unified(
-                model=self._model_name,
-                provider=self._provider,
-                temperature=self._temperature,
-                interface=self._interface,
-                endpoint_base_url=self._endpoint_base_url,
-                endpoint_api_key=self._endpoint_api_key,
-            )
+            from karenina.adapters.factory import get_llm
+            from karenina.schemas.workflow.models import ModelConfig
+
+            # Use provided model_config or create one from individual params
+            if self._model_config is not None:
+                config = self._model_config
+            else:
+                # Convert endpoint_api_key to SecretStr if provided
+                api_key = SecretStr(self._endpoint_api_key) if self._endpoint_api_key else None
+                config = ModelConfig(
+                    id="adele-classifier",
+                    model_name=self._model_name,
+                    model_provider=self._provider,
+                    temperature=self._temperature,
+                    interface=self._interface,  # type: ignore[arg-type]  # Runtime validated Literal
+                    endpoint_base_url=self._endpoint_base_url,
+                    endpoint_api_key=api_key,
+                )
+            self._llm = get_llm(config)
         return self._llm
 
     def classify_single(
@@ -153,25 +179,27 @@ class QuestionClassifier:
 
         This is faster and cheaper but may be less accurate for complex questions.
         """
-        from karenina.benchmark.verification.evaluators.rubric_parsing import (
-            invoke_with_structured_output,
-        )
         from karenina.schemas.workflow.rubric_outputs import BatchLiteralClassifications
 
         # Build prompts for question classification
         system_prompt = self._build_system_prompt()
         user_prompt = self._build_user_prompt(question_text, traits)
 
-        messages: list[BaseMessage] = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=user_prompt),
+        messages = [
+            Message.system(system_prompt),
+            Message.user(user_prompt),
         ]
 
-        # Invoke with structured output
-        parsed_result, usage_metadata = invoke_with_structured_output(self.llm, messages, BatchLiteralClassifications)
+        # Invoke with structured output using LLMPort
+        structured_llm = self.llm.with_structured_output(BatchLiteralClassifications)
+        response = structured_llm.invoke(messages)
 
-        # Validate and convert classifications
-        scores, labels = self._validate_classifications(parsed_result.classifications, traits)
+        # response.raw is the validated Pydantic model
+        parsed_result = response.raw
+        usage_metadata = asdict(response.usage) if response.usage else {}
+
+        # Validate and convert classifications (use to_dict() to convert list format to dict)
+        scores, labels = self._validate_classifications(parsed_result.to_dict(), traits)
 
         return QuestionClassificationResult(
             question_id=question_id,
@@ -193,7 +221,7 @@ class QuestionClassifier:
         Classify a question by evaluating each trait in a separate LLM call.
 
         When async_enabled is True, the LLM calls run in parallel using
-        ParallelLLMInvoker for significant speedup. Otherwise, calls run
+        LLMParallelInvoker for significant speedup. Otherwise, calls run
         sequentially (legacy behavior).
         """
         from karenina.schemas.workflow.rubric_outputs import SingleLiteralClassification
@@ -202,14 +230,14 @@ class QuestionClassifier:
         labels: dict[str, str] = {}
         combined_usage: dict[str, Any] = {"calls": 0, "total_tokens": 0}
 
-        # Build all tasks upfront
-        tasks: list[tuple[list[BaseMessage], type[SingleLiteralClassification]]] = []
+        # Build all tasks upfront using Message types
+        tasks: list[tuple[list[Message], type[SingleLiteralClassification]]] = []
         for trait in traits:
             system_prompt = self._build_system_prompt_single_trait()
             user_prompt = self._build_user_prompt_single_trait(question_text, trait)
-            messages: list[BaseMessage] = [
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=user_prompt),
+            messages = [
+                Message.system(system_prompt),
+                Message.user(user_prompt),
             ]
             tasks.append((messages, SingleLiteralClassification))
 
@@ -232,14 +260,14 @@ class QuestionClassifier:
 
     def _execute_parallel_classification(
         self,
-        tasks: list[tuple[list[BaseMessage], Any]],
+        tasks: list[tuple[list[Message], Any]],
         traits: list[Any],
     ) -> tuple[dict[str, int], dict[str, str], dict[str, Any]]:
-        """Execute classification tasks in parallel using ParallelLLMInvoker."""
-        from karenina.infrastructure.llm.parallel_invoker import ParallelLLMInvoker
+        """Execute classification tasks in parallel using LLMParallelInvoker."""
+        from karenina.adapters.llm_parallel import LLMParallelInvoker
 
-        invoker = ParallelLLMInvoker(self.llm, max_workers=self._async_max_workers)
-        results = invoker.invoke_batch(tasks)
+        invoker = LLMParallelInvoker(self.llm, max_workers=self._async_max_workers)
+        results = invoker.invoke_batch_structured(tasks)
 
         scores: dict[str, int] = {}
         labels: dict[str, str] = {}
@@ -266,14 +294,10 @@ class QuestionClassifier:
 
     def _execute_sequential_classification(
         self,
-        tasks: list[tuple[list[BaseMessage], Any]],
+        tasks: list[tuple[list[Message], Any]],
         traits: list[Any],
     ) -> tuple[dict[str, int], dict[str, str], dict[str, Any]]:
         """Execute classification tasks sequentially (legacy behavior)."""
-        from karenina.benchmark.verification.evaluators.rubric_parsing import (
-            invoke_with_structured_output,
-        )
-
         scores: dict[str, int] = {}
         labels: dict[str, str] = {}
         combined_usage: dict[str, Any] = {"calls": 0, "total_tokens": 0, "input_tokens": 0, "output_tokens": 0}
@@ -281,7 +305,13 @@ class QuestionClassifier:
         for i, (messages, model_class) in enumerate(tasks):
             trait = traits[i]
             try:
-                parsed_result, usage_metadata = invoke_with_structured_output(self.llm, messages, model_class)
+                # Use LLMPort.with_structured_output() pattern
+                structured_llm = self.llm.with_structured_output(model_class)
+                response = structured_llm.invoke(messages)
+
+                # response.raw is the validated Pydantic model
+                parsed_result = response.raw
+                usage_metadata = asdict(response.usage) if response.usage else {}
 
                 # Validate the classification
                 score, label = self._validate_single_classification(trait, parsed_result.classification)
@@ -352,29 +382,7 @@ class QuestionClassifier:
 
     def _build_system_prompt_single_trait(self) -> str:
         """Build system prompt for single-trait question classification."""
-        return """You are an expert evaluator classifying QUESTIONS (not answers) using the ADeLe framework.
-
-ADeLe (Assessment Dimensions for Language Evaluation) characterizes questions by their cognitive complexity. Your task is to analyze the QUESTION ITSELF and classify it for a SINGLE dimension.
-
-**RESPONSE FORMAT:**
-You will receive a JSON Schema specifying the exact output structure. Your response MUST conform to this schema.
-Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
-
-**CRITICAL REQUIREMENTS:**
-1. **Exact Class Name**: Use the EXACT class name from the trait's categories (case-sensitive)
-2. **One Class Only**: Choose exactly one class
-3. **No Invention**: Do NOT invent new categories - only use the provided class names
-
-**CLASSIFICATION GUIDELINES:**
-- You are classifying the QUESTION, not evaluating an answer
-- Consider what cognitive demands the question places on someone trying to answer it
-- Read each class definition carefully - they describe increasing levels of complexity
-- When uncertain, choose the level that best represents the primary cognitive demand
-
-**WHAT NOT TO DO:**
-- Do NOT wrap JSON in markdown code blocks (no ```)
-- Do NOT add explanatory text before or after the JSON
-- Do NOT modify or paraphrase class names"""
+        return SYSTEM_PROMPT_SINGLE_TRAIT
 
     def _build_user_prompt_single_trait(self, question_text: str, trait: Any) -> str:
         """Build user prompt for single-trait question classification."""
@@ -393,66 +401,26 @@ Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
         mid_idx = len(class_names) // 2
         example_json = json.dumps({"classification": class_names[mid_idx]}, indent=2)
 
-        return f"""Classify the following QUESTION for the ADeLe dimension: **{trait.name}**
-
-**QUESTION TO CLASSIFY:**
-{question_text}
-
-**DIMENSION: {trait.name}**
-{trait.description or "Classification dimension"}
-
-Classes (in order of increasing complexity): {", ".join(class_names)}
-
-{chr(10).join(class_details)}
-
-**JSON SCHEMA (your response MUST conform to this):**
-```json
-{json_schema}
-```
-
-**REQUIRED OUTPUT FORMAT:**
-Return a JSON object with a "classification" key containing the exact class name.
-
-Example format (class value is just an example):
-{example_json}
-
-**YOUR JSON RESPONSE:**"""
+        return USER_PROMPT_SINGLE_TRAIT_TEMPLATE.format(
+            trait_name=trait.name,
+            question_text=question_text,
+            trait_description=trait.description or "Classification dimension",
+            class_names=", ".join(class_names),
+            class_details="\n".join(class_details),
+            json_schema=json_schema,
+            example_json=example_json,
+        )
 
     def _build_system_prompt(self) -> str:
         """Build system prompt for batch question classification."""
-        return """You are an expert evaluator classifying QUESTIONS (not answers) using the ADeLe framework.
-
-ADeLe (Assessment Dimensions for Language Evaluation) characterizes questions by their cognitive complexity across multiple dimensions. Your task is to analyze the QUESTION ITSELF and determine what level of each dimension would be required to answer it.
-
-**RESPONSE FORMAT:**
-You will receive a JSON Schema specifying the exact output structure. Your response MUST conform to this schema.
-Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
-
-**CRITICAL REQUIREMENTS:**
-1. **Exact Class Names**: Use the EXACT class names from each trait's categories (case-sensitive)
-2. **One Class Per Trait**: Choose exactly one class for each trait
-3. **All Traits Required**: Include ALL traits in your response
-4. **No Invention**: Do NOT invent new categories - only use the provided class names
-
-**CLASSIFICATION GUIDELINES:**
-- You are classifying the QUESTION, not evaluating an answer
-- Consider what cognitive demands the question places on someone trying to answer it
-- Read each trait's class definitions carefully - they describe increasing levels of complexity
-- When uncertain, choose the level that best represents the primary cognitive demand
-- Consider the question holistically - a simple question in one dimension may be complex in another
-
-**WHAT NOT TO DO:**
-- Do NOT wrap JSON in markdown code blocks (no ```)
-- Do NOT add explanatory text before or after the JSON
-- Do NOT modify or paraphrase class names
-- Do NOT skip any traits"""
+        return SYSTEM_PROMPT_BATCH
 
     def _build_user_prompt(self, question_text: str, traits: list[Any]) -> str:
         """Build user prompt for question classification."""
         from karenina.schemas.workflow.rubric_outputs import BatchLiteralClassifications
 
         traits_description = []
-        example_classifications: dict[str, str] = {}
+        example_classifications: list[dict[str, str]] = []
 
         for trait in traits:
             if trait.kind != "literal" or trait.classes is None:
@@ -473,32 +441,17 @@ Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
             traits_description.append(trait_desc)
             # Use middle class as example to avoid bias toward first/last
             mid_idx = len(class_names) // 2
-            example_classifications[trait.name] = class_names[mid_idx]
+            example_classifications.append({"trait_name": trait.name, "class_name": class_names[mid_idx]})
 
         example_json = json.dumps({"classifications": example_classifications}, indent=2)
         json_schema = json.dumps(BatchLiteralClassifications.model_json_schema(), indent=2)
 
-        return f"""Classify the following QUESTION for each ADeLe dimension:
-
-**QUESTION TO CLASSIFY:**
-{question_text}
-
-**ADeLe DIMENSIONS TO CLASSIFY:**
-{chr(10).join(traits_description)}
-
-**JSON SCHEMA (your response MUST conform to this):**
-```json
-{json_schema}
-```
-
-**REQUIRED OUTPUT FORMAT:**
-Return a JSON object with a "classifications" key mapping trait names to class names.
-Use EXACT trait and class names as shown above.
-
-Example format (class values are just examples):
-{example_json}
-
-**YOUR JSON RESPONSE:**"""
+        return USER_PROMPT_BATCH_TEMPLATE.format(
+            question_text=question_text,
+            traits_description="\n".join(traits_description),
+            json_schema=json_schema,
+            example_json=example_json,
+        )
 
     def _validate_classifications(
         self,

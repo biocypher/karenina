@@ -17,7 +17,6 @@ if TYPE_CHECKING:
     from ..schemas.checkpoint import SchemaOrgQuestion
     from ..schemas.domain import Question
 
-from ..domain.answers.generator import generate_answer_template, load_answer_templates_from_json
 from ..schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
 from ..schemas.workflow import (
     FinishedTemplate,
@@ -25,6 +24,7 @@ from ..schemas.workflow import (
     VerificationResult,
     VerificationResultSet,
 )
+from .authoring.answers.generator import generate_answer_template, load_answer_templates_from_json
 from .core import (
     BenchmarkBase,
     ExportManager,
@@ -77,8 +77,6 @@ class Benchmark:
         self._template_manager = TemplateManager(self._base)
         self._results_manager = ResultsManager(self._base)
         self._verification_manager = VerificationManager(self._base, self._rubric_manager)
-        # Set the results manager on verification manager for auto-storage
-        self._verification_manager._results_manager = self._results_manager
         self._export_manager = ExportManager(self._base, self._template_manager, self._rubric_manager)
 
     @classmethod
@@ -132,8 +130,6 @@ class Benchmark:
         instance._template_manager = TemplateManager(instance._base)
         instance._results_manager = ResultsManager(instance._base)
         instance._verification_manager = VerificationManager(instance._base, instance._rubric_manager)
-        # Set the results manager on verification manager for auto-storage
-        instance._verification_manager._results_manager = instance._results_manager
         instance._export_manager = ExportManager(instance._base, instance._template_manager, instance._rubric_manager)
 
         return instance
@@ -789,75 +785,6 @@ class Benchmark:
         return self._rubric_manager.validate_rubrics()
 
     # Verification methods - delegate to VerificationManager
-    def verify_question(
-        self,
-        question_id: str,
-        config: VerificationConfig,
-        run_name: str | None = None,
-        async_enabled: bool | None = None,
-    ) -> VerificationResultSet:
-        """Verify a single question."""
-        return self._verification_manager.verify_question(question_id, config, run_name, async_enabled)
-
-    def verify_questions(
-        self,
-        question_ids: list[str],
-        config: VerificationConfig,
-        run_name: str | None = None,
-        async_enabled: bool | None = None,
-        progress_callback: Callable[[float, str], None] | None = None,
-    ) -> VerificationResultSet:
-        """Verify multiple specific questions."""
-        return self._verification_manager.verify_questions(
-            question_ids, config, run_name, async_enabled, progress_callback
-        )
-
-    def verify_filtered(
-        self,
-        config: VerificationConfig,
-        finished: bool | None = True,
-        has_template: bool | None = True,
-        has_rubric: bool | None = None,
-        author: str | None = None,
-        run_name: str | None = None,
-        async_enabled: bool | None = None,
-        progress_callback: Callable[[float, str], None] | None = None,
-    ) -> VerificationResultSet:
-        """Verify questions matching specific criteria."""
-        return self._verification_manager.verify_filtered(
-            config, finished, has_template, has_rubric, author, run_name, async_enabled, progress_callback
-        )
-
-    def verify_all_finished(
-        self,
-        config: VerificationConfig,
-        run_name: str | None = None,
-        async_enabled: bool | None = None,
-        progress_callback: Callable[[float, str], None] | None = None,
-    ) -> VerificationResultSet:
-        """Verify all finished questions in the benchmark."""
-        return self._verification_manager.verify_all_finished(config, run_name, async_enabled, progress_callback)
-
-    def verify_custom(
-        self,
-        question_selector: Callable[[dict[str, Any]], bool],
-        config: VerificationConfig,
-        run_name: str | None = None,
-        async_enabled: bool | None = None,
-        progress_callback: Callable[[float, str], None] | None = None,
-    ) -> VerificationResultSet:
-        """Verify questions selected by a custom function."""
-        return self._verification_manager.verify_custom(
-            question_selector, config, run_name, async_enabled, progress_callback
-        )
-
-    def verify_dry_run(
-        self,
-        question_ids: list[str] | None = None,
-    ) -> dict[str, bool]:
-        """Perform a dry run verification (validate without executing)."""
-        return self._verification_manager.verify_dry_run(question_ids)
-
     def run_verification(
         self,
         config: VerificationConfig,
@@ -869,37 +796,6 @@ class Benchmark:
         """Run verification on the benchmark using existing execution system."""
         return self._verification_manager.run_verification(
             config, question_ids, run_name, async_enabled, progress_callback
-        )
-
-    def verify_with_mixed_configs(
-        self,
-        question_configs: dict[str, VerificationConfig],
-        progress_callback: Callable[[float, str], None] | None = None,
-    ) -> dict[str, VerificationResultSet]:
-        """Verify different questions with different configurations."""
-        return self._verification_manager.verify_with_mixed_configs(question_configs, progress_callback)
-
-    def verify_comparative(
-        self,
-        question_ids: list[str],
-        configs: list[VerificationConfig],
-        run_names: list[str],
-        progress_callback: Callable[[float, str], None] | None = None,
-    ) -> dict[str, VerificationResultSet]:
-        """Run same questions with multiple configurations for comparison."""
-        return self._verification_manager.verify_comparative(question_ids, configs, run_names, progress_callback)
-
-    def verify_progressive(
-        self,
-        config: VerificationConfig,
-        batch_size: int = 5,
-        run_name: str | None = None,
-        resume_from: str | None = None,
-        progress_callback: Callable[[float, str], None] | None = None,
-    ) -> VerificationResultSet:
-        """Verify questions in batches with ability to resume from interruptions."""
-        return self._verification_manager.verify_progressive(
-            config, batch_size, run_name, resume_from, progress_callback
         )
 
     # Results management methods - delegate to ResultsManager
@@ -1147,7 +1043,7 @@ class Benchmark:
             verbose_logger = VerboseLogger(max_iterations=max_metric_calls)
 
         # Run GEPA optimization with multi-objective Pareto tracking
-        result = gepa.optimize(
+        result: Any = gepa.optimize(  # type: ignore[attr-defined]
             seed_candidate=seed_candidate,
             trainset=split.train,
             valset=split.val,
@@ -1316,8 +1212,6 @@ class Benchmark:
         instance._template_manager = TemplateManager(instance._base)
         instance._results_manager = ResultsManager(instance._base)
         instance._verification_manager = VerificationManager(instance._base, instance._rubric_manager)
-        # Set the results manager on verification manager for auto-storage
-        instance._verification_manager._results_manager = instance._results_manager
         instance._export_manager = ExportManager(instance._base, instance._template_manager, instance._rubric_manager)
 
         return instance

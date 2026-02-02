@@ -5,7 +5,7 @@ This module tests the cache optimization system including:
 - Cache key correctness (question_id + answering_model + replicate)
 - Sequential and parallel execution modes
 
-Note: Most tests use execute_sequential to avoid anyio portal overhead.
+Note: Most tests use VerificationExecutor(parallel=False) to avoid anyio portal overhead.
 One test verifies parallel execution works correctly.
 """
 
@@ -13,7 +13,8 @@ from unittest.mock import patch
 
 import pytest
 
-from karenina.benchmark.verification.batch_runner import execute_sequential
+from karenina.benchmark.verification.executor import ExecutorConfig, VerificationExecutor
+from karenina.schemas.verification.model_identity import ModelIdentity
 from karenina.schemas.workflow import ModelConfig, VerificationResult
 from karenina.schemas.workflow.verification import (
     VerificationResultMetadata,
@@ -25,10 +26,12 @@ from karenina.schemas.workflow.verification import (
 def create_mock_result(kwargs: dict) -> VerificationResult:
     """Create a standard mock VerificationResult from kwargs."""
     timestamp = "2025-01-01"
+    _answering = ModelIdentity.from_model_config(kwargs["answering_model"], role="answering")
+    _parsing = ModelIdentity.from_model_config(kwargs["parsing_model"], role="parsing")
     result_id = VerificationResultMetadata.compute_result_id(
         question_id=kwargs["question_id"],
-        answering_model=kwargs["answering_model"].id,
-        parsing_model=kwargs["parsing_model"].id,
+        answering=_answering,
+        parsing=_parsing,
         timestamp=timestamp,
     )
     return VerificationResult(
@@ -37,8 +40,8 @@ def create_mock_result(kwargs: dict) -> VerificationResult:
             template_id="test_template",
             completed_without_errors=True,
             question_text=kwargs["question_text"],
-            answering_model=kwargs["answering_model"].id,
-            parsing_model=kwargs["parsing_model"].id,
+            answering=_answering,
+            parsing=_parsing,
             execution_time=0.1,
             timestamp=timestamp,
             result_id=result_id,
@@ -55,7 +58,7 @@ def create_model(model_id: str, system_prompt: str = "Test") -> ModelConfig:
     return ModelConfig(
         id=model_id,
         model_provider="anthropic",
-        model_name="claude-haiku-4-5",
+        model_name=model_id,
         temperature=0.0,
         system_prompt=system_prompt,
     )
@@ -82,6 +85,18 @@ def create_task(
         "abstention_enabled": False,
         "deep_judgment_enabled": False,
     }
+
+
+def execute_sequential(tasks: list[dict]) -> dict[str, VerificationResult]:
+    """Run tasks sequentially via VerificationExecutor."""
+    executor = VerificationExecutor(parallel=False, config=ExecutorConfig())
+    return executor.run_batch(tasks)
+
+
+def execute_parallel(tasks: list[dict], max_workers: int = 2) -> dict[str, VerificationResult]:
+    """Run tasks in parallel via VerificationExecutor."""
+    executor = VerificationExecutor(parallel=True, config=ExecutorConfig(max_workers=max_workers))
+    return executor.run_batch(tasks)
 
 
 @pytest.mark.integration
@@ -324,7 +339,7 @@ class TestCacheOptimizationIntegration:
         assert question_ids == {"q1", "q2"}
 
         parsing_models = {r.parsing_model for r in result_list}
-        assert parsing_models == {"parser_1", "parser_2"}
+        assert parsing_models == {"langchain:parser_1", "langchain:parser_2"}
 
 
 @pytest.mark.integration
@@ -338,8 +353,6 @@ class TestParallelExecution:
     @patch("karenina.benchmark.verification.runner.run_single_model_verification")
     def test_parallel_execution_completes(self, mock_verify):
         """Test that parallel execution completes and returns all results."""
-        from karenina.benchmark.verification.batch_runner import execute_parallel
-
         mock_verify.side_effect = lambda **kwargs: create_mock_result(kwargs)
 
         answering_model = create_model("answering_1")

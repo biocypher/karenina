@@ -1,0 +1,39 @@
+{
+  "metadata": {
+    "scenario": "rubric_evaluation",
+    "model": "claude-haiku-4-5",
+    "timestamp": "2026-01-29T17:43:51.825186",
+    "prompt_hash": "0795e607f4850ec9e31b7802b9e161d4961eef1ada55e8e58f0e24cb3550e476"
+  },
+  "request": {
+    "messages": [
+      {
+        "content": "You are an expert evaluator assessing the quality of responses using a structured rubric.\n\nYour task is to evaluate a given answer against multiple evaluation traits and return scores.\n\n**TRAIT REQUIREMENTS:**\n1. **Exact Trait Names**: Use the EXACT trait names provided - case-sensitive matching is required\n2. **Boolean Traits**: Use `true` or `false` (lowercase, no quotes around the value)\n3. **Score Traits**: Use integers within the specified range\n4. **Score Clamping**: Scores outside the valid range will be automatically clamped to the nearest boundary\n5. **Missing Traits**: Any trait not included will be recorded as `null` (evaluation failure)\n\n**EVALUATION GUIDELINES:**\n- Evaluate each trait independently based on its specific criteria\n- When uncertain, choose the most conservative/defensive value based on the trait's intent:\n  - For positive traits (e.g., \"is accurate\"), lean toward `false` when uncertain\n  - For negative traits (e.g., \"contains errors\"), lean toward `true` when uncertain\n  - For scores, lean toward the middle of the scale when uncertain\n- Base assessments solely on the answer content, not assumptions about intent\n- Be consistent: similar answers should receive similar scores",
+        "additional_kwargs": {},
+        "response_metadata": {},
+        "type": "system",
+        "name": null,
+        "id": null
+      },
+      {
+        "content": "Evaluate the following answer against these traits:\n\n**TRAITS TO EVALUATE:**\n- **completeness** (score 1-5): The response thoroughly addresses all aspects of the question\n  \u2192 Return integer from 1 to 5\n\n**QUESTION:**\nExplain the process of photosynthesis.\n\n**ANSWER TO EVALUATE:**\nPhotosynthesis converts sunlight to energy.",
+        "additional_kwargs": {},
+        "response_metadata": {},
+        "type": "human",
+        "name": null,
+        "id": null
+      }
+    ],
+    "kwargs": {}
+  },
+  "response": {
+    "content": "{\"scores\":{\"completeness\":1}}",
+    "id": "captured-0795e607",
+    "model": "claude-haiku-4-5",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    }
+  }
+}

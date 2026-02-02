@@ -529,20 +529,19 @@ def _prompt_for_model(model_type: str, mode: str = "basic") -> ModelConfig:
                 # Validate this server immediately
                 console.print(f"\n[cyan]Validating MCP server '{server_name}'...[/cyan]")
                 try:
-                    from karenina.infrastructure.llm.mcp_utils import sync_create_mcp_client_and_tools
+                    from karenina.utils.mcp import sync_fetch_tool_descriptions
 
-                    _, tools = sync_create_mcp_client_and_tools({server_name: server_url}, tool_filter=None)
+                    tool_descriptions = sync_fetch_tool_descriptions({server_name: server_url})
 
-                    if tools:
+                    if tool_descriptions:
                         console.print(f"[green]✓ Successfully connected to '{server_name}'[/green]")
-                        console.print(f"[dim]Found {len(tools)} available tool(s):[/dim]")
-                        for tool in tools[:10]:  # Show first 10 tools
-                            tool_name = getattr(tool, "name", "Unknown")
-                            tool_desc = getattr(tool, "description", "")
-                            desc_preview = (tool_desc[:60] + "...") if len(tool_desc) > 60 else tool_desc
-                            console.print(f"  [dim]• {tool_name}: {desc_preview}[/dim]")
-                        if len(tools) > 10:
-                            console.print(f"  [dim]... and {len(tools) - 10} more[/dim]")
+                        console.print(f"[dim]Found {len(tool_descriptions)} available tool(s):[/dim]")
+                        tool_items = list(tool_descriptions.items())
+                        for name, desc in tool_items[:10]:  # Show first 10 tools
+                            desc_preview = (desc[:60] + "...") if len(desc) > 60 else desc
+                            console.print(f"  [dim]• {name}: {desc_preview}[/dim]")
+                        if len(tool_items) > 10:
+                            console.print(f"  [dim]... and {len(tool_items) - 10} more[/dim]")
                     else:
                         console.print(f"[yellow]Warning: No tools found from server '{server_name}'[/yellow]")
 
@@ -569,19 +568,19 @@ def _prompt_for_model(model_type: str, mode: str = "basic") -> ModelConfig:
 
                 # Validate tool filter if we have tools
                 try:
-                    from karenina.infrastructure.llm.mcp_utils import sync_create_mcp_client_and_tools
+                    from karenina.utils.mcp import sync_fetch_tool_descriptions
 
-                    _, filtered_tools = sync_create_mcp_client_and_tools(mcp_urls_dict, tool_filter=mcp_tool_filter)
-                    available_tool_names = [getattr(t, "name", "") for t in filtered_tools]
+                    all_tool_descriptions = sync_fetch_tool_descriptions(mcp_urls_dict, tool_filter=mcp_tool_filter)
+                    available_tool_names = list(all_tool_descriptions.keys())
 
-                    if not filtered_tools:
+                    if not all_tool_descriptions:
                         console.print("[yellow]Warning: No tools match the specified filter[/yellow]")
                         console.print(f"[dim]Requested: {', '.join(mcp_tool_filter)}[/dim]")
                         if not Confirm.ask("Continue with this tool filter anyway?", default=False):
                             mcp_tool_filter = None
                     else:
                         console.print(
-                            f"[green]✓ Tool filter validated ({len(filtered_tools)} tool(s) selected)[/green]"
+                            f"[green]✓ Tool filter validated ({len(all_tool_descriptions)} tool(s) selected)[/green]"
                         )
                         console.print(f"[dim]Selected tools: {', '.join(available_tool_names)}[/dim]")
 

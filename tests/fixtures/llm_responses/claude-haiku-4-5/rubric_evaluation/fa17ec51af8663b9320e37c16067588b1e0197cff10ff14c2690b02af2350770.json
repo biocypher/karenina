@@ -1,0 +1,39 @@
+{
+  "metadata": {
+    "scenario": "rubric_evaluation",
+    "model": "claude-haiku-4-5",
+    "timestamp": "2026-01-29T17:43:51.824667",
+    "prompt_hash": "fa17ec51af8663b9320e37c16067588b1e0197cff10ff14c2690b02af2350770"
+  },
+  "request": {
+    "messages": [
+      {
+        "content": "You are an expert evaluator assessing the quality of responses using a structured rubric.\n\nYour task is to evaluate a given answer against multiple evaluation traits and return scores.\n\n**TRAIT REQUIREMENTS:**\n1. **Exact Trait Names**: Use the EXACT trait names provided - case-sensitive matching is required\n2. **Boolean Traits**: Use `true` or `false` (lowercase, no quotes around the value)\n3. **Score Traits**: Use integers within the specified range\n4. **Score Clamping**: Scores outside the valid range will be automatically clamped to the nearest boundary\n5. **Missing Traits**: Any trait not included will be recorded as `null` (evaluation failure)\n\n**EVALUATION GUIDELINES:**\n- Evaluate each trait independently based on its specific criteria\n- When uncertain, choose the most conservative/defensive value based on the trait's intent:\n  - For positive traits (e.g., \"is accurate\"), lean toward `false` when uncertain\n  - For negative traits (e.g., \"contains errors\"), lean toward `true` when uncertain\n  - For scores, lean toward the middle of the scale when uncertain\n- Base assessments solely on the answer content, not assumptions about intent\n- Be consistent: similar answers should receive similar scores",
+        "additional_kwargs": {},
+        "response_metadata": {},
+        "type": "system",
+        "name": null,
+        "id": null
+      },
+      {
+        "content": "Evaluate the following answer against these traits:\n\n**TRAITS TO EVALUATE:**\n- **clarity** (boolean): The response is clear, unambiguous, and easy to understand\n  \u2192 Return `true` or `false`\n\n**QUESTION:**\nWhat is the capital of France?\n\n**ANSWER TO EVALUATE:**\nParis is the capital of France. It is a major European city.",
+        "additional_kwargs": {},
+        "response_metadata": {},
+        "type": "human",
+        "name": null,
+        "id": null
+      }
+    ],
+    "kwargs": {}
+  },
+  "response": {
+    "content": "{\"scores\":{\"clarity\":true}}",
+    "id": "captured-fa17ec51",
+    "model": "claude-haiku-4-5",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    }
+  }
+}

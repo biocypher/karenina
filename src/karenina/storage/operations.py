@@ -442,8 +442,10 @@ def save_verification_results(
                     VerificationResultModel.run_id == run_id,  # type: ignore[attr-defined]
                     VerificationResultModel.question_id == result.metadata.question_id,  # type: ignore[attr-defined]
                     VerificationResultModel.metadata_template_id == result.metadata.template_id,  # type: ignore[attr-defined]
-                    VerificationResultModel.metadata_answering_model == result.metadata.answering_model,  # type: ignore[attr-defined]
-                    VerificationResultModel.metadata_parsing_model == result.metadata.parsing_model,  # type: ignore[attr-defined]
+                    VerificationResultModel.metadata_answering_model_name == result.metadata.answering.model_name,  # type: ignore[attr-defined]
+                    VerificationResultModel.metadata_answering_interface == result.metadata.answering.interface,  # type: ignore[attr-defined]
+                    VerificationResultModel.metadata_parsing_model_name == result.metadata.parsing.model_name,  # type: ignore[attr-defined]
+                    VerificationResultModel.metadata_parsing_interface == result.metadata.parsing.interface,  # type: ignore[attr-defined]
                     VerificationResultModel.metadata_replicate == result.metadata.replicate,  # type: ignore[attr-defined]
                 )
             ).scalar_one_or_none()
@@ -522,7 +524,7 @@ def load_verification_results(
             query = query.where(VerificationResultModel.question_id == question_id)  # type: ignore[attr-defined]
 
         if answering_model:
-            query = query.where(VerificationResultModel.metadata_answering_model == answering_model)  # type: ignore[attr-defined]
+            query = query.where(VerificationResultModel.metadata_answering_model_name == answering_model)  # type: ignore[attr-defined]
 
         # Apply limit if specified
         if limit:

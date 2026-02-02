@@ -5,7 +5,7 @@ Tests the fluent interface for building Answer templates programmatically.
 
 import pytest
 
-from karenina.domain.answers.builder import AnswerBuilder
+from karenina.benchmark.authoring.answers.builder import AnswerBuilder
 
 
 class TestAnswerBuilderInit:

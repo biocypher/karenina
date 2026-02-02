@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from ...schemas.domain import Rubric
 
 from ...schemas.workflow import ModelConfig
-from ..verification.evaluators.rubric_evaluator import RubricEvaluator
+from ..verification.evaluators import RubricEvaluator
 
 # Import the shared function from utils.parsing
 

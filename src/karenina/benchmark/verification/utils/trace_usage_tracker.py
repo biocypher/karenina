@@ -1,8 +1,9 @@
 """
-Usage tracking utilities for LangChain LLM calls.
+Usage tracking utilities for LLM calls.
 
 Provides classes to track and aggregate token usage and agent metrics across
-verification stages.
+verification stages. Works with any adapter that returns usage metadata in
+the expected format.
 """
 
 from dataclasses import dataclass, field
@@ -31,33 +32,47 @@ class UsageMetadata:
     output_token_details: dict[str, int] = field(default_factory=dict)
 
     @classmethod
-    def from_callback_metadata(cls, callback_metadata: dict[str, Any]) -> "UsageMetadata":
+    def from_callback_metadata(
+        cls, callback_metadata: dict[str, Any], fallback_model_name: str = "unknown"
+    ) -> "UsageMetadata":
         """
-        Create UsageMetadata from LangChain callback metadata.
+        Create UsageMetadata from callback metadata.
+
+        Accepts two formats:
+
+        1. **Model-keyed** (from LangChain callbacks):
+           ``{"model-name": {"input_tokens": 11, "output_tokens": 20, ...}}``
+
+        2. **Flat** (from ``dataclasses.asdict(ports.UsageMetadata)``):
+           ``{"input_tokens": 11, "output_tokens": 20, "total_tokens": 31, ...}``
 
         Args:
-            callback_metadata: Dict from get_usage_metadata_callback().usage_metadata
-                Expected format:
-                {
-                    'model-name': {
-                        'input_tokens': 11,
-                        'output_tokens': 20,
-                        'total_tokens': 31,
-                        'input_token_details': {'audio': 0, 'cache_read': 0},
-                        'output_token_details': {'audio': 0, 'reasoning': 0}
-                    }
-                }
+            callback_metadata: Dict with usage data in either format.
+            fallback_model_name: Model name to use when not present in metadata.
 
         Returns:
             UsageMetadata instance
         """
         if not callback_metadata:
-            return cls(model_name="unknown")
+            return cls(model_name=fallback_model_name)
 
-        # LangChain returns metadata keyed by model name
-        # Extract the first (and usually only) model entry
-        if isinstance(callback_metadata, dict):
-            for model_name, metadata in callback_metadata.items():
+        if not isinstance(callback_metadata, dict):
+            return cls(model_name=fallback_model_name)
+
+        # Detect flat format: top-level "input_tokens" key whose value is an int
+        if "input_tokens" in callback_metadata and isinstance(callback_metadata.get("input_tokens"), int):
+            return cls(
+                model_name=callback_metadata.get("model") or fallback_model_name,
+                input_tokens=callback_metadata.get("input_tokens", 0),
+                output_tokens=callback_metadata.get("output_tokens", 0),
+                total_tokens=callback_metadata.get("total_tokens", 0),
+                input_token_details=callback_metadata.get("input_token_details", {}),
+                output_token_details=callback_metadata.get("output_token_details", {}),
+            )
+
+        # Model-keyed format: iterate to find first nested dict entry
+        for model_name, metadata in callback_metadata.items():
+            if isinstance(metadata, dict):
                 return cls(
                     model_name=model_name,
                     input_tokens=metadata.get("input_tokens", 0),
@@ -68,7 +83,7 @@ class UsageMetadata:
                 )
 
         # Fallback for unexpected format
-        return cls(model_name="unknown")
+        return cls(model_name=fallback_model_name)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -121,13 +136,14 @@ class UsageTracker:
         Args:
             stage_name: Name of verification stage (e.g., "answer_generation")
             model_name: Model identifier for fallback if not in metadata
-            callback_metadata: Dict from get_usage_metadata_callback().usage_metadata
+            callback_metadata: Dict keyed by model name with usage data.
+                See UsageMetadata.from_callback_metadata() for expected format.
         """
         if not callback_metadata:
             # Create minimal metadata if callback returned nothing
             metadata = UsageMetadata(model_name=model_name)
         else:
-            metadata = UsageMetadata.from_callback_metadata(callback_metadata)
+            metadata = UsageMetadata.from_callback_metadata(callback_metadata, fallback_model_name=model_name)
 
         if stage_name not in self._stage_calls:
             self._stage_calls[stage_name] = []
@@ -138,8 +154,11 @@ class UsageTracker:
         """
         Extract and store agent execution metrics from response.
 
+        Note: This method is used by stages that need to extract metrics from
+        raw response objects. For pre-extracted metrics, use set_agent_metrics().
+
         Args:
-            response: Agent response object from LangGraph (dict with "messages" key)
+            response: Agent response dict with "messages" key containing message objects.
         """
         if not response or not isinstance(response, dict):
             return

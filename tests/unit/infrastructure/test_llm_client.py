@@ -1,56 +1,46 @@
 """Unit tests for LLM client utilities and infrastructure.
 
 Tests cover:
-- Exception classes (LLMError, LLMNotAvailableError, SessionError, ManualTraceError, ManualTraceNotFoundError)
-- Pydantic models (ChatRequest, ChatResponse)
-- ChatSession class (initialization, message handling, system messages)
-- Session management functions (get_session, list_sessions, delete_session, clear_all_sessions)
-- ManualLLM class (fixture-based testing without API calls)
 - ManualTraceManager class (trace storage, validation, cleanup)
-- Manual trace utilities
-- Custom OpenAI client classes (ChatOpenRouter, ChatOpenAIEndpoint)
+- Manual trace utilities and helper functions
+- ManualTraces class
+- init_chat_model_unified function
+
+Note: Tests for ChatOpenRouter and ChatOpenAIEndpoint are in test_langchain_adapter.py
+since those classes live in karenina.adapters.langchain.models.
 
 Note: Tests do NOT make actual API calls. All LLM interaction is mocked or uses fixture-backed implementations.
+
+Note: ManualLLM class has been removed as dead code. Manual interface now uses
+ManualAgentAdapter which reads traces directly from ManualTraceManager.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from pydantic import ValidationError
+from langchain_core.messages import AIMessage, HumanMessage
 
-from karenina.infrastructure.llm.exceptions import (
-    LLMError,
-    LLMNotAvailableError,
+from karenina.adapters.langchain.initialization import init_chat_model_unified
+from karenina.adapters.manual import (
     ManualTraceError,
-    ManualTraceNotFoundError,
-    SessionError,
-)
-from karenina.infrastructure.llm.interface import (
-    ChatOpenAIEndpoint,
-    ChatOpenRouter,
-    ChatRequest,
-    ChatResponse,
-    ChatSession,
-    clear_all_sessions,
-    delete_session,
-    get_session,
-    init_chat_model_unified,
-    list_sessions,
-)
-from karenina.infrastructure.llm.manual_llm import ManualLLM, create_manual_llm
-from karenina.infrastructure.llm.manual_traces import (
     ManualTraceManager,
     ManualTraces,
     clear_manual_traces,
+    convert_langchain_messages,
+    extract_agent_metrics,
     get_manual_trace,
     get_manual_trace_count,
     get_manual_trace_with_metrics,
     get_memory_usage_info,
+    harmonize_messages,
     has_manual_trace,
+    is_langchain_message_list,
+    is_port_message_list,
     load_manual_traces,
+    preprocess_message_list,
     set_manual_trace,
 )
+from karenina.ports.messages import Message, Role, ToolUseContent
 
 # =============================================================================
 # Exception Classes Tests
@@ -58,541 +48,11 @@ from karenina.infrastructure.llm.manual_traces import (
 
 
 @pytest.mark.unit
-def test_llm_error_is_exception() -> None:
-    """Test that LLMError is an Exception subclass."""
-    assert issubclass(LLMError, Exception)
-    error = LLMError("test error")
-    assert str(error) == "test error"
-
-
-@pytest.mark.unit
-def test_llm_not_available_error_is_llm_error() -> None:
-    """Test that LLMNotAvailableError inherits from LLMError."""
-    assert issubclass(LLMNotAvailableError, LLMError)
-    error = LLMNotAvailableError("not available")
-    assert isinstance(error, LLMError)
-
-
-@pytest.mark.unit
-def test_session_error_is_llm_error() -> None:
-    """Test that SessionError inherits from LLMError."""
-    assert issubclass(SessionError, LLMError)
-    error = SessionError("session error")
-    assert isinstance(error, LLMError)
-
-
-@pytest.mark.unit
-def test_manual_trace_not_found_error_inherits_from_llm_error() -> None:
-    """Test that ManualTraceNotFoundError inherits from LLMError."""
-    assert issubclass(ManualTraceNotFoundError, LLMError)
-    error = ManualTraceNotFoundError("trace not found")
-    assert isinstance(error, LLMError)
-
-
-@pytest.mark.unit
-def test_manual_trace_error_is_llm_error() -> None:
-    """Test that ManualTraceError inherits from LLMError."""
-    assert issubclass(ManualTraceError, LLMError)
+def test_manual_trace_error_is_exception() -> None:
+    """Test that ManualTraceError is an Exception subclass."""
+    assert issubclass(ManualTraceError, Exception)
     error = ManualTraceError("trace error")
-    assert isinstance(error, LLMError)
-
-
-# =============================================================================
-# ChatRequest Model Tests
-# =============================================================================
-
-
-@pytest.mark.unit
-def test_chat_request_model_validation() -> None:
-    """Test ChatRequest Pydantic model validation."""
-    request = ChatRequest(
-        model="gemini-2.0-flash",
-        provider="google_genai",
-        message="Hello, world!",
-        session_id="test-session",
-        system_message="You are helpful.",
-        temperature=0.5,
-        interface="langchain",
-        endpoint_base_url="http://localhost:8000",
-        endpoint_api_key="test-key",
-    )
-
-    assert request.model == "gemini-2.0-flash"
-    assert request.provider == "google_genai"
-    assert request.message == "Hello, world!"
-    assert request.session_id == "test-session"
-    assert request.system_message == "You are helpful."
-    assert request.temperature == 0.5
-    assert request.interface == "langchain"
-    assert request.endpoint_base_url == "http://localhost:8000"
-    assert request.endpoint_api_key == "test-key"
-
-
-@pytest.mark.unit
-def test_chat_request_defaults() -> None:
-    """Test ChatRequest default values."""
-    request = ChatRequest(
-        model="gpt-4",
-        provider="openai",
-        message="Test message",
-    )
-
-    assert request.session_id is None
-    assert request.system_message is None
-    assert request.temperature == 0.7
-    assert request.interface is None
-    assert request.endpoint_base_url is None
-    assert request.endpoint_api_key is None
-
-
-@pytest.mark.unit
-def test_chat_request_missing_required_fields() -> None:
-    """Test that ChatRequest requires model, provider, and message fields."""
-    with pytest.raises(ValidationError):
-        ChatRequest(message="test")  # missing model and provider
-
-    with pytest.raises(ValidationError):
-        ChatRequest(model="test")  # missing provider and message
-
-
-# =============================================================================
-# ChatResponse Model Tests
-# =============================================================================
-
-
-@pytest.mark.unit
-def test_chat_response_model() -> None:
-    """Test ChatResponse Pydantic model."""
-    response = ChatResponse(
-        session_id="session-123",
-        message="Response text",
-        model="gemini-2.0-flash",
-        provider="google_genai",
-        timestamp="2025-01-11T12:00:00",
-    )
-
-    assert response.session_id == "session-123"
-    assert response.message == "Response text"
-    assert response.model == "gemini-2.0-flash"
-    assert response.provider == "google_genai"
-    assert response.timestamp == "2025-01-11T12:00:00"
-
-
-# =============================================================================
-# ChatSession Class Tests
-# =============================================================================
-
-
-@pytest.mark.unit
-def test_chat_session_initialization() -> None:
-    """Test ChatSession initialization with all parameters."""
-    session = ChatSession(
-        session_id="test-session",
-        model="gemini-2.0-flash",
-        provider="google_genai",
-        temperature=0.5,
-        mcp_urls_dict=None,
-        mcp_tool_filter=None,
-        interface="langchain",
-        endpoint_base_url="http://localhost:8000",
-        endpoint_api_key="test-key",
-    )
-
-    assert session.session_id == "test-session"
-    assert session.model == "gemini-2.0-flash"
-    assert session.provider == "google_genai"
-    assert session.temperature == 0.5
-    assert session.mcp_urls_dict is None
-    assert session.mcp_tool_filter is None
-    assert session.interface == "langchain"
-    assert session.endpoint_base_url == "http://localhost:8000"
-    assert session.endpoint_api_key == "test-key"
-    assert session.messages == []
-    assert session.llm is None
-    assert session.is_agent is False
-
-
-@pytest.mark.unit
-def test_chat_session_defaults() -> None:
-    """Test ChatSession default values."""
-    session = ChatSession(
-        session_id="test",
-        model="gpt-4",
-        provider="openai",
-    )
-
-    assert session.temperature == 0.7
-    assert session.mcp_urls_dict is None
-    assert session.mcp_tool_filter is None
-    assert session.interface == "langchain"
-    assert session.endpoint_base_url is None
-    assert session.endpoint_api_key is None
-    assert session.messages == []
-    assert session.llm is None
-    assert session.is_agent is False
-
-
-@pytest.mark.unit
-def test_chat_session_add_human_message() -> None:
-    """Test adding a human message to the session."""
-    session = ChatSession("test", "gpt-4", "openai")
-    session.add_message("Hello!", is_human=True)
-
-    assert len(session.messages) == 1
-    assert isinstance(session.messages[0], HumanMessage)
-    assert session.messages[0].content == "Hello!"
-
-
-@pytest.mark.unit
-def test_chat_session_add_ai_message() -> None:
-    """Test adding an AI message to the session."""
-    session = ChatSession("test", "gpt-4", "openai")
-    session.add_message("Hi there!", is_human=False)
-
-    assert len(session.messages) == 1
-    assert isinstance(session.messages[0], AIMessage)
-    assert session.messages[0].content == "Hi there!"
-
-
-@pytest.mark.unit
-def test_chat_session_add_system_message_first() -> None:
-    """Test adding a system message when no messages exist."""
-    session = ChatSession("test", "gpt-4", "openai")
-    session.add_system_message("You are helpful.")
-
-    assert len(session.messages) == 1
-    assert isinstance(session.messages[0], SystemMessage)
-    assert session.messages[0].content == "You are helpful."
-
-
-@pytest.mark.unit
-def test_chat_session_add_system_message_inserts_at_beginning() -> None:
-    """Test that system message is inserted at the beginning."""
-    session = ChatSession("test", "gpt-4", "openai")
-    session.add_message("Hello!", is_human=True)
-    session.add_system_message("You are helpful.")
-
-    assert len(session.messages) == 2
-    assert isinstance(session.messages[0], SystemMessage)
-    assert session.messages[0].content == "You are helpful."
-    assert isinstance(session.messages[1], HumanMessage)
-
-
-@pytest.mark.unit
-def test_chat_session_update_existing_system_message() -> None:
-    """Test that adding a system message updates the existing one."""
-    session = ChatSession("test", "gpt-4", "openai")
-    session.add_system_message("You are helpful.")
-    session.add_system_message("You are very helpful.")
-
-    assert len(session.messages) == 1
-    assert session.messages[0].content == "You are very helpful."
-
-
-@pytest.mark.unit
-def test_chat_session_mcp_urls_dict_sets_agent_flag() -> None:
-    """Test that providing MCP URLs sets the agent flag."""
-    session = ChatSession(
-        session_id="test",
-        model="gpt-4",
-        provider="openai",
-        mcp_urls_dict={"tool1": "http://example.com"},
-    )
-
-    # is_agent is only set to True after initialize_llm()
-    assert session.is_agent is False
-    assert session.mcp_urls_dict == {"tool1": "http://example.com"}
-
-
-# =============================================================================
-# Session Management Functions Tests
-# =============================================================================
-
-
-@pytest.mark.unit
-def test_clear_all_sessions() -> None:
-    """Test clearing all chat sessions."""
-    import karenina.infrastructure.llm.interface as interface_module
-
-    # First clear any existing sessions
-    clear_all_sessions()
-
-    # Add a test session by directly accessing the module's global
-    session_id = "test-session"
-    interface_module.chat_sessions[session_id] = ChatSession(session_id, "gpt-4", "openai")
-    assert len(interface_module.chat_sessions) > 0
-
-    clear_all_sessions()
-
-    # Access through the module to see the updated global
-    assert len(interface_module.chat_sessions) == 0
-
-
-@pytest.mark.unit
-def test_get_session_existing() -> None:
-    """Test getting an existing session."""
-    import karenina.infrastructure.llm.interface as interface_module
-
-    clear_all_sessions()
-    session_id = "test-session"
-    session = ChatSession(session_id, "gpt-4", "openai")
-    interface_module.chat_sessions[session_id] = session
-
-    retrieved = get_session(session_id)
-    assert retrieved is session
-
-    clear_all_sessions()
-
-
-@pytest.mark.unit
-def test_get_session_nonexistent() -> None:
-    """Test getting a non-existent session returns None."""
-    retrieved = get_session("nonexistent")
-    assert retrieved is None
-
-
-@pytest.mark.unit
-def test_delete_session_existing() -> None:
-    """Test deleting an existing session."""
-    import karenina.infrastructure.llm.interface as interface_module
-
-    clear_all_sessions()
-    session_id = "test-session"
-    interface_module.chat_sessions[session_id] = ChatSession(session_id, "gpt-4", "openai")
-
-    result = delete_session(session_id)
-
-    assert result is True
-    assert session_id not in interface_module.chat_sessions
-
-
-@pytest.mark.unit
-def test_delete_session_nonexistent() -> None:
-    """Test deleting a non-existent session returns False."""
-    result = delete_session("nonexistent")
-    assert result is False
-
-
-@pytest.mark.unit
-def test_list_sessions_empty() -> None:
-    """Test listing sessions when none exist."""
-    clear_all_sessions()
-    result = list_sessions()
-    assert result == []
-
-
-@pytest.mark.unit
-def test_list_sessions_with_data() -> None:
-    """Test listing sessions with actual data."""
-    import karenina.infrastructure.llm.interface as interface_module
-
-    clear_all_sessions()
-
-    session_id = "test-session"
-    session = ChatSession(session_id, "gpt-4", "openai")
-    session.add_message("Hello", is_human=True)
-    session.add_message("Hi there", is_human=False)
-    interface_module.chat_sessions[session_id] = session
-
-    result = list_sessions()
-
-    assert len(result) == 1
-    assert result[0]["session_id"] == session_id
-    assert result[0]["model"] == "gpt-4"
-    assert result[0]["provider"] == "openai"
-    assert result[0]["message_count"] == 2  # Excludes system messages
-    assert "created_at" in result[0]
-    assert "last_used" in result[0]
-
-    clear_all_sessions()
-
-
-# =============================================================================
-# ChatOpenRouter Class Tests
-# =============================================================================
-
-
-@pytest.mark.unit
-def test_chat_openrouter_initialization() -> None:
-    """Test ChatOpenRouter initialization."""
-    with patch.dict("os.environ", {"OPENROUTER_API_KEY": "test-key"}):
-        model = ChatOpenRouter(model="gpt-4", temperature=0.5)
-
-        assert model.model_name == "gpt-4"
-        assert model.temperature == 0.5
-
-
-@pytest.mark.unit
-def test_chat_openrouter_lc_secrets() -> None:
-    """Test ChatOpenRouter lc_secrets property."""
-    model = ChatOpenRouter(model="gpt-4", openai_api_key="test-key")
-    secrets = model.lc_secrets
-    assert secrets == {"openai_api_key": "OPENROUTER_API_KEY"}
-
-
-# =============================================================================
-# ChatOpenAIEndpoint Class Tests
-# =============================================================================
-
-
-@pytest.mark.unit
-def test_chat_openai_endpoint_requires_api_key() -> None:
-    """Test that ChatOpenAIEndpoint requires an API key."""
-    with pytest.raises(ValueError, match="API key is required"):
-        ChatOpenAIEndpoint(base_url="http://localhost:8000")
-
-
-@pytest.mark.unit
-def test_chat_openai_endpoint_requires_explicit_api_key() -> None:
-    """Test that ChatOpenAIEndpoint does NOT read from environment."""
-    # Even with env var set, it should still fail if no explicit key
-    with (
-        patch.dict("os.environ", {"OPENAI_API_KEY": "env-key"}),
-        pytest.raises(ValueError, match="API key is required"),
-    ):
-        ChatOpenAIEndpoint(base_url="http://localhost:8000")
-
-
-@pytest.mark.unit
-def test_chat_openai_endpoint_initialization_with_key() -> None:
-    """Test ChatOpenAIEndpoint initialization with explicit API key."""
-    model = ChatOpenAIEndpoint(
-        base_url="http://localhost:8000",
-        openai_api_key="explicit-key",
-    )
-
-    assert model is not None
-
-
-@pytest.mark.unit
-def test_chat_openai_endpoint_lc_secrets_empty() -> None:
-    """Test ChatOpenAIEndpoint lc_secrets returns empty dict."""
-    model = ChatOpenAIEndpoint(
-        base_url="http://localhost:8000",
-        openai_api_key="test-key",
-    )
-    secrets = model.lc_secrets
-    assert secrets == {}
-
-
-# =============================================================================
-# ManualLLM Class Tests
-# =============================================================================
-
-
-@pytest.mark.unit
-def test_manual_llm_initialization() -> None:
-    """Test ManualLLM initialization."""
-    llm = ManualLLM(question_hash="abc123")
-
-    assert llm.question_hash == "abc123"
-
-
-@pytest.mark.unit
-def test_manual_llm_ignores_extra_kwargs() -> None:
-    """Test that ManualLLM ignores extra kwargs."""
-    llm = ManualLLM(question_hash="test", temperature=0.5, max_tokens=100)
-
-    assert llm.question_hash == "test"
-
-
-@pytest.mark.unit
-def test_manual_llm_invoke_returns_trace() -> None:
-    """Test ManualLLM.invoke returns precomputed trace."""
-    # Use a valid 32-character MD5 hash
-    valid_hash = "d41d8cd98f00b204e9800998ecf8427e"
-    set_manual_trace(valid_hash, "This is a precomputed answer.")
-
-    llm = ManualLLM(question_hash=valid_hash)
-    result = llm.invoke([])
-
-    assert isinstance(result, AIMessage)
-    assert result.content == "This is a precomputed answer."
-
-    # Clean up
-    clear_manual_traces()
-
-
-@pytest.mark.unit
-def test_manual_llm_invoke_trace_not_found() -> None:
-    """Test ManualLLM.invoke raises error when trace not found."""
-    clear_manual_traces()
-
-    # Use a valid MD5 hash format that doesn't exist
-    llm = ManualLLM(question_hash="d41d8cd98f00b204e9800998ecf8427e")
-
-    with pytest.raises(ManualTraceNotFoundError, match="No manual trace found"):
-        llm.invoke([])
-
-
-@pytest.mark.unit
-def test_manual_llm_with_structured_output_returns_self() -> None:
-    """Test ManualLLM.with_structured_output returns self."""
-    llm = ManualLLM(question_hash="test")
-    result = llm.with_structured_output(None)
-
-    assert result is llm
-
-
-@pytest.mark.unit
-def test_manual_llm_content_property() -> None:
-    """Test ManualLLM.content property returns trace."""
-    valid_hash = "d41d8cd98f00b204e9800998ecf8427e"
-    set_manual_trace(valid_hash, "Trace content")
-
-    llm = ManualLLM(question_hash=valid_hash)
-    assert llm.content == "Trace content"
-
-    clear_manual_traces()
-
-
-@pytest.mark.unit
-def test_manual_llm_content_not_found_raises_error() -> None:
-    """Test ManualLLM.content raises error when trace not found."""
-    clear_manual_traces()
-
-    llm = ManualLLM(question_hash="d41d8cd98f00b204e9800998ecf8427e")
-
-    with pytest.raises(ManualTraceNotFoundError):
-        _ = llm.content
-
-
-@pytest.mark.unit
-def test_manual_llm_get_agent_metrics() -> None:
-    """Test ManualLLM.get_agent_metrics returns metrics."""
-    valid_hash = "d41d8cd98f00b204e9800998ecf8427e"
-    metrics = {"tool_calls": 5, "failures": 0}
-    set_manual_trace(valid_hash, "Trace", agent_metrics=metrics)
-
-    llm = ManualLLM(question_hash=valid_hash)
-    result = llm.get_agent_metrics()
-
-    assert result == metrics
-
-    clear_manual_traces()
-
-
-@pytest.mark.unit
-def test_manual_llm_get_agent_metrics_none_when_not_set() -> None:
-    """Test ManualLLM.get_agent_metrics returns None when no metrics."""
-    valid_hash = "d41d8cd98f00b204e9800998ecf8427e"
-    set_manual_trace(valid_hash, "Trace")
-
-    llm = ManualLLM(question_hash=valid_hash)
-    result = llm.get_agent_metrics()
-
-    assert result is None
-
-    clear_manual_traces()
-
-
-@pytest.mark.unit
-def test_create_manual_llm() -> None:
-    """Test create_manual_llm factory function."""
-    llm = create_manual_llm(question_hash="test123")
-
-    assert isinstance(llm, ManualLLM)
-    assert llm.question_hash == "test123"
+    assert str(error) == "trace error"
 
 
 # =============================================================================
@@ -965,61 +425,24 @@ def test_set_manual_trace_invalid_hash_raises_error() -> None:
 
 
 @pytest.mark.unit
-def test_init_chat_model_unsupported_interface() -> None:
-    """Test that unsupported interface raises ValueError."""
-    with pytest.raises(ValueError, match="Unsupported interface"):
-        init_chat_model_unified("gpt-4", interface="unsupported")
-
-
-@pytest.mark.unit
-def test_init_chat_model_manual_requires_question_hash() -> None:
-    """Test that manual interface requires question_hash."""
-    with pytest.raises(ValueError, match="question_hash is required"):
-        init_chat_model_unified("manual", interface="manual")
-
-
-@pytest.mark.unit
-def test_init_chat_model_manual_with_hash() -> None:
-    """Test manual interface with question_hash."""
-    # Set up a trace with valid MD5 hash
-    valid_hash = "d41d8cd98f00b204e9800998ecf8427e"
-    set_manual_trace(valid_hash, "Test trace")
-
-    model = init_chat_model_unified("manual", interface="manual", question_hash=valid_hash)
-
-    assert isinstance(model, ManualLLM)
-    assert model.question_hash == valid_hash
-
-    clear_manual_traces()
-
-
-@pytest.mark.unit
 def test_init_chat_model_openai_endpoint_requires_base_url() -> None:
     """Test that openai_endpoint interface requires endpoint_base_url."""
-    with pytest.raises(ValueError, match="endpoint_base_url is required"):
+    from karenina.ports import AdapterUnavailableError
+
+    with pytest.raises(AdapterUnavailableError, match="endpoint_base_url is required"):
         init_chat_model_unified("gpt-4", interface="openai_endpoint")
 
 
 @pytest.mark.unit
 def test_init_chat_model_openai_endpoint_requires_api_key() -> None:
     """Test that openai_endpoint interface requires endpoint_api_key."""
-    with pytest.raises(ValueError, match="endpoint_api_key is required"):
+    from karenina.ports import AdapterUnavailableError
+
+    with pytest.raises(AdapterUnavailableError, match="endpoint_api_key is required"):
         init_chat_model_unified(
             "gpt-4",
             interface="openai_endpoint",
             endpoint_base_url="http://localhost:8000",
-        )
-
-
-@pytest.mark.unit
-def test_init_chat_model_mcp_with_manual_raises_error() -> None:
-    """Test that MCP with manual interface raises ValueError."""
-    with pytest.raises(ValueError, match="MCP integration is not supported"):
-        init_chat_model_unified(
-            "gpt-4",
-            interface="manual",
-            question_hash="abc123",
-            mcp_urls_dict={"tool": "http://example.com"},
         )
 
 
@@ -1112,5 +535,207 @@ def test_manual_traces_register_trace_message_list() -> None:
     result = get_manual_trace("d41d8cd98f00b204e9800998ecf8427e")
     assert isinstance(result, str)
     assert "Answer" in result
+
+    clear_manual_traces()
+
+
+# =============================================================================
+# Message Utilities Tests (Port-based architecture)
+# =============================================================================
+
+
+@pytest.mark.unit
+def test_is_port_message_list() -> None:
+    """Test detection of port Message lists."""
+    # Port messages
+    port_messages = [Message.user("Hello"), Message.assistant("World")]
+    assert is_port_message_list(port_messages) is True
+
+    # Empty list
+    assert is_port_message_list([]) is False
+
+    # LangChain messages
+    lc_messages = [HumanMessage(content="Hello")]
+    assert is_port_message_list(lc_messages) is False
+
+    # Other types
+    assert is_port_message_list(["string"]) is False
+
+
+@pytest.mark.unit
+def test_is_langchain_message_list() -> None:
+    """Test detection of LangChain message lists."""
+    # LangChain messages
+    lc_messages = [HumanMessage(content="Hello"), AIMessage(content="World")]
+    assert is_langchain_message_list(lc_messages) is True
+
+    # Empty list
+    assert is_langchain_message_list([]) is False
+
+    # Port messages
+    port_messages = [Message.user("Hello")]
+    assert is_langchain_message_list(port_messages) is False
+
+
+@pytest.mark.unit
+def test_convert_langchain_messages() -> None:
+    """Test conversion from LangChain to port messages."""
+    lc_messages = [
+        HumanMessage(content="What is 2+2?"),
+        AIMessage(content="The answer is 4."),
+    ]
+
+    port_messages = convert_langchain_messages(lc_messages)
+
+    assert len(port_messages) == 2
+    assert port_messages[0].role == Role.USER
+    assert port_messages[0].text == "What is 2+2?"
+    assert port_messages[1].role == Role.ASSISTANT
+    assert port_messages[1].text == "The answer is 4."
+
+
+@pytest.mark.unit
+def test_harmonize_messages_basic() -> None:
+    """Test basic message harmonization."""
+    messages = [
+        Message.user("Question?"),
+        Message.assistant("Answer!"),
+    ]
+
+    trace = harmonize_messages(messages)
+
+    # Should contain the assistant message but skip the first user message
+    assert "AI Message" in trace
+    assert "Answer!" in trace
+
+
+@pytest.mark.unit
+def test_harmonize_messages_with_tools() -> None:
+    """Test message harmonization with tool calls and results."""
+    messages = [
+        Message.user("Calculate 2+2"),
+        Message.assistant(
+            "I'll calculate that.",
+            tool_calls=[ToolUseContent(id="calc1", name="calculator", input={"expr": "2+2"})],
+        ),
+        Message.tool_result("calc1", "4"),
+        Message.assistant("The answer is 4."),
+    ]
+
+    trace = harmonize_messages(messages)
+
+    assert "Tool Calls:" in trace
+    assert "calculator" in trace
+    assert "Tool Message" in trace
+    assert "The answer is 4." in trace
+
+
+@pytest.mark.unit
+def test_extract_agent_metrics_basic() -> None:
+    """Test basic agent metrics extraction."""
+    messages = [
+        Message.user("Question?"),
+        Message.assistant("Thinking..."),
+        Message.assistant("Final answer."),
+    ]
+
+    metrics = extract_agent_metrics(messages)
+
+    assert metrics["iterations"] == 2
+    assert metrics["tool_calls"] == 0
+    assert metrics["tools_used"] == []
+
+
+@pytest.mark.unit
+def test_extract_agent_metrics_with_tools() -> None:
+    """Test agent metrics extraction with tool usage."""
+    messages = [
+        Message.user("Calculate 2+2"),
+        Message.assistant(
+            "",
+            tool_calls=[
+                ToolUseContent(id="calc1", name="calculator", input={}),
+                ToolUseContent(id="search1", name="search", input={}),
+            ],
+        ),
+        Message.tool_result("calc1", "4"),
+        Message.tool_result("search1", "found it"),
+        Message.assistant("Done."),
+    ]
+
+    metrics = extract_agent_metrics(messages)
+
+    assert metrics["iterations"] == 2
+    assert metrics["tool_calls"] == 2
+    assert set(metrics["tools_used"]) == {"calculator", "search"}
+    assert metrics["tool_call_counts"] == {"calculator": 1, "search": 1}
+
+
+@pytest.mark.unit
+def test_extract_agent_metrics_with_failures() -> None:
+    """Test agent metrics extraction detects suspected failures."""
+    messages = [
+        Message.assistant("", tool_calls=[ToolUseContent(id="api1", name="api", input={})]),
+        Message.tool_result("api1", "Error: Connection timeout"),
+        Message.assistant("There was an error."),
+    ]
+
+    metrics = extract_agent_metrics(messages)
+
+    assert metrics["suspect_failed_tool_calls"] == 1
+    assert len(metrics["suspect_failed_tools"]) == 1
+
+
+@pytest.mark.unit
+def test_preprocess_message_list_port_format() -> None:
+    """Test preprocessing port Message lists."""
+    messages = [
+        Message.user("Question?"),
+        Message.assistant("Answer!"),
+    ]
+
+    trace, metrics = preprocess_message_list(messages)
+
+    assert isinstance(trace, str)
+    assert "Answer!" in trace
+    assert metrics is not None
+    assert metrics["iterations"] == 1
+
+
+@pytest.mark.unit
+def test_preprocess_message_list_langchain_format() -> None:
+    """Test preprocessing LangChain message lists."""
+    messages = [
+        HumanMessage(content="Question?"),
+        AIMessage(content="Answer!"),
+    ]
+
+    trace, metrics = preprocess_message_list(messages)
+
+    assert isinstance(trace, str)
+    assert "Answer!" in trace
+    assert metrics is not None
+
+
+@pytest.mark.unit
+def test_manual_traces_register_port_messages() -> None:
+    """Test registering port Message lists."""
+    clear_manual_traces()
+
+    mock_benchmark = MagicMock()
+    mock_benchmark._questions_cache = {}
+    traces = ManualTraces(mock_benchmark)
+
+    # Create port message list
+    messages = [
+        Message.user("What is 2+2?"),
+        Message.assistant("The answer is 4."),
+    ]
+
+    traces.register_trace("d41d8cd98f00b204e9800998ecf8427e", messages)
+
+    result = get_manual_trace("d41d8cd98f00b204e9800998ecf8427e")
+    assert isinstance(result, str)
+    assert "answer is 4" in result
 
     clear_manual_traces()

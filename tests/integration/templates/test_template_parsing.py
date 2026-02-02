@@ -18,10 +18,11 @@ The tests use the fixture-backed LLM client for deterministic results.
 
 import pytest
 
-from karenina.benchmark.verification.evaluators.template_evaluator import (
+from karenina.benchmark.verification.evaluators import (
     FieldVerificationResult,
     ParseResult,
     TemplateEvaluator,
+    TemplatePromptBuilder,
 )
 from karenina.schemas.domain import BaseAnswer
 from karenina.schemas.workflow import ModelConfig
@@ -61,11 +62,11 @@ class TestTemplateEvaluatorInitialization:
 
         assert evaluator.model_config == parsing_model_config
         assert evaluator.answer_class == simple_answer
-        assert evaluator.model_str == "anthropic/claude-haiku-4-5"
+        assert evaluator.model_str == "langchain:claude-haiku-4-5"
 
     def test_init_requires_model_config(self, simple_answer: type[BaseAnswer]):
         """Verify evaluator raises error without model config."""
-        with pytest.raises(ValueError, match="Model configuration is required"):
+        with pytest.raises(RuntimeError, match="Model configuration is required"):
             TemplateEvaluator(
                 model_config=None,
                 answer_class=simple_answer,
@@ -79,7 +80,7 @@ class TestTemplateEvaluatorInitialization:
             model_name="",  # Empty model name
         )
 
-        with pytest.raises(ValueError, match="Model name is required"):
+        with pytest.raises(RuntimeError, match="Model name is required"):
             TemplateEvaluator(
                 model_config=config,
                 answer_class=simple_answer,
@@ -89,11 +90,13 @@ class TestTemplateEvaluatorInitialization:
         """Verify model string formats correctly for different interfaces."""
         from unittest.mock import MagicMock, patch
 
-        # Mock the LLM initialization to avoid API key requirements
-        with patch(
-            "karenina.benchmark.verification.evaluators.template_evaluator.init_chat_model_unified"
-        ) as mock_init:
-            mock_init.return_value = MagicMock()
+        # Mock both LLM and parser factories to avoid API key requirements
+        with (
+            patch("karenina.benchmark.verification.evaluators.template.evaluator.get_llm") as mock_get_llm,
+            patch("karenina.benchmark.verification.evaluators.template.evaluator.get_parser") as mock_get_parser,
+        ):
+            mock_get_llm.return_value = MagicMock()
+            mock_get_parser.return_value = MagicMock()
 
             # Standard langchain interface
             config = ModelConfig(
@@ -103,7 +106,7 @@ class TestTemplateEvaluatorInitialization:
                 interface="langchain",
             )
             evaluator = TemplateEvaluator(model_config=config, answer_class=simple_answer)
-            assert evaluator.model_str == "anthropic/claude-haiku-4-5"
+            assert evaluator.model_str == "langchain:claude-haiku-4-5"
 
             # OpenRouter interface (no provider in string)
             config_openrouter = ModelConfig(
@@ -112,7 +115,7 @@ class TestTemplateEvaluatorInitialization:
                 interface="openrouter",
             )
             evaluator_or = TemplateEvaluator(model_config=config_openrouter, answer_class=simple_answer)
-            assert evaluator_or.model_str == "anthropic/claude-haiku-4-5"
+            assert evaluator_or.model_str == "openrouter:anthropic/claude-haiku-4-5"
 
 
 # =============================================================================
@@ -122,40 +125,31 @@ class TestTemplateEvaluatorInitialization:
 
 @pytest.mark.integration
 class TestPromptConstruction:
-    """Test prompt construction methods."""
+    """Test prompt construction methods via TemplatePromptBuilder."""
 
-    def test_build_system_prompt_base(self, parsing_model_config: ModelConfig, simple_answer: type[BaseAnswer]):
+    def test_build_system_prompt_base(self, simple_answer: type[BaseAnswer]):
         """Verify base system prompt contains required elements."""
-        evaluator = TemplateEvaluator(
-            model_config=parsing_model_config,
-            answer_class=simple_answer,
-        )
+        builder = TemplatePromptBuilder(answer_class=simple_answer)
 
-        format_instructions = evaluator.parser.get_format_instructions()
-        system_prompt = evaluator._build_system_prompt(format_instructions=format_instructions)
+        system_prompt = builder.build_system_prompt()
 
         # Check base elements
         assert "evaluator that extracts structured information" in system_prompt
         assert "Extraction Protocol" in system_prompt
         assert "Critical Rules" in system_prompt
-        assert "Output Format" in system_prompt
-        assert "format_instructions" in system_prompt
+
+        # Format-specific sections should NOT be present (appended by adapters)
+        assert "Output Format" not in system_prompt
+        assert "format_instructions" not in system_prompt
 
         # Should NOT have tool trace section by default
         assert "Tool Trace Verification" not in system_prompt
 
-    def test_build_system_prompt_with_tool_traces(
-        self, parsing_model_config: ModelConfig, simple_answer: type[BaseAnswer]
-    ):
+    def test_build_system_prompt_with_tool_traces(self, simple_answer: type[BaseAnswer]):
         """Verify system prompt includes tool trace section when enabled."""
-        evaluator = TemplateEvaluator(
-            model_config=parsing_model_config,
-            answer_class=simple_answer,
-        )
+        builder = TemplatePromptBuilder(answer_class=simple_answer)
 
-        format_instructions = evaluator.parser.get_format_instructions()
-        system_prompt = evaluator._build_system_prompt(
-            format_instructions=format_instructions,
+        system_prompt = builder.build_system_prompt(
             has_tool_traces=True,
         )
 
@@ -163,38 +157,35 @@ class TestPromptConstruction:
         assert "Tool Trace Verification" in system_prompt
         assert "Verify Grounding in Tool Results" in system_prompt
 
-    def test_build_system_prompt_with_user_prompt(
-        self, parsing_model_config: ModelConfig, simple_answer: type[BaseAnswer]
-    ):
-        """Verify system prompt includes user customizations."""
-        evaluator = TemplateEvaluator(
-            model_config=parsing_model_config,
-            answer_class=simple_answer,
+    def test_build_system_prompt_user_instructions_via_assembler(self, simple_answer: type[BaseAnswer]):
+        """Verify user instructions are injected via PromptAssembler, not TemplatePromptBuilder."""
+        from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
+        from karenina.ports.capabilities import PortCapabilities
+
+        builder = TemplatePromptBuilder(answer_class=simple_answer)
+
+        system_text = builder.build_system_prompt()
+
+        custom_instruction = "Always be concise and extract only the most relevant data."
+        assembler = PromptAssembler(
+            task=PromptTask.PARSING,
+            interface="langchain",
+            capabilities=PortCapabilities(),
+        )
+        final_system, _ = assembler.assemble_text(
+            system_text=system_text,
+            user_text="",
+            user_instructions=custom_instruction,
         )
 
-        format_instructions = evaluator.parser.get_format_instructions()
-        custom_prompt = "Always be concise and extract only the most relevant data."
-        system_prompt = evaluator._build_system_prompt(
-            format_instructions=format_instructions,
-            user_system_prompt=custom_prompt,
-        )
+        assert custom_instruction in final_system
 
-        assert "Additional Instructions" in system_prompt
-        assert custom_prompt in system_prompt
-
-    def test_build_system_prompt_with_ground_truth(
-        self, parsing_model_config: ModelConfig, simple_answer: type[BaseAnswer]
-    ):
+    def test_build_system_prompt_with_ground_truth(self, simple_answer: type[BaseAnswer]):
         """Verify system prompt includes ground truth when provided."""
-        evaluator = TemplateEvaluator(
-            model_config=parsing_model_config,
-            answer_class=simple_answer,
-        )
+        builder = TemplatePromptBuilder(answer_class=simple_answer)
 
-        format_instructions = evaluator.parser.get_format_instructions()
         ground_truth = {"value": "42", "confidence": 0.95}
-        system_prompt = evaluator._build_system_prompt(
-            format_instructions=format_instructions,
+        system_prompt = builder.build_system_prompt(
             ground_truth=ground_truth,
         )
 
@@ -202,17 +193,14 @@ class TestPromptConstruction:
         assert '"value": "42"' in system_prompt
         assert '"confidence": 0.95' in system_prompt
 
-    def test_build_user_prompt(self, parsing_model_config: ModelConfig, simple_answer: type[BaseAnswer]):
+    def test_build_user_prompt(self, simple_answer: type[BaseAnswer]):
         """Verify user prompt construction."""
-        evaluator = TemplateEvaluator(
-            model_config=parsing_model_config,
-            answer_class=simple_answer,
-        )
+        builder = TemplatePromptBuilder(answer_class=simple_answer)
 
         question = "What is the answer to life, the universe, and everything?"
         response = "The answer is 42."
 
-        user_prompt = evaluator._build_user_prompt(
+        user_prompt = builder.build_user_prompt(
             question_text=question,
             response_to_parse=response,
         )
@@ -221,25 +209,26 @@ class TestPromptConstruction:
         assert question in user_prompt
         assert "RESPONSE TO PARSE" in user_prompt
         assert response in user_prompt
-        assert "JSON SCHEMA" in user_prompt
-        assert "YOUR JSON RESPONSE" in user_prompt
 
-    def test_user_prompt_includes_schema(self, parsing_model_config: ModelConfig, multi_field_answer: type[BaseAnswer]):
-        """Verify user prompt includes the answer class schema."""
-        evaluator = TemplateEvaluator(
-            model_config=parsing_model_config,
-            answer_class=multi_field_answer,
-        )
+        # Format-specific sections should NOT be present (appended by adapters)
+        assert "JSON SCHEMA" not in user_prompt
+        assert "YOUR JSON RESPONSE" not in user_prompt
 
-        user_prompt = evaluator._build_user_prompt(
+    def test_user_prompt_is_format_agnostic(self, multi_field_answer: type[BaseAnswer]):
+        """Verify user prompt does not include schema (adapters append it)."""
+        builder = TemplatePromptBuilder(answer_class=multi_field_answer)
+
+        user_prompt = builder.build_user_prompt(
             question_text="Test question",
             response_to_parse="Test response",
         )
 
-        # Should include schema fields
-        assert "main_answer" in user_prompt
-        assert "confidence" in user_prompt
-        assert "keywords" in user_prompt
+        # Base user prompt should NOT include schema fields (adapters append them)
+        assert "JSON SCHEMA" not in user_prompt
+        assert "PARSING NOTES" not in user_prompt
+        # Should still include question and response
+        assert "Test question" in user_prompt
+        assert "Test response" in user_prompt
 
 
 # =============================================================================
@@ -472,18 +461,13 @@ class TestEdgeCases:
         assert evaluator.answer_class == simple_answer
         assert evaluator.raw_answer_class == simple_answer
 
-    def test_build_user_prompt_with_long_response(
-        self, parsing_model_config: ModelConfig, simple_answer: type[BaseAnswer]
-    ):
+    def test_build_user_prompt_with_long_response(self, simple_answer: type[BaseAnswer]):
         """Verify user prompt handles long responses."""
-        evaluator = TemplateEvaluator(
-            model_config=parsing_model_config,
-            answer_class=simple_answer,
-        )
+        builder = TemplatePromptBuilder(answer_class=simple_answer)
 
         long_response = "A" * 10000  # 10k character response
 
-        user_prompt = evaluator._build_user_prompt(
+        user_prompt = builder.build_user_prompt(
             question_text="Test question",
             response_to_parse=long_response,
         )
@@ -491,27 +475,22 @@ class TestEdgeCases:
         # Should contain the full response
         assert long_response in user_prompt
 
-    def test_build_system_prompt_all_sections(self, parsing_model_config: ModelConfig, simple_answer: type[BaseAnswer]):
+    def test_build_system_prompt_all_sections(self, simple_answer: type[BaseAnswer]):
         """Verify system prompt with all optional sections enabled."""
-        evaluator = TemplateEvaluator(
-            model_config=parsing_model_config,
-            answer_class=simple_answer,
-        )
+        builder = TemplatePromptBuilder(answer_class=simple_answer)
 
-        format_instructions = evaluator.parser.get_format_instructions()
-        system_prompt = evaluator._build_system_prompt(
-            format_instructions=format_instructions,
-            user_system_prompt="Custom instructions",
+        system_prompt = builder.build_system_prompt(
             has_tool_traces=True,
             ground_truth={"value": "42"},
         )
 
-        # All sections should be present
+        # All base sections should be present
         assert "Extraction Protocol" in system_prompt
         assert "Tool Trace Verification" in system_prompt
-        assert "Additional Instructions" in system_prompt
         assert "Ground Truth Reference" in system_prompt
-        assert "Output Format" in system_prompt
+
+        # Format-specific sections should NOT be present (appended by adapters)
+        assert "Output Format" not in system_prompt
 
 
 # =============================================================================

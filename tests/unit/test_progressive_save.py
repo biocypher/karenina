@@ -1,242 +1,229 @@
 """Tests for progressive save functionality, specifically TaskIdentifier."""
 
-from unittest.mock import MagicMock
-
 from karenina.cli.progressive_save import TaskIdentifier
-from karenina.schemas import VerificationConfig
-from karenina.schemas.workflow import VerificationResult
+from karenina.schemas.verification.model_identity import ModelIdentity
 from karenina.schemas.workflow.models import ModelConfig
 
 
 class TestTaskIdentifierFromResult:
     """Tests for TaskIdentifier.from_result() method."""
 
+    def _make_identity(
+        self,
+        interface: str = "langchain",
+        model_name: str = "claude-haiku-4-5",
+        tools: list[str] | None = None,
+    ) -> ModelIdentity:
+        return ModelIdentity(interface=interface, model_name=model_name, tools=tools or [])
+
     def _create_mock_result(
         self,
         question_id: str = "q1",
-        answering_model: str = "anthropic/claude-haiku-4-5",
-        parsing_model: str = "anthropic/claude-haiku-4-5",
+        answering_interface: str = "langchain",
+        answering_model_name: str = "claude-haiku-4-5",
+        answering_tools: list[str] | None = None,
+        parsing_interface: str = "langchain",
+        parsing_model_name: str = "claude-haiku-4-5",
+        parsing_tools: list[str] | None = None,
         replicate: int = 1,
-        mcp_servers: list[str] | None = None,
-    ) -> VerificationResult:
-        """Create a mock VerificationResult for testing."""
-        # Create nested mocks for metadata
-        metadata = MagicMock()
+    ):
+        """Create a mock-like object with proper ModelIdentity metadata."""
+        answering = self._make_identity(answering_interface, answering_model_name, answering_tools)
+        parsing = self._make_identity(parsing_interface, parsing_model_name, parsing_tools)
+
+        class MockMetadata:
+            pass
+
+        metadata = MockMetadata()
         metadata.question_id = question_id
-        metadata.answering_model = answering_model
-        metadata.parsing_model = parsing_model
+        metadata.answering = answering
+        metadata.parsing = parsing
         metadata.replicate = replicate
 
-        result = MagicMock()
+        class MockResult:
+            pass
+
+        result = MockResult()
         result.metadata = metadata
-        result.answering_mcp_servers = mcp_servers
         return result
-
-    def _create_config(
-        self,
-        answering_models: list[dict],
-        parsing_models: list[dict] | None = None,
-    ) -> VerificationConfig:
-        """Create a VerificationConfig for testing."""
-        if parsing_models is None:
-            parsing_models = [
-                {
-                    "id": "parsing-1",
-                    "model_provider": "anthropic",
-                    "model_name": "claude-haiku-4-5",
-                    "interface": "langchain",
-                }
-            ]
-
-        return VerificationConfig(
-            answering_models=[ModelConfig(**m) for m in answering_models],
-            parsing_models=[ModelConfig(**m) for m in parsing_models],
-        )
 
     def test_single_config_no_mcp(self):
         """Test with a single answering model without MCP."""
-        config = self._create_config(
-            answering_models=[
-                {
-                    "id": "answering-1",
-                    "model_provider": "anthropic",
-                    "model_name": "claude-haiku-4-5",
-                    "interface": "langchain",
-                }
-            ]
-        )
-
-        result = self._create_mock_result(
-            question_id="q1",
-            answering_model="anthropic/claude-haiku-4-5",
-            mcp_servers=None,
-        )
-
-        task_id = TaskIdentifier.from_result(result, config)
+        result = self._create_mock_result(question_id="q1")
+        task_id = TaskIdentifier.from_result(result)
 
         assert task_id.question_id == "q1"
-        assert task_id.answering_model_id == "answering-1"
-        assert task_id.mcp_hash == ""
-        assert task_id.parsing_model_id == "parsing-1"
+        assert task_id.answering_canonical_key == "langchain:claude-haiku-4-5:"
+        assert task_id.parsing_canonical_key == "langchain:claude-haiku-4-5:"
 
     def test_single_config_with_mcp(self):
-        """Test with a single answering model with MCP."""
-        config = self._create_config(
-            answering_models=[
-                {
-                    "id": "answering-1",
-                    "model_provider": "anthropic",
-                    "model_name": "claude-haiku-4-5",
-                    "interface": "langchain",
-                    "mcp_urls_dict": {"otar-local": "http://localhost:8080"},
-                }
-            ]
-        )
-
+        """Test with a single answering model with MCP tools."""
         result = self._create_mock_result(
             question_id="q1",
-            answering_model="anthropic/claude-haiku-4-5",
-            mcp_servers=["otar-local"],
+            answering_tools=["otar-local"],
         )
-
-        task_id = TaskIdentifier.from_result(result, config)
+        task_id = TaskIdentifier.from_result(result)
 
         assert task_id.question_id == "q1"
-        assert task_id.answering_model_id == "answering-1"
-        assert task_id.mcp_hash != ""  # Should have MCP hash
-        assert task_id.parsing_model_id == "parsing-1"
+        assert task_id.answering_canonical_key == "langchain:claude-haiku-4-5:otar-local"
 
-    def test_multiple_mcp_configs_same_model_first_config(self):
-        """Test with multiple MCP configs - result matches first config."""
-        config = self._create_config(
-            answering_models=[
-                {
-                    "id": "answering-1",
-                    "model_provider": "anthropic",
-                    "model_name": "claude-haiku-4-5",
-                    "interface": "langchain",
-                    "mcp_urls_dict": {"otar-local": "http://localhost:8080"},
-                },
-                {
-                    "id": "answering-2",
-                    "model_provider": "anthropic",
-                    "model_name": "claude-haiku-4-5",
-                    "interface": "langchain",
-                    "mcp_urls_dict": {"otar-official": "http://official:8080"},
-                },
-            ]
-        )
+    def test_different_tools_produce_different_keys(self):
+        """Test that different MCP tool sets produce different canonical keys."""
+        result1 = self._create_mock_result(answering_tools=["otar-local"])
+        result2 = self._create_mock_result(answering_tools=["otar-official"])
 
-        # Result from first MCP config
-        result = self._create_mock_result(
-            question_id="q1",
-            answering_model="anthropic/claude-haiku-4-5",
-            mcp_servers=["otar-local"],
-        )
+        task_id1 = TaskIdentifier.from_result(result1)
+        task_id2 = TaskIdentifier.from_result(result2)
 
-        task_id = TaskIdentifier.from_result(result, config)
+        assert task_id1.answering_canonical_key != task_id2.answering_canonical_key
+        assert task_id1.to_key() != task_id2.to_key()
 
-        assert task_id.answering_model_id == "answering-1"
-        # Should have hash for otar-local config
-        expected_hash = TaskIdentifier.compute_mcp_hash(config.answering_models[0])
-        assert task_id.mcp_hash == expected_hash
+    def test_different_interfaces_produce_different_keys(self):
+        """Test that different interfaces produce different canonical keys."""
+        result1 = self._create_mock_result(answering_interface="langchain")
+        result2 = self._create_mock_result(answering_interface="claude_agent_sdk")
 
-    def test_multiple_mcp_configs_same_model_second_config(self):
-        """Test with multiple MCP configs - result matches second config.
+        task_id1 = TaskIdentifier.from_result(result1)
+        task_id2 = TaskIdentifier.from_result(result2)
 
-        This is the critical test for the bug fix. Previously, this would
-        incorrectly match the first config because only model string was checked.
-        """
-        config = self._create_config(
-            answering_models=[
-                {
-                    "id": "answering-1",
-                    "model_provider": "anthropic",
-                    "model_name": "claude-haiku-4-5",
-                    "interface": "langchain",
-                    "mcp_urls_dict": {"otar-local": "http://localhost:8080"},
-                },
-                {
-                    "id": "answering-2",
-                    "model_provider": "anthropic",
-                    "model_name": "claude-haiku-4-5",
-                    "interface": "langchain",
-                    "mcp_urls_dict": {"otar-official": "http://official:8080"},
-                },
-            ]
-        )
+        assert task_id1.answering_canonical_key != task_id2.answering_canonical_key
 
-        # Result from SECOND MCP config
-        result = self._create_mock_result(
-            question_id="q1",
-            answering_model="anthropic/claude-haiku-4-5",
-            mcp_servers=["otar-official"],  # <-- Different MCP server
-        )
-
-        task_id = TaskIdentifier.from_result(result, config)
-
-        # Should match second config, not first!
-        assert task_id.answering_model_id == "answering-2"
-        # Should have hash for otar-official config
-        expected_hash = TaskIdentifier.compute_mcp_hash(config.answering_models[1])
-        assert task_id.mcp_hash == expected_hash
-
-    def test_multiple_mcp_configs_no_match_falls_back(self):
-        """Test fallback when no MCP config matches."""
-        config = self._create_config(
-            answering_models=[
-                {
-                    "id": "answering-1",
-                    "model_provider": "anthropic",
-                    "model_name": "claude-haiku-4-5",
-                    "interface": "langchain",
-                    "mcp_urls_dict": {"otar-local": "http://localhost:8080"},
-                },
-            ]
-        )
-
-        # Result with different MCP server that doesn't match
-        result = self._create_mock_result(
-            question_id="q1",
-            answering_model="anthropic/claude-haiku-4-5",
-            mcp_servers=["unknown-server"],
-        )
-
-        task_id = TaskIdentifier.from_result(result, config)
-
-        # Falls back to result value
-        assert task_id.answering_model_id == "anthropic/claude-haiku-4-5"
-        assert task_id.mcp_hash == ""
-
-    def test_task_id_roundtrip_with_mcp(self):
+    def test_task_id_roundtrip(self):
         """Test that task IDs can be generated and parsed back correctly."""
-        config = self._create_config(
-            answering_models=[
-                {
-                    "id": "answering-1",
-                    "model_provider": "anthropic",
-                    "model_name": "claude-haiku-4-5",
-                    "interface": "langchain",
-                    "mcp_urls_dict": {"otar-official": "http://official:8080"},
-                },
-            ]
-        )
-
         result = self._create_mock_result(
             question_id="urn:uuid:abc123",
-            answering_model="anthropic/claude-haiku-4-5",
+            answering_tools=["otar-official"],
             replicate=2,
-            mcp_servers=["otar-official"],
         )
 
-        task_id = TaskIdentifier.from_result(result, config)
+        task_id = TaskIdentifier.from_result(result)
         key = task_id.to_key()
 
         # Parse it back
         parsed = TaskIdentifier.from_key(key)
 
         assert parsed.question_id == "urn:uuid:abc123"
-        assert parsed.answering_model_id == "answering-1"
-        assert parsed.mcp_hash == task_id.mcp_hash
-        assert parsed.parsing_model_id == "parsing-1"
+        assert parsed.answering_canonical_key == "langchain:claude-haiku-4-5:otar-official"
+        assert parsed.parsing_canonical_key == "langchain:claude-haiku-4-5:"
         assert parsed.replicate == 2
+
+    def test_task_id_roundtrip_no_replicate(self):
+        """Test roundtrip without replicate."""
+        result = self._create_mock_result(replicate=None)
+
+        task_id = TaskIdentifier.from_result(result)
+        key = task_id.to_key()
+        parsed = TaskIdentifier.from_key(key)
+
+        assert parsed.replicate is None
+        assert parsed.question_id == "q1"
+
+
+class TestTaskIdentifierFromTaskDict:
+    """Tests for TaskIdentifier.from_task_dict() method."""
+
+    def test_basic_task_dict(self):
+        """Test creating TaskIdentifier from a task dictionary."""
+        answering_model = ModelConfig(
+            id="answering-1",
+            model_provider="anthropic",
+            model_name="claude-haiku-4-5",
+            interface="langchain",
+        )
+        parsing_model = ModelConfig(
+            id="parsing-1",
+            model_provider="anthropic",
+            model_name="claude-haiku-4-5",
+            interface="langchain",
+        )
+
+        task = {
+            "question_id": "q1",
+            "answering_model": answering_model,
+            "parsing_model": parsing_model,
+            "replicate": 1,
+        }
+
+        task_id = TaskIdentifier.from_task_dict(task)
+
+        assert task_id.question_id == "q1"
+        assert task_id.answering_canonical_key == "langchain:claude-haiku-4-5:"
+        assert task_id.parsing_canonical_key == "langchain:claude-haiku-4-5:"
+        assert task_id.replicate == 1
+
+    def test_task_dict_with_mcp_tools(self):
+        """Test creating TaskIdentifier from task dict with MCP tools."""
+        answering_model = ModelConfig(
+            id="answering-1",
+            model_provider="anthropic",
+            model_name="claude-haiku-4-5",
+            interface="langchain",
+            mcp_urls_dict={"brave": "http://localhost:8080", "fs": "http://localhost:8081"},
+        )
+        parsing_model = ModelConfig(
+            id="parsing-1",
+            model_provider="anthropic",
+            model_name="claude-haiku-4-5",
+            interface="langchain",
+        )
+
+        task = {
+            "question_id": "q1",
+            "answering_model": answering_model,
+            "parsing_model": parsing_model,
+        }
+
+        task_id = TaskIdentifier.from_task_dict(task)
+
+        # Tools are sorted in canonical_key
+        assert task_id.answering_canonical_key == "langchain:claude-haiku-4-5:brave|fs"
+        # Parsing model never has tools (role="parsing")
+        assert task_id.parsing_canonical_key == "langchain:claude-haiku-4-5:"
+
+    def test_from_task_dict_matches_from_result(self):
+        """Test that from_task_dict and from_result produce the same key for matching inputs."""
+        answering_model = ModelConfig(
+            id="answering-1",
+            model_provider="anthropic",
+            model_name="claude-haiku-4-5",
+            interface="langchain",
+            mcp_urls_dict={"otar-local": "http://localhost:8080"},
+        )
+        parsing_model = ModelConfig(
+            id="parsing-1",
+            model_provider="anthropic",
+            model_name="claude-haiku-4-5",
+            interface="langchain",
+        )
+
+        task = {
+            "question_id": "q1",
+            "answering_model": answering_model,
+            "parsing_model": parsing_model,
+            "replicate": 1,
+        }
+
+        task_key = TaskIdentifier.from_task_dict(task).to_key()
+
+        # Simulate what a result would look like after pipeline execution
+        answering_identity = ModelIdentity.from_model_config(answering_model, role="answering")
+        parsing_identity = ModelIdentity.from_model_config(parsing_model, role="parsing")
+
+        class MockMetadata:
+            pass
+
+        metadata = MockMetadata()
+        metadata.question_id = "q1"
+        metadata.answering = answering_identity
+        metadata.parsing = parsing_identity
+        metadata.replicate = 1
+
+        class MockResult:
+            pass
+
+        result = MockResult()
+        result.metadata = metadata
+
+        result_key = TaskIdentifier.from_result(result).to_key()
+
+        assert task_key == result_key

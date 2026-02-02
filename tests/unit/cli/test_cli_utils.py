@@ -33,6 +33,7 @@ from karenina.cli.utils import (
     parse_question_indices,
     validate_output_path,
 )
+from karenina.schemas.verification.model_identity import ModelIdentity
 from karenina.schemas.workflow.verification.api_models import FinishedTemplate
 from karenina.schemas.workflow.verification.config import VerificationConfig
 from karenina.schemas.workflow.verification.result import VerificationResult
@@ -59,8 +60,8 @@ def _make_result(question_id: str, completed: bool = True) -> VerificationResult
             template_id="test-template",
             completed_without_errors=completed,
             question_text=f"Question {question_id}",
-            answering_model="gpt-4",
-            parsing_model="gpt-4",
+            answering=ModelIdentity(interface="langchain", model_name="gpt-4"),
+            parsing=ModelIdentity(interface="langchain", model_name="gpt-4"),
             execution_time=1.0,
             timestamp="2025-01-11T00:00:00",
             result_id="1234567890123456",
@@ -809,10 +810,8 @@ def test_load_manual_traces_from_file_valid(tmp_path: Path) -> None:
     mock_benchmark = MagicMock()
 
     with (
-        patch("karenina.infrastructure.llm.manual_traces.load_manual_traces"),
-        patch(
-            "karenina.infrastructure.llm.manual_traces.ManualTraces", return_value="mock_manual_traces"
-        ) as MockManualTraces,
+        patch("karenina.adapters.manual.load_manual_traces"),
+        patch("karenina.adapters.manual.ManualTraces", return_value="mock_manual_traces") as MockManualTraces,
     ):
         result = load_manual_traces_from_file(trace_file, mock_benchmark)
         assert result == "mock_manual_traces"

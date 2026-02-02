@@ -5,6 +5,11 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from karenina.integrations.gepa.prompts.defaults import (
+    DEFAULT_ANSWERING_SYSTEM_PROMPT,
+    DEFAULT_PARSING_INSTRUCTIONS,
+)
+
 if TYPE_CHECKING:
     from karenina.schemas.workflow.models import ModelConfig
 
@@ -261,9 +266,9 @@ class OptimizationConfig(BaseModel):
         """Warn if optimizing a target without providing a seed."""
         if OptimizationTarget.ANSWERING_SYSTEM_PROMPT in self.targets and self.seed_answering_prompt is None:
             # Use a default seed prompt
-            self.seed_answering_prompt = "You are a helpful assistant."
+            self.seed_answering_prompt = DEFAULT_ANSWERING_SYSTEM_PROMPT
         if OptimizationTarget.PARSING_INSTRUCTIONS in self.targets and self.seed_parsing_instructions is None:
-            self.seed_parsing_instructions = "Extract the answer from the response following the schema."
+            self.seed_parsing_instructions = DEFAULT_PARSING_INSTRUCTIONS
         return self
 
     def get_seed_candidate(self) -> dict[str, str]:

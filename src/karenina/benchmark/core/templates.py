@@ -211,55 +211,6 @@ class TemplateManager:
 
         return len(errors) == 0, errors
 
-    def validate_template_with_verification_system(self, question_id: str) -> tuple[bool, str | None]:
-        """
-        Validate a specific template using the verification system.
-
-        Args:
-            question_id: The question ID
-
-        Returns:
-            Tuple of (is_valid, error_message)
-        """
-        if question_id not in self.base._questions_cache:
-            return False, f"Question not found: {question_id}"
-
-        template = self.base._questions_cache[question_id].get("answer_template")
-        if not template:
-            return False, f"Question {question_id} has no template"
-
-        is_valid, error_msg, _ = validate_answer_template(template)
-        return is_valid, error_msg
-
-    def get_template_statistics(self) -> dict[str, Any]:
-        """Get statistics about templates in the benchmark."""
-        templates = [
-            q.get("answer_template", "") for q_id, q in self.base._questions_cache.items() if self.has_template(q_id)
-        ]
-
-        if not templates:
-            return {
-                "total_templates": 0,
-                "avg_template_length": 0,
-                "min_template_length": 0,
-                "max_template_length": 0,
-                "templates_with_errors": 0,
-            }
-
-        avg_template_length = int(sum(len(t) for t in templates) / len(templates))
-
-        # Count templates with syntax errors
-        _, errors = self.validate_templates()
-        templates_with_errors = len(errors)
-
-        return {
-            "total_templates": len(templates),
-            "avg_template_length": avg_template_length,
-            "min_template_length": min(len(t) for t in templates),
-            "max_template_length": max(len(t) for t in templates),
-            "templates_with_errors": templates_with_errors,
-        }
-
     def _is_default_template(self, template: str, question: str) -> bool:
         """Check if a template is the auto-generated default."""
         if not template:

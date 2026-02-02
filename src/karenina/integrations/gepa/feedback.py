@@ -11,9 +11,8 @@ verification failures. It supports:
 import asyncio
 from typing import TYPE_CHECKING, Any
 
-from langchain_core.messages import HumanMessage, SystemMessage
-
-from karenina.infrastructure.llm.interface import init_chat_model_unified
+from karenina.adapters.factory import get_llm
+from karenina.ports import LLMPort, Message
 from karenina.schemas.workflow import INTERFACES_NO_PROVIDER_REQUIRED
 
 if TYPE_CHECKING:
@@ -21,42 +20,11 @@ if TYPE_CHECKING:
     from karenina.schemas.workflow.models import ModelConfig
 
 
-# System prompts for feedback generation
-SINGLE_FEEDBACK_SYSTEM_PROMPT = """\
-You are an expert at analyzing LLM verification failures. Your task is to provide
-actionable feedback that will help improve the prompts used to generate and parse
-model responses.
-
-Focus on:
-1. Why the verification failed (parsing issues, incorrect extraction, format problems)
-2. What the model misunderstood or got wrong
-3. Concrete suggestions for prompt improvements
-
-Be concise but specific. Provide feedback in 3-5 sentences."""
-
-DIFFERENTIAL_FEEDBACK_SYSTEM_PROMPT = """\
-You are an expert at analyzing why some LLM responses succeed while others fail.
-Your task is to perform differential analysis between successful and failed model
-traces to identify what makes responses pass verification.
-
-Focus on:
-1. What successful models did differently (structure, format, content)
-2. The specific failure mode of the failing trace
-3. Concrete prompt improvements to help the failing model succeed
-
-Be concise but specific. Provide feedback in 3-5 sentences."""
-
-RUBRIC_FEEDBACK_SYSTEM_PROMPT = """\
-You are an expert at analyzing rubric evaluation results for LLM responses.
-Your task is to explain why specific rubric traits failed or scored low,
-and suggest improvements.
-
-Focus on:
-1. Why each failed trait didn't meet the criteria
-2. Specific changes that would improve the score
-3. Patterns that affect multiple traits
-
-Be concise but specific. Provide feedback for rubric improvement."""
+from karenina.integrations.gepa.prompts.feedback import (
+    DIFFERENTIAL_FEEDBACK_SYSTEM_PROMPT,
+    RUBRIC_FEEDBACK_SYSTEM_PROMPT,
+    SINGLE_FEEDBACK_SYSTEM_PROMPT,
+)
 
 
 class LLMFeedbackGenerator:
@@ -68,6 +36,7 @@ class LLMFeedbackGenerator:
     Example:
         >>> from karenina.schemas.workflow.models import ModelConfig
         >>> config = ModelConfig(
+        ...     id="feedback-llm",
         ...     model_provider="openai",
         ...     model_name="gpt-4o-mini",
         ...     temperature=0.7,
@@ -98,26 +67,8 @@ class LLMFeedbackGenerator:
 
         self.model_config = model_config
 
-        # Build kwargs for LLM initialization
-        model_kwargs: dict[str, Any] = {
-            "model": model_config.model_name,
-            "provider": model_config.model_provider,
-            "temperature": model_config.temperature or 0.7,
-            "interface": model_config.interface,
-        }
-
-        # Add interface-specific parameters
-        if model_config.endpoint_base_url:
-            model_kwargs["endpoint_base_url"] = model_config.endpoint_base_url
-        if model_config.endpoint_api_key:
-            model_kwargs["endpoint_api_key"] = model_config.endpoint_api_key.get_secret_value()
-
-        # Add extra kwargs
-        if model_config.extra_kwargs:
-            model_kwargs.update(model_config.extra_kwargs)
-
         try:
-            self.llm = init_chat_model_unified(**model_kwargs)
+            self.llm: LLMPort = get_llm(model_config)
         except Exception as e:
             raise RuntimeError(f"Failed to initialize feedback LLM: {e}") from e
 
@@ -136,12 +87,12 @@ class LLMFeedbackGenerator:
         prompt = self._build_single_feedback_prompt(trajectory)
 
         messages = [
-            SystemMessage(content=SINGLE_FEEDBACK_SYSTEM_PROMPT),
-            HumanMessage(content=prompt),
+            Message.system(SINGLE_FEEDBACK_SYSTEM_PROMPT),
+            Message.user(prompt),
         ]
 
         response = self.llm.invoke(messages)
-        return response.content if hasattr(response, "content") else str(response)
+        return response.content
 
     def generate_differential_feedback(
         self,
@@ -163,12 +114,12 @@ class LLMFeedbackGenerator:
         prompt = self._build_differential_feedback_prompt(failed_trajectory, successful_trajectories)
 
         messages = [
-            SystemMessage(content=DIFFERENTIAL_FEEDBACK_SYSTEM_PROMPT),
-            HumanMessage(content=prompt),
+            Message.system(DIFFERENTIAL_FEEDBACK_SYSTEM_PROMPT),
+            Message.user(prompt),
         ]
 
         response = self.llm.invoke(messages)
-        return response.content if hasattr(response, "content") else str(response)
+        return response.content
 
     def generate_rubric_feedback(
         self,
@@ -187,12 +138,12 @@ class LLMFeedbackGenerator:
         prompt = self._build_rubric_feedback_prompt(trajectory, rubric_scores)
 
         messages = [
-            SystemMessage(content=RUBRIC_FEEDBACK_SYSTEM_PROMPT),
-            HumanMessage(content=prompt),
+            Message.system(RUBRIC_FEEDBACK_SYSTEM_PROMPT),
+            Message.user(prompt),
         ]
 
         response = self.llm.invoke(messages)
-        return response.content if hasattr(response, "content") else str(response)
+        return response.content
 
     def generate_complete_feedback(
         self,
@@ -249,12 +200,12 @@ class LLMFeedbackGenerator:
         prompt = self._build_single_feedback_prompt(trajectory)
 
         messages = [
-            SystemMessage(content=SINGLE_FEEDBACK_SYSTEM_PROMPT),
-            HumanMessage(content=prompt),
+            Message.system(SINGLE_FEEDBACK_SYSTEM_PROMPT),
+            Message.user(prompt),
         ]
 
         response = await self.llm.ainvoke(messages)
-        return response.content if hasattr(response, "content") else str(response)
+        return response.content
 
     async def generate_differential_feedback_async(
         self,
@@ -273,12 +224,12 @@ class LLMFeedbackGenerator:
         prompt = self._build_differential_feedback_prompt(failed_trajectory, successful_trajectories)
 
         messages = [
-            SystemMessage(content=DIFFERENTIAL_FEEDBACK_SYSTEM_PROMPT),
-            HumanMessage(content=prompt),
+            Message.system(DIFFERENTIAL_FEEDBACK_SYSTEM_PROMPT),
+            Message.user(prompt),
         ]
 
         response = await self.llm.ainvoke(messages)
-        return response.content if hasattr(response, "content") else str(response)
+        return response.content
 
     async def generate_rubric_feedback_async(
         self,
@@ -297,12 +248,12 @@ class LLMFeedbackGenerator:
         prompt = self._build_rubric_feedback_prompt(trajectory, rubric_scores)
 
         messages = [
-            SystemMessage(content=RUBRIC_FEEDBACK_SYSTEM_PROMPT),
-            HumanMessage(content=prompt),
+            Message.system(RUBRIC_FEEDBACK_SYSTEM_PROMPT),
+            Message.user(prompt),
         ]
 
         response = await self.llm.ainvoke(messages)
-        return response.content if hasattr(response, "content") else str(response)
+        return response.content
 
     async def generate_complete_feedback_async(
         self,

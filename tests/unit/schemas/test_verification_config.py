@@ -18,8 +18,8 @@ from unittest.mock import patch
 
 import pytest
 
-from karenina.schemas.workflow.models import FewShotConfig, ModelConfig
-from karenina.schemas.workflow.verification.config import (
+from karenina.schemas.config import FewShotConfig, ModelConfig
+from karenina.schemas.verification import (
     DEFAULT_ANSWERING_SYSTEM_PROMPT,
     DEFAULT_PARSING_SYSTEM_PROMPT,
     DeepJudgmentTraitConfig,
@@ -37,7 +37,7 @@ from karenina.schemas.workflow.verification.config import (
     {},
     clear=True,
 )
-@patch("karenina.schemas.workflow.verification.config.os.getenv", return_value=None)
+@patch("karenina.schemas.verification.config.os.getenv", return_value=None)
 def test_verification_config_default_values(_mock_getenv) -> None:
     """Test VerificationConfig default field values.
 

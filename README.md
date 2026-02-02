@@ -139,7 +139,7 @@ This setup allows the judge to flexibly interpret free text while ensuring that 
 **1. Define a Pydantic template:**
 
 ```python
-from karenina.domain.answers import BaseAnswer
+from karenina.schemas.entities import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):

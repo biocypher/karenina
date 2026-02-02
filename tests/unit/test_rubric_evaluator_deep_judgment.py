@@ -9,13 +9,77 @@ This module tests the deep judgment evaluation flow for LLMRubricTraits:
 """
 
 import json
-from unittest.mock import Mock, patch
+from typing import Any
+from unittest.mock import Mock
 
 import pytest
 
-from karenina.benchmark.verification.evaluators.rubric_deep_judgment import RubricDeepJudgmentHandler
+from karenina.benchmark.verification.evaluators.rubric.deep_judgment import RubricDeepJudgmentHandler
+from karenina.ports.usage import UsageMetadata
 from karenina.schemas import ModelConfig
 from karenina.schemas.domain import LLMRubricTrait, Rubric
+from karenina.schemas.workflow.rubric_outputs import TraitExcerpt, TraitExcerptsOutput
+
+
+def create_mock_llmport(
+    invoke_responses: list[str] | None = None,
+    structured_responses: list[tuple[str, Any]] | None = None,
+):
+    """
+    Create a mock LLMPort that properly simulates the interface.
+
+    Args:
+        invoke_responses: List of text responses for llm.invoke() calls
+        structured_responses: Optional list of (json_content, parsed_model) for
+            with_structured_output().invoke() calls
+
+    Returns:
+        Mock LLMPort that behaves like the real interface.
+    """
+    mock_llm = Mock()
+    invoke_call_count = [0]
+    structured_call_count = [0]
+
+    _invoke_responses = invoke_responses or [""]
+
+    # Mock for plain invoke() calls - returns LLMResponse with .content
+    def mock_invoke(messages):
+        response = Mock()
+        response.content = _invoke_responses[invoke_call_count[0] % len(_invoke_responses)]
+        response.usage = UsageMetadata(input_tokens=10, output_tokens=10, total_tokens=20)
+        invoke_call_count[0] += 1
+        return response
+
+    mock_llm.invoke.side_effect = mock_invoke
+
+    # Mock for with_structured_output() calls
+    def mock_with_structured_output(schema):
+        mock_structured_llm = Mock()
+
+        def mock_structured_invoke(messages):
+            nonlocal structured_call_count
+            response = Mock()
+            if structured_responses and structured_call_count[0] < len(structured_responses):
+                content, raw = structured_responses[structured_call_count[0]]
+                response.content = content
+                response.raw = raw
+            else:
+                response.content = "{}"
+                # Try to construct the schema if possible
+                try:
+                    response.raw = schema()
+                except Exception:
+                    response.raw = Mock()
+            response.usage = UsageMetadata(input_tokens=10, output_tokens=10, total_tokens=20)
+            structured_call_count[0] += 1
+            return response
+
+        mock_structured_llm.invoke.side_effect = mock_structured_invoke
+        return mock_structured_llm
+
+    mock_llm.with_structured_output.side_effect = mock_with_structured_output
+
+    return mock_llm
 
 
 class TestDeepJudgmentRetryMechanism:
@@ -73,32 +137,28 @@ class TestDeepJudgmentRetryMechanism:
 
     def test_excerpt_extraction_first_attempt_success(self, mock_model_config, sample_answer, dj_trait_with_excerpts):
         """Test successful excerpt extraction on first attempt."""
-        mock_llm = Mock()
+        # Create structured output for excerpt extraction with valid excerpts
+        excerpts_output = TraitExcerptsOutput(
+            excerpts=[
+                TraitExcerpt(
+                    text="Photosynthesis is the process by which plants convert light energy into chemical energy",
+                    confidence="high",
+                ),
+                TraitExcerpt(
+                    text="This occurs in the chloroplasts",
+                    confidence="medium",
+                ),
+            ]
+        )
 
-        # Mock excerpt extraction response with valid excerpts
-        mock_llm.invoke.side_effect = [
-            # Excerpt extraction
-            Mock(
-                content=json.dumps(
-                    {
-                        "excerpts": [
-                            {
-                                "text": "Photosynthesis is the process by which plants convert light energy into chemical energy",
-                                "confidence": "high",
-                            },
-                            {
-                                "text": "This occurs in the chloroplasts",
-                                "confidence": "medium",
-                            },
-                        ]
-                    }
-                )
-            ),
-            # Reasoning generation
-            Mock(content="The answer demonstrates strong scientific accuracy with precise terminology."),
-            # Score extraction
-            Mock(content=json.dumps({"scientific_accuracy": 5})),
-        ]
+        # Create mock LLM with structured output for excerpt extraction
+        mock_llm = create_mock_llmport(
+            invoke_responses=[],  # Not used for excerpt extraction
+            structured_responses=[
+                # Excerpt extraction uses with_structured_output()
+                (json.dumps(excerpts_output.model_dump()), excerpts_output),
+            ],
+        )
 
         # Create handler directly with mock LLM
         handler = RubricDeepJudgmentHandler(mock_llm, mock_model_config)
@@ -118,52 +178,45 @@ class TestDeepJudgmentRetryMechanism:
         result = handler._extract_excerpts_for_trait(sample_answer, dj_trait_with_excerpts, config)
 
         # Verify results
-        assert result["auto_fail"] is False  # Changed from success to auto_fail
+        assert result["auto_fail"] is False
         assert "excerpts" in result
         assert len(result["excerpts"]) == 2
         assert result["retry_count"] == 0
 
-        # Verify LLM was called once for extraction
-        assert mock_llm.invoke.call_count >= 1
+        # Verify with_structured_output was called
+        assert mock_llm.with_structured_output.call_count >= 1
 
     def test_excerpt_extraction_retry_success(self, mock_model_config, sample_answer, dj_trait_with_excerpts):
         """Test excerpt extraction succeeds on retry after validation failure."""
-        mock_llm = Mock()
-
         # First attempt: excerpts with low similarity (fail validation)
+        invalid_excerpts = TraitExcerptsOutput(
+            excerpts=[
+                TraitExcerpt(
+                    text="Plants use sunlight",  # Low similarity to actual answer
+                    confidence="low",
+                )
+            ]
+        )
+
         # Second attempt: excerpts with high similarity (pass validation)
-        mock_llm.invoke.side_effect = [
-            # First extraction attempt - invalid excerpts
-            Mock(
-                content=json.dumps(
-                    {
-                        "excerpts": [
-                            {
-                                "text": "Plants use sunlight",  # Low similarity to actual answer
-                                "confidence": "low",
-                            }
-                        ]
-                    }
+        valid_excerpts = TraitExcerptsOutput(
+            excerpts=[
+                TraitExcerpt(
+                    text="Photosynthesis is the process by which plants convert light energy",
+                    confidence="high",
                 )
-            ),
-            # Second extraction attempt - valid excerpts
-            Mock(
-                content=json.dumps(
-                    {
-                        "excerpts": [
-                            {
-                                "text": "Photosynthesis is the process by which plants convert light energy",
-                                "confidence": "high",
-                            }
-                        ]
-                    }
-                )
-            ),
-            # Reasoning
-            Mock(content="The answer provides accurate scientific information."),
-            # Score
-            Mock(content=json.dumps({"scientific_accuracy": 4})),
-        ]
+            ]
+        )
+
+        mock_llm = create_mock_llmport(
+            invoke_responses=[],  # Not used for excerpt extraction
+            structured_responses=[
+                # First extraction attempt - invalid excerpts
+                (json.dumps(invalid_excerpts.model_dump()), invalid_excerpts),
+                # Second extraction attempt - valid excerpts
+                (json.dumps(valid_excerpts.model_dump()), valid_excerpts),
+            ],
+        )
 
         handler = RubricDeepJudgmentHandler(mock_llm, mock_model_config)
 
@@ -180,26 +233,30 @@ class TestDeepJudgmentRetryMechanism:
         result = handler._extract_excerpts_for_trait(sample_answer, dj_trait_with_excerpts, config)
 
         # Verify retry occurred
-        assert result["auto_fail"] is False  # Changed from success to auto_fail
+        assert result["auto_fail"] is False
         assert result["retry_count"] == 1
         assert len(result["excerpts"]) >= 1
 
     def test_excerpt_extraction_all_retries_exhausted(self, mock_model_config, sample_answer, dj_trait_with_excerpts):
         """Test auto-fail when all retry attempts are exhausted."""
-        mock_llm = Mock()
+        # All attempts return invalid excerpts (text not in answer)
+        invalid_excerpts = TraitExcerptsOutput(
+            excerpts=[
+                TraitExcerpt(
+                    text="Completely wrong text not in answer",
+                    confidence="low",
+                )
+            ]
+        )
 
-        # All attempts return invalid excerpts
-        mock_llm.invoke.return_value = Mock(
-            content=json.dumps(
-                {
-                    "excerpts": [
-                        {
-                            "text": "Completely wrong text not in answer",
-                            "confidence": "low",
-                        }
-                    ]
-                }
-            )
+        # Provide enough structured responses for initial + 2 retries
+        mock_llm = create_mock_llmport(
+            invoke_responses=[],
+            structured_responses=[
+                (json.dumps(invalid_excerpts.model_dump()), invalid_excerpts),
+                (json.dumps(invalid_excerpts.model_dump()), invalid_excerpts),
+                (json.dumps(invalid_excerpts.model_dump()), invalid_excerpts),
+            ],
         )
 
         handler = RubricDeepJudgmentHandler(mock_llm, mock_model_config)
@@ -222,8 +279,6 @@ class TestDeepJudgmentRetryMechanism:
 
     def test_per_trait_retry_override(self, mock_model_config, sample_answer):
         """Test that trait-specific retry_attempts override global default."""
-        mock_llm = Mock()
-
         # Create trait with custom retry attempts
         trait = LLMRubricTrait(
             name="custom_retry_trait",
@@ -236,9 +291,20 @@ class TestDeepJudgmentRetryMechanism:
             deep_judgment_excerpt_retry_attempts=5,  # Override
         )
 
-        # All attempts fail
-        mock_llm.invoke.return_value = Mock(
-            content=json.dumps({"excerpts": [{"text": "Invalid text", "confidence": "low"}]})
+        # All attempts fail with invalid excerpts
+        invalid_excerpts = TraitExcerptsOutput(excerpts=[TraitExcerpt(text="Invalid text", confidence="low")])
+
+        # Provide enough structured responses for initial + 5 retries
+        mock_llm = create_mock_llmport(
+            invoke_responses=[],
+            structured_responses=[
+                (json.dumps(invalid_excerpts.model_dump()), invalid_excerpts),
+                (json.dumps(invalid_excerpts.model_dump()), invalid_excerpts),
+                (json.dumps(invalid_excerpts.model_dump()), invalid_excerpts),
+                (json.dumps(invalid_excerpts.model_dump()), invalid_excerpts),
+                (json.dumps(invalid_excerpts.model_dump()), invalid_excerpts),
+                (json.dumps(invalid_excerpts.model_dump()), invalid_excerpts),
+            ],
         )
 
         handler = RubricDeepJudgmentHandler(mock_llm, mock_model_config)
@@ -260,17 +326,32 @@ class TestDeepJudgmentRetryMechanism:
 
     def test_validation_feedback_format(self, mock_model_config, sample_answer, dj_trait_with_excerpts):
         """Test that validation feedback includes scores and threshold."""
-        mock_llm = Mock()
-
         # Track the prompts sent to LLM
         prompts_sent = []
 
-        def capture_prompt(messages):
-            prompts_sent.append(messages)
-            # Return invalid excerpts to trigger feedback
-            return Mock(content=json.dumps({"excerpts": [{"text": "Wrong text", "confidence": "low"}]}))
+        # Create invalid excerpts
+        invalid_excerpts = TraitExcerptsOutput(excerpts=[TraitExcerpt(text="Wrong text", confidence="low")])
 
-        mock_llm.invoke.side_effect = capture_prompt
+        # Create a custom mock that captures prompts
+        mock_llm = Mock()
+        call_count = [0]
+
+        def mock_with_structured_output(schema):
+            mock_structured_llm = Mock()
+
+            def mock_invoke(messages):
+                prompts_sent.append(messages)
+                response = Mock()
+                response.content = json.dumps(invalid_excerpts.model_dump())
+                response.raw = invalid_excerpts
+                response.usage = UsageMetadata(input_tokens=10, output_tokens=10, total_tokens=20)
+                call_count[0] += 1
+                return response
+
+            mock_structured_llm.invoke.side_effect = mock_invoke
+            return mock_structured_llm
+
+        mock_llm.with_structured_output.side_effect = mock_with_structured_output
 
         handler = RubricDeepJudgmentHandler(mock_llm, mock_model_config)
 
@@ -318,51 +399,36 @@ class TestDeepJudgmentFlows:
         """Sample answer for testing."""
         return "Photosynthesis is the process by which plants convert light energy into chemical energy."
 
-    @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
-    def test_flow_with_excerpts_full_pipeline(self, mock_init_model, mock_model_config):  # noqa: ARG002
+    def test_flow_with_excerpts_full_pipeline(self):
         """Test full pipeline: extract → validate → reasoning → scoring."""
-        mock_llm = Mock()
-        mock_init_model.return_value = mock_llm
-
-        # Mock responses for each stage
-        mock_llm.invoke.side_effect = [
-            # Stage 1: Extract excerpts
-            Mock(
-                content=json.dumps(
-                    {
-                        "excerpts": [
-                            {
-                                "text": "Photosynthesis is the process by which plants convert light energy",
-                                "confidence": "high",
-                            }
-                        ]
-                    }
+        # Create structured output for excerpt extraction
+        excerpts_output = TraitExcerptsOutput(
+            excerpts=[
+                TraitExcerpt(
+                    text="Photosynthesis is the process by which plants convert light energy",
+                    confidence="high",
                 )
-            ),
-            # Stage 2: Generate reasoning
-            Mock(content="The answer correctly defines photosynthesis with accurate terminology."),
-            # Stage 3: Extract score
-            Mock(content=json.dumps({"scientific_accuracy": 5})),
-        ]
+            ]
+        )
 
-        # This would normally be called through evaluate_rubric
-        # For now, just verify the mock was set up correctly
-        assert mock_llm.invoke.call_count == 0  # Not called yet
+        # Create mock LLM with both structured and invoke responses
+        mock_llm = create_mock_llmport(
+            invoke_responses=[
+                # Stage 2: Generate reasoning
+                "The answer correctly defines photosynthesis with accurate terminology.",
+            ],
+            structured_responses=[
+                # Stage 1: Extract excerpts
+                (json.dumps(excerpts_output.model_dump()), excerpts_output),
+            ],
+        )
 
-    @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
-    def test_flow_without_excerpts(self, mock_init_model, mock_model_config):  # noqa: ARG002
+        # Verify mock was set up correctly
+        assert mock_llm.with_structured_output is not None
+        assert mock_llm.invoke is not None
+
+    def test_flow_without_excerpts(self):
         """Test flow without excerpts: reasoning → scoring (2 stages)."""
-        mock_llm = Mock()
-        mock_init_model.return_value = mock_llm
-
-        # Only reasoning and scoring stages (no excerpt extraction)
-        mock_llm.invoke.side_effect = [
-            # Stage 1: Generate reasoning (using full response)
-            Mock(content="The overall response is clear and well-organized."),
-            # Stage 2: Extract score
-            Mock(content=json.dumps({"overall_clarity": 4})),
-        ]
-
         trait = LLMRubricTrait(
             name="overall_clarity",
             description="Is the response clear?",
@@ -376,12 +442,8 @@ class TestDeepJudgmentFlows:
         # When excerpt_enabled=False, should skip excerpt extraction
         assert trait.deep_judgment_excerpt_enabled is False
 
-    @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
-    def test_mixed_excerpt_settings(self, mock_init_model, mock_model_config):  # noqa: ARG002
+    def test_mixed_excerpt_settings(self):
         """Test rubric with mixed excerpt settings."""
-        mock_llm = Mock()
-        mock_init_model.return_value = mock_llm
-
         # Create rubric with mixed traits
         trait_with_excerpts = LLMRubricTrait(
             name="scientific_accuracy",
@@ -437,12 +499,8 @@ class TestDeepJudgmentConfiguration:
             system_prompt="You are a helpful assistant.",
         )
 
-    @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
-    def test_per_trait_max_excerpts_override(self, mock_init_model, mock_model_config):  # noqa: ARG002
+    def test_per_trait_max_excerpts_override(self):
         """Test per-trait max_excerpts override."""
-        mock_llm = Mock()
-        mock_init_model.return_value = mock_llm
-
         trait = LLMRubricTrait(
             name="test_trait",
             description="Test",
@@ -457,12 +515,8 @@ class TestDeepJudgmentConfiguration:
         # Trait-specific value should override global default
         assert trait.deep_judgment_max_excerpts == 10
 
-    @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
-    def test_per_trait_fuzzy_threshold_override(self, mock_init_model, mock_model_config):  # noqa: ARG002
+    def test_per_trait_fuzzy_threshold_override(self):
         """Test per-trait fuzzy_threshold override."""
-        mock_llm = Mock()
-        mock_init_model.return_value = mock_llm
-
         trait = LLMRubricTrait(
             name="test_trait",
             description="Test",
@@ -476,25 +530,8 @@ class TestDeepJudgmentConfiguration:
 
         assert trait.deep_judgment_fuzzy_match_threshold == 0.95
 
-    @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
-    def test_boolean_trait_evaluation(self, mock_init_model, mock_model_config):  # noqa: ARG002
+    def test_boolean_trait_evaluation(self):
         """Test deep judgment evaluation of boolean traits."""
-        mock_llm = Mock()
-        mock_init_model.return_value = mock_llm
-
-        mock_llm.invoke.side_effect = [
-            # Excerpt extraction
-            Mock(
-                content=json.dumps(
-                    {"excerpts": [{"text": "Photosynthesis converts light energy", "confidence": "high"}]}
-                )
-            ),
-            # Reasoning
-            Mock(content="The answer mentions photosynthesis."),
-            # Score (boolean)
-            Mock(content=json.dumps({"mentions_photosynthesis": True})),
-        ]
-
         trait = LLMRubricTrait(
             name="mentions_photosynthesis",
             description="Does the answer mention photosynthesis?",
@@ -509,12 +546,8 @@ class TestDeepJudgmentConfiguration:
         assert trait.validate_score(False)
         assert not trait.validate_score(5)
 
-    @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
-    def test_score_trait_evaluation(self, mock_init_model, mock_model_config):  # noqa: ARG002
+    def test_score_trait_evaluation(self):
         """Test deep judgment evaluation of score traits."""
-        mock_llm = Mock()
-        mock_init_model.return_value = mock_llm
-
         trait = LLMRubricTrait(
             name="clarity",
             description="How clear is the response?",
@@ -534,12 +567,8 @@ class TestDeepJudgmentConfiguration:
         assert not trait.validate_score(6)
         assert not trait.validate_score(True)
 
-    @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
-    def test_score_range_validation(self, mock_init_model, mock_model_config):  # noqa: ARG002
+    def test_score_range_validation(self):
         """Test custom score range validation."""
-        mock_llm = Mock()
-        mock_init_model.return_value = mock_llm
-
         trait = LLMRubricTrait(
             name="custom_range",
             description="Custom range trait",
@@ -579,10 +608,15 @@ class TestDeepJudgmentEdgeCases:
 
     def test_empty_excerpts_from_llm(self, mock_model_config, sample_answer):
         """Test handling of empty excerpts list from LLM."""
-        mock_llm = Mock()
-
         # LLM returns empty excerpts list
-        mock_llm.invoke.return_value = Mock(content=json.dumps({"excerpts": []}))
+        empty_excerpts = TraitExcerptsOutput(excerpts=[])
+
+        mock_llm = create_mock_llmport(
+            invoke_responses=[],
+            structured_responses=[
+                (json.dumps(empty_excerpts.model_dump()), empty_excerpts),
+            ],
+        )
 
         trait = LLMRubricTrait(
             name="test_trait",
@@ -612,18 +646,19 @@ class TestDeepJudgmentEdgeCases:
 
     def test_partial_validation_success(self, mock_model_config, sample_answer):
         """Test when some excerpts are valid and some are invalid."""
-        mock_llm = Mock()
-
         # Return mix of valid and invalid excerpts
-        mock_llm.invoke.return_value = Mock(
-            content=json.dumps(
-                {
-                    "excerpts": [
-                        {"text": "This is a test answer", "confidence": "high"},  # Valid
-                        {"text": "Completely wrong text", "confidence": "low"},  # Invalid
-                    ]
-                }
-            )
+        mixed_excerpts = TraitExcerptsOutput(
+            excerpts=[
+                TraitExcerpt(text="This is a test answer", confidence="high"),  # Valid
+                TraitExcerpt(text="Completely wrong text", confidence="low"),  # Invalid
+            ]
+        )
+
+        mock_llm = create_mock_llmport(
+            invoke_responses=[],
+            structured_responses=[
+                (json.dumps(mixed_excerpts.model_dump()), mixed_excerpts),
+            ],
         )
 
         trait = LLMRubricTrait(
@@ -653,12 +688,8 @@ class TestDeepJudgmentEdgeCases:
         if not result["auto_fail"]:
             assert len(result["excerpts"]) >= 1
 
-    @patch("karenina.benchmark.verification.evaluators.rubric_evaluator.init_chat_model_unified")
-    def test_search_enabled_without_excerpts(self, mock_init_model, mock_model_config):  # noqa: ARG002
+    def test_search_enabled_without_excerpts(self):
         """Test that search_enabled without excerpt_enabled is handled gracefully."""
-        mock_llm = Mock()
-        mock_init_model.return_value = mock_llm
-
         trait = LLMRubricTrait(
             name="test_trait",
             description="Test",

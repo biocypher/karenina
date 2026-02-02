@@ -12,6 +12,7 @@ Tests cover:
 
 import pytest
 
+from karenina.schemas.verification.model_identity import ModelIdentity
 from karenina.schemas.workflow.verification.result import VerificationResult
 from karenina.schemas.workflow.verification.result_components import (
     VerificationResultDeepJudgment,
@@ -34,8 +35,8 @@ def test_metadata_construction() -> None:
         template_id="t-456",
         completed_without_errors=True,
         question_text="What is 2+2?",
-        answering_model="gpt-4",
-        parsing_model="claude-haiku-4-5",
+        answering=ModelIdentity(interface="langchain", model_name="gpt-4"),
+        parsing=ModelIdentity(interface="langchain", model_name="claude-haiku-4-5"),
         execution_time=1.5,
         timestamp="2025-01-11T12:00:00Z",
         result_id="abc123",
@@ -46,8 +47,8 @@ def test_metadata_construction() -> None:
     assert metadata.completed_without_errors is True
     assert metadata.error is None
     assert metadata.question_text == "What is 2+2?"
-    assert metadata.answering_model == "gpt-4"
-    assert metadata.parsing_model == "claude-haiku-4-5"
+    assert metadata.answering_model == "langchain:gpt-4"
+    assert metadata.parsing_model == "langchain:claude-haiku-4-5"
     assert metadata.execution_time == 1.5
     assert metadata.timestamp == "2025-01-11T12:00:00Z"
     assert metadata.result_id == "abc123"
@@ -62,8 +63,8 @@ def test_metadata_with_error() -> None:
         completed_without_errors=False,
         error="API timeout",
         question_text="What is 2+2?",
-        answering_model="gpt-4",
-        parsing_model="claude-haiku-4-5",
+        answering=ModelIdentity(interface="langchain", model_name="gpt-4"),
+        parsing=ModelIdentity(interface="langchain", model_name="claude-haiku-4-5"),
         execution_time=0.5,
         timestamp="2025-01-11T12:00:00Z",
         result_id="abc123",
@@ -78,11 +79,10 @@ def test_metadata_compute_result_id_deterministic() -> None:
     """Test that compute_result_id produces deterministic hash."""
     params = {
         "question_id": "q-123",
-        "answering_model": "openai/gpt-4",
-        "parsing_model": "anthropic/claude-haiku-4-5",
+        "answering": ModelIdentity(interface="langchain", model_name="openai/gpt-4"),
+        "parsing": ModelIdentity(interface="langchain", model_name="anthropic/claude-haiku-4-5"),
         "timestamp": "2025-01-11T12:00:00Z",
         "replicate": None,
-        "answering_mcp_servers": None,
     }
 
     id1 = VerificationResultMetadata.compute_result_id(**params)
@@ -97,15 +97,15 @@ def test_metadata_compute_result_id_includes_replicate() -> None:
     """Test that compute_result_id includes replicate in hash."""
     params1 = {
         "question_id": "q-123",
-        "answering_model": "openai/gpt-4",
-        "parsing_model": "anthropic/claude-haiku-4-5",
+        "answering": ModelIdentity(interface="langchain", model_name="openai/gpt-4"),
+        "parsing": ModelIdentity(interface="langchain", model_name="anthropic/claude-haiku-4-5"),
         "timestamp": "2025-01-11T12:00:00Z",
         "replicate": 1,
     }
     params2 = {
         "question_id": "q-123",
-        "answering_model": "openai/gpt-4",
-        "parsing_model": "anthropic/claude-haiku-4-5",
+        "answering": ModelIdentity(interface="langchain", model_name="openai/gpt-4"),
+        "parsing": ModelIdentity(interface="langchain", model_name="anthropic/claude-haiku-4-5"),
         "timestamp": "2025-01-11T12:00:00Z",
         "replicate": 2,
     }
@@ -117,21 +117,19 @@ def test_metadata_compute_result_id_includes_replicate() -> None:
 
 
 @pytest.mark.unit
-def test_metadata_compute_result_id_includes_mcp_servers() -> None:
-    """Test that compute_result_id includes MCP servers in hash."""
+def test_metadata_compute_result_id_includes_tools() -> None:
+    """Test that compute_result_id includes tools in hash via ModelIdentity."""
     params1 = {
         "question_id": "q-123",
-        "answering_model": "openai/gpt-4",
-        "parsing_model": "anthropic/claude-haiku-4-5",
+        "answering": ModelIdentity(interface="langchain", model_name="openai/gpt-4", tools=["server1", "server2"]),
+        "parsing": ModelIdentity(interface="langchain", model_name="anthropic/claude-haiku-4-5"),
         "timestamp": "2025-01-11T12:00:00Z",
-        "answering_mcp_servers": ["server1", "server2"],
     }
     params2 = {
         "question_id": "q-123",
-        "answering_model": "openai/gpt-4",
-        "parsing_model": "anthropic/claude-haiku-4-5",
+        "answering": ModelIdentity(interface="langchain", model_name="openai/gpt-4", tools=["server1"]),
+        "parsing": ModelIdentity(interface="langchain", model_name="anthropic/claude-haiku-4-5"),
         "timestamp": "2025-01-11T12:00:00Z",
-        "answering_mcp_servers": ["server1"],
     }
 
     id1 = VerificationResultMetadata.compute_result_id(**params1)
@@ -141,25 +139,23 @@ def test_metadata_compute_result_id_includes_mcp_servers() -> None:
 
 
 @pytest.mark.unit
-def test_metadata_compute_result_id_sorts_mcp_servers() -> None:
-    """Test that MCP servers are sorted for deterministic hashing."""
+def test_metadata_compute_result_id_sorts_tools() -> None:
+    """Test that tools are sorted for deterministic hashing via canonical_key."""
     params = {
         "question_id": "q-123",
-        "answering_model": "openai/gpt-4",
-        "parsing_model": "anthropic/claude-haiku-4-5",
+        "answering": ModelIdentity(interface="langchain", model_name="openai/gpt-4", tools=["server2", "server1"]),
+        "parsing": ModelIdentity(interface="langchain", model_name="anthropic/claude-haiku-4-5"),
         "timestamp": "2025-01-11T12:00:00Z",
-        "answering_mcp_servers": ["server2", "server1"],  # Unsorted
     }
 
     result_id = VerificationResultMetadata.compute_result_id(**params)
 
-    # Same params with different order should produce same ID
+    # Same params with different tool order should produce same ID
     params_sorted = {
         "question_id": "q-123",
-        "answering_model": "openai/gpt-4",
-        "parsing_model": "anthropic/claude-haiku-4-5",
+        "answering": ModelIdentity(interface="langchain", model_name="openai/gpt-4", tools=["server1", "server2"]),
+        "parsing": ModelIdentity(interface="langchain", model_name="anthropic/claude-haiku-4-5"),
         "timestamp": "2025-01-11T12:00:00Z",
-        "answering_mcp_servers": ["server1", "server2"],  # Sorted
     }
 
     result_id_sorted = VerificationResultMetadata.compute_result_id(**params_sorted)
@@ -521,8 +517,8 @@ def test_verification_result_construction_minimal() -> None:
             template_id="t-456",
             completed_without_errors=True,
             question_text="What is 2+2?",
-            answering_model="gpt-4",
-            parsing_model="claude-haiku-4-5",
+            answering=ModelIdentity(interface="langchain", model_name="gpt-4"),
+            parsing=ModelIdentity(interface="langchain", model_name="claude-haiku-4-5"),
             execution_time=1.5,
             timestamp="2025-01-11T12:00:00Z",
             result_id="abc123",
@@ -550,8 +546,8 @@ def test_verification_result_with_all_components() -> None:
             template_id="t-456",
             completed_without_errors=True,
             question_text="What is 2+2?",
-            answering_model="gpt-4",
-            parsing_model="claude-haiku-4-5",
+            answering=ModelIdentity(interface="langchain", model_name="gpt-4"),
+            parsing=ModelIdentity(interface="langchain", model_name="claude-haiku-4-5"),
             execution_time=1.5,
             timestamp="2025-01-11T12:00:00Z",
             result_id="abc123",
@@ -591,8 +587,8 @@ def test_verification_result_with_trace_filtering() -> None:
             template_id="t-456",
             completed_without_errors=True,
             question_text="What is 2+2?",
-            answering_model="gpt-4",
-            parsing_model="claude-haiku-4-5",
+            answering=ModelIdentity(interface="langchain", model_name="gpt-4"),
+            parsing=ModelIdentity(interface="langchain", model_name="claude-haiku-4-5"),
             execution_time=1.5,
             timestamp="2025-01-11T12:00:00Z",
             result_id="abc123",
@@ -621,8 +617,8 @@ def test_verification_result_with_trace_extraction_error() -> None:
             completed_without_errors=False,
             error="Could not extract final AI message",
             question_text="What is 2+2?",
-            answering_model="gpt-4",
-            parsing_model="claude-haiku-4-5",
+            answering=ModelIdentity(interface="langchain", model_name="gpt-4"),
+            parsing=ModelIdentity(interface="langchain", model_name="claude-haiku-4-5"),
             execution_time=0.5,
             timestamp="2025-01-11T12:00:00Z",
             result_id="abc123",
@@ -649,8 +645,8 @@ def test_backward_compat_metadata_properties() -> None:
             template_id="t-456",
             completed_without_errors=True,
             question_text="What is 2+2?",
-            answering_model="gpt-4",
-            parsing_model="claude-haiku-4-5",
+            answering=ModelIdentity(interface="langchain", model_name="gpt-4"),
+            parsing=ModelIdentity(interface="langchain", model_name="claude-haiku-4-5"),
             execution_time=1.5,
             timestamp="2025-01-11T12:00:00Z",
             result_id="abc123",
@@ -667,8 +663,8 @@ def test_backward_compat_metadata_properties() -> None:
     assert result.completed_without_errors is True
     assert result.error is None
     assert result.question_text == "What is 2+2?"
-    assert result.answering_model == "gpt-4"
-    assert result.parsing_model == "claude-haiku-4-5"
+    assert result.answering_model == "langchain:gpt-4"
+    assert result.parsing_model == "langchain:claude-haiku-4-5"
     assert result.run_name == "test-run"
     assert result.keywords == ["math", "simple"]
     assert result.timestamp == "2025-01-11T12:00:00Z"
@@ -683,8 +679,8 @@ def test_backward_compat_template_properties() -> None:
             template_id="t-456",
             completed_without_errors=True,
             question_text="What is 2+2?",
-            answering_model="gpt-4",
-            parsing_model="claude-haiku-4-5",
+            answering=ModelIdentity(interface="langchain", model_name="gpt-4"),
+            parsing=ModelIdentity(interface="langchain", model_name="claude-haiku-4-5"),
             execution_time=1.5,
             timestamp="2025-01-11T12:00:00Z",
             result_id="abc123",
@@ -728,8 +724,8 @@ def test_backward_compat_template_properties_return_none_when_no_template() -> N
             completed_without_errors=False,
             error="Failed",
             question_text="What is 2+2?",
-            answering_model="gpt-4",
-            parsing_model="claude-haiku-4-5",
+            answering=ModelIdentity(interface="langchain", model_name="gpt-4"),
+            parsing=ModelIdentity(interface="langchain", model_name="claude-haiku-4-5"),
             execution_time=0.1,
             timestamp="2025-01-11T12:00:00Z",
             result_id="abc123",
@@ -754,8 +750,8 @@ def test_backward_compat_rubric_properties() -> None:
             template_id="t-456",
             completed_without_errors=True,
             question_text="What is 2+2?",
-            answering_model="gpt-4",
-            parsing_model="claude-haiku-4-5",
+            answering=ModelIdentity(interface="langchain", model_name="gpt-4"),
+            parsing=ModelIdentity(interface="langchain", model_name="claude-haiku-4-5"),
             execution_time=1.5,
             timestamp="2025-01-11T12:00:00Z",
             result_id="abc123",
@@ -802,8 +798,8 @@ def test_backward_compat_rubric_properties_return_defaults_when_no_rubric() -> N
             template_id="t-456",
             completed_without_errors=True,
             question_text="What is 2+2?",
-            answering_model="gpt-4",
-            parsing_model="claude-haiku-4-5",
+            answering=ModelIdentity(interface="langchain", model_name="gpt-4"),
+            parsing=ModelIdentity(interface="langchain", model_name="claude-haiku-4-5"),
             execution_time=1.5,
             timestamp="2025-01-11T12:00:00Z",
             result_id="abc123",
@@ -830,8 +826,8 @@ def test_backward_compat_deep_judgment_properties() -> None:
             template_id="t-456",
             completed_without_errors=True,
             question_text="What is 2+2?",
-            answering_model="gpt-4",
-            parsing_model="claude-haiku-4-5",
+            answering=ModelIdentity(interface="langchain", model_name="gpt-4"),
+            parsing=ModelIdentity(interface="langchain", model_name="claude-haiku-4-5"),
             execution_time=1.5,
             timestamp="2025-01-11T12:00:00Z",
             result_id="abc123",
@@ -863,8 +859,8 @@ def test_backward_compat_deep_judgment_properties_return_defaults_when_no_deep_j
             template_id="t-456",
             completed_without_errors=True,
             question_text="What is 2+2?",
-            answering_model="gpt-4",
-            parsing_model="claude-haiku-4-5",
+            answering=ModelIdentity(interface="langchain", model_name="gpt-4"),
+            parsing=ModelIdentity(interface="langchain", model_name="claude-haiku-4-5"),
             execution_time=1.5,
             timestamp="2025-01-11T12:00:00Z",
             result_id="abc123",
@@ -897,8 +893,8 @@ def test_pass_determination_completed_without_errors() -> None:
             template_id="t-456",
             completed_without_errors=True,
             question_text="What is 2+2?",
-            answering_model="gpt-4",
-            parsing_model="claude-haiku-4-5",
+            answering=ModelIdentity(interface="langchain", model_name="gpt-4"),
+            parsing=ModelIdentity(interface="langchain", model_name="claude-haiku-4-5"),
             execution_time=1.5,
             timestamp="2025-01-11T12:00:00Z",
             result_id="abc123",
@@ -924,8 +920,8 @@ def test_fail_determination_completed_with_errors() -> None:
             completed_without_errors=False,
             error="API timeout",
             question_text="What is 2+2?",
-            answering_model="gpt-4",
-            parsing_model="claude-haiku-4-5",
+            answering=ModelIdentity(interface="langchain", model_name="gpt-4"),
+            parsing=ModelIdentity(interface="langchain", model_name="claude-haiku-4-5"),
             execution_time=0.5,
             timestamp="2025-01-11T12:00:00Z",
             result_id="abc123",
@@ -949,8 +945,8 @@ def test_error_property_accessible() -> None:
             completed_without_errors=False,
             error="Parsing failed",
             question_text="What is 2+2?",
-            answering_model="gpt-4",
-            parsing_model="claude-haiku-4-5",
+            answering=ModelIdentity(interface="langchain", model_name="gpt-4"),
+            parsing=ModelIdentity(interface="langchain", model_name="claude-haiku-4-5"),
             execution_time=0.5,
             timestamp="2025-01-11T12:00:00Z",
             result_id="abc123",
@@ -1030,8 +1026,8 @@ def test_backward_compat_sufficiency_properties() -> None:
             template_id="t-456",
             completed_without_errors=True,
             question_text="What is 2+2?",
-            answering_model="gpt-4",
-            parsing_model="claude-haiku-4-5",
+            answering=ModelIdentity(interface="langchain", model_name="gpt-4"),
+            parsing=ModelIdentity(interface="langchain", model_name="claude-haiku-4-5"),
             execution_time=1.5,
             timestamp="2025-01-11T12:00:00Z",
             result_id="abc123",
@@ -1062,8 +1058,8 @@ def test_backward_compat_sufficiency_properties_return_defaults_when_no_template
             completed_without_errors=False,
             error="Failed",
             question_text="What is 2+2?",
-            answering_model="gpt-4",
-            parsing_model="claude-haiku-4-5",
+            answering=ModelIdentity(interface="langchain", model_name="gpt-4"),
+            parsing=ModelIdentity(interface="langchain", model_name="claude-haiku-4-5"),
             execution_time=0.1,
             timestamp="2025-01-11T12:00:00Z",
             result_id="abc123",

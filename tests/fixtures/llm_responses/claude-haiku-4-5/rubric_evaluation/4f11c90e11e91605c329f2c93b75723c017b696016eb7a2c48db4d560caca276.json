@@ -2,7 +2,7 @@
   "metadata": {
     "scenario": "rubric_evaluation",
     "model": "claude-haiku-4-5",
-    "timestamp": "2026-01-11T21:00:37.826513",
+    "timestamp": "2026-01-20T20:18:42.381020",
     "prompt_hash": "4f11c90e11e91605c329f2c93b75723c017b696016eb7a2c48db4d560caca276"
   },
   "request": {
@@ -27,8 +27,8 @@
     "kwargs": {}
   },
   "response": {
-    "content": "```json\n{\n  \"scores\": {\n    \"completeness\": 1\n  }\n}\n```",
-    "id": "lc_run--d1a68122-6c13-4618-b2d1-6e5e98662b9d-0",
+    "content": "{\"scores\":{\"completeness\":1}}",
+    "id": "captured-4f11c90e",
     "model": "claude-haiku-4-5",
     "usage": {
       "input_tokens": 0,

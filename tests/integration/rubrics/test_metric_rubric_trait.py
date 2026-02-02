@@ -135,7 +135,16 @@ class TestMetricComputation:
         Note: _compute_metrics was moved from RubricEvaluator to MetricTraitEvaluator
         during the flaw-001 refactoring.
         """
-        return MetricTraitEvaluator(llm=None)
+        from karenina.schemas.workflow import ModelConfig
+
+        model_config = ModelConfig(
+            id="test-metric",
+            model_provider="anthropic",
+            model_name="claude-haiku-4-5",
+            temperature=0.0,
+            interface="langchain",
+        )
+        return MetricTraitEvaluator(llm=None, model_config=model_config)
 
     def test_perfect_extraction_all_metrics_one(self, metric_evaluator):
         """Verify perfect extraction: P=1, R=1, F1=1."""
@@ -493,7 +502,16 @@ class TestMetricFormulas:
     @pytest.fixture
     def metric_evaluator(self):
         """Get metric trait evaluator for metric computation."""
-        return MetricTraitEvaluator(llm=None)
+        from karenina.schemas.workflow import ModelConfig
+
+        model_config = ModelConfig(
+            id="test-metric",
+            model_provider="anthropic",
+            model_name="claude-haiku-4-5",
+            temperature=0.0,
+            interface="langchain",
+        )
+        return MetricTraitEvaluator(llm=None, model_config=model_config)
 
     def test_precision_matches_sklearn_definition(self, metric_evaluator):
         """Verify precision matches sklearn: TP / (TP + FP)."""
