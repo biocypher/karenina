@@ -4,7 +4,11 @@ Karenina CLI - Command-line interface for benchmark verification.
 This module provides a Typer-based CLI for running benchmark verifications from the command line.
 """
 
+import logging
+
 import typer
+
+logger = logging.getLogger(__name__)
 
 # Create the main Typer app
 app = typer.Typer(
@@ -25,45 +29,58 @@ def callback(ctx: typer.Context) -> None:
         print(ctx.get_help())
 
 
-# Import subcommands (will be implemented in subsequent phases)
-# These imports will be added as we implement each command module
 try:
-    from .preset import preset_app
-    from .serve import init, serve
-    from .status import verify_status
     from .verify import verify
 
-    # Register verify command directly on main app
     app.command(name="verify")(verify)
+except ImportError as e:
+    logger.warning("verify command unavailable: %s", e)
 
-    # Register verify-status command for inspecting progressive save state
+try:
+    from .status import verify_status
+
     app.command(name="verify-status")(verify_status)
+except ImportError as e:
+    logger.warning("verify-status command unavailable: %s", e)
 
-    # Register preset as a sub-command group
+try:
+    from .preset import preset_app
+
     app.add_typer(preset_app, name="preset", help="Manage verification presets")
+except ImportError as e:
+    logger.warning("preset command unavailable: %s", e)
 
-    # Register serve and init commands for webapp
+try:
+    from .serve import init, serve
+
     app.command(name="serve")(serve)
     app.command(name="init")(init)
-except ImportError:
-    # Commands not yet implemented
-    pass
+except ImportError as e:
+    logger.warning("serve/init commands unavailable: %s", e)
 
-# Import GEPA optimization commands (optional - requires gepa package)
 try:
-    from .optimize import optimize, optimize_compare, optimize_history
+    from .optimize import optimize
 
-    # Register optimize command directly on main app
     app.command(name="optimize")(optimize)
+except ImportError as e:
+    # GEPA not installed
+    logger.debug("optimize command unavailable: %s", e)
 
-    # Register optimize-history command for viewing past runs
+try:
+    from .optimize import optimize_history
+
     app.command(name="optimize-history")(optimize_history)
+except ImportError as e:
+    # GEPA not installed
+    logger.debug("optimize-history command unavailable: %s", e)
 
-    # Register optimize-compare command for comparing runs
+try:
+    from .optimize import optimize_compare
+
     app.command(name="optimize-compare")(optimize_compare)
-except ImportError:
-    # GEPA optimization not available
-    pass
+except ImportError as e:
+    # GEPA not installed
+    logger.debug("optimize-compare command unavailable: %s", e)
 
 
 def main() -> None:
