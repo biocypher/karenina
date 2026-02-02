@@ -541,20 +541,20 @@ class TestArtifactDependencies:
 
     def test_generate_answer_produces_raw_response(self, minimal_context: VerificationContext):
         """GenerateAnswerStage should produce raw_llm_response artifact."""
+        from karenina.ports.llm import LLMResponse
+        from karenina.ports.usage import UsageMetadata
+
         # Validate first to get Answer class
         ValidateTemplateStage().execute(minimal_context)
 
-        # Mock get_agent to return a mock agent with run_sync
-        with patch("karenina.benchmark.verification.stages.pipeline.generate_answer.get_agent") as mock_get_agent:
-            mock_agent = MagicMock()
-            mock_result = MagicMock()
-            mock_result.final_response = "The capital is Paris."
-            mock_result.raw_trace = "The capital is Paris."
-            mock_result.usage = MagicMock(input_tokens=10, output_tokens=10, total_tokens=20)
-            mock_result.turns = 1
-            mock_result.limit_reached = False
-            mock_agent.run_sync.return_value = mock_result
-            mock_get_agent.return_value = mock_agent
+        # Mock get_llm (no MCP URLs → LLMPort path, not AgentPort)
+        with patch("karenina.benchmark.verification.stages.pipeline.generate_answer.get_llm") as mock_get_llm:
+            mock_llm = MagicMock()
+            mock_llm.invoke.return_value = LLMResponse(
+                content="The capital is Paris.",
+                usage=UsageMetadata(input_tokens=10, output_tokens=10, total_tokens=20),
+            )
+            mock_get_llm.return_value = mock_llm
 
             stage = GenerateAnswerStage()
             stage.execute(minimal_context)
@@ -591,6 +591,9 @@ class TestPipelineIntegration:
         This test requires careful mocking because FinalizeResultStage has
         strict Pydantic validation. The mocks must return proper data types.
         """
+        from karenina.ports.llm import LLMResponse
+        from karenina.ports.usage import UsageMetadata
+
         # Build pipeline
         orchestrator = StageOrchestrator.from_config(
             evaluation_mode="template_only",
@@ -606,21 +609,18 @@ class TestPipelineIntegration:
         # Create a real parsed answer instance
         parsed_answer = Answer(capital="Paris")
 
-        # Mock agent for answer generation and template parsing
+        # Mock LLM for answer generation (no MCP URLs → LLMPort path) and template parsing
         with (
-            patch("karenina.benchmark.verification.stages.pipeline.generate_answer.get_agent") as mock_get_agent,
+            patch("karenina.benchmark.verification.stages.pipeline.generate_answer.get_llm") as mock_get_llm,
             patch("karenina.benchmark.verification.stages.pipeline.parse_template.TemplateEvaluator") as MockEvaluator,
         ):
-            # Answer generation mock - return AgentResult-like object
-            mock_agent = MagicMock()
-            mock_result = MagicMock()
-            mock_result.final_response = "The capital of France is Paris."
-            mock_result.raw_trace = "The capital of France is Paris."
-            mock_result.usage = MagicMock(input_tokens=10, output_tokens=10, total_tokens=20)
-            mock_result.turns = 1
-            mock_result.limit_reached = False
-            mock_agent.run_sync.return_value = mock_result
-            mock_get_agent.return_value = mock_agent
+            # Answer generation mock - return LLMResponse
+            mock_llm = MagicMock()
+            mock_llm.invoke.return_value = LLMResponse(
+                content="The capital of France is Paris.",
+                usage=UsageMetadata(input_tokens=10, output_tokens=10, total_tokens=20),
+            )
+            mock_get_llm.return_value = mock_llm
 
             # Template parsing mock - use proper return types
             mock_evaluator = MagicMock()
@@ -665,6 +665,9 @@ class TestPipelineIntegration:
 
     def test_pipeline_with_abstention_early_exit(self, minimal_context: VerificationContext):
         """Test pipeline exits early when abstention detected."""
+        from karenina.ports.llm import LLMResponse
+        from karenina.ports.usage import UsageMetadata
+
         minimal_context.abstention_enabled = True
 
         orchestrator = StageOrchestrator.from_config(
@@ -686,21 +689,18 @@ class TestPipelineIntegration:
             return context.get_artifact("final_result")
 
         with (
-            patch("karenina.benchmark.verification.stages.pipeline.generate_answer.get_agent") as mock_get_agent,
+            patch("karenina.benchmark.verification.stages.pipeline.generate_answer.get_llm") as mock_get_llm,
             patch(
                 "karenina.benchmark.verification.stages.pipeline.abstention_check.detect_abstention"
             ) as mock_abstention,
         ):
-            # Generate a refusal response - return AgentResult-like object
-            mock_agent = MagicMock()
-            mock_result = MagicMock()
-            mock_result.final_response = "I'm sorry, but I cannot provide information about that topic."
-            mock_result.raw_trace = "I'm sorry, but I cannot provide information about that topic."
-            mock_result.usage = MagicMock(input_tokens=10, output_tokens=10, total_tokens=20)
-            mock_result.turns = 1
-            mock_result.limit_reached = False
-            mock_agent.run_sync.return_value = mock_result
-            mock_get_agent.return_value = mock_agent
+            # Generate a refusal response - return LLMResponse (no MCP URLs → LLMPort path)
+            mock_llm = MagicMock()
+            mock_llm.invoke.return_value = LLMResponse(
+                content="I'm sorry, but I cannot provide information about that topic.",
+                usage=UsageMetadata(input_tokens=10, output_tokens=10, total_tokens=20),
+            )
+            mock_get_llm.return_value = mock_llm
 
             # Abstention detector returns (detected, check_performed, reasoning, usage_metadata)
             mock_abstention.return_value = (

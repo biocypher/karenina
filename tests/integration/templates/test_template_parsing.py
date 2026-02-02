@@ -90,9 +90,13 @@ class TestTemplateEvaluatorInitialization:
         """Verify model string formats correctly for different interfaces."""
         from unittest.mock import MagicMock, patch
 
-        # Mock the LLM factory to avoid API key requirements
-        with patch("karenina.benchmark.verification.evaluators.template.evaluator.get_llm") as mock_get_llm:
+        # Mock both LLM and parser factories to avoid API key requirements
+        with (
+            patch("karenina.benchmark.verification.evaluators.template.evaluator.get_llm") as mock_get_llm,
+            patch("karenina.benchmark.verification.evaluators.template.evaluator.get_parser") as mock_get_parser,
+        ):
             mock_get_llm.return_value = MagicMock()
+            mock_get_parser.return_value = MagicMock()
 
             # Standard langchain interface
             config = ModelConfig(
