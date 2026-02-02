@@ -26,6 +26,7 @@ from .json_extraction import extract_json_from_response
 from .messages import append_error_feedback
 from .retry import TRANSIENT_RETRY, create_transient_retry, log_retry
 from .testing import FixtureBackedLLMClient, MockResponse, MockUsage
+from .version import get_karenina_version
 
 __all__ = [
     # Answer caching
@@ -60,4 +61,6 @@ __all__ = [
     "FixtureBackedLLMClient",
     "MockResponse",
     "MockUsage",
+    # Version utilities
+    "get_karenina_version",
 ]
