@@ -62,6 +62,7 @@ from .helpers import (
     get_memory_usage_info,
     has_manual_trace,
     load_manual_traces,
+    load_manual_traces_from_file,
     set_manual_trace,
 )
 from .manager import ManualTraceManager, get_trace_manager
@@ -293,6 +294,7 @@ __all__ = [
     "ManualTraces",
     # Helper functions
     "load_manual_traces",
+    "load_manual_traces_from_file",
     "get_manual_trace",
     "has_manual_trace",
     "clear_manual_traces",

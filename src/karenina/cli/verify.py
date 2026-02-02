@@ -22,6 +22,7 @@ from rich.progress import (
 )
 from rich.prompt import Confirm, Prompt
 
+from karenina.adapters.manual import load_manual_traces_from_file
 from karenina.benchmark import Benchmark
 from karenina.benchmark.verification import (
     export_verification_results_csv,
@@ -37,7 +38,6 @@ from .utils import (
     filter_templates_by_indices,
     get_preset_path,
     get_traces_path,
-    load_manual_traces_from_file,
     parse_question_indices,
     validate_output_path,
 )
