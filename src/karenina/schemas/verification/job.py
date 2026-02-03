@@ -45,26 +45,51 @@ class VerificationJob(BaseModel):
     result_set: "VerificationResultSet | None" = None  # Unified verification result container
     error_message: str | None = None
 
-    def task_started(self, question_id: str) -> None:
-        """Mark a task as started and record start time."""
-        if question_id not in self.in_progress_questions:
-            self.in_progress_questions.append(question_id)
+    @staticmethod
+    def _make_task_key(question_id: str, replicate: int | None = None) -> str:
+        """Create a unique task key from question_id and optional replicate.
+
+        For single-replicate runs, returns just the question_id.
+        For multi-replicate runs, appends _rep{N} to distinguish tasks.
+        """
+        if replicate is None:
+            return question_id
+        return f"{question_id}_rep{replicate}"
+
+    def task_started(self, question_id: str, replicate: int | None = None) -> None:
+        """Mark a task as started and record start time.
+
+        Args:
+            question_id: The question identifier
+            replicate: Optional replicate number (for multi-replicate runs)
+        """
+        task_key = self._make_task_key(question_id, replicate)
+        if task_key not in self.in_progress_questions:
+            self.in_progress_questions.append(task_key)
 
         # Record task start time
-        self.task_start_times[question_id] = time.time()
+        self.task_start_times[task_key] = time.time()
 
-    def task_finished(self, question_id: str, success: bool) -> None:
-        """Mark a task as finished, calculate duration, and update counts."""
+    def task_finished(self, question_id: str, success: bool, replicate: int | None = None) -> None:
+        """Mark a task as finished, calculate duration, and update counts.
+
+        Args:
+            question_id: The question identifier
+            success: Whether the task completed successfully
+            replicate: Optional replicate number (for multi-replicate runs)
+        """
+        task_key = self._make_task_key(question_id, replicate)
+
         # Calculate task duration from recorded start time
         task_duration = 0.0
-        if question_id in self.task_start_times:
-            task_duration = time.time() - self.task_start_times[question_id]
+        if task_key in self.task_start_times:
+            task_duration = time.time() - self.task_start_times[task_key]
             # Clean up start time
-            del self.task_start_times[question_id]
+            del self.task_start_times[task_key]
 
         # Remove from in-progress list
-        if question_id in self.in_progress_questions:
-            self.in_progress_questions.remove(question_id)
+        if task_key in self.in_progress_questions:
+            self.in_progress_questions.remove(task_key)
 
         # Update counts
         self.processed_count += 1
