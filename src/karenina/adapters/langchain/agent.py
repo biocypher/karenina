@@ -322,7 +322,9 @@ class LangChainAgentAdapter:
                 "AgentPort requires MCP servers or tools. For simple LLM calls without tools, use LLMPort instead."
             )
 
-        tool_filter = self._convert_tools_to_names(tools)
+        tool_filter = self._convert_tools_to_names(tools) or self._config.mcp_tool_filter
+        if tool_filter:
+            logger.info(f"Restricting LangChain agent to MCP tools: {tool_filter}")
 
         # Build kwargs for model initialization
         kwargs: dict[str, Any] = {}
