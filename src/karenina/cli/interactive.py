@@ -8,7 +8,6 @@ This module implements the interactive configuration builder with two modes:
 
 from typing import Any, Literal, cast
 
-import typer
 from pydantic import SecretStr
 from rich.console import Console
 from rich.prompt import Confirm, Prompt
@@ -27,9 +26,53 @@ from karenina.schemas.workflow.verification import (
     DEFAULT_PARSING_SYSTEM_PROMPT,
 )
 
-from .utils import parse_question_indices
+from .utils import cli_error, parse_question_indices
 
 console = Console()
+
+# Display constants
+TEXT_TRUNCATION_LENGTH = 80
+MCP_TOOL_PREVIEW_COUNT = 10
+MCP_TOOL_DESC_PREVIEW_LENGTH = 60
+
+# Default deep judgment settings
+DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS = 3
+DEFAULT_FUZZY_THRESHOLD = 0.80
+DEFAULT_RETRY_ATTEMPTS = 2
+
+# Default rubric deep judgment settings
+DEFAULT_RUBRIC_MAX_EXCERPTS = 7
+
+# Default embedding settings
+DEFAULT_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+DEFAULT_EMBEDDING_THRESHOLD = 0.85
+
+
+def _prompt_float_range(prompt_text: str, min_val: float, max_val: float, default: str) -> float:
+    """Prompt for a float value within a range, exiting on invalid input."""
+    value_str = Prompt.ask(prompt_text, default=default)
+    try:
+        value = float(value_str)
+        if not min_val <= value <= max_val:
+            raise ValueError(f"Value must be between {min_val} and {max_val}")
+    except ValueError as e:
+        cli_error(str(e), e)
+    return value
+
+
+def _prompt_int_min(prompt_text: str, min_val: int, default: str) -> int:
+    """Prompt for an integer value with a minimum, exiting on invalid input."""
+    value_str = Prompt.ask(prompt_text, default=default)
+    try:
+        value = int(value_str)
+        if value < min_val:
+            if min_val == 0:
+                raise ValueError("Value must be non-negative")
+            else:
+                raise ValueError(f"Value must be at least {min_val}")
+    except ValueError as e:
+        cli_error(str(e), e)
+    return value
 
 
 def build_config_interactively(
@@ -58,8 +101,7 @@ def build_config_interactively(
     templates = benchmark.get_finished_templates()
 
     if not templates:
-        console.print("[red]Error: No finished templates found in benchmark[/red]")
-        raise typer.Exit(code=1)
+        cli_error("No finished templates found in benchmark")
 
     # Step 1: Display questions and select subset
     console.print("[bold]Step 1: Question Selection[/bold]")
@@ -76,23 +118,13 @@ def build_config_interactively(
         try:
             selected_indices = parse_question_indices(question_selection, len(templates))
         except ValueError as e:
-            console.print(f"[red]Error: {e}[/red]")
-            raise typer.Exit(code=1) from e
+            cli_error(str(e), e)
 
     console.print(f"[green]✓ Selected {len(selected_indices)} question(s)[/green]\n")
 
     # Step 2: Replicate count
     console.print("[bold]Step 2: Replicate Count[/bold]")
-    replicate_count_str = Prompt.ask("Number of replicates per verification", default="1")
-
-    try:
-        replicate_count = int(replicate_count_str)
-        if replicate_count < 1:
-            raise ValueError("Replicate count must be at least 1")
-    except ValueError as e:
-        console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(code=1) from e
-
+    replicate_count = _prompt_int_min("Number of replicates per verification", min_val=1, default="1")
     console.print(f"[green]✓ Replicate count: {replicate_count}[/green]\n")
 
     # Step 3: Feature flags
@@ -118,19 +150,14 @@ def build_config_interactively(
 
     # Embedding check
     embedding_check_enabled = Confirm.ask("Enable embedding check?", default=False)
-    embedding_check_model = "all-MiniLM-L6-v2"
-    embedding_check_threshold = 0.85
+    embedding_check_model = DEFAULT_EMBEDDING_MODEL
+    embedding_check_threshold = DEFAULT_EMBEDDING_THRESHOLD
 
     if embedding_check_enabled:
-        embedding_check_model = Prompt.ask("Embedding model", default="all-MiniLM-L6-v2")
-        threshold_str = Prompt.ask("Embedding similarity threshold (0.0-1.0)", default="0.85")
-        try:
-            embedding_check_threshold = float(threshold_str)
-            if not 0.0 <= embedding_check_threshold <= 1.0:
-                raise ValueError("Threshold must be between 0.0 and 1.0")
-        except ValueError as e:
-            console.print(f"[red]Error: {e}[/red]")
-            raise typer.Exit(code=1) from e
+        embedding_check_model = Prompt.ask("Embedding model", default=DEFAULT_EMBEDDING_MODEL)
+        embedding_check_threshold = _prompt_float_range(
+            "Embedding similarity threshold (0.0-1.0)", 0.0, 1.0, str(DEFAULT_EMBEDDING_THRESHOLD)
+        )
 
     deep_judgment_enabled = Confirm.ask("Enable deep judgment?", default=False)
 
@@ -138,9 +165,9 @@ def build_config_interactively(
 
     # Advanced mode: Additional configuration
     rubric_trait_names = None
-    deep_judgment_max_excerpts = 3
-    deep_judgment_fuzzy_threshold = 0.80
-    deep_judgment_retry_attempts = 2
+    deep_judgment_max_excerpts = DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS
+    deep_judgment_fuzzy_threshold = DEFAULT_FUZZY_THRESHOLD
+    deep_judgment_retry_attempts = DEFAULT_RETRY_ATTEMPTS
     deep_judgment_search_enabled = False
     deep_judgment_search_tool = "tavily"
     few_shot_config = None
@@ -155,149 +182,26 @@ def build_config_interactively(
             traits_str = Prompt.ask("Rubric trait names (comma-separated)")
             rubric_trait_names = [t.strip() for t in traits_str.split(",")]
 
-        # Deep judgment settings (if enabled)
         if deep_judgment_enabled:
-            console.print("\n[cyan]Deep Judgment Settings:[/cyan]")
-            max_excerpts_str = Prompt.ask("Max excerpts per attribute", default="3")
-            try:
-                deep_judgment_max_excerpts = int(max_excerpts_str)
-                if deep_judgment_max_excerpts < 1:
-                    raise ValueError("Max excerpts must be at least 1")
-            except ValueError as e:
-                console.print(f"[red]Error: {e}[/red]")
-                raise typer.Exit(code=1) from e
+            dj = _configure_deep_judgment()
+            deep_judgment_max_excerpts = dj["max_excerpts"]
+            deep_judgment_fuzzy_threshold = dj["fuzzy_threshold"]
+            deep_judgment_retry_attempts = dj["retry_attempts"]
+            deep_judgment_search_enabled = dj["search_enabled"]
+            deep_judgment_search_tool = dj["search_tool"]
 
-            fuzzy_threshold_str = Prompt.ask("Fuzzy match threshold (0.0-1.0)", default="0.80")
-            try:
-                deep_judgment_fuzzy_threshold = float(fuzzy_threshold_str)
-                if not 0.0 <= deep_judgment_fuzzy_threshold <= 1.0:
-                    raise ValueError("Threshold must be between 0.0 and 1.0")
-            except ValueError as e:
-                console.print(f"[red]Error: {e}[/red]")
-                raise typer.Exit(code=1) from e
+        djr = _configure_deep_judgment_rubric(rubric_enabled)
+        deep_judgment_rubric_mode = djr["mode"]
+        deep_judgment_rubric_global_excerpts = djr["global_excerpts"]
+        deep_judgment_rubric_max_excerpts_default = djr["max_excerpts_default"]
+        deep_judgment_rubric_fuzzy_match_threshold_default = djr["fuzzy_match_threshold_default"]
+        deep_judgment_rubric_excerpt_retry_attempts_default = djr["excerpt_retry_attempts_default"]
+        deep_judgment_rubric_search_enabled = djr["search_enabled"]
+        deep_judgment_rubric_search_tool = djr["search_tool"]
+        deep_judgment_rubric_config = djr["config"]
 
-            retry_attempts_str = Prompt.ask("Excerpt retry attempts", default="2")
-            try:
-                deep_judgment_retry_attempts = int(retry_attempts_str)
-                if deep_judgment_retry_attempts < 0:
-                    raise ValueError("Retry attempts must be non-negative")
-            except ValueError as e:
-                console.print(f"[red]Error: {e}[/red]")
-                raise typer.Exit(code=1) from e
-
-            deep_judgment_search_enabled = Confirm.ask("Enable search validation?", default=False)
-            if deep_judgment_search_enabled:
-                deep_judgment_search_tool = Prompt.ask("Search tool", default="tavily")
-
-        # Deep judgment rubric settings (if rubric enabled)
-        deep_judgment_rubric_mode = "disabled"
-        deep_judgment_rubric_global_excerpts = True
-        deep_judgment_rubric_max_excerpts_default = 7
-        deep_judgment_rubric_fuzzy_match_threshold_default = 0.80
-        deep_judgment_rubric_excerpt_retry_attempts_default = 2
-        deep_judgment_rubric_search_enabled = False
-        deep_judgment_rubric_search_tool = "tavily"
-        deep_judgment_rubric_config = None
-
-        if rubric_enabled:
-            console.print("\n[cyan]Deep Judgment Rubric Settings:[/cyan]")
-            console.print("[dim]Deep judgment modes:[/dim]")
-            console.print("[dim]  • disabled: No deep judgment for rubrics (default)[/dim]")
-            console.print("[dim]  • enable_all: Apply to all LLM traits with global settings[/dim]")
-            console.print("[dim]  • use_checkpoint: Use settings saved in checkpoint file[/dim]")
-            console.print("[dim]  • custom: Load per-trait config from JSON file[/dim]\n")
-
-            deep_judgment_rubric_mode = Prompt.ask(
-                "Deep judgment rubric mode",
-                choices=["disabled", "enable_all", "use_checkpoint", "custom"],
-                default="disabled",
-            )
-
-            if deep_judgment_rubric_mode == "enable_all":
-                deep_judgment_rubric_global_excerpts = Confirm.ask(
-                    "Enable excerpts for all rubric traits?", default=True
-                )
-
-                max_excerpts_str = Prompt.ask("Max excerpts per rubric trait", default="7")
-                try:
-                    deep_judgment_rubric_max_excerpts_default = int(max_excerpts_str)
-                    if deep_judgment_rubric_max_excerpts_default < 1:
-                        raise ValueError("Max excerpts must be at least 1")
-                except ValueError as e:
-                    console.print(f"[red]Error: {e}[/red]")
-                    raise typer.Exit(code=1) from e
-
-                fuzzy_threshold_str = Prompt.ask("Fuzzy match threshold (0.0-1.0)", default="0.80")
-                try:
-                    deep_judgment_rubric_fuzzy_match_threshold_default = float(fuzzy_threshold_str)
-                    if not 0.0 <= deep_judgment_rubric_fuzzy_match_threshold_default <= 1.0:
-                        raise ValueError("Threshold must be between 0.0 and 1.0")
-                except ValueError as e:
-                    console.print(f"[red]Error: {e}[/red]")
-                    raise typer.Exit(code=1) from e
-
-                retry_attempts_str = Prompt.ask("Excerpt retry attempts", default="2")
-                try:
-                    deep_judgment_rubric_excerpt_retry_attempts_default = int(retry_attempts_str)
-                    if deep_judgment_rubric_excerpt_retry_attempts_default < 0:
-                        raise ValueError("Retry attempts must be non-negative")
-                except ValueError as e:
-                    console.print(f"[red]Error: {e}[/red]")
-                    raise typer.Exit(code=1) from e
-
-                deep_judgment_rubric_search_enabled = Confirm.ask("Enable search validation?", default=False)
-                if deep_judgment_rubric_search_enabled:
-                    deep_judgment_rubric_search_tool = Prompt.ask("Search tool", default="tavily")
-
-            elif deep_judgment_rubric_mode == "custom":
-                console.print("[yellow]Custom mode requires a JSON config file[/yellow]")
-                config_path_str = Prompt.ask("Path to custom rubric config JSON")
-                import json
-                from pathlib import Path
-
-                try:
-                    config_path = Path(config_path_str)
-                    with open(config_path) as f:
-                        deep_judgment_rubric_config = json.load(f)
-                    console.print(f"[green]✓ Loaded custom config from {config_path}[/green]")
-                except Exception as e:
-                    console.print(f"[red]Error loading config: {e}[/red]")
-                    raise typer.Exit(code=1) from e
-
-            elif deep_judgment_rubric_mode == "use_checkpoint":
-                console.print("[dim]Using deep judgment settings from checkpoint file[/dim]")
-
-        # Few-shot configuration
-        console.print("\n[cyan]Few-Shot Configuration:[/cyan]")
-        if Confirm.ask("Enable few-shot prompting?", default=False):
-            from karenina.schemas.workflow.models import FewShotConfig
-
-            few_shot_mode_str = Prompt.ask("Few-shot mode", choices=["all", "k-shot", "custom", "none"], default="all")
-            few_shot_mode = cast(Literal["all", "k-shot", "custom", "none"], few_shot_mode_str)
-
-            few_shot_k_str = Prompt.ask("Few-shot k (number of examples)", default="3")
-            try:
-                few_shot_k = int(few_shot_k_str)
-                if few_shot_k < 1:
-                    raise ValueError("k must be at least 1")
-            except ValueError as e:
-                console.print(f"[red]Error: {e}[/red]")
-                raise typer.Exit(code=1) from e
-
-            few_shot_config = FewShotConfig(enabled=True, global_mode=few_shot_mode, global_k=few_shot_k)
-
-        # Async settings
-        console.print("\n[cyan]Async Execution Settings:[/cyan]")
-        async_enabled = Confirm.ask("Enable async execution?", default=True)
-        if async_enabled:
-            max_workers_str = Prompt.ask("Max parallel workers", default="2")
-            try:
-                async_max_workers = int(max_workers_str)
-                if async_max_workers < 1:
-                    raise ValueError("Max workers must be at least 1")
-            except ValueError as e:
-                console.print(f"[red]Error: {e}[/red]")
-                raise typer.Exit(code=1) from e
+        few_shot_config = _configure_few_shot()
+        async_enabled, async_max_workers = _configure_async()
 
         console.print("[green]✓ Advanced configuration complete[/green]\n")
 
@@ -371,6 +275,8 @@ def build_config_interactively(
     # Step 6: Optionally save as preset
     if Confirm.ask("\nSave this configuration as a preset?", default=False):
         preset_name = Prompt.ask("Preset name")
+        if not preset_name.strip():
+            cli_error("Preset name cannot be empty")
         preset_description = Prompt.ask("Description (optional)", default="")
 
         try:
@@ -405,6 +311,119 @@ def build_config_interactively(
     return config, selected_indices, show_progress_bar, progressive_save_enabled
 
 
+def _configure_deep_judgment() -> dict[str, Any]:
+    """Prompt for deep judgment settings. Returns dict with max_excerpts, fuzzy_threshold, retry_attempts, search_enabled, search_tool."""
+    console.print("\n[cyan]Deep Judgment Settings:[/cyan]")
+    max_excerpts = _prompt_int_min(
+        "Max excerpts per attribute", min_val=1, default=str(DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS)
+    )
+    fuzzy_threshold = _prompt_float_range("Fuzzy match threshold (0.0-1.0)", 0.0, 1.0, str(DEFAULT_FUZZY_THRESHOLD))
+    retry_attempts = _prompt_int_min("Excerpt retry attempts", min_val=0, default=str(DEFAULT_RETRY_ATTEMPTS))
+
+    search_enabled = Confirm.ask("Enable search validation?", default=False)
+    search_tool = "tavily"
+    if search_enabled:
+        search_tool = Prompt.ask("Search tool", default="tavily")
+
+    return {
+        "max_excerpts": max_excerpts,
+        "fuzzy_threshold": fuzzy_threshold,
+        "retry_attempts": retry_attempts,
+        "search_enabled": search_enabled,
+        "search_tool": search_tool,
+    }
+
+
+def _configure_deep_judgment_rubric(rubric_enabled: bool) -> dict[str, Any]:
+    """Prompt for deep judgment rubric settings. Returns dict with mode, global_excerpts, thresholds, search, config."""
+    result: dict[str, Any] = {
+        "mode": "disabled",
+        "global_excerpts": True,
+        "max_excerpts_default": DEFAULT_RUBRIC_MAX_EXCERPTS,
+        "fuzzy_match_threshold_default": DEFAULT_FUZZY_THRESHOLD,
+        "excerpt_retry_attempts_default": DEFAULT_RETRY_ATTEMPTS,
+        "search_enabled": False,
+        "search_tool": "tavily",
+        "config": None,
+    }
+
+    if not rubric_enabled:
+        return result
+
+    console.print("\n[cyan]Deep Judgment Rubric Settings:[/cyan]")
+    console.print("[dim]Deep judgment modes:[/dim]")
+    console.print("[dim]  • disabled: No deep judgment for rubrics (default)[/dim]")
+    console.print("[dim]  • enable_all: Apply to all LLM traits with global settings[/dim]")
+    console.print("[dim]  • use_checkpoint: Use settings saved in checkpoint file[/dim]")
+    console.print("[dim]  • custom: Load per-trait config from JSON file[/dim]\n")
+
+    result["mode"] = Prompt.ask(
+        "Deep judgment rubric mode",
+        choices=["disabled", "enable_all", "use_checkpoint", "custom"],
+        default="disabled",
+    )
+
+    if result["mode"] == "enable_all":
+        result["global_excerpts"] = Confirm.ask("Enable excerpts for all rubric traits?", default=True)
+        result["max_excerpts_default"] = _prompt_int_min(
+            "Max excerpts per rubric trait", min_val=1, default=str(DEFAULT_RUBRIC_MAX_EXCERPTS)
+        )
+        result["fuzzy_match_threshold_default"] = _prompt_float_range(
+            "Fuzzy match threshold (0.0-1.0)", 0.0, 1.0, str(DEFAULT_FUZZY_THRESHOLD)
+        )
+        result["excerpt_retry_attempts_default"] = _prompt_int_min(
+            "Excerpt retry attempts", min_val=0, default=str(DEFAULT_RETRY_ATTEMPTS)
+        )
+
+        result["search_enabled"] = Confirm.ask("Enable search validation?", default=False)
+        if result["search_enabled"]:
+            result["search_tool"] = Prompt.ask("Search tool", default="tavily")
+
+    elif result["mode"] == "custom":
+        console.print("[yellow]Custom mode requires a JSON config file[/yellow]")
+        config_path_str = Prompt.ask("Path to custom rubric config JSON")
+        import json
+        from pathlib import Path
+
+        try:
+            config_path = Path(config_path_str)
+            with open(config_path) as f:
+                result["config"] = json.load(f)
+            console.print(f"[green]✓ Loaded custom config from {config_path}[/green]")
+        except Exception as e:
+            cli_error(f"loading config: {e}", e)
+
+    elif result["mode"] == "use_checkpoint":
+        console.print("[dim]Using deep judgment settings from checkpoint file[/dim]")
+
+    return result
+
+
+def _configure_few_shot() -> Any:
+    """Prompt for few-shot configuration. Returns FewShotConfig or None."""
+    console.print("\n[cyan]Few-Shot Configuration:[/cyan]")
+    if not Confirm.ask("Enable few-shot prompting?", default=False):
+        return None
+
+    from karenina.schemas.workflow.models import FewShotConfig
+
+    few_shot_mode_str = Prompt.ask("Few-shot mode", choices=["all", "k-shot", "custom", "none"], default="all")
+    few_shot_mode = cast(Literal["all", "k-shot", "custom", "none"], few_shot_mode_str)
+    few_shot_k = _prompt_int_min("Few-shot k (number of examples)", min_val=1, default="3")
+
+    return FewShotConfig(enabled=True, global_mode=few_shot_mode, global_k=few_shot_k)
+
+
+def _configure_async() -> tuple[bool, int]:
+    """Prompt for async execution settings. Returns (async_enabled, async_max_workers)."""
+    console.print("\n[cyan]Async Execution Settings:[/cyan]")
+    async_enabled = Confirm.ask("Enable async execution?", default=True)
+    async_max_workers = 2
+    if async_enabled:
+        async_max_workers = _prompt_int_min("Max parallel workers", min_val=1, default="2")
+    return async_enabled, async_max_workers
+
+
 def _display_questions_table(templates: list[Any]) -> None:
     """
     Display a table of questions with indices.
@@ -421,7 +440,9 @@ def _display_questions_table(templates: list[Any]) -> None:
         question_id = template.question_id
         # Truncate question text if too long
         question_text = (
-            template.question_text[:80] + "..." if len(template.question_text) > 80 else template.question_text
+            template.question_text[:TEXT_TRUNCATION_LENGTH] + "..."
+            if len(template.question_text) > TEXT_TRUNCATION_LENGTH
+            else template.question_text
         )
         table.add_row(str(i), question_id, question_text)
 
@@ -462,24 +483,10 @@ def _prompt_for_model(model_type: str, mode: str = "basic") -> ModelConfig:
         model_provider = Prompt.ask("Model provider", default="openai")
 
     # Temperature
-    temperature_str = Prompt.ask("Temperature (0.0-2.0)", default="0.1")
-    try:
-        temperature = float(temperature_str)
-        if not 0.0 <= temperature <= 2.0:
-            raise ValueError("Temperature must be between 0.0 and 2.0")
-    except ValueError as e:
-        console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(code=1) from e
+    temperature = _prompt_float_range("Temperature (0.0-2.0)", 0.0, 2.0, "0.1")
 
     # Max retries
-    max_retries_str = Prompt.ask("Max retries", default="2")
-    try:
-        max_retries = int(max_retries_str)
-        if max_retries < 0:
-            raise ValueError("Max retries must be non-negative")
-    except ValueError as e:
-        console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(code=1) from e
+    max_retries = _prompt_int_min("Max retries", min_val=0, default="2")
 
     # System prompt
     default_system_prompt = (
@@ -521,7 +528,11 @@ def _prompt_for_model(model_type: str, mode: str = "basic") -> ModelConfig:
             while True:
                 console.print("\n[cyan]Add MCP Server:[/cyan]")
                 server_name = Prompt.ask("MCP server name")
+                if not server_name.strip():
+                    cli_error("MCP server name cannot be empty")
                 server_url = Prompt.ask("MCP server URL")
+                if not server_url.strip():
+                    cli_error("MCP server URL cannot be empty")
 
                 # Add to dictionary
                 temp_mcp_urls[server_name] = server_url
@@ -537,11 +548,15 @@ def _prompt_for_model(model_type: str, mode: str = "basic") -> ModelConfig:
                         console.print(f"[green]✓ Successfully connected to '{server_name}'[/green]")
                         console.print(f"[dim]Found {len(tool_descriptions)} available tool(s):[/dim]")
                         tool_items = list(tool_descriptions.items())
-                        for name, desc in tool_items[:10]:  # Show first 10 tools
-                            desc_preview = (desc[:60] + "...") if len(desc) > 60 else desc
+                        for name, desc in tool_items[:MCP_TOOL_PREVIEW_COUNT]:
+                            desc_preview = (
+                                (desc[:MCP_TOOL_DESC_PREVIEW_LENGTH] + "...")
+                                if len(desc) > MCP_TOOL_DESC_PREVIEW_LENGTH
+                                else desc
+                            )
                             console.print(f"  [dim]• {name}: {desc_preview}[/dim]")
-                        if len(tool_items) > 10:
-                            console.print(f"  [dim]... and {len(tool_items) - 10} more[/dim]")
+                        if len(tool_items) > MCP_TOOL_PREVIEW_COUNT:
+                            console.print(f"  [dim]... and {len(tool_items) - MCP_TOOL_PREVIEW_COUNT} more[/dim]")
                     else:
                         console.print(f"[yellow]Warning: No tools found from server '{server_name}'[/yellow]")
 
@@ -562,6 +577,7 @@ def _prompt_for_model(model_type: str, mode: str = "basic") -> ModelConfig:
                 console.print("[yellow]No MCP servers configured.[/yellow]")
 
             # MCP tool filter
+            # Note: mypy incorrectly infers Confirm.ask default parameter type
             if mcp_urls_dict and Confirm.ask("\nFilter specific MCP tools?", default=False):  # type: ignore[arg-type]
                 tools_str = Prompt.ask("MCP tool names (comma-separated)")
                 mcp_tool_filter = [t.strip() for t in tools_str.split(",")]

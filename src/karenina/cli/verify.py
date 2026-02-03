@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
+from pydantic import ValidationError
 from rich.console import Console
 from rich.progress import (
     BarColumn,
@@ -22,6 +23,7 @@ from rich.progress import (
 )
 from rich.prompt import Confirm, Prompt
 
+from karenina.adapters.manual import load_manual_traces_from_file
 from karenina.benchmark import Benchmark
 from karenina.benchmark.verification import (
     export_verification_results_csv,
@@ -29,15 +31,14 @@ from karenina.benchmark.verification import (
 )
 from karenina.benchmark.verification.batch_runner import generate_task_queue, run_verification_batch
 from karenina.schemas import FinishedTemplate, VerificationConfig, VerificationResult, VerificationResultSet
+from karenina.utils.progressive_save import ProgressiveSaveManager, TaskIdentifier, generate_task_manifest
 
-from .progressive_save import ProgressiveSaveManager, TaskIdentifier, generate_task_manifest
 from .utils import (
+    cli_error,
     create_export_job,
-    filter_templates_by_ids,
     filter_templates_by_indices,
     get_preset_path,
     get_traces_path,
-    load_manual_traces_from_file,
     parse_question_indices,
     validate_output_path,
 )
@@ -52,9 +53,9 @@ def _build_config_from_cli_args(
     parsing_model: str | None,
     parsing_provider: str | None,
     parsing_id: str,
-    temperature: float,
+    temperature: float | None,
     interface: str | None,
-    replicate_count: int,
+    replicate_count: int | None,
     abstention: bool,
     sufficiency: bool,
     embedding_check: bool,
@@ -80,6 +81,9 @@ def _build_config_from_cli_args(
     """
     Build VerificationConfig respecting hierarchy: CLI > preset > env > defaults.
 
+    Handles CLI-specific concerns (file loading for deep_judgment_rubric_config)
+    then delegates to VerificationConfig.from_overrides() for config construction.
+
     Args:
         CLI argument values (all optional)
         preset_config: Optional preset configuration to use as base
@@ -87,151 +91,61 @@ def _build_config_from_cli_args(
     Returns:
         VerificationConfig with CLI overrides applied
     """
-    from karenina.schemas.workflow.models import ModelConfig
-
-    # Start with preset if provided, otherwise create new config
-    config_dict = preset_config.model_dump() if preset_config else {}
-
-    # Override replicate_count only if no preset OR if explicitly different from default
-    # (This preserves preset value unless user explicitly passes --replicate-count)
-    if not preset_config or replicate_count != 1:
-        config_dict["replicate_count"] = replicate_count
-
-    # Override feature flags (always override since they have defaults)
-    config_dict["abstention_enabled"] = abstention
-    config_dict["sufficiency_enabled"] = sufficiency
-    config_dict["embedding_check_enabled"] = embedding_check
-    config_dict["deep_judgment_enabled"] = deep_judgment
-
-    # Override deep judgment rubric settings (always override since they have defaults)
-    config_dict["deep_judgment_rubric_mode"] = deep_judgment_rubric_mode
-    config_dict["deep_judgment_rubric_global_excerpts"] = deep_judgment_rubric_excerpts
-    config_dict["deep_judgment_rubric_max_excerpts_default"] = deep_judgment_rubric_max_excerpts
-    config_dict["deep_judgment_rubric_fuzzy_match_threshold_default"] = deep_judgment_rubric_fuzzy_threshold
-    config_dict["deep_judgment_rubric_excerpt_retry_attempts_default"] = deep_judgment_rubric_retry_attempts
-    config_dict["deep_judgment_rubric_search_enabled"] = deep_judgment_rubric_search
-    config_dict["deep_judgment_rubric_search_tool"] = deep_judgment_rubric_search_tool
-
-    # Load custom config JSON if provided (for custom mode)
+    # CLI-specific: load custom rubric config JSON if a file path was provided
+    rubric_config_dict = None
     if deep_judgment_rubric_config is not None:
         import json
 
         try:
             with open(deep_judgment_rubric_config) as f:
-                custom_config = json.load(f)
-            config_dict["deep_judgment_rubric_config"] = custom_config
-        except Exception as e:
+                rubric_config_dict = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError, ValueError) as e:
             raise ValueError(f"Failed to load custom rubric config from {deep_judgment_rubric_config}: {e}") from e
 
-    # Override MCP trace filtering settings (always override since they have defaults)
-    config_dict["use_full_trace_for_template"] = use_full_trace_for_template
-    config_dict["use_full_trace_for_rubric"] = use_full_trace_for_rubric
+    # Resolve interface for answering vs parsing:
+    # Parsing model should NOT use manual interface (only answering model can)
+    answering_interface = interface
+    parsing_interface = interface if interface != "manual" else "langchain"
 
-    # Override advanced settings (always override since they have defaults)
-    config_dict["evaluation_mode"] = evaluation_mode
-    # Set rubric_enabled based on evaluation_mode
-    config_dict["rubric_enabled"] = evaluation_mode in ["template_and_rubric", "rubric_only"]
-    config_dict["embedding_similarity_threshold"] = embedding_threshold
-    config_dict["embedding_model_name"] = embedding_model
-    config_dict["async_enabled"] = async_execution
-    if async_workers is not None:
-        config_dict["async_max_workers"] = async_workers
-    # else: let VerificationConfig read from KARENINA_ASYNC_MAX_WORKERS or use default
-
-    # Handle model configuration
-    # If ANY optional model CLI arg is provided, we override that model completely
-    # Note: answering_id, parsing_id, and temperature now have defaults so always count as provided
-    answering_has_cli_args = any(
-        [
-            answering_model is not None,
-            answering_provider is not None,
-            interface is not None,
-        ]
+    return VerificationConfig.from_overrides(
+        base=preset_config,
+        # Model configuration
+        answering_model=answering_model,
+        answering_provider=answering_provider,
+        answering_id=answering_id,
+        answering_interface=answering_interface,
+        parsing_model=parsing_model,
+        parsing_provider=parsing_provider,
+        parsing_id=parsing_id,
+        parsing_interface=parsing_interface,
+        temperature=temperature,
+        manual_traces=manual_traces_obj,
+        # Execution settings
+        replicate_count=replicate_count,
+        # Feature flags
+        abstention=abstention,
+        sufficiency=sufficiency,
+        embedding_check=embedding_check,
+        deep_judgment=deep_judgment,
+        # Evaluation settings
+        evaluation_mode=evaluation_mode,
+        embedding_threshold=embedding_threshold,
+        embedding_model=embedding_model,
+        async_execution=async_execution,
+        async_workers=async_workers,
+        # Trace filtering
+        use_full_trace_for_template=use_full_trace_for_template,
+        use_full_trace_for_rubric=use_full_trace_for_rubric,
+        # Deep judgment rubric settings
+        deep_judgment_rubric_mode=deep_judgment_rubric_mode,
+        deep_judgment_rubric_excerpts=deep_judgment_rubric_excerpts,
+        deep_judgment_rubric_max_excerpts=deep_judgment_rubric_max_excerpts,
+        deep_judgment_rubric_fuzzy_threshold=deep_judgment_rubric_fuzzy_threshold,
+        deep_judgment_rubric_retry_attempts=deep_judgment_rubric_retry_attempts,
+        deep_judgment_rubric_search=deep_judgment_rubric_search,
+        deep_judgment_rubric_search_tool=deep_judgment_rubric_search_tool,
+        deep_judgment_rubric_config=rubric_config_dict,
     )
-
-    parsing_has_cli_args = any(
-        [
-            parsing_model is not None,
-            parsing_provider is not None,
-            interface is not None,
-        ]
-    )
-
-    if answering_has_cli_args:
-        # Build answering model from CLI args
-        # Use preset values as defaults if available
-        if preset_config and preset_config.answering_models:
-            base_model = preset_config.answering_models[0].model_dump()
-        else:
-            # No preset - start with minimal required fields
-            # For manual interface, only interface and manual_traces are required
-            if interface == "manual":
-                base_model = {
-                    "interface": "manual",
-                    # id, model_name, model_provider will be set by ModelConfig defaults
-                }
-            else:
-                # Validation ensures model_name and provider are provided when no preset
-                base_model = {
-                    "model_name": answering_model or "gpt-4.1-mini",
-                    "model_provider": answering_provider or "openai",
-                    "interface": interface or "langchain",
-                    "temperature": temperature,
-                    "id": answering_id,
-                }
-
-        # Apply CLI overrides if preset was used
-        if preset_config:
-            if answering_model is not None:
-                base_model["model_name"] = answering_model
-            if answering_provider is not None:
-                base_model["model_provider"] = answering_provider
-            base_model["id"] = answering_id
-            base_model["temperature"] = temperature
-            if interface is not None:
-                base_model["interface"] = interface
-
-        # Create ModelConfig
-        if base_model.get("interface") == "manual":
-            if manual_traces_obj is None:
-                raise ValueError("manual_traces_obj is None but interface is manual")
-            # Create ModelConfig directly with required parameters for manual interface
-            model_config = ModelConfig(interface="manual", manual_traces=manual_traces_obj)
-            config_dict["answering_models"] = [model_config]
-        else:
-            config_dict["answering_models"] = [ModelConfig(**base_model)]
-
-    if parsing_has_cli_args:
-        # Build parsing model from CLI args
-        if preset_config and preset_config.parsing_models:
-            base_model = preset_config.parsing_models[0].model_dump()
-        else:
-            # No preset - start with minimal required fields
-            # Validation ensures model_name and provider are provided when no preset
-            # Note: Parsing model should NOT use manual interface (only answering model can)
-            parsing_interface = interface if interface != "manual" else "langchain"
-            base_model = {
-                "model_name": parsing_model or "gpt-4.1-mini",
-                "model_provider": parsing_provider or "openai",
-                "interface": parsing_interface,
-                "temperature": temperature,
-                "id": parsing_id,
-            }
-
-        # Apply CLI overrides if preset was used
-        if preset_config:
-            if parsing_model is not None:
-                base_model["model_name"] = parsing_model
-            if parsing_provider is not None:
-                base_model["model_provider"] = parsing_provider
-            base_model["id"] = parsing_id
-            base_model["temperature"] = temperature
-            if interface is not None and interface != "manual":
-                base_model["interface"] = interface
-
-        config_dict["parsing_models"] = [ModelConfig(**base_model)]
-
-    return VerificationConfig(**config_dict)
 
 
 def _validate_output_and_prompt(
@@ -253,13 +167,11 @@ def _validate_output_and_prompt(
         try:
             output_format = validate_output_path(output)
         except ValueError as e:
-            console.print(f"[red]Error: {e}[/red]")
-            raise typer.Exit(code=1) from e
+            cli_error(str(e), e)
 
     # Validate progressive save requires output
     if progressive_save and not output:
-        console.print("[red]Error: --progressive-save requires --output to be specified[/red]")
-        raise typer.Exit(code=1)
+        cli_error("--progressive-save requires --output to be specified")
 
     # Prompt for output file if not specified (and not resuming or interactive)
     if not output and not resume and not interactive:
@@ -274,8 +186,7 @@ def _validate_output_and_prompt(
         try:
             output_format = validate_output_path(output)
         except ValueError as e:
-            console.print(f"[red]Error: {e}[/red]")
-            raise typer.Exit(code=1) from e
+            cli_error(str(e), e)
 
     return output, output_format
 
@@ -293,8 +204,7 @@ def _handle_resume_mode(
         typer.Exit: If state file not found, load error, or all tasks completed
     """
     if not resume.exists():
-        console.print(f"[red]Error: State file not found: {resume}[/red]")
-        raise typer.Exit(code=1)
+        cli_error(f"State file not found: {resume}")
 
     console.print(f"[cyan]Loading resume state from {resume}...[/cyan]")
     try:
@@ -319,8 +229,7 @@ def _handle_resume_mode(
     except typer.Exit:
         raise
     except Exception as e:
-        console.print(f"[red]Error loading resume state: {e}[/red]")
-        raise typer.Exit(code=1) from e
+        cli_error(f"loading resume state: {e}", e)
 
 
 def _load_benchmark(benchmark_path: str) -> Benchmark:
@@ -336,9 +245,8 @@ def _load_benchmark(benchmark_path: str) -> Benchmark:
     console.print("[cyan]Loading benchmark...[/cyan]")
     try:
         benchmark = Benchmark.load(Path(benchmark_path))
-    except Exception as e:
-        console.print(f"[red]Error loading benchmark: {e}[/red]")
-        raise typer.Exit(code=1) from e
+    except (FileNotFoundError, ValidationError) as e:
+        cli_error(f"loading benchmark: {e}", e)
 
     console.print(f"[green]✓ Loaded benchmark: {benchmark.name or 'Unnamed'}[/green]")
     console.print(f"  Total questions: {len(benchmark.get_all_questions())}")
@@ -428,11 +336,9 @@ def _load_manual_traces(manual_traces: Path, benchmark: Benchmark) -> object:
         return manual_traces_obj
 
     except FileNotFoundError as e:
-        console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(code=1) from e
+        cli_error(str(e), e)
     except Exception as e:
-        console.print(f"[red]Error loading manual traces: {e}[/red]")
-        raise typer.Exit(code=1) from e
+        cli_error(f"loading manual traces: {e}", e)
 
 
 def _validate_deep_judgment_rubric_settings(
@@ -448,13 +354,12 @@ def _validate_deep_judgment_rubric_settings(
     """
     valid_modes = ["disabled", "enable_all", "use_checkpoint", "custom"]
     if deep_judgment_rubric_mode not in valid_modes:
-        console.print(f"[red]Error: Invalid deep_judgment_rubric_mode '{deep_judgment_rubric_mode}'[/red]")
-        console.print(f"[red]Valid modes: {', '.join(valid_modes)}[/red]")
-        raise typer.Exit(code=1)
+        cli_error(
+            f"Invalid deep_judgment_rubric_mode '{deep_judgment_rubric_mode}'. Valid modes: {', '.join(valid_modes)}"
+        )
 
     if not 0.0 <= deep_judgment_rubric_fuzzy_threshold <= 1.0:
-        console.print("[red]Error: deep_judgment_rubric_fuzzy_threshold must be between 0.0 and 1.0[/red]")
-        raise typer.Exit(code=1)
+        cli_error("deep_judgment_rubric_fuzzy_threshold must be between 0.0 and 1.0")
 
     if deep_judgment_rubric_mode == "use_checkpoint":
         console.print(
@@ -465,18 +370,18 @@ def _validate_deep_judgment_rubric_settings(
         )
 
     if deep_judgment_rubric_mode == "custom" and not deep_judgment_rubric_config:
-        console.print("[red]Error: custom mode requires --deep-judgment-rubric-config to be specified[/red]")
-        raise typer.Exit(code=1)
+        cli_error("custom mode requires --deep-judgment-rubric-config to be specified")
 
 
 def _filter_templates(
     all_templates: list[FinishedTemplate],
     selected_question_indices: list[int] | None,
     questions: str | None,
-    question_ids: str | None,
 ) -> list[FinishedTemplate]:
     """
-    Filter templates based on provided criteria.
+    Filter templates based on index-based criteria.
+
+    Note: Question ID filtering is handled upstream via Benchmark.get_finished_templates(question_ids=...).
 
     Returns:
         Filtered list of templates
@@ -498,16 +403,10 @@ def _filter_templates(
             templates = filter_templates_by_indices(all_templates, indices)
             console.print(f"[dim]Filtered to {len(templates)} question(s) by indices[/dim]")
         except ValueError as e:
-            console.print(f"[red]Error parsing question indices: {e}[/red]")
-            raise typer.Exit(code=1) from e
-    elif question_ids:
-        ids = [id.strip() for id in question_ids.split(",")]
-        templates = filter_templates_by_ids(all_templates, ids)
-        console.print(f"[dim]Filtered to {len(templates)} question(s) by IDs[/dim]")
+            cli_error(f"parsing question indices: {e}", e)
 
     if not templates:
-        console.print("[red]Error: No templates to verify after filtering[/red]")
-        raise typer.Exit(code=1)
+        cli_error("No templates to verify after filtering")
 
     return templates
 
@@ -711,8 +610,8 @@ def _build_config_non_interactive(
     parsing_model: str | None,
     parsing_provider: str | None,
     parsing_id: str,
-    temperature: float,
-    replicate_count: int,
+    temperature: float | None,
+    replicate_count: int | None,
     abstention: bool,
     sufficiency: bool,
     embedding_check: bool,
@@ -753,9 +652,8 @@ def _build_config_non_interactive(
             preset_path = get_preset_path(str(preset))
             preset_config = VerificationConfig.from_preset(preset_path)
             console.print(f"[green]✓ Loaded preset from: {preset_path}[/green]")
-        except Exception as e:
-            console.print(f"[red]Error loading preset: {e}[/red]")
-            raise typer.Exit(code=1) from e
+        except (FileNotFoundError, ValueError, ValidationError) as e:
+            cli_error(f"loading preset: {e}", e)
 
     # Validate required parameters when no preset is used
     if not preset_config:
@@ -836,8 +734,7 @@ def _build_config_non_interactive(
             console.print("[dim]Building configuration from CLI arguments[/dim]")
 
     except Exception as e:
-        console.print(f"[red]Error building configuration: {e}[/red]")
-        raise typer.Exit(code=1) from e
+        cli_error(f"building configuration: {e}", e)
 
     # Validate deep judgment rubric settings
     _validate_deep_judgment_rubric_settings(
@@ -904,12 +801,12 @@ def verify(
         str | None, typer.Option(help="Parsing model provider for langchain (required without preset)")
     ] = None,
     parsing_id: Annotated[str, typer.Option(help="Parsing model ID")] = "parsing-1",
-    temperature: Annotated[float, typer.Option(help="Model temperature (0.0-2.0)")] = 0.1,
+    temperature: Annotated[float | None, typer.Option(help="Model temperature (0.0-2.0)")] = None,
     interface: Annotated[
         str | None, typer.Option(help="Model interface: langchain/openrouter/openai_endpoint (required without preset)")
     ] = None,
     # General settings
-    replicate_count: Annotated[int, typer.Option(help="Number of replicates per verification")] = 1,
+    replicate_count: Annotated[int | None, typer.Option(help="Number of replicates per verification")] = None,
     # Feature flags
     abstention: Annotated[bool, typer.Option("--abstention", help="Enable abstention detection")] = False,
     sufficiency: Annotated[bool, typer.Option("--sufficiency", help="Enable trace sufficiency detection")] = False,
@@ -1027,13 +924,12 @@ def verify(
 
         # Validate benchmark_path is provided unless resuming
         if not resume and not benchmark_path:
-            console.print("[red]Error: BENCHMARK_PATH is required (unless using --resume)[/red]")
-            raise typer.Exit(code=1)
+            cli_error("BENCHMARK_PATH is required (unless using --resume)")
 
         # Initialize state variables
         progressive_manager: ProgressiveSaveManager | None = None
         pending_task_ids: set[str] | None = None
-        config: VerificationConfig
+        config: VerificationConfig | None = None
         selected_question_indices: list[int] | None = None
         show_progress_bar_interactive: bool | None = None
 
@@ -1044,7 +940,8 @@ def verify(
             )
 
         # Step 3: Load benchmark
-        assert benchmark_path is not None, "benchmark_path should be set"
+        if benchmark_path is None:
+            cli_error("benchmark_path must be set (not resuming or resume should have set it)")
         benchmark = _load_benchmark(benchmark_path)
 
         # Set global rubric on progressive manager if resuming
@@ -1098,9 +995,18 @@ def verify(
                 progressive_save=progressive_save,
             )
 
+        # Validate config was built successfully
+        if config is None:
+            cli_error("Failed to build verification configuration")
+
         # Step 5: Get and filter templates
-        all_templates = benchmark.get_finished_templates()
-        templates = _filter_templates(all_templates, selected_question_indices, questions, question_ids)
+        ids_filter = None
+        if question_ids:
+            ids_filter = {id.strip() for id in question_ids.split(",")}
+        all_templates = benchmark.get_finished_templates(question_ids=ids_filter)
+        if ids_filter:
+            console.print(f"[dim]Filtered to {len(all_templates)} question(s) by IDs[/dim]")
+        templates = _filter_templates(all_templates, selected_question_indices, questions)
 
         # Step 6: Prompt for output in interactive mode (if not already specified)
         if not output and interactive:
@@ -1108,7 +1014,8 @@ def verify(
 
         # Step 7: Initialize progressive save (if enabled and not resuming)
         if progressive_save and not resume:
-            assert output is not None, "output should be set for progressive save"
+            if output is None:
+                cli_error("output path is required for progressive save")
             progressive_manager = _initialize_progressive_save(output, config, benchmark_path, templates, benchmark)
 
         # Step 8: Filter templates for resume (only pending tasks)
@@ -1153,12 +1060,13 @@ def verify(
         # Step 12: Display summary
         _display_summary(final_results, duration)
 
-        # Force exit to cleanup lingering resources (HTTP clients, MCP connections, etc.)
-        import sys
+        raise typer.Exit(code=0)
 
-        time.sleep(0.5)
-        sys.exit(0)
-
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Interrupted by user.[/yellow]")
+        if progressive_manager is not None and output is not None:
+            console.print(f"[dim]To resume: karenina verify --resume {output}[/dim]")
+        raise typer.Exit(code=130) from None
     except typer.Exit:
         raise
     except Exception as e:

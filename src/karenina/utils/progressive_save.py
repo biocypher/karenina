@@ -1,4 +1,4 @@
-"""Progressive save functionality for CLI verification with resume support.
+"""Progressive save functionality for verification with resume support.
 
 This module provides incremental saving of verification results and the ability
 to resume interrupted verification runs.
@@ -8,33 +8,24 @@ Key Components:
 - ProgressiveSaveManager: Manages .tmp and .state files for progressive saving
 """
 
-import contextlib
 import hashlib
 import json
 import logging
-import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ..schemas import VerificationConfig, VerificationResult
-from ..schemas.config import ModelConfig
-from ..schemas.entities import Rubric
-from ..schemas.results import VerificationResultSet
-from ..schemas.verification.model_identity import ModelIdentity
+from karenina.benchmark.verification.stages.helpers.results_exporter import export_verification_results_json
+from karenina.schemas import VerificationConfig, VerificationResult
+from karenina.schemas.config import ModelConfig
+from karenina.schemas.entities import Rubric
+from karenina.schemas.results import VerificationResultSet
+from karenina.schemas.verification.model_identity import ModelIdentity
+from karenina.schemas.workflow.verification.job import VerificationJob
+from karenina.utils.file_ops import atomic_write
 
 logger = logging.getLogger(__name__)
-
-
-def get_karenina_version() -> str:
-    """Get the current Karenina version."""
-    try:
-        import karenina
-
-        return getattr(karenina, "__version__", "unknown")
-    except ImportError:
-        return "unknown"
 
 
 @dataclass
@@ -141,7 +132,6 @@ class ProgressiveSaveManager:
     """
 
     STATE_FORMAT_VERSION = "1.0"
-    RESULTS_FORMAT_VERSION = "2.1"
 
     def __init__(
         self,
@@ -361,92 +351,26 @@ class ProgressiveSaveManager:
             "start_time": self._start_time,
         }
 
-        self._atomic_write(self.state_path, json.dumps(state_data, indent=2))
+        atomic_write(self.state_path, json.dumps(state_data, indent=2))
 
     def _save_results(self) -> None:
         """Save results file in standard export format with atomic write.
 
-        Uses the same v2.0 format as export_verification_results_json for consistency:
-        - metadata.verification_config: answering_model and parsing_model info
-        - metadata.job_summary: total_questions, successful_count, etc.
-        - shared_data.rubric_definition: global rubric traits (if available)
+        Delegates to export_verification_results_json() to avoid duplicating
+        the export format construction logic.
         """
-        # Build rubric definition from global_rubric if provided
-        # This is stored once in shared_data instead of per-result
-        rubric_definition = None
-        if self.global_rubric is not None:
-            if hasattr(self.global_rubric, "model_dump"):
-                rubric_definition = self.global_rubric.model_dump(mode="json", exclude_unset=True)
-            elif hasattr(self.global_rubric, "get_trait_names"):
-                rubric_definition = {"trait_names": self.global_rubric.get_trait_names()}
-
-        # Get model info for verification_config
-        answering_model = self.config.answering_models[0] if self.config.answering_models else None
-        parsing_model = self.config.parsing_models[0] if self.config.parsing_models else None
-
-        # Build export data in standard v2.0 format (same as export_verification_results_json)
-        export_data: dict[str, Any] = {
-            "format_version": self.RESULTS_FORMAT_VERSION,
-            "metadata": {
-                "export_timestamp": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
-                "karenina_version": get_karenina_version(),
-                "job_id": f"progressive-{int(self._start_time or time.time())}",
-                "verification_config": {
-                    "answering_model": {
-                        "provider": answering_model.model_provider if answering_model else None,
-                        "name": answering_model.model_name if answering_model else None,
-                        "temperature": answering_model.temperature if answering_model else None,
-                        "interface": answering_model.interface if answering_model else None,
-                    },
-                    "parsing_model": {
-                        "provider": parsing_model.model_provider if parsing_model else None,
-                        "name": parsing_model.model_name if parsing_model else None,
-                        "temperature": parsing_model.temperature if parsing_model else None,
-                        "interface": parsing_model.interface if parsing_model else None,
-                    },
-                },
-                "job_summary": {
-                    "total_questions": self.total_tasks,
-                    "successful_count": self.completed_count,
-                    "failed_count": 0,  # Not tracked during progressive save
-                    "start_time": self._start_time,
-                    "end_time": None,  # Not complete yet
-                    "total_duration": None,  # Not complete yet
-                },
-            },
-            "shared_data": {
-                "rubric_definition": rubric_definition,
-            },
-            "results": [],
-        }
-
-        # Add results
-        for result in self._results:
-            result_dict = result.model_dump(mode="json")
-            export_data["results"].append(result_dict)
-
-        self._atomic_write(self.tmp_path, json.dumps(export_data, indent=2, ensure_ascii=False))
-
-    def _atomic_write(self, path: Path, content: str) -> None:
-        """Write content to file atomically using write-rename pattern."""
-        partial_path = path.with_suffix(path.suffix + ".partial")
-
-        try:
-            # Write to partial file
-            with open(partial_path, "w", encoding="utf-8") as f:
-                f.write(content)
-                f.flush()
-                os.fsync(f.fileno())
-
-            # Atomic rename
-            partial_path.replace(path)
-
-        except Exception as e:
-            # Clean up partial file on error
-            if partial_path.exists():
-                with contextlib.suppress(OSError):
-                    partial_path.unlink()
-            raise e
+        job = VerificationJob(
+            job_id=f"progressive-{int(self._start_time or time.time())}",
+            run_name="progressive",
+            status="running",
+            config=self.config,
+            total_questions=self.total_tasks,
+            successful_count=self.completed_count,
+            start_time=self._start_time,
+        )
+        result_set = VerificationResultSet(results=list(self._results))
+        json_str = export_verification_results_json(job, result_set, self.global_rubric)
+        atomic_write(self.tmp_path, json_str)
 
 
 def generate_task_manifest(tasks: list[dict[str, Any]]) -> list[str]:

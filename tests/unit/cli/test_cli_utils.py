@@ -7,10 +7,9 @@ Tests cover:
 - parse_question_indices() - parsing question index strings
 - validate_output_path() - output path validation
 - filter_templates_by_indices() - filtering templates by index
-- filter_templates_by_ids() - filtering templates by ID
 - create_export_job() - creating VerificationJob for export
 - get_traces_path() - trace file path resolution
-- load_manual_traces_from_file() - loading manual traces
+- load_manual_traces_from_file() - loading manual traces (from karenina.adapters.manual)
 
 All tests use temp directories and avoid external dependencies.
 """
@@ -21,15 +20,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from karenina.adapters.manual import load_manual_traces_from_file
 from karenina.cli.utils import (
     _get_presets_directory,
     create_export_job,
-    filter_templates_by_ids,
     filter_templates_by_indices,
     get_preset_path,
     get_traces_path,
     list_presets,
-    load_manual_traces_from_file,
     parse_question_indices,
     validate_output_path,
 )
@@ -469,73 +467,6 @@ def test_filter_templates_by_indices_preserves_order() -> None:
 
 
 # =============================================================================
-# filter_templates_by_ids Tests
-# =============================================================================
-
-
-@pytest.mark.unit
-def test_filter_templates_by_ids_empty() -> None:
-    """Test filtering with empty IDs returns empty list."""
-    templates = [
-        _make_template("q-1"),
-        _make_template("q-2"),
-    ]
-    result = filter_templates_by_ids(templates, [])
-    assert result == []
-
-
-@pytest.mark.unit
-def test_filter_templates_by_ids_single() -> None:
-    """Test filtering by single ID."""
-    templates = [
-        _make_template("q-1"),
-        _make_template("q-2"),
-        _make_template("q-3"),
-    ]
-    result = filter_templates_by_ids(templates, ["q-2"])
-    assert len(result) == 1
-    assert result[0].question_id == "q-2"
-
-
-@pytest.mark.unit
-def test_filter_templates_by_ids_multiple() -> None:
-    """Test filtering by multiple IDs."""
-    templates = [
-        _make_template("q-1"),
-        _make_template("q-2"),
-        _make_template("q-3"),
-        _make_template("q-4"),
-    ]
-    result = filter_templates_by_ids(templates, ["q-1", "q-3", "q-4"])
-    assert len(result) == 3
-    assert [t.question_id for t in result] == ["q-1", "q-3", "q-4"]
-
-
-@pytest.mark.unit
-def test_filter_templates_by_ids_nonexistent() -> None:
-    """Test filtering with non-existent IDs returns subset."""
-    templates = [
-        _make_template("q-1"),
-        _make_template("q-2"),
-    ]
-    result = filter_templates_by_ids(templates, ["q-1", "q-99"])
-    assert len(result) == 1
-    assert result[0].question_id == "q-1"
-
-
-@pytest.mark.unit
-def test_filter_templates_by_ids_preserves_order() -> None:
-    """Test filtering preserves original order."""
-    templates = [
-        _make_template("q-1"),
-        _make_template("q-2"),
-        _make_template("q-3"),
-    ]
-    result = filter_templates_by_ids(templates, ["q-3", "q-1"])
-    assert [t.question_id for t in result] == ["q-1", "q-3"]
-
-
-# =============================================================================
 # create_export_job Tests
 # =============================================================================
 
@@ -810,8 +741,8 @@ def test_load_manual_traces_from_file_valid(tmp_path: Path) -> None:
     mock_benchmark = MagicMock()
 
     with (
-        patch("karenina.adapters.manual.load_manual_traces"),
-        patch("karenina.adapters.manual.ManualTraces", return_value="mock_manual_traces") as MockManualTraces,
+        patch("karenina.adapters.manual.helpers.load_manual_traces"),
+        patch("karenina.adapters.manual.traces.ManualTraces", return_value="mock_manual_traces") as MockManualTraces,
     ):
         result = load_manual_traces_from_file(trace_file, mock_benchmark)
         assert result == "mock_manual_traces"

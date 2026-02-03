@@ -533,3 +533,237 @@ class VerificationConfig(BaseModel):
     def from_preset(cls, filepath: Path) -> "VerificationConfig":
         """Load a VerificationConfig from a preset file. Delegates to config_presets.load_preset."""
         return load_preset(filepath)
+
+    @classmethod
+    def from_overrides(
+        cls,
+        base: "VerificationConfig | None" = None,
+        *,
+        # Model configuration
+        answering_model: str | None = None,
+        answering_provider: str | None = None,
+        answering_id: str | None = None,
+        answering_interface: str | None = None,
+        parsing_model: str | None = None,
+        parsing_provider: str | None = None,
+        parsing_id: str | None = None,
+        parsing_interface: str | None = None,
+        temperature: float | None = None,
+        manual_traces: Any | None = None,
+        # Execution settings
+        replicate_count: int | None = None,
+        # Feature flags
+        abstention: bool | None = None,
+        sufficiency: bool | None = None,
+        embedding_check: bool | None = None,
+        deep_judgment: bool | None = None,
+        # Evaluation settings
+        evaluation_mode: str | None = None,
+        embedding_threshold: float | None = None,
+        embedding_model: str | None = None,
+        async_execution: bool | None = None,
+        async_workers: int | None = None,
+        # Trace filtering
+        use_full_trace_for_template: bool | None = None,
+        use_full_trace_for_rubric: bool | None = None,
+        # Deep judgment rubric settings
+        deep_judgment_rubric_mode: str | None = None,
+        deep_judgment_rubric_excerpts: bool | None = None,
+        deep_judgment_rubric_max_excerpts: int | None = None,
+        deep_judgment_rubric_fuzzy_threshold: float | None = None,
+        deep_judgment_rubric_retry_attempts: int | None = None,
+        deep_judgment_rubric_search: bool | None = None,
+        deep_judgment_rubric_search_tool: str | None = None,
+        deep_judgment_rubric_config: dict[str, Any] | None = None,
+    ) -> "VerificationConfig":
+        """
+        Create a VerificationConfig by applying overrides to an optional base config.
+
+        Implements the hierarchy: overrides > base config > defaults.
+        Parameters set to None are not applied (base or default value is preserved).
+
+        This is the canonical way to construct a VerificationConfig with selective
+        overrides, usable by CLI, server, and programmatic callers.
+
+        Args:
+            base: Optional base config (e.g., from a preset). If None, starts from defaults.
+            **kwargs: Override values. None means "don't override".
+
+        Returns:
+            A new VerificationConfig with overrides applied.
+        """
+        # Start with base config dump or empty dict
+        config_dict: dict[str, Any] = base.model_dump() if base else {}
+
+        # --- Scalar overrides (None = don't override) ---
+
+        # Replicate count
+        if replicate_count is not None:
+            config_dict["replicate_count"] = replicate_count
+        elif not base:
+            config_dict["replicate_count"] = 1
+
+        # Feature flags
+        if abstention is not None:
+            config_dict["abstention_enabled"] = abstention
+        if sufficiency is not None:
+            config_dict["sufficiency_enabled"] = sufficiency
+        if embedding_check is not None:
+            config_dict["embedding_check_enabled"] = embedding_check
+        if deep_judgment is not None:
+            config_dict["deep_judgment_enabled"] = deep_judgment
+
+        # Evaluation settings
+        if evaluation_mode is not None:
+            config_dict["evaluation_mode"] = evaluation_mode
+            config_dict["rubric_enabled"] = evaluation_mode in ["template_and_rubric", "rubric_only"]
+        if embedding_threshold is not None:
+            config_dict["embedding_check_threshold"] = embedding_threshold
+        if embedding_model is not None:
+            config_dict["embedding_check_model"] = embedding_model
+        if async_execution is not None:
+            config_dict["async_enabled"] = async_execution
+        if async_workers is not None:
+            config_dict["async_max_workers"] = async_workers
+
+        # Trace filtering
+        if use_full_trace_for_template is not None:
+            config_dict["use_full_trace_for_template"] = use_full_trace_for_template
+        if use_full_trace_for_rubric is not None:
+            config_dict["use_full_trace_for_rubric"] = use_full_trace_for_rubric
+
+        # Deep judgment rubric settings
+        if deep_judgment_rubric_mode is not None:
+            config_dict["deep_judgment_rubric_mode"] = deep_judgment_rubric_mode
+        if deep_judgment_rubric_excerpts is not None:
+            config_dict["deep_judgment_rubric_global_excerpts"] = deep_judgment_rubric_excerpts
+        if deep_judgment_rubric_max_excerpts is not None:
+            config_dict["deep_judgment_rubric_max_excerpts_default"] = deep_judgment_rubric_max_excerpts
+        if deep_judgment_rubric_fuzzy_threshold is not None:
+            config_dict["deep_judgment_rubric_fuzzy_match_threshold_default"] = deep_judgment_rubric_fuzzy_threshold
+        if deep_judgment_rubric_retry_attempts is not None:
+            config_dict["deep_judgment_rubric_excerpt_retry_attempts_default"] = deep_judgment_rubric_retry_attempts
+        if deep_judgment_rubric_search is not None:
+            config_dict["deep_judgment_rubric_search_enabled"] = deep_judgment_rubric_search
+        if deep_judgment_rubric_search_tool is not None:
+            config_dict["deep_judgment_rubric_search_tool"] = deep_judgment_rubric_search_tool
+        if deep_judgment_rubric_config is not None:
+            config_dict["deep_judgment_rubric_config"] = deep_judgment_rubric_config
+
+        # --- Model configuration ---
+        # Determine the unified interface (answering and parsing may differ)
+        ans_interface = answering_interface
+        par_interface = parsing_interface
+        # If only a single 'interface' concept was provided via answering_interface,
+        # it's already split by the caller. No implicit sharing here.
+
+        answering_has_overrides = any(
+            [
+                answering_model is not None,
+                answering_provider is not None,
+                ans_interface is not None,
+            ]
+        )
+
+        parsing_has_overrides = any(
+            [
+                parsing_model is not None,
+                parsing_provider is not None,
+                par_interface is not None,
+            ]
+        )
+
+        if answering_has_overrides:
+            config_dict["answering_models"] = [
+                cls._build_model_config_dict(
+                    base_models=base.answering_models if base else None,
+                    model_name=answering_model,
+                    provider=answering_provider,
+                    model_id=answering_id,
+                    temperature=temperature,
+                    interface=ans_interface,
+                    manual_traces=manual_traces,
+                    default_model="gpt-4.1-mini",
+                    default_provider="openai",
+                    default_interface="langchain",
+                )
+            ]
+        elif manual_traces is not None:
+            # Manual interface requested via manual_traces without explicit model overrides
+            config_dict["answering_models"] = [ModelConfig(interface="manual", manual_traces=manual_traces)]
+
+        if parsing_has_overrides:
+            config_dict["parsing_models"] = [
+                cls._build_model_config_dict(
+                    base_models=base.parsing_models if base else None,
+                    model_name=parsing_model,
+                    provider=parsing_provider,
+                    model_id=parsing_id,
+                    temperature=temperature,
+                    interface=par_interface,
+                    manual_traces=None,  # Parsing model never uses manual interface
+                    default_model="gpt-4.1-mini",
+                    default_provider="openai",
+                    default_interface="langchain",
+                )
+            ]
+
+        return cls(**config_dict)
+
+    @classmethod
+    def _build_model_config_dict(
+        cls,
+        *,
+        base_models: list[ModelConfig] | None,
+        model_name: str | None,
+        provider: str | None,
+        model_id: str | None,
+        temperature: float | None,
+        interface: str | None,
+        manual_traces: Any | None,
+        default_model: str,
+        default_provider: str,
+        default_interface: str,
+    ) -> ModelConfig:
+        """
+        Build a ModelConfig by applying overrides to an optional base model.
+
+        If base_models is provided, uses the first model as the starting point and
+        applies only non-None overrides. If no base, constructs from scratch with defaults.
+
+        Returns:
+            A new ModelConfig instance.
+        """
+        if interface == "manual" and manual_traces is not None:
+            return ModelConfig(interface="manual", manual_traces=manual_traces)
+
+        if base_models:
+            # Start from base model, apply overrides
+            base_model = base_models[0].model_dump()
+            if model_name is not None:
+                base_model["model_name"] = model_name
+            if provider is not None:
+                base_model["model_provider"] = provider
+            if model_id is not None:
+                base_model["id"] = model_id
+            if temperature is not None:
+                base_model["temperature"] = temperature
+            if interface is not None:
+                base_model["interface"] = interface
+            return ModelConfig(**base_model)
+
+        # No base — build from scratch
+        from typing import Literal, cast
+
+        InterfaceType = Literal[
+            "langchain", "openrouter", "manual", "openai_endpoint", "claude_agent_sdk", "claude_tool"
+        ]
+        final_interface = cast(InterfaceType, interface or default_interface)
+
+        return ModelConfig(
+            model_name=model_name or default_model,
+            model_provider=provider or default_provider,
+            interface=final_interface,
+            temperature=temperature if temperature is not None else 0.1,
+            id=model_id,
+        )

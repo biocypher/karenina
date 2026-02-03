@@ -14,9 +14,22 @@ from rich.panel import Panel
 from rich.progress import BarColumn, Progress, TextColumn
 from rich.table import Table
 
-from .progressive_save import ProgressiveJobStatus, inspect_state_file
+from karenina.utils.progressive_save import ProgressiveJobStatus, inspect_state_file
+
+from .utils import cli_error
 
 console = Console()
+
+# Time conversion constants
+SECONDS_PER_MINUTE = 60
+SECONDS_PER_HOUR = 3600
+
+# File size conversion constants
+BYTES_PER_KB = 1024
+BYTES_PER_MB = BYTES_PER_KB * 1024
+
+# Display constants
+PROGRESS_BAR_WIDTH = 40
 
 
 def _format_elapsed_time(seconds: float | None) -> str:
@@ -24,13 +37,13 @@ def _format_elapsed_time(seconds: float | None) -> str:
     if seconds is None:
         return "unknown"
 
-    if seconds < 60:
+    if seconds < SECONDS_PER_MINUTE:
         return f"{seconds:.1f}s"
-    elif seconds < 3600:
-        minutes = seconds / 60
+    elif seconds < SECONDS_PER_HOUR:
+        minutes = seconds / SECONDS_PER_MINUTE
         return f"{minutes:.1f}m"
     else:
-        hours = seconds / 3600
+        hours = seconds / SECONDS_PER_HOUR
         return f"{hours:.1f}h"
 
 
@@ -39,12 +52,12 @@ def _format_file_size(size_bytes: int | None) -> str:
     if size_bytes is None:
         return "N/A"
 
-    if size_bytes < 1024:
+    if size_bytes < BYTES_PER_KB:
         return f"{size_bytes} B"
-    elif size_bytes < 1024 * 1024:
-        return f"{size_bytes / 1024:.1f} KB"
+    elif size_bytes < BYTES_PER_MB:
+        return f"{size_bytes / BYTES_PER_KB:.1f} KB"
     else:
-        return f"{size_bytes / (1024 * 1024):.1f} MB"
+        return f"{size_bytes / BYTES_PER_MB:.1f} MB"
 
 
 def verify_status(
@@ -96,11 +109,9 @@ def verify_status(
     try:
         status = inspect_state_file(state_file)
     except FileNotFoundError as e:
-        console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(code=1) from e
+        cli_error(str(e), e)
     except ValueError as e:
-        console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(code=1) from e
+        cli_error(str(e), e)
 
     if json_output:
         _output_json(status)
@@ -162,7 +173,7 @@ def _output_rich(status: ProgressiveJobStatus, show_tasks: bool, show_questions:
     console.print("\n[bold]Progress[/bold]")
     with Progress(
         TextColumn("[progress.description]{task.description}"),
-        BarColumn(bar_width=40),
+        BarColumn(bar_width=PROGRESS_BAR_WIDTH),
         TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
         TextColumn("({task.completed}/{task.total})"),
         console=console,

@@ -327,6 +327,58 @@ class TestGetFinishedTemplates:
         assert templates[0].question_id == q_id
         assert templates[0].template_code == VALID_TEMPLATE
 
+    def test_get_finished_filtered_by_question_ids(self) -> None:
+        """Test filtering finished templates by question IDs."""
+        benchmark = Benchmark.create(name="test")
+        manager = TemplateManager(benchmark)
+
+        q1 = benchmark.add_question("Question 1?", "Answer 1")
+        q2 = benchmark.add_question("Question 2?", "Answer 2")
+        q3 = benchmark.add_question("Question 3?", "Answer 3")
+        for q_id in [q1, q2, q3]:
+            manager.add_answer_template(q_id, VALID_TEMPLATE)
+        # Set finished after all template additions (add_answer_template triggers _rebuild_cache)
+        for q_id in [q1, q2, q3]:
+            benchmark._questions_cache[q_id]["finished"] = True
+
+        templates = manager.get_finished_templates(question_ids={q1, q3})
+
+        assert len(templates) == 2
+        returned_ids = {t.question_id for t in templates}
+        assert q1 in returned_ids
+        assert q3 in returned_ids
+        assert q2 not in returned_ids
+
+    def test_get_finished_filtered_by_nonexistent_ids(self) -> None:
+        """Test filtering with non-existent IDs returns empty list."""
+        benchmark = Benchmark.create(name="test")
+        manager = TemplateManager(benchmark)
+
+        q_id = benchmark.add_question("Question?", "Answer")
+        manager.add_answer_template(q_id, VALID_TEMPLATE)
+        benchmark._questions_cache[q_id]["finished"] = True
+
+        templates = manager.get_finished_templates(question_ids={"nonexistent"})
+
+        assert templates == []
+
+    def test_get_finished_none_question_ids_returns_all(self) -> None:
+        """Test that None question_ids returns all finished templates."""
+        benchmark = Benchmark.create(name="test")
+        manager = TemplateManager(benchmark)
+
+        q1 = benchmark.add_question("Question 1?", "Answer 1")
+        q2 = benchmark.add_question("Question 2?", "Answer 2")
+        for q_id in [q1, q2]:
+            manager.add_answer_template(q_id, VALID_TEMPLATE)
+        # Set finished after all template additions
+        for q_id in [q1, q2]:
+            benchmark._questions_cache[q_id]["finished"] = True
+
+        templates = manager.get_finished_templates(question_ids=None)
+
+        assert len(templates) == 2
+
     def test_get_finished_truncates_long_preview(self) -> None:
         """Test that long questions are truncated in preview."""
         benchmark = Benchmark.create(name="test")

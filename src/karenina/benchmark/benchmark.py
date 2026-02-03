@@ -423,9 +423,13 @@ class Benchmark:
         """Copy template from one question to another."""
         self._template_manager.copy_template(from_id, to_id)
 
-    def get_finished_templates(self) -> list[FinishedTemplate]:
-        """Get all finished templates for verification."""
-        return self._template_manager.get_finished_templates()
+    def get_finished_templates(self, question_ids: set[str] | None = None) -> list[FinishedTemplate]:
+        """Get all finished templates for verification.
+
+        Args:
+            question_ids: Optional set of question IDs to filter by. If None, returns all finished templates.
+        """
+        return self._template_manager.get_finished_templates(question_ids=question_ids)
 
     def get_missing_templates(self, ids_only: bool = False) -> list[str] | list[dict[str, Any]]:
         """

@@ -169,7 +169,16 @@ class ClaudeToolAgentAdapter:
                 sessions = await connect_all_mcp_servers(exit_stack, mcp_servers)
                 mcp_tool_list = await get_all_mcp_tools(sessions)
 
+                # Apply tool filter from model config or tools parameter
+                tool_filter_names: set[str] | None = None
+                if self._config.mcp_tool_filter:
+                    tool_filter_names = set(self._config.mcp_tool_filter)
+                    logger.info(f"Restricting Claude Tool agent to MCP tools: {self._config.mcp_tool_filter}")
+
                 for server_name, session, mcp_tool in mcp_tool_list:
+                    if tool_filter_names and mcp_tool.name not in tool_filter_names:
+                        logger.debug(f"Skipping MCP tool '{mcp_tool.name}' (not in tool filter)")
+                        continue
                     wrapped = wrap_mcp_tool(session, mcp_tool, server_name, collector=collector)
                     all_tools.append(wrapped)
                     logger.debug(f"Added MCP tool '{mcp_tool.name}' from server '{server_name}'")

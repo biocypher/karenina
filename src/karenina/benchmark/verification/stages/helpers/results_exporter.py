@@ -29,6 +29,7 @@ from io import StringIO
 from typing import Any, Protocol
 
 from .....schemas.workflow import VerificationJob, VerificationResultSet
+from .....utils.version import get_karenina_version
 
 
 class HasTraitNames(Protocol):
@@ -105,16 +106,6 @@ def _safe_json_serialize(data: Any, question_id: str, field_name: str) -> str:
                 "Critical: Failed to convert %s to string for question %s: %s", field_name, question_id, str_error
             )
             return f"<serialization_failed:{type(data).__name__}>"
-
-
-def get_karenina_version() -> str:
-    """Get the current Karenina version."""
-    try:
-        import karenina
-
-        return getattr(karenina, "__version__", "unknown")
-    except ImportError:
-        return "unknown"
 
 
 def export_verification_results_json(
