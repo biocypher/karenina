@@ -155,6 +155,13 @@ def sanitize_model_config(model: dict[str, Any]) -> dict[str, Any]:
         if "endpoint_api_key" in model and model["endpoint_api_key"]:
             sanitized["endpoint_api_key"] = model["endpoint_api_key"]
 
+    # Only include Anthropic fields for claude_tool and claude_agent_sdk interfaces
+    if model["interface"] in ("claude_tool", "claude_agent_sdk"):
+        if "anthropic_base_url" in model and model["anthropic_base_url"]:
+            sanitized["anthropic_base_url"] = model["anthropic_base_url"]
+        if "anthropic_api_key" in model and model["anthropic_api_key"]:
+            sanitized["anthropic_api_key"] = model["anthropic_api_key"]
+
     # Only include MCP fields if they have values
     if "mcp_urls_dict" in model and model["mcp_urls_dict"]:
         sanitized["mcp_urls_dict"] = model["mcp_urls_dict"]

@@ -166,6 +166,17 @@ class ClaudeSDKAgentAdapter:
                 if key not in ("permission_mode", "max_turns", "mcp_servers", "allowed_tools"):
                     options_kwargs[key] = value
 
+        # Build env dict for Anthropic settings (api_key, base_url)
+        # The Claude Agent SDK reads ANTHROPIC_API_KEY and ANTHROPIC_BASE_URL from env
+        env_vars: dict[str, str] = {}
+        if self._config.anthropic_api_key:
+            env_vars["ANTHROPIC_API_KEY"] = self._config.anthropic_api_key.get_secret_value()
+        if self._config.anthropic_base_url:
+            env_vars["ANTHROPIC_BASE_URL"] = self._config.anthropic_base_url
+
+        if env_vars:
+            options_kwargs["env"] = env_vars
+
         return ClaudeAgentOptions(**options_kwargs)
 
     def _build_raw_trace(self, messages: list[Any]) -> str:
