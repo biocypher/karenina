@@ -9,11 +9,50 @@ Use the LLMPort interface via get_llm() instead.
 
 from __future__ import annotations
 
+import logging
 import os
+import re
 from typing import Any
 
 from langchain_openai import ChatOpenAI
 from pydantic import Field, SecretStr
+
+logger = logging.getLogger(__name__)
+
+
+def _normalize_openai_endpoint_url(base_url: str) -> str:
+    """Ensure base URL ends with /v1 for OpenAI-compatible endpoints.
+
+    The OpenAI API expects requests to paths like /v1/chat/completions.
+    This function normalizes URLs to ensure they end with /v1.
+
+    Args:
+        base_url: The user-provided base URL
+
+    Returns:
+        Normalized URL ending with /v1
+
+    Examples:
+        >>> _normalize_openai_endpoint_url("http://localhost:8000")
+        'http://localhost:8000/v1'
+        >>> _normalize_openai_endpoint_url("http://localhost:8000/")
+        'http://localhost:8000/v1'
+        >>> _normalize_openai_endpoint_url("http://localhost:8000/v1")
+        'http://localhost:8000/v1'
+        >>> _normalize_openai_endpoint_url("http://localhost:8000/v1/")
+        'http://localhost:8000/v1'
+    """
+    # Remove trailing slashes for consistent handling
+    url = base_url.rstrip("/")
+
+    # Check if URL already ends with /v1 (case-insensitive)
+    if re.search(r"/v1$", url, re.IGNORECASE):
+        return url
+
+    # Append /v1
+    normalized = f"{url}/v1"
+    logger.debug(f"Normalized OpenAI endpoint URL: {base_url} -> {normalized}")
+    return normalized
 
 
 class ChatOpenRouter(ChatOpenAI):
@@ -79,8 +118,11 @@ class ChatOpenAIEndpoint(ChatOpenAI):
         if isinstance(openai_api_key, str):
             openai_api_key = SecretStr(openai_api_key)
 
+        # Normalize URL to ensure it ends with /v1
+        normalized_url = _normalize_openai_endpoint_url(base_url)
+
         super().__init__(
-            base_url=base_url,
+            base_url=normalized_url,
             api_key=openai_api_key,
             **kwargs,
         )
