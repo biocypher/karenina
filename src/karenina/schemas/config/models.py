@@ -559,6 +559,9 @@ class ModelConfig(BaseModel):
     # OpenAI Endpoint configuration (for openai_endpoint interface)
     endpoint_base_url: str | None = None  # Custom endpoint base URL
     endpoint_api_key: SecretStr | None = None  # User-provided API key
+    # Anthropic-specific configuration (for claude_tool and claude_agent_sdk interfaces)
+    anthropic_base_url: str | None = None  # Custom Anthropic API endpoint (for proxies, self-hosted)
+    anthropic_api_key: SecretStr | None = None  # Override ANTHROPIC_API_KEY env var
     # Extra keyword arguments to pass to the underlying model interface
     # Useful for passing vendor-specific API keys, custom parameters, etc.
     extra_kwargs: dict[str, Any] | None = None

@@ -105,7 +105,14 @@ class ClaudeToolAgentAdapter:
         if self._async_client is None:
             from anthropic import AsyncAnthropic
 
-            self._async_client = AsyncAnthropic()
+            # Build kwargs for Anthropic client (api_key, base_url from config)
+            kwargs: dict[str, Any] = {}
+            if self._config.anthropic_api_key:
+                kwargs["api_key"] = self._config.anthropic_api_key.get_secret_value()
+            if self._config.anthropic_base_url:
+                kwargs["base_url"] = self._config.anthropic_base_url
+
+            self._async_client = AsyncAnthropic(**kwargs)
         return self._async_client
 
     def _extract_final_response(self, trace_messages: list[Message]) -> str:

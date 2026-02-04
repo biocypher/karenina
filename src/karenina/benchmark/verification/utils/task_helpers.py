@@ -90,21 +90,23 @@ def create_preview_result(task: dict[str, Any]) -> VerificationResult:
     that the task is "starting" (not yet completed).
 
     Args:
-        task: Task dictionary with question_id, question_text, and model info
+        task: Task dictionary with question_id, question_text, model info, and optional replicate
 
     Returns:
-        VerificationResult with preview metadata
+        VerificationResult with preview metadata including replicate info
     """
     from karenina.schemas.verification.model_identity import ModelIdentity
 
     answering_identity = ModelIdentity.from_model_config(task["answering_model"], role="answering")
     parsing_identity = ModelIdentity.from_model_config(task["parsing_model"], role="parsing")
+    replicate = task.get("replicate")  # May be None for single-replicate runs
 
     preview_result_id = VerificationResultMetadata.compute_result_id(
         question_id=task["question_id"],
         answering=answering_identity,
         parsing=parsing_identity,
         timestamp="",  # Empty timestamp indicates "starting" event
+        replicate=replicate,
     )
     return VerificationResult(
         metadata=VerificationResultMetadata(
@@ -117,6 +119,7 @@ def create_preview_result(task: dict[str, Any]) -> VerificationResult:
             execution_time=0.0,
             timestamp="",  # Empty timestamp indicates "starting" event
             result_id=preview_result_id,
+            replicate=replicate,
         )
     )
 
