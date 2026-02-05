@@ -30,14 +30,14 @@ from karenina.benchmark.verification.stages import (
     ValidateTemplateStage,
     VerificationContext,
 )
-from karenina.schemas.domain import LLMRubricTrait, Rubric
-from karenina.schemas.verification.model_identity import ModelIdentity
-from karenina.schemas.workflow import (
-    ModelConfig,
+from karenina.schemas.config import ModelConfig
+from karenina.schemas.entities import LLMRubricTrait, Rubric
+from karenina.schemas.verification import (
     VerificationResult,
     VerificationResultMetadata,
     VerificationResultTemplate,
 )
+from karenina.schemas.verification.model_identity import ModelIdentity
 
 # =============================================================================
 # Test Helpers - Create Valid VerificationResult
@@ -224,7 +224,7 @@ def minimal_context(minimal_model_config: ModelConfig) -> VerificationContext:
         question_text="What is the capital of France?",
         template_code="""
 from pydantic import Field
-from karenina.schemas.domain import BaseAnswer
+from karenina.schemas.entities import BaseAnswer
 
 class Answer(BaseAnswer):
     capital: str = Field(description="The capital city")

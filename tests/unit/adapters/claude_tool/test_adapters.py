@@ -16,7 +16,7 @@ class TestClaudeToolAdapterInitialization:
     @pytest.fixture
     def model_config(self) -> Any:
         """Create a mock ModelConfig for claude_tool interface."""
-        from karenina.schemas.workflow.models import ModelConfig
+        from karenina.schemas.config import ModelConfig
 
         return ModelConfig(
             id="test-claude-tool",
@@ -118,7 +118,7 @@ class TestProtocolCompliance:
     @pytest.fixture
     def model_config(self) -> Any:
         """Create a ModelConfig for claude_tool interface."""
-        from karenina.schemas.workflow.models import ModelConfig
+        from karenina.schemas.config import ModelConfig
 
         return ModelConfig(
             id="test-claude-tool",
@@ -215,7 +215,7 @@ class TestFactoryIntegration:
     @pytest.fixture
     def claude_tool_config(self) -> Any:
         """Create a ModelConfig for claude_tool interface."""
-        from karenina.schemas.workflow.models import ModelConfig
+        from karenina.schemas.config import ModelConfig
 
         return ModelConfig(
             id="test-claude-tool",

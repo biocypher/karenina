@@ -443,7 +443,7 @@ Prompt caching is configured via `AgentMiddlewareConfig` in `ModelConfig`:
 
 ```python
 from karenina.schemas import ModelConfig
-from karenina.schemas.workflow.models import AgentMiddlewareConfig, PromptCachingConfig
+from karenina.schemas.config import AgentMiddlewareConfig, PromptCachingConfig
 
 model_config = ModelConfig(
     id="agent-claude",

@@ -13,7 +13,7 @@ from pydantic import SecretStr
 
 from karenina.benchmark.authoring.answers.generator import generate_answer_template
 from karenina.benchmark.authoring.questions.extractor import extract_questions_from_file
-from karenina.schemas.workflow import ModelConfig
+from karenina.schemas.config import ModelConfig
 
 
 @pytest.fixture

@@ -16,7 +16,7 @@ and validation. These tests focus on integration with real trace fixtures.
 
 import pytest
 
-from karenina.schemas.domain import CallableTrait, Rubric
+from karenina.schemas.entities import CallableTrait, Rubric
 
 # =============================================================================
 # Boolean Callable Tests with Trace Fixtures
@@ -399,7 +399,7 @@ class TestCallableTraitWithRubric:
 
     def test_rubric_with_callable_and_regex_traits(self, trace_with_citations: str):
         """Verify Rubric can contain both callable and regex traits."""
-        from karenina.schemas.domain import RegexTrait
+        from karenina.schemas.entities import RegexTrait
 
         callable_trait = CallableTrait.from_callable(
             name="word_count_ok",

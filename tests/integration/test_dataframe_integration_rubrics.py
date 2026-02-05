@@ -13,8 +13,8 @@ Run with: pytest tests/integration/test_dataframe_integration_rubrics.py -v
 import pandas as pd
 import pytest
 
-from karenina.schemas.workflow import (
-    RubricResults,
+from karenina.schemas.results import RubricResults
+from karenina.schemas.verification import (
     VerificationResult,
     VerificationResultRubric,
     VerificationResultTemplate,

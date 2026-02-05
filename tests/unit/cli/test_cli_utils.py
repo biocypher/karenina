@@ -31,12 +31,14 @@ from karenina.cli.utils import (
     parse_question_indices,
     validate_output_path,
 )
+from karenina.schemas.results import VerificationResultSet
+from karenina.schemas.verification import (
+    FinishedTemplate,
+    VerificationConfig,
+    VerificationResult,
+    VerificationResultMetadata,
+)
 from karenina.schemas.verification.model_identity import ModelIdentity
-from karenina.schemas.workflow.verification.api_models import FinishedTemplate
-from karenina.schemas.workflow.verification.config import VerificationConfig
-from karenina.schemas.workflow.verification.result import VerificationResult
-from karenina.schemas.workflow.verification.result_components import VerificationResultMetadata
-from karenina.schemas.workflow.verification_result_set import VerificationResultSet
 
 
 # Helper function to create minimal FinishedTemplate
@@ -462,7 +464,7 @@ def test_filter_templates_by_indices_preserves_order() -> None:
 @pytest.mark.unit
 def test_create_export_job_basic() -> None:
     """Test creating basic export job."""
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
     result_set = VerificationResultSet(
         results=[
@@ -514,7 +516,7 @@ def test_create_export_job_basic() -> None:
 @pytest.mark.unit
 def test_create_export_job_with_failures() -> None:
     """Test creating export job with some failures."""
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
     result_set = VerificationResultSet(
         results=[
@@ -562,7 +564,7 @@ def test_create_export_job_with_failures() -> None:
 @pytest.mark.unit
 def test_create_export_job_default_run_name() -> None:
     """Test creating export job with empty run name uses default."""
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
     result_set = VerificationResultSet(
         results=[
@@ -607,7 +609,7 @@ def test_create_export_job_default_run_name() -> None:
 @pytest.mark.unit
 def test_create_export_job_generates_uuid() -> None:
     """Test creating export job generates UUID."""
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
     result_set = VerificationResultSet(
         results=[

@@ -11,8 +11,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from karenina.schemas.workflow.models import ModelConfig
-    from karenina.schemas.workflow.verification.result import VerificationResult
+    from karenina.schemas.config import ModelConfig
+    from karenina.schemas.verification import VerificationResult
 
 
 @dataclass

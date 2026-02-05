@@ -14,7 +14,7 @@ from datetime import datetime
 
 import pytest
 
-from karenina.schemas.domain import (
+from karenina.schemas.entities import (
     CallableTrait,
     LLMRubricTrait,
     MetricRubricTrait,
@@ -748,12 +748,6 @@ def test_convert_llm_trait_literal_roundtrip() -> None:
     assert restored.max_score == 3  # 4 classes -> 0-3
     assert restored.higher_is_better == original.higher_is_better
     assert restored.deep_judgment_enabled == original.deep_judgment_enabled
-
-
-# Note: The deprecated ManualRubricTrait types (GlobalManualRubricTrait,
-# QuestionSpecificManualRubricTrait) are gracefully skipped with a warning log.
-# The convert_rating_to_rubric_trait function returns None for these types,
-# and callers filter out None values when building trait lists.
 
 
 # =============================================================================

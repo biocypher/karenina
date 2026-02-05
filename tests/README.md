@@ -109,7 +109,7 @@ See [docs/testing/FIXTURES.md](../docs/testing/FIXTURES.md) for details.
 Example:
 ```python
 import pytest
-from karenina.schemas.workflow.verification.config import VerificationConfig
+from karenina.schemas.verification import VerificationConfig
 
 @pytest.mark.unit
 def test_verification_config_defaults() -> None:

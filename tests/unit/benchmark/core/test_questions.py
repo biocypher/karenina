@@ -14,7 +14,7 @@ import pytest
 
 from karenina import Benchmark
 from karenina.benchmark.core.questions import QuestionManager, _rename_answer_class_to_standard
-from karenina.schemas.domain import BaseAnswer, Question
+from karenina.schemas.entities import BaseAnswer, Question
 
 # Valid template for testing
 VALID_TEMPLATE = '''class Answer(BaseAnswer):

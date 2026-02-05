@@ -371,7 +371,7 @@ class VerificationResultSet(BaseModel):
 
             # Build answering model key with MCP if present
             if by in ("answering", "both"):
-                mcp_servers = result.answering_mcp_servers
+                mcp_servers = result.template.answering_mcp_servers if result.template else None
                 if mcp_servers and len(mcp_servers) > 0:
                     answering_key = f"{answering_model} + MCP[{','.join(sorted(mcp_servers))}]"
                 else:

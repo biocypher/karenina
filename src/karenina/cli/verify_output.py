@@ -144,8 +144,8 @@ def run_verification_with_progress(
             def progress_callback(current: int, _total: int, result: VerificationResult | None = None) -> None:
                 """Update progress bar on each verification completion."""
                 progress.update(progress_task, completed=current)
-                if result and result.verify_result is not None:
-                    status = "\u2713" if result.verify_result else "\u2717"
+                if result and result.template and result.template.verify_result is not None:
+                    status = "\u2713" if result.template.verify_result else "\u2717"
                     progress.update(progress_task, description=f"Verifying questions... {status}")
 
                 if progressive_manager and result and result.metadata.timestamp:

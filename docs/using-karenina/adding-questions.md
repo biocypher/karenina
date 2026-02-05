@@ -113,7 +113,7 @@ questions = extract_questions_from_file(
     question_column="Question",
     answer_column="Answer",
     author_name_column="Author",      # Optional: author name
-    keywords_column="Keywords"         # Optional: comma-separated keywords
+    keywords_columns=[{"column": "Keywords", "separator": ","}]  # Optional: keyword columns with separators
 )
 
 # Each extracted question will include author and keywords if available
@@ -257,7 +257,7 @@ file_questions = extract_questions_from_file(
     question_column="Question",
     answer_column="Answer",
     author_name_column="Author",
-    keywords_column="Keywords"
+    keywords_columns=[{"column": "Keywords", "separator": ","}],
 )
 
 for q in file_questions:

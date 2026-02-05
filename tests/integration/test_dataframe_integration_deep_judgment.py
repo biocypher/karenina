@@ -13,8 +13,8 @@ Run with: pytest tests/integration/test_dataframe_integration_deep_judgment.py -
 import pandas as pd
 import pytest
 
-from karenina.schemas.workflow import (
-    JudgmentResults,
+from karenina.schemas.results import JudgmentResults
+from karenina.schemas.verification import (
     VerificationResult,
     VerificationResultDeepJudgment,
     VerificationResultTemplate,

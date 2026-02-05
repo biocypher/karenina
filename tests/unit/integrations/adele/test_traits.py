@@ -12,7 +12,7 @@ from karenina.integrations.adele import (
     get_adele_trait_by_code,
     get_all_adele_traits,
 )
-from karenina.schemas.domain.rubric import LLMRubricTrait, Rubric
+from karenina.schemas.entities.rubric import LLMRubricTrait, Rubric
 
 
 class TestConstants:

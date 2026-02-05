@@ -85,7 +85,7 @@ class TestUnicodeHandling:
 
         template_code = '''
 from pydantic import Field
-from karenina.schemas.domain import BaseAnswer
+from karenina.schemas.entities import BaseAnswer
 
 class Answer(BaseAnswer):
     """Template with unicode: αβγδε"""
@@ -147,7 +147,7 @@ class TestLongContentHandling:
         long_docstring = "x" * 40_000  # 40KB docstring
         template_code = f'''
 from pydantic import Field
-from karenina.schemas.domain import BaseAnswer
+from karenina.schemas.entities import BaseAnswer
 
 class Answer(BaseAnswer):
     """{long_docstring}"""

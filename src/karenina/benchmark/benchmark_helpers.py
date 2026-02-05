@@ -16,7 +16,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from ..integrations.gepa import FrontierType, KareninaOutput, ObjectiveConfig
     from ..schemas.checkpoint import SchemaOrgQuestion
-    from ..schemas.workflow import VerificationConfig, VerificationResult, VerificationResultSet
+    from ..schemas.results import VerificationResultSet
+    from ..schemas.verification import VerificationConfig, VerificationResult
     from .benchmark import Benchmark
 
 logger = logging.getLogger(__name__)
@@ -283,7 +284,8 @@ def run_optimize(
 
     # Create default config if not provided
     if config is None:
-        from karenina.schemas.workflow import ModelConfig, VerificationConfig
+        from karenina.schemas.config import ModelConfig
+        from karenina.schemas.verification import VerificationConfig
 
         config = VerificationConfig(
             answering_models=[ModelConfig(id="answerer-gpt4o", model_name="gpt-4o", model_provider="openai")],
@@ -416,7 +418,7 @@ def store_verification_results(
     run_name: str | None = None,
 ) -> None:
     """Store verification results in the benchmark metadata."""
-    from ..schemas.workflow import VerificationResultSet
+    from ..schemas.results import VerificationResultSet
 
     if isinstance(results, VerificationResultSet):
         results_dict: dict[str, Any] = {}
@@ -441,7 +443,7 @@ def store_verification_results(
 
 def build_repr(benchmark: Benchmark) -> str:
     """Build the developer-friendly repr string for a Benchmark."""
-    from ..schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
+    from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
 
     lines = ["Benchmark("]
 

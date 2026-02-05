@@ -17,7 +17,7 @@ Supported Interfaces:
 
 Example:
     >>> from karenina.adapters import get_agent, get_llm, get_parser
-    >>> from karenina.schemas.workflow.models import ModelConfig
+    >>> from karenina.schemas.config import ModelConfig
     >>>
     >>> config = ModelConfig(
     ...     id="claude-sonnet",
@@ -49,10 +49,10 @@ from karenina.ports import (
 )
 
 if TYPE_CHECKING:
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
 # Import at runtime for validation function (not circular since ModelConfig is only TYPE_CHECKING)
-from karenina.schemas.workflow.models import INTERFACES_NO_PROVIDER_REQUIRED
+from karenina.schemas.config import INTERFACES_NO_PROVIDER_REQUIRED
 
 # Type alias for interface values
 InterfaceType: TypeAlias = Literal[

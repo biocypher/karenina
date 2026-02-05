@@ -8,11 +8,11 @@ if TYPE_CHECKING:
     from .base import BenchmarkBase
     from .rubrics import RubricManager
 
-from ...schemas.workflow import (
+from ...schemas.results import VerificationResultSet
+from ...schemas.verification import (
     FinishedTemplate,
     VerificationConfig,
     VerificationResult,
-    VerificationResultSet,
 )
 from ..verification import run_verification_batch
 from ..verification.utils.template_validation import validate_answer_template
@@ -81,7 +81,7 @@ class VerificationManager:
                     question_rubric_dict = question_rubric_raw
                 # If it's a list of trait objects, convert to Rubric and dump
                 elif isinstance(question_rubric_raw, list):
-                    from ...schemas.domain.rubric import (
+                    from ...schemas.entities.rubric import (
                         CallableTrait,
                         LLMRubricTrait,
                         MetricRubricTrait,
@@ -135,7 +135,7 @@ class VerificationManager:
                 # This is called BEFORE starting each task to show current item being processed
                 percentage = ((current - 1) / total) * 100 if total > 0 else 0
                 if result:
-                    message = f"Verifying {result.question_id} ({current}/{total})"
+                    message = f"Verifying {result.metadata.question_id} ({current}/{total})"
                     progress_callback(percentage, message)
 
             batch_progress_callback = adapter

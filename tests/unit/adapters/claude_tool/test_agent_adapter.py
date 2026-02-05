@@ -69,7 +69,7 @@ class MockResponse:
 @pytest.fixture
 def model_config() -> Any:
     """Create a mock ModelConfig for claude_tool interface."""
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
     return ModelConfig(
         id="test-claude-tool",
@@ -292,7 +292,7 @@ class TestAgentAdapterRun:
         """
         from pydantic import ValidationError
 
-        from karenina.schemas.workflow.models import ModelConfig
+        from karenina.schemas.config import ModelConfig
 
         with pytest.raises(ValidationError, match="model_name is required"):
             ModelConfig(

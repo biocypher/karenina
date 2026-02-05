@@ -6,7 +6,7 @@ This module provides database auto-save functionality for verification results.
 import logging
 from typing import Any
 
-from ....schemas.workflow import FinishedTemplate, VerificationResult
+from ....schemas.verification import FinishedTemplate, VerificationResult
 
 logger = logging.getLogger(__name__)
 

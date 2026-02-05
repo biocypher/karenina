@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ...schemas.domain import Rubric
+    from ...schemas.entities import Rubric
 
-from ...schemas.workflow import VerificationResult
+from ...schemas.verification import VerificationResult
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ class ResultsIOManager:
             result_dict = result.model_dump()
             result_dict["row_index"] = index
             # Replace success with "abstained" when abstention is detected
-            if result.abstention_detected and result.abstention_override_applied:
+            if result.template and result.template.abstention_detected and result.template.abstention_override_applied:
                 result_dict["success"] = "abstained"
             results_array.append(result_dict)
         return json.dumps(results_array, indent=2, ensure_ascii=False)
@@ -60,8 +60,10 @@ class ResultsIOManager:
         # Extract all unique rubric trait names from results
         all_rubric_trait_names: set[str] = set()
         for result in results.values():
-            if result.verify_rubric:
-                all_rubric_trait_names.update(result.verify_rubric.keys())
+            if result.rubric:
+                scores = result.rubric.get_all_trait_scores()
+                if scores:
+                    all_rubric_trait_names.update(scores.keys())
 
         # Determine global vs question-specific rubrics
         global_trait_names = set()
@@ -126,28 +128,31 @@ class ResultsIOManager:
         question_specific_traits: list[str],
     ) -> list[Any]:
         """Create a CSV row for a single verification result."""
+        # Get all trait scores from rubric sub-object
+        all_trait_scores = result.rubric.get_all_trait_scores() if result.rubric else None
+
         # Extract global rubric trait values
         global_rubric_values: list[str] = []
         for trait_name in global_traits:
-            if result.verify_rubric and trait_name in result.verify_rubric:
-                value = result.verify_rubric[trait_name]
+            if all_trait_scores and trait_name in all_trait_scores:
+                value = all_trait_scores[trait_name]
                 global_rubric_values.append(str(value) if value is not None else "")
             else:
                 global_rubric_values.append("")
 
         # Create question-specific rubrics JSON
-        question_specific_rubrics: dict[str, int | bool] = {}
-        if result.verify_rubric:
+        question_specific_rubrics: dict[str, int | bool | dict[str, float]] = {}
+        if all_trait_scores:
             for trait_name in question_specific_traits:
-                if trait_name in result.verify_rubric:
-                    question_specific_rubrics[trait_name] = result.verify_rubric[trait_name]
+                if trait_name in all_trait_scores:
+                    question_specific_rubrics[trait_name] = all_trait_scores[trait_name]
 
         question_specific_rubrics_value = json.dumps(question_specific_rubrics) if question_specific_traits else ""
 
         # Create rubric summary
         rubric_summary = ""
-        if result.verify_rubric:
-            traits = list(result.verify_rubric.items())
+        if all_trait_scores:
+            traits = list(all_trait_scores.items())
             passed_traits = sum(
                 1
                 for name, value in traits

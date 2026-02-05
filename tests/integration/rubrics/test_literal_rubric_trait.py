@@ -25,7 +25,7 @@ Fixtures used:
 
 import pytest
 
-from karenina.schemas.domain import LLMRubricTrait, Rubric
+from karenina.schemas.entities import LLMRubricTrait, Rubric
 
 # =============================================================================
 # Literal Trait Configuration Tests

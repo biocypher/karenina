@@ -14,13 +14,14 @@ from unittest.mock import patch
 import pytest
 
 from karenina.benchmark.verification.executor import ExecutorConfig, VerificationExecutor
-from karenina.schemas.verification.model_identity import ModelIdentity
-from karenina.schemas.workflow import ModelConfig, VerificationResult
-from karenina.schemas.workflow.verification import (
+from karenina.schemas.config import ModelConfig
+from karenina.schemas.verification import (
+    VerificationResult,
     VerificationResultMetadata,
     VerificationResultRubric,
     VerificationResultTemplate,
 )
+from karenina.schemas.verification.model_identity import ModelIdentity
 
 
 def create_mock_result(kwargs: dict) -> VerificationResult:
@@ -335,10 +336,10 @@ class TestCacheOptimizationIntegration:
         result_list = list(results.values())
         assert len(result_list) == 3
 
-        question_ids = {r.question_id for r in result_list}
+        question_ids = {r.metadata.question_id for r in result_list}
         assert question_ids == {"q1", "q2"}
 
-        parsing_models = {r.parsing_model for r in result_list}
+        parsing_models = {r.metadata.parsing_model for r in result_list}
         assert parsing_models == {"langchain:parser_1", "langchain:parser_2"}
 
 
@@ -368,7 +369,7 @@ class TestParallelExecution:
         results = execute_parallel(tasks, max_workers=2)
 
         assert len(results) == 3
-        question_ids = {results[key].question_id for key in results}
+        question_ids = {results[key].metadata.question_id for key in results}
         assert question_ids == {"q1", "q2", "q3"}
 
 

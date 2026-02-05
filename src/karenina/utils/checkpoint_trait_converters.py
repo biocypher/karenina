@@ -15,8 +15,8 @@ from ..schemas.checkpoint import (
     SchemaOrgPropertyValue,
     SchemaOrgRating,
 )
-from ..schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
-from ..schemas.domain.rubric import TraitKind
+from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
+from ..schemas.entities.rubric import TraitKind
 
 logger = logging.getLogger(__name__)
 
@@ -202,7 +202,7 @@ def _convert_llm_trait_to_rating(trait: LLMRubricTrait, rubric_type: str) -> Sch
 
 def convert_rating_to_rubric_trait(
     rating: SchemaOrgRating,
-) -> LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | None:
+) -> LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait:
     """
     Convert a schema.org Rating back to a rubric trait.
 
@@ -210,8 +210,10 @@ def convert_rating_to_rubric_trait(
         rating: The SchemaOrgRating to convert
 
     Returns:
-        A LLMRubricTrait, RegexTrait, CallableTrait, or MetricRubricTrait object,
-        or None if the trait type is unsupported (e.g., deprecated ManualRubricTrait)
+        A LLMRubricTrait, RegexTrait, CallableTrait, or MetricRubricTrait object
+
+    Raises:
+        ValueError: If the rating has an unrecognized additionalType
     """
     # Check if it's a MetricRubricTrait
     if rating.additionalType in ["GlobalMetricRubricTrait", "QuestionSpecificMetricRubricTrait"]:
@@ -225,17 +227,19 @@ def convert_rating_to_rubric_trait(
     if rating.additionalType in ["GlobalCallableTrait", "QuestionSpecificCallableTrait"]:
         return _convert_rating_to_callable_trait(rating)
 
-    # Unsupported trait type - log warning and skip
-    if rating.additionalType in ["GlobalManualRubricTrait", "QuestionSpecificManualRubricTrait"]:
-        logger.warning(
-            "Skipping unsupported trait '%s' (type: %s). ManualRubricTrait has been deprecated.",
-            rating.name,
-            rating.additionalType,
-        )
-        return None
+    # Handle LLMRubricTrait (default for GlobalRubricTrait, QuestionSpecificRubricTrait,
+    # GlobalLLMRubricTrait, QuestionSpecificLLMRubricTrait)
+    known_llm_types = [
+        "GlobalRubricTrait",
+        "QuestionSpecificRubricTrait",
+        "GlobalLLMRubricTrait",
+        "QuestionSpecificLLMRubricTrait",
+    ]
+    if rating.additionalType in known_llm_types or rating.additionalType is None:
+        return _convert_rating_to_llm_trait(rating)
 
-    # Handle LLMRubricTrait (default case, also handles GlobalLLMRubricTrait/QuestionSpecificLLMRubricTrait)
-    return _convert_rating_to_llm_trait(rating)
+    msg = f"Unrecognized rubric trait type: '{rating.additionalType}' (trait: '{rating.name}')"
+    raise ValueError(msg)
 
 
 def _convert_rating_to_metric_trait(rating: SchemaOrgRating) -> MetricRubricTrait:

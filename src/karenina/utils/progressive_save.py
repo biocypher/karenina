@@ -21,8 +21,8 @@ from karenina.schemas import VerificationConfig, VerificationResult
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.entities import Rubric
 from karenina.schemas.results import VerificationResultSet
+from karenina.schemas.verification import VerificationJob
 from karenina.schemas.verification.model_identity import ModelIdentity
-from karenina.schemas.workflow.verification.job import VerificationJob
 from karenina.utils.file_ops import atomic_write
 
 logger = logging.getLogger(__name__)

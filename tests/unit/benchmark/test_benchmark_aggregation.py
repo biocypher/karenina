@@ -49,7 +49,7 @@ def test_to_dict_with_questions() -> None:
 @pytest.mark.unit
 def test_to_dict_includes_global_rubric() -> None:
     """Test to_dict includes global rubric."""
-    from karenina.schemas.domain import LLMRubricTrait, Rubric
+    from karenina.schemas.entities import LLMRubricTrait, Rubric
 
     benchmark = Benchmark.create(name="test")
     benchmark.add_question("Q1?", "A1", question_id="q1", finished=True)
@@ -111,7 +111,7 @@ def test_to_csv_with_template() -> None:
     benchmark = Benchmark.create(name="test")
 
     template = """
-from karenina.schemas.domain import BaseAnswer
+from karenina.schemas.entities import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -169,7 +169,7 @@ def test_get_summary_with_progress() -> None:
 @pytest.mark.unit
 def test_get_summary_with_global_rubric() -> None:
     """Test get_summary includes global rubric info."""
-    from karenina.schemas.domain import LLMRubricTrait, Rubric
+    from karenina.schemas.entities import LLMRubricTrait, Rubric
 
     benchmark = Benchmark.create(name="test")
     benchmark.add_question("Q1?", "A1", question_id="q1", finished=True)
@@ -205,7 +205,7 @@ def test_get_statistics_with_templates() -> None:
     benchmark = Benchmark.create(name="test")
 
     template1 = """
-from karenina.schemas.domain import BaseAnswer
+from karenina.schemas.entities import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -216,7 +216,7 @@ class Answer(BaseAnswer):
 """
 
     template2 = """
-from karenina.schemas.domain import BaseAnswer
+from karenina.schemas.entities import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -286,7 +286,7 @@ def test_check_readiness_unfinished_questions() -> None:
     benchmark = Benchmark.create(name="test")
 
     template = """
-from karenina.schemas.domain import BaseAnswer
+from karenina.schemas.entities import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -312,7 +312,7 @@ def test_check_readiness_ready_benchmark() -> None:
     benchmark = Benchmark.create(name="test")
 
     template = """
-from karenina.schemas.domain import BaseAnswer
+from karenina.schemas.entities import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -352,7 +352,7 @@ def test_get_health_report_excellent() -> None:
     benchmark = Benchmark.create(name="test")
 
     template = """
-from karenina.schemas.domain import BaseAnswer
+from karenina.schemas.entities import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -380,7 +380,7 @@ def test_get_health_report_levels() -> None:
     benchmark = Benchmark.create(name="test")
 
     template = """
-from karenina.schemas.domain import BaseAnswer
+from karenina.schemas.entities import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -448,7 +448,7 @@ def test_to_markdown_with_questions() -> None:
 @pytest.mark.unit
 def test_to_markdown_with_global_rubric() -> None:
     """Test to_markdown includes global rubric."""
-    from karenina.schemas.domain import LLMRubricTrait, Rubric
+    from karenina.schemas.entities import LLMRubricTrait, Rubric
 
     benchmark = Benchmark.create(name="test")
     benchmark.add_question("Q1?", "A1", question_id="q1", finished=True)
@@ -485,7 +485,7 @@ def test_is_complete_property() -> None:
     assert benchmark.is_complete is False
 
     template = """
-from karenina.schemas.domain import BaseAnswer
+from karenina.schemas.entities import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):

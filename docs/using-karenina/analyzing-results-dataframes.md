@@ -607,7 +607,7 @@ Aggregate deep judgment model call counts.
 You can register custom aggregation functions:
 
 ```python
-from karenina.schemas.workflow import register_aggregator
+from karenina.schemas.results import AggregatorRegistry
 
 # Define custom aggregator
 def weighted_score(df, by, weights):

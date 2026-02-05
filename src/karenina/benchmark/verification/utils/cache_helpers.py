@@ -7,7 +7,7 @@ for the AnswerTraceCache used in batch verification.
 import logging
 from typing import Any
 
-from ....schemas.workflow import VerificationResult
+from ....schemas.verification import VerificationResult
 from ....utils.answer_cache import AnswerTraceCache
 
 logger = logging.getLogger(__name__)
@@ -47,9 +47,11 @@ def extract_answer_data_from_result(result: VerificationResult) -> dict[str, Any
     # Convert from stage summary format to callback metadata format
     # Stage summary: {"input_tokens": 123, "model": "gpt-4", ...}
     # Callback format: {"gpt-4": {"input_tokens": 123, ...}}
+    template = result.template
     usage_metadata = None
-    if result.usage_metadata and "answer_generation" in result.usage_metadata:
-        stage_summary = result.usage_metadata["answer_generation"]
+    raw_usage = template.usage_metadata if template else None
+    if raw_usage and "answer_generation" in raw_usage:
+        stage_summary = raw_usage["answer_generation"]
         if stage_summary and isinstance(stage_summary, dict):
             # Extract model name and create callback-style nested dict
             model_name = stage_summary.get("model", "unknown")
@@ -64,11 +66,11 @@ def extract_answer_data_from_result(result: VerificationResult) -> dict[str, Any
             }
 
     return {
-        "raw_llm_response": result.raw_llm_response,
+        "raw_llm_response": template.raw_llm_response if template else None,
         "usage_metadata": usage_metadata,
-        "agent_metrics": result.agent_metrics,
-        "recursion_limit_reached": result.recursion_limit_reached,
-        "answering_mcp_servers": result.answering_mcp_servers,
+        "agent_metrics": template.agent_metrics if template else None,
+        "recursion_limit_reached": template.recursion_limit_reached if template else None,
+        "answering_mcp_servers": template.answering_mcp_servers if template else None,
     }
 
 

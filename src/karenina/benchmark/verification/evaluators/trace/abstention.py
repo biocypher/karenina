@@ -11,8 +11,8 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 from .....adapters import get_llm
 from .....ports import LLMResponse
 from .....ports.capabilities import PortCapabilities
+from .....schemas.config import ModelConfig
 from .....schemas.verification.prompt_config import PromptConfig
-from .....schemas.workflow import ModelConfig
 from .....utils.errors import is_retryable_error
 from .....utils.retry import log_retry
 from ...prompts.assembler import PromptAssembler

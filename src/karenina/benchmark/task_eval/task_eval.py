@@ -16,9 +16,10 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Literal, Union
 
 if TYPE_CHECKING:
-    from ...schemas.domain import Question, Rubric
+    from ...schemas.entities import Question, Rubric
 
-from ...schemas.workflow import ModelConfig, VerificationConfig
+from ...schemas.config import ModelConfig
+from ...schemas.verification import VerificationConfig
 from ..verification.evaluators import RubricEvaluator
 from .models import LogEvent, StepEval, TaskEvalResult
 
@@ -318,7 +319,7 @@ class TaskEval:
 
         Handles both Question objects and dictionary objects from Benchmark.
         """
-        from ...schemas.domain import Question
+        from ...schemas.entities import Question
 
         if isinstance(question, Question):
             return {
@@ -752,7 +753,7 @@ class Answer(BaseAnswer):
         if not rubrics:
             return None
 
-        from ...schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
+        from ...schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
 
         # Check for trait name conflicts first (across all trait types)
         all_trait_names = []

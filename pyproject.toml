@@ -124,8 +124,6 @@ markers = [
     "rubric: Rubric evaluation tests",
     "storage: Checkpoint I/O and storage tests",
     "cli: CLI command tests",
-    # Legacy markers (for backward compatibility)
-    "requires_api: marks tests that require API keys (OpenAI, etc.)",
     "deep_judgment: marks tests that use deep judgment verification mode",
 ]
 

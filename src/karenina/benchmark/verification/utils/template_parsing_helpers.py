@@ -13,7 +13,7 @@ from typing import Any, get_args, get_origin
 from karenina.utils.json_extraction import extract_json_from_text as _extract_json_from_text
 from karenina.utils.json_extraction import strip_markdown_fences as _strip_markdown_fences
 
-from ....schemas.domain import BaseAnswer
+from ....schemas.entities import BaseAnswer
 from ....schemas.shared import SearchResultItem
 
 __all__ = [
@@ -161,17 +161,13 @@ def format_excerpts_for_reasoning(excerpts: dict[str, list[dict[str, Any]]]) -> 
                 search_results = excerpt_obj["search_results"]
                 lines.append("    Search Results:")
 
-                # Handle both string and list formats (list is new structured format)
-                if isinstance(search_results, list):
-                    # Use the new formatting function for structured results
-                    formatted = _format_search_results_for_llm(search_results)
-                    search_lines = formatted.split("\n")
-                elif isinstance(search_results, str):
-                    # Legacy string format
-                    search_lines = search_results.split("\n")
-                else:
-                    # Fallback for unexpected types
-                    search_lines = [str(search_results)]
+                if not isinstance(search_results, list):
+                    raise TypeError(
+                        f"Unsupported search_results format: {type(search_results).__name__}. "
+                        "Expected list of structured results."
+                    )
+                formatted = _format_search_results_for_llm(search_results)
+                search_lines = formatted.split("\n")
 
                 for search_line in search_lines:
                     lines.append(f"      {search_line}")
@@ -423,7 +419,7 @@ def extract_rubric_traits_from_template(answer_template: str) -> list[Any]:
     """
     try:
         # Prepare minimal execution environment similar to template validation
-        from ....schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
+        from ....schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
 
         global_ns = {
             "__builtins__": __builtins__,

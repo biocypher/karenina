@@ -19,8 +19,8 @@ from karenina.benchmark.verification.stages import (
     VerificationContext,
     VerifyTemplateStage,
 )
-from karenina.schemas.domain import BaseAnswer, LLMRubricTrait, Rubric
-from karenina.schemas.workflow import ModelConfig
+from karenina.schemas.config import ModelConfig
+from karenina.schemas.entities import BaseAnswer, LLMRubricTrait, Rubric
 
 # =============================================================================
 # Test Answer Classes for verify_granular_result Tests

@@ -20,7 +20,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
 
-from .....schemas.domain import Rubric
+from .....schemas.config import ModelConfig
+from .....schemas.entities import Rubric
 from .....schemas.verification import PromptConfig
 from .....schemas.verification.config import (
     DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
@@ -28,7 +29,6 @@ from .....schemas.verification.config import (
     DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS,
     DEFAULT_RUBRIC_MAX_EXCERPTS,
 )
-from .....schemas.workflow import ModelConfig
 
 if TYPE_CHECKING:
     from ...utils.trace_usage_tracker import UsageTracker

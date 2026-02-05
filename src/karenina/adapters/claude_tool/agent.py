@@ -35,7 +35,7 @@ from karenina.ports import (
     Tool,
     UsageMetadata,
 )
-from karenina.schemas.workflow.models import ModelConfig
+from karenina.schemas.config import ModelConfig
 
 from .mcp import connect_all_mcp_servers, get_all_mcp_tools
 from .messages import (
@@ -69,7 +69,7 @@ class ClaudeToolAgentAdapter:
     - Usage metadata aggregation across turns
 
     Example:
-        >>> from karenina.schemas.workflow.models import ModelConfig
+        >>> from karenina.schemas.config import ModelConfig
         >>> config = ModelConfig(
         ...     id="claude-haiku",
         ...     model_name="claude-haiku-4-5",

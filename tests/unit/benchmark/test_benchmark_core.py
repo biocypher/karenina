@@ -211,7 +211,7 @@ def test_add_question_with_template() -> None:
     benchmark = Benchmark.create(name="test")
 
     template = """
-from karenina.schemas.domain import BaseAnswer
+from karenina.schemas.entities import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):

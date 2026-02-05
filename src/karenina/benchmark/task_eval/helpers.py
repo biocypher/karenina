@@ -5,9 +5,9 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ...schemas.domain import Rubric
+    from ...schemas.entities import Rubric
 
-from ...schemas.workflow import ModelConfig
+from ...schemas.config import ModelConfig
 from ..verification.evaluators import RubricEvaluator
 
 logger = logging.getLogger(__name__)
@@ -123,7 +123,7 @@ def evaluate_question_with_rubric(
     if answer_template:
         question_rubric_traits = extract_traits_func(answer_template)
         if question_rubric_traits:
-            from ...schemas.domain import Rubric
+            from ...schemas.entities import Rubric
 
             question_rubric = Rubric(llm_traits=question_rubric_traits)
 

@@ -12,7 +12,7 @@ Tests cover:
 import pytest
 from pydantic import ValidationError
 
-from karenina.schemas.domain import (
+from karenina.schemas.entities import (
     BaseAnswer,
     CallableTrait,
     LLMRubricTrait,
@@ -213,13 +213,12 @@ def test_llm_rubric_trait_deep_judgment_fields() -> None:
 
 @pytest.mark.unit
 def test_llm_rubric_trait_default_higher_is_better() -> None:
-    """Test that higher_is_better defaults to True for legacy data."""
-    # Using model_validate to simulate loading from dict
+    """Test that higher_is_better defaults to True when None or missing."""
     trait = LLMRubricTrait.model_validate(
         {
             "name": "test",
             "kind": "boolean",
-            "higher_is_better": None,  # Legacy: missing or None
+            "higher_is_better": None,
         }
     )
 
@@ -486,7 +485,7 @@ def test_base_answer_verify_regex() -> None:
     """Test BaseAnswer.verify_regex() method."""
     from typing import ClassVar
 
-    from karenina.schemas.domain.answer import BaseAnswer
+    from karenina.schemas.entities.answer import BaseAnswer
 
     class Answer(BaseAnswer):
         value: str
@@ -605,7 +604,7 @@ def test_regex_trait_serialization_roundtrip() -> None:
 @pytest.mark.unit
 def test_capture_answer_source_returns_class() -> None:
     """Test that capture_answer_source returns the same class."""
-    from karenina.schemas.domain.answer import BaseAnswer
+    from karenina.schemas.entities.answer import BaseAnswer
 
     class CustomAnswer(BaseAnswer):
         value: str
@@ -621,7 +620,7 @@ def test_capture_answer_source_returns_class() -> None:
 @pytest.mark.unit
 def test_capture_answer_source_calls_method_when_exists() -> None:
     """Test that capture_answer_source calls set_source_code_from_notebook if present."""
-    from karenina.schemas.domain.answer import BaseAnswer
+    from karenina.schemas.entities.answer import BaseAnswer
 
     # Track if method was called
     method_called = {"called": False}
@@ -644,7 +643,7 @@ def test_capture_answer_source_calls_method_when_exists() -> None:
 @pytest.mark.unit
 def test_capture_answer_source_no_error_without_method() -> None:
     """Test that capture_answer_source doesn't error when method is missing."""
-    from karenina.schemas.domain.answer import BaseAnswer
+    from karenina.schemas.entities.answer import BaseAnswer
 
     class PlainAnswer(BaseAnswer):
         value: str
@@ -660,7 +659,7 @@ def test_capture_answer_source_no_error_without_method() -> None:
 @pytest.mark.unit
 def test_capture_answer_source_as_decorator() -> None:
     """Test that capture_answer_source works as a decorator."""
-    from karenina.schemas.domain.answer import BaseAnswer
+    from karenina.schemas.entities.answer import BaseAnswer
 
     method_called = {"called": False}
 

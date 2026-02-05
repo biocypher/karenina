@@ -23,7 +23,7 @@ Example:
     ...     ClaudeSDKAgentAdapter,
     ...     check_claude_cli_available,
     ... )
-    >>> from karenina.schemas.workflow.models import ModelConfig
+    >>> from karenina.schemas.config import ModelConfig
     >>>
     >>> # Check if Claude SDK is available
     >>> availability = check_claude_cli_available()

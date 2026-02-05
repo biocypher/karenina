@@ -10,7 +10,7 @@ Tests cover:
 import pytest
 from pydantic import ValidationError
 
-from karenina.schemas.domain import (
+from karenina.schemas.entities import (
     CallableTrait,
     LLMRubricTrait,
     MetricRubricTrait,
@@ -603,7 +603,7 @@ def test_merge_rubrics_all_trait_types() -> None:
 @pytest.mark.unit
 def test_valid_metrics_constants() -> None:
     """Test that VALID_METRICS constants are correctly defined."""
-    from karenina.schemas.domain.rubric import (
+    from karenina.schemas.entities.rubric import (
         VALID_METRICS,
         VALID_METRICS_FULL_MATRIX,
         VALID_METRICS_TP_ONLY,
@@ -617,7 +617,7 @@ def test_valid_metrics_constants() -> None:
 @pytest.mark.unit
 def test_metric_requirements_constant() -> None:
     """Test that METRIC_REQUIREMENTS constant is correctly defined."""
-    from karenina.schemas.domain.rubric import METRIC_REQUIREMENTS
+    from karenina.schemas.entities.rubric import METRIC_REQUIREMENTS
 
     assert METRIC_REQUIREMENTS["precision"] == {"tp", "fp"}
     assert METRIC_REQUIREMENTS["recall"] == {"tp", "fn"}

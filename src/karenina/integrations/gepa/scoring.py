@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from karenina.integrations.gepa.config import ObjectiveConfig
-    from karenina.schemas.workflow.verification.result import VerificationResult
+    from karenina.schemas.verification import VerificationResult
 
 
 def compute_objective_scores(

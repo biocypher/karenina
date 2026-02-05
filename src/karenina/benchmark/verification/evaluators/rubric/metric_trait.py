@@ -21,13 +21,13 @@ from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
 from .....ports import LLMPort, PortCapabilities
-from .....schemas.domain import MetricRubricTrait
+from .....schemas.entities import MetricRubricTrait
 from ...prompts import PromptAssembler, PromptTask
 from ...prompts.rubric.metric_trait import MetricTraitPromptBuilder
 
 if TYPE_CHECKING:
+    from .....schemas.config import ModelConfig
     from .....schemas.verification import PromptConfig
-    from .....schemas.workflow.models import ModelConfig
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +128,7 @@ class MetricTraitEvaluator:
         Returns:
             Tuple of (confusion_lists, metrics, usage_metadata)
         """
-        from .....schemas.workflow.rubric_outputs import ConfusionMatrixOutput
+        from .....schemas.outputs import ConfusionMatrixOutput
 
         # Build prompt
         system_prompt = self._prompt_builder.build_system_prompt()
