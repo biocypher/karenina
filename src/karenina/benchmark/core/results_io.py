@@ -1,4 +1,4 @@
-"""Results I/O handler for verification result export and import."""
+"""Results I/O manager for verification result export and import."""
 
 import csv
 import json
@@ -15,10 +15,10 @@ from ...schemas.workflow import VerificationResult
 logger = logging.getLogger(__name__)
 
 
-class ResultsIOHandler:
-    """Handler for verification result export and import operations.
+class ResultsIOManager:
+    """Manager for verification result export and import operations.
 
-    Extracts CSV and JSON serialization/deserialization logic from ResultsManager.
+    Handles CSV and JSON serialization/deserialization logic for ResultsManager.
     """
 
     @staticmethod
@@ -113,7 +113,7 @@ class ResultsIOHandler:
         writer.writerow(headers)
 
         for index, result in enumerate(results.values(), start=1):
-            row = ResultsIOHandler._create_csv_row(index, result, global_traits, question_specific_traits)
+            row = ResultsIOManager._create_csv_row(index, result, global_traits, question_specific_traits)
             writer.writerow(row)
 
         return output.getvalue()
@@ -157,55 +157,55 @@ class ResultsIOHandler:
 
         return [
             index,  # row_index
-            ResultsIOHandler._escape_csv_field(result.metadata.question_id),
-            ResultsIOHandler._escape_csv_field(result.metadata.question_text),
-            ResultsIOHandler._escape_csv_field(result.template.raw_llm_response if result.template else ""),
-            ResultsIOHandler._escape_csv_field(
+            ResultsIOManager._escape_csv_field(result.metadata.question_id),
+            ResultsIOManager._escape_csv_field(result.metadata.question_text),
+            ResultsIOManager._escape_csv_field(result.template.raw_llm_response if result.template else ""),
+            ResultsIOManager._escape_csv_field(
                 json.dumps(result.template.parsed_gt_response)
                 if result.template and result.template.parsed_gt_response
                 else ""
             ),
-            ResultsIOHandler._escape_csv_field(
+            ResultsIOManager._escape_csv_field(
                 json.dumps(result.template.parsed_llm_response)
                 if result.template and result.template.parsed_llm_response
                 else ""
             ),
-            ResultsIOHandler._escape_csv_field(
+            ResultsIOManager._escape_csv_field(
                 json.dumps(result.template.verify_result)
                 if result.template and result.template.verify_result is not None
                 else "N/A"
             ),
-            ResultsIOHandler._escape_csv_field(
+            ResultsIOManager._escape_csv_field(
                 json.dumps(result.template.verify_granular_result)
                 if result.template and result.template.verify_granular_result is not None
                 else "N/A"
             ),
-            *[ResultsIOHandler._escape_csv_field(value) for value in global_rubric_values],
+            *[ResultsIOManager._escape_csv_field(value) for value in global_rubric_values],
             *([question_specific_rubrics_value] if question_specific_traits else []),
-            ResultsIOHandler._escape_csv_field(rubric_summary),
-            ResultsIOHandler._escape_csv_field(result.metadata.answering_model),
-            ResultsIOHandler._escape_csv_field(result.metadata.parsing_model),
-            ResultsIOHandler._escape_csv_field(result.metadata.replicate or ""),
-            ResultsIOHandler._escape_csv_field(result.metadata.answering_system_prompt or ""),
-            ResultsIOHandler._escape_csv_field(result.metadata.parsing_system_prompt or ""),
-            ResultsIOHandler._escape_csv_field(
+            ResultsIOManager._escape_csv_field(rubric_summary),
+            ResultsIOManager._escape_csv_field(result.metadata.answering_model),
+            ResultsIOManager._escape_csv_field(result.metadata.parsing_model),
+            ResultsIOManager._escape_csv_field(result.metadata.replicate or ""),
+            ResultsIOManager._escape_csv_field(result.metadata.answering_system_prompt or ""),
+            ResultsIOManager._escape_csv_field(result.metadata.parsing_system_prompt or ""),
+            ResultsIOManager._escape_csv_field(
                 "abstained"
                 if result.template
                 and result.template.abstention_detected
                 and result.template.abstention_override_applied
                 else result.metadata.completed_without_errors
             ),
-            ResultsIOHandler._escape_csv_field(result.metadata.error or ""),
-            ResultsIOHandler._escape_csv_field(result.metadata.execution_time),
-            ResultsIOHandler._escape_csv_field(result.metadata.timestamp),
-            ResultsIOHandler._escape_csv_field(result.metadata.run_name or ""),
+            ResultsIOManager._escape_csv_field(result.metadata.error or ""),
+            ResultsIOManager._escape_csv_field(result.metadata.execution_time),
+            ResultsIOManager._escape_csv_field(result.metadata.timestamp),
+            ResultsIOManager._escape_csv_field(result.metadata.run_name or ""),
             # Embedding check fields
-            ResultsIOHandler._escape_csv_field(result.template.embedding_check_performed if result.template else False),
-            ResultsIOHandler._escape_csv_field(result.template.embedding_similarity_score if result.template else ""),
-            ResultsIOHandler._escape_csv_field(
+            ResultsIOManager._escape_csv_field(result.template.embedding_check_performed if result.template else False),
+            ResultsIOManager._escape_csv_field(result.template.embedding_similarity_score if result.template else ""),
+            ResultsIOManager._escape_csv_field(
                 result.template.embedding_override_applied if result.template else False
             ),
-            ResultsIOHandler._escape_csv_field(result.template.embedding_model_used if result.template else ""),
+            ResultsIOManager._escape_csv_field(result.template.embedding_model_used if result.template else ""),
         ]
 
     @staticmethod
@@ -289,7 +289,7 @@ class ResultsIOHandler:
             reader = csv.DictReader(f)
 
             for row in reader:
-                result_key, processed_row = ResultsIOHandler._process_csv_row(row)
+                result_key, processed_row = ResultsIOManager._process_csv_row(row)
                 if processed_row:
                     try:
                         results[result_key] = VerificationResult(**processed_row)

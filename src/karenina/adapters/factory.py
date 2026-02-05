@@ -197,6 +197,11 @@ def get_llm(
         )
 
     adapter = spec.llm_factory(model_config)
+    if not isinstance(adapter, LLMPort):
+        raise AdapterUnavailableError(
+            message=f"LLM adapter for interface '{interface}' does not implement LLMPort protocol",
+            reason=f"Adapter {type(adapter).__name__} is missing required methods",
+        )
     register_adapter(adapter)
     return adapter
 
@@ -275,6 +280,11 @@ def get_agent(
         )
 
     adapter = spec.agent_factory(model_config)
+    if not isinstance(adapter, AgentPort):
+        raise AdapterUnavailableError(
+            message=f"Agent adapter for interface '{interface}' does not implement AgentPort protocol",
+            reason=f"Adapter {type(adapter).__name__} is missing required methods",
+        )
     register_adapter(adapter)
     return adapter
 
@@ -355,6 +365,11 @@ def get_parser(
         )
 
     adapter = spec.parser_factory(model_config)
+    if not isinstance(adapter, ParserPort):
+        raise AdapterUnavailableError(
+            message=f"Parser adapter for interface '{interface}' does not implement ParserPort protocol",
+            reason=f"Adapter {type(adapter).__name__} is missing required methods",
+        )
     register_adapter(adapter)
     return adapter
 
