@@ -25,7 +25,7 @@ from karenina.benchmark.verification.evaluators import (
     TemplatePromptBuilder,
 )
 from karenina.schemas.config import ModelConfig
-from karenina.schemas.domain import BaseAnswer
+from karenina.schemas.entities import BaseAnswer
 
 # =============================================================================
 # Fixtures

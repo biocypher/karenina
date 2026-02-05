@@ -279,7 +279,7 @@ def load_benchmark(
     """
     # Import here to avoid circular imports
     from ..benchmark.benchmark import Benchmark
-    from ..schemas.domain import Question
+    from ..schemas.entities import Question
 
     # Convert storage URL to DBConfig if needed
     db_config = DBConfig(storage_url=storage) if isinstance(storage, str) else storage

@@ -81,7 +81,7 @@ class VerificationManager:
                     question_rubric_dict = question_rubric_raw
                 # If it's a list of trait objects, convert to Rubric and dump
                 elif isinstance(question_rubric_raw, list):
-                    from ...schemas.domain.rubric import (
+                    from ...schemas.entities.rubric import (
                         CallableTrait,
                         LLMRubricTrait,
                         MetricRubricTrait,

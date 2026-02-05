@@ -6,7 +6,7 @@ string field for extracting a simple answer.
 
 from pydantic import Field
 
-from karenina.schemas.domain import BaseAnswer
+from karenina.schemas.entities import BaseAnswer
 
 
 class Answer(BaseAnswer):

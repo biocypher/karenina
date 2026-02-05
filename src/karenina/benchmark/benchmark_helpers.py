@@ -443,7 +443,7 @@ def store_verification_results(
 
 def build_repr(benchmark: Benchmark) -> str:
     """Build the developer-friendly repr string for a Benchmark."""
-    from ..schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
+    from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
 
     lines = ["Benchmark("]
 

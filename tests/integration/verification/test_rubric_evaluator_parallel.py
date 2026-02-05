@@ -15,7 +15,7 @@ from karenina.benchmark.verification.evaluators.rubric.llm_trait import (
     LLMTraitEvaluator,
 )
 from karenina.schemas.config import ModelConfig
-from karenina.schemas.domain.rubric import LLMRubricTrait
+from karenina.schemas.entities.rubric import LLMRubricTrait
 
 # =============================================================================
 # Test Fixtures

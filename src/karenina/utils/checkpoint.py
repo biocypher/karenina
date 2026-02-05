@@ -21,7 +21,7 @@ from ..schemas.checkpoint import (
     SchemaOrgQuestion,
     SchemaOrgSoftwareSourceCode,
 )
-from ..schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
+from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
 from .checkpoint_trait_converters import (
     convert_rating_to_rubric_trait,
     convert_rubric_trait_to_rating,

@@ -56,7 +56,7 @@
           "@type": "SoftwareSourceCode",
           "@id": "mq001-template",
           "name": "Temperature Answer Template",
-          "text": "from karenina.schemas.domain import BaseAnswer\nfrom pydantic import Field\n\nclass Answer(BaseAnswer):\n    temperature: int = Field(description=\"Temperature in Celsius\")\n\n    def model_post_init(self, __context):\n        self.correct = {\"temperature\": 100}\n\n    def verify(self) -> bool:\n        return self.temperature == self.correct[\"temperature\"]\n",
+          "text": "from karenina.schemas.entities import BaseAnswer\nfrom pydantic import Field\n\nclass Answer(BaseAnswer):\n    temperature: int = Field(description=\"Temperature in Celsius\")\n\n    def model_post_init(self, __context):\n        self.correct = {\"temperature\": 100}\n\n    def verify(self) -> bool:\n        return self.temperature == self.correct[\"temperature\"]\n",
           "programmingLanguage": "Python"
         },
         "additionalProperty": [
@@ -87,7 +87,7 @@
           "@type": "SoftwareSourceCode",
           "@id": "mq002-template",
           "name": "List Answer Template",
-          "text": "from karenina.schemas.domain import BaseAnswer\nfrom pydantic import Field\n\nclass Answer(BaseAnswer):\n    colors: list[str] = Field(description=\"List of color names\")\n\n    def model_post_init(self, __context):\n        self.correct = {\"colors\": [\"red\", \"green\", \"blue\"]}\n\n    def verify(self) -> bool:\n        return [c.lower() for c in self.colors] == self.correct[\"colors\"]\n",
+          "text": "from karenina.schemas.entities import BaseAnswer\nfrom pydantic import Field\n\nclass Answer(BaseAnswer):\n    colors: list[str] = Field(description=\"List of color names\")\n\n    def model_post_init(self, __context):\n        self.correct = {\"colors\": [\"red\", \"green\", \"blue\"]}\n\n    def verify(self) -> bool:\n        return [c.lower() for c in self.colors] == self.correct[\"colors\"]\n",
           "programmingLanguage": "Python"
         },
         "additionalProperty": [
@@ -118,7 +118,7 @@
           "@type": "SoftwareSourceCode",
           "@id": "mq003-template",
           "name": "Author Answer Template",
-          "text": "from karenina.schemas.domain import BaseAnswer\nfrom pydantic import Field\n\nclass Answer(BaseAnswer):\n    author: str = Field(description=\"The author's name\")\n\n    def model_post_init(self, __context):\n        self.correct = {\"author\": \"William Shakespeare\"}\n\n    def verify(self) -> bool:\n        return self.author.lower().replace(\".\", \"\") == self.correct[\"author\"].lower().replace(\".\", \"\")\n",
+          "text": "from karenina.schemas.entities import BaseAnswer\nfrom pydantic import Field\n\nclass Answer(BaseAnswer):\n    author: str = Field(description=\"The author's name\")\n\n    def model_post_init(self, __context):\n        self.correct = {\"author\": \"William Shakespeare\"}\n\n    def verify(self) -> bool:\n        return self.author.lower().replace(\".\", \"\") == self.correct[\"author\"].lower().replace(\".\", \"\")\n",
           "programmingLanguage": "Python"
         },
         "additionalProperty": [
@@ -149,7 +149,7 @@
           "@type": "SoftwareSourceCode",
           "@id": "mq004-template",
           "name": "Chemical Symbol Template",
-          "text": "from karenina.schemas.domain import BaseAnswer\nfrom pydantic import Field\n\nclass Answer(BaseAnswer):\n    symbol: str = Field(description=\"Chemical element symbol\")\n\n    def model_post_init(self, __context):\n        self.correct = {\"symbol\": \"Au\"}\n\n    def verify(self) -> bool:\n        return self.symbol == self.correct[\"symbol\"]\n",
+          "text": "from karenina.schemas.entities import BaseAnswer\nfrom pydantic import Field\n\nclass Answer(BaseAnswer):\n    symbol: str = Field(description=\"Chemical element symbol\")\n\n    def model_post_init(self, __context):\n        self.correct = {\"symbol\": \"Au\"}\n\n    def verify(self) -> bool:\n        return self.symbol == self.correct[\"symbol\"]\n",
           "programmingLanguage": "Python"
         },
         "rating": [
@@ -191,7 +191,7 @@
           "@type": "SoftwareSourceCode",
           "@id": "mq005-template",
           "name": "Math Calculation Template",
-          "text": "from karenina.schemas.domain import BaseAnswer\nfrom pydantic import Field\n\nclass Answer(BaseAnswer):\n    result: int = Field(description=\"Calculation result\")\n\n    def model_post_init(self, __context):\n        self.correct = {\"result\": 105}\n\n    def verify(self) -> bool:\n        return self.result == self.correct[\"result\"]\n",
+          "text": "from karenina.schemas.entities import BaseAnswer\nfrom pydantic import Field\n\nclass Answer(BaseAnswer):\n    result: int = Field(description=\"Calculation result\")\n\n    def model_post_init(self, __context):\n        self.correct = {\"result\": 105}\n\n    def verify(self) -> bool:\n        return self.result == self.correct[\"result\"]\n",
           "programmingLanguage": "Python"
         },
         "additionalProperty": [

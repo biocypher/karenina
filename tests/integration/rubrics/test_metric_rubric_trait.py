@@ -23,7 +23,7 @@ Metric formulas tested:
 import pytest
 
 from karenina.benchmark.verification.evaluators import MetricTraitEvaluator
-from karenina.schemas.domain import MetricRubricTrait, Rubric
+from karenina.schemas.entities import MetricRubricTrait, Rubric
 
 # =============================================================================
 # MetricRubricTrait Configuration Tests
@@ -366,7 +366,7 @@ class TestMetricRubricTraitWithRubric:
 
     def test_rubric_with_mixed_trait_types(self):
         """Verify Rubric can contain metric traits alongside other trait types."""
-        from karenina.schemas.domain import RegexTrait
+        from karenina.schemas.entities import RegexTrait
 
         metric_trait = MetricRubricTrait(
             name="entity_check",

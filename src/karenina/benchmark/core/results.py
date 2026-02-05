@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ...schemas.domain import Rubric
+    from ...schemas.entities import Rubric
     from .base import BenchmarkBase
 
 from ...schemas.verification import VerificationResult

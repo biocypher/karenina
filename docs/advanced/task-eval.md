@@ -211,7 +211,7 @@ Here's a minimal example showing the task-centric workflow with both templates a
 
 ```python
 from karenina.benchmark.task_eval import TaskEval
-from karenina.schemas.domain import Rubric, RubricTrait, RegexTrait
+from karenina.schemas.entities import Rubric, RubricTrait, RegexTrait
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.verification import VerificationConfig
 
@@ -227,7 +227,7 @@ task.log("Testing: Verified with 5 test cases, all passed")
 # 3. Attach verification criteria to traces
 # 3a. Template for correctness verification
 answer_template = '''
-from karenina.schemas.domain import BaseAnswer
+from karenina.schemas.entities import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -310,7 +310,7 @@ Attach answer templates to verify factual correctness, just like in Benchmark:
 ```python
 # Define template
 answer_template = '''
-from karenina.schemas.domain import BaseAnswer
+from karenina.schemas.entities import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -343,7 +343,7 @@ Attach rubrics to assess qualitative aspects. All three rubric types are support
 #### LLM-Based Rubrics
 
 ```python
-from karenina.schemas.domain import RubricTrait
+from karenina.schemas.entities import RubricTrait
 
 task.add_rubric(Rubric(
     traits=[
@@ -368,7 +368,7 @@ task.add_rubric(Rubric(
 #### Regex-Based Rubrics
 
 ```python
-from karenina.schemas.domain import RegexTrait
+from karenina.schemas.entities import RegexTrait
 
 task.add_rubric(Rubric(
     manual_traits=[
@@ -392,7 +392,7 @@ task.add_rubric(Rubric(
 #### Metric-Based Rubrics
 
 ```python
-from karenina.schemas.domain import MetricRubricTrait
+from karenina.schemas.entities import MetricRubricTrait
 
 task.add_rubric(Rubric(
     metric_traits=[
@@ -980,7 +980,7 @@ for question_id, scores in aggregated.items():
 
 ```python
 from karenina.benchmark.task_eval import TaskEval
-from karenina.schemas.domain import Rubric, RubricTrait, RegexTrait, MetricRubricTrait
+from karenina.schemas.entities import Rubric, RubricTrait, RegexTrait, MetricRubricTrait
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.verification import VerificationConfig
 

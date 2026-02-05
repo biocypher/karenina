@@ -10,7 +10,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from ...schemas.domain import Rubric
+from ...schemas.entities import Rubric
 from ...schemas.results import VerificationResultSet
 from ...schemas.verification import (
     FinishedTemplate,

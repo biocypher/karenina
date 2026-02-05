@@ -19,7 +19,7 @@ import cloudpickle
 import pytest
 from pydantic import ValidationError
 
-from karenina.schemas.domain import CallableTrait
+from karenina.schemas.entities import CallableTrait
 
 # =============================================================================
 # CallableTrait Creation Tests

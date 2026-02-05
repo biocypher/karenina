@@ -12,7 +12,7 @@ Tests cover:
 import pytest
 from pydantic import ValidationError
 
-from karenina.schemas.domain import RegexTrait
+from karenina.schemas.entities import RegexTrait
 
 # =============================================================================
 # RegexTrait Creation and Defaults Tests

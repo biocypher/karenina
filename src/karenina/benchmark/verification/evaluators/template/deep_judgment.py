@@ -30,7 +30,7 @@ from karenina.utils.json_extraction import strip_markdown_fences as _strip_markd
 from .....ports import LLMPort, ParserPort
 from .....ports.capabilities import PortCapabilities
 from .....schemas.config import ModelConfig
-from .....schemas.domain import BaseAnswer
+from .....schemas.entities import BaseAnswer
 from .....schemas.shared import SearchResultItem
 from .....schemas.verification import VerificationConfig
 from ...prompts.assembler import PromptAssembler

@@ -10,7 +10,7 @@ from typing import Any
 
 from pydantic import Field
 
-from karenina.schemas.domain import BaseAnswer
+from karenina.schemas.entities import BaseAnswer
 
 
 class Answer(BaseAnswer):

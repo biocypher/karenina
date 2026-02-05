@@ -14,7 +14,7 @@ from datetime import datetime
 
 import pytest
 
-from karenina.schemas.domain import (
+from karenina.schemas.entities import (
     CallableTrait,
     LLMRubricTrait,
     MetricRubricTrait,

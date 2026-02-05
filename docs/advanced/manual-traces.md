@@ -46,7 +46,7 @@ from karenina.benchmark import Benchmark
 from karenina.adapters.manual import ManualTraces
 from karenina.schemas import ModelConfig, VerificationConfig
 from pydantic import Field
-from karenina.schemas.domain import BaseAnswer
+from karenina.schemas.entities import BaseAnswer
 
 # Define Answer template (must be named "Answer")
 class Answer(BaseAnswer):

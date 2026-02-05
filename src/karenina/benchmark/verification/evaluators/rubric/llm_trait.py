@@ -24,7 +24,7 @@ from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
 from .....ports import LLMPort, Message, PortCapabilities
-from .....schemas.domain import LLMRubricTrait
+from .....schemas.entities import LLMRubricTrait
 from ...prompts import PromptAssembler, PromptTask
 from ...prompts.rubric.literal_trait import LiteralTraitPromptBuilder
 from ...prompts.rubric.llm_trait import LLMTraitPromptBuilder

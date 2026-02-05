@@ -7,7 +7,7 @@ import logging
 from typing import Any
 
 from ...schemas.config import ModelConfig
-from ...schemas.domain import Rubric
+from ...schemas.entities import Rubric
 from ...schemas.verification import PromptConfig, VerificationResult
 from ...schemas.verification.config import (
     DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,

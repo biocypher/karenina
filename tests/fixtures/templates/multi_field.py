@@ -6,7 +6,7 @@ optional fields, and different data types (str, int, list, dict).
 
 from pydantic import Field
 
-from karenina.schemas.domain import BaseAnswer
+from karenina.schemas.entities import BaseAnswer
 
 
 class Citation(BaseAnswer):

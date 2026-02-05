@@ -72,7 +72,7 @@ def _deserialize_llm_trait(trait_data: dict[str, Any]) -> Any:
     Returns:
         LLMRubricTrait instance
     """
-    from ..schemas.domain import LLMRubricTrait
+    from ..schemas.entities import LLMRubricTrait
 
     kind = trait_data.get("kind", "score")
     return LLMRubricTrait(
@@ -101,7 +101,7 @@ def _deserialize_regex_trait(trait_data: dict[str, Any]) -> Any:
     Returns:
         RegexTrait instance
     """
-    from ..schemas.domain import RegexTrait
+    from ..schemas.entities import RegexTrait
 
     return RegexTrait(
         name=trait_data["name"],
@@ -122,7 +122,7 @@ def _deserialize_callable_trait(trait_data: dict[str, Any]) -> Any:
     Returns:
         CallableTrait instance
     """
-    from ..schemas.domain import CallableTrait
+    from ..schemas.entities import CallableTrait
 
     return CallableTrait(
         name=trait_data["name"],
@@ -145,7 +145,7 @@ def _deserialize_metric_trait(trait_data: dict[str, Any]) -> Any:
     Returns:
         MetricRubricTrait instance
     """
-    from ..schemas.domain import MetricRubricTrait
+    from ..schemas.entities import MetricRubricTrait
 
     return MetricRubricTrait(
         name=trait_data["name"],
@@ -173,7 +173,7 @@ def deserialize_rubric_from_dict(rubric_data: dict[str, Any] | None) -> Any | No
     if not rubric_data:
         return None
 
-    from ..schemas.domain import Rubric
+    from ..schemas.entities import Rubric
 
     # Check for unsupported old format
     if "manual_traits" in rubric_data:
@@ -217,7 +217,7 @@ def serialize_question_rubric_from_cache(
     if not rubric_data:
         return None
 
-    from ..schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
+    from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
 
     if isinstance(rubric_data, dict):
         # Cache format: dict with llm_traits, regex_traits, etc.

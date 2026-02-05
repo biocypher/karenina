@@ -31,7 +31,7 @@ from karenina.benchmark.verification.stages import (
     VerificationContext,
 )
 from karenina.schemas.config import ModelConfig
-from karenina.schemas.domain import LLMRubricTrait, Rubric
+from karenina.schemas.entities import LLMRubricTrait, Rubric
 from karenina.schemas.verification import (
     VerificationResult,
     VerificationResultMetadata,
@@ -224,7 +224,7 @@ def minimal_context(minimal_model_config: ModelConfig) -> VerificationContext:
         question_text="What is the capital of France?",
         template_code="""
 from pydantic import Field
-from karenina.schemas.domain import BaseAnswer
+from karenina.schemas.entities import BaseAnswer
 
 class Answer(BaseAnswer):
     capital: str = Field(description="The capital city")

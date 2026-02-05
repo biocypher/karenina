@@ -36,7 +36,7 @@ from ...prompts.deep_judgment.rubric.deep_judgment import DeepJudgmentPromptBuil
 from ...prompts.task_types import PromptTask
 
 if TYPE_CHECKING:
-    from .....schemas.domain import LLMRubricTrait, Rubric
+    from .....schemas.entities import LLMRubricTrait, Rubric
     from .....schemas.verification.prompt_config import PromptConfig
 
 logger = logging.getLogger(__name__)
@@ -152,7 +152,7 @@ class RubricDeepJudgmentHandler:
                 - hallucination_risks: Per-trait hallucination risk (if search enabled)
                 - traits_without_valid_excerpts: Traits that failed excerpt extraction
         """
-        from .....schemas.domain import Rubric as RubricClass
+        from .....schemas.entities import Rubric as RubricClass
 
         # Separate deep-judgment vs standard traits
         dj_traits = [t for t in rubric.llm_traits if t.deep_judgment_enabled]

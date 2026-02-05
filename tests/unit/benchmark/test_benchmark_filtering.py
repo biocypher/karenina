@@ -57,7 +57,7 @@ def test_filter_questions_has_template() -> None:
 
     # Valid template with verify() method
     template = """
-from karenina.schemas.domain import BaseAnswer
+from karenina.schemas.entities import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -84,7 +84,7 @@ def test_filter_questions_no_template() -> None:
 
     # Valid template with verify() method
     template = """
-from karenina.schemas.domain import BaseAnswer
+from karenina.schemas.entities import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -130,7 +130,7 @@ def test_filter_questions_combined_criteria() -> None:
     author = {"name": "Alice", "email": "alice@example.com"}
     # Valid template with verify() method
     template = """
-from karenina.schemas.domain import BaseAnswer
+from karenina.schemas.entities import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -251,7 +251,7 @@ def test_get_questions_by_author() -> None:
 @pytest.mark.unit
 def test_get_questions_with_rubric() -> None:
     """Test get_questions_with_rubric returns questions with rubrics."""
-    from karenina.schemas.domain import RegexTrait
+    from karenina.schemas.entities import RegexTrait
 
     benchmark = Benchmark.create(name="test")
 

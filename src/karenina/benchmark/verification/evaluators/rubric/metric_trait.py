@@ -21,7 +21,7 @@ from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
 from .....ports import LLMPort, PortCapabilities
-from .....schemas.domain import MetricRubricTrait
+from .....schemas.entities import MetricRubricTrait
 from ...prompts import PromptAssembler, PromptTask
 from ...prompts.rubric.metric_trait import MetricTraitPromptBuilder
 

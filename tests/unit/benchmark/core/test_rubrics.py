@@ -13,7 +13,7 @@ import pytest
 
 from karenina import Benchmark
 from karenina.benchmark.core.rubrics import RubricManager
-from karenina.schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
+from karenina.schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
 
 
 @pytest.mark.unit

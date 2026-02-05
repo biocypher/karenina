@@ -6,7 +6,7 @@ Manages stage execution, dependencies, and error handling.
 import logging
 import time
 
-from .....schemas.domain import Rubric
+from .....schemas.entities import Rubric
 from .....schemas.verification import VerificationResult
 from ..pipeline.abstention_check import AbstentionCheckStage
 from ..pipeline.deep_judgment_autofail import DeepJudgmentAutoFailStage

@@ -22,7 +22,7 @@ from karenina.benchmark.verification.evaluators import RubricEvaluator, Template
 from karenina.ports import LLMPort, LLMResponse
 from karenina.ports.usage import UsageMetadata
 from karenina.schemas.config import ModelConfig
-from karenina.schemas.domain import BaseAnswer, LLMRubricTrait, RegexTrait, Rubric
+from karenina.schemas.entities import BaseAnswer, LLMRubricTrait, RegexTrait, Rubric
 
 # Import FixtureBackedLLMClient from root conftest
 from tests.conftest import FixtureBackedLLMClient

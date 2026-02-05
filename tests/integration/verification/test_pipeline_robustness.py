@@ -35,7 +35,7 @@ from karenina.benchmark.verification.stages import (
     VerifyTemplateStage,
 )
 from karenina.schemas.config import ModelConfig
-from karenina.schemas.domain import LLMRubricTrait, RegexTrait, Rubric
+from karenina.schemas.entities import LLMRubricTrait, RegexTrait, Rubric
 
 # =============================================================================
 # Test Fixtures
@@ -58,7 +58,7 @@ def valid_template_code() -> str:
     """Return a valid template code string."""
     return """
 from pydantic import Field
-from karenina.schemas.domain import BaseAnswer
+from karenina.schemas.entities import BaseAnswer
 
 class Answer(BaseAnswer):
     capital: str = Field(description="The capital city")

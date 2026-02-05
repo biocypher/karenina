@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
 
 from .....schemas.config import ModelConfig
-from .....schemas.domain import Rubric
+from .....schemas.entities import Rubric
 from .....schemas.verification import PromptConfig
 from .....schemas.verification.config import (
     DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,

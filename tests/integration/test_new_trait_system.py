@@ -19,7 +19,7 @@ from datetime import UTC, datetime
 import pandas as pd
 import pytest
 
-from karenina.schemas.domain.rubric import CallableTrait, LLMRubricTrait, RegexTrait, Rubric
+from karenina.schemas.entities.rubric import CallableTrait, LLMRubricTrait, RegexTrait, Rubric
 from karenina.schemas.results import RubricResults
 from karenina.schemas.verification import (
     VerificationResult,

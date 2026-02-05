@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 from .....adapters import get_llm, get_parser
 from .....ports import LLMPort
 from .....schemas.config import ModelConfig
-from .....schemas.domain import BaseAnswer
+from .....schemas.entities import BaseAnswer
 from .....schemas.verification.model_identity import ModelIdentity
 from ...prompts import PromptAssembler, PromptTask
 from ...prompts.parsing.parsing_instructions import TemplatePromptBuilder

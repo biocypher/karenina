@@ -17,7 +17,7 @@ import pytest
 from karenina.benchmark.verification.evaluators.rubric.deep_judgment import RubricDeepJudgmentHandler
 from karenina.ports.usage import UsageMetadata
 from karenina.schemas import ModelConfig
-from karenina.schemas.domain import LLMRubricTrait, Rubric
+from karenina.schemas.entities import LLMRubricTrait, Rubric
 from karenina.schemas.outputs import TraitExcerpt, TraitExcerptsOutput
 
 

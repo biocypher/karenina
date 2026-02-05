@@ -40,7 +40,7 @@
           "@type": "SoftwareSourceCode",
           "@id": "q001-template",
           "name": "Simple Addition Answer Template",
-          "text": "from karenina.schemas.domain import BaseAnswer\nfrom pydantic import Field\n\nclass Answer(BaseAnswer):\n    \"\"\"Answer template for simple arithmetic.\"\"\"\n    result: int = Field(description=\"The numerical result\")\n\n    def model_post_init(self, __context):\n        self.correct = {\"result\": 4}\n\n    def verify(self) -> bool:\n        return self.result == self.correct[\"result\"]\n",
+          "text": "from karenina.schemas.entities import BaseAnswer\nfrom pydantic import Field\n\nclass Answer(BaseAnswer):\n    \"\"\"Answer template for simple arithmetic.\"\"\"\n    result: int = Field(description=\"The numerical result\")\n\n    def model_post_init(self, __context):\n        self.correct = {\"result\": 4}\n\n    def verify(self) -> bool:\n        return self.result == self.correct[\"result\"]\n",
           "programmingLanguage": "Python",
           "codeRepository": "karenina-test-fixtures"
         }

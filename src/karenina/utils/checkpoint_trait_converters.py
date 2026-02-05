@@ -15,8 +15,8 @@ from ..schemas.checkpoint import (
     SchemaOrgPropertyValue,
     SchemaOrgRating,
 )
-from ..schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
-from ..schemas.domain.rubric import TraitKind
+from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
+from ..schemas.entities.rubric import TraitKind
 
 logger = logging.getLogger(__name__)
 

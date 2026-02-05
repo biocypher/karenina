@@ -7,7 +7,7 @@ few-shot resolution, and preview result creation.
 import logging
 from typing import Any
 
-from ....schemas.domain import Rubric
+from ....schemas.entities import Rubric
 from ....schemas.verification import (
     FinishedTemplate,
     VerificationConfig,

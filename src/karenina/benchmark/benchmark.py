@@ -17,9 +17,9 @@ from typing import TYPE_CHECKING, Any, Union
 if TYPE_CHECKING:
     from ..integrations.gepa import FrontierType, KareninaOutput, ObjectiveConfig, OptimizationRun
     from ..schemas.checkpoint import SchemaOrgQuestion
-    from ..schemas.domain import Question
+    from ..schemas.entities import Question
 
-from ..schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
+from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
 from ..schemas.results import VerificationResultSet
 from ..schemas.verification import (
     FinishedTemplate,
