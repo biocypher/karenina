@@ -282,13 +282,10 @@ class TestMalformedJsonLd:
         file_path.write_text(json.dumps(data))
 
         # Should handle gracefully or raise clear error
-        try:
-            benchmark = Benchmark.load(file_path)
-            # If it loads, date should be handled somehow
-            assert benchmark is not None
-        except Exception as e:
-            # Should be a clear validation error
-            assert "date" in str(e).lower() or "validation" in str(e).lower()
+        with pytest.raises((ValidationError, ValueError, KeyError)) as exc_info:
+            Benchmark.load(file_path)
+        error_msg = str(exc_info.value).lower()
+        assert "date" in error_msg or "validation" in error_msg
 
     def test_truncated_json(self, tmp_path: Path) -> None:
         """Test loading truncated JSON file."""
@@ -349,12 +346,11 @@ class TestCheckpointIORecovery:
 
         file_path = readonly_dir / "test.jsonld"
 
-        try:
-            with pytest.raises(PermissionError):
-                benchmark.save(file_path)
-        finally:
-            # Restore permissions for cleanup
-            readonly_dir.chmod(0o755)
+        with pytest.raises(PermissionError):
+            benchmark.save(file_path)
+
+        # Restore permissions for cleanup (pytest tmp_path cleanup needs write access)
+        readonly_dir.chmod(0o755)
 
     def test_load_nonexistent_file(self) -> None:
         """Test loading from nonexistent file."""

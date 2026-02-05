@@ -257,11 +257,10 @@ class TestDeepJudgmentPandasOperations(PandasOperationsTestMixin):
             pytest.skip("No data for pivot testing")
 
         # Count excerpts per attribute
-        try:
-            pivot = df.groupby(["question_id", "attribute_name"]).size().unstack(fill_value=0)
-            assert isinstance(pivot, pd.DataFrame)
-        except Exception as e:
-            pytest.skip(f"Pivot not applicable: {e}")
+        assert "question_id" in df.columns, "Missing question_id column for pivot"
+        assert "attribute_name" in df.columns, "Missing attribute_name column for pivot"
+        pivot = df.groupby(["question_id", "attribute_name"]).size().unstack(fill_value=0)
+        assert isinstance(pivot, pd.DataFrame)
 
 
 if __name__ == "__main__":

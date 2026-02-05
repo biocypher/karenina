@@ -310,16 +310,15 @@ class TestRubricPandasOperations(PandasOperationsTestMixin):
             pytest.skip("No LLM trait data for pivot testing")
 
         # Pivot: questions x traits
-        try:
-            pivot = df.pivot_table(
-                values="trait_score",
-                index="question_id",
-                columns="trait_name",
-                aggfunc="mean",
-            )
-            assert isinstance(pivot, pd.DataFrame)
-        except Exception as e:
-            pytest.skip(f"Pivot not applicable: {e}")
+        assert "trait_name" in df.columns, "Missing trait_name column for pivot"
+        assert "trait_score" in df.columns, "Missing trait_score column for pivot"
+        pivot = df.pivot_table(
+            values="trait_score",
+            index="question_id",
+            columns="trait_name",
+            aggfunc="mean",
+        )
+        assert isinstance(pivot, pd.DataFrame)
 
     def test_multi_level_groupby(self, verification_results_list: list[VerificationResult]):
         """Test multi-level groupby operations."""
