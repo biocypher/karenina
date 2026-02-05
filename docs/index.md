@@ -1,52 +1,37 @@
 # Karenina Documentation
 
-Welcome to the Karenina documentation. Karenina is a Python library for systematic LLM benchmarking with structured, reproducible evaluation.
+Welcome to the Karenina documentation. Karenina is a framework for defining, running, and analyzing LLM benchmarks in a rigorous and reproducible way.
 
----
+## Getting Started
 
-## What is Karenina?
+- [Introduction](01-introduction/index.md) — What Karenina is and a quickstart example
+- [Installation](02-installation/index.md) — Setup for all scenarios
+- [Configuration](03-configuration/index.md) — Environment variables, presets, and workspace init
 
-Karenina is a framework for defining benchmarks in a rigorous and reproducible way. With Karenina, benchmarks can be created, shared, reviewed, and executed across a wide range of large language models (LLMs).
+## Core Concepts
 
-**Core Philosophy**: Enable domain experts to create benchmarks without deep LLM-technical expertise, allowing them to focus on knowledge rather than infrastructure.
+- [Checkpoints](04-core-concepts/checkpoints.md) — JSON-LD benchmark format
+- [Answer Templates](04-core-concepts/answer-templates.md) — Structured evaluation via Pydantic models
+- [Rubrics](04-core-concepts/rubrics/index.md) — Quality assessment with 4 trait types
+- [Evaluation Modes](04-core-concepts/evaluation-modes.md) — Template-only, rubric-only, or both
+- [Adapters](04-core-concepts/adapters.md) — LLM backend interfaces
 
-**Key Capabilities**:
+## Workflows
 
-- Create benchmarks from scratch or existing question sets
-- Define precise evaluation criteria using code-based templates
-- Evaluate answers using both rule-based and LLM-as-judge strategies
-- Support natural free-form responses and constrained formats
-- Track performance across multiple models and configurations
-- Share and reproduce benchmark results
+- [Creating Benchmarks](05-creating-benchmarks/index.md) — Author questions, templates, and rubrics
+- [Running Verification](06-running-verification/index.md) — Execute evaluation pipelines
+- [Analyzing Results](07-analyzing-results/index.md) — Inspect, export, and iterate on results
 
----
+## Reference
 
-## Quick Navigation
+- [CLI Reference](09-cli-reference/index.md) — Complete command documentation
+- [Configuration Reference](10-configuration-reference/index.md) — All configuration options
 
-### 🚀 Getting Started
-- **[Installation](install.md)** - Set up Karenina on your system
-- **[Quick Start](quickstart.md)** - Create your first benchmark in 10 minutes
-- **[Features Overview](features.md)** - Complete feature catalog
+## Advanced
 
-### 📖 User Guides
-- **[Defining Benchmarks](using-karenina/defining-benchmark.md)** - Benchmark creation and metadata
-- **[Adding Questions](using-karenina/adding-questions.md)** - File extraction and management
-- **[Templates](using-karenina/templates.md)** - Creating and customizing answer templates
-- **[Rubrics](using-karenina/rubrics.md)** - Evaluation criteria and trait types
-- **[Verification](using-karenina/verification.md)** - Running evaluations and analyzing results
-- **[CLI Verification](using-karenina/cli-verification.md)** - Command-line interface for automation
-- **[Saving & Loading](using-karenina/saving-loading.md)** - Checkpoints, database, and export
+- [Pipeline Internals](11-advanced-pipeline/index.md) — 13-stage verification pipeline
+- [Adapter Architecture](12-advanced-adapters/index.md) — Ports, adapters, and MCP integration
 
-### 🔬 Advanced Features
-- **[Deep-Judgment](advanced/deep-judgment.md)** - Extract detailed feedback with excerpts
-- **[Few-Shot Prompting](advanced/few-shot.md)** - Guide responses with examples
-- **[Abstention Detection](advanced/abstention-detection.md)** - Handle model refusals
-- **[Embedding Check](advanced/embedding-check.md)** - Semantic similarity fallback
-- **[TaskEval](advanced/task-eval.md)** - Evaluate agent workflow traces
-- **[Presets](advanced/presets.md)** - Save and reuse verification configurations
-- **[System Integration](advanced/integration.md)** - Server and GUI integration
+## Contributing
 
-### 📚 Reference
-- **[API Reference](api-reference.md)** - Complete API documentation
-- **[Configuration](configuration.md)** - Environment variables and defaults
-- **[Troubleshooting](troubleshooting.md)** - Common issues and solutions
+- [Contributing Guide](13-contributing/index.md) — How to extend Karenina

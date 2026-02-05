@@ -4,6 +4,9 @@ site_url: https://example.com
 repo_url: https://github.com/example/karenina
 repo_name: karenina
 
+exclude_docs: |
+  _archive/
+
 theme:
   name: material
   features:
@@ -111,37 +114,95 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - About: about.md
-  - Installation: install.md
-  - Quick Start: quickstart.md
-  - User Guides:
-    - Defining a Benchmark: using-karenina/defining-benchmark.md
-    - Adding Questions: using-karenina/adding-questions.md
-    - Accessing and Filtering: using-karenina/accessing-filtering.md
-    - Templates: using-karenina/templates.md
-    - Rubrics: using-karenina/rubrics.md
-    - Model Configuration: using-karenina/model-configuration.md
-    - Running Verification: using-karenina/verification.md
-    - Analyzing Results with DataFrames: using-karenina/analyzing-results-dataframes.md
-    - DataFrame Quick Reference: using-karenina/dataframe-quick-reference.md
-    - CLI Verification: using-karenina/cli-verification.md
-    - Saving and Loading: using-karenina/saving-loading.md
-
-  - Features:
-    - Overview: features.md
-    - Advanced Features:
-      - Deep-Judgment: advanced/deep-judgment.md
-      - Abstention Detection: advanced/abstention-detection.md
-      - Embedding Check: advanced/embedding-check.md
-      - TaskEval: advanced/task-eval.md
-      - Configuration Presets: advanced/presets.md
-      - Few-Shot Prompting: advanced/few-shot.md
-      - Manual Traces: advanced/manual-traces.md
-      - MCP Integration: advanced/mcp-integration.md
-      - System Integration: advanced/integration.md
-  - Configuration: configuration.md
-  - API Reference: api-reference.md
-  - Troubleshooting: troubleshooting.md
+  - Getting Started:
+    - Introduction:
+      - Overview: 01-introduction/index.md
+      - Philosophy: 01-introduction/philosophy.md
+      - Templates vs Rubrics: 01-introduction/template-vs-rubric.md
+    - Installation: 02-installation/index.md
+    - Configuration:
+      - Overview: 03-configuration/index.md
+      - Environment Variables: 03-configuration/environment-variables.md
+      - Presets: 03-configuration/presets.md
+      - Workspace Init: 03-configuration/workspace-init.md
+  - Core Concepts:
+    - Overview: 04-core-concepts/index.md
+    - Checkpoints: 04-core-concepts/checkpoints.md
+    - Answer Templates: 04-core-concepts/answer-templates.md
+    - Rubrics:
+      - Overview: 04-core-concepts/rubrics/index.md
+      - LLM Traits: 04-core-concepts/rubrics/llm-traits.md
+      - Literal Traits: 04-core-concepts/rubrics/literal-traits.md
+      - Regex Traits: 04-core-concepts/rubrics/regex-traits.md
+      - Callable Traits: 04-core-concepts/rubrics/callable-traits.md
+      - Metric Traits: 04-core-concepts/rubrics/metric-traits.md
+    - Evaluation Modes: 04-core-concepts/evaluation-modes.md
+    - Adapters: 04-core-concepts/adapters.md
+    - MCP Overview: 04-core-concepts/mcp-overview.md
+    - Manual Interface: 04-core-concepts/manual-interface.md
+    - Adele: 04-core-concepts/adele.md
+    - Few-Shot: 04-core-concepts/few-shot.md
+  - Workflows:
+    - Creating Benchmarks:
+      - Overview: 05-creating-benchmarks/index.md
+      - Creating a Checkpoint: 05-creating-benchmarks/creating-checkpoint.md
+      - Adding Questions: 05-creating-benchmarks/adding-questions.md
+      - Classifying with Adele: 05-creating-benchmarks/classifying-with-adele.md
+      - Generating Templates: 05-creating-benchmarks/generating-templates.md
+      - Writing Templates: 05-creating-benchmarks/writing-templates.md
+      - Defining Rubrics: 05-creating-benchmarks/defining-rubrics.md
+      - Few-Shot Examples: 05-creating-benchmarks/few-shot-examples.md
+      - Saving Benchmarks: 05-creating-benchmarks/saving-benchmarks.md
+    - Running Verification:
+      - Overview: 06-running-verification/index.md
+      - Loading a Benchmark: 06-running-verification/loading-benchmark.md
+      - Verification Config: 06-running-verification/verification-config.md
+      - Prompt Config: 06-running-verification/prompt-config.md
+      - Response Quality Checks: 06-running-verification/response-quality-checks.md
+      - Using Presets: 06-running-verification/using-presets.md
+      - Python API: 06-running-verification/python-api.md
+      - CLI: 06-running-verification/cli.md
+      - Manual Interface: 06-running-verification/manual-interface.md
+      - Multi-Model: 06-running-verification/multi-model.md
+      - MCP Verification: 06-running-verification/mcp-verification.md
+      - Database Persistence: 06-running-verification/database-persistence.md
+    - Analyzing Results:
+      - Overview: 07-analyzing-results/index.md
+      - Verification Result: 07-analyzing-results/verification-result.md
+      - DataFrame Analysis: 07-analyzing-results/dataframe-analysis.md
+      - Exporting: 07-analyzing-results/exporting.md
+      - Iterating: 07-analyzing-results/iterating.md
+  - Reference:
+    - CLI Reference:
+      - Overview: 09-cli-reference/index.md
+      - verify: 09-cli-reference/verify.md
+      - verify-status: 09-cli-reference/verify-status.md
+      - preset: 09-cli-reference/preset.md
+      - serve: 09-cli-reference/serve.md
+      - init: 09-cli-reference/init.md
+      - optimize: 09-cli-reference/optimize.md
+    - Configuration Reference:
+      - Overview: 10-configuration-reference/index.md
+      - Environment Variables: 10-configuration-reference/env-vars.md
+      - VerificationConfig: 10-configuration-reference/verification-config.md
+      - ModelConfig: 10-configuration-reference/model-config.md
+      - PromptConfig: 10-configuration-reference/prompt-config.md
+      - Preset Schema: 10-configuration-reference/preset-schema.md
+  - Advanced:
+    - Pipeline:
+      - Overview: 11-advanced-pipeline/index.md
+      - Stages: 11-advanced-pipeline/stages.md
+      - Deep Judgment (Templates): 11-advanced-pipeline/deep-judgment-templates.md
+      - Deep Judgment (Rubrics): 11-advanced-pipeline/deep-judgment-rubrics.md
+      - Prompt Assembly: 11-advanced-pipeline/prompt-assembly.md
+      - Custom Stages: 11-advanced-pipeline/custom-stages.md
+    - Adapters:
+      - Overview: 12-advanced-adapters/index.md
+      - Ports: 12-advanced-adapters/ports.md
+      - Available Adapters: 12-advanced-adapters/available-adapters.md
+      - MCP Integration: 12-advanced-adapters/mcp-integration.md
+      - Writing Adapters: 12-advanced-adapters/writing-adapters.md
+  - Contributing: 13-contributing/index.md
 
 extra:
   social:

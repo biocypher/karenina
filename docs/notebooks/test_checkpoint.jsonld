@@ -1,0 +1,276 @@
+{
+  "@context": {
+    "@version": 1.1,
+    "@vocab": "http://schema.org/",
+    "DataFeed": "DataFeed",
+    "DataFeedItem": "DataFeedItem",
+    "Question": "Question",
+    "Answer": "Answer",
+    "SoftwareSourceCode": "SoftwareSourceCode",
+    "Rating": "Rating",
+    "PropertyValue": "PropertyValue",
+    "version": "version",
+    "name": "name",
+    "description": "description",
+    "creator": "creator",
+    "dateCreated": "dateCreated",
+    "dateModified": "dateModified",
+    "dataFeedElement": {
+      "@id": "dataFeedElement",
+      "@container": "@set"
+    },
+    "item": {
+      "@id": "item",
+      "@type": "@id"
+    },
+    "text": "text",
+    "acceptedAnswer": {
+      "@id": "acceptedAnswer",
+      "@type": "@id"
+    },
+    "programmingLanguage": "programmingLanguage",
+    "codeRepository": "codeRepository",
+    "rating": {
+      "@id": "rating",
+      "@container": "@set"
+    },
+    "bestRating": "bestRating",
+    "worstRating": "worstRating",
+    "ratingExplanation": "ratingExplanation",
+    "additionalType": "additionalType",
+    "additionalProperty": {
+      "@id": "additionalProperty",
+      "@container": "@set"
+    },
+    "value": "value",
+    "url": "url",
+    "identifier": "identifier",
+    "keywords": {
+      "@id": "keywords",
+      "@container": "@set"
+    }
+  },
+  "@type": "DataFeed",
+  "@id": "urn:uuid:karenina-checkpoint-1770332819.237824",
+  "name": "Documentation Test Benchmark",
+  "description": "Sample benchmark with 5 questions for use in documentation examples",
+  "version": "1.0.0",
+  "creator": "Karenina Documentation",
+  "dateCreated": "2026-02-05T23:06:59.237819",
+  "dateModified": "2026-02-05T23:06:59.238117",
+  "dataFeedElement": [
+    {
+      "@type": "DataFeedItem",
+      "@id": "urn:uuid:question-what-is-the-capital-of-france-cb0b4aaf",
+      "dateCreated": "2026-02-05T23:06:59.237875",
+      "dateModified": "2026-02-05T23:06:59.237926",
+      "item": {
+        "@type": "Question",
+        "text": "What is the capital of France?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Paris"
+        },
+        "hasPart": {
+          "@type": "SoftwareSourceCode",
+          "name": "What is the capital of France?... Answer Template",
+          "text": "from pydantic import Field\nfrom karenina.schemas.entities import BaseAnswer\n\nclass Answer(BaseAnswer):\n    capital: str = Field(description=\"The capital city mentioned in the response\")\n\n    def model_post_init(self, __context):\n        self.correct = {\"capital\": \"Paris\"}\n\n    def verify(self) -> bool:\n        return self.capital.strip().lower() == self.correct[\"capital\"].lower()\n",
+          "programmingLanguage": "Python",
+          "codeRepository": "karenina-benchmarks"
+        },
+        "rating": [
+          {
+            "@type": "Rating",
+            "name": "conciseness",
+            "description": "Is the response concise and to the point?",
+            "bestRating": 1.0,
+            "worstRating": 0.0,
+            "additionalType": "QuestionSpecificRubricTrait",
+            "additionalProperty": [
+              {
+                "@type": "PropertyValue",
+                "name": "higher_is_better",
+                "value": true
+              }
+            ]
+          }
+        ],
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "finished",
+            "value": true
+          }
+        ]
+      }
+    },
+    {
+      "@type": "DataFeedItem",
+      "@id": "urn:uuid:question-what-is-6-multiplied-by-7-aba99ec8",
+      "dateCreated": "2026-02-05T23:06:59.237947",
+      "dateModified": "2026-02-05T23:06:59.237973",
+      "item": {
+        "@type": "Question",
+        "text": "What is 6 multiplied by 7?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "42"
+        },
+        "hasPart": {
+          "@type": "SoftwareSourceCode",
+          "name": "What is 6 multiplied by 7?... Answer Template",
+          "text": "from pydantic import Field\nfrom karenina.schemas.entities import BaseAnswer\n\nclass Answer(BaseAnswer):\n    result: int = Field(description=\"The numeric result of the calculation\")\n\n    def model_post_init(self, __context):\n        self.correct = {\"result\": 42}\n\n    def verify(self) -> bool:\n        return self.result == self.correct[\"result\"]\n",
+          "programmingLanguage": "Python",
+          "codeRepository": "karenina-benchmarks"
+        },
+        "rating": [
+          {
+            "@type": "Rating",
+            "name": "explanation_quality",
+            "description": "Rate the quality of the explanation provided with the answer",
+            "bestRating": 5.0,
+            "worstRating": 1.0,
+            "additionalType": "QuestionSpecificRubricTrait",
+            "additionalProperty": [
+              {
+                "@type": "PropertyValue",
+                "name": "higher_is_better",
+                "value": true
+              }
+            ]
+          }
+        ],
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "finished",
+            "value": true
+          }
+        ]
+      }
+    },
+    {
+      "@type": "DataFeedItem",
+      "@id": "urn:uuid:question-what-element-has-the-atomic-number-8-provide-both--8bcf4ce2",
+      "dateCreated": "2026-02-05T23:06:59.237988",
+      "dateModified": "2026-02-05T23:06:59.238044",
+      "item": {
+        "@type": "Question",
+        "text": "What element has the atomic number 8? Provide both the name and chemical symbol.",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Oxygen (O)"
+        },
+        "hasPart": {
+          "@type": "SoftwareSourceCode",
+          "name": "What element has the atomic nu... Answer Template",
+          "text": "from pydantic import Field\nfrom karenina.schemas.entities import BaseAnswer\n\nclass Answer(BaseAnswer):\n    element: str = Field(description=\"The chemical element name\")\n    symbol: str = Field(description=\"The chemical symbol\")\n\n    def model_post_init(self, __context):\n        self.correct = {\"element\": \"oxygen\", \"symbol\": \"O\"}\n\n    def verify(self) -> bool:\n        return (\n            self.element.strip().lower() == self.correct[\"element\"]\n            and self.symbol.strip().upper() == self.correct[\"symbol\"]\n        )\n",
+          "programmingLanguage": "Python",
+          "codeRepository": "karenina-benchmarks"
+        },
+        "rating": [
+          {
+            "@type": "Rating",
+            "name": "symbol_format",
+            "description": "Response includes a chemical symbol in parentheses like (O)",
+            "bestRating": 1.0,
+            "worstRating": 0.0,
+            "additionalType": "QuestionSpecificRegexTrait",
+            "additionalProperty": [
+              {
+                "@type": "PropertyValue",
+                "name": "pattern",
+                "value": "\\([A-Z][a-z]?\\)"
+              },
+              {
+                "@type": "PropertyValue",
+                "name": "case_sensitive",
+                "value": true
+              },
+              {
+                "@type": "PropertyValue",
+                "name": "invert_result",
+                "value": false
+              },
+              {
+                "@type": "PropertyValue",
+                "name": "higher_is_better",
+                "value": true
+              }
+            ]
+          }
+        ],
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "finished",
+            "value": true
+          }
+        ]
+      }
+    },
+    {
+      "@type": "DataFeedItem",
+      "@id": "urn:uuid:question-is-17-a-prime-number-7abec4b4",
+      "dateCreated": "2026-02-05T23:06:59.238066",
+      "dateModified": "2026-02-05T23:06:59.238066",
+      "item": {
+        "@type": "Question",
+        "text": "Is 17 a prime number?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes, 17 is a prime number."
+        },
+        "hasPart": {
+          "@type": "SoftwareSourceCode",
+          "name": "Is 17 a prime number?... Answer Template",
+          "text": "from pydantic import Field\nfrom karenina.schemas.entities import BaseAnswer\n\nclass Answer(BaseAnswer):\n    is_prime: bool = Field(description=\"Whether 17 is identified as prime\")\n\n    def verify(self) -> bool:\n        return self.is_prime is True\n",
+          "programmingLanguage": "Python",
+          "codeRepository": "karenina-benchmarks"
+        },
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "finished",
+            "value": true
+          }
+        ]
+      }
+    },
+    {
+      "@type": "DataFeedItem",
+      "@id": "urn:uuid:question-explain-the-concept-of-machine-learning-in-simple--de73020c",
+      "dateCreated": "2026-02-05T23:06:59.238087",
+      "dateModified": "2026-02-05T23:06:59.238087",
+      "item": {
+        "@type": "Question",
+        "text": "Explain the concept of machine learning in simple terms.",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Machine learning is a subset of artificial intelligence where computers learn from data to make predictions or decisions without being explicitly programmed for each task."
+        },
+        "hasPart": {
+          "@type": "SoftwareSourceCode",
+          "name": "Explain the concept of machine... Answer Template",
+          "text": "class Answer(BaseAnswer):\n    \"\"\"Answer template for: Explain the concept of machine learning in simple ...\"\"\"\n\n    response: str = Field(description=\"The answer response\")\n\n    def verify(self) -> bool:\n        # Default template: returns False to indicate custom verification needed\n        return False\n",
+          "programmingLanguage": "Python",
+          "codeRepository": "karenina-benchmarks"
+        },
+        "additionalProperty": [
+          {
+            "@type": "PropertyValue",
+            "name": "finished",
+            "value": false
+          }
+        ]
+      }
+    }
+  ],
+  "additionalProperty": [
+    {
+      "@type": "PropertyValue",
+      "name": "benchmark_format_version",
+      "value": "3.0.0-jsonld"
+    }
+  ]
+}
