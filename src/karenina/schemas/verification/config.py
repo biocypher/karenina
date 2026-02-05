@@ -9,7 +9,6 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..config.models import (
-    INTERFACE_LANGCHAIN,
     INTERFACES_NO_PROVIDER_REQUIRED,
     FewShotConfig,
     ModelConfig,
@@ -166,7 +165,7 @@ class VerificationConfig(BaseModel):
 
     def __init__(self, **data: Any) -> None:
         """
-        Initialize with backward compatibility for single model configs.
+        Initialize with environment variable support and default system prompts.
 
         Configuration precedence (highest to lowest):
         1. Explicit arguments (including preset values)
@@ -208,44 +207,6 @@ class VerificationConfig(BaseModel):
                 with contextlib.suppress(ValueError):
                     data["async_max_workers"] = int(env_val)
             # else: let Pydantic use field default (DEFAULT_ASYNC_MAX_WORKERS)
-
-        # If legacy single model fields are provided, convert to arrays
-        if "answering_models" not in data and any(k.startswith("answering_") for k in data):
-            answering_model = ModelConfig(
-                id="answering-legacy",
-                model_provider=data.get("answering_model_provider") or None,
-                model_name=data.get("answering_model_name", ""),
-                temperature=data.get("answering_temperature", 0.1),
-                interface=data.get("answering_interface", INTERFACE_LANGCHAIN),
-                system_prompt=data.get("answering_system_prompt", DEFAULT_ANSWERING_SYSTEM_PROMPT),
-            )
-            data["answering_models"] = [answering_model]
-
-        if "parsing_models" not in data and any(k.startswith("parsing_") for k in data):
-            parsing_model = ModelConfig(
-                id="parsing-legacy",
-                model_provider=data.get("parsing_model_provider") or None,
-                model_name=data.get("parsing_model_name", ""),
-                temperature=data.get("parsing_temperature", 0.1),
-                interface=data.get("parsing_interface", INTERFACE_LANGCHAIN),
-                system_prompt=data.get("parsing_system_prompt", DEFAULT_PARSING_SYSTEM_PROMPT),
-            )
-            data["parsing_models"] = [parsing_model]
-
-        # Convert legacy few-shot fields to new FewShotConfig
-        if "few_shot_config" not in data and any(
-            k in data for k in ["few_shot_enabled", "few_shot_mode", "few_shot_k"]
-        ):
-            few_shot_enabled = data.get("few_shot_enabled", False)
-            few_shot_mode = data.get("few_shot_mode", "all")
-            few_shot_k = data.get("few_shot_k", 3)
-
-            # Create FewShotConfig from legacy settings
-            data["few_shot_config"] = FewShotConfig(
-                enabled=few_shot_enabled,
-                global_mode=few_shot_mode,
-                global_k=few_shot_k,
-            )
 
         # Apply default system prompts to models that don't have one
         if "answering_models" in data:
@@ -502,10 +463,10 @@ class VerificationConfig(BaseModel):
 
     def is_few_shot_enabled(self) -> bool:
         """
-        Check if few-shot prompting is enabled (backward compatible).
+        Check if few-shot prompting is enabled.
 
         Returns:
-            True if few-shot is enabled in any format
+            True if few-shot is enabled
         """
         config = self.get_few_shot_config()
         return config is not None and config.enabled

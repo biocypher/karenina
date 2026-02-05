@@ -2,7 +2,7 @@
 
 Tests cover:
 - VerificationConfig field validation and defaults
-- Backward compatibility (legacy single-model fields)
+- Default system prompt application
 - Environment variable handling (EMBEDDING_CHECK, KARENINA_ASYNC_*)
 - _validate_config() method with all error conditions
 - __repr__() output formatting
@@ -281,98 +281,12 @@ def test_validation_search_tool_must_be_string_or_callable() -> None:
 
 
 # =============================================================================
-# VerificationConfig Backward Compatibility Tests
+# VerificationConfig Default System Prompt Tests
 # =============================================================================
 
 
 @pytest.mark.unit
-def test_backward_compat_legacy_answering_fields() -> None:
-    """Test backward compatibility with legacy single answering model fields."""
-    config = VerificationConfig(
-        answering_model_provider="openai",
-        answering_model_name="gpt-4",
-        answering_temperature=0.5,
-        answering_interface="langchain",
-        answering_system_prompt="Custom prompt",
-        parsing_models=[
-            ModelConfig(
-                id="parsing",
-                model_name="gpt-4",
-                model_provider="openai",
-                interface="langchain",
-                system_prompt="test",
-                temperature=0.1,
-            )
-        ],
-    )
-
-    assert len(config.answering_models) == 1
-    assert config.answering_models[0].id == "answering-legacy"
-    assert config.answering_models[0].model_provider == "openai"
-    assert config.answering_models[0].model_name == "gpt-4"
-    assert config.answering_models[0].temperature == 0.5
-    assert config.answering_models[0].interface == "langchain"
-    assert config.answering_models[0].system_prompt == "Custom prompt"
-
-
-@pytest.mark.unit
-def test_backward_compat_legacy_parsing_fields() -> None:
-    """Test backward compatibility with legacy single parsing model fields."""
-    config = VerificationConfig(
-        parsing_model_provider="anthropic",
-        parsing_model_name="claude-haiku-4-5",
-        parsing_temperature=0.3,
-        parsing_interface="langchain",
-        parsing_system_prompt="Parse this",
-        answering_models=[
-            ModelConfig(
-                id="answering",
-                model_name="gpt-4",
-                model_provider="openai",
-                interface="langchain",
-                system_prompt="test",
-                temperature=0.1,
-            )
-        ],
-    )
-
-    assert len(config.parsing_models) == 1
-    assert config.parsing_models[0].id == "parsing-legacy"
-    assert config.parsing_models[0].model_provider == "anthropic"
-    assert config.parsing_models[0].model_name == "claude-haiku-4-5"
-    assert config.parsing_models[0].temperature == 0.3
-
-
-@pytest.mark.unit
-def test_backward_compat_legacy_few_shot_fields() -> None:
-    """Test backward compatibility with legacy few-shot fields."""
-
-    config = VerificationConfig(
-        few_shot_enabled=True,
-        few_shot_mode="k-shot",
-        few_shot_k=5,
-        parsing_models=[
-            ModelConfig(
-                id="parsing",
-                model_name="gpt-4",
-                model_provider="openai",
-                interface="langchain",
-                system_prompt="test",
-                temperature=0.1,
-            )
-        ],
-        answering_models=[],
-        parsing_only=True,
-    )
-
-    assert config.few_shot_config is not None
-    assert config.few_shot_config.enabled is True
-    assert config.few_shot_config.global_mode == "k-shot"
-    assert config.few_shot_config.global_k == 5
-
-
-@pytest.mark.unit
-def test_backward_compat_default_system_prompts() -> None:
+def test_default_system_prompts() -> None:
     """Test that default system prompts are applied when not provided."""
     from karenina.schemas.config import ModelConfig
 
