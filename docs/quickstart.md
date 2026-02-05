@@ -100,7 +100,7 @@ questions = extract_questions_from_file(
     question_column="Question",
     answer_column="Answer",
     author_name_column="Author",  # Optional
-    keywords_column="Keywords"    # Optional
+    keywords_columns=[{"column": "Keywords", "separator": ","}]  # Optional
 )
 
 # Add extracted questions to benchmark

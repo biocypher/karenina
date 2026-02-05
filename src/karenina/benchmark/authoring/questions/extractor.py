@@ -111,9 +111,6 @@ def extract_questions_from_file(
     author_affiliation_column: str | None = None,
     url_column: str | None = None,
     keywords_columns: list[dict[str, str]] | None = None,
-    # Deprecated: kept for backward compatibility
-    keywords_column: str | None = None,
-    keywords_separator: str = ",",
 ) -> list[tuple[Question, dict[str, Any]]]:
     """
     Extract questions from a file with flexible column selection and optional metadata.
@@ -129,8 +126,6 @@ def extract_questions_from_file(
         url_column: Optional column name for URLs
         keywords_columns: Optional list of keyword column configurations with individual separators
             e.g., [{"column": "keywords1", "separator": ","}, {"column": "keywords2", "separator": ";"}]
-        keywords_column: (Deprecated) Optional single column name for keywords
-        keywords_separator: (Deprecated) Separator for splitting keywords (default: ",")
 
     Returns:
         List of tuples containing (Question, metadata_dict)
@@ -168,16 +163,10 @@ def extract_questions_from_file(
         columns_to_use.append(url_column)
         metadata_columns["url"] = url_column
 
-    # Handle backward compatibility for keywords
-    effective_keywords_columns = keywords_columns
-    if not effective_keywords_columns and keywords_column:
-        # Old format: convert to new format
-        effective_keywords_columns = [{"column": keywords_column, "separator": keywords_separator}]
-
     # Add all keyword columns
-    if effective_keywords_columns:
+    if keywords_columns:
         keyword_cols_info = []
-        for kw_config in effective_keywords_columns:
+        for kw_config in keywords_columns:
             col_name = kw_config.get("column")
             separator = kw_config.get("separator", ",")
             if col_name and col_name in df.columns:
@@ -355,9 +344,6 @@ def extract_and_generate_questions(
     author_affiliation_column: str | None = None,
     url_column: str | None = None,
     keywords_columns: list[dict[str, str]] | None = None,
-    # Deprecated: kept for backward compatibility
-    keywords_column: str | None = None,
-    keywords_separator: str = ",",
 ) -> dict[str, Any] | None:
     """
     Extract questions from file and generate a Python file with Question instances.
@@ -375,8 +361,6 @@ def extract_and_generate_questions(
         url_column: Optional column name for URLs
         keywords_columns: Optional list of keyword column configurations with individual separators
             e.g., [{"column": "keywords1", "separator": ","}, {"column": "keywords2", "separator": ";"}]
-        keywords_column: (Deprecated) Optional single column name for keywords
-        keywords_separator: (Deprecated) Separator for splitting keywords (default: ",")
 
     Returns:
         If return_json is True, returns dictionary in webapp format
@@ -402,8 +386,6 @@ def extract_and_generate_questions(
         author_affiliation_column=author_affiliation_column,
         url_column=url_column,
         keywords_columns=keywords_columns,
-        keywords_column=keywords_column,
-        keywords_separator=keywords_separator,
     )
 
     if not questions:
