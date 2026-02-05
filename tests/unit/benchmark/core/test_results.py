@@ -16,7 +16,7 @@ import pytest
 
 from karenina import Benchmark
 from karenina.benchmark.core.results import ResultsManager
-from karenina.benchmark.core.results_io import ResultsIOHandler
+from karenina.benchmark.core.results_io import ResultsIOManager
 from karenina.schemas.verification.model_identity import ModelIdentity
 from karenina.schemas.workflow import VerificationResult, VerificationResultMetadata, VerificationResultTemplate
 
@@ -620,24 +620,24 @@ class TestLoadResultsFromFile:
 
 @pytest.mark.unit
 class TestEscapeCsvField:
-    """Tests for ResultsIOHandler._escape_csv_field static method."""
+    """Tests for ResultsIOManager._escape_csv_field static method."""
 
     def test_escape_none(self) -> None:
         """Test escaping None returns empty string."""
-        assert ResultsIOHandler._escape_csv_field(None) == ""
+        assert ResultsIOManager._escape_csv_field(None) == ""
 
     def test_escape_simple_string(self) -> None:
         """Test escaping simple string returns as-is."""
-        assert ResultsIOHandler._escape_csv_field("hello") == "hello"
+        assert ResultsIOManager._escape_csv_field("hello") == "hello"
 
     def test_escape_with_comma(self) -> None:
         """Test escaping string with comma wraps in quotes."""
-        assert ResultsIOHandler._escape_csv_field("hello,world") == '"hello,world"'
+        assert ResultsIOManager._escape_csv_field("hello,world") == '"hello,world"'
 
     def test_escape_with_quote(self) -> None:
         """Test escaping string with quote doubles quotes."""
-        assert ResultsIOHandler._escape_csv_field('say "hello"') == '"say ""hello"""'
+        assert ResultsIOManager._escape_csv_field('say "hello"') == '"say ""hello"""'
 
     def test_escape_with_newline(self) -> None:
         """Test escaping string with newline wraps in quotes."""
-        assert ResultsIOHandler._escape_csv_field("line1\nline2") == '"line1\nline2"'
+        assert ResultsIOManager._escape_csv_field("line1\nline2") == '"line1\nline2"'

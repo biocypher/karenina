@@ -3,13 +3,22 @@
 Main entry point for running verification using the stage-based pipeline architecture.
 """
 
+import logging
 from typing import Any
 
 from ...schemas.domain import Rubric
 from ...schemas.verification import PromptConfig
+from ...schemas.verification.config import (
+    DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
+    DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS,
+    DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS,
+    DEFAULT_RUBRIC_MAX_EXCERPTS,
+)
 from ...schemas.workflow import ModelConfig, VerificationResult
 from ...utils.checkpoint import generate_template_id
 from .stages import StageOrchestrator, VerificationContext
+
+logger = logging.getLogger(__name__)
 
 
 def run_single_model_verification(
@@ -29,18 +38,18 @@ def run_single_model_verification(
     sufficiency_enabled: bool = False,
     deep_judgment_enabled: bool = False,
     rubric_evaluation_strategy: str = "batch",
-    deep_judgment_max_excerpts_per_attribute: int = 3,
-    deep_judgment_fuzzy_match_threshold: float = 0.80,
-    deep_judgment_excerpt_retry_attempts: int = 2,
+    deep_judgment_max_excerpts_per_attribute: int = DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS,
+    deep_judgment_fuzzy_match_threshold: float = DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
+    deep_judgment_excerpt_retry_attempts: int = DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS,
     deep_judgment_search_enabled: bool = False,
     deep_judgment_search_tool: str | Any = "tavily",
     # Deep-judgment rubric configuration (NEW)
     deep_judgment_rubric_mode: str = "disabled",
     deep_judgment_rubric_global_excerpts: bool = True,
     deep_judgment_rubric_config: dict[str, Any] | None = None,
-    deep_judgment_rubric_max_excerpts_default: int = 7,
-    deep_judgment_rubric_fuzzy_match_threshold_default: float = 0.80,
-    deep_judgment_rubric_excerpt_retry_attempts_default: int = 2,
+    deep_judgment_rubric_max_excerpts_default: int = DEFAULT_RUBRIC_MAX_EXCERPTS,
+    deep_judgment_rubric_fuzzy_match_threshold_default: float = DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
+    deep_judgment_rubric_excerpt_retry_attempts_default: int = DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS,
     deep_judgment_rubric_search_enabled: bool = False,
     deep_judgment_rubric_search_tool: str | Any = "tavily",
     evaluation_mode: str = "template_only",

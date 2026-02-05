@@ -1,6 +1,7 @@
 """Template management functionality for benchmarks."""
 
 import ast
+import logging
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -9,6 +10,8 @@ if TYPE_CHECKING:
 
 from ...schemas.workflow import FinishedTemplate
 from ..verification.utils.template_validation import validate_answer_template
+
+logger = logging.getLogger(__name__)
 
 
 class TemplateManager:

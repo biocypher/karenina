@@ -12,7 +12,7 @@ The main model is SearchResultItem, which represents a single search result
 with title, content, and source URL.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SearchResultItem(BaseModel):
@@ -74,14 +74,12 @@ class SearchResultItem(BaseModel):
         url_display = self.url or "No URL"
         return f"[{title_display}] {self.content[:100]}... (Source: {url_display})"
 
-    class Config:
-        """Pydantic model configuration."""
-
-        # Enable JSON schema generation
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "title": "Example Article Title",
                 "content": "This is the main content of the search result...",
                 "url": "https://example.com/article",
             }
         }
+    )

@@ -23,7 +23,15 @@ from karenina.schemas.workflow.models import (
 )
 from karenina.schemas.workflow.verification import (
     DEFAULT_ANSWERING_SYSTEM_PROMPT,
+    DEFAULT_ASYNC_ENABLED,
+    DEFAULT_ASYNC_MAX_WORKERS,
+    DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
+    DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS,
+    DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS,
+    DEFAULT_EMBEDDING_MODEL,
+    DEFAULT_EMBEDDING_THRESHOLD,
     DEFAULT_PARSING_SYSTEM_PROMPT,
+    DEFAULT_RUBRIC_MAX_EXCERPTS,
 )
 
 from .utils import cli_error, parse_question_indices
@@ -35,17 +43,9 @@ TEXT_TRUNCATION_LENGTH = 80
 MCP_TOOL_PREVIEW_COUNT = 10
 MCP_TOOL_DESC_PREVIEW_LENGTH = 60
 
-# Default deep judgment settings
-DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS = 3
-DEFAULT_FUZZY_THRESHOLD = 0.80
-DEFAULT_RETRY_ATTEMPTS = 2
-
-# Default rubric deep judgment settings
-DEFAULT_RUBRIC_MAX_EXCERPTS = 7
-
-# Default embedding settings
-DEFAULT_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
-DEFAULT_EMBEDDING_THRESHOLD = 0.85
+# Aliases for backward compatibility and shorter names in CLI prompts
+DEFAULT_FUZZY_THRESHOLD = DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD
+DEFAULT_RETRY_ATTEMPTS = DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS
 
 
 def _prompt_float_range(prompt_text: str, min_val: float, max_val: float, default: str) -> float:
@@ -171,8 +171,8 @@ def build_config_interactively(
     deep_judgment_search_enabled = False
     deep_judgment_search_tool = "tavily"
     few_shot_config = None
-    async_enabled = True
-    async_max_workers = 2
+    async_enabled = DEFAULT_ASYNC_ENABLED
+    async_max_workers = DEFAULT_ASYNC_MAX_WORKERS
 
     if mode == "advanced":
         console.print("[bold]Advanced Configuration[/bold]")
@@ -417,10 +417,10 @@ def _configure_few_shot() -> Any:
 def _configure_async() -> tuple[bool, int]:
     """Prompt for async execution settings. Returns (async_enabled, async_max_workers)."""
     console.print("\n[cyan]Async Execution Settings:[/cyan]")
-    async_enabled = Confirm.ask("Enable async execution?", default=True)
-    async_max_workers = 2
+    async_enabled = Confirm.ask("Enable async execution?", default=DEFAULT_ASYNC_ENABLED)
+    async_max_workers = DEFAULT_ASYNC_MAX_WORKERS
     if async_enabled:
-        async_max_workers = _prompt_int_min("Max parallel workers", min_val=1, default="2")
+        async_max_workers = _prompt_int_min("Max parallel workers", min_val=1, default=str(DEFAULT_ASYNC_MAX_WORKERS))
     return async_enabled, async_max_workers
 
 
@@ -540,9 +540,9 @@ def _prompt_for_model(model_type: str, mode: str = "basic") -> ModelConfig:
                 # Validate this server immediately
                 console.print(f"\n[cyan]Validating MCP server '{server_name}'...[/cyan]")
                 try:
-                    from karenina.utils.mcp import sync_fetch_tool_descriptions
+                    from karenina.utils.mcp import fetch_tool_descriptions
 
-                    tool_descriptions = sync_fetch_tool_descriptions({server_name: server_url})
+                    tool_descriptions = fetch_tool_descriptions({server_name: server_url})
 
                     if tool_descriptions:
                         console.print(f"[green]✓ Successfully connected to '{server_name}'[/green]")
@@ -584,9 +584,9 @@ def _prompt_for_model(model_type: str, mode: str = "basic") -> ModelConfig:
 
                 # Validate tool filter if we have tools
                 try:
-                    from karenina.utils.mcp import sync_fetch_tool_descriptions
+                    from karenina.utils.mcp import fetch_tool_descriptions
 
-                    all_tool_descriptions = sync_fetch_tool_descriptions(mcp_urls_dict, tool_filter=mcp_tool_filter)
+                    all_tool_descriptions = fetch_tool_descriptions(mcp_urls_dict, tool_filter=mcp_tool_filter)
                     available_tool_names = list(all_tool_descriptions.keys())
 
                     if not all_tool_descriptions:

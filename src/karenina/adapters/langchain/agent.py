@@ -111,7 +111,7 @@ class LangChainAgentAdapter:
         ...     model_provider="anthropic"
         ... )
         >>> adapter = LangChainAgentAdapter(config)
-        >>> result = await adapter.run(
+        >>> result = await adapter.arun(
         ...     messages=[Message.user("What files are in /tmp?")],
         ...     mcp_servers={
         ...         "filesystem": {
@@ -236,7 +236,7 @@ class LangChainAgentAdapter:
             from langchain.agents import create_agent
             from langgraph.checkpoint.memory import InMemorySaver
 
-            from karenina.adapters.langchain.mcp import create_mcp_client_and_tools
+            from karenina.adapters.langchain.mcp import acreate_mcp_client_and_tools
         except ImportError as e:
             raise ImportError(
                 "langchain>=1.1.0, langgraph, and langchain-mcp-adapters are required. "
@@ -244,7 +244,7 @@ class LangChainAgentAdapter:
             ) from e
 
         # Get MCP client and tools asynchronously (avoids threading issues)
-        _, tools = await create_mcp_client_and_tools(mcp_urls, tool_filter)
+        _, tools = await acreate_mcp_client_and_tools(mcp_urls, tool_filter)
 
         # Auto-detect context size for openai_endpoint interface if not explicitly configured
         max_context_tokens = self._config.max_context_tokens
@@ -286,7 +286,7 @@ class LangChainAgentAdapter:
 
         return agent
 
-    async def run(
+    async def arun(
         self,
         messages: list[Message],
         tools: list[Tool] | None = None,
@@ -452,14 +452,14 @@ class LangChainAgentAdapter:
             actual_model=self._config.model_name,
         )
 
-    def run_sync(
+    def run(
         self,
         messages: list[Message],
         tools: list[Tool] | None = None,
         mcp_servers: dict[str, MCPServerConfig] | None = None,
         config: AgentConfig | None = None,
     ) -> AgentResult:
-        """Synchronous wrapper for run().
+        """Synchronous wrapper for arun().
 
         Args:
             messages: Initial conversation messages.
@@ -471,14 +471,14 @@ class LangChainAgentAdapter:
             AgentResult from the agent execution.
 
         Raises:
-            Same exceptions as run().
+            Same exceptions as arun().
         """
         from karenina.benchmark.verification.executor import get_async_portal
 
         portal = get_async_portal()
 
         if portal is not None:
-            return portal.call(self.run, messages, tools, mcp_servers, config)
+            return portal.call(self.arun, messages, tools, mcp_servers, config)
 
         # No portal - check if we're in an async context
         try:
@@ -486,7 +486,7 @@ class LangChainAgentAdapter:
             # We're in an async context - use ThreadPoolExecutor
 
             def run_in_thread() -> AgentResult:
-                return asyncio.run(self.run(messages, tools, mcp_servers, config))
+                return asyncio.run(self.arun(messages, tools, mcp_servers, config))
 
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 future = executor.submit(run_in_thread)
@@ -495,7 +495,7 @@ class LangChainAgentAdapter:
 
         except RuntimeError:
             # No event loop running, safe to use asyncio.run
-            return asyncio.run(self.run(messages, tools, mcp_servers, config))
+            return asyncio.run(self.arun(messages, tools, mcp_servers, config))
 
     async def aclose(self) -> None:
         """Close underlying resources.

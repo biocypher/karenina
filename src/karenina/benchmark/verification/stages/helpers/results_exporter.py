@@ -618,11 +618,7 @@ def _serialize_verification_result(
     # Convert Pydantic models to dict before serializing
     data_to_serialize = result
     if hasattr(result, "model_dump"):
-        # Pydantic v2 model
         data_to_serialize = result.model_dump()
-    elif hasattr(result, "dict"):
-        # Pydantic v1 model (legacy)
-        data_to_serialize = result.dict()
 
     # Delegate to _safe_json_serialize for consistent handling
     return _safe_json_serialize(data_to_serialize, question_id, field_name)

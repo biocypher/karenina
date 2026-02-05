@@ -35,7 +35,7 @@ Example:
     ...         interface="claude_agent_sdk"
     ...     )
     ...     adapter = ClaudeSDKAgentAdapter(config)
-    ...     result = await adapter.run(messages=[Message.user("Hello!")])
+    ...     result = await adapter.arun(messages=[Message.user("Hello!")])
 """
 
 from typing import TYPE_CHECKING, Any

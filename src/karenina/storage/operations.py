@@ -5,6 +5,7 @@ verification runs, and results to/from the database.
 """
 
 import hashlib
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -33,6 +34,8 @@ from .rubric_serializer import (
     serialize_question_rubric_from_cache,
     serialize_rubric,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def save_benchmark(
@@ -167,7 +170,7 @@ def save_benchmark(
                     question_rubric_dict = serialize_question_rubric_from_cache(q_data["question_rubric"])
                 except Exception as e:
                     # Log warning but continue - rubric is optional
-                    print(f"Warning: Failed to serialize rubric for question {question_id}: {e}")
+                    logger.warning("Failed to serialize rubric for question %s: %s", question_id, e)
                     question_rubric_dict = None
 
             # Check if association already exists (composite key: benchmark_id + question_id + template_id)
@@ -732,7 +735,7 @@ def import_verification_results(
                     resolved_qid = question_id_map.get(text_hash)
 
                 if not resolved_qid:
-                    print(f"Warning: Question not found in DB for ID '{original_qid}', skipping")
+                    logger.warning("Question not found in DB for ID '%s', skipping", original_qid)
                     skipped_count += 1
                     continue
 
@@ -751,7 +754,7 @@ def import_verification_results(
 
             except Exception as e:
                 # Log warning but continue with other results
-                print(f"Warning: Failed to import result: {e}")
+                logger.warning("Failed to import result: %s", e, exc_info=True)
                 skipped_count += 1
 
         # Update run counts

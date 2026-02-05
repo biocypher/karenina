@@ -26,7 +26,7 @@ Example:
     >>>
     >>> config = ModelConfig(model="claude-sonnet-4-20250514", provider="anthropic")
     >>> agent = get_agent(config)
-    >>> result = await agent.run(messages=[Message.user("Hello!")])
+    >>> result = await agent.arun(messages=[Message.user("Hello!")])
 """
 
 from typing import TYPE_CHECKING, Any

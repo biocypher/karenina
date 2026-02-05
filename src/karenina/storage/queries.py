@@ -4,12 +4,15 @@ This module provides convenient functions for querying the database views
 to get aggregated statistics and summaries.
 """
 
+import logging
 from typing import Any
 
 from sqlalchemy import text
 
 from .db_config import DBConfig
 from .engine import get_session
+
+logger = logging.getLogger(__name__)
 
 
 def get_benchmark_summary(db_config: DBConfig, benchmark_name: str | None = None) -> list[dict[str, Any]]:

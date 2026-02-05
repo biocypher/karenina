@@ -9,9 +9,10 @@ import logging
 import traceback
 from typing import Any
 
-from .....adapters import get_agent, get_llm
-from .....ports import AgentConfig, AgentPort, LLMPort, Message
-from .....schemas.verification.model_identity import ModelIdentity
+from karenina.adapters import get_agent, get_llm
+from karenina.ports import AgentConfig, AgentPort, LLMPort, Message
+from karenina.schemas.verification.model_identity import ModelIdentity
+
 from ...utils.llm_invocation import _construct_few_shot_prompt
 from ...utils.trace_agent_metrics import extract_agent_metrics_from_messages
 from ...utils.trace_usage_tracker import UsageTracker
@@ -208,7 +209,7 @@ class GenerateAnswerStage(BaseVerificationStage):
                 )
 
                 # Run the agent
-                result = answering_agent.run_sync(
+                result = answering_agent.run(
                     messages=adapter_messages,
                     mcp_servers=mcp_servers,
                     config=agent_config,

@@ -9,7 +9,7 @@ from __future__ import annotations
 import functools
 from importlib import resources
 
-from karenina.schemas.domain.rubric import LLMRubricTrait, Rubric
+from karenina.schemas.entities.rubric import LLMRubricTrait, Rubric
 
 from .parser import AdeleRubric, parse_adele_file
 

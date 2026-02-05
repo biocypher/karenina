@@ -5,10 +5,9 @@ types in the frontend (karenina-gui), enabling seamless data exchange
 between Python library and GUI.
 """
 
-from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # Schema.org Person type
@@ -168,13 +167,7 @@ class JsonLdCheckpoint(BaseModel):
     dataFeedElement: list[SchemaOrgDataFeedItem]  # Questions
     additionalProperty: list[SchemaOrgPropertyValue] | None = None
 
-    class Config:
-        """Pydantic config for JSON-LD compatibility."""
-
-        populate_by_name = True  # Allow both @type and type
-        json_encoders = {
-            datetime: lambda v: v.isoformat() if v else None,
-        }
+    model_config = ConfigDict(populate_by_name=True)
 
 
 # Standard JSON-LD context for schema.org

@@ -196,23 +196,11 @@ def test_get_preset_path_direct_absolute_path(tmp_path: Path) -> None:
 @pytest.mark.unit
 def test_get_preset_path_direct_relative_path(tmp_path: Path) -> None:
     """Test get_preset_path with relative path that exists."""
-    # Create a temporary file in the actual working directory
-    import tempfile
+    preset_file = tmp_path / "preset.json"
+    preset_file.write_text("{}")
 
-    # Create temp file
-    fd, temp_path = tempfile.mkstemp(suffix=".json", text=True)
-    try:
-        # Write some content
-        with open(fd, "w") as f:
-            f.write("{}")
-
-        # Test that direct path works
-        result = get_preset_path(temp_path)
-        assert result == Path(temp_path).resolve()
-    finally:
-        # Clean up
-        if Path(temp_path).exists():
-            Path(temp_path).unlink()
+    result = get_preset_path(str(preset_file))
+    assert result == preset_file.resolve()
 
 
 @pytest.mark.unit

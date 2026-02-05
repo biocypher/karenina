@@ -10,10 +10,13 @@ Functions:
 
 from __future__ import annotations
 
+import logging
 import types
 from typing import Union, get_args, get_origin
 
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["is_pydantic_model", "unwrap_optional"]
 

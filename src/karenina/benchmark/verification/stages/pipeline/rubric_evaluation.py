@@ -5,7 +5,8 @@ Evaluates LLM responses against qualitative rubric criteria.
 
 import logging
 
-from .....schemas.verification.model_identity import ModelIdentity
+from karenina.schemas.verification.model_identity import ModelIdentity
+
 from ...evaluators import RubricEvaluator
 from ...utils import prepare_evaluation_input
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
@@ -178,7 +179,7 @@ class RubricEvaluationStage(BaseVerificationStage):
                     logger.info(f"Deep judgment enabled for rubric traits in question {context.question_id}")
 
                     # Create a minimal VerificationConfig for deep judgment settings
-                    from ....schemas.workflow import VerificationConfig
+                    from karenina.schemas.workflow import VerificationConfig
 
                     dj_config = VerificationConfig(
                         answering_models=[context.answering_model],

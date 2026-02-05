@@ -8,6 +8,7 @@ in sync with the domain model.
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -24,6 +25,8 @@ from sqlalchemy.orm import relationship
 from ..schemas.workflow import VerificationResult
 from .auto_mapper import PydanticSQLAlchemyMapper
 from .base import Base
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     pass
@@ -132,19 +135,19 @@ def print_schema_info() -> None:
     Shows all columns, their types, and indexes.
     """
     if not hasattr(VerificationResultModel, "__table__"):
-        print("Model has no __table__ attribute")
+        logger.info("Model has no __table__ attribute")
         return
 
     table = VerificationResultModel.__table__
-    print(f"Table: {table.name}")
-    print(f"Columns ({len(table.columns)}):")
+    logger.info("Table: %s", table.name)
+    logger.info("Columns (%d):", len(table.columns))
 
     for col in table.columns:
         index_marker = " [INDEXED]" if col.index else ""
         nullable = "NULL" if col.nullable else "NOT NULL"
-        print(f"  {col.name}: {col.type} {nullable}{index_marker}")
+        logger.info("  %s: %s %s%s", col.name, col.type, nullable, index_marker)
 
-    print(f"\nIndexes ({len(table.indexes)}):")
+    logger.info("Indexes (%d):", len(table.indexes))
     for idx in table.indexes:
         cols = ", ".join(c.name for c in idx.columns)
-        print(f"  {idx.name}: ({cols})")
+        logger.info("  %s: (%s)", idx.name, cols)

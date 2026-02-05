@@ -358,16 +358,13 @@ class TestPandasOperations(PandasOperationsTestMixin):
         if len(df) == 0:
             pytest.skip("No LLM trait data for pivot testing")
 
-        # Try pivot: questions x traits (if trait_name column exists)
-        if "trait_name" in df.columns and "trait_score" in df.columns:
-            try:
-                pivot = df.pivot_table(
-                    values="trait_score",
-                    index="question_id",
-                    columns="trait_name",
-                    aggfunc="mean",
-                )
-                assert isinstance(pivot, pd.DataFrame)
-            except Exception as e:
-                # Pivot may fail if data structure doesn't support it
-                pytest.skip(f"Pivot not applicable to this data structure: {e}")
+        # Pivot: questions x traits
+        assert "trait_name" in df.columns, "Missing trait_name column for pivot"
+        assert "trait_score" in df.columns, "Missing trait_score column for pivot"
+        pivot = df.pivot_table(
+            values="trait_score",
+            index="question_id",
+            columns="trait_name",
+            aggfunc="mean",
+        )
+        assert isinstance(pivot, pd.DataFrame)

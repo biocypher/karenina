@@ -11,6 +11,7 @@ from collections.abc import Callable
 from typing import Any
 
 from ...schemas.domain import Rubric
+from ...schemas.verification.config import DEFAULT_ASYNC_ENABLED
 from ...schemas.workflow import (
     FinishedTemplate,
     VerificationConfig,
@@ -274,7 +275,7 @@ def run_verification_batch(
 
     # Determine async mode
     if async_enabled is None:
-        async_enabled = os.getenv("KARENINA_ASYNC_ENABLED", "true").lower() == "true"
+        async_enabled = os.getenv("KARENINA_ASYNC_ENABLED", str(DEFAULT_ASYNC_ENABLED).lower()).lower() == "true"
 
     # Determine max workers: explicit arg > config > env var > default
     if max_workers is None:

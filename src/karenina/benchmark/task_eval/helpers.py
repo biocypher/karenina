@@ -1,5 +1,6 @@
 """Helper functions for TaskEval to reduce code duplication."""
 
+import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
@@ -8,6 +9,8 @@ if TYPE_CHECKING:
 
 from ...schemas.workflow import ModelConfig
 from ..verification.evaluators import RubricEvaluator
+
+logger = logging.getLogger(__name__)
 
 # Import the shared function from utils.parsing
 
@@ -89,7 +92,7 @@ def evaluate_standalone_rubrics(
                 question=question, answer=concatenated_logs, rubric=merged_rubric
             )
         except Exception as e:
-            print(f"Warning: {context.title()} rubric evaluation failed: {e}")
+            logger.warning("%s rubric evaluation failed: %s", context.title(), e)
             rubric_scores = {}
 
     return rubric_scores

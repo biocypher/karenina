@@ -22,6 +22,12 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from .....schemas.domain import Rubric
 from .....schemas.verification import PromptConfig
+from .....schemas.verification.config import (
+    DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
+    DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS,
+    DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS,
+    DEFAULT_RUBRIC_MAX_EXCERPTS,
+)
 from .....schemas.workflow import ModelConfig
 
 if TYPE_CHECKING:
@@ -269,9 +275,9 @@ class VerificationContext:
     rubric_evaluation_strategy: str = "batch"  # "batch" or "sequential"
 
     # Deep-Judgment Configuration
-    deep_judgment_max_excerpts_per_attribute: int = 3
-    deep_judgment_fuzzy_match_threshold: float = 0.80
-    deep_judgment_excerpt_retry_attempts: int = 2
+    deep_judgment_max_excerpts_per_attribute: int = DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS
+    deep_judgment_fuzzy_match_threshold: float = DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD
+    deep_judgment_excerpt_retry_attempts: int = DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS
     deep_judgment_search_enabled: bool = False
     deep_judgment_search_tool: str | Any = "tavily"
 
@@ -279,9 +285,9 @@ class VerificationContext:
     deep_judgment_rubric_mode: str = "disabled"  # Mode: disabled, enable_all, use_checkpoint, custom
     deep_judgment_rubric_global_excerpts: bool = True  # For enable_all mode: enable/disable excerpts
     deep_judgment_rubric_config: dict[str, Any] | None = None  # For custom mode: nested trait config
-    deep_judgment_rubric_max_excerpts_default: int = 7
-    deep_judgment_rubric_fuzzy_match_threshold_default: float = 0.80
-    deep_judgment_rubric_excerpt_retry_attempts_default: int = 2
+    deep_judgment_rubric_max_excerpts_default: int = DEFAULT_RUBRIC_MAX_EXCERPTS
+    deep_judgment_rubric_fuzzy_match_threshold_default: float = DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD
+    deep_judgment_rubric_excerpt_retry_attempts_default: int = DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS
     deep_judgment_rubric_search_enabled: bool = False
     deep_judgment_rubric_search_tool: str | Any = "tavily"
 

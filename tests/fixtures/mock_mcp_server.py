@@ -88,7 +88,7 @@ def create_mock_mcp_client_and_tools(
 ) -> tuple[MockMCPClient, list[MockTool]]:
     """Create mock MCP client and tools for testing.
 
-    This function mirrors the signature of sync_create_mcp_client_and_tools
+    This function mirrors the signature of create_mcp_client_and_tools
     to make it easy to patch in tests.
 
     Args:

@@ -8,6 +8,8 @@ This module tests the AdapterRegistry and verifies consistency between:
 
 from __future__ import annotations
 
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import get_args
 
 import pytest
@@ -269,3 +271,117 @@ class TestManualAdapterSpec:
         assert isinstance(agent, ManualAgentAdapter)
         assert isinstance(llm, ManualLLMAdapter)
         assert isinstance(parser, ManualParserAdapter)
+
+
+class TestRegistryThreadSafety:
+    """Tests for thread-safe initialization of AdapterRegistry."""
+
+    def test_concurrent_get_interfaces_returns_consistent_results(self) -> None:
+        """Test that concurrent get_interfaces() calls return identical results.
+
+        Multiple threads hitting the already-initialized registry should all
+        see the same consistent snapshot.
+        """
+        from karenina.adapters.registry import AdapterRegistry
+
+        results: list[frozenset[str]] = []
+        barrier = threading.Barrier(10)
+
+        def call_get_interfaces() -> frozenset[str]:
+            barrier.wait()
+            return AdapterRegistry.get_interfaces()
+
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [executor.submit(call_get_interfaces) for _ in range(10)]
+            for future in as_completed(futures):
+                results.append(future.result(timeout=10))
+
+        assert len(results) == 10
+        first = results[0]
+        assert all(r == first for r in results), "Threads returned different interface sets"
+        assert "langchain" in first
+
+    def test_concurrent_register_with_unique_interfaces(self) -> None:
+        """Test that concurrent register() calls for different interfaces are safe.
+
+        Simulates multiple adapter registrations happening in parallel, which
+        could race on the _specs dict without proper locking.
+        """
+        from karenina.adapters.registry import AdapterRegistry, AdapterSpec
+
+        barrier = threading.Barrier(10)
+        errors: list[Exception] = []
+
+        def register_unique(i: int) -> None:
+            barrier.wait()
+            try:
+                spec = AdapterSpec(
+                    interface=f"test_concurrent_{i}",
+                    description=f"Concurrent test adapter {i}",
+                )
+                AdapterRegistry.register(spec)
+            except Exception as e:
+                errors.append(e)
+
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [executor.submit(register_unique, i) for i in range(10)]
+            for f in futures:
+                f.result(timeout=10)
+
+        assert errors == [], f"Concurrent register() raised: {errors}"
+
+        # All 10 unique interfaces should have been registered
+        for i in range(10):
+            spec = AdapterRegistry.get_spec(f"test_concurrent_{i}")
+            assert spec is not None, f"test_concurrent_{i} was not registered"
+
+    def test_ensure_initialized_uses_lock(self) -> None:
+        """Test that _ensure_initialized() uses lock-based protection.
+
+        Verifies the double-checked locking pattern by confirming the
+        _registry_lock is used during initialization.
+        """
+        from unittest.mock import patch
+
+        from karenina.adapters import registry as registry_module
+        from karenina.adapters.registry import AdapterRegistry
+
+        # Track lock acquisitions
+        original_lock = registry_module._registry_lock
+        lock_acquired_count = 0
+
+        class TrackingRLock:
+            """RLock wrapper that counts acquisitions."""
+
+            def __enter__(self) -> TrackingRLock:
+                nonlocal lock_acquired_count
+                lock_acquired_count += 1
+                original_lock.__enter__()
+                return self
+
+            def __exit__(self, *args: object) -> None:
+                original_lock.__exit__(*args)
+
+        # Temporarily set _initialized to False to trigger the lock path
+        old_initialized = AdapterRegistry._initialized
+        try:
+            AdapterRegistry._initialized = False
+            with patch.object(registry_module, "_registry_lock", TrackingRLock()):
+                AdapterRegistry._ensure_initialized()
+            assert lock_acquired_count == 1, "Lock should be acquired exactly once"
+        finally:
+            AdapterRegistry._initialized = old_initialized
+
+    def test_double_check_skips_reinitialization(self) -> None:
+        """Test that the double-check inside the lock prevents redundant init.
+
+        If _initialized becomes True between the outer check and acquiring
+        the lock, the inner check should skip initialization.
+        """
+        from karenina.adapters.registry import AdapterRegistry
+
+        # Registry is already initialized — calling _ensure_initialized()
+        # should be a no-op (the first check returns immediately)
+        assert AdapterRegistry._initialized is True
+        AdapterRegistry._ensure_initialized()
+        assert AdapterRegistry._initialized is True

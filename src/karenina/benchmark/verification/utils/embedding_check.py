@@ -1,15 +1,18 @@
 """Embedding similarity utilities for verification fallback."""
 
 import json
+import logging
 import os
 import threading
 from collections import OrderedDict
 from typing import Any
 
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
-
-from ....adapters.langchain.initialization import init_chat_model_unified
+from ....adapters.factory import get_llm
+from ....ports.messages import Message
+from ....schemas.verification.config import DEFAULT_EMBEDDING_MODEL, DEFAULT_EMBEDDING_THRESHOLD
 from ....schemas.workflow import ModelConfig
+
+logger = logging.getLogger(__name__)
 
 # Global cache for embedding models (thread-safe) with LRU eviction
 # Using OrderedDict to track access order for LRU eviction policy
@@ -116,7 +119,7 @@ def _get_embedding_model_name() -> str:
     Returns:
         The embedding model name to use
     """
-    return os.getenv("EMBEDDING_CHECK_MODEL", "all-MiniLM-L6-v2")
+    return os.getenv("EMBEDDING_CHECK_MODEL", DEFAULT_EMBEDDING_MODEL)
 
 
 def _get_embedding_threshold() -> float:
@@ -127,10 +130,10 @@ def _get_embedding_threshold() -> float:
         The similarity threshold (0.0 to 1.0)
     """
     try:
-        threshold = float(os.getenv("EMBEDDING_CHECK_THRESHOLD", "0.85"))
+        threshold = float(os.getenv("EMBEDDING_CHECK_THRESHOLD", str(DEFAULT_EMBEDDING_THRESHOLD)))
         return max(0.0, min(1.0, threshold))  # Clamp between 0 and 1
     except ValueError:
-        return 0.85  # Default fallback
+        return DEFAULT_EMBEDDING_THRESHOLD  # Default fallback
 
 
 def _convert_to_comparable_string(data: dict[str, Any] | None) -> str:
@@ -230,29 +233,8 @@ def check_semantic_equivalence(
         return False
 
     try:
-        # Initialize parsing LLM
-        # Note: model_name is guaranteed non-None by ModelConfig validator
-        assert parsing_model.model_name is not None, "model_name must not be None"
-
-        # Build kwargs for model initialization
-        model_kwargs: dict[str, Any] = {
-            "model": parsing_model.model_name,
-            "provider": parsing_model.model_provider,
-            "temperature": parsing_model.temperature,
-            "interface": parsing_model.interface,
-        }
-
-        # Add endpoint configuration if using openai_endpoint interface
-        if parsing_model.endpoint_base_url:
-            model_kwargs["endpoint_base_url"] = parsing_model.endpoint_base_url
-        if parsing_model.endpoint_api_key:
-            model_kwargs["endpoint_api_key"] = parsing_model.endpoint_api_key
-
-        # Add any extra kwargs if provided (e.g., vendor-specific API keys)
-        if parsing_model.extra_kwargs:
-            model_kwargs.update(parsing_model.extra_kwargs)
-
-        parsing_llm = init_chat_model_unified(**model_kwargs)
+        # Get LLM via the port/adapter factory (respects interface routing)
+        parsing_llm = get_llm(parsing_model)
 
         # Convert data to readable strings
         gt_text = _convert_to_comparable_string(ground_truth_data)
@@ -290,11 +272,11 @@ Model Response:
 
 Are these two responses semantically equivalent?"""
 
-        messages: list[BaseMessage] = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
+        messages = [Message.system(system_prompt), Message.user(user_prompt)]
 
-        # Get LLM response
+        # Get LLM response via port interface
         response = parsing_llm.invoke(messages)
-        response_text = response.content if hasattr(response, "content") else str(response)
+        response_text = response.content
 
         # Parse response
         response_clean = response_text.strip().upper()

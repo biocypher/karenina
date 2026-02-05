@@ -309,11 +309,7 @@ class TestErrorHierarchy:
         ]
 
         for error in errors:
-            try:
-                raise error
-            except PortError as e:
-                # Should catch all of them
-                assert e is error
+            assert isinstance(error, PortError), f"{type(error).__name__} is not a PortError subclass"
 
 
 # =============================================================================

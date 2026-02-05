@@ -9,10 +9,12 @@ Used primarily by GEPA optimization to get and modify tool descriptions.
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import logging
-import threading
 from contextlib import AsyncExitStack
 from typing import Any
+
+from karenina.exceptions import McpTimeoutError
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +41,7 @@ def apply_tool_description_overrides(
     return tools
 
 
-async def fetch_tool_descriptions(
+async def afetch_tool_descriptions(
     mcp_urls_dict: dict[str, str],
     tool_filter: list[str] | None = None,
 ) -> dict[str, str]:
@@ -99,7 +101,11 @@ async def fetch_tool_descriptions(
                 logger.debug(f"Fetched {len(mcp_tools)} tools from MCP server '{server_name}'")
 
             except TimeoutError as e:
-                raise Exception(f"MCP server '{server_name}' connection timed out after 30 seconds.") from e
+                raise McpTimeoutError(
+                    f"MCP server '{server_name}' connection timed out after 30 seconds.",
+                    server_name=server_name,
+                    timeout_seconds=30,
+                ) from e
             except Exception as e:
                 logger.error(f"Failed to fetch tools from MCP server '{server_name}': {e}")
                 raise
@@ -108,11 +114,11 @@ async def fetch_tool_descriptions(
     return descriptions
 
 
-def sync_fetch_tool_descriptions(
+def fetch_tool_descriptions(
     mcp_urls_dict: dict[str, str],
     tool_filter: list[str] | None = None,
 ) -> dict[str, str]:
-    """Synchronous wrapper for fetch_tool_descriptions.
+    """Synchronous wrapper for afetch_tool_descriptions.
 
     Uses the same async handling pattern as other sync wrappers in karenina,
     supporting both the shared BlockingPortal (when available from parallel
@@ -131,37 +137,44 @@ def sync_fetch_tool_descriptions(
 
         portal = get_async_portal()
         if portal is not None:
-            return portal.call(fetch_tool_descriptions, mcp_urls_dict, tool_filter)
+            return portal.call(afetch_tool_descriptions, mcp_urls_dict, tool_filter)
     except ImportError:
         pass
 
     # Check if we're already in an async context
     try:
-        current_loop = asyncio.get_running_loop()
-        if current_loop:
-            # Run in a separate thread
-            result: list[dict[str, str] | None] = [None]
-            exception: list[Exception | None] = [None]
+        asyncio.get_running_loop()
 
-            def thread_target() -> None:
-                try:
-                    result[0] = asyncio.run(fetch_tool_descriptions(mcp_urls_dict, tool_filter))
-                except Exception as e:
-                    exception[0] = e
+        # Use ThreadPoolExecutor to avoid nested event loop issues
+        def run_in_thread() -> dict[str, str]:
+            return asyncio.run(afetch_tool_descriptions(mcp_urls_dict, tool_filter))
 
-            thread = threading.Thread(target=thread_target)
-            thread.start()
-            thread.join(timeout=45.0)
-
-            if thread.is_alive():
-                raise Exception("Fetch tool descriptions timed out after 45 seconds")
-
-            if exception[0]:
-                raise exception[0]
-
-            return result[0] or {}
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(run_in_thread)
+            try:
+                return future.result(timeout=45)
+            except TimeoutError as e:
+                raise McpTimeoutError(
+                    "Fetch tool descriptions timed out after 45 seconds",
+                    timeout_seconds=45,
+                ) from e
     except RuntimeError:
         pass
 
     # Create new event loop and run
-    return asyncio.run(fetch_tool_descriptions(mcp_urls_dict, tool_filter))
+    return asyncio.run(afetch_tool_descriptions(mcp_urls_dict, tool_filter))
+
+
+def sync_fetch_tool_descriptions(
+    mcp_urls_dict: dict[str, str],
+    tool_filter: list[str] | None = None,
+) -> dict[str, str]:
+    """Deprecated: Use fetch_tool_descriptions() instead."""
+    import warnings
+
+    warnings.warn(
+        "sync_fetch_tool_descriptions is deprecated, use fetch_tool_descriptions instead",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return fetch_tool_descriptions(mcp_urls_dict, tool_filter)

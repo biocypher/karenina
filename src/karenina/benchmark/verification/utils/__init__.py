@@ -74,7 +74,9 @@ __all__ = [
     "extract_agent_metrics",
     "extract_agent_metrics_from_messages",
     "extract_middleware_metrics",
-    # Parsing utilities
+    # Parsing utilities — underscore-prefixed but exported because they are
+    # internal helpers shared across verification subpackages (used by
+    # evaluators/template/deep_judgment.py and prompts/ modules).
     "_extract_attribute_names_from_class",
     "_extract_attribute_descriptions",
     "_extract_text_from_search_results",
