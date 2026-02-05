@@ -4,7 +4,10 @@ This module provides helper functions for converting Rubric objects to/from
 JSON-serializable dictionary format for database storage.
 """
 
+import logging
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 def serialize_rubric_to_dict(

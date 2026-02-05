@@ -10,6 +10,7 @@ from Pydantic BaseModel classes, with support for:
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any, get_type_hints
 
 from pydantic import BaseModel
@@ -18,6 +19,8 @@ from sqlalchemy import JSON, Boolean, Column, Float, Index, Integer, String, Tex
 
 from .utils import is_pydantic_model as _is_pydantic_model
 from .utils import unwrap_optional as _unwrap_optional
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import DeclarativeBase
@@ -154,7 +157,7 @@ class PydanticSQLAlchemyMapper:
         try:
             hints = get_type_hints(model)
         except Exception:
-            # Fallback if type hints fail
+            logger.debug("get_type_hints failed for %s, falling back to model_fields", model, exc_info=True)
             hints = {name: field.annotation for name, field in model.model_fields.items() if field.annotation}
 
         for field_name, field_type in hints.items():
@@ -225,6 +228,7 @@ class PydanticSQLAlchemyMapper:
         try:
             hints = get_type_hints(model)
         except Exception:
+            logger.debug("get_type_hints failed for %s, falling back to model_fields", model, exc_info=True)
             hints = {name: field.annotation for name, field in model.model_fields.items() if field.annotation}
 
         for field_name, field_type in hints.items():
@@ -355,6 +359,7 @@ def get_flat_field_mapping(
     try:
         hints = get_type_hints(model)
     except Exception:
+        logger.debug("get_type_hints failed for %s, falling back to model_fields", model, exc_info=True)
         hints = {name: field.annotation for name, field in model.model_fields.items() if field.annotation}
 
     for field_name, field_type in hints.items():
@@ -368,7 +373,9 @@ def get_flat_field_mapping(
             try:
                 nested_hints = get_type_hints(inner_type)
             except Exception:
-                # Type checker doesn't know inner_type is BaseModel, but we checked with _is_pydantic_model
+                logger.debug(
+                    "get_type_hints failed for nested model %s, falling back to model_fields", inner_type, exc_info=True
+                )
                 nested_hints = {
                     name: field.annotation
                     for name, field in inner_type.model_fields.items()  # type: ignore[attr-defined]

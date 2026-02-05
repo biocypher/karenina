@@ -7,6 +7,7 @@ Note: VerificationResultModel is auto-generated from Pydantic schemas
 and is defined in generated_models.py to keep it in sync with domain models.
 """
 
+import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -24,6 +25,8 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     # VerificationResultModel is dynamically generated, so we import it for type checking
