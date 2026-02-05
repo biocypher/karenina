@@ -38,14 +38,12 @@ from pydantic import BaseModel
 
 from karenina.ports import (
     AgentConfig,
-    AgentPort,
     AgentResult,
     LLMPort,
     LLMResponse,
     MCPServerConfig,
     Message,
     ParsePortResult,
-    ParserPort,
     Tool,
     UsageMetadata,
 )
@@ -88,7 +86,7 @@ T = TypeVar("T", bound=BaseModel)
 # =============================================================================
 
 
-class ManualAgentAdapter(AgentPort):
+class ManualAgentAdapter:
     """AgentPort implementation for manual interface using pre-recorded traces.
 
     Reads traces from ManualTraceManager and returns them as AgentResult.
@@ -201,7 +199,7 @@ class ManualAgentAdapter(AgentPort):
         )
 
 
-class ManualLLMAdapter(LLMPort):
+class ManualLLMAdapter:
     """No-op LLMPort implementation for manual interface.
 
     Exists to satisfy the type system (factories return Port, not None).
@@ -242,7 +240,7 @@ class ManualLLMAdapter(LLMPort):
         raise ManualInterfaceError("llm.with_structured_output()")
 
 
-class ManualParserAdapter(ParserPort):
+class ManualParserAdapter:
     """No-op ParserPort implementation for manual interface.
 
     Exists to satisfy the type system (factories return Port, not None).
