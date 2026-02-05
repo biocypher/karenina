@@ -6,7 +6,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from ..config.models import (
     INTERFACE_LANGCHAIN,
@@ -37,6 +37,8 @@ class DeepJudgmentTraitConfig(BaseModel):
 
     This model validates trait-level deep judgment settings used in custom mode.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     enabled: bool = True
     excerpt_enabled: bool = True

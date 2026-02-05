@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from .config import VerificationConfig
 from .result import VerificationResult
@@ -10,6 +10,8 @@ from .result import VerificationResult
 
 class FinishedTemplate(BaseModel):
     """Metadata for a finished answer template."""
+
+    model_config = ConfigDict(extra="forbid")
 
     question_id: str
     question_text: str
@@ -26,6 +28,8 @@ class FinishedTemplate(BaseModel):
 class VerificationRequest(BaseModel):
     """Request to start verification."""
 
+    model_config = ConfigDict(extra="forbid")
+
     config: VerificationConfig
     question_ids: list[str] | None = None  # If None, verify all finished templates
     run_name: str | None = None  # Optional user-defined run name
@@ -33,6 +37,8 @@ class VerificationRequest(BaseModel):
 
 class VerificationStatusResponse(BaseModel):
     """Response for verification status."""
+
+    model_config = ConfigDict(extra="forbid")
 
     job_id: str
     run_name: str
@@ -51,6 +57,8 @@ class VerificationStatusResponse(BaseModel):
 
 class VerificationStartResponse(BaseModel):
     """Response when starting verification."""
+
+    model_config = ConfigDict(extra="forbid")
 
     job_id: str
     run_name: str

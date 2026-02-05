@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING, Any, Literal, cast
 
-from pydantic import BaseModel, Field, SecretStr, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 
 if TYPE_CHECKING:
     pass
@@ -18,6 +18,8 @@ class ModelRetryConfig(BaseModel):
 
     Controls automatic retry behavior for failed model calls with exponential backoff.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     max_retries: int = Field(
         default=2,
@@ -51,6 +53,8 @@ class ToolRetryConfig(BaseModel):
     Controls automatic retry behavior for failed tool calls with exponential backoff.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     max_retries: int = Field(
         default=3,
         description="Maximum retry attempts for tool calls",
@@ -74,6 +78,8 @@ class SummarizationConfig(BaseModel):
 
     Automatically summarizes conversation history when approaching token limits.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     enabled: bool = Field(
         default=True,
@@ -113,6 +119,8 @@ class PromptCachingConfig(BaseModel):
     See: https://docs.langchain.com/oss/python/integrations/middleware/anthropic#prompt-caching
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     enabled: bool = Field(
         default=True,
         description="Enable Anthropic prompt caching (default: True for Anthropic models with MCP tools)",
@@ -138,6 +146,8 @@ class AgentLimitConfig(BaseModel):
     Controls maximum model and tool calls to prevent infinite loops or excessive costs.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     model_call_limit: int = Field(
         default=25,
         ge=1,
@@ -160,6 +170,8 @@ class AgentMiddlewareConfig(BaseModel):
     Only applies when mcp_urls_dict is provided in ModelConfig.
     Configures retry logic, execution limits, summarization, and prompt caching for agent workflows.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     limits: AgentLimitConfig = Field(
         default_factory=AgentLimitConfig,
@@ -202,6 +214,8 @@ INTERFACES_NO_PROVIDER_REQUIRED = [
 class QuestionFewShotConfig(BaseModel):
     """Per-question few-shot configuration."""
 
+    model_config = ConfigDict(extra="forbid")
+
     mode: Literal["all", "k-shot", "custom", "none", "inherit"] = "inherit"
     k: int | None = None  # Override global k for this question
     selected_examples: list[str | int] | None = None  # Hash (MD5) or index selection
@@ -211,6 +225,8 @@ class QuestionFewShotConfig(BaseModel):
 
 class FewShotConfig(BaseModel):
     """Flexible configuration for few-shot prompting with convenient bulk setup interface."""
+
+    model_config = ConfigDict(extra="forbid")
 
     # Global fallback settings
     global_mode: Literal["all", "k-shot", "custom", "none"] = "all"
@@ -540,6 +556,8 @@ class FewShotConfig(BaseModel):
 
 class ModelConfig(BaseModel):
     """Configuration for a single model."""
+
+    model_config = ConfigDict(extra="forbid")
 
     id: str | None = None  # Optional - defaults to "manual" for manual interface
     model_provider: str | None = None  # Optional - only required for langchain interface

@@ -3,7 +3,7 @@
 import time
 from typing import TYPE_CHECKING, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 if TYPE_CHECKING:
     from ..results.verification_result_set import VerificationResultSet
@@ -12,6 +12,8 @@ if TYPE_CHECKING:
 
 class VerificationJob(BaseModel):
     """Represents a verification job."""
+
+    model_config = ConfigDict(extra="forbid")
 
     job_id: str
     run_name: str  # User-defined or auto-generated run name
