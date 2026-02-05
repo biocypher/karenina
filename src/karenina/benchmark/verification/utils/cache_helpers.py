@@ -7,8 +7,8 @@ for the AnswerTraceCache used in batch verification.
 import logging
 from typing import Any
 
-from ....schemas.verification import VerificationResult
-from ....utils.answer_cache import AnswerTraceCache
+from karenina.schemas.verification import VerificationResult
+from karenina.utils.answer_cache import AnswerTraceCache
 
 logger = logging.getLogger(__name__)
 

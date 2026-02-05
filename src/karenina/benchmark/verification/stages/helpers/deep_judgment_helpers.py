@@ -7,8 +7,8 @@ These are extracted from rubric_evaluation.py to reduce clutter in the stage fil
 import logging
 from typing import Any
 
-from .....schemas.entities import LLMRubricTrait
-from .....schemas.verification import DeepJudgmentTraitConfig
+from karenina.schemas.entities import LLMRubricTrait
+from karenina.schemas.verification import DeepJudgmentTraitConfig
 
 # Set up logger
 logger = logging.getLogger(__name__)

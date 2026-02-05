@@ -18,16 +18,17 @@ Evaluation is delegated to specialized handlers:
 import logging
 from typing import TYPE_CHECKING, Any
 
-from .....adapters import get_llm
-from .....ports import LLMPort
-from .....schemas.config import ModelConfig
-from .....schemas.entities import CallableTrait, MetricRubricTrait, RegexTrait, Rubric
+from karenina.adapters import get_llm
+from karenina.ports import LLMPort
+from karenina.schemas.config import ModelConfig
+from karenina.schemas.entities import CallableTrait, MetricRubricTrait, RegexTrait, Rubric
+
 from .deep_judgment import RubricDeepJudgmentHandler
 from .llm_trait import LLMTraitEvaluator
 from .metric_trait import MetricTraitEvaluator
 
 if TYPE_CHECKING:
-    from .....schemas.verification import PromptConfig
+    from karenina.schemas.verification import PromptConfig
 
 logger = logging.getLogger(__name__)
 

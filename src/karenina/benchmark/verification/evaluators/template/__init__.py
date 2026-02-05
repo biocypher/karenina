@@ -7,7 +7,8 @@ This package provides:
 - deep_judgment_parse: Multi-stage parsing with excerpt extraction
 """
 
-from ...prompts.parsing.parsing_instructions import TemplatePromptBuilder
+from karenina.benchmark.verification.prompts.parsing.parsing_instructions import TemplatePromptBuilder
+
 from .deep_judgment import deep_judgment_parse
 from .evaluator import TemplateEvaluator
 from .results import FieldVerificationResult, ParseResult, RegexVerificationResult

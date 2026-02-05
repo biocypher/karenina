@@ -6,8 +6,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from ...schemas.checkpoint import JsonLdCheckpoint
-from ...utils.checkpoint import (
+from karenina.schemas.checkpoint import JsonLdCheckpoint
+from karenina.utils.checkpoint import (
     create_jsonld_benchmark,
     extract_questions_from_benchmark,
     validate_jsonld_benchmark,
@@ -97,7 +97,7 @@ class BenchmarkBase:
         """
         from copy import deepcopy
 
-        from ...utils.checkpoint import strip_deep_judgment_config_from_checkpoint
+        from karenina.utils.checkpoint import strip_deep_judgment_config_from_checkpoint
 
         path = Path(path)
 
@@ -143,7 +143,7 @@ class BenchmarkBase:
         if item.id:
             return str(item.id)
         # Generate from question text if no ID
-        from ...utils.checkpoint import generate_question_id
+        from karenina.utils.checkpoint import generate_question_id
 
         return generate_question_id(item.item.text)
 
@@ -157,7 +157,7 @@ class BenchmarkBase:
 
                 # Find or create the property in additionalProperty
                 if not hasattr(item.item, "additionalProperty") or item.item.additionalProperty is None:
-                    from ...schemas.checkpoint import SchemaOrgPropertyValue
+                    from karenina.schemas.checkpoint import SchemaOrgPropertyValue
 
                     item.item.additionalProperty = []
 
@@ -170,7 +170,7 @@ class BenchmarkBase:
                         break
 
                 if not prop_found:
-                    from ...schemas.checkpoint import SchemaOrgPropertyValue
+                    from karenina.schemas.checkpoint import SchemaOrgPropertyValue
 
                     new_prop = SchemaOrgPropertyValue(name=property_name, value=value)
                     item.item.additionalProperty.append(new_prop)

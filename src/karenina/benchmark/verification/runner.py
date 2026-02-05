@@ -6,16 +6,17 @@ Main entry point for running verification using the stage-based pipeline archite
 import logging
 from typing import Any
 
-from ...schemas.config import ModelConfig
-from ...schemas.entities import Rubric
-from ...schemas.verification import PromptConfig, VerificationResult
-from ...schemas.verification.config import (
+from karenina.schemas.config import ModelConfig
+from karenina.schemas.entities import Rubric
+from karenina.schemas.verification import PromptConfig, VerificationResult
+from karenina.schemas.verification.config import (
     DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
     DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS,
     DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS,
     DEFAULT_RUBRIC_MAX_EXCERPTS,
 )
-from ...utils.checkpoint import generate_template_id
+from karenina.utils.checkpoint import generate_template_id
+
 from .stages import StageOrchestrator, VerificationContext
 
 logger = logging.getLogger(__name__)

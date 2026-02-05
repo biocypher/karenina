@@ -6,7 +6,8 @@ Parses LLM responses into Pydantic objects using standard or deep-judgment parsi
 import logging
 from typing import Any
 
-from ...evaluators import TemplateEvaluator
+from karenina.benchmark.verification.evaluators import TemplateEvaluator
+
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
 # Set up logger

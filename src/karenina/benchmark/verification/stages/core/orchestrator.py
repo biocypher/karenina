@@ -6,8 +6,9 @@ Manages stage execution, dependencies, and error handling.
 import logging
 import time
 
-from .....schemas.entities import Rubric
-from .....schemas.verification import VerificationResult
+from karenina.schemas.entities import Rubric
+from karenina.schemas.verification import VerificationResult
+
 from ..pipeline.abstention_check import AbstentionCheckStage
 from ..pipeline.deep_judgment_autofail import DeepJudgmentAutoFailStage
 from ..pipeline.deep_judgment_rubric_auto_fail import DeepJudgmentRubricAutoFailStage

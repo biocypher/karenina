@@ -8,17 +8,20 @@ from typing import Any
 from pydantic import BaseModel, Field
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from .....adapters import get_llm
-from .....ports import LLMResponse
-from .....ports.capabilities import PortCapabilities
-from .....schemas.config import ModelConfig
-from .....schemas.verification.prompt_config import PromptConfig
-from .....utils.errors import is_retryable_error
-from .....utils.retry import log_retry
-from ...prompts.assembler import PromptAssembler
-from ...prompts.task_types import PromptTask
-from ...prompts.trace.sufficiency import SUFFICIENCY_DETECTION_SYS, SUFFICIENCY_DETECTION_USER
-from ...utils.llm_judge_helpers import extract_judge_result, fallback_json_parse
+from karenina.adapters import get_llm
+from karenina.benchmark.verification.prompts.assembler import PromptAssembler
+from karenina.benchmark.verification.prompts.task_types import PromptTask
+from karenina.benchmark.verification.prompts.trace.sufficiency import (
+    SUFFICIENCY_DETECTION_SYS,
+    SUFFICIENCY_DETECTION_USER,
+)
+from karenina.benchmark.verification.utils.llm_judge_helpers import extract_judge_result, fallback_json_parse
+from karenina.ports import LLMResponse
+from karenina.ports.capabilities import PortCapabilities
+from karenina.schemas.config import ModelConfig
+from karenina.schemas.verification.prompt_config import PromptConfig
+from karenina.utils.errors import is_retryable_error
+from karenina.utils.retry import log_retry
 
 # Set up logger
 logger = logging.getLogger(__name__)

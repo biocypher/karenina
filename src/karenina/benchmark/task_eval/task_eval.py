@@ -16,10 +16,11 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Literal, Union
 
 if TYPE_CHECKING:
-    from ...schemas.entities import Question, Rubric
+    from karenina.schemas.entities import Question, Rubric
 
-from ...schemas.config import ModelConfig
-from ...schemas.verification import VerificationConfig
+from karenina.schemas.config import ModelConfig
+from karenina.schemas.verification import VerificationConfig
+
 from ..verification.evaluators import RubricEvaluator
 from .models import LogEvent, StepEval, TaskEvalResult
 
@@ -319,7 +320,7 @@ class TaskEval:
 
         Handles both Question objects and dictionary objects from Benchmark.
         """
-        from ...schemas.entities import Question
+        from karenina.schemas.entities import Question
 
         if isinstance(question, Question):
             return {
@@ -753,7 +754,7 @@ class Answer(BaseAnswer):
         if not rubrics:
             return None
 
-        from ...schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
+        from karenina.schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
 
         # Check for trait name conflicts first (across all trait types)
         all_trait_names = []

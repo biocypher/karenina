@@ -12,7 +12,8 @@ from typing import TYPE_CHECKING, Any, cast
 from uuid import uuid4
 
 if TYPE_CHECKING:
-    from ...schemas.verification import VerificationResult
+    from karenina.schemas.verification import VerificationResult
+
     from ..benchmark.benchmark import Benchmark
 
 from sqlalchemy import Select, select
@@ -599,10 +600,12 @@ def _model_to_verification_result(model: VerificationResultModel) -> "Verificati
     automatically reconstruct the nested Pydantic model from the
     flat SQLAlchemy model.
     """
+    from typing import cast
+
     from karenina.schemas.verification import VerificationResult
 
     # Use auto-converter to reconstruct nested Pydantic model from flat ORM
-    return orm_to_pydantic(model, VerificationResult, FLATTEN_CONFIG)
+    return cast(VerificationResult, orm_to_pydantic(model, VerificationResult, FLATTEN_CONFIG))
 
 
 def import_verification_results(

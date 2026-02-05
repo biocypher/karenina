@@ -6,10 +6,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ...schemas.entities import Rubric
+    from karenina.schemas.entities import Rubric
+
     from .base import BenchmarkBase
 
-from ...schemas.verification import VerificationResult
+from karenina.schemas.verification import VerificationResult
+
 from .results_io import ResultsIOManager
 
 logger = logging.getLogger(__name__)

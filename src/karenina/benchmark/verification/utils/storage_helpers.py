@@ -6,7 +6,7 @@ This module provides database auto-save functionality for verification results.
 import logging
 from typing import Any
 
-from ....schemas.verification import FinishedTemplate, VerificationResult
+from karenina.schemas.verification import FinishedTemplate, VerificationResult
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +32,8 @@ def auto_save_results(
         run_id: Unique identifier for this run
     """
     try:
-        from ....benchmark import Benchmark
-        from ....storage import DBConfig, get_benchmark_summary, save_benchmark, save_verification_results
+        from karenina.benchmark import Benchmark
+        from karenina.storage import DBConfig, get_benchmark_summary, save_benchmark, save_verification_results
 
         # Create database config
         db_config = DBConfig(storage_url=storage_url)

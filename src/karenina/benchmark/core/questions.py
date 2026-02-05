@@ -13,10 +13,12 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Union
 
 if TYPE_CHECKING:
-    from ...schemas.entities import Question
+    from karenina.schemas.entities import Question
+
     from .base import BenchmarkBase
 
-from ...utils.checkpoint import add_question_to_benchmark
+from karenina.utils.checkpoint import add_question_to_benchmark
+
 from .question_query import QuestionQueryBuilder
 
 logger = logging.getLogger(__name__)
@@ -140,7 +142,7 @@ class QuestionManager:
             q_id = manager.add_question("What is 6*7?", "42", answer_template=MyAnswer)
         """
         # Import Question class here to avoid circular imports
-        from ...schemas.entities import Question
+        from karenina.schemas.entities import Question
 
         # Track whether user provided an answer template (before we set default)
         user_provided_template = answer_template is not None
@@ -174,7 +176,7 @@ class QuestionManager:
         if answer_template is not None:
             if inspect.isclass(answer_template):
                 # Import BaseAnswer here to avoid circular imports
-                from ...schemas.entities import BaseAnswer
+                from karenina.schemas.entities import BaseAnswer
 
                 # Validate that it's an Answer class
                 if not issubclass(answer_template, BaseAnswer):
@@ -329,7 +331,7 @@ class QuestionManager:
         Raises:
             ValueError: If question not found
         """
-        from ...schemas.entities import Question
+        from karenina.schemas.entities import Question
 
         q_data = self.get_question(question_id)
         return Question(
@@ -348,7 +350,7 @@ class QuestionManager:
         """
         from typing import cast
 
-        from ...schemas.entities import Question
+        from karenina.schemas.entities import Question
 
         objects = []
         for q_data in cast(list[dict[str, Any]], self.get_all_questions()):
@@ -373,7 +375,7 @@ class QuestionManager:
         Returns:
             The question ID that was assigned
         """
-        from ...schemas.entities import Question
+        from karenina.schemas.entities import Question
 
         if not isinstance(question_obj, Question):
             raise ValueError("question_obj must be a Question instance")

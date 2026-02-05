@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ...schemas.entities import Rubric
+    from karenina.schemas.entities import Rubric
 
-from ...schemas.verification import VerificationResult
+from karenina.schemas.verification import VerificationResult
 
 logger = logging.getLogger(__name__)
 
