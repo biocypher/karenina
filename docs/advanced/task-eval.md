@@ -212,7 +212,8 @@ Here's a minimal example showing the task-centric workflow with both templates a
 ```python
 from karenina.benchmark.task_eval import TaskEval
 from karenina.schemas.domain import Rubric, RubricTrait, RegexTrait
-from karenina.schemas.workflow import ModelConfig, VerificationConfig
+from karenina.schemas.config import ModelConfig
+from karenina.schemas.verification import VerificationConfig
 
 # 1. Create TaskEval instance (task-centric)
 task = TaskEval(task_id="agent_code_generation")
@@ -980,7 +981,8 @@ for question_id, scores in aggregated.items():
 ```python
 from karenina.benchmark.task_eval import TaskEval
 from karenina.schemas.domain import Rubric, RubricTrait, RegexTrait, MetricRubricTrait
-from karenina.schemas.workflow import ModelConfig, VerificationConfig
+from karenina.schemas.config import ModelConfig
+from karenina.schemas.verification import VerificationConfig
 
 # Create TaskEval for a code generation agent
 task = TaskEval(

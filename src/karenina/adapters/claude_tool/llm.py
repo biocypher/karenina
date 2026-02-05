@@ -22,7 +22,7 @@ from pydantic import BaseModel
 
 from karenina.ports import AdapterUnavailableError, LLMPort, LLMResponse, Message, ParseError
 from karenina.ports.capabilities import PortCapabilities
-from karenina.schemas.workflow.models import ModelConfig
+from karenina.schemas.config import ModelConfig
 from karenina.utils.messages import append_error_feedback
 
 from .messages import build_system_with_cache, convert_to_anthropic, extract_system_prompt
@@ -50,7 +50,7 @@ class ClaudeToolLLMAdapter:
     with exponential backoff for connection errors, timeouts, rate limits, and 5xx errors).
 
     Example:
-        >>> from karenina.schemas.workflow.models import ModelConfig
+        >>> from karenina.schemas.config import ModelConfig
         >>> config = ModelConfig(
         ...     id="claude-haiku",
         ...     model_name="claude-haiku-4-5",

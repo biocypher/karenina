@@ -38,7 +38,7 @@ def test_mcp_agent_middleware_signature() -> None:
 
     from karenina.adapters.langchain.mcp import create_mcp_client_and_tools
     from karenina.adapters.langchain.middleware import build_agent_middleware
-    from karenina.schemas.workflow.models import AgentMiddlewareConfig
+    from karenina.schemas.config import AgentMiddlewareConfig
 
     # Create fixture-backed LLM client
     llm = FixtureBackedLLMClient(FIXTURE_DIR)

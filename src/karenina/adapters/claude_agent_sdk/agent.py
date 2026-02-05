@@ -44,7 +44,7 @@ from .usage import extract_sdk_usage
 if TYPE_CHECKING:
     from claude_agent_sdk import ClaudeAgentOptions, ResultMessage
 
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,7 @@ class ClaudeSDKAgentAdapter:
     - Usage metadata extraction from SDK responses
 
     Example:
-        >>> from karenina.schemas.workflow.models import ModelConfig
+        >>> from karenina.schemas.config import ModelConfig
         >>> config = ModelConfig(
         ...     id="claude-sonnet",
         ...     model_name="claude-sonnet-4-20250514",

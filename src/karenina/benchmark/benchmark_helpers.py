@@ -283,7 +283,8 @@ def run_optimize(
 
     # Create default config if not provided
     if config is None:
-        from karenina.schemas.workflow import ModelConfig, VerificationConfig
+        from karenina.schemas.config import ModelConfig
+        from karenina.schemas.verification import VerificationConfig
 
         config = VerificationConfig(
             answering_models=[ModelConfig(id="answerer-gpt4o", model_name="gpt-4o", model_provider="openai")],

@@ -14,7 +14,7 @@ Key features:
 - Structured output with Pydantic models
 
 Example:
-    >>> from karenina.schemas.workflow.models import ModelConfig
+    >>> from karenina.schemas.config import ModelConfig
     >>> from karenina.adapters.factory import get_agent
     >>>
     >>> config = ModelConfig(

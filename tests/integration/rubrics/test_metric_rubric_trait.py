@@ -135,7 +135,7 @@ class TestMetricComputation:
         Note: _compute_metrics was moved from RubricEvaluator to MetricTraitEvaluator
         during the flaw-001 refactoring.
         """
-        from karenina.schemas.workflow import ModelConfig
+        from karenina.schemas.config import ModelConfig
 
         model_config = ModelConfig(
             id="test-metric",
@@ -502,7 +502,7 @@ class TestMetricFormulas:
     @pytest.fixture
     def metric_evaluator(self):
         """Get metric trait evaluator for metric computation."""
-        from karenina.schemas.workflow import ModelConfig
+        from karenina.schemas.config import ModelConfig
 
         model_config = ModelConfig(
             id="test-metric",

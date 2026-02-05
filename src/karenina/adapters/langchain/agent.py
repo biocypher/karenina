@@ -30,7 +30,7 @@ from .messages import LangChainMessageConverter
 from .usage import count_agent_turns, extract_langchain_usage, extract_usage_cumulative
 
 if TYPE_CHECKING:
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +104,7 @@ class LangChainAgentAdapter:
     - Usage metadata extraction from LangChain responses
 
     Example:
-        >>> from karenina.schemas.workflow.models import ModelConfig
+        >>> from karenina.schemas.config import ModelConfig
         >>> config = ModelConfig(
         ...     id="claude-sonnet",
         ...     model_name="claude-sonnet-4-5",

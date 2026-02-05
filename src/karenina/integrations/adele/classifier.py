@@ -30,7 +30,7 @@ from .schemas import QuestionClassificationResult
 from .traits import ADELE_TRAIT_NAMES, get_adele_trait
 
 if TYPE_CHECKING:
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +119,7 @@ class QuestionClassifier:
             from pydantic import SecretStr
 
             from karenina.adapters.factory import get_llm
-            from karenina.schemas.workflow.models import ModelConfig
+            from karenina.schemas.config import ModelConfig
 
             # Use provided model_config or create one from individual params
             if self._model_config is not None:

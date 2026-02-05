@@ -157,7 +157,7 @@ def test_validation_allows_no_answering_model_when_parsing_only() -> None:
 @pytest.mark.unit
 def test_validation_requires_model_provider_for_non_excluded_interfaces() -> None:
     """Test that validation requires provider for most interfaces."""
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
     model = ModelConfig(
         id="test",
@@ -179,7 +179,7 @@ def test_validation_requires_model_provider_for_non_excluded_interfaces() -> Non
 @pytest.mark.unit
 def test_validation_allows_empty_provider_for_openrouter() -> None:
     """Test that openrouter interface allows empty provider."""
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
     model = ModelConfig(
         id="test",
@@ -374,7 +374,7 @@ def test_backward_compat_legacy_few_shot_fields() -> None:
 @pytest.mark.unit
 def test_backward_compat_default_system_prompts() -> None:
     """Test that default system prompts are applied when not provided."""
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
     config = VerificationConfig(
         parsing_models=[
@@ -500,7 +500,7 @@ def test_explicit_value_overrides_env_var() -> None:
 @pytest.mark.unit
 def test_repr_shows_models() -> None:
     """Test that __repr__ shows model information."""
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
     config = VerificationConfig(
         answering_models=[
@@ -860,7 +860,7 @@ def test_create_preset_structure() -> None:
 @pytest.mark.unit
 def test_save_preset_creates_file(tmp_path: Path) -> None:
     """Test save_preset creates a JSON file."""
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
     config = VerificationConfig(
         answering_models=[
@@ -914,7 +914,7 @@ def test_save_preset_creates_file(tmp_path: Path) -> None:
 @pytest.mark.unit
 def test_save_preset_generates_safe_filename(tmp_path: Path) -> None:
     """Test save_preset generates safe filename."""
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
     config = VerificationConfig(
         parsing_models=[
@@ -944,7 +944,7 @@ def test_save_preset_generates_safe_filename(tmp_path: Path) -> None:
 @pytest.mark.unit
 def test_save_perset_existing_file_raises(tmp_path: Path) -> None:
     """Test save_preset raises error if file already exists."""
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
     # Create existing file
     (tmp_path / "test-preset.json").write_text("{}")
@@ -971,7 +971,7 @@ def test_save_perset_existing_file_raises(tmp_path: Path) -> None:
 @pytest.mark.unit
 def test_from_preset_loads_config(tmp_path: Path) -> None:
     """Test from_preset loads VerificationConfig from file."""
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
     # Create a preset file
     config = VerificationConfig(

@@ -71,8 +71,8 @@ class TestAdapterRegistry:
 
     def test_model_identity_display_string_langchain(self) -> None:
         """Test ModelIdentity.display_string for langchain interface."""
+        from karenina.schemas.config import ModelConfig
         from karenina.schemas.verification.model_identity import ModelIdentity
-        from karenina.schemas.workflow.models import ModelConfig
 
         config = ModelConfig(
             id="test",
@@ -87,8 +87,8 @@ class TestAdapterRegistry:
 
     def test_model_identity_display_string_openrouter(self) -> None:
         """Test ModelIdentity.display_string for openrouter interface."""
+        from karenina.schemas.config import ModelConfig
         from karenina.schemas.verification.model_identity import ModelIdentity
-        from karenina.schemas.workflow.models import ModelConfig
 
         config = ModelConfig(
             id="test",
@@ -103,8 +103,8 @@ class TestAdapterRegistry:
 
     def test_model_identity_display_string_openai_endpoint(self) -> None:
         """Test ModelIdentity.display_string for openai_endpoint interface."""
+        from karenina.schemas.config import ModelConfig
         from karenina.schemas.verification.model_identity import ModelIdentity
-        from karenina.schemas.workflow.models import ModelConfig
 
         config = ModelConfig(
             id="test",
@@ -145,7 +145,7 @@ class TestRegistryConsistency:
         with the dynamically registered adapters in the registry.
         """
         from karenina.adapters.registry import AdapterRegistry
-        from karenina.schemas.workflow.models import ModelConfig
+        from karenina.schemas.config import ModelConfig
 
         # Get interfaces from registry
         registry_interfaces = AdapterRegistry.get_interfaces()

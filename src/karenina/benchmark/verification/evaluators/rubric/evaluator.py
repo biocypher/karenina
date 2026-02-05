@@ -20,8 +20,8 @@ from typing import TYPE_CHECKING, Any
 
 from .....adapters import get_llm
 from .....ports import LLMPort
+from .....schemas.config import ModelConfig
 from .....schemas.domain import CallableTrait, MetricRubricTrait, RegexTrait, Rubric
-from .....schemas.workflow import ModelConfig
 from .deep_judgment import RubricDeepJudgmentHandler
 from .llm_trait import LLMTraitEvaluator
 from .metric_trait import MetricTraitEvaluator

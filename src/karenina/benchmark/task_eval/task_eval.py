@@ -18,7 +18,8 @@ from typing import TYPE_CHECKING, Any, Literal, Union
 if TYPE_CHECKING:
     from ...schemas.domain import Question, Rubric
 
-from ...schemas.workflow import ModelConfig, VerificationConfig
+from ...schemas.config import ModelConfig
+from ...schemas.verification import VerificationConfig
 from ..verification.evaluators import RubricEvaluator
 from .models import LogEvent, StepEval, TaskEvalResult
 

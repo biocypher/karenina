@@ -45,7 +45,7 @@ __all__ = [
 ]
 
 if TYPE_CHECKING:
-    from karenina.schemas.workflow import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
 
 class GroundTruthField(BaseModel):
@@ -292,7 +292,7 @@ def generate_answer_template(
         # Import ModelConfig and SecretStr dynamically to avoid circular imports
         from pydantic import SecretStr
 
-        from karenina.schemas.workflow import ModelConfig
+        from karenina.schemas.config import ModelConfig
 
         # Create ModelConfig from individual parameters
         model_config = ModelConfig(

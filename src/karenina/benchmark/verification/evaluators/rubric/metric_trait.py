@@ -26,8 +26,8 @@ from ...prompts import PromptAssembler, PromptTask
 from ...prompts.rubric.metric_trait import MetricTraitPromptBuilder
 
 if TYPE_CHECKING:
+    from .....schemas.config import ModelConfig
     from .....schemas.verification import PromptConfig
-    from .....schemas.workflow.models import ModelConfig
 
 logger = logging.getLogger(__name__)
 

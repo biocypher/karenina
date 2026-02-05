@@ -22,7 +22,7 @@ Parallel invokers:
 
 Example:
     >>> from karenina.adapters import get_agent, get_llm
-    >>> from karenina.schemas.workflow.models import ModelConfig
+    >>> from karenina.schemas.config import ModelConfig
     >>>
     >>> config = ModelConfig(model="claude-sonnet-4-20250514", provider="anthropic")
     >>> agent = get_agent(config)

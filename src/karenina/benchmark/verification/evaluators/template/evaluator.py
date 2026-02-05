@@ -14,9 +14,9 @@ from typing import TYPE_CHECKING, Any
 
 from .....adapters import get_llm, get_parser
 from .....ports import LLMPort
+from .....schemas.config import ModelConfig
 from .....schemas.domain import BaseAnswer
 from .....schemas.verification.model_identity import ModelIdentity
-from .....schemas.workflow import ModelConfig
 from ...prompts import PromptAssembler, PromptTask
 from ...prompts.parsing.parsing_instructions import TemplatePromptBuilder
 from ...utils import prepare_evaluation_input
@@ -353,7 +353,7 @@ class TemplateEvaluator:
         """
         from langchain_core.output_parsers import PydanticOutputParser
 
-        from .....schemas.workflow import VerificationConfig
+        from .....schemas.verification import VerificationConfig
         from .deep_judgment import deep_judgment_parse
 
         result = ParseResult()

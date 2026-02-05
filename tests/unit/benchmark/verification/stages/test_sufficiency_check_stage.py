@@ -19,8 +19,8 @@ from karenina.benchmark.verification.stages import (
     SufficiencyCheckStage,
     VerificationContext,
 )
+from karenina.schemas.config import ModelConfig
 from karenina.schemas.domain import BaseAnswer
-from karenina.schemas.workflow import ModelConfig
 
 # =============================================================================
 # Fixtures

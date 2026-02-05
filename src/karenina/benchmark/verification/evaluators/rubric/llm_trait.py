@@ -30,8 +30,8 @@ from ...prompts.rubric.literal_trait import LiteralTraitPromptBuilder
 from ...prompts.rubric.llm_trait import LLMTraitPromptBuilder
 
 if TYPE_CHECKING:
+    from .....schemas.config import ModelConfig
     from .....schemas.verification import PromptConfig
-    from .....schemas.workflow.models import ModelConfig
 
 logger = logging.getLogger(__name__)
 

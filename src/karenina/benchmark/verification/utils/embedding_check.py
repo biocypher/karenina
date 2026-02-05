@@ -9,8 +9,8 @@ from typing import Any
 
 from ....adapters.factory import get_llm
 from ....ports.messages import Message
+from ....schemas.config import ModelConfig
 from ....schemas.verification.config import DEFAULT_EMBEDDING_MODEL, DEFAULT_EMBEDDING_THRESHOLD
-from ....schemas.workflow import ModelConfig
 
 logger = logging.getLogger(__name__)
 

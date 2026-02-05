@@ -15,7 +15,7 @@ from rich.table import Table
 
 from karenina.benchmark import Benchmark
 from karenina.schemas import ModelConfig, VerificationConfig
-from karenina.schemas.workflow.models import (
+from karenina.schemas.config import (
     INTERFACE_LANGCHAIN,
     INTERFACE_MANUAL,
     INTERFACE_OPENAI_ENDPOINT,
@@ -405,7 +405,7 @@ def _configure_few_shot() -> Any:
     if not Confirm.ask("Enable few-shot prompting?", default=False):
         return None
 
-    from karenina.schemas.workflow.models import FewShotConfig
+    from karenina.schemas.config import FewShotConfig
 
     few_shot_mode_str = Prompt.ask("Few-shot mode", choices=["all", "k-shot", "custom", "none"], default="all")
     few_shot_mode = cast(Literal["all", "k-shot", "custom", "none"], few_shot_mode_str)

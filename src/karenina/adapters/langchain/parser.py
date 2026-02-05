@@ -39,7 +39,7 @@ from .messages import LangChainMessageConverter
 from .prompts import FEEDBACK_FORMAT, FEEDBACK_NULL
 
 if TYPE_CHECKING:
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +114,7 @@ class LangChainParserAdapter:
     4. Return the validated model instance
 
     Example:
-        >>> from karenina.schemas.workflow.models import ModelConfig
+        >>> from karenina.schemas.config import ModelConfig
         >>> from pydantic import BaseModel, Field
 
         >>> class Answer(BaseModel):

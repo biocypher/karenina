@@ -14,8 +14,9 @@ from unittest.mock import patch
 import pytest
 
 from karenina.benchmark.verification.executor import ExecutorConfig, VerificationExecutor
+from karenina.schemas.config import ModelConfig
 from karenina.schemas.verification.model_identity import ModelIdentity
-from karenina.schemas.workflow import ModelConfig, VerificationResult
+from karenina.schemas.workflow import VerificationResult
 from karenina.schemas.workflow.verification import (
     VerificationResultMetadata,
     VerificationResultRubric,

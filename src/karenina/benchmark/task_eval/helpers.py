@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from ...schemas.domain import Rubric
 
-from ...schemas.workflow import ModelConfig
+from ...schemas.config import ModelConfig
 from ..verification.evaluators import RubricEvaluator
 
 logger = logging.getLogger(__name__)

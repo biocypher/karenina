@@ -17,7 +17,7 @@ class TestClaudeSDKAdapterInitialization:
     @pytest.fixture
     def model_config(self) -> Any:
         """Create a mock ModelConfig for claude_agent_sdk interface."""
-        from karenina.schemas.workflow.models import ModelConfig
+        from karenina.schemas.config import ModelConfig
 
         return ModelConfig(
             id="test-claude-sdk",
@@ -74,7 +74,7 @@ class TestProtocolCompliance:
     @pytest.fixture
     def model_config(self) -> Any:
         """Create a ModelConfig for claude_agent_sdk interface."""
-        from karenina.schemas.workflow.models import ModelConfig
+        from karenina.schemas.config import ModelConfig
 
         return ModelConfig(
             id="test-claude-sdk",
@@ -117,7 +117,7 @@ class TestFactoryIntegration:
     @pytest.fixture
     def claude_sdk_config(self) -> Any:
         """Create a ModelConfig for claude_agent_sdk interface."""
-        from karenina.schemas.workflow.models import ModelConfig
+        from karenina.schemas.config import ModelConfig
 
         return ModelConfig(
             id="test-claude-sdk",
