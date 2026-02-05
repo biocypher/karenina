@@ -11,13 +11,13 @@ from collections.abc import Callable
 from typing import Any
 
 from ...schemas.domain import Rubric
-from ...schemas.verification.config import DEFAULT_ASYNC_ENABLED
-from ...schemas.workflow import (
+from ...schemas.results import VerificationResultSet
+from ...schemas.verification import (
     FinishedTemplate,
     VerificationConfig,
     VerificationResult,
-    VerificationResultSet,
 )
+from ...schemas.verification.config import DEFAULT_ASYNC_ENABLED
 from ...utils.answer_cache import AnswerTraceCache
 from .utils.cache_helpers import (
     extract_answer_data_from_result,

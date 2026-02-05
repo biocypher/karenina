@@ -8,11 +8,11 @@ if TYPE_CHECKING:
     from .base import BenchmarkBase
     from .rubrics import RubricManager
 
-from ...schemas.workflow import (
+from ...schemas.results import VerificationResultSet
+from ...schemas.verification import (
     FinishedTemplate,
     VerificationConfig,
     VerificationResult,
-    VerificationResultSet,
 )
 from ..verification import run_verification_batch
 from ..verification.utils.template_validation import validate_answer_template

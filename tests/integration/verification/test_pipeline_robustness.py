@@ -34,10 +34,8 @@ from karenina.benchmark.verification.stages import (
     VerificationContext,
     VerifyTemplateStage,
 )
+from karenina.schemas.config import ModelConfig
 from karenina.schemas.domain import LLMRubricTrait, RegexTrait, Rubric
-from karenina.schemas.workflow import (
-    ModelConfig,
-)
 
 # =============================================================================
 # Test Fixtures

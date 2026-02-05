@@ -138,7 +138,7 @@ class LLMTraitEvaluator:
         Returns:
             Tuple of (results_dict, usage_metadata)
         """
-        from .....schemas.workflow.rubric_outputs import BatchRubricScores
+        from .....schemas.outputs import BatchRubricScores
 
         system_prompt = self._llm_prompt_builder.build_batch_system_prompt()
         user_prompt = self._llm_prompt_builder.build_batch_user_prompt(question, answer, traits)
@@ -184,7 +184,7 @@ class LLMTraitEvaluator:
         Returns:
             Tuple of (results_dict, list_of_usage_metadata)
         """
-        from .....schemas.workflow.rubric_outputs import SingleBooleanScore, SingleNumericScore
+        from .....schemas.outputs import SingleBooleanScore, SingleNumericScore
 
         # Build all tasks upfront
         tasks: list[tuple[list[Message], type]] = []
@@ -438,7 +438,7 @@ class LLMTraitEvaluator:
             - labels: Dict mapping trait names to class labels (or invalid value for error)
             - usage_metadata: Usage metadata from the LLM call
         """
-        from .....schemas.workflow.rubric_outputs import BatchLiteralClassifications
+        from .....schemas.outputs import BatchLiteralClassifications
 
         # Filter to only literal traits
         literal_traits = [t for t in traits if t.kind == "literal"]
@@ -497,7 +497,7 @@ class LLMTraitEvaluator:
             - labels: Dict mapping trait names to class labels (or invalid value for error)
             - usage_metadata_list: List of usage metadata dicts from LLM calls
         """
-        from .....schemas.workflow.rubric_outputs import SingleLiteralClassification
+        from .....schemas.outputs import SingleLiteralClassification
 
         # Filter to only literal traits
         literal_traits = [t for t in traits if t.kind == "literal"]

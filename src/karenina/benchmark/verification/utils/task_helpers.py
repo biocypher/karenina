@@ -8,7 +8,7 @@ import logging
 from typing import Any
 
 from ....schemas.domain import Rubric
-from ....schemas.workflow import (
+from ....schemas.verification import (
     FinishedTemplate,
     VerificationConfig,
     VerificationResult,

@@ -179,7 +179,7 @@ class QuestionClassifier:
 
         This is faster and cheaper but may be less accurate for complex questions.
         """
-        from karenina.schemas.workflow.rubric_outputs import BatchLiteralClassifications
+        from karenina.schemas.outputs import BatchLiteralClassifications
 
         # Build prompts for question classification
         system_prompt = self._build_system_prompt()
@@ -224,7 +224,7 @@ class QuestionClassifier:
         LLMParallelInvoker for significant speedup. Otherwise, calls run
         sequentially (legacy behavior).
         """
-        from karenina.schemas.workflow.rubric_outputs import SingleLiteralClassification
+        from karenina.schemas.outputs import SingleLiteralClassification
 
         scores: dict[str, int] = {}
         labels: dict[str, str] = {}
@@ -386,7 +386,7 @@ class QuestionClassifier:
 
     def _build_user_prompt_single_trait(self, question_text: str, trait: Any) -> str:
         """Build user prompt for single-trait question classification."""
-        from karenina.schemas.workflow.rubric_outputs import SingleLiteralClassification
+        from karenina.schemas.outputs import SingleLiteralClassification
 
         if trait.kind != "literal" or trait.classes is None:
             raise ValueError(f"Trait {trait.name} is not a literal trait with classes")
@@ -417,7 +417,7 @@ class QuestionClassifier:
 
     def _build_user_prompt(self, question_text: str, traits: list[Any]) -> str:
         """Build user prompt for question classification."""
-        from karenina.schemas.workflow.rubric_outputs import BatchLiteralClassifications
+        from karenina.schemas.outputs import BatchLiteralClassifications
 
         traits_description = []
         example_classifications: list[dict[str, str]] = []

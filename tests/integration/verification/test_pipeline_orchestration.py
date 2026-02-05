@@ -30,14 +30,14 @@ from karenina.benchmark.verification.stages import (
     ValidateTemplateStage,
     VerificationContext,
 )
+from karenina.schemas.config import ModelConfig
 from karenina.schemas.domain import LLMRubricTrait, Rubric
-from karenina.schemas.verification.model_identity import ModelIdentity
-from karenina.schemas.workflow import (
-    ModelConfig,
+from karenina.schemas.verification import (
     VerificationResult,
     VerificationResultMetadata,
     VerificationResultTemplate,
 )
+from karenina.schemas.verification.model_identity import ModelIdentity
 
 # =============================================================================
 # Test Helpers - Create Valid VerificationResult

@@ -18,7 +18,7 @@ from karenina.benchmark.verification.evaluators.rubric.deep_judgment import Rubr
 from karenina.ports.usage import UsageMetadata
 from karenina.schemas import ModelConfig
 from karenina.schemas.domain import LLMRubricTrait, Rubric
-from karenina.schemas.workflow.rubric_outputs import TraitExcerpt, TraitExcerptsOutput
+from karenina.schemas.outputs import TraitExcerpt, TraitExcerptsOutput
 
 
 def create_mock_llmport(

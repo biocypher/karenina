@@ -11,6 +11,7 @@ import json
 
 import pytest
 
+from karenina.schemas.results import RubricJudgmentResults, RubricResults
 from karenina.schemas.verification import (
     VerificationResult,
     VerificationResultDeepJudgmentRubric,
@@ -20,8 +21,6 @@ from karenina.schemas.verification import (
 
 # Import and rebuild RubricJudgmentResults to resolve forward references
 from karenina.schemas.verification.model_identity import ModelIdentity
-from karenina.schemas.workflow.rubric_judgment_results import RubricJudgmentResults
-from karenina.schemas.workflow.rubric_results import RubricResults
 
 RubricJudgmentResults.model_rebuild()
 

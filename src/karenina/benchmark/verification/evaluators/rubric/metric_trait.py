@@ -128,7 +128,7 @@ class MetricTraitEvaluator:
         Returns:
             Tuple of (confusion_lists, metrics, usage_metadata)
         """
-        from .....schemas.workflow.rubric_outputs import ConfusionMatrixOutput
+        from .....schemas.outputs import ConfusionMatrixOutput
 
         # Build prompt
         system_prompt = self._prompt_builder.build_system_prompt()

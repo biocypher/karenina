@@ -20,11 +20,11 @@ if TYPE_CHECKING:
     from ..schemas.domain import Question
 
 from ..schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
-from ..schemas.workflow import (
+from ..schemas.results import VerificationResultSet
+from ..schemas.verification import (
     FinishedTemplate,
     VerificationConfig,
     VerificationResult,
-    VerificationResultSet,
 )
 from . import benchmark_helpers as _helpers
 from .core import (

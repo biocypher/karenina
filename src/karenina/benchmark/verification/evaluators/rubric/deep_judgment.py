@@ -408,7 +408,7 @@ class RubricDeepJudgmentHandler:
         # Retry loop
         for attempt in range(max_attempts + 1):  # Initial + retries
             # Build prompt (with feedback if retry)
-            from .....schemas.workflow.rubric_outputs import TraitExcerptsOutput
+            from .....schemas.outputs import TraitExcerptsOutput
 
             system_prompt = self._prompt_builder.build_excerpt_extraction_system_prompt()
             user_prompt = self._prompt_builder.build_excerpt_extraction_user_prompt(
@@ -580,7 +580,7 @@ class RubricDeepJudgmentHandler:
 
         for i, excerpt in enumerate(excerpts):
             # Build prompt for hallucination assessment
-            from .....schemas.workflow.rubric_outputs import HallucinationRiskOutput
+            from .....schemas.outputs import HallucinationRiskOutput
 
             excerpt_text = excerpt.get("text", "")
             search_result = search_results[i] if i < len(search_results) else "No results available"
@@ -604,7 +604,7 @@ class RubricDeepJudgmentHandler:
             )
 
             # Use LLMPort.with_structured_output() for parsing
-            from .....schemas.workflow.rubric_outputs import HallucinationRiskOutput
+            from .....schemas.outputs import HallucinationRiskOutput
 
             try:
                 structured_llm = self.llm.with_structured_output(HallucinationRiskOutput)
@@ -695,7 +695,7 @@ class RubricDeepJudgmentHandler:
         Returns:
             Dictionary with: score (int | bool), usage_metadata
         """
-        from .....schemas.workflow.rubric_outputs import SingleBooleanScore, SingleNumericScore
+        from .....schemas.outputs import SingleBooleanScore, SingleNumericScore
 
         schema_class = SingleBooleanScore if trait.kind == "boolean" else SingleNumericScore
 

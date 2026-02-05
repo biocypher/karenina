@@ -10,10 +10,8 @@ following the fixture-based testing pattern.
 import pandas as pd
 import pytest
 
-from karenina.schemas.workflow import (
-    JudgmentResults,
-    RubricResults,
-    TemplateResults,
+from karenina.schemas.results import JudgmentResults, RubricResults, TemplateResults
+from karenina.schemas.verification import (
     VerificationResult,
     VerificationResultDeepJudgment,
     VerificationResultRubric,

@@ -20,14 +20,14 @@ import pandas as pd
 import pytest
 
 from karenina.schemas.domain.rubric import CallableTrait, LLMRubricTrait, RegexTrait, Rubric
-from karenina.schemas.verification.model_identity import ModelIdentity
-from karenina.schemas.workflow import (
-    RubricResults,
+from karenina.schemas.results import RubricResults
+from karenina.schemas.verification import (
     VerificationResult,
     VerificationResultMetadata,
     VerificationResultRubric,
     VerificationResultTemplate,
 )
+from karenina.schemas.verification.model_identity import ModelIdentity
 
 # =============================================================================
 # Helper Functions
