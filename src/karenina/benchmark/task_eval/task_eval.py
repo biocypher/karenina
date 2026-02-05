@@ -11,6 +11,7 @@ Example:
     result = task.evaluate(config)
 """
 
+import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Literal, Union
 
@@ -20,6 +21,8 @@ if TYPE_CHECKING:
 from ...schemas.workflow import ModelConfig, VerificationConfig
 from ..verification.evaluators import RubricEvaluator
 from .models import LogEvent, StepEval, TaskEvalResult
+
+logger = logging.getLogger(__name__)
 
 
 class TaskEval:
@@ -559,7 +562,7 @@ class TaskEval:
 
         except Exception as e:
             # Handle evaluation errors gracefully
-            print(f"Warning: Evaluation failed for {error_context}: {e}")
+            logger.warning("Evaluation failed for %s: %s", error_context, e)
 
     # =============================================================================
     # EVALUATION METHODS
@@ -706,7 +709,7 @@ class Answer(BaseAnswer):
                     question=question_text, answer=response_text, rubric=rubric
                 )
             except Exception as e:
-                print(f"Warning: RubricEvaluator failed in fallback: {e}")
+                logger.warning("RubricEvaluator failed in fallback: %s", e)
                 rubric_scores = {}
 
         return {
