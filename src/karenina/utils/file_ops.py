@@ -33,9 +33,9 @@ def atomic_write(filepath: Path, data: str) -> None:
         # Atomic rename
         partial_path.replace(filepath)
 
-    except Exception as e:
+    except Exception:
         # Clean up partial file on error
         if partial_path.exists():
             with contextlib.suppress(OSError):
                 partial_path.unlink()
-        raise e
+        raise
