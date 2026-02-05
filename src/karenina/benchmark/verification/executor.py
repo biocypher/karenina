@@ -25,9 +25,9 @@ from anyio.from_thread import start_blocking_portal
 if TYPE_CHECKING:
     from anyio.from_thread import BlockingPortal
 
-from ...schemas.verification import VerificationResult
-from ...schemas.verification.config import DEFAULT_ASYNC_MAX_WORKERS
-from ...utils.answer_cache import AnswerTraceCache
+from karenina.schemas.verification import VerificationResult
+from karenina.schemas.verification.config import DEFAULT_ASYNC_MAX_WORKERS
+from karenina.utils.answer_cache import AnswerTraceCache
 
 logger = logging.getLogger(__name__)
 

@@ -8,12 +8,13 @@ if TYPE_CHECKING:
     from .base import BenchmarkBase
     from .rubrics import RubricManager
 
-from ...schemas.results import VerificationResultSet
-from ...schemas.verification import (
+from karenina.schemas.results import VerificationResultSet
+from karenina.schemas.verification import (
     FinishedTemplate,
     VerificationConfig,
     VerificationResult,
 )
+
 from ..verification import run_verification_batch
 from ..verification.utils.template_validation import validate_answer_template
 
@@ -81,7 +82,7 @@ class VerificationManager:
                     question_rubric_dict = question_rubric_raw
                 # If it's a list of trait objects, convert to Rubric and dump
                 elif isinstance(question_rubric_raw, list):
-                    from ...schemas.entities.rubric import (
+                    from karenina.schemas.entities.rubric import (
                         CallableTrait,
                         LLMRubricTrait,
                         MetricRubricTrait,

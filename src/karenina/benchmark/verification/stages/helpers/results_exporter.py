@@ -28,9 +28,9 @@ import time
 from io import StringIO
 from typing import Any, Protocol
 
-from .....schemas.results import VerificationResultSet
-from .....schemas.verification import VerificationJob
-from .....utils.version import get_karenina_version
+from karenina.schemas.results import VerificationResultSet
+from karenina.schemas.verification import VerificationJob
+from karenina.utils.version import get_karenina_version
 
 
 class HasTraitNames(Protocol):

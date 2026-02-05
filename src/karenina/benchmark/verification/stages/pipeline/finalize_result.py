@@ -6,9 +6,9 @@ Builds the final VerificationResult from accumulated context.
 import logging
 from typing import Any
 
+from karenina.benchmark.verification.utils.llm_invocation import _split_parsed_response
 from karenina.schemas.verification import VerificationResult
 
-from ...utils.llm_invocation import _split_parsed_response
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
 # Set up logger

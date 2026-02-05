@@ -8,7 +8,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from .base import BenchmarkBase
 
-from ...schemas.verification import FinishedTemplate
+from karenina.schemas.verification import FinishedTemplate
+
 from ..verification.utils.template_validation import validate_answer_template
 
 logger = logging.getLogger(__name__)

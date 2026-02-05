@@ -12,19 +12,20 @@ import logging
 import os
 from typing import TYPE_CHECKING, Any
 
-from .....adapters import get_llm, get_parser
-from .....ports import LLMPort
-from .....schemas.config import ModelConfig
-from .....schemas.entities import BaseAnswer
-from .....schemas.verification.model_identity import ModelIdentity
-from ...prompts import PromptAssembler, PromptTask
-from ...prompts.parsing.parsing_instructions import TemplatePromptBuilder
-from ...utils import prepare_evaluation_input
+from karenina.adapters import get_llm, get_parser
+from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
+from karenina.benchmark.verification.prompts.parsing.parsing_instructions import TemplatePromptBuilder
+from karenina.benchmark.verification.utils import prepare_evaluation_input
+from karenina.ports import LLMPort
+from karenina.schemas.config import ModelConfig
+from karenina.schemas.entities import BaseAnswer
+from karenina.schemas.verification.model_identity import ModelIdentity
+
 from .results import FieldVerificationResult, ParseResult, RegexVerificationResult
 
 if TYPE_CHECKING:
-    from .....ports import ParserPort
-    from .....schemas.verification import PromptConfig
+    from karenina.ports import ParserPort
+    from karenina.schemas.verification import PromptConfig
 
 logger = logging.getLogger(__name__)
 
@@ -318,7 +319,9 @@ class TemplateEvaluator:
         if not self._should_expose_ground_truth():
             return None
         try:
-            from ...utils.template_parsing_helpers import create_test_instance_from_answer_class
+            from karenina.benchmark.verification.utils.template_parsing_helpers import (
+                create_test_instance_from_answer_class,
+            )
 
             _, ground_truth = create_test_instance_from_answer_class(self.raw_answer_class)
             return ground_truth
@@ -353,7 +356,8 @@ class TemplateEvaluator:
         """
         from langchain_core.output_parsers import PydanticOutputParser
 
-        from .....schemas.verification import VerificationConfig
+        from karenina.schemas.verification import VerificationConfig
+
         from .deep_judgment import deep_judgment_parse
 
         result = ParseResult()
@@ -380,7 +384,9 @@ class TemplateEvaluator:
         ground_truth = None
         if self._should_expose_ground_truth():
             try:
-                from ...utils.template_parsing_helpers import create_test_instance_from_answer_class
+                from karenina.benchmark.verification.utils.template_parsing_helpers import (
+                    create_test_instance_from_answer_class,
+                )
 
                 _, ground_truth = create_test_instance_from_answer_class(self.raw_answer_class)
             except Exception as e:

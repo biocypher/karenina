@@ -2,7 +2,7 @@
 
 import inspect
 
-from ....schemas.entities import BaseAnswer
+from karenina.schemas.entities import BaseAnswer
 
 
 def validate_answer_template(template_code: str) -> tuple[bool, str | None, type | None]:

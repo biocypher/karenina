@@ -5,10 +5,10 @@ Evaluates LLM responses against qualitative rubric criteria.
 
 import logging
 
+from karenina.benchmark.verification.evaluators import RubricEvaluator
+from karenina.benchmark.verification.utils import prepare_evaluation_input
 from karenina.schemas.verification.model_identity import ModelIdentity
 
-from ...evaluators import RubricEvaluator
-from ...utils import prepare_evaluation_input
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
 from ..helpers.deep_judgment_helpers import apply_deep_judgment_config_to_traits
 

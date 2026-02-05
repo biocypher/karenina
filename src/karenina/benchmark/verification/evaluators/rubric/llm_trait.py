@@ -23,15 +23,15 @@ import re
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
-from .....ports import LLMPort, Message, PortCapabilities
-from .....schemas.entities import LLMRubricTrait
-from ...prompts import PromptAssembler, PromptTask
-from ...prompts.rubric.literal_trait import LiteralTraitPromptBuilder
-from ...prompts.rubric.llm_trait import LLMTraitPromptBuilder
+from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
+from karenina.benchmark.verification.prompts.rubric.literal_trait import LiteralTraitPromptBuilder
+from karenina.benchmark.verification.prompts.rubric.llm_trait import LLMTraitPromptBuilder
+from karenina.ports import LLMPort, Message, PortCapabilities
+from karenina.schemas.entities import LLMRubricTrait
 
 if TYPE_CHECKING:
-    from .....schemas.config import ModelConfig
-    from .....schemas.verification import PromptConfig
+    from karenina.schemas.config import ModelConfig
+    from karenina.schemas.verification import PromptConfig
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ class LLMTraitEvaluator:
             model_config: Model configuration for reference.
             prompt_config: Optional per-task-type user instructions for prompt assembly.
         """
-        from .....adapters.llm_parallel import read_async_config
+        from karenina.adapters.llm_parallel import read_async_config
 
         self.llm = llm
         self._model_config = model_config
@@ -138,7 +138,7 @@ class LLMTraitEvaluator:
         Returns:
             Tuple of (results_dict, usage_metadata)
         """
-        from .....schemas.outputs import BatchRubricScores
+        from karenina.schemas.outputs import BatchRubricScores
 
         system_prompt = self._llm_prompt_builder.build_batch_system_prompt()
         user_prompt = self._llm_prompt_builder.build_batch_user_prompt(question, answer, traits)
@@ -184,7 +184,7 @@ class LLMTraitEvaluator:
         Returns:
             Tuple of (results_dict, list_of_usage_metadata)
         """
-        from .....schemas.outputs import SingleBooleanScore, SingleNumericScore
+        from karenina.schemas.outputs import SingleBooleanScore, SingleNumericScore
 
         # Build all tasks upfront
         tasks: list[tuple[list[Message], type]] = []
@@ -219,7 +219,7 @@ class LLMTraitEvaluator:
 
         Uses the LLMParallelInvoker for concurrent execution with LLMPort.
         """
-        from .....adapters import LLMParallelInvoker
+        from karenina.adapters import LLMParallelInvoker
 
         logger.debug(f"LLMParallelInvoker: Executing {len(tasks)} tasks with max_workers={self._async_max_workers}")
         invoker = LLMParallelInvoker(self.llm, max_workers=self._async_max_workers)
@@ -438,7 +438,7 @@ class LLMTraitEvaluator:
             - labels: Dict mapping trait names to class labels (or invalid value for error)
             - usage_metadata: Usage metadata from the LLM call
         """
-        from .....schemas.outputs import BatchLiteralClassifications
+        from karenina.schemas.outputs import BatchLiteralClassifications
 
         # Filter to only literal traits
         literal_traits = [t for t in traits if t.kind == "literal"]
@@ -497,7 +497,7 @@ class LLMTraitEvaluator:
             - labels: Dict mapping trait names to class labels (or invalid value for error)
             - usage_metadata_list: List of usage metadata dicts from LLM calls
         """
-        from .....schemas.outputs import SingleLiteralClassification
+        from karenina.schemas.outputs import SingleLiteralClassification
 
         # Filter to only literal traits
         literal_traits = [t for t in traits if t.kind == "literal"]
@@ -535,7 +535,7 @@ class LLMTraitEvaluator:
 
         Uses the LLMParallelInvoker for concurrent execution with LLMPort.
         """
-        from .....adapters import LLMParallelInvoker
+        from karenina.adapters import LLMParallelInvoker
 
         logger.debug(
             f"LLMParallelInvoker: Executing {len(tasks)} literal tasks with max_workers={self._async_max_workers}"

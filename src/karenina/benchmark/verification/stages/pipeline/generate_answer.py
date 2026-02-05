@@ -10,12 +10,12 @@ import traceback
 from typing import Any
 
 from karenina.adapters import get_agent, get_llm
+from karenina.benchmark.verification.utils.llm_invocation import _construct_few_shot_prompt
+from karenina.benchmark.verification.utils.trace_agent_metrics import extract_agent_metrics_from_messages
+from karenina.benchmark.verification.utils.trace_usage_tracker import UsageTracker
 from karenina.ports import AgentConfig, AgentPort, LLMPort, Message
 from karenina.schemas.verification.model_identity import ModelIdentity
 
-from ...utils.llm_invocation import _construct_few_shot_prompt
-from ...utils.trace_agent_metrics import extract_agent_metrics_from_messages
-from ...utils.trace_usage_tracker import UsageTracker
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
 # Set up logger

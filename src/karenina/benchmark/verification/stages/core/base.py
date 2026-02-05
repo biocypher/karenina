@@ -20,10 +20,10 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
 
-from .....schemas.config import ModelConfig
-from .....schemas.entities import Rubric
-from .....schemas.verification import PromptConfig
-from .....schemas.verification.config import (
+from karenina.schemas.config import ModelConfig
+from karenina.schemas.entities import Rubric
+from karenina.schemas.verification import PromptConfig
+from karenina.schemas.verification.config import (
     DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
     DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS,
     DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS,
@@ -31,7 +31,7 @@ from .....schemas.verification.config import (
 )
 
 if TYPE_CHECKING:
-    from ...utils.trace_usage_tracker import UsageTracker
+    from karenina.benchmark.verification.utils.trace_usage_tracker import UsageTracker
 
 logger = logging.getLogger(__name__)
 
@@ -520,7 +520,7 @@ class BaseVerificationStage(ABC):
         Returns:
             UsageTracker instance (from context or newly created)
         """
-        from ...utils.trace_usage_tracker import UsageTracker
+        from karenina.benchmark.verification.utils.trace_usage_tracker import UsageTracker
 
         usage_tracker: UsageTracker | None = context.get_artifact("usage_tracker")
         if usage_tracker is None:

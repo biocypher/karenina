@@ -4,8 +4,8 @@ Validates the Pydantic template syntax and injects question ID.
 """
 
 from karenina.benchmark.authoring.answers.generator import inject_question_id_into_answer_class
+from karenina.benchmark.verification.utils.template_validation import validate_answer_template
 
-from ...utils.template_validation import validate_answer_template
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
 

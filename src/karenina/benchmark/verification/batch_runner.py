@@ -10,15 +10,16 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from ...schemas.entities import Rubric
-from ...schemas.results import VerificationResultSet
-from ...schemas.verification import (
+from karenina.schemas.entities import Rubric
+from karenina.schemas.results import VerificationResultSet
+from karenina.schemas.verification import (
     FinishedTemplate,
     VerificationConfig,
     VerificationResult,
 )
-from ...schemas.verification.config import DEFAULT_ASYNC_ENABLED
-from ...utils.answer_cache import AnswerTraceCache
+from karenina.schemas.verification.config import DEFAULT_ASYNC_ENABLED
+from karenina.utils.answer_cache import AnswerTraceCache
+
 from .utils.cache_helpers import (
     extract_answer_data_from_result,
     generate_answer_cache_key,

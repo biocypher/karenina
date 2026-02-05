@@ -5,7 +5,8 @@ Auto-fails verification when agent trace doesn't end with an AI message.
 
 import logging
 
-from ...utils import extract_final_ai_message
+from karenina.benchmark.verification.utils import extract_final_ai_message
+
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
 # Set up logger

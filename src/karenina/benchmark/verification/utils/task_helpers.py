@@ -7,8 +7,8 @@ few-shot resolution, and preview result creation.
 import logging
 from typing import Any
 
-from ....schemas.entities import Rubric
-from ....schemas.verification import (
+from karenina.schemas.entities import Rubric
+from karenina.schemas.verification import (
     FinishedTemplate,
     VerificationConfig,
     VerificationResult,
@@ -48,7 +48,7 @@ def merge_rubrics_for_task(
             logger.warning(f"Failed to parse question rubric for {template.question_id}: {e}")
 
     try:
-        from ....schemas import merge_rubrics
+        from karenina.schemas import merge_rubrics
 
         return merge_rubrics(global_rubric, question_rubric)
     except ValueError as e:

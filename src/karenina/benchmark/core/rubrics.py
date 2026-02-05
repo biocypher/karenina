@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from .base import BenchmarkBase
 
-from ...schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
-from ...utils.checkpoint import (
+from karenina.schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
+from karenina.utils.checkpoint import (
     add_global_rubric_to_benchmark,
     extract_global_rubric_from_benchmark,
 )
@@ -44,7 +44,7 @@ class RubricManager:
         Raises:
             ValueError: If question not found
         """
-        from ...utils.checkpoint import convert_rubric_trait_to_rating
+        from karenina.utils.checkpoint import convert_rubric_trait_to_rating
 
         # Find the question
         found = False

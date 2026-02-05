@@ -29,15 +29,15 @@ import re
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
-from .....ports import LLMPort, Message
-from .....ports.capabilities import PortCapabilities
-from ...prompts.assembler import PromptAssembler
-from ...prompts.deep_judgment.rubric.deep_judgment import DeepJudgmentPromptBuilder
-from ...prompts.task_types import PromptTask
+from karenina.benchmark.verification.prompts.assembler import PromptAssembler
+from karenina.benchmark.verification.prompts.deep_judgment.rubric.deep_judgment import DeepJudgmentPromptBuilder
+from karenina.benchmark.verification.prompts.task_types import PromptTask
+from karenina.ports import LLMPort, Message
+from karenina.ports.capabilities import PortCapabilities
 
 if TYPE_CHECKING:
-    from .....schemas.entities import LLMRubricTrait, Rubric
-    from .....schemas.verification.prompt_config import PromptConfig
+    from karenina.schemas.entities import LLMRubricTrait, Rubric
+    from karenina.schemas.verification.prompt_config import PromptConfig
 
 logger = logging.getLogger(__name__)
 
@@ -152,7 +152,7 @@ class RubricDeepJudgmentHandler:
                 - hallucination_risks: Per-trait hallucination risk (if search enabled)
                 - traits_without_valid_excerpts: Traits that failed excerpt extraction
         """
-        from .....schemas.entities import Rubric as RubricClass
+        from karenina.schemas.entities import Rubric as RubricClass
 
         # Separate deep-judgment vs standard traits
         dj_traits = [t for t in rubric.llm_traits if t.deep_judgment_enabled]
@@ -408,7 +408,7 @@ class RubricDeepJudgmentHandler:
         # Retry loop
         for attempt in range(max_attempts + 1):  # Initial + retries
             # Build prompt (with feedback if retry)
-            from .....schemas.outputs import TraitExcerptsOutput
+            from karenina.schemas.outputs import TraitExcerptsOutput
 
             system_prompt = self._prompt_builder.build_excerpt_extraction_system_prompt()
             user_prompt = self._prompt_builder.build_excerpt_extraction_user_prompt(
@@ -512,7 +512,7 @@ class RubricDeepJudgmentHandler:
         Returns:
             Tuple of (valid_excerpts, failed_excerpts)
         """
-        from ...utils.trace_fuzzy_match import fuzzy_match_excerpt
+        from karenina.benchmark.verification.utils.trace_fuzzy_match import fuzzy_match_excerpt
 
         valid = []
         failed = []
@@ -557,7 +557,7 @@ class RubricDeepJudgmentHandler:
         Returns:
             Dictionary with: excerpts (updated with search results), risk_assessment, model_calls, usage_metadata_list
         """
-        from ...utils.search_provider import create_search_tool
+        from karenina.benchmark.verification.utils.search_provider import create_search_tool
 
         # Create search tool
         search_tool = create_search_tool(config.deep_judgment_rubric_search_tool)
@@ -580,7 +580,7 @@ class RubricDeepJudgmentHandler:
 
         for i, excerpt in enumerate(excerpts):
             # Build prompt for hallucination assessment
-            from .....schemas.outputs import HallucinationRiskOutput
+            from karenina.schemas.outputs import HallucinationRiskOutput
 
             excerpt_text = excerpt.get("text", "")
             search_result = search_results[i] if i < len(search_results) else "No results available"
@@ -604,7 +604,7 @@ class RubricDeepJudgmentHandler:
             )
 
             # Use LLMPort.with_structured_output() for parsing
-            from .....schemas.outputs import HallucinationRiskOutput
+            from karenina.schemas.outputs import HallucinationRiskOutput
 
             try:
                 structured_llm = self.llm.with_structured_output(HallucinationRiskOutput)
@@ -695,7 +695,7 @@ class RubricDeepJudgmentHandler:
         Returns:
             Dictionary with: score (int | bool), usage_metadata
         """
-        from .....schemas.outputs import SingleBooleanScore, SingleNumericScore
+        from karenina.schemas.outputs import SingleBooleanScore, SingleNumericScore
 
         schema_class = SingleBooleanScore if trait.kind == "boolean" else SingleNumericScore
 
