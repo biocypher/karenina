@@ -2,6 +2,7 @@
 
 import contextlib
 import os
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
 
@@ -102,7 +103,7 @@ class VerificationConfig(BaseModel):
 
     # Search-enhanced deep-judgment settings (validate excerpts against external evidence)
     deep_judgment_search_enabled: bool = False  # Enable search validation for excerpts
-    deep_judgment_search_tool: str | Any = "tavily"  # Search tool name or callable instance
+    deep_judgment_search_tool: str | Callable[..., Any] = "tavily"  # Search tool name or callable instance
     # Supported built-in tools: "tavily"
     # Can also pass any callable: (str | list[str]) -> (str | list[str])
     # Examples: langchain tools, MCP tools, custom functions
@@ -111,7 +112,9 @@ class VerificationConfig(BaseModel):
     deep_judgment_rubric_max_excerpts_default: int = 7  # Default max excerpts per trait (higher than templates)
     deep_judgment_rubric_fuzzy_match_threshold_default: float = 0.80  # Default fuzzy match threshold for traits
     deep_judgment_rubric_excerpt_retry_attempts_default: int = 2  # Default retry attempts for trait excerpts
-    deep_judgment_rubric_search_tool: str | Any = "tavily"  # Search tool for rubric hallucination detection
+    deep_judgment_rubric_search_tool: str | Callable[..., Any] = (
+        "tavily"  # Search tool for rubric hallucination detection
+    )
 
     # Deep-judgment rubric configuration modes (NEW - runtime control of deep judgment)
     deep_judgment_rubric_mode: Literal["disabled", "enable_all", "use_checkpoint", "custom"] = "disabled"

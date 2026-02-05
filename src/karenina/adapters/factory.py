@@ -38,7 +38,7 @@ Example:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
 
 from karenina.adapters.registry import AdapterAvailability, AdapterRegistry, register_adapter
 from karenina.ports import (
@@ -55,7 +55,9 @@ if TYPE_CHECKING:
 from karenina.schemas.workflow.models import INTERFACES_NO_PROVIDER_REQUIRED
 
 # Type alias for interface values
-InterfaceType = Literal["langchain", "openrouter", "manual", "openai_endpoint", "claude_agent_sdk", "claude_tool"]
+InterfaceType: TypeAlias = Literal[
+    "langchain", "openrouter", "manual", "openai_endpoint", "claude_agent_sdk", "claude_tool"
+]
 
 logger = logging.getLogger(__name__)
 

@@ -7,7 +7,7 @@ multiple verification runs, supporting aggregation and analysis of trait scores.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 
 from pydantic import BaseModel, Field, PrivateAttr
 
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from ..verification import VerificationResult
 
 
-TraitType = Literal["llm", "regex", "callable", "metric"]
+TraitType: TypeAlias = Literal["llm", "regex", "callable", "metric"]
 
 
 class RubricResults(BaseModel):

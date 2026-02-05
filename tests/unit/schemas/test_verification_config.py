@@ -261,7 +261,7 @@ def test_validation_invalid_search_tool_name() -> None:
 @pytest.mark.unit
 def test_validation_search_tool_must_be_string_or_callable() -> None:
     """Test that validation rejects invalid search tool types."""
-    with pytest.raises(ValueError, match="Search tool must be either a supported tool name"):
+    with pytest.raises(ValueError, match="Input should be"):
         VerificationConfig(
             parsing_models=[
                 ModelConfig(
@@ -275,7 +275,7 @@ def test_validation_search_tool_must_be_string_or_callable() -> None:
             ],
             answering_models=[],
             deep_judgment_search_enabled=True,
-            deep_judgment_search_tool=123,  # Invalid type
+            deep_judgment_search_tool=123,  # Invalid type — rejected by Pydantic (str | Callable)
             parsing_only=True,
         )
 
