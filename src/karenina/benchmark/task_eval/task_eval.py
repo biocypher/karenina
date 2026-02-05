@@ -632,7 +632,7 @@ class TaskEval:
         if evaluation_mode == "rubric_only" and not answer_template:
             # Create a minimal template that just captures the raw response
             answer_template = '''
-from karenina.schemas.domain import BaseAnswer
+from karenina.schemas.entities import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
