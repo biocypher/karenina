@@ -163,18 +163,3 @@ def fetch_tool_descriptions(
 
     # Create new event loop and run
     return asyncio.run(afetch_tool_descriptions(mcp_urls_dict, tool_filter))
-
-
-def sync_fetch_tool_descriptions(
-    mcp_urls_dict: dict[str, str],
-    tool_filter: list[str] | None = None,
-) -> dict[str, str]:
-    """Deprecated: Use fetch_tool_descriptions() instead."""
-    import warnings
-
-    warnings.warn(
-        "sync_fetch_tool_descriptions is deprecated, use fetch_tool_descriptions instead",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return fetch_tool_descriptions(mcp_urls_dict, tool_filter)

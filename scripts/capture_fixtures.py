@@ -780,7 +780,7 @@ def _run_mcp_agent_scenario(model: str, provider: str, output_dir: Path, force: 
         print("  Install with: uv add 'langchain>=1.1.0' langgraph langchain-mcp-adapters")
         return 1
 
-    from karenina.adapters.langchain.mcp import sync_create_mcp_client_and_tools
+    from karenina.adapters.langchain.mcp import create_mcp_client_and_tools
     from karenina.adapters.langchain.middleware import build_agent_middleware
     from karenina.schemas.workflow.models import AgentMiddlewareConfig
 
@@ -810,7 +810,7 @@ def _run_mcp_agent_scenario(model: str, provider: str, output_dir: Path, force: 
 
     try:
         print("  Connecting to MCP server and fetching tools...")
-        _, tools = sync_create_mcp_client_and_tools(
+        _, tools = create_mcp_client_and_tools(
             mcp_urls_dict,
             mcp_tool_filter,
             None,  # No description overrides

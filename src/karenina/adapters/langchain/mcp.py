@@ -29,7 +29,6 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "acreate_mcp_client_and_tools",
     "create_mcp_client_and_tools",
-    "sync_create_mcp_client_and_tools",  # Deprecated: use create_mcp_client_and_tools
     "cleanup_mcp_client",
     "apply_tool_description_overrides",
 ]
@@ -179,22 +178,6 @@ def create_mcp_client_and_tools(
 
     # Create new event loop and run the async function
     return asyncio.run(acreate_mcp_client_and_tools(mcp_urls_dict, tool_filter, tool_description_overrides))
-
-
-def sync_create_mcp_client_and_tools(
-    mcp_urls_dict: dict[str, str],
-    tool_filter: list[str] | None = None,
-    tool_description_overrides: dict[str, str] | None = None,
-) -> tuple[Any, list[Any]]:
-    """Deprecated: Use create_mcp_client_and_tools() instead."""
-    import warnings
-
-    warnings.warn(
-        "sync_create_mcp_client_and_tools is deprecated, use create_mcp_client_and_tools instead",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return create_mcp_client_and_tools(mcp_urls_dict, tool_filter, tool_description_overrides)
 
 
 def cleanup_mcp_client(client: Any) -> None:
