@@ -336,10 +336,10 @@ class TestCacheOptimizationIntegration:
         result_list = list(results.values())
         assert len(result_list) == 3
 
-        question_ids = {r.question_id for r in result_list}
+        question_ids = {r.metadata.question_id for r in result_list}
         assert question_ids == {"q1", "q2"}
 
-        parsing_models = {r.parsing_model for r in result_list}
+        parsing_models = {r.metadata.parsing_model for r in result_list}
         assert parsing_models == {"langchain:parser_1", "langchain:parser_2"}
 
 
@@ -369,7 +369,7 @@ class TestParallelExecution:
         results = execute_parallel(tasks, max_workers=2)
 
         assert len(results) == 3
-        question_ids = {results[key].question_id for key in results}
+        question_ids = {results[key].metadata.question_id for key in results}
         assert question_ids == {"q1", "q2", "q3"}
 
 
