@@ -200,16 +200,12 @@ def deserialize_rubric_from_dict(rubric_data: dict[str, Any] | None) -> Any | No
 
 
 def serialize_question_rubric_from_cache(
-    rubric_data: dict[str, Any] | list[Any] | None,
+    rubric_data: dict[str, Any] | None,
 ) -> dict[str, list[dict[str, Any]]] | None:
     """Serialize question rubric from cache format to database format.
 
-    The benchmark cache may store rubrics in different formats:
-    - Dict format: {"llm_traits": [...], "regex_traits": [...], ...}
-    - Legacy list format: [trait1, trait2, ...]
-
     Args:
-        rubric_data: Rubric data from benchmark cache
+        rubric_data: Rubric data dict with 'llm_traits', 'regex_traits', etc. keys
 
     Returns:
         Dictionary with serialized traits for database storage, or None if empty
@@ -217,37 +213,17 @@ def serialize_question_rubric_from_cache(
     if not rubric_data:
         return None
 
-    from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
+    llm_traits = rubric_data.get("llm_traits", [])
+    regex_traits = rubric_data.get("regex_traits", [])
+    callable_traits = rubric_data.get("callable_traits", [])
+    metric_traits = rubric_data.get("metric_traits", [])
 
-    if isinstance(rubric_data, dict):
-        # Cache format: dict with llm_traits, regex_traits, etc.
-        llm_traits = rubric_data.get("llm_traits", [])
-        regex_traits = rubric_data.get("regex_traits", [])
-        callable_traits = rubric_data.get("callable_traits", [])
-        metric_traits = rubric_data.get("metric_traits", [])
+    if not (llm_traits or regex_traits or callable_traits or metric_traits):
+        return None
 
-        if not (llm_traits or regex_traits or callable_traits or metric_traits):
-            return None
-
-        return serialize_rubric_to_dict(
-            llm_traits=llm_traits,
-            regex_traits=regex_traits,
-            callable_traits=callable_traits,
-            metric_traits=metric_traits,
-        )
-
-    elif isinstance(rubric_data, list) and len(rubric_data) > 0:
-        # Legacy format: flat list of trait objects
-        llm_traits = [t for t in rubric_data if isinstance(t, LLMRubricTrait)]
-        regex_traits = [t for t in rubric_data if isinstance(t, RegexTrait)]
-        callable_traits = [t for t in rubric_data if isinstance(t, CallableTrait)]
-        metric_traits = [t for t in rubric_data if isinstance(t, MetricRubricTrait)]
-
-        return serialize_rubric_to_dict(
-            llm_traits=llm_traits,
-            regex_traits=regex_traits,
-            callable_traits=callable_traits,
-            metric_traits=metric_traits,
-        )
-
-    return None
+    return serialize_rubric_to_dict(
+        llm_traits=llm_traits,
+        regex_traits=regex_traits,
+        callable_traits=callable_traits,
+        metric_traits=metric_traits,
+    )

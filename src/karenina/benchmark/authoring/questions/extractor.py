@@ -294,40 +294,28 @@ def generate_questions_file(
         f.write(content)
 
 
-def questions_to_json(questions: list[Question] | list[tuple[Question, dict[str, Any]]]) -> dict[str, Any]:
+def questions_to_json(questions: list[tuple[Question, dict[str, Any]]]) -> dict[str, Any]:
     """
     Convert questions to JSON format compatible with the webapp.
 
     Args:
-        questions: List of Question instances or tuples of (Question, metadata_dict)
+        questions: List of tuples of (Question, metadata_dict)
 
     Returns:
         Dictionary in the format expected by the webapp
     """
     result = {}
-    for item in questions:
-        if isinstance(item, tuple):
-            # New format: (Question, metadata)
-            question, metadata = item
-            question_data: dict[str, Any] = {
-                "question": question.question,
-                "raw_answer": question.raw_answer,
-                # No answer_template - this should only be added after template generation
-            }
+    for question, metadata in questions:
+        question_data: dict[str, Any] = {
+            "question": question.question,
+            "raw_answer": question.raw_answer,
+        }
 
-            # Add metadata if present
-            if metadata:
-                question_data["metadata"] = metadata
+        # Add metadata if present
+        if metadata:
+            question_data["metadata"] = metadata
 
-            result[question.id] = question_data
-        else:
-            # Legacy format: just Question
-            question = item
-            result[question.id] = {
-                "question": question.question,
-                "raw_answer": question.raw_answer,
-                # No answer_template - this should only be added after template generation
-            }
+        result[question.id] = question_data
     return result
 
 

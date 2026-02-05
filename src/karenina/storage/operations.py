@@ -616,8 +616,6 @@ def import_verification_results(
 
     Supports:
     - v2.x format: {format_version: "2.0"/"2.1", metadata, shared_data, results}
-    - Legacy unified format: {metadata, results}
-    - Legacy array format: [result1, result2, ...]
 
     Args:
         json_data: Parsed JSON data from export file
@@ -639,30 +637,16 @@ def import_verification_results(
         init_database(db_config)
 
     # Detect format version
-    format_version = json_data.get("format_version", "1.0")
+    format_version = json_data.get("format_version")
 
     # Extract results and metadata based on format
     if format_version in ("2.0", "2.1"):
         results_list = json_data.get("results", [])
         metadata = json_data.get("metadata", {})
         shared_data = json_data.get("shared_data", {})
-    elif "metadata" in json_data and "results" in json_data:
-        # Legacy unified format
-        results_list = json_data.get("results", [])
-        metadata = json_data.get("metadata", {})
-        shared_data = {}
-        format_version = "1.0"
-    elif isinstance(json_data, list):
-        # Legacy array format
-        results_list = json_data
-        metadata = {}
-        shared_data = {}
-        format_version = "legacy"
     else:
         raise ValueError(
-            "Unrecognized JSON format. Expected v2.0 format with 'format_version' key, "
-            "legacy unified format with 'metadata' and 'results' keys, "
-            "or legacy array format."
+            f"Unsupported checkpoint format. Expected format_version '2.0' or '2.1'. Got: {format_version!r}"
         )
 
     if not results_list:
