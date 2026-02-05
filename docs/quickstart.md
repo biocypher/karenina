@@ -206,7 +206,7 @@ print("This rubric will be evaluated for ALL questions")
 This trait validates that the answer contains the exact correct gene symbol:
 
 ```python
-from karenina.schemas import ManualRubricTrait
+from karenina.schemas import RegexTrait
 
 # Find the drug target question ID
 drug_target_qid = [qid for qid in question_ids
@@ -214,12 +214,12 @@ drug_target_qid = [qid for qid in question_ids
 
 # Create a regex trait specific to the drug target question
 # The answer must contain "BCL2" (case-sensitive)
-regex_trait = ManualRubricTrait(
+regex_trait = RegexTrait(
     name="BH3 Mention",
     description="Answer must contain a mention to BH3 proteins",
     pattern=r"\bBH3\b",  # Matches the exact word "BH3" with word boundaries
     case_sensitive=True,  # "BH3" is correct, "bcl2" or "Bcl2" would fail
-    invert=False  # Match = pass (answer contains BH3)
+    invert_result=False  # Match = pass (answer contains BH3)
 )
 
 # Add ONLY to the drug target question (not global!)
@@ -489,7 +489,7 @@ Here's the entire workflow in one script with both global and question-specific 
 from karenina import Benchmark
 from karenina.schemas import (
     VerificationConfig, ModelConfig, RubricTrait,
-    ManualRubricTrait, MetricRubricTrait
+    RegexTrait, MetricRubricTrait
 )
 from pathlib import Path
 
@@ -552,12 +552,12 @@ benchmark.create_global_rubric(
 drug_target_qid = [qid for qid in question_ids if "Venetoclax" in benchmark.get_question(qid).question][0]
 benchmark.add_question_rubric(
     question_id=drug_target_qid,
-    traits=[ManualRubricTrait(
+    traits=[RegexTrait(
         name="BH3 Mention",
         description="Answer must mention BH3 proteins",
         pattern=r"\bBH3\b",
         case_sensitive=True,
-        invert=False
+        invert_result=False
     )]
 )
 

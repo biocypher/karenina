@@ -750,12 +750,6 @@ def test_convert_llm_trait_literal_roundtrip() -> None:
     assert restored.deep_judgment_enabled == original.deep_judgment_enabled
 
 
-# Note: The deprecated ManualRubricTrait types (GlobalManualRubricTrait,
-# QuestionSpecificManualRubricTrait) are gracefully skipped with a warning log.
-# The convert_rating_to_rubric_trait function returns None for these types,
-# and callers filter out None values when building trait lists.
-
-
 # =============================================================================
 # create_jsonld_benchmark() Tests
 # =============================================================================

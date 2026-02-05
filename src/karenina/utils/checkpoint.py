@@ -312,9 +312,8 @@ def extract_questions_from_benchmark(
         # Extract question-specific rubric
         question_rubric = None
         if question.rating:
-            # Convert ratings to traits (filtering out None for unsupported types)
             traits = [
-                trait
+                convert_rating_to_rubric_trait(rating)
                 for rating in question.rating
                 if rating.additionalType
                 in [
@@ -323,7 +322,6 @@ def extract_questions_from_benchmark(
                     "QuestionSpecificCallableTrait",
                     "QuestionSpecificMetricRubricTrait",
                 ]
-                and (trait := convert_rating_to_rubric_trait(rating)) is not None
             ]
 
             # Categorize traits by type to match Rubric schema
@@ -391,9 +389,7 @@ def extract_global_rubric_from_benchmark(
                 "GlobalCallableTrait",
                 "GlobalMetricRubricTrait",
             ]:
-                trait = convert_rating_to_rubric_trait(rating)
-                if trait is not None:
-                    traits.append(trait)
+                traits.append(convert_rating_to_rubric_trait(rating))
 
     # Extract from additionalProperty (legacy format from GUI checkpoint-converter)
     if benchmark.additionalProperty:
