@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from ...schemas.domain import Rubric
     from .base import BenchmarkBase
 
-from ...schemas.workflow import VerificationResult
+from ...schemas.verification import VerificationResult
 from .results_io import ResultsIOManager
 
 logger = logging.getLogger(__name__)

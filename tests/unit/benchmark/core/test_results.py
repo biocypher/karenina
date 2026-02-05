@@ -17,8 +17,8 @@ import pytest
 from karenina import Benchmark
 from karenina.benchmark.core.results import ResultsManager
 from karenina.benchmark.core.results_io import ResultsIOManager
+from karenina.schemas.verification import VerificationResult, VerificationResultMetadata, VerificationResultTemplate
 from karenina.schemas.verification.model_identity import ModelIdentity
-from karenina.schemas.workflow import VerificationResult, VerificationResultMetadata, VerificationResultTemplate
 
 
 # Helper function to create a sample VerificationResult

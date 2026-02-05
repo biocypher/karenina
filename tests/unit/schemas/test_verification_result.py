@@ -12,15 +12,15 @@ Tests cover:
 
 import pytest
 
-from karenina.schemas.verification.model_identity import ModelIdentity
-from karenina.schemas.workflow.verification.result import VerificationResult
-from karenina.schemas.workflow.verification.result_components import (
+from karenina.schemas.verification import (
+    VerificationResult,
     VerificationResultDeepJudgment,
     VerificationResultDeepJudgmentRubric,
     VerificationResultMetadata,
     VerificationResultRubric,
     VerificationResultTemplate,
 )
+from karenina.schemas.verification.model_identity import ModelIdentity
 
 # =============================================================================
 # VerificationResultMetadata Tests

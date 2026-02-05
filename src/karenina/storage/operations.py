@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, cast
 from uuid import uuid4
 
 if TYPE_CHECKING:
-    from ...schemas.workflow import VerificationResult
+    from ...schemas.verification import VerificationResult
     from ..benchmark.benchmark import Benchmark
 
 from sqlalchemy import Select, select
@@ -599,7 +599,7 @@ def _model_to_verification_result(model: VerificationResultModel) -> "Verificati
     automatically reconstruct the nested Pydantic model from the
     flat SQLAlchemy model.
     """
-    from karenina.schemas.workflow import VerificationResult
+    from karenina.schemas.verification import VerificationResult
 
     # Use auto-converter to reconstruct nested Pydantic model from flat ORM
     return orm_to_pydantic(model, VerificationResult, FLATTEN_CONFIG)
@@ -632,7 +632,7 @@ def import_verification_results(
     Raises:
         ValueError: If benchmark not found or JSON format unrecognized
     """
-    from karenina.schemas.workflow import VerificationResult
+    from karenina.schemas.verification import VerificationResult
 
     # Initialize database if auto_create is enabled
     if db_config.auto_create:

@@ -8,14 +8,13 @@ from typing import Any
 
 from ...schemas.config import ModelConfig
 from ...schemas.domain import Rubric
-from ...schemas.verification import PromptConfig
+from ...schemas.verification import PromptConfig, VerificationResult
 from ...schemas.verification.config import (
     DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
     DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS,
     DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS,
     DEFAULT_RUBRIC_MAX_EXCERPTS,
 )
-from ...schemas.workflow import VerificationResult
 from ...utils.checkpoint import generate_template_id
 from .stages import StageOrchestrator, VerificationContext
 

@@ -31,12 +31,14 @@ from karenina.cli.utils import (
     parse_question_indices,
     validate_output_path,
 )
+from karenina.schemas.results import VerificationResultSet
+from karenina.schemas.verification import (
+    FinishedTemplate,
+    VerificationConfig,
+    VerificationResult,
+    VerificationResultMetadata,
+)
 from karenina.schemas.verification.model_identity import ModelIdentity
-from karenina.schemas.workflow.verification.api_models import FinishedTemplate
-from karenina.schemas.workflow.verification.config import VerificationConfig
-from karenina.schemas.workflow.verification.result import VerificationResult
-from karenina.schemas.workflow.verification.result_components import VerificationResultMetadata
-from karenina.schemas.workflow.verification_result_set import VerificationResultSet
 
 
 # Helper function to create minimal FinishedTemplate

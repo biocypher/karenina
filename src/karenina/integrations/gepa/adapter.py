@@ -49,9 +49,8 @@ from karenina.integrations.gepa.scoring import (  # noqa: E402
 if TYPE_CHECKING:
     from karenina.benchmark.benchmark import Benchmark
     from karenina.schemas.config import ModelConfig
-    from karenina.schemas.workflow.verification.config import VerificationConfig
-    from karenina.schemas.workflow.verification.result import VerificationResult
-    from karenina.schemas.workflow.verification.result_set import VerificationResultSet
+    from karenina.schemas.results import VerificationResultSet
+    from karenina.schemas.verification import VerificationConfig, VerificationResult
 
 
 class KareninaAdapter(GEPAAdapter):  # type: ignore[type-arg]

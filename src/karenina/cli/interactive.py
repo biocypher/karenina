@@ -21,7 +21,7 @@ from karenina.schemas.config import (
     INTERFACE_OPENAI_ENDPOINT,
     INTERFACE_OPENROUTER,
 )
-from karenina.schemas.workflow.verification import (
+from karenina.schemas.verification import (
     DEFAULT_ANSWERING_SYSTEM_PROMPT,
     DEFAULT_ASYNC_ENABLED,
     DEFAULT_ASYNC_MAX_WORKERS,

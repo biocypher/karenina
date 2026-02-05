@@ -13,10 +13,10 @@ Tests cover:
 import pytest
 
 from karenina.schemas.config.models import ModelConfig
-from karenina.schemas.verification.model_identity import ModelIdentity
-from karenina.schemas.workflow.verification.result_components import (
+from karenina.schemas.verification import (
     VerificationResultMetadata,
 )
+from karenina.schemas.verification.model_identity import ModelIdentity
 
 # =============================================================================
 # ModelIdentity Construction

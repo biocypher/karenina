@@ -28,7 +28,8 @@ import time
 from io import StringIO
 from typing import Any, Protocol
 
-from .....schemas.workflow import VerificationJob, VerificationResultSet
+from .....schemas.results import VerificationResultSet
+from .....schemas.verification import VerificationJob
 from .....utils.version import get_karenina_version
 
 

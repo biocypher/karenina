@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from ...schemas.domain import Rubric
 
-from ...schemas.workflow import VerificationResult
+from ...schemas.verification import VerificationResult
 
 logger = logging.getLogger(__name__)
 

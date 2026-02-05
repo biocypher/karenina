@@ -22,7 +22,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 
-from ..schemas.workflow import VerificationResult
+from ..schemas.verification import VerificationResult
 from .auto_mapper import PydanticSQLAlchemyMapper
 from .base import Base
 

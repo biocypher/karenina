@@ -6,7 +6,7 @@ Builds the final VerificationResult from accumulated context.
 import logging
 from typing import Any
 
-from karenina.schemas.workflow import VerificationResult
+from karenina.schemas.verification import VerificationResult
 
 from ...utils.llm_invocation import _split_parsed_response
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
@@ -130,7 +130,7 @@ class FinalizeResultStage(BaseVerificationStage):
                 )
 
         # Build VerificationResult from context with nested structure
-        from karenina.schemas.workflow import (
+        from karenina.schemas.verification import (
             VerificationResultDeepJudgment,
             VerificationResultMetadata,
             VerificationResultRubric,
@@ -300,7 +300,7 @@ class FinalizeResultStage(BaseVerificationStage):
         # Create deep-judgment rubric subclass (if performed)
         deep_judgment_rubric = None
         if context.get_result_field(ArtifactKeys.DEEP_JUDGMENT_RUBRIC_PERFORMED, False):
-            from karenina.schemas.workflow import VerificationResultDeepJudgmentRubric
+            from karenina.schemas.verification import VerificationResultDeepJudgmentRubric
 
             deep_judgment_rubric = VerificationResultDeepJudgmentRubric(
                 deep_judgment_rubric_performed=context.get_result_field(

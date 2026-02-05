@@ -7,7 +7,7 @@ for the AnswerTraceCache used in batch verification.
 import logging
 from typing import Any
 
-from ....schemas.workflow import VerificationResult
+from ....schemas.verification import VerificationResult
 from ....utils.answer_cache import AnswerTraceCache
 
 logger = logging.getLogger(__name__)

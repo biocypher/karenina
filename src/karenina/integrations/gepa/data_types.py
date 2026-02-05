@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from karenina.schemas.config import ModelConfig
-    from karenina.schemas.workflow.verification.result import VerificationResult
+    from karenina.schemas.verification import VerificationResult
 
 
 @dataclass

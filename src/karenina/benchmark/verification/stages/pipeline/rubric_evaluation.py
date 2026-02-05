@@ -179,7 +179,7 @@ class RubricEvaluationStage(BaseVerificationStage):
                     logger.info(f"Deep judgment enabled for rubric traits in question {context.question_id}")
 
                     # Create a minimal VerificationConfig for deep judgment settings
-                    from karenina.schemas.workflow import VerificationConfig
+                    from karenina.schemas.verification import VerificationConfig
 
                     dj_config = VerificationConfig(
                         answering_models=[context.answering_model],

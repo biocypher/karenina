@@ -8,7 +8,7 @@ import logging
 from typing import Any
 
 from .....schemas.domain import LLMRubricTrait
-from .....schemas.workflow.verification.config import DeepJudgmentTraitConfig
+from .....schemas.verification import DeepJudgmentTraitConfig
 
 # Set up logger
 logger = logging.getLogger(__name__)

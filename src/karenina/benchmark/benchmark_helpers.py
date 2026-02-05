@@ -16,7 +16,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from ..integrations.gepa import FrontierType, KareninaOutput, ObjectiveConfig
     from ..schemas.checkpoint import SchemaOrgQuestion
-    from ..schemas.workflow import VerificationConfig, VerificationResult, VerificationResultSet
+    from ..schemas.results import VerificationResultSet
+    from ..schemas.verification import VerificationConfig, VerificationResult
     from .benchmark import Benchmark
 
 logger = logging.getLogger(__name__)
@@ -417,7 +418,7 @@ def store_verification_results(
     run_name: str | None = None,
 ) -> None:
     """Store verification results in the benchmark metadata."""
-    from ..schemas.workflow import VerificationResultSet
+    from ..schemas.results import VerificationResultSet
 
     if isinstance(results, VerificationResultSet):
         results_dict: dict[str, Any] = {}

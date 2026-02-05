@@ -6,7 +6,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 # Import VerificationResult for use in StepEval
-from ...schemas.workflow import VerificationResult
+from ...schemas.verification import VerificationResult
 
 
 class LogEvent(BaseModel):

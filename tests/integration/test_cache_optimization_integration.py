@@ -15,13 +15,13 @@ import pytest
 
 from karenina.benchmark.verification.executor import ExecutorConfig, VerificationExecutor
 from karenina.schemas.config import ModelConfig
-from karenina.schemas.verification.model_identity import ModelIdentity
-from karenina.schemas.workflow import VerificationResult
-from karenina.schemas.workflow.verification import (
+from karenina.schemas.verification import (
+    VerificationResult,
     VerificationResultMetadata,
     VerificationResultRubric,
     VerificationResultTemplate,
 )
+from karenina.schemas.verification.model_identity import ModelIdentity
 
 
 def create_mock_result(kwargs: dict) -> VerificationResult:
