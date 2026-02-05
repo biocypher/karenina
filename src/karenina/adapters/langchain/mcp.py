@@ -16,8 +16,8 @@ Example:
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import logging
-import threading
 from typing import Any
 
 from karenina.exceptions import McpClientError, McpTimeoutError
@@ -157,38 +157,21 @@ def sync_create_mcp_client_and_tools(
 
     # Check if we're already in an async context
     try:
-        current_loop = asyncio.get_running_loop()
-        if current_loop:
-            # We're in an async context, need to run in a separate thread
-            def run_in_thread() -> tuple[Any, list[Any]]:
-                return asyncio.run(create_mcp_client_and_tools(mcp_urls_dict, tool_filter, tool_description_overrides))
+        asyncio.get_running_loop()
 
-            result: list[tuple[Any, list[Any]] | None] = [None]
-            exception: list[Exception | None] = [None]
+        # Use ThreadPoolExecutor to avoid nested event loop issues
+        def run_in_thread() -> tuple[Any, list[Any]]:
+            return asyncio.run(create_mcp_client_and_tools(mcp_urls_dict, tool_filter, tool_description_overrides))
 
-            def thread_target() -> None:
-                try:
-                    result[0] = run_in_thread()
-                except Exception as e:
-                    exception[0] = e
-
-            thread = threading.Thread(target=thread_target)
-            thread.start()
-            thread.join(timeout=45.0)
-
-            if thread.is_alive():
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(run_in_thread)
+            try:
+                return future.result(timeout=45)
+            except TimeoutError as e:
                 raise McpTimeoutError(
                     "MCP client creation timed out after 45 seconds",
                     timeout_seconds=45,
-                )
-
-            if exception[0]:
-                raise exception[0]
-
-            if result[0] is None:
-                raise McpClientError("MCP client creation failed without exception")
-
-            return result[0]
+                ) from e
     except RuntimeError:
         # No event loop running, safe to create new one
         pass

@@ -9,8 +9,8 @@ Used primarily by GEPA optimization to get and modify tool descriptions.
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import logging
-import threading
 from contextlib import AsyncExitStack
 from typing import Any
 
@@ -143,32 +143,21 @@ def sync_fetch_tool_descriptions(
 
     # Check if we're already in an async context
     try:
-        current_loop = asyncio.get_running_loop()
-        if current_loop:
-            # Run in a separate thread
-            result: list[dict[str, str] | None] = [None]
-            exception: list[Exception | None] = [None]
+        asyncio.get_running_loop()
 
-            def thread_target() -> None:
-                try:
-                    result[0] = asyncio.run(fetch_tool_descriptions(mcp_urls_dict, tool_filter))
-                except Exception as e:
-                    exception[0] = e
+        # Use ThreadPoolExecutor to avoid nested event loop issues
+        def run_in_thread() -> dict[str, str]:
+            return asyncio.run(fetch_tool_descriptions(mcp_urls_dict, tool_filter))
 
-            thread = threading.Thread(target=thread_target)
-            thread.start()
-            thread.join(timeout=45.0)
-
-            if thread.is_alive():
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(run_in_thread)
+            try:
+                return future.result(timeout=45)
+            except TimeoutError as e:
                 raise McpTimeoutError(
                     "Fetch tool descriptions timed out after 45 seconds",
                     timeout_seconds=45,
-                )
-
-            if exception[0]:
-                raise exception[0]
-
-            return result[0] or {}
+                ) from e
     except RuntimeError:
         pass
 
