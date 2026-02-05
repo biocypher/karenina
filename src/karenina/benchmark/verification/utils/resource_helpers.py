@@ -25,17 +25,22 @@ def cleanup_resources() -> None:
     from karenina.adapters.registry import cleanup_all_adapters
 
     # Close all tracked adapters (AsyncAnthropic clients, etc.)
+    cleanup_timeout = 10
     try:
-        # Try to run in existing event loop if available
         try:
             loop = asyncio.get_running_loop()
-            # Schedule cleanup but don't wait (we're in sync context)
-            loop.create_task(cleanup_all_adapters())
+            # We're in a sync function but an event loop is running (e.g. nested
+            # inside an async caller).  Schedule the coroutine on that loop and
+            # block the current thread until it finishes or times out.
+            future = asyncio.run_coroutine_threadsafe(cleanup_all_adapters(), loop)
+            future.result(timeout=cleanup_timeout)
         except RuntimeError:
-            # No event loop running - create one to run cleanup
+            # No event loop running — create one to run cleanup
             asyncio.run(cleanup_all_adapters())
-    except Exception as e:
-        logger.debug(f"Adapter cleanup encountered error: {e}")
+        except TimeoutError:
+            logger.warning("Adapter cleanup timed out after %d seconds", cleanup_timeout)
+    except Exception:
+        logger.exception("Adapter cleanup failed")
 
     # Dispose all cached SQLAlchemy engines
     try:
