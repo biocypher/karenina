@@ -14,6 +14,8 @@ import threading
 from contextlib import AsyncExitStack
 from typing import Any
 
+from karenina.exceptions import McpTimeoutError
+
 logger = logging.getLogger(__name__)
 
 
@@ -99,7 +101,11 @@ async def fetch_tool_descriptions(
                 logger.debug(f"Fetched {len(mcp_tools)} tools from MCP server '{server_name}'")
 
             except TimeoutError as e:
-                raise Exception(f"MCP server '{server_name}' connection timed out after 30 seconds.") from e
+                raise McpTimeoutError(
+                    f"MCP server '{server_name}' connection timed out after 30 seconds.",
+                    server_name=server_name,
+                    timeout_seconds=30,
+                ) from e
             except Exception as e:
                 logger.error(f"Failed to fetch tools from MCP server '{server_name}': {e}")
                 raise
@@ -154,7 +160,10 @@ def sync_fetch_tool_descriptions(
             thread.join(timeout=45.0)
 
             if thread.is_alive():
-                raise Exception("Fetch tool descriptions timed out after 45 seconds")
+                raise McpTimeoutError(
+                    "Fetch tool descriptions timed out after 45 seconds",
+                    timeout_seconds=45,
+                )
 
             if exception[0]:
                 raise exception[0]

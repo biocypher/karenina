@@ -10,6 +10,8 @@ import logging
 from datetime import datetime
 from typing import Any
 
+from karenina.exceptions import KareninaError
+
 from ..schemas.checkpoint import (
     SCHEMA_ORG_CONTEXT,
     JsonLdCheckpoint,
@@ -45,7 +47,7 @@ __all__ = [
 ]
 
 
-class BenchmarkConversionError(Exception):
+class BenchmarkConversionError(KareninaError):
     """Raised when benchmark conversion fails."""
 
     pass

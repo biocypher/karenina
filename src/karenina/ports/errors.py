@@ -39,8 +39,10 @@ Example usage:
 
 from __future__ import annotations
 
+from karenina.exceptions import KareninaError
 
-class PortError(Exception):
+
+class PortError(KareninaError):
     """Base exception for all port-related errors.
 
     All port errors inherit from this class, allowing unified exception
@@ -53,12 +55,10 @@ class PortError(Exception):
         try:
             await agent.run(messages)
         except PortError as e:
-            print(f"Port error: {e}")
+            logger.error(f"Port error: {e}")
     """
 
-    def __init__(self, message: str) -> None:
-        self.message = message
-        super().__init__(message)
+    pass
 
 
 class AdapterUnavailableError(PortError):

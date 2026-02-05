@@ -20,6 +20,7 @@ import logging
 import threading
 from typing import Any
 
+from karenina.exceptions import McpClientError, McpTimeoutError
 from karenina.utils.mcp.tools import apply_tool_description_overrides
 
 logger = logging.getLogger(__name__)
@@ -108,11 +109,12 @@ async def create_mcp_client_and_tools(
         return client, tools
 
     except TimeoutError as e:
-        raise Exception(
-            "MCP server connection timed out after 30 seconds. Check server availability and network connection."
+        raise McpTimeoutError(
+            "MCP server connection timed out after 30 seconds. Check server availability and network connection.",
+            timeout_seconds=30,
         ) from e
     except Exception as e:
-        raise Exception(f"Failed to create MCP client or fetch tools: {e}") from e
+        raise McpClientError(f"Failed to create MCP client or fetch tools: {e}") from e
 
 
 def sync_create_mcp_client_and_tools(
@@ -175,13 +177,16 @@ def sync_create_mcp_client_and_tools(
             thread.join(timeout=45.0)
 
             if thread.is_alive():
-                raise Exception("MCP client creation timed out after 45 seconds")
+                raise McpTimeoutError(
+                    "MCP client creation timed out after 45 seconds",
+                    timeout_seconds=45,
+                )
 
             if exception[0]:
                 raise exception[0]
 
             if result[0] is None:
-                raise Exception("MCP client creation failed without exception")
+                raise McpClientError("MCP client creation failed without exception")
 
             return result[0]
     except RuntimeError:
