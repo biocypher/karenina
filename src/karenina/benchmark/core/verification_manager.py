@@ -135,7 +135,7 @@ class VerificationManager:
                 # This is called BEFORE starting each task to show current item being processed
                 percentage = ((current - 1) / total) * 100 if total > 0 else 0
                 if result:
-                    message = f"Verifying {result.question_id} ({current}/{total})"
+                    message = f"Verifying {result.metadata.question_id} ({current}/{total})"
                     progress_callback(percentage, message)
 
             batch_progress_callback = adapter

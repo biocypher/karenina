@@ -69,7 +69,7 @@ class ResultsManager:
 
             for result_key, result in self._in_memory_results[run].items():
                 # Check if this matches question ID filter
-                if question_ids is not None and result.question_id not in question_ids:
+                if question_ids is not None and result.metadata.question_id not in question_ids:
                     continue
 
                 all_results[result_key] = result
@@ -92,7 +92,7 @@ class ResultsManager:
             run_results = {}
             for result_key, result in results.items():
                 # Check if this matches question ID filter
-                if question_id is not None and result.question_id != question_id:
+                if question_id is not None and result.metadata.question_id != question_id:
                     continue
 
                 run_results[result_key] = result
@@ -134,7 +134,7 @@ class ResultsManager:
                 # Clear specific questions
                 results_to_remove = []
                 for result_key, result in self._in_memory_results[run].items():
-                    if result.question_id in question_ids:
+                    if result.metadata.question_id in question_ids:
                         results_to_remove.append(result_key)
                         cleared_count += 1
 
