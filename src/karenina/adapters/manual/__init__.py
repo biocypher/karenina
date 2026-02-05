@@ -18,7 +18,7 @@ Usage Pattern:
     >>> agent = get_agent(model_config)  # Returns ManualAgentAdapter
     >>>
     >>> # Use same pattern as other adapters
-    >>> result = agent.run_sync(
+    >>> result = agent.run(
     ...     messages=[...],
     ...     config=AgentConfig(question_hash="abc123...")
     ... )
@@ -102,7 +102,7 @@ class ManualAgentAdapter:
         >>>
         >>> # Then use the adapter
         >>> adapter = ManualAgentAdapter(model_config)
-        >>> result = adapter.run_sync(
+        >>> result = adapter.run(
         ...     messages=[Message.user("What is the answer?")],
         ...     config=AgentConfig(question_hash="abc123...")
         ... )
@@ -117,14 +117,14 @@ class ManualAgentAdapter:
         """
         self._model_config = model_config
 
-    async def run(
+    async def arun(
         self,
         messages: list[Message],
         tools: list[Tool] | None = None,
         mcp_servers: dict[str, MCPServerConfig] | None = None,
         config: AgentConfig | None = None,
     ) -> AgentResult:
-        """Async implementation delegates to run_sync.
+        """Async implementation delegates to run().
 
         Args:
             messages: Input messages (ignored for manual interface).
@@ -139,9 +139,9 @@ class ManualAgentAdapter:
             ManualInterfaceError: If question_hash not provided in config.
             ManualTraceNotFoundError: If trace not found for hash.
         """
-        return self.run_sync(messages, tools, mcp_servers, config)
+        return self.run(messages, tools, mcp_servers, config)
 
-    def run_sync(
+    def run(
         self,
         messages: list[Message],  # noqa: ARG002
         tools: list[Tool] | None = None,  # noqa: ARG002
@@ -168,7 +168,7 @@ class ManualAgentAdapter:
         # Get question hash from config
         question_hash = config.question_hash
         if not question_hash:
-            raise ManualInterfaceError("agent.run_sync() requires question_hash in AgentConfig for manual interface")
+            raise ManualInterfaceError("agent.run() requires question_hash in AgentConfig for manual interface")
 
         # Look up trace from manager (use local imports)
         from .helpers import get_manual_trace_count, get_manual_trace_with_metrics

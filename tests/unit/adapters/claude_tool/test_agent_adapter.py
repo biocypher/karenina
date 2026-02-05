@@ -216,7 +216,7 @@ class TestAgentAdapterRun:
         mock_client.beta.messages.tool_runner = MagicMock(return_value=mock_iterator)
 
         with patch.object(adapter, "_get_async_client", return_value=mock_client):
-            result = await adapter.run(
+            result = await adapter.arun(
                 messages=[Message.user("Hello")],
             )
 
@@ -237,7 +237,7 @@ class TestAgentAdapterRun:
         mock_client.beta.messages.tool_runner = MagicMock(return_value=mock_iterator)
 
         with patch.object(adapter, "_get_async_client", return_value=mock_client):
-            await adapter.run(messages=[Message.user("Hello")])
+            await adapter.arun(messages=[Message.user("Hello")])
 
             mock_client.beta.messages.tool_runner.assert_called_once()
 
@@ -253,7 +253,7 @@ class TestAgentAdapterRun:
         mock_client.beta.messages.tool_runner = MagicMock(return_value=mock_iterator)
 
         with patch.object(adapter, "_get_async_client", return_value=mock_client):
-            await adapter.run(messages=[Message.user("Hello")])
+            await adapter.arun(messages=[Message.user("Hello")])
 
             call_kwargs = mock_client.beta.messages.tool_runner.call_args.kwargs
             assert call_kwargs["model"] == "claude-haiku-4-5"
@@ -268,7 +268,7 @@ class TestAgentAdapterRun:
             mock_execute.side_effect = TimeoutError("Timed out")
 
             with pytest.raises(AgentTimeoutError):
-                await adapter.run(
+                await adapter.arun(
                     messages=[Message.user("Hello")],
                     config=AgentConfig(timeout=30),
                 )
@@ -282,7 +282,7 @@ class TestAgentAdapterRun:
             mock_execute.side_effect = RuntimeError("Something broke")
 
             with pytest.raises(AgentExecutionError, match="Something broke"):
-                await adapter.run(messages=[Message.user("Hello")])
+                await adapter.arun(messages=[Message.user("Hello")])
 
     def test_model_config_requires_model_name(self) -> None:
         """Test ModelConfig validates model_name is required for claude_tool.
@@ -330,7 +330,7 @@ class TestAgentAdapterWithTools:
             mock_wrapped = MagicMock()
             mock_wrap.return_value = mock_wrapped
 
-            await adapter.run(
+            await adapter.arun(
                 messages=[Message.user("Hello")],
                 tools=[tool],
             )
@@ -369,7 +369,7 @@ class TestAgentAdapterWithMCPServers:
             mock_connect.return_value = {"test_server": MagicMock()}
             mock_get_tools.return_value = []
 
-            await adapter.run(
+            await adapter.arun(
                 messages=[Message.user("Hello")],
                 mcp_servers=mcp_servers,
             )
@@ -447,9 +447,9 @@ class TestAgentAdapterExecuteLoop:
 class TestAgentAdapterSync:
     """Tests for synchronous agent execution."""
 
-    def test_run_sync_exists(self, model_config: Any) -> None:
-        """Test run_sync method exists."""
+    def test_run_exists(self, model_config: Any) -> None:
+        """Test run method exists."""
         adapter = ClaudeToolAgentAdapter(model_config)
 
-        assert hasattr(adapter, "run_sync")
-        assert callable(adapter.run_sync)
+        assert hasattr(adapter, "run")
+        assert callable(adapter.run)

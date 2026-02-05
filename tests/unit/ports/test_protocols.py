@@ -68,10 +68,10 @@ class MockLLMPort:
 class MockAgentPort:
     """Mock implementation of AgentPort for testing isinstance checks.
 
-    Implements all required methods: run, run_sync.
+    Implements all required methods: arun, run.
     """
 
-    async def run(
+    async def arun(
         self,
         messages: list[Message],
         tools: list[Tool] | None = None,
@@ -88,7 +88,7 @@ class MockAgentPort:
             limit_reached=False,
         )
 
-    def run_sync(
+    def run(
         self,
         messages: list[Message],
         tools: list[Tool] | None = None,
@@ -149,9 +149,9 @@ class IncompleteLLMPort:
 
 
 class IncompleteAgentPort:
-    """Agent implementation missing run_sync method."""
+    """Agent implementation missing run method."""
 
-    async def run(
+    async def arun(
         self,
         messages: list[Message],
         tools: list[Tool] | None = None,
@@ -167,7 +167,7 @@ class IncompleteAgentPort:
             limit_reached=False,
         )
 
-    # Missing: run_sync
+    # Missing: run
 
 
 class IncompleteParserPort:
@@ -278,7 +278,7 @@ class TestAgentPort:
         assert isinstance(mock, AgentPort)
 
     def test_isinstance_returns_false_for_incomplete_agent_port(self) -> None:
-        """Test that isinstance returns False when run_sync is missing."""
+        """Test that isinstance returns False when run is missing."""
         incomplete = IncompleteAgentPort()
         assert not isinstance(incomplete, AgentPort)
 
@@ -303,11 +303,11 @@ class TestAgentPortMethodSignatures:
     """Tests verifying AgentPort method signatures work correctly."""
 
     @pytest.mark.asyncio
-    async def test_mock_agent_port_run_returns_agent_result(self) -> None:
-        """Test that MockAgentPort.run returns AgentResult."""
+    async def test_mock_agent_port_arun_returns_agent_result(self) -> None:
+        """Test that MockAgentPort.arun returns AgentResult."""
         mock = MockAgentPort()
         messages = [Message.user("Hello")]
-        result = await mock.run(messages)
+        result = await mock.arun(messages)
 
         assert isinstance(result, AgentResult)
         assert result.final_response == "Mock response"
@@ -316,18 +316,18 @@ class TestAgentPortMethodSignatures:
         assert result.turns == 1
         assert result.limit_reached is False
 
-    def test_mock_agent_port_run_sync_returns_agent_result(self) -> None:
-        """Test that MockAgentPort.run_sync returns AgentResult."""
+    def test_mock_agent_port_run_returns_agent_result(self) -> None:
+        """Test that MockAgentPort.run returns AgentResult."""
         mock = MockAgentPort()
         messages = [Message.user("Hello")]
-        result = mock.run_sync(messages)
+        result = mock.run(messages)
 
         assert isinstance(result, AgentResult)
         assert result.final_response == "Mock response"
 
     @pytest.mark.asyncio
-    async def test_mock_agent_port_run_with_tools(self) -> None:
-        """Test that MockAgentPort.run accepts tools parameter."""
+    async def test_mock_agent_port_arun_with_tools(self) -> None:
+        """Test that MockAgentPort.arun accepts tools parameter."""
         mock = MockAgentPort()
         messages = [Message.user("Search for something")]
         tools = [
@@ -338,17 +338,17 @@ class TestAgentPortMethodSignatures:
             )
         ]
 
-        result = await mock.run(messages, tools=tools)
+        result = await mock.arun(messages, tools=tools)
         assert isinstance(result, AgentResult)
 
     @pytest.mark.asyncio
-    async def test_mock_agent_port_run_with_config(self) -> None:
-        """Test that MockAgentPort.run accepts config parameter."""
+    async def test_mock_agent_port_arun_with_config(self) -> None:
+        """Test that MockAgentPort.arun accepts config parameter."""
         mock = MockAgentPort()
         messages = [Message.user("Hello")]
         config = AgentConfig(max_turns=10, timeout=30.0)
 
-        result = await mock.run(messages, config=config)
+        result = await mock.arun(messages, config=config)
         assert isinstance(result, AgentResult)
 
 
@@ -486,8 +486,8 @@ class TestProtocolMethodExistence:
         assert hasattr(mock, "run")
         assert callable(mock.run)
 
-        assert hasattr(mock, "run_sync")
-        assert callable(mock.run_sync)
+        assert hasattr(mock, "arun")
+        assert callable(mock.arun)
 
     def test_parser_port_has_required_methods(self) -> None:
         """Test that MockParserPort has all required ParserPort methods."""

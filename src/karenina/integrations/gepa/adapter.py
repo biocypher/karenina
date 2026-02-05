@@ -186,7 +186,7 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[type-arg]
             ValueError: If no MCP servers are configured.
             RuntimeError: If fetching fails.
         """
-        from karenina.utils.mcp import sync_fetch_tool_descriptions
+        from karenina.utils.mcp import fetch_tool_descriptions
 
         # Find first model with MCP configuration
         mcp_urls_dict = None
@@ -204,7 +204,7 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[type-arg]
         logger.info(f"Fetching tool descriptions from MCP servers: {list(mcp_urls_dict.keys())}")
 
         try:
-            descriptions = sync_fetch_tool_descriptions(mcp_urls_dict, mcp_tool_filter)
+            descriptions = fetch_tool_descriptions(mcp_urls_dict, mcp_tool_filter)
             logger.info(f"Fetched descriptions for {len(descriptions)} tools")
             return descriptions
         except Exception as e:

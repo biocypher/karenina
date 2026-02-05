@@ -220,7 +220,7 @@ class AgentPort(Protocol):
     Example:
         >>> # Using an AgentPort implementation
         >>> agent: AgentPort = get_agent(model_config)
-        >>> result = await agent.run(
+        >>> result = await agent.arun(
         ...     messages=[Message.user("What files are in the repo?")],
         ...     mcp_servers={
         ...         "filesystem": {
@@ -240,7 +240,7 @@ class AgentPort(Protocol):
           conversation data in different formats for backward compatibility
     """
 
-    async def run(
+    async def arun(
         self,
         messages: list[Message],
         tools: list[Tool] | None = None,
@@ -274,16 +274,16 @@ class AgentPort(Protocol):
         """
         ...
 
-    def run_sync(
+    def run(
         self,
         messages: list[Message],
         tools: list[Tool] | None = None,
         mcp_servers: dict[str, MCPServerConfig] | None = None,
         config: AgentConfig | None = None,
     ) -> AgentResult:
-        """Synchronous wrapper for run().
+        """Synchronous wrapper for arun().
 
-        Convenience method that wraps the async `run()` method for use in
+        Convenience method that wraps the async `arun()` method for use in
         synchronous contexts. Uses asyncio.run() internally.
 
         Args:
@@ -296,10 +296,10 @@ class AgentPort(Protocol):
             AgentResult from the agent execution.
 
         Raises:
-            Same exceptions as run().
+            Same exceptions as arun().
 
         Note:
             This method creates a new event loop. Do not call from within
-            an existing async context - use `run()` directly instead.
+            an existing async context - use `arun()` directly instead.
         """
         ...

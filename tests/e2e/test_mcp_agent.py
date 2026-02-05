@@ -36,7 +36,7 @@ def test_mcp_agent_middleware_signature() -> None:
     from langchain_core.messages import HumanMessage
     from langgraph.checkpoint.memory import InMemorySaver
 
-    from karenina.adapters.langchain.mcp import sync_create_mcp_client_and_tools
+    from karenina.adapters.langchain.mcp import create_mcp_client_and_tools
     from karenina.adapters.langchain.middleware import build_agent_middleware
     from karenina.schemas.workflow.models import AgentMiddlewareConfig
 
@@ -47,7 +47,7 @@ def test_mcp_agent_middleware_signature() -> None:
     # (tools come from MCP server, LLM responses come from fixtures)
     mcp_urls = {"opentargets": "https://mcp.platform.opentargets.org/mcp"}
     try:
-        _, tools = sync_create_mcp_client_and_tools(mcp_urls, None, None)
+        _, tools = create_mcp_client_and_tools(mcp_urls, None, None)
     except (TimeoutError, ConnectionError, OSError) as e:
         pytest.skip(f"MCP server unavailable: {e}")
 

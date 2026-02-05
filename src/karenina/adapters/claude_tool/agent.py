@@ -77,7 +77,7 @@ class ClaudeToolAgentAdapter:
         ...     interface="claude_tool"
         ... )
         >>> adapter = ClaudeToolAgentAdapter(config)
-        >>> result = await adapter.run(
+        >>> result = await adapter.arun(
         ...     messages=[Message.user("What files are in /tmp?")],
         ...     mcp_servers={
         ...         "open-targets": {
@@ -133,7 +133,7 @@ class ClaudeToolAgentAdapter:
 
         return "[No final response extracted]"
 
-    async def run(
+    async def arun(
         self,
         messages: list[Message],
         tools: list[Tool] | None = None,
@@ -374,14 +374,14 @@ class ClaudeToolAgentAdapter:
             actual_model=actual_model,
         )
 
-    def run_sync(
+    def run(
         self,
         messages: list[Message],
         tools: list[Tool] | None = None,
         mcp_servers: dict[str, MCPServerConfig] | None = None,
         config: AgentConfig | None = None,
     ) -> AgentResult:
-        """Synchronous wrapper for run().
+        """Synchronous wrapper for arun().
 
         Args:
             messages: Initial conversation messages.
@@ -397,13 +397,13 @@ class ClaudeToolAgentAdapter:
         portal = get_async_portal()
 
         if portal is not None:
-            return portal.call(self.run, messages, tools, mcp_servers, config)
+            return portal.call(self.arun, messages, tools, mcp_servers, config)
 
         try:
             asyncio.get_running_loop()
 
             def run_in_thread() -> AgentResult:
-                return asyncio.run(self.run(messages, tools, mcp_servers, config))
+                return asyncio.run(self.arun(messages, tools, mcp_servers, config))
 
             timeout = config.timeout if config and config.timeout else 600
             with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -411,7 +411,7 @@ class ClaudeToolAgentAdapter:
                 return future.result(timeout=timeout)
 
         except RuntimeError:
-            return asyncio.run(self.run(messages, tools, mcp_servers, config))
+            return asyncio.run(self.arun(messages, tools, mcp_servers, config))
 
     async def aclose(self) -> None:
         """Close underlying HTTP client resources.

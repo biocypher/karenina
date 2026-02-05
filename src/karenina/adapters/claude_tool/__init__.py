@@ -24,7 +24,7 @@ Example:
     ...     interface="claude_tool",
     ... )
     >>> agent = get_agent(config)
-    >>> result = await agent.run(
+    >>> result = await agent.arun(
     ...     messages=[Message.user("What genes are associated with breast cancer?")],
     ...     mcp_servers={
     ...         "open-targets": {

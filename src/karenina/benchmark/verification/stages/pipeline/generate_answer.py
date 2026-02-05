@@ -208,7 +208,7 @@ class GenerateAnswerStage(BaseVerificationStage):
                 )
 
                 # Run the agent
-                result = answering_agent.run_sync(
+                result = answering_agent.run(
                     messages=adapter_messages,
                     mcp_servers=mcp_servers,
                     config=agent_config,

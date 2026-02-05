@@ -387,8 +387,8 @@ class TestGetAgent:
 
         # Verify it raises ManualInterfaceError when invoked
         with pytest.raises(ManualInterfaceError) as exc_info:
-            agent.run_sync([])
-        assert "agent.run_sync()" in str(exc_info.value)
+            agent.run([])
+        assert "agent.run()" in str(exc_info.value)
 
     def test_get_agent_claude_sdk_fallback_to_langchain(self, claude_sdk_model_config: Any) -> None:
         """Test get_agent falls back to LangChain when Claude SDK unavailable."""

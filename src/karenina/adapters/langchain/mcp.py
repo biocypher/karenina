@@ -8,7 +8,7 @@ see karenina.utils.mcp.
 
 Example:
     >>> mcp_urls = {"biocontext": "https://mcp.biocontext.ai/mcp/"}
-    >>> client, tools = await create_mcp_client_and_tools(mcp_urls)
+    >>> client, tools = await acreate_mcp_client_and_tools(mcp_urls)
     >>> # tools are LangChain Tool objects ready for agent use
     >>> print(f"Loaded {len(tools)} tools")
 """
@@ -27,14 +27,15 @@ logger = logging.getLogger(__name__)
 
 # Re-export for backward compatibility
 __all__ = [
+    "acreate_mcp_client_and_tools",
     "create_mcp_client_and_tools",
-    "sync_create_mcp_client_and_tools",
+    "sync_create_mcp_client_and_tools",  # Deprecated: use create_mcp_client_and_tools
     "cleanup_mcp_client",
     "apply_tool_description_overrides",
 ]
 
 
-async def create_mcp_client_and_tools(
+async def acreate_mcp_client_and_tools(
     mcp_urls_dict: dict[str, str],
     tool_filter: list[str] | None = None,
     tool_description_overrides: dict[str, str] | None = None,
@@ -64,7 +65,7 @@ async def create_mcp_client_and_tools(
 
     Example:
         >>> mcp_urls = {"biocontext": "https://mcp.biocontext.ai/mcp/"}
-        >>> client, tools = await create_mcp_client_and_tools(mcp_urls)
+        >>> client, tools = await acreate_mcp_client_and_tools(mcp_urls)
         >>> print(f"Loaded {len(tools)} tools")
 
         >>> # Filter to specific tools
@@ -117,7 +118,7 @@ async def create_mcp_client_and_tools(
         raise McpClientError(f"Failed to create MCP client or fetch tools: {e}") from e
 
 
-def sync_create_mcp_client_and_tools(
+def create_mcp_client_and_tools(
     mcp_urls_dict: dict[str, str],
     tool_filter: list[str] | None = None,
     tool_description_overrides: dict[str, str] | None = None,
@@ -138,7 +139,7 @@ def sync_create_mcp_client_and_tools(
         Tuple of (client, tools) as in create_mcp_client_and_tools
 
     Raises:
-        Same exceptions as create_mcp_client_and_tools
+        Same exceptions as acreate_mcp_client_and_tools
     """
     from typing import cast
 
@@ -149,7 +150,7 @@ def sync_create_mcp_client_and_tools(
         portal = get_async_portal()
         if portal is not None:
             portal_result = portal.call(
-                create_mcp_client_and_tools, mcp_urls_dict, tool_filter, tool_description_overrides
+                acreate_mcp_client_and_tools, mcp_urls_dict, tool_filter, tool_description_overrides
             )
             return cast(tuple[Any, list[Any]], portal_result)
     except ImportError:
@@ -161,7 +162,7 @@ def sync_create_mcp_client_and_tools(
 
         # Use ThreadPoolExecutor to avoid nested event loop issues
         def run_in_thread() -> tuple[Any, list[Any]]:
-            return asyncio.run(create_mcp_client_and_tools(mcp_urls_dict, tool_filter, tool_description_overrides))
+            return asyncio.run(acreate_mcp_client_and_tools(mcp_urls_dict, tool_filter, tool_description_overrides))
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future = executor.submit(run_in_thread)
@@ -177,7 +178,23 @@ def sync_create_mcp_client_and_tools(
         pass
 
     # Create new event loop and run the async function
-    return asyncio.run(create_mcp_client_and_tools(mcp_urls_dict, tool_filter, tool_description_overrides))
+    return asyncio.run(acreate_mcp_client_and_tools(mcp_urls_dict, tool_filter, tool_description_overrides))
+
+
+def sync_create_mcp_client_and_tools(
+    mcp_urls_dict: dict[str, str],
+    tool_filter: list[str] | None = None,
+    tool_description_overrides: dict[str, str] | None = None,
+) -> tuple[Any, list[Any]]:
+    """Deprecated: Use create_mcp_client_and_tools() instead."""
+    import warnings
+
+    warnings.warn(
+        "sync_create_mcp_client_and_tools is deprecated, use create_mcp_client_and_tools instead",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return create_mcp_client_and_tools(mcp_urls_dict, tool_filter, tool_description_overrides)
 
 
 def cleanup_mcp_client(client: Any) -> None:
@@ -190,7 +207,7 @@ def cleanup_mcp_client(client: Any) -> None:
         client: MCP client instance (MultiServerMCPClient or similar)
 
     Example:
-        >>> client, tools = sync_create_mcp_client_and_tools(mcp_urls)
+        >>> client, tools = create_mcp_client_and_tools(mcp_urls)
         >>> # ... use client ...
         >>> cleanup_mcp_client(client)
     """

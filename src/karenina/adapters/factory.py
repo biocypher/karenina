@@ -32,7 +32,7 @@ Example:
     >>>
     >>> # Use them (check interface before using for manual)
     >>> if config.interface != "manual":
-    ...     result = await agent.run(messages=[Message.user("Hello!")])
+    ...     result = await agent.arun(messages=[Message.user("Hello!")])
 """
 
 from __future__ import annotations
@@ -234,7 +234,7 @@ def get_agent(
         ... )
         >>> agent = get_agent(config)
         >>> if config.interface != "manual":
-        ...     result = await agent.run(
+        ...     result = await agent.arun(
         ...         messages=[Message.user("What files are in /tmp?")],
         ...         mcp_servers={"filesystem": {"type": "http", "url": "http://localhost:8080"}}
         ...     )

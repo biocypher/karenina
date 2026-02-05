@@ -540,9 +540,9 @@ def _prompt_for_model(model_type: str, mode: str = "basic") -> ModelConfig:
                 # Validate this server immediately
                 console.print(f"\n[cyan]Validating MCP server '{server_name}'...[/cyan]")
                 try:
-                    from karenina.utils.mcp import sync_fetch_tool_descriptions
+                    from karenina.utils.mcp import fetch_tool_descriptions
 
-                    tool_descriptions = sync_fetch_tool_descriptions({server_name: server_url})
+                    tool_descriptions = fetch_tool_descriptions({server_name: server_url})
 
                     if tool_descriptions:
                         console.print(f"[green]✓ Successfully connected to '{server_name}'[/green]")
@@ -584,9 +584,9 @@ def _prompt_for_model(model_type: str, mode: str = "basic") -> ModelConfig:
 
                 # Validate tool filter if we have tools
                 try:
-                    from karenina.utils.mcp import sync_fetch_tool_descriptions
+                    from karenina.utils.mcp import fetch_tool_descriptions
 
-                    all_tool_descriptions = sync_fetch_tool_descriptions(mcp_urls_dict, tool_filter=mcp_tool_filter)
+                    all_tool_descriptions = fetch_tool_descriptions(mcp_urls_dict, tool_filter=mcp_tool_filter)
                     available_tool_names = list(all_tool_descriptions.keys())
 
                     if not all_tool_descriptions:
