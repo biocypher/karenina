@@ -1,5 +1,6 @@
 """Results management functionality for benchmarks."""
 
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -10,6 +11,8 @@ if TYPE_CHECKING:
 
 from ...schemas.workflow import VerificationResult
 from .results_io import ResultsIOHandler
+
+logger = logging.getLogger(__name__)
 
 
 class ResultsManager:
@@ -274,6 +277,7 @@ class ResultsManager:
                             latest_timestamp = timestamp
                             latest_run = run_name
                 except (ValueError, IndexError):
+                    logger.debug("Could not parse timestamp from run name %s", run_name)
                     continue
 
         # If we couldn't parse timestamps, just get the last one alphabetically

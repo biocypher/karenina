@@ -1,6 +1,7 @@
 """Base benchmark management functionality."""
 
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,8 @@ from ...utils.checkpoint import (
     extract_questions_from_benchmark,
     validate_jsonld_benchmark,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class BenchmarkBase:

@@ -3,6 +3,7 @@
 Main entry point for running verification using the stage-based pipeline architecture.
 """
 
+import logging
 from typing import Any
 
 from ...schemas.domain import Rubric
@@ -10,6 +11,8 @@ from ...schemas.verification import PromptConfig
 from ...schemas.workflow import ModelConfig, VerificationResult
 from ...utils.checkpoint import generate_template_id
 from .stages import StageOrchestrator, VerificationContext
+
+logger = logging.getLogger(__name__)
 
 
 def run_single_model_verification(

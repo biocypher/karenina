@@ -5,9 +5,12 @@ searching, and aggregation operations on questions, extracted from QuestionManag
 to follow single responsibility principle.
 """
 
+import logging
 import re
 from collections import Counter
 from typing import TYPE_CHECKING, Any
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from .base import BenchmarkBase
@@ -119,7 +122,7 @@ class QuestionQueryBuilder:
                     if not custom_filter(q_data):
                         continue
                 except Exception:
-                    # If custom filter raises exception, skip this question
+                    logger.debug("Custom filter raised exception for question, skipping", exc_info=True)
                     continue
 
             results.append(q_data)
@@ -415,6 +418,7 @@ class QuestionQueryBuilder:
                 try:
                     return bool(re.search(value, field_value, re.IGNORECASE))
                 except re.error:
+                    logger.debug("Invalid regex pattern in filter: %s", value)
                     return False
             return False
         else:
@@ -457,6 +461,7 @@ class QuestionQueryBuilder:
                     flags = 0 if case_sensitive else re.IGNORECASE
                     match = bool(re.search(q, combined_text, flags))
                 except re.error:
+                    logger.debug("Invalid regex pattern in search: %s", q)
                     match = False
             else:
                 match = q in combined_text

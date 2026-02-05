@@ -7,6 +7,7 @@ are delegated to QuestionQueryBuilder for single responsibility.
 
 import ast
 import inspect
+import logging
 from collections.abc import Iterator
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Union
@@ -17,6 +18,8 @@ if TYPE_CHECKING:
 
 from ...utils.checkpoint import add_question_to_benchmark
 from .question_query import QuestionQueryBuilder
+
+logger = logging.getLogger(__name__)
 
 # Sentinel value to detect if finished parameter was explicitly provided
 _NOT_PROVIDED = object()
@@ -53,6 +56,11 @@ def _rename_answer_class_to_standard(source_code: str, original_class_name: str)
     except Exception:
         # If AST parsing fails, fall back to simple string replacement
         # This is a safety net but should rarely be needed
+        logger.debug(
+            "AST parsing failed for class rename %s -> Answer, falling back to string replacement",
+            original_class_name,
+            exc_info=True,
+        )
         return source_code.replace(f"class {original_class_name}(", "class Answer(")
 
 

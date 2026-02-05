@@ -2,6 +2,7 @@
 
 import csv
 import json
+import logging
 from io import StringIO
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -10,6 +11,8 @@ if TYPE_CHECKING:
     from ...schemas.domain import Rubric
 
 from ...schemas.workflow import VerificationResult
+
+logger = logging.getLogger(__name__)
 
 
 class ResultsIOHandler:
@@ -252,7 +255,7 @@ class ResultsIOHandler:
                     try:
                         results[result_key] = VerificationResult(**item_copy)
                     except Exception:
-                        # Skip malformed items
+                        logger.warning("Skipping malformed JSON item at key %s", result_key, exc_info=True)
                         continue
         elif isinstance(data, dict):
             # Handle server format with metadata wrapper
@@ -264,7 +267,7 @@ class ResultsIOHandler:
                     try:
                         results[result_key] = VerificationResult(**result_data)
                     except Exception:
-                        # Skip malformed results
+                        logger.warning("Skipping malformed result at key %s", result_key, exc_info=True)
                         continue
 
         return results
@@ -291,7 +294,7 @@ class ResultsIOHandler:
                     try:
                         results[result_key] = VerificationResult(**processed_row)
                     except Exception:
-                        # Skip malformed rows
+                        logger.warning("Skipping malformed CSV row at key %s", result_key, exc_info=True)
                         continue
 
         return results
@@ -328,6 +331,7 @@ class ResultsIOHandler:
                     else:
                         verify_rubric[trait_name] = value  # type: ignore[assignment]
                 except (ValueError, AttributeError):
+                    logger.debug("Could not convert rubric trait value for %s, using raw value", trait_name)
                     verify_rubric[trait_name] = value  # type: ignore[assignment]
 
         # Extract question-specific rubrics from JSON column
@@ -337,7 +341,7 @@ class ResultsIOHandler:
                 if isinstance(question_specific, dict):
                     verify_rubric.update(question_specific)
             except json.JSONDecodeError:
-                pass
+                logger.debug("Could not parse question_specific_rubrics JSON for row")
 
         # Convert JSON strings back to objects
         processed_row: dict[str, Any] = {}
@@ -357,11 +361,13 @@ class ResultsIOHandler:
                 try:
                     processed_row[field] = json.loads(value)
                 except (json.JSONDecodeError, TypeError):
+                    logger.debug("Could not parse JSON for field %s, using raw value", field)
                     processed_row[field] = value
             elif field == "execution_time" and value:
                 try:
                     processed_row[field] = float(value)
                 except ValueError:
+                    logger.debug("Could not parse execution_time '%s', defaulting to 0.0", value)
                     processed_row[field] = 0.0
             elif field == "success" and value:
                 # Handle "abstained" status as True (since abstention overrides are successful responses)

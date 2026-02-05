@@ -8,6 +8,7 @@ while maintaining 100% backward compatibility.
 """
 
 import json
+import logging
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Union
@@ -36,6 +37,8 @@ from .core import (
     VerificationManager,
 )
 from .core.questions import _NOT_PROVIDED
+
+logger = logging.getLogger(__name__)
 
 
 class Benchmark:
@@ -539,6 +542,7 @@ class Benchmark:
             }
 
         except Exception as e:
+            logger.warning("Template generation failed for question %s: %s", question_id, e, exc_info=True)
             return {
                 "success": False,
                 "template_code": "",
@@ -725,6 +729,7 @@ class Benchmark:
                 self.add_answer_template(question_id, template_code)
                 results[question_id] = True
             except Exception:
+                logger.warning("Failed to import template for question %s", question_id, exc_info=True)
                 results[question_id] = False
 
         return results
