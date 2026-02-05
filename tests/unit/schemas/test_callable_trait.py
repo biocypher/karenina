@@ -1041,14 +1041,13 @@ def test_callable_trait_invert_result_preserved() -> None:
 
 
 # =============================================================================
-# Legacy Defaults Tests
+# Default Value Tests
 # =============================================================================
 
 
 @pytest.mark.unit
-def test_callable_trait_legacy_default_higher_is_better() -> None:
-    """Test legacy data gets higher_is_better=True default."""
-    # When loading from dict with None or missing higher_is_better
+def test_callable_trait_higher_is_better_none_defaults_to_true() -> None:
+    """Test that higher_is_better=None defaults to True (old checkpoint data)."""
     trait = CallableTrait(
         name="test",
         kind="boolean",
@@ -1056,5 +1055,4 @@ def test_callable_trait_legacy_default_higher_is_better() -> None:
         higher_is_better=None,
     )
 
-    # Should default to True for legacy compatibility
     assert trait.higher_is_better is True

@@ -648,19 +648,17 @@ def test_regex_trait_pattern_types(name: str, pattern: str, match_text: str, no_
 
 
 # =============================================================================
-# Legacy Defaults Tests
+# Default Value Tests
 # =============================================================================
 
 
 @pytest.mark.unit
-def test_regex_trait_legacy_default_higher_is_better() -> None:
-    """Test legacy data gets higher_is_better=True default."""
-    # When loading from dict with None or missing higher_is_better
+def test_regex_trait_higher_is_better_none_defaults_to_true() -> None:
+    """Test that higher_is_better=None defaults to True (old checkpoint data)."""
     trait = RegexTrait(
         name="test",
         pattern=r"\w+",
         higher_is_better=None,
     )
 
-    # Should default to True for legacy compatibility
     assert trait.higher_is_better is True

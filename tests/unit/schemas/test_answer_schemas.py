@@ -213,13 +213,12 @@ def test_llm_rubric_trait_deep_judgment_fields() -> None:
 
 @pytest.mark.unit
 def test_llm_rubric_trait_default_higher_is_better() -> None:
-    """Test that higher_is_better defaults to True for legacy data."""
-    # Using model_validate to simulate loading from dict
+    """Test that higher_is_better defaults to True when None or missing."""
     trait = LLMRubricTrait.model_validate(
         {
             "name": "test",
             "kind": "boolean",
-            "higher_is_better": None,  # Legacy: missing or None
+            "higher_is_better": None,
         }
     )
 
