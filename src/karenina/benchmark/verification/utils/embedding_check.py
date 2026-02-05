@@ -9,6 +9,7 @@ from typing import Any
 
 from ....adapters.factory import get_llm
 from ....ports.messages import Message
+from ....schemas.verification.config import DEFAULT_EMBEDDING_MODEL, DEFAULT_EMBEDDING_THRESHOLD
 from ....schemas.workflow import ModelConfig
 
 logger = logging.getLogger(__name__)
@@ -118,7 +119,7 @@ def _get_embedding_model_name() -> str:
     Returns:
         The embedding model name to use
     """
-    return os.getenv("EMBEDDING_CHECK_MODEL", "all-MiniLM-L6-v2")
+    return os.getenv("EMBEDDING_CHECK_MODEL", DEFAULT_EMBEDDING_MODEL)
 
 
 def _get_embedding_threshold() -> float:
@@ -129,10 +130,10 @@ def _get_embedding_threshold() -> float:
         The similarity threshold (0.0 to 1.0)
     """
     try:
-        threshold = float(os.getenv("EMBEDDING_CHECK_THRESHOLD", "0.85"))
+        threshold = float(os.getenv("EMBEDDING_CHECK_THRESHOLD", str(DEFAULT_EMBEDDING_THRESHOLD)))
         return max(0.0, min(1.0, threshold))  # Clamp between 0 and 1
     except ValueError:
-        return 0.85  # Default fallback
+        return DEFAULT_EMBEDDING_THRESHOLD  # Default fallback
 
 
 def _convert_to_comparable_string(data: dict[str, Any] | None) -> str:

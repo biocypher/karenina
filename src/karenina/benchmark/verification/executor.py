@@ -25,6 +25,7 @@ from anyio.from_thread import start_blocking_portal
 if TYPE_CHECKING:
     from anyio.from_thread import BlockingPortal
 
+from ...schemas.verification.config import DEFAULT_ASYNC_MAX_WORKERS
 from ...schemas.workflow import VerificationResult
 from ...utils.answer_cache import AnswerTraceCache
 
@@ -72,7 +73,7 @@ class ExecutorConfig:
         retry_wait_seconds: Seconds to wait for IN_PROGRESS cache entries (default: 5.0)
     """
 
-    max_workers: int = 2
+    max_workers: int = DEFAULT_ASYNC_MAX_WORKERS
     enable_cache: bool = True
     retry_wait_seconds: float = 5.0
 
@@ -355,4 +356,4 @@ def get_default_max_workers() -> int:
     Returns:
         Max workers value from KARENINA_ASYNC_MAX_WORKERS env var or 2
     """
-    return int(os.getenv("KARENINA_ASYNC_MAX_WORKERS", "2"))
+    return int(os.getenv("KARENINA_ASYNC_MAX_WORKERS", str(DEFAULT_ASYNC_MAX_WORKERS)))

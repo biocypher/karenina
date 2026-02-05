@@ -8,7 +8,15 @@ This module re-exports all verification-related classes for backward compatibili
 # Re-export from new location for backward compatibility
 from ...verification import (
     DEFAULT_ANSWERING_SYSTEM_PROMPT,
+    DEFAULT_ASYNC_ENABLED,
+    DEFAULT_ASYNC_MAX_WORKERS,
+    DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
+    DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS,
+    DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS,
+    DEFAULT_EMBEDDING_MODEL,
+    DEFAULT_EMBEDDING_THRESHOLD,
     DEFAULT_PARSING_SYSTEM_PROMPT,
+    DEFAULT_RUBRIC_MAX_EXCERPTS,
     DeepJudgmentTraitConfig,
     FinishedTemplate,
     VerificationConfig,
@@ -33,7 +41,15 @@ from ...verification import (
 __all__ = [
     # Constants
     "DEFAULT_ANSWERING_SYSTEM_PROMPT",
+    "DEFAULT_ASYNC_ENABLED",
+    "DEFAULT_ASYNC_MAX_WORKERS",
+    "DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD",
+    "DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS",
+    "DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS",
+    "DEFAULT_EMBEDDING_MODEL",
+    "DEFAULT_EMBEDDING_THRESHOLD",
     "DEFAULT_PARSING_SYSTEM_PROMPT",
+    "DEFAULT_RUBRIC_MAX_EXCERPTS",
     # Configuration
     "VerificationConfig",
     "DeepJudgmentTraitConfig",

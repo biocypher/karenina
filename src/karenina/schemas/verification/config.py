@@ -30,6 +30,22 @@ DEFAULT_PARSING_SYSTEM_PROMPT = (
     "You are a validation assistant. Parse and validate responses against the given Pydantic template."
 )
 
+# Default embedding check settings
+DEFAULT_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+DEFAULT_EMBEDDING_THRESHOLD = 0.85
+
+# Default async execution settings
+DEFAULT_ASYNC_ENABLED = True
+DEFAULT_ASYNC_MAX_WORKERS = 2
+
+# Default deep-judgment settings
+DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS = 3
+DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD = 0.80
+DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS = 2
+
+# Default deep-judgment rubric settings
+DEFAULT_RUBRIC_MAX_EXCERPTS = 7
+
 
 class DeepJudgmentTraitConfig(BaseModel):
     """
@@ -90,18 +106,18 @@ class VerificationConfig(BaseModel):
 
     # Embedding check settings (semantic similarity fallback)
     embedding_check_enabled: bool = False  # Enable semantic similarity fallback
-    embedding_check_model: str = "all-MiniLM-L6-v2"  # SentenceTransformer model for embeddings
-    embedding_check_threshold: float = 0.85  # Similarity threshold (0.0-1.0)
+    embedding_check_model: str = DEFAULT_EMBEDDING_MODEL  # SentenceTransformer model for embeddings
+    embedding_check_threshold: float = DEFAULT_EMBEDDING_THRESHOLD  # Similarity threshold (0.0-1.0)
 
     # Async execution settings
-    async_enabled: bool = True  # Enable parallel execution
-    async_max_workers: int = 2  # Number of parallel workers
+    async_enabled: bool = DEFAULT_ASYNC_ENABLED  # Enable parallel execution
+    async_max_workers: int = DEFAULT_ASYNC_MAX_WORKERS  # Number of parallel workers
 
     # Deep-judgment settings (multi-stage parsing with excerpts and reasoning)
     deep_judgment_enabled: bool = False  # Enable deep-judgment analysis (default: disabled)
-    deep_judgment_max_excerpts_per_attribute: int = 3  # Max excerpts to extract per attribute
-    deep_judgment_fuzzy_match_threshold: float = 0.80  # Similarity threshold for excerpt validation
-    deep_judgment_excerpt_retry_attempts: int = 2  # Additional retry attempts for excerpt validation
+    deep_judgment_max_excerpts_per_attribute: int = DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS  # Max excerpts per attribute
+    deep_judgment_fuzzy_match_threshold: float = DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD  # Similarity threshold
+    deep_judgment_excerpt_retry_attempts: int = DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS  # Retry attempts
 
     # Search-enhanced deep-judgment settings (validate excerpts against external evidence)
     deep_judgment_search_enabled: bool = False  # Enable search validation for excerpts
@@ -111,9 +127,9 @@ class VerificationConfig(BaseModel):
     # Examples: langchain tools, MCP tools, custom functions
 
     # Deep-judgment rubric settings (global defaults for per-trait configuration)
-    deep_judgment_rubric_max_excerpts_default: int = 7  # Default max excerpts per trait (higher than templates)
-    deep_judgment_rubric_fuzzy_match_threshold_default: float = 0.80  # Default fuzzy match threshold for traits
-    deep_judgment_rubric_excerpt_retry_attempts_default: int = 2  # Default retry attempts for trait excerpts
+    deep_judgment_rubric_max_excerpts_default: int = DEFAULT_RUBRIC_MAX_EXCERPTS  # Max excerpts per trait
+    deep_judgment_rubric_fuzzy_match_threshold_default: float = DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD  # Fuzzy match
+    deep_judgment_rubric_excerpt_retry_attempts_default: int = DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS  # Retry attempts
     deep_judgment_rubric_search_tool: str | Callable[..., Any] = (
         "tavily"  # Search tool for rubric hallucination detection
     )
@@ -168,7 +184,7 @@ class VerificationConfig(BaseModel):
             env_val = os.getenv("EMBEDDING_CHECK_MODEL")
             if env_val is not None:
                 data["embedding_check_model"] = env_val
-            # else: let Pydantic use field default ("all-MiniLM-L6-v2")
+            # else: let Pydantic use field default (DEFAULT_EMBEDDING_MODEL)
 
         if "embedding_check_threshold" not in data:
             env_val = os.getenv("EMBEDDING_CHECK_THRESHOLD")
@@ -176,14 +192,14 @@ class VerificationConfig(BaseModel):
                 # Invalid env var value will let Pydantic use field default (0.85)
                 with contextlib.suppress(ValueError):
                     data["embedding_check_threshold"] = float(env_val)
-            # else: let Pydantic use field default (0.85)
+            # else: let Pydantic use field default (DEFAULT_EMBEDDING_THRESHOLD)
 
         # Read environment variables for async execution settings (only if not explicitly provided AND env var is set)
         if "async_enabled" not in data:
             env_val = os.getenv("KARENINA_ASYNC_ENABLED")
             if env_val is not None:
                 data["async_enabled"] = env_val.lower() in ("true", "1", "yes")
-            # else: let Pydantic use field default (True)
+            # else: let Pydantic use field default (DEFAULT_ASYNC_ENABLED)
 
         if "async_max_workers" not in data:
             env_val = os.getenv("KARENINA_ASYNC_MAX_WORKERS")
@@ -191,7 +207,7 @@ class VerificationConfig(BaseModel):
                 # Invalid env var value will let Pydantic use field default (2)
                 with contextlib.suppress(ValueError):
                     data["async_max_workers"] = int(env_val)
-            # else: let Pydantic use field default (2)
+            # else: let Pydantic use field default (DEFAULT_ASYNC_MAX_WORKERS)
 
         # If legacy single model fields are provided, convert to arrays
         if "answering_models" not in data and any(k.startswith("answering_") for k in data):

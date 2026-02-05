@@ -16,6 +16,13 @@ from rich.console import Console
 from karenina.benchmark import Benchmark
 from karenina.benchmark.verification.batch_runner import generate_task_queue
 from karenina.schemas import FinishedTemplate, VerificationConfig, VerificationResultSet
+from karenina.schemas.verification.config import (
+    DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
+    DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS,
+    DEFAULT_EMBEDDING_MODEL,
+    DEFAULT_EMBEDDING_THRESHOLD,
+    DEFAULT_RUBRIC_MAX_EXCERPTS,
+)
 from karenina.utils.progressive_save import ProgressiveSaveManager, TaskIdentifier, generate_task_manifest
 
 from .utils import cli_error, filter_templates_by_indices, parse_question_indices, validate_output_path
@@ -236,13 +243,13 @@ def verify(
     ] = True,
     deep_judgment_rubric_max_excerpts: Annotated[
         int, typer.Option(help="Max excerpts per rubric trait (enable_all mode)")
-    ] = 7,
+    ] = DEFAULT_RUBRIC_MAX_EXCERPTS,
     deep_judgment_rubric_fuzzy_threshold: Annotated[
         float, typer.Option(help="Fuzzy match threshold for rubric excerpts (0.0-1.0)")
-    ] = 0.80,
+    ] = DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
     deep_judgment_rubric_retry_attempts: Annotated[
         int, typer.Option(help="Retry attempts for rubric excerpt extraction")
-    ] = 2,
+    ] = DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS,
     deep_judgment_rubric_search: Annotated[
         bool, typer.Option("--deep-judgment-rubric-search", help="Enable search validation for rubric excerpts")
     ] = False,
@@ -271,8 +278,10 @@ def verify(
     evaluation_mode: Annotated[
         str, typer.Option(help="Evaluation mode (template_only/template_and_rubric/rubric_only)")
     ] = "template_only",
-    embedding_threshold: Annotated[float, typer.Option(help="Embedding similarity threshold (0.0-1.0)")] = 0.85,
-    embedding_model: Annotated[str, typer.Option(help="Embedding model name")] = "all-MiniLM-L6-v2",
+    embedding_threshold: Annotated[
+        float, typer.Option(help="Embedding similarity threshold (0.0-1.0)")
+    ] = DEFAULT_EMBEDDING_THRESHOLD,
+    embedding_model: Annotated[str, typer.Option(help="Embedding model name")] = DEFAULT_EMBEDDING_MODEL,
     no_async: Annotated[bool, typer.Option("--no-async", help="Disable async execution")] = False,
     async_workers: Annotated[
         int | None, typer.Option(help="Number of async workers (default: 2 or KARENINA_ASYNC_MAX_WORKERS)")
