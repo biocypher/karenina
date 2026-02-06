@@ -2,6 +2,8 @@
 
 Karenina is a Python framework for defining, running, and analyzing LLM benchmarks in a rigorous and reproducible way. It enables systematic evaluation of language model performance through structured, verifiable testing — combining code-based answer templates for correctness checking with rubric traits for quality assessment.
 
+**New here?** Start with the **[Quick Start](quickstart.md)** — a hands-on walkthrough that takes you from zero to a working benchmark in minutes.
+
 ---
 
 ## Reading Paths
