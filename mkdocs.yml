@@ -11,6 +11,7 @@ theme:
   name: material
   features:
     - navigation.tabs
+    - navigation.indexes
     - navigation.sections
     - navigation.expand
     - navigation.path
@@ -115,6 +116,7 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Getting Started:
+    - getting-started.md
     - Introduction:
       - Overview: notebooks/01-introduction-index.ipynb
       - Philosophy: 01-introduction/philosophy.md
@@ -127,7 +129,7 @@ nav:
       - Presets: 03-configuration/presets.md
       - Workspace Init: 03-configuration/workspace-init.md
   - Core Concepts:
-    - Overview: 04-core-concepts/index.md
+    - core-concepts.md
     - Checkpoints: 04-core-concepts/checkpoints.md
     - Answer Templates: notebooks/04-core-concepts-answer-templates.ipynb
     - Rubrics:
@@ -144,6 +146,7 @@ nav:
     - Adele: 04-core-concepts/adele.md
     - Few-Shot: 04-core-concepts/few-shot.md
   - Workflows:
+    - workflows.md
     - Creating Benchmarks:
       - Overview: 05-creating-benchmarks/index.md
       - Creating a Checkpoint: notebooks/05-creating-benchmarks-creating-checkpoint.ipynb
@@ -174,6 +177,7 @@ nav:
       - Exporting: 07-analyzing-results/exporting.md
       - Iterating: 07-analyzing-results/iterating.md
   - Reference:
+    - reference.md
     - CLI Reference:
       - Overview: 09-cli-reference/index.md
       - verify: 09-cli-reference/verify.md
@@ -190,6 +194,7 @@ nav:
       - PromptConfig: 10-configuration-reference/prompt-config.md
       - Preset Schema: 10-configuration-reference/preset-schema.md
   - Advanced:
+    - advanced.md
     - Pipeline:
       - Overview: 11-advanced-pipeline/index.md
       - Stages: 11-advanced-pipeline/stages.md
@@ -203,7 +208,11 @@ nav:
       - Available Adapters: 12-advanced-adapters/available-adapters.md
       - MCP Integration: 12-advanced-adapters/mcp-integration.md
       - Writing Adapters: 12-advanced-adapters/writing-adapters.md
-  - Contributing: 13-contributing/index.md
+  - Contributing:
+    - contributing.md
+
+extra_css:
+  - stylesheets/extra.css
 
 extra:
   social:
