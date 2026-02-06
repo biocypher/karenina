@@ -20,8 +20,9 @@ This page covers practical patterns for writing templates by hand. For the conce
 ```python tags=["hide-cell"]
 # Setup cell: ensures examples execute without live API keys.
 # This cell is hidden in rendered documentation.
-from karenina.schemas.entities import BaseAnswer
 from pydantic import Field
+
+from karenina.schemas.entities import BaseAnswer
 ```
 
 ## When to Write Custom Templates

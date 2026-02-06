@@ -27,14 +27,14 @@ import datetime
 import os
 from unittest.mock import patch
 
+from karenina.schemas.results import VerificationResultSet
 from karenina.schemas.verification import VerificationConfig, VerificationResult
+from karenina.schemas.verification.model_identity import ModelIdentity
 from karenina.schemas.verification.result_components import (
     VerificationResultMetadata,
-    VerificationResultTemplate,
     VerificationResultRubric,
+    VerificationResultTemplate,
 )
-from karenina.schemas.verification.model_identity import ModelIdentity
-from karenina.schemas.results import VerificationResultSet
 
 # Change to notebooks directory so test_checkpoint.jsonld is found
 os.chdir(os.path.dirname(os.path.abspath("__file__")))
@@ -61,7 +61,7 @@ def _mock_run_verification(self, config, question_ids=None, **kwargs):
                 break
         answering = ModelIdentity(model_name="gpt-4o", interface="langchain")
         parsing = ModelIdentity(model_name="gpt-4o", interface="langchain")
-        ts = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
+        ts = datetime.datetime.now(tz=datetime.UTC).isoformat()
         result_id = VerificationResultMetadata.compute_result_id(
             qid, answering, parsing, ts
         )

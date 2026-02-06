@@ -44,8 +44,9 @@ Every template inherits from `BaseAnswer` and must be named `Answer`. A template
 Here is a simple template that checks whether an LLM correctly identified a drug target:
 
 ```python
-from karenina.schemas.entities import BaseAnswer
 from pydantic import Field
+
+from karenina.schemas.entities import BaseAnswer
 
 
 class Answer(BaseAnswer):

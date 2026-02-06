@@ -22,20 +22,20 @@ for filtering, grouping, aggregation, and visualization.
 # This cell is hidden in the rendered documentation.
 import datetime
 
+from karenina.schemas.results import VerificationResultSet
 from karenina.schemas.verification import VerificationResult
+from karenina.schemas.verification.model_identity import ModelIdentity
 from karenina.schemas.verification.result_components import (
     VerificationResultMetadata,
     VerificationResultRubric,
     VerificationResultTemplate,
 )
-from karenina.schemas.verification.model_identity import ModelIdentity
-from karenina.schemas.results import VerificationResultSet
 
 # Build mock results representing a verification run with template + rubric evaluation
 _answering_gpt4o = ModelIdentity(model_name="gpt-4o", interface="langchain")
 _answering_claude = ModelIdentity(model_name="claude-sonnet-4-20250514", interface="claude_agent_sdk")
 _parsing = ModelIdentity(model_name="gpt-4o-mini", interface="langchain")
-_ts = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
+_ts = datetime.datetime.now(tz=datetime.UTC).isoformat()
 
 
 def _make_result(
@@ -305,8 +305,6 @@ print(f"Rubric DataFrame columns: {len(df.columns)}")
 Compare template pass rates and rubric scores across models using pandas:
 
 ```python
-import pandas as pd
-
 # Template pass rates by model
 template_df = results.get_template_results().to_dataframe()
 model_pass = (
@@ -338,7 +336,9 @@ print(question_pass.to_string())
 
 ```python
 # Export template results to CSV
-import tempfile, os
+import os
+import tempfile
+
 with tempfile.NamedTemporaryFile(suffix=".csv", delete=False, mode="w") as f:
     template_df.to_csv(f.name, index=False)
     print(f"Exported {len(template_df)} rows to CSV")

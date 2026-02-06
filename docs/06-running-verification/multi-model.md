@@ -25,13 +25,13 @@ import datetime
 import os
 from unittest.mock import patch
 
+from karenina.schemas.results import VerificationResultSet
 from karenina.schemas.verification import VerificationConfig, VerificationResult
+from karenina.schemas.verification.model_identity import ModelIdentity
 from karenina.schemas.verification.result_components import (
     VerificationResultMetadata,
     VerificationResultTemplate,
 )
-from karenina.schemas.verification.model_identity import ModelIdentity
-from karenina.schemas.results import VerificationResultSet
 
 os.chdir(os.path.dirname(os.path.abspath("__file__")))
 
@@ -94,7 +94,7 @@ def _mock_run_verification(self, config, question_ids=None, **kwargs):
                     answering=answering,
                     parsing=parsing,
                     execution_time=1.2,
-                    timestamp=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    timestamp=datetime.datetime.now(datetime.UTC).isoformat(),
                     result_id=f"mock-{qid[:8]}-{model_name[:4]}-{parse_model.model_name[:4]}",
                     run_name=kwargs.get("run_name"),
                 )
