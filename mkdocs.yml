@@ -116,7 +116,7 @@ nav:
   - Home: index.md
   - Getting Started:
     - Introduction:
-      - Overview: 01-introduction/index.md
+      - Overview: notebooks/01-introduction-index.ipynb
       - Philosophy: 01-introduction/philosophy.md
       - Templates vs Rubrics: 01-introduction/template-vs-rubric.md
     - Installation: 02-installation/index.md
@@ -128,14 +128,14 @@ nav:
   - Core Concepts:
     - Overview: 04-core-concepts/index.md
     - Checkpoints: 04-core-concepts/checkpoints.md
-    - Answer Templates: 04-core-concepts/answer-templates.md
+    - Answer Templates: notebooks/04-core-concepts-answer-templates.ipynb
     - Rubrics:
       - Overview: 04-core-concepts/rubrics/index.md
-      - LLM Traits: 04-core-concepts/rubrics/llm-traits.md
-      - Literal Traits: 04-core-concepts/rubrics/literal-traits.md
-      - Regex Traits: 04-core-concepts/rubrics/regex-traits.md
-      - Callable Traits: 04-core-concepts/rubrics/callable-traits.md
-      - Metric Traits: 04-core-concepts/rubrics/metric-traits.md
+      - LLM Traits: notebooks/04-core-concepts-rubrics-llm-traits.ipynb
+      - Literal Traits: notebooks/04-core-concepts-rubrics-literal-traits.ipynb
+      - Regex Traits: notebooks/04-core-concepts-rubrics-regex-traits.ipynb
+      - Callable Traits: notebooks/04-core-concepts-rubrics-callable-traits.ipynb
+      - Metric Traits: notebooks/04-core-concepts-rubrics-metric-traits.ipynb
     - Evaluation Modes: 04-core-concepts/evaluation-modes.md
     - Adapters: 04-core-concepts/adapters.md
     - MCP Overview: 04-core-concepts/mcp-overview.md
@@ -145,31 +145,31 @@ nav:
   - Workflows:
     - Creating Benchmarks:
       - Overview: 05-creating-benchmarks/index.md
-      - Creating a Checkpoint: 05-creating-benchmarks/creating-checkpoint.md
-      - Adding Questions: 05-creating-benchmarks/adding-questions.md
+      - Creating a Checkpoint: notebooks/05-creating-benchmarks-creating-checkpoint.ipynb
+      - Adding Questions: notebooks/05-creating-benchmarks-adding-questions.ipynb
       - Classifying with Adele: 05-creating-benchmarks/classifying-with-adele.md
       - Generating Templates: 05-creating-benchmarks/generating-templates.md
-      - Writing Templates: 05-creating-benchmarks/writing-templates.md
-      - Defining Rubrics: 05-creating-benchmarks/defining-rubrics.md
+      - Writing Templates: notebooks/05-creating-benchmarks-writing-templates.ipynb
+      - Defining Rubrics: notebooks/05-creating-benchmarks-defining-rubrics.ipynb
       - Few-Shot Examples: 05-creating-benchmarks/few-shot-examples.md
-      - Saving Benchmarks: 05-creating-benchmarks/saving-benchmarks.md
+      - Saving Benchmarks: notebooks/05-creating-benchmarks-saving-benchmarks.ipynb
     - Running Verification:
       - Overview: 06-running-verification/index.md
-      - Loading a Benchmark: 06-running-verification/loading-benchmark.md
-      - Verification Config: 06-running-verification/verification-config.md
+      - Loading a Benchmark: notebooks/06-running-verification-loading-benchmark.ipynb
+      - Verification Config: notebooks/06-running-verification-verification-config.ipynb
       - Prompt Config: 06-running-verification/prompt-config.md
       - Response Quality Checks: 06-running-verification/response-quality-checks.md
       - Using Presets: 06-running-verification/using-presets.md
-      - Python API: 06-running-verification/python-api.md
+      - Python API: notebooks/06-running-verification-python-api.ipynb
       - CLI: 06-running-verification/cli.md
       - Manual Interface: 06-running-verification/manual-interface.md
-      - Multi-Model: 06-running-verification/multi-model.md
+      - Multi-Model: notebooks/06-running-verification-multi-model.ipynb
       - MCP Verification: 06-running-verification/mcp-verification.md
       - Database Persistence: 06-running-verification/database-persistence.md
     - Analyzing Results:
       - Overview: 07-analyzing-results/index.md
       - Verification Result: 07-analyzing-results/verification-result.md
-      - DataFrame Analysis: 07-analyzing-results/dataframe-analysis.md
+      - DataFrame Analysis: notebooks/07-analyzing-results-dataframe-analysis.ipynb
       - Exporting: 07-analyzing-results/exporting.md
       - Iterating: 07-analyzing-results/iterating.md
   - Reference:
