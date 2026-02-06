@@ -6,6 +6,7 @@ This section covers the fundamental building blocks of karenina. Each concept ha
 
 | Concept | What It Is | Page |
 |---------|-----------|------|
+| **Templates vs Rubrics** | The two evaluation units: correctness (templates) vs quality (rubrics) | [Templates vs Rubrics](04-core-concepts/template-vs-rubric.md) |
 | **Checkpoints** | JSON-LD files that store benchmarks (questions, templates, rubrics, results) | [Checkpoints](04-core-concepts/checkpoints.md) |
 | **Answer Templates** | Pydantic models that define how a Judge LLM parses and verifies responses | [Answer Templates](04-core-concepts/answer-templates.md) |
 | **Rubrics** | Trait-based evaluation of response quality (LLM, regex, callable, metric) | [Rubrics](04-core-concepts/rubrics/index.md) |
@@ -56,9 +57,9 @@ Choose the path that matches your goal:
 
 ### New User
 
-Read the concepts in order — each builds on the previous:
+Start with the distinction between the two evaluation units, then read the concepts in order:
 
-**[Checkpoints](04-core-concepts/checkpoints.md)** → **[Answer Templates](04-core-concepts/answer-templates.md)** → **[Rubrics](04-core-concepts/rubrics/index.md)** → **[Evaluation Modes](04-core-concepts/evaluation-modes.md)** → **[Adapters](04-core-concepts/adapters.md)**
+**[Templates vs Rubrics](04-core-concepts/template-vs-rubric.md)** → **[Checkpoints](04-core-concepts/checkpoints.md)** → **[Answer Templates](04-core-concepts/answer-templates.md)** → **[Rubrics](04-core-concepts/rubrics/index.md)** → **[Evaluation Modes](04-core-concepts/evaluation-modes.md)** → **[Adapters](04-core-concepts/adapters.md)**
 
 Then proceed to [Creating Benchmarks](05-creating-benchmarks/index.md) and [Running Verification](06-running-verification/index.md) for hands-on workflows.
 
@@ -82,6 +83,12 @@ For architecture internals, see:
 ---
 
 ## Concept Details
+
+### Templates vs Rubrics
+
+Karenina's evaluation rests on two complementary building blocks: **answer templates** verify factual correctness by having a Judge LLM parse responses into structured schemas, while **rubrics** assess response quality through trait evaluators that examine the raw text. Understanding when to use each — and when to use both together — is the foundation for effective benchmark design.
+
+[Read more about templates vs rubrics →](04-core-concepts/template-vs-rubric.md)
 
 ### Checkpoints
 

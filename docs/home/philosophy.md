@@ -1,4 +1,4 @@
-# LLM Evaluation Philosophy
+# Karenina Evaluation Philosophy
 
 This page explains the evaluation approach behind Karenina: why it uses LLMs as judges, why structured evaluation matters, and how it handles the reality of free-form language model outputs.
 
@@ -119,8 +119,8 @@ This separation means each component can be independently configured, tested, an
 
 ## Learn More
 
-- [Templates vs Rubrics](template-vs-rubric.md) — Understand the two complementary evaluation units
+- [Templates vs Rubrics](../04-core-concepts/template-vs-rubric.md) — Understand the two complementary evaluation units
 - [Answer Templates](../04-core-concepts/answer-templates.md) — Deep dive into template structure, `verify()`, and field types
 - [Evaluation Modes](../04-core-concepts/evaluation-modes.md) — How template-only, rubric-only, and combined modes work
 
-**Back to**: [Introduction](index.md)
+**Back to**: [Home](index.md)

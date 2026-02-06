@@ -114,22 +114,18 @@ markdown_extensions:
       permalink: true
 
 nav:
-  - Home: index.md
+  - Home:
+    - home/index.md
+    - Philosophy: home/philosophy.md
+    - Reading Paths: home/reading-paths.md
   - Getting Started:
     - getting-started.md
-    - Introduction:
-      - Overview: notebooks/01-introduction-index.ipynb
-      - Philosophy: 01-introduction/philosophy.md
-      - Templates vs Rubrics: 01-introduction/template-vs-rubric.md
     - Installation: 02-installation/index.md
     - Quick Start: notebooks/quickstart.ipynb
-    - Configuration:
-      - Overview: 03-configuration/index.md
-      - Environment Variables: 03-configuration/environment-variables.md
-      - Presets: 03-configuration/presets.md
-      - Workspace Init: 03-configuration/workspace-init.md
+    - Workspace Init: 02-installation/workspace-init.md
   - Core Concepts:
     - core-concepts.md
+    - Templates vs Rubrics: 04-core-concepts/template-vs-rubric.md
     - Checkpoints: 04-core-concepts/checkpoints.md
     - Answer Templates: notebooks/04-core-concepts-answer-templates.ipynb
     - Rubrics:
@@ -147,6 +143,10 @@ nav:
     - Few-Shot: 04-core-concepts/few-shot.md
   - Workflows:
     - workflows.md
+    - Configuration:
+      - Overview: 03-configuration/index.md
+      - Environment Variables: 03-configuration/environment-variables.md
+      - Presets: 03-configuration/presets.md
     - Creating Benchmarks:
       - Overview: 05-creating-benchmarks/index.md
       - Creating a Checkpoint: notebooks/05-creating-benchmarks-creating-checkpoint.ipynb

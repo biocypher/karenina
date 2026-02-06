@@ -123,7 +123,7 @@ Karenina's three evaluation modes control which building blocks are active:
 | `template_and_rubric` | Yes | Yes | Correctness + quality assessment |
 | `rubric_only` | No | Yes | Quality-only evaluation (no correct answer needed) |
 
-For details on configuring evaluation modes, see [Evaluation Modes](../04-core-concepts/evaluation-modes.md).
+For details on configuring evaluation modes, see [Evaluation Modes](evaluation-modes.md).
 
 ## Conceptual Summary
 
@@ -155,9 +155,9 @@ For details on configuring evaluation modes, see [Evaluation Modes](../04-core-c
 
 ## Learn More
 
-- [LLM Evaluation Philosophy](philosophy.md) — Why Karenina uses LLMs as judges
-- [Answer Templates](../04-core-concepts/answer-templates.md) — Deep dive into template structure, `verify()`, and field types
-- [Rubrics Overview](../04-core-concepts/rubrics/index.md) — All four rubric trait types in detail
-- [Evaluation Modes](../04-core-concepts/evaluation-modes.md) — How to configure template-only, rubric-only, and combined modes
+- [LLM Evaluation Philosophy](../home/philosophy.md) — Why Karenina uses LLMs as judges
+- [Answer Templates](answer-templates.md) — Deep dive into template structure, `verify()`, and field types
+- [Rubrics Overview](rubrics/index.md) — All four rubric trait types in detail
+- [Evaluation Modes](evaluation-modes.md) — How to configure template-only, rubric-only, and combined modes
 
-**Back to**: [Introduction](index.md)
+**Back to**: [Core Concepts](../core-concepts.md)

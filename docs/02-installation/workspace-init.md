@@ -72,7 +72,7 @@ KARENINA_ASYNC_MAX_WORKERS=2
 The `.env` file is created with restricted permissions (`chmod 600`) to protect API keys.
 
 !!! tip
-    Add your API keys to `.env` before running verification. See [Environment Variables](environment-variables.md) for all available settings.
+    Add your API keys to `.env` before running verification. See [Environment Variables](../03-configuration/environment-variables.md) for all available settings.
 
 ## Created Directories
 
@@ -133,8 +133,8 @@ karenina init --dir ~/karenina-workspace
 
 ## Next Steps
 
-- [Environment Variables](environment-variables.md) — Configure API keys and other settings in `.env`
-- [Presets](presets.md) — Create reusable verification configurations in `presets/`
-- [Configuration Hierarchy](index.md) — Understand how settings are resolved
+- [Environment Variables](../03-configuration/environment-variables.md) — Configure API keys and other settings in `.env`
+- [Presets](../03-configuration/presets.md) — Create reusable verification configurations in `presets/`
+- [Configuration Hierarchy](../03-configuration/index.md) — Understand how settings are resolved
 - [Running Verification](../06-running-verification/index.md) — Start evaluating with your new workspace
 - [CLI Reference: init](../09-cli-reference/init.md) — Full command reference

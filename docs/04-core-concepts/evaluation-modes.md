@@ -136,7 +136,7 @@ In `rubric_only` mode, `template_verification_performed` is `False` and `verify_
 
 ## Learn More
 
-- [Template vs Rubric](../01-introduction/template-vs-rubric.md) --- The fundamental distinction between correctness and quality evaluation
+- [Template vs Rubric](template-vs-rubric.md) --- The fundamental distinction between correctness and quality evaluation
 - [Answer Templates](answer-templates.md) --- How templates parse and verify answers
 - [Rubrics Overview](rubrics/index.md) --- The four rubric trait types
 - [VerificationConfig Reference](../10-configuration-reference/verification-config.md) --- All configuration fields including evaluation mode

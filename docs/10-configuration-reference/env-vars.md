@@ -126,4 +126,4 @@ In all cases, the effective precedence is: explicit argument > VerificationConfi
 - [Environment Variables Tutorial (section 03)](../03-configuration/environment-variables.md) — grouped explanations with usage examples
 - [VerificationConfig Reference](verification-config.md) — fields that shadow embedding and async env vars
 - [Configuration Hierarchy (section 03)](../03-configuration/index.md) — how env vars fit into precedence
-- [Workspace Initialization (section 03)](../03-configuration/workspace-init.md) — `karenina init` creates `.env` template
+- [Workspace Initialization](../02-installation/workspace-init.md) — `karenina init` creates `.env` template
