@@ -53,7 +53,7 @@ def _mock_run_verification(self, config, question_ids=None, **kwargs):
 
     for qid in qids:
         q = self.get_question(qid)
-        q_text = q.get("question_text", "")
+        q_text = q.get("question", "")
         has_template = self.has_template(qid)
 
         for ans_model in config.answering_models:
