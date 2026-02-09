@@ -113,8 +113,9 @@ export GOOGLE_API_KEY="AI..."
 ```
 
 Alternatively, use `karenina init` to generate a `.env` template with all
-supported variables. See [Configuration](../03-configuration/index.md) in the
-Workflows section for details on the full configuration hierarchy.
+supported variables. See [Workspace Initialization](workspace-init.md) for full
+details on the init command, or [Configuration](../03-configuration/index.md)
+for the full configuration hierarchy.
 
 ---
 
@@ -172,7 +173,7 @@ echo $ANTHROPIC_API_KEY
 
 ## Next Steps
 
-- **[Quick Start](../quickstart.md)** — End-to-end walkthrough: create a benchmark, run verification, inspect results
+- **[Quick Start](quickstart.md)** — End-to-end walkthrough: create a benchmark, run verification, inspect results
 - **[Configuration](../03-configuration/index.md)** — Set up presets, environment variables, and workspace
 - **[Core Concepts](../04-core-concepts/index.md)** — Understand checkpoints, templates, and rubrics
 - **[Creating Benchmarks](../05-creating-benchmarks/index.md)** — Build your first benchmark

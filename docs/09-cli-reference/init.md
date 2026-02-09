@@ -191,7 +191,7 @@ karenina init --advanced --force
 ## Related
 
 - [serve](serve.md) — Start the webapp server (also offers first-time setup)
-- [Workspace Initialization](../02-installation/workspace-init.md) — Tutorial with detailed explanations
+- [Workspace Initialization](../getting-started/workspace-init.md) — Tutorial with detailed explanations
 - [Environment Variables](../03-configuration/environment-variables.md) — All environment variable settings
 - [Configuration Hierarchy](../03-configuration/index.md) — How configuration layers interact
 - [CLI Reference](index.md) — Overview of all CLI commands

@@ -60,7 +60,7 @@ ANTHROPIC_API_KEY="sk-ant-..."
 OPENAI_API_KEY="sk-..."
 ```
 
-The `karenina init` command creates a `.env` template with placeholder entries for all three main providers. See [Workspace Initialization](../02-installation/workspace-init.md) for details.
+The `karenina init` command creates a `.env` template with placeholder entries for all three main providers. See [Workspace Initialization](../getting-started/workspace-init.md) for details.
 
 ---
 
@@ -180,6 +180,6 @@ Environment variables that accept boolean values recognize these truthy strings 
 
 - [Configuration Hierarchy](index.md) — How environment variables fit into the precedence system
 - [Presets](presets.md) — Reusable configuration files that override environment variables
-- [Workspace Initialization](../02-installation/workspace-init.md) — `karenina init` creates default directories and `.env` template
+- [Workspace Initialization](../getting-started/workspace-init.md) — `karenina init` creates default directories and `.env` template
 - [Environment Variables Reference](../10-configuration-reference/env-vars.md) — Exhaustive table of all variables
 - [Running Verification](../06-running-verification/index.md) — Putting configuration into practice

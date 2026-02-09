@@ -1,7 +1,7 @@
 ---
 jupyter:
   jupytext:
-    formats: md,notebooks//ipynb
+    formats: getting-started//md,notebooks//ipynb
     text_representation:
       extension: .md
       format_name: markdown
@@ -24,7 +24,7 @@ By the end you will have a working benchmark that evaluates LLM responses for bo
 ## Prerequisites
 
 - **Python 3.11+**
-- **Karenina installed** (see [Installation](02-installation/index.md))
+- **Karenina installed** (see [Installation](installation.md))
 - **API keys** for the LLM providers you plan to use:
 
 > ```bash
@@ -411,7 +411,7 @@ Call `benchmark.generate_all_templates()` with model parameters:
 > )
 > ```
 
-See [Generating Templates](05-creating-benchmarks/generating-templates.md) for details.
+See [Generating Templates](../05-creating-benchmarks/generating-templates.md) for details.
 
 ### Extracting Questions from Files
 
@@ -428,7 +428,7 @@ Import questions from Excel, CSV, or TSV files using `extract_questions_from_fil
 > )
 > ```
 
-See [Adding Questions](05-creating-benchmarks/adding-questions.md) for details.
+See [Adding Questions](../05-creating-benchmarks/adding-questions.md) for details.
 
 ### Using Different LLM Providers
 
@@ -452,9 +452,9 @@ Karenina supports many backends. Pass different `interface` values to `ModelConf
 
 | Topic | Link |
 |-------|------|
-| Core concepts (checkpoints, templates, rubrics) | [Core Concepts](04-core-concepts/index.md) |
-| Writing custom templates in depth | [Writing Templates](05-creating-benchmarks/writing-templates.md) |
-| All four rubric trait types | [Rubrics](04-core-concepts/rubrics/index.md) |
-| Verification configuration options | [Verification Config](06-running-verification/verification-config.md) |
-| DataFrame-based result analysis | [DataFrame Analysis](07-analyzing-results/dataframe-analysis.md) |
-| CLI verification (no Python needed) | [CLI Reference](09-cli-reference/verify.md) |
+| Core concepts (checkpoints, templates, rubrics) | [Core Concepts](../04-core-concepts/index.md) |
+| Writing custom templates in depth | [Writing Templates](../05-creating-benchmarks/writing-templates.md) |
+| All four rubric trait types | [Rubrics](../04-core-concepts/rubrics/index.md) |
+| Verification configuration options | [Verification Config](../06-running-verification/verification-config.md) |
+| DataFrame-based result analysis | [DataFrame Analysis](../07-analyzing-results/dataframe-analysis.md) |
+| CLI verification (no Python needed) | [CLI Reference](../09-cli-reference/verify.md) |

@@ -92,4 +92,4 @@ src/karenina/
 
 - [Advanced Pipeline](11-advanced-pipeline/index.md) --- pipeline architecture and extension
 - [Advanced Adapters](12-advanced-adapters/index.md) --- adapter architecture and extension
-- [Installation](02-installation/index.md) --- basic setup and dependencies
+- [Installation](getting-started/installation.md) --- basic setup and dependencies

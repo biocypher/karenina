@@ -4,7 +4,7 @@ Choose the path that matches your goal:
 
 **New User** — Learn Karenina from the ground up:
 
-> [Installation](../02-installation/index.md) → [Quick Start](../notebooks/quickstart.ipynb) → [Core Concepts](../core-concepts.md) → [Creating Benchmarks](../05-creating-benchmarks/index.md) → [Running Verification](../06-running-verification/index.md) → [Analyzing Results](../07-analyzing-results/index.md)
+> [Installation](../getting-started/installation.md) → [Quick Start](../notebooks/quickstart.ipynb) → [Core Concepts](../core-concepts.md) → [Creating Benchmarks](../05-creating-benchmarks/index.md) → [Running Verification](../06-running-verification/index.md) → [Analyzing Results](../07-analyzing-results/index.md)
 
 **Power User** — Dive into advanced features:
 
@@ -12,7 +12,7 @@ Choose the path that matches your goal:
 
 **CLI User** — Use Karenina from the command line:
 
-> [Installation](../02-installation/index.md) → [Configuration](../03-configuration/index.md) → [CLI Reference](../09-cli-reference/index.md)
+> [Installation](../getting-started/installation.md) → [Configuration](../03-configuration/index.md) → [CLI Reference](../09-cli-reference/index.md)
 
 **Contributor** — Extend Karenina with custom adapters or pipeline stages:
 
@@ -24,9 +24,9 @@ Choose the path that matches your goal:
 
 | Section | What You'll Learn |
 |---------|-------------------|
-| [Installation](../02-installation/index.md) | Requirements, install commands, optional dependencies, troubleshooting |
+| [Installation](../getting-started/installation.md) | Requirements, install commands, optional dependencies, troubleshooting |
 | [Quick Start](../notebooks/quickstart.ipynb) | Hands-on walkthrough from zero to a working benchmark |
-| [Workspace Init](../02-installation/workspace-init.md) | Set up a project directory with `karenina init` |
+| [Workspace Init](../getting-started/workspace-init.md) | Set up a project directory with `karenina init` |
 
 ## Core Concepts
 

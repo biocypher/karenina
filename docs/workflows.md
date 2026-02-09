@@ -33,4 +33,4 @@ Each workflow section has an overview page with a visual diagram, followed by de
 
 ## Prerequisites
 
-Before starting these workflows, make sure you've completed the [Getting Started](getting-started.md) section — particularly [Installation](02-installation/index.md). Configuration is covered in the first subsection below.
+Before starting these workflows, make sure you've completed the [Getting Started](getting-started/index.md) section — particularly [Installation](getting-started/installation.md). Configuration is covered in the first subsection below.

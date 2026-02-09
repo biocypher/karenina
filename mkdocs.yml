@@ -119,10 +119,10 @@ nav:
     - Philosophy: home/philosophy.md
     - Reading Paths: home/reading-paths.md
   - Getting Started:
-    - getting-started.md
-    - Installation: 02-installation/index.md
+    - getting-started/index.md
+    - Installation: getting-started/installation.md
     - Quick Start: notebooks/quickstart.ipynb
-    - Workspace Init: 02-installation/workspace-init.md
+    - Workspace Init: getting-started/workspace-init.md
   - Core Concepts:
     - core-concepts.md
     - Templates vs Rubrics: 04-core-concepts/template-vs-rubric.md
