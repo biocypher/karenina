@@ -125,22 +125,26 @@ nav:
     - Workspace Init: getting-started/workspace-init.md
   - Core Concepts:
     - core-concepts.md
-    - Templates vs Rubrics: 04-core-concepts/template-vs-rubric.md
-    - Checkpoints: 04-core-concepts/checkpoints.md
-    - Answer Templates: notebooks/04-core-concepts-answer-templates.ipynb
+    - Questions & Benchmarks: core_concepts/questions-and-benchmarks.md
+    - Checkpoints: core_concepts/checkpoints.md
+    - Templates vs Rubrics: core_concepts/template-vs-rubric.md
+    - Answer Templates: notebooks/core_concepts/answer-templates.ipynb
     - Rubrics:
-      - Overview: 04-core-concepts/rubrics/index.md
-      - LLM Traits: notebooks/04-core-concepts-rubrics-llm-traits.ipynb
-      - Literal Traits: notebooks/04-core-concepts-rubrics-literal-traits.ipynb
-      - Regex Traits: notebooks/04-core-concepts-rubrics-regex-traits.ipynb
-      - Callable Traits: notebooks/04-core-concepts-rubrics-callable-traits.ipynb
-      - Metric Traits: notebooks/04-core-concepts-rubrics-metric-traits.ipynb
-    - Evaluation Modes: 04-core-concepts/evaluation-modes.md
-    - Adapters: 04-core-concepts/adapters.md
-    - MCP Overview: 04-core-concepts/mcp-overview.md
-    - Manual Interface: 04-core-concepts/manual-interface.md
-    - Adele: 04-core-concepts/adele.md
-    - Few-Shot: 04-core-concepts/few-shot.md
+      - Overview: core_concepts/rubrics/index.md
+      - LLM Traits: notebooks/core_concepts/rubrics/llm-traits.ipynb
+      - Literal Traits: notebooks/core_concepts/rubrics/literal-traits.ipynb
+      - Regex Traits: notebooks/core_concepts/rubrics/regex-traits.ipynb
+      - Callable Traits: notebooks/core_concepts/rubrics/callable-traits.ipynb
+      - Metric Traits: notebooks/core_concepts/rubrics/metric-traits.ipynb
+    - Evaluation Modes: core_concepts/evaluation-modes.md
+    - Verification Pipeline: core_concepts/verification-pipeline.md
+    - Prompt Assembly: core_concepts/prompt-assembly.md
+    - Results & Scoring: core_concepts/results-and-scoring.md
+    - Adapters: core_concepts/adapters.md
+    - MCP Overview: core_concepts/mcp-overview.md
+    - Manual Interface: core_concepts/manual-interface.md
+    - Adele: core_concepts/adele.md
+    - Few-Shot: core_concepts/few-shot.md
   - Workflows:
     - workflows.md
     - Configuration:
@@ -149,31 +153,31 @@ nav:
       - Presets: 03-configuration/presets.md
     - Creating Benchmarks:
       - Overview: 05-creating-benchmarks/index.md
-      - Creating a Checkpoint: notebooks/05-creating-benchmarks-creating-checkpoint.ipynb
-      - Adding Questions: notebooks/05-creating-benchmarks-adding-questions.ipynb
+      - Creating a Checkpoint: notebooks/creating-benchmarks/creating-checkpoint.ipynb
+      - Adding Questions: notebooks/creating-benchmarks/adding-questions.ipynb
       - Classifying with Adele: 05-creating-benchmarks/classifying-with-adele.md
       - Generating Templates: 05-creating-benchmarks/generating-templates.md
-      - Writing Templates: notebooks/05-creating-benchmarks-writing-templates.ipynb
-      - Defining Rubrics: notebooks/05-creating-benchmarks-defining-rubrics.ipynb
+      - Writing Templates: notebooks/creating-benchmarks/writing-templates.ipynb
+      - Defining Rubrics: notebooks/creating-benchmarks/defining-rubrics.ipynb
       - Few-Shot Examples: 05-creating-benchmarks/few-shot-examples.md
-      - Saving Benchmarks: notebooks/05-creating-benchmarks-saving-benchmarks.ipynb
+      - Saving Benchmarks: notebooks/creating-benchmarks/saving-benchmarks.ipynb
     - Running Verification:
       - Overview: 06-running-verification/index.md
-      - Loading a Benchmark: notebooks/06-running-verification-loading-benchmark.ipynb
-      - Verification Config: notebooks/06-running-verification-verification-config.ipynb
+      - Loading a Benchmark: notebooks/running-verification/loading-benchmark.ipynb
+      - Verification Config: notebooks/running-verification/verification-config.ipynb
       - Prompt Config: 06-running-verification/prompt-config.md
       - Response Quality Checks: 06-running-verification/response-quality-checks.md
       - Using Presets: 06-running-verification/using-presets.md
-      - Python API: notebooks/06-running-verification-python-api.ipynb
+      - Python API: notebooks/running-verification/python-api.ipynb
       - CLI: 06-running-verification/cli.md
       - Manual Interface: 06-running-verification/manual-interface.md
-      - Multi-Model: notebooks/06-running-verification-multi-model.ipynb
+      - Multi-Model: notebooks/running-verification/multi-model.ipynb
       - MCP Verification: 06-running-verification/mcp-verification.md
       - Database Persistence: 06-running-verification/database-persistence.md
     - Analyzing Results:
       - Overview: 07-analyzing-results/index.md
       - Verification Result: 07-analyzing-results/verification-result.md
-      - DataFrame Analysis: notebooks/07-analyzing-results-dataframe-analysis.ipynb
+      - DataFrame Analysis: notebooks/analyzing-results/dataframe-analysis.ipynb
       - Exporting: 07-analyzing-results/exporting.md
       - Iterating: 07-analyzing-results/iterating.md
   - Reference:
