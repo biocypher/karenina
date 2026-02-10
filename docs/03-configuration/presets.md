@@ -25,9 +25,9 @@ A preset file is a JSON wrapper around a `VerificationConfig` dictionary:
   "config": {
     "answering_models": [
       {
-        "id": "gpt-4.1-mini",
-        "model_provider": "openai",
-        "model_name": "gpt-4.1-mini",
+        "id": "claude-haiku-4-5",
+        "model_provider": "anthropic",
+        "model_name": "claude-haiku-4-5",
         "temperature": 0.0,
         "interface": "langchain",
         "system_prompt": "You are an expert assistant..."
@@ -74,9 +74,9 @@ Build a `VerificationConfig` and call `save_preset()`:
 from karenina.schemas import VerificationConfig, ModelConfig
 
 model = ModelConfig(
-    id="gpt-4.1-mini",
-    model_provider="openai",
-    model_name="gpt-4.1-mini",
+    id="claude-haiku-4-5",
+    model_provider="anthropic",
+    model_name="claude-haiku-4-5",
     temperature=0.0,
     interface="langchain",
 )

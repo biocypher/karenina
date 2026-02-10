@@ -61,9 +61,9 @@ The highest-priority configuration source. Any flag passed on the command line o
 ```bash
 karenina verify checkpoint.jsonld \
     --interface langchain \
-    --answering-model gpt-4.1-mini \
-    --parsing-model gpt-4.1-mini \
-    --provider openai \
+    --answering-model claude-haiku-4-5 \
+    --parsing-model claude-haiku-4-5 \
+    --provider anthropic \
     --async-workers 4 \
     --deep-judgment
 ```

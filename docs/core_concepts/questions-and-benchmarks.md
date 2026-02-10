@@ -100,7 +100,7 @@ benchmark = Benchmark.create(
 benchmark.add_question(
     question="What is the putative target of venetoclax?",
     raw_answer="BCL2",
-    author="Dr. Smith",
+    author={"name": "Dr. Smith"},
 )
 ```
 
@@ -121,7 +121,7 @@ class Answer(BaseAnswer):
         return self.target.strip().upper() == self.correct["target"].upper()
 '''
 
-benchmark.add_template(question_id, template_code)
+benchmark.add_answer_template(question_id, template_code)
 ```
 
 ### 4. Add Rubric Traits (Optional)
@@ -155,8 +155,8 @@ benchmark.save(Path("drug_targets.jsonld"))
 from karenina.schemas import VerificationConfig, ModelConfig
 
 config = VerificationConfig(
-    answering_models=[ModelConfig(model_name="claude-sonnet-4-5-20250929", model_provider="anthropic")],
-    parsing_models=[ModelConfig(model_name="gpt-4.1-mini", model_provider="openai")],
+    answering_models=[ModelConfig(id="answering", model_name="claude-sonnet-4-5-20250929", model_provider="anthropic")],
+    parsing_models=[ModelConfig(id="parsing", model_name="claude-haiku-4-5", model_provider="anthropic")],
 )
 
 results = benchmark.run_verification(config)

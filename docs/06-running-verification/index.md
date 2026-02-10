@@ -50,12 +50,12 @@ from karenina.schemas import VerificationConfig, ModelConfig
 
 config = VerificationConfig(
     answering_models=[
-        ModelConfig(id="gpt-4.1-mini", model_provider="openai",
-                    model_name="gpt-4.1-mini", interface="langchain")
+        ModelConfig(id="claude-haiku-4-5", model_provider="anthropic",
+                    model_name="claude-haiku-4-5", interface="langchain")
     ],
     parsing_models=[
-        ModelConfig(id="gpt-judge", model_provider="openai",
-                    model_name="gpt-4.1-mini", temperature=0.0,
+        ModelConfig(id="haiku-judge", model_provider="anthropic",
+                    model_name="claude-haiku-4-5", temperature=0.0,
                     interface="langchain")
     ],
     evaluation_mode="template_only"

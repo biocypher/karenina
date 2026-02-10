@@ -28,7 +28,7 @@ Requires `karenina[webapp]` to be installed (`pip install karenina[webapp]`).
 
 When `serve` is run in a directory without a `defaults.json` file (and `--skip-setup` is not set), it offers an interactive setup prompt:
 
-1. **default** — Quick setup with sensible defaults (OpenAI provider, gpt-4.1-mini model, LangChain interface, async enabled with 2 workers)
+1. **default** — Quick setup with sensible defaults (Anthropic provider, claude-haiku-4-5 model, LangChain interface, async enabled with 2 workers)
 2. **advanced** — Full guided configuration (equivalent to `karenina init --advanced`)
 3. **skip** — Start the server without setup
 

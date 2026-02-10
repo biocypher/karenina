@@ -46,8 +46,8 @@ Quick setup defaults:
 
 | Setting | Default Value |
 |---------|--------------|
-| Provider | `openai` |
-| Model | `gpt-4.1-mini` |
+| Provider | `anthropic` |
+| Model | `claude-haiku-4-5` |
 | Interface | `langchain` |
 | Async enabled | `true` |
 | Async workers | `2` |
@@ -63,8 +63,8 @@ Stores default LLM configuration used by the GUI and server:
 ```json
 {
   "default_interface": "langchain",
-  "default_provider": "openai",
-  "default_model": "gpt-4.1-mini",
+  "default_provider": "anthropic",
+  "default_model": "claude-haiku-4-5",
   "default_endpoint_base_url": ""
 }
 ```
@@ -123,7 +123,7 @@ Provider-specific default models:
 
 | Provider | Default Model |
 |----------|--------------|
-| `openai` | `gpt-4.1-mini` |
+| `openai` | `claude-haiku-4-5` |
 | `anthropic` | `claude-haiku-4-5` |
 | `google_genai` | `gemini-pro` |
 | `openrouter` | `openai/gpt-4o-mini` |

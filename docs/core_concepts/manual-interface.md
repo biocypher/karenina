@@ -107,9 +107,9 @@ manual_config = ModelConfig(
 )
 
 judge_config = ModelConfig(
-    id="gpt-4.1-mini",
-    model_provider="openai",
-    model_name="gpt-4.1-mini",
+    id="claude-haiku",
+    model_provider="anthropic",
+    model_name="claude-haiku-4-5",
     interface="langchain"
 )
 

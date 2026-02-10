@@ -55,17 +55,17 @@ from karenina.schemas.verification import VerificationConfig
 config = VerificationConfig(
     answering_models=[
         ModelConfig(
-            id="answering-gpt4mini",
-            model_name="gpt-4.1-mini",
-            model_provider="openai",
+            id="answering-haiku",
+            model_name="claude-haiku-4-5",
+            model_provider="anthropic",
             interface="langchain",
         )
     ],
     parsing_models=[
         ModelConfig(
-            id="parsing-gpt4mini",
-            model_name="gpt-4.1-mini",
-            model_provider="openai",
+            id="parsing-haiku",
+            model_name="claude-haiku-4-5",
+            model_provider="anthropic",
             interface="langchain",
         )
     ],
@@ -83,7 +83,7 @@ Each `ModelConfig` specifies how to connect to an LLM:
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `id` | `str` | — | Unique identifier for this model configuration (required) |
-| `model_name` | `str` | — | Model identifier (e.g., `"gpt-4.1-mini"`, `"claude-sonnet-4-20250514"`) |
+| `model_name` | `str` | — | Model identifier (e.g., `"claude-haiku-4-5"`, `"claude-sonnet-4-20250514"`) |
 | `model_provider` | `str` | — | Provider name (e.g., `"openai"`, `"anthropic"`) |
 | `interface` | `str` | `"langchain"` | Adapter backend (see [Adapters](../core_concepts/adapters.md)) |
 | `temperature` | `float` | `0.1` | Sampling temperature |
@@ -110,9 +110,9 @@ config = VerificationConfig(
     ],
     parsing_models=[
         ModelConfig(
-            id="parsing-gpt4mini",
-            model_name="gpt-4.1-mini",
-            model_provider="openai",
+            id="parsing-haiku",
+            model_name="claude-haiku-4-5",
+            model_provider="anthropic",
             interface="langchain",
         )
     ],
@@ -138,10 +138,10 @@ The `evaluation_mode` field determines which pipeline stages run:
 # Template + rubric mode
 config = VerificationConfig(
     answering_models=[
-        ModelConfig(id="answering", model_name="gpt-4.1-mini", model_provider="openai")
+        ModelConfig(id="answering", model_name="claude-haiku-4-5", model_provider="anthropic")
     ],
     parsing_models=[
-        ModelConfig(id="parsing", model_name="gpt-4.1-mini", model_provider="openai")
+        ModelConfig(id="parsing", model_name="claude-haiku-4-5", model_provider="anthropic")
     ],
     evaluation_mode="template_and_rubric",
     rubric_enabled=True,
@@ -175,10 +175,10 @@ These run *before* parsing, saving cost by short-circuiting evaluation for probl
 ```python
 config = VerificationConfig(
     answering_models=[
-        ModelConfig(id="answering", model_name="gpt-4.1-mini", model_provider="openai")
+        ModelConfig(id="answering", model_name="claude-haiku-4-5", model_provider="anthropic")
     ],
     parsing_models=[
-        ModelConfig(id="parsing", model_name="gpt-4.1-mini", model_provider="openai")
+        ModelConfig(id="parsing", model_name="claude-haiku-4-5", model_provider="anthropic")
     ],
     abstention_enabled=True,
     sufficiency_enabled=True,
@@ -227,10 +227,10 @@ When rubrics are enabled (`evaluation_mode` set to `"template_and_rubric"` or `"
 # Rubric-only mode evaluating specific traits
 config = VerificationConfig(
     answering_models=[
-        ModelConfig(id="answering", model_name="gpt-4.1-mini", model_provider="openai")
+        ModelConfig(id="answering", model_name="claude-haiku-4-5", model_provider="anthropic")
     ],
     parsing_models=[
-        ModelConfig(id="parsing", model_name="gpt-4.1-mini", model_provider="openai")
+        ModelConfig(id="parsing", model_name="claude-haiku-4-5", model_provider="anthropic")
     ],
     evaluation_mode="rubric_only",
     rubric_enabled=True,
@@ -258,10 +258,10 @@ These can also be set via environment variables (`KARENINA_ASYNC_ENABLED`, `KARE
 # Increase parallelism for large benchmarks
 config = VerificationConfig(
     answering_models=[
-        ModelConfig(id="answering", model_name="gpt-4.1-mini", model_provider="openai")
+        ModelConfig(id="answering", model_name="claude-haiku-4-5", model_provider="anthropic")
     ],
     parsing_models=[
-        ModelConfig(id="parsing", model_name="gpt-4.1-mini", model_provider="openai")
+        ModelConfig(id="parsing", model_name="claude-haiku-4-5", model_provider="anthropic")
     ],
     async_enabled=True,
     async_max_workers=5,
@@ -289,10 +289,10 @@ Run each question–model combination multiple times:
 ```python
 config = VerificationConfig(
     answering_models=[
-        ModelConfig(id="answering", model_name="gpt-4.1-mini", model_provider="openai")
+        ModelConfig(id="answering", model_name="claude-haiku-4-5", model_provider="anthropic")
     ],
     parsing_models=[
-        ModelConfig(id="parsing", model_name="gpt-4.1-mini", model_provider="openai")
+        ModelConfig(id="parsing", model_name="claude-haiku-4-5", model_provider="anthropic")
     ],
     replicate_count=3,
 )
@@ -309,11 +309,11 @@ The `from_overrides` class method is the most convenient way to create a config 
 ```python
 # Start from defaults, override just the models
 config = VerificationConfig.from_overrides(
-    answering_model="gpt-4.1-mini",
-    answering_provider="openai",
+    answering_model="claude-haiku-4-5",
+    answering_provider="anthropic",
     answering_id="answering",
-    parsing_model="gpt-4.1-mini",
-    parsing_provider="openai",
+    parsing_model="claude-haiku-4-5",
+    parsing_provider="anthropic",
     parsing_id="parsing",
     abstention=True,
     embedding_check=True,
@@ -345,11 +345,11 @@ You can also apply overrides to a base config loaded from a preset:
 
 ```python
 config = VerificationConfig.from_overrides(
-    answering_model="gpt-4.1-mini",
-    answering_provider="openai",
+    answering_model="claude-haiku-4-5",
+    answering_provider="anthropic",
     answering_id="answering",
-    parsing_model="gpt-4.1-mini",
-    parsing_provider="openai",
+    parsing_model="claude-haiku-4-5",
+    parsing_provider="anthropic",
     parsing_id="parsing",
     abstention=True,
     embedding_check=True,

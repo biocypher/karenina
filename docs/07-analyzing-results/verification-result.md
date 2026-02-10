@@ -217,7 +217,7 @@ Usage metadata structure:
 {
     "answer_generation": {
         "input_tokens": 150, "output_tokens": 200, "total_tokens": 350,
-        "model": "gpt-4.1-mini-2025-04-14"
+        "model": "claude-haiku-4-5"
     },
     "parsing": {"input_tokens": 200, "output_tokens": 80, "total_tokens": 280},
     "rubric_evaluation": {...},

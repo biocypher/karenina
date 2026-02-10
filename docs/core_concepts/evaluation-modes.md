@@ -80,27 +80,33 @@ Note that `rubric_only` mode:
 Set the evaluation mode on `VerificationConfig`:
 
 ```python
+from karenina.schemas import ModelConfig
 from karenina.schemas.verification import VerificationConfig
+
+answering = [ModelConfig(id="answerer", model_name="claude-haiku-4-5", model_provider="anthropic")]
+parsing = [ModelConfig(id="parser", model_name="claude-haiku-4-5", model_provider="anthropic")]
 
 # Template-only (default)
 config = VerificationConfig(
     evaluation_mode="template_only",
-    # rubric_enabled is automatically False
-    ...
+    answering_models=answering,
+    parsing_models=parsing,
 )
 
 # Template + rubric
 config = VerificationConfig(
     evaluation_mode="template_and_rubric",
     rubric_enabled=True,
-    ...
+    answering_models=answering,
+    parsing_models=parsing,
 )
 
 # Rubric-only
 config = VerificationConfig(
     evaluation_mode="rubric_only",
     rubric_enabled=True,
-    ...
+    answering_models=answering,
+    parsing_models=parsing,
 )
 ```
 
@@ -118,6 +124,10 @@ Setting an inconsistent combination raises a `ValueError` at configuration time.
     ```python
     config = VerificationConfig.from_overrides(
         evaluation_mode="template_and_rubric",
+        answering_model="claude-haiku-4-5",
+        answering_provider="anthropic",
+        parsing_model="claude-haiku-4-5",
+        parsing_provider="anthropic",
         # rubric_enabled is set to True automatically
     )
     ```

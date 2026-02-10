@@ -48,10 +48,10 @@ Present when template evaluation ran (`template_only` or `template_and_rubric` m
 | `verify_result` | Boolean — did `verify()` pass? |
 | `verify_granular_result` | Per-field verification (if `verify_granular()` is implemented) |
 | `abstention_detected` | Whether the model refused to answer |
-| `sufficiency_check_passed` | Whether the response had enough information |
-| `embedding_check_passed` | Semantic similarity check result (if enabled) |
-| `embedding_similarity_scores` | Per-field similarity scores (if enabled) |
-| `regex_check_passed` | Regex validation result (if applicable) |
+| `sufficiency_check_performed` | Whether the sufficiency check was attempted |
+| `embedding_check_performed` | Whether the embedding check was attempted |
+| `embedding_similarity_score` | Similarity score, 0.0 to 1.0 (if enabled) |
+| `regex_overall_success` | Overall regex validation result (if applicable) |
 | `usage_metadata` | Token counts and LLM usage statistics |
 | `agent_metrics` | MCP agent metrics (tool calls, iterations) |
 

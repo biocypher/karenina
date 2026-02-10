@@ -53,8 +53,8 @@ from karenina.schemas.verification import VerificationConfig, PromptConfig
 
 config = VerificationConfig(
     prompt_config=PromptConfig(
-        parsing_system_prompt_addition="Always prefer the most specific interpretation.",
-        answering_system_prompt="You are a genomics expert. Answer concisely.",
+        parsing="Always prefer the most specific interpretation.",
+        generation="You are a genomics expert. Answer concisely.",
     ),
     ...
 )

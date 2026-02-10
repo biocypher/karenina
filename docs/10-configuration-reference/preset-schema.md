@@ -107,9 +107,9 @@ A preset with two answering models, template + rubric evaluation, and deep judgm
   "config": {
     "answering_models": [
       {
-        "id": "gpt-4.1-mini",
-        "model_provider": "openai",
-        "model_name": "gpt-4.1-mini",
+        "id": "claude-haiku-4-5",
+        "model_provider": "anthropic",
+        "model_name": "claude-haiku-4-5",
         "temperature": 0.0,
         "interface": "langchain",
         "system_prompt": null
@@ -125,9 +125,9 @@ A preset with two answering models, template + rubric evaluation, and deep judgm
     ],
     "parsing_models": [
       {
-        "id": "gpt-4.1-mini-parser",
-        "model_provider": "openai",
-        "model_name": "gpt-4.1-mini",
+        "id": "claude-haiku-4-5-parser",
+        "model_provider": "anthropic",
+        "model_name": "claude-haiku-4-5",
         "temperature": 0.0,
         "interface": "langchain",
         "system_prompt": null

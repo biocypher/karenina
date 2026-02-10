@@ -163,9 +163,9 @@ manual_config = ModelConfig(
 
 # Parsing model is a live LLM (the judge)
 judge_config = ModelConfig(
-    id="gpt-4.1-mini",
-    model_provider="openai",
-    model_name="gpt-4.1-mini",
+    id="claude-haiku-4-5",
+    model_provider="anthropic",
+    model_name="claude-haiku-4-5",
     interface="langchain"
 )
 
@@ -213,8 +213,8 @@ For file-based traces, use the CLI directly:
 karenina verify checkpoint.jsonld \
   --interface manual \
   --manual-traces traces/my_traces.json \
-  --parsing-model gpt-4.1-mini \
-  --parsing-provider openai
+  --parsing-model claude-haiku-4-5 \
+  --parsing-provider anthropic
 ```
 
 The `--manual-traces` flag accepts a JSON file path with the `{question_hash: trace_string}` format described above.
@@ -256,7 +256,7 @@ Evaluate how different judges interpret the same traces:
 ```python
 manual_config = ModelConfig(interface="manual", manual_traces=manual_traces)
 
-for judge_name, judge_provider in [("gpt-4.1-mini", "openai"), ("claude-sonnet-4-5-20250929", "anthropic")]:
+for judge_name, judge_provider in [("claude-haiku-4-5", "anthropic"), ("claude-sonnet-4-5-20250929", "anthropic")]:
     judge = ModelConfig(
         id=judge_name,
         model_provider=judge_provider,

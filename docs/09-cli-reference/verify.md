@@ -181,11 +181,11 @@ karenina verify checkpoint.jsonld --preset default.json \
 
 ```bash
 karenina verify checkpoint.jsonld \
-  --answering-model gpt-4.1-mini \
-  --parsing-model gpt-4.1-mini \
+  --answering-model claude-haiku-4-5 \
+  --parsing-model claude-haiku-4-5 \
   --interface langchain \
-  --answering-provider openai \
-  --parsing-provider openai
+  --answering-provider anthropic \
+  --parsing-provider anthropic
 ```
 
 ### Specific questions by index
@@ -227,8 +227,8 @@ karenina verify checkpoint.jsonld --preset default.json \
 karenina verify checkpoint.jsonld \
   --interface manual \
   --manual-traces traces/my_traces.json \
-  --parsing-model gpt-4.1-mini \
-  --parsing-provider openai
+  --parsing-model claude-haiku-4-5 \
+  --parsing-provider anthropic
 ```
 
 ### Progressive save and resume

@@ -20,11 +20,11 @@ Without a preset, you must specify model configuration explicitly:
 
 ```bash
 karenina verify checkpoint.jsonld \
-  --answering-model gpt-4.1-mini \
-  --parsing-model gpt-4.1-mini \
+  --answering-model claude-haiku-4-5 \
+  --parsing-model claude-haiku-4-5 \
   --interface langchain \
-  --answering-provider openai \
-  --parsing-provider openai
+  --answering-provider anthropic \
+  --parsing-provider anthropic
 ```
 
 ---
@@ -183,8 +183,8 @@ Run verification on pre-recorded model responses instead of calling live LLMs:
 karenina verify checkpoint.jsonld \
   --interface manual \
   --manual-traces traces/my_traces.json \
-  --parsing-model gpt-4.1-mini \
-  --parsing-provider openai
+  --parsing-model claude-haiku-4-5 \
+  --parsing-provider anthropic
 ```
 
 The manual traces JSON file maps question hashes to response strings. The parsing model is still called to extract structured answers from the traces.
