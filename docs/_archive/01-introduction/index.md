@@ -192,4 +192,4 @@ _ = _patcher_validate.stop()
 - [Philosophy](philosophy.md) — Why LLM-as-judge evaluation works
 - [Templates vs Rubrics](template-vs-rubric.md) — Understanding the two evaluation units
 - [Installation](../02-installation/index.md) — Install karenina and set up API keys
-- [Core Concepts](../04-core-concepts/index.md) — Deep dive into checkpoints, templates, rubrics, and more
+- [Core Concepts](../core_concepts/index.md) — Deep dive into checkpoints, templates, rubrics, and more

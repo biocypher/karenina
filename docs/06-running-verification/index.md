@@ -167,9 +167,9 @@ Before running verification, ensure you have:
 | Requirement | Why | Where to Set Up |
 |-------------|-----|-----------------|
 | **Benchmark with questions** | Questions to evaluate | [Creating Benchmarks](../05-creating-benchmarks/index.md) |
-| **Templates and/or rubrics** | Evaluation criteria | [Answer Templates](../04-core-concepts/answer-templates.md) · [Rubrics](../04-core-concepts/rubrics/index.md) |
+| **Templates and/or rubrics** | Evaluation criteria | [Answer Templates](../core_concepts/answer-templates.md) · [Rubrics](../core_concepts/rubrics/index.md) |
 | **LLM API keys** | Access to answering and parsing models | [Environment Variables](../03-configuration/environment-variables.md) |
-| **Evaluation mode choice** | What to evaluate (correctness, quality, or both) | [Evaluation Modes](../04-core-concepts/evaluation-modes.md) |
+| **Evaluation mode choice** | What to evaluate (correctness, quality, or both) | [Evaluation Modes](../core_concepts/evaluation-modes.md) |
 
 ---
 

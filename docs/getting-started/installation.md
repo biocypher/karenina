@@ -175,5 +175,5 @@ echo $ANTHROPIC_API_KEY
 
 - **[Quick Start](quickstart.md)** — End-to-end walkthrough: create a benchmark, run verification, inspect results
 - **[Configuration](../03-configuration/index.md)** — Set up presets, environment variables, and workspace
-- **[Core Concepts](../04-core-concepts/index.md)** — Understand checkpoints, templates, and rubrics
+- **[Core Concepts](../core_concepts/index.md)** — Understand checkpoints, templates, and rubrics
 - **[Creating Benchmarks](../05-creating-benchmarks/index.md)** — Build your first benchmark

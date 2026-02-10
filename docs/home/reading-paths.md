@@ -32,13 +32,17 @@ Choose the path that matches your goal:
 
 | Section | What You'll Learn |
 |---------|-------------------|
-| [Overview](../core-concepts.md) | How all concepts fit together, with reading paths by experience level |
-| [Templates vs Rubrics](../04-core-concepts/template-vs-rubric.md) | The two evaluation units: correctness (templates) vs quality (rubrics) |
-| [Checkpoints](../04-core-concepts/checkpoints.md) | The JSON-LD benchmark format: questions, templates, rubrics, and metadata |
-| [Answer Templates](../04-core-concepts/answer-templates.md) | Pydantic models that define how a Judge LLM evaluates correctness |
-| [Rubrics](../04-core-concepts/rubrics/index.md) | Quality assessment with four trait types: LLM, regex, callable, metric |
-| [Evaluation Modes](../04-core-concepts/evaluation-modes.md) | Template-only, template-and-rubric, and rubric-only evaluation |
-| [Adapters](../04-core-concepts/adapters.md) | LLM backend interfaces: LangChain, Claude SDK, OpenRouter, and more |
+| [Overview](../core-concepts.md) | How all concepts fit together, ordered by pipeline flow |
+| [Questions & Benchmarks](../core_concepts/questions-and-benchmarks.md) | The central objects: questions bundled with templates, rubrics, and metadata |
+| [Checkpoints](../core_concepts/checkpoints.md) | The JSON-LD benchmark format: questions, templates, rubrics, and metadata |
+| [Templates vs Rubrics](../core_concepts/template-vs-rubric.md) | The two evaluation units: correctness (templates) vs quality (rubrics) |
+| [Answer Templates](../core_concepts/answer-templates.md) | Pydantic models that define how a Judge LLM evaluates correctness |
+| [Rubrics](../core_concepts/rubrics/index.md) | Quality assessment with four trait types: LLM, regex, callable, metric |
+| [Evaluation Modes](../core_concepts/evaluation-modes.md) | Template-only, template-and-rubric, and rubric-only evaluation |
+| [Verification Pipeline](../core_concepts/verification-pipeline.md) | The 13-stage engine that executes evaluation end to end |
+| [Prompt Assembly](../core_concepts/prompt-assembly.md) | How prompts are constructed for pipeline LLM calls |
+| [Results & Scoring](../core_concepts/results-and-scoring.md) | What verification produces: pass/fail, scores, traits, and metrics |
+| [Adapters](../core_concepts/adapters.md) | LLM backend interfaces: LangChain, Claude SDK, OpenRouter, and more |
 
 ## Workflows
 

@@ -156,7 +156,7 @@ The `VerificationResultSet` provides specialized accessors for different analysi
 
 ## What You Get by Evaluation Mode
 
-The data available in results depends on which [evaluation mode](../04-core-concepts/evaluation-modes.md) you used:
+The data available in results depends on which [evaluation mode](../core_concepts/evaluation-modes.md) you used:
 
 | Evaluation Mode | Template Results | Rubric Results | Deep Judgment |
 |----------------|-----------------|----------------|---------------|

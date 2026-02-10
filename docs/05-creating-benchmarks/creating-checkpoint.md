@@ -15,7 +15,7 @@ jupyter:
 
 A **checkpoint** is a Karenina benchmark file in JSON-LD format. Creating one is the first step in building any benchmark. This page covers the `Benchmark` constructor, metadata fields, and inspecting your new benchmark.
 
-For background on what checkpoints are and why they use JSON-LD, see [Checkpoints](../04-core-concepts/checkpoints.md).
+For background on what checkpoints are and why they use JSON-LD, see [Checkpoints](../core_concepts/checkpoints.md).
 
 ```python tags=["hide-cell"]
 # Setup cell (hidden in rendered docs).

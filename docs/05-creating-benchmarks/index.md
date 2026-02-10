@@ -79,7 +79,7 @@ Every question needs evaluation criteria. Karenina provides two complementary ap
 
 [Write custom templates →](writing-templates.md)
 
-For background on what templates are and how they work, see [Answer Templates](../04-core-concepts/answer-templates.md).
+For background on what templates are and how they work, see [Answer Templates](../core_concepts/answer-templates.md).
 
 ### 5. Define Rubrics
 
@@ -93,7 +93,7 @@ Add rubric traits to evaluate response quality beyond factual correctness. Trait
 
 [Define rubrics for a benchmark →](defining-rubrics.md)
 
-For background on rubric concepts, see [Rubrics](../04-core-concepts/rubrics/index.md).
+For background on rubric concepts, see [Rubrics](../core_concepts/rubrics/index.md).
 
 ### 6. Add Few-Shot Examples (Optional)
 
@@ -101,7 +101,7 @@ Inject example responses into the Judge LLM's parsing prompt to improve accuracy
 
 [Add few-shot examples →](few-shot-examples.md)
 
-For background on few-shot configuration modes, see [Few-Shot](../04-core-concepts/few-shot.md).
+For background on few-shot configuration modes, see [Few-Shot](../core_concepts/few-shot.md).
 
 ### 7. Save the Benchmark
 
@@ -132,7 +132,7 @@ Not every step is required. Here's a guide based on your evaluation strategy:
 | **Template + rubric** (correctness + quality) | Create checkpoint, add questions, add templates, define rubrics, save | Adele, few-shot |
 | **Rubric-only** (quality assessment) | Create checkpoint, add questions, define rubrics, save | Adele, few-shot |
 
-See [Evaluation Modes](../04-core-concepts/evaluation-modes.md) for details on how these strategies map to pipeline behavior.
+See [Evaluation Modes](../core_concepts/evaluation-modes.md) for details on how these strategies map to pipeline behavior.
 
 ---
 

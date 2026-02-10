@@ -140,7 +140,7 @@ EMBEDDING_CHECK=true
 EMBEDDING_CHECK_THRESHOLD=0.9
 ```
 
-The embedding check runs after template verification and provides an additional similarity-based signal. See [Answer Templates](../04-core-concepts/answer-templates.md) for how embedding checks integrate with template verification.
+The embedding check runs after template verification and provides an additional similarity-based signal. See [Answer Templates](../core_concepts/answer-templates.md) for how embedding checks integrate with template verification.
 
 ---
 

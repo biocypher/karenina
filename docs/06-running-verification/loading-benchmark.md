@@ -15,7 +15,7 @@ jupyter:
 
 Before running verification, you need to load your benchmark from a checkpoint file (JSON-LD) or a database. This page covers `Benchmark.load()`, inspecting questions, templates, and rubrics, and preparing for verification.
 
-For background on the checkpoint format, see [Checkpoints](../04-core-concepts/checkpoints.md).
+For background on the checkpoint format, see [Checkpoints](../core_concepts/checkpoints.md).
 
 ```python tags=["hide-cell"]
 # Setup cell (hidden in rendered docs).

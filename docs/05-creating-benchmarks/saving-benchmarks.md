@@ -15,7 +15,7 @@ jupyter:
 
 Once you have created a benchmark, added questions, and defined templates and rubrics, you need to persist it. Karenina offers two persistence options: **JSON-LD checkpoint files** and **database storage**.
 
-For background on the JSON-LD checkpoint format, see [Checkpoints](../04-core-concepts/checkpoints.md).
+For background on the JSON-LD checkpoint format, see [Checkpoints](../core_concepts/checkpoints.md).
 
 ```python tags=["hide-cell"]
 # Setup cell (hidden in rendered docs).
@@ -191,4 +191,4 @@ shutil.rmtree(tmpdir, ignore_errors=True)
 - [Defining Rubrics](defining-rubrics.md) — add quality assessment traits
 - [Running Verification](../06-running-verification/index.md) — run evaluation on your saved benchmark
 - [Analyzing Results](../07-analyzing-results/index.md) — inspect and export results
-- [Checkpoints](../04-core-concepts/checkpoints.md) — understand the JSON-LD format
+- [Checkpoints](../core_concepts/checkpoints.md) — understand the JSON-LD format

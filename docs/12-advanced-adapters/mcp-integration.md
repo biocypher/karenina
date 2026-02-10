@@ -1,6 +1,6 @@
 # MCP Integration Deep Dive
 
-This page documents **how** adapters handle MCP servers internally — the connection lifecycle, tool schema transformation, agent execution loops, trace capture, and message conversion. For MCP **configuration and usage**, see the [MCP overview](../04-core-concepts/mcp-overview.md) and [MCP-enabled verification](../06-running-verification/mcp-verification.md).
+This page documents **how** adapters handle MCP servers internally — the connection lifecycle, tool schema transformation, agent execution loops, trace capture, and message conversion. For MCP **configuration and usage**, see the [MCP overview](../core_concepts/mcp-overview.md) and [MCP-enabled verification](../06-running-verification/mcp-verification.md).
 
 ---
 
@@ -330,7 +330,7 @@ In all cases, the pipeline's **RecursionLimitAutoFail** stage (Stage 3) checks `
 
 ## Related
 
-- [MCP overview](../04-core-concepts/mcp-overview.md) — Configuration and when to use MCP
+- [MCP overview](../core_concepts/mcp-overview.md) — Configuration and when to use MCP
 - [MCP-enabled verification](../06-running-verification/mcp-verification.md) — Running MCP verification workflows
 - [Adapter architecture](index.md) — Hexagonal architecture and port/adapter pattern
 - [Port types](ports.md) — Complete AgentPort protocol reference

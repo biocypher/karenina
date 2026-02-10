@@ -15,7 +15,7 @@ jupyter:
 
 Questions are the core content of any benchmark. Each question pairs a prompt with an expected answer, and optionally includes a template, metadata, and few-shot examples. This page covers the three ways to add questions and how to work with question metadata.
 
-For background on how questions are stored in checkpoint files, see [Checkpoints](../04-core-concepts/checkpoints.md).
+For background on how questions are stored in checkpoint files, see [Checkpoints](../core_concepts/checkpoints.md).
 
 ```python tags=["hide-cell"]
 # Setup cell (hidden in rendered docs).
@@ -94,7 +94,7 @@ In Python scripts (not notebooks), you can pass a class directly. The class name
 !!! note
     Passing a class requires that `inspect.getsource()` can access the class source code. This works in `.py` files but not in interactive environments (notebooks, REPL). In those contexts, use a code string instead.
 
-For more on writing templates, see [Writing Templates](writing-templates.md) and [Answer Templates](../04-core-concepts/answer-templates.md).
+For more on writing templates, see [Writing Templates](writing-templates.md) and [Answer Templates](../core_concepts/answer-templates.md).
 
 ## Adding a Question with a Question Object
 
@@ -235,4 +235,4 @@ Full method signature:
 - [Writing Templates](writing-templates.md) — define evaluation criteria for your questions
 - [Defining Rubrics](defining-rubrics.md) — add quality assessment traits
 - [Saving Benchmarks](saving-benchmarks.md) — persist your benchmark to JSON-LD or database
-- [Answer Templates](../04-core-concepts/answer-templates.md) — concept guide for templates
+- [Answer Templates](../core_concepts/answer-templates.md) — concept guide for templates

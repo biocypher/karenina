@@ -13,7 +13,7 @@ Most users can work entirely with the interfaces described in [Running Verificat
 
 ## The 13-Stage Pipeline
 
-Every verification run executes a subset of 13 stages in a fixed order. The `StageOrchestrator` builds the stage list based on [evaluation mode](../04-core-concepts/evaluation-modes.md) and feature flags.
+Every verification run executes a subset of 13 stages in a fixed order. The `StageOrchestrator` builds the stage list based on [evaluation mode](../core_concepts/evaluation-modes.md) and feature flags.
 
 ```
  ┌─────────────────────────────────────────────────────────────┐
@@ -122,6 +122,6 @@ Each stage implements `should_run(context)` to decide at runtime whether to exec
 
 - [Running Verification](../06-running-verification/index.md) — User-facing verification workflow
 - [VerificationConfig Tutorial](../06-running-verification/verification-config.md) — Configuring pipeline features
-- [Evaluation Modes](../04-core-concepts/evaluation-modes.md) — How modes affect stage selection
+- [Evaluation Modes](../core_concepts/evaluation-modes.md) — How modes affect stage selection
 - [VerificationResult Structure](../07-analyzing-results/verification-result.md) — What the pipeline produces
 - [VerificationConfig Reference](../10-configuration-reference/verification-config.md) — All 33 configuration fields

@@ -208,7 +208,7 @@ Messages support structured content blocks — text, tool use, tool results, and
 
 ## Related
 
-- [Adapters Overview](../04-core-concepts/adapters.md) — Conceptual introduction to the adapter system
+- [Adapters Overview](../core_concepts/adapters.md) — Conceptual introduction to the adapter system
 - [Verification Pipeline](../11-advanced-pipeline/index.md) — How the pipeline uses ports during execution
 - [Prompt Assembly](../11-advanced-pipeline/prompt-assembly.md) — The tri-section prompt system and adapter instructions
 - [Verification Config Reference](../10-configuration-reference/verification-config.md) — ModelConfig fields that configure adapters

@@ -15,7 +15,7 @@ jupyter:
 
 Rubrics evaluate the **quality** of LLM responses — characteristics like safety, clarity, format compliance, and instruction adherence. This page shows how to add rubric traits to a benchmark using both global and question-specific scopes.
 
-For conceptual background on rubrics and trait types, see [Rubrics Overview](../04-core-concepts/rubrics/index.md).
+For conceptual background on rubrics and trait types, see [Rubrics Overview](../core_concepts/rubrics/index.md).
 
 ```python tags=["hide-cell"]
 # Setup cell: hidden in rendered documentation.
@@ -304,8 +304,8 @@ print(f"Global rubric now has {len(global_rubric.get_trait_names())} traits: {gl
 
 ## Next Steps
 
-- [Rubrics Overview](../04-core-concepts/rubrics/index.md) -- conceptual background on trait types
-- [LLM Traits](../04-core-concepts/rubrics/llm-traits.md) -- detailed boolean and score trait documentation
-- [Evaluation Modes](../04-core-concepts/evaluation-modes.md) -- choosing template_only, template_and_rubric, or rubric_only
+- [Rubrics Overview](../core_concepts/rubrics/index.md) -- conceptual background on trait types
+- [LLM Traits](../core_concepts/rubrics/llm-traits.md) -- detailed boolean and score trait documentation
+- [Evaluation Modes](../core_concepts/evaluation-modes.md) -- choosing template_only, template_and_rubric, or rubric_only
 - [Running Verification](../06-running-verification/index.md) -- running verification with rubrics enabled
 - [Saving Benchmarks](saving-benchmarks.md) -- persisting benchmarks with rubric traits

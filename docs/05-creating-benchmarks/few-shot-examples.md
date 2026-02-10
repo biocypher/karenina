@@ -2,7 +2,7 @@
 
 Few-shot examples are question-answer pairs that are prepended to a question's prompt during verification, guiding the answering model toward the expected response format, style, and content.
 
-This page covers how to add examples to your benchmark. For configuration options that control *which* examples are used during verification, see [Few-Shot Configuration](../04-core-concepts/few-shot.md).
+This page covers how to add examples to your benchmark. For configuration options that control *which* examples are used during verification, see [Few-Shot Configuration](../core_concepts/few-shot.md).
 
 ---
 
@@ -145,7 +145,7 @@ config = FewShotConfig(
 
 The final example list for a question is resolved in this order: stored examples (selected by mode) → question-specific external → global external.
 
-See [Few-Shot Configuration](../04-core-concepts/few-shot.md) for the full configuration reference.
+See [Few-Shot Configuration](../core_concepts/few-shot.md) for the full configuration reference.
 
 ---
 
@@ -180,6 +180,6 @@ print(q.few_shot_examples)  # Same examples as before
 
 ## Next Steps
 
-- [Few-Shot Configuration](../04-core-concepts/few-shot.md) — Control which examples are used during verification (modes, k-shot, custom selection)
+- [Few-Shot Configuration](../core_concepts/few-shot.md) — Control which examples are used during verification (modes, k-shot, custom selection)
 - [Running Verification](../06-running-verification/index.md) — Execute verification with few-shot enabled
 - [VerificationConfig Tutorial](../06-running-verification/verification-config.md) — Complete configuration setup including `few_shot_config`

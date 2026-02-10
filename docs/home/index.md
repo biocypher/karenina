@@ -46,13 +46,13 @@ Karenina uses a **two-unit evaluation approach**:
 
 These two units are complementary. A common pattern: use a template to verify the model extracted the correct answer, then use rubrics to check that the response was concise, cited sources, and avoided hallucination.
 
-For a deeper discussion, see [Templates vs Rubrics](../04-core-concepts/template-vs-rubric.md) and [Philosophy](philosophy.md).
+For a deeper discussion, see [Templates vs Rubrics](../core_concepts/template-vs-rubric.md) and [Philosophy](philosophy.md).
 
 ---
 
 ## Next Steps
 
 - [Philosophy](philosophy.md) — Why LLM-as-judge evaluation works
-- [Templates vs Rubrics](../04-core-concepts/template-vs-rubric.md) — Understanding the two evaluation units
+- [Templates vs Rubrics](../core_concepts/template-vs-rubric.md) — Understanding the two evaluation units
 - [Installation](../getting-started/installation.md) — Install karenina and set up API keys
 - [Core Concepts](../core-concepts.md) — Deep dive into checkpoints, templates, rubrics, and more

@@ -15,7 +15,7 @@ jupyter:
 
 Custom templates give you full control over evaluation logic. While [automatic generation](generating-templates.md) works well for straightforward questions, custom templates are essential when you need complex comparison logic, domain-specific tolerance, or multi-step verification.
 
-This page covers practical patterns for writing templates by hand. For the conceptual foundation (what templates are, field types, `verify()` basics), see [Answer Templates](../04-core-concepts/answer-templates.md).
+This page covers practical patterns for writing templates by hand. For the conceptual foundation (what templates are, field types, `verify()` basics), see [Answer Templates](../core_concepts/answer-templates.md).
 
 ```python tags=["hide-cell"]
 # Setup cell: ensures examples execute without live API keys.
@@ -333,5 +333,5 @@ print(f"With templates:  {len(benchmark.get_finished_templates())}")
 - [Generating Templates](generating-templates.md) — Automatic template generation for common question types
 - [Defining Rubrics](defining-rubrics.md) — Add quality assessment alongside correctness checks
 - [Saving Benchmarks](saving-benchmarks.md) — Save your benchmark with templates to a checkpoint
-- [Answer Templates](../04-core-concepts/answer-templates.md) — Conceptual foundation (field types, naming requirement)
+- [Answer Templates](../core_concepts/answer-templates.md) — Conceptual foundation (field types, naming requirement)
 - [Running Verification](../06-running-verification/index.md) — Execute verification with your custom templates

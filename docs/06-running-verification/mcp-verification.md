@@ -380,5 +380,5 @@ for result in results:
 - [Running Verification](index.md) — verification workflow overview
 - [Python API](python-api.md) — full Python API walkthrough
 - [Multi-Model Evaluation](multi-model.md) — comparing models
-- [Evaluation Modes](../04-core-concepts/evaluation-modes.md) — template, rubric, and combined modes
+- [Evaluation Modes](../core_concepts/evaluation-modes.md) — template, rubric, and combined modes
 - [Verification Config Reference](../10-configuration-reference/verification-config.md) — all `VerificationConfig` fields

@@ -3,7 +3,7 @@
 ADeLe (Assessment Dimensions for Language Evaluation) classifies your benchmark questions by cognitive complexity across 18 dimensions. This helps you understand what your benchmark measures and filter questions by difficulty.
 
 !!! note "Concept vs Workflow"
-    This page covers **how to run classification** in the benchmark creation workflow. For the full list of 18 dimensions and the ordinal scale, see [ADeLe Concepts](../04-core-concepts/adele.md).
+    This page covers **how to run classification** in the benchmark creation workflow. For the full list of 18 dimensions and the ordinal scale, see [ADeLe Concepts](../core_concepts/adele.md).
 
 ## When to Classify
 
@@ -250,12 +250,12 @@ print(len(rubric.llm_traits))  # 2
 ```
 
 !!! tip "ADeLe traits as rubric traits"
-    Each ADeLe dimension is a [literal trait](../04-core-concepts/rubrics/literal-traits.md) with 6 ordered classes. You can use `create_adele_rubric()` to add ADeLe dimensions directly to your benchmark's rubric evaluation.
+    Each ADeLe dimension is a [literal trait](../core_concepts/rubrics/literal-traits.md) with 6 ordered classes. You can use `create_adele_rubric()` to add ADeLe dimensions directly to your benchmark's rubric evaluation.
 
 ## Next Steps
 
-- [ADeLe Concepts](../04-core-concepts/adele.md) — Full list of 18 dimensions with descriptions
+- [ADeLe Concepts](../core_concepts/adele.md) — Full list of 18 dimensions with descriptions
 - [Generating Templates](generating-templates.md) — Auto-generate answer templates for your questions
 - [Defining Rubrics](defining-rubrics.md) — Add rubric traits for quality evaluation
 - [Running Verification](../06-running-verification/index.md) — Execute your benchmark
-- [Literal Traits](../04-core-concepts/rubrics/literal-traits.md) — How ADeLe traits work as rubric traits
+- [Literal Traits](../core_concepts/rubrics/literal-traits.md) — How ADeLe traits work as rubric traits

@@ -2,7 +2,7 @@
 
 Karenina ships with four adapter implementations and two routing interfaces, totaling six `interface` values. This page documents each adapter's implementation details, capabilities, configuration requirements, and adapter-specific behavior.
 
-For the conceptual introduction to adapters, see [Adapters Overview](../04-core-concepts/adapters.md). For port protocol signatures, see [Port Types](ports.md).
+For the conceptual introduction to adapters, see [Adapters Overview](../core_concepts/adapters.md). For port protocol signatures, see [Port Types](ports.md).
 
 ---
 
@@ -314,7 +314,7 @@ No system prompt support, no structured output, no MCP, no tools. The manual ada
 - **External traces**: Evaluate responses from models or systems outside karenina
 - **Development**: Iterate on templates and rubrics without waiting for LLM responses
 
-See [Manual Interface](../04-core-concepts/manual-interface.md) for trace format and workflow details.
+See [Manual Interface](../core_concepts/manual-interface.md) for trace format and workflow details.
 
 ---
 
@@ -352,4 +352,4 @@ See [Manual Interface](../04-core-concepts/manual-interface.md) for trace format
 - [Port Types](ports.md) — Complete protocol signatures for LLMPort, ParserPort, AgentPort
 - [MCP Integration](mcp-integration.md) — How adapters handle MCP servers and tool schemas
 - [Writing Custom Adapters](writing-adapters.md) — Guide to implementing and registering new adapters
-- [Adapters Overview](../04-core-concepts/adapters.md) — Conceptual introduction to the adapter system
+- [Adapters Overview](../core_concepts/adapters.md) — Conceptual introduction to the adapter system

@@ -1,6 +1,6 @@
 # Manual Interface Workflow
 
-This page walks through the step-by-step workflow for running verification with pre-recorded traces using the manual interface. For conceptual background on how the manual interface works, see [Manual Interface Concepts](../04-core-concepts/manual-interface.md).
+This page walks through the step-by-step workflow for running verification with pre-recorded traces using the manual interface. For conceptual background on how the manual interface works, see [Manual Interface Concepts](../core_concepts/manual-interface.md).
 
 ## When to Use This Workflow
 
@@ -356,7 +356,7 @@ The `ModelConfig` was created with `interface="manual"` but without a `manual_tr
 
 ## Next Steps
 
-- [Manual Interface Concepts](../04-core-concepts/manual-interface.md) — Conceptual background on trace formats and the adapter architecture
+- [Manual Interface Concepts](../core_concepts/manual-interface.md) — Conceptual background on trace formats and the adapter architecture
 - [Verification Config](verification-config.md) — Configure evaluation modes, features, and models
 - [Python API](python-api.md) — Complete verification workflow reference
 - [CLI Verification](cli.md#manual-traces) — Using `--interface manual` from the command line

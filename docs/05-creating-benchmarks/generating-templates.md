@@ -315,5 +315,5 @@ interface.
 - [Saving Benchmarks](saving-benchmarks.md) — persist your work
 - [Running Verification](../06-running-verification/index.md) — execute
   verification with generated templates
-- [Answer Templates](../04-core-concepts/answer-templates.md) — template
+- [Answer Templates](../core_concepts/answer-templates.md) — template
   concepts and field types

@@ -85,7 +85,7 @@ Each `ModelConfig` specifies how to connect to an LLM:
 | `id` | `str` | — | Unique identifier for this model configuration (required) |
 | `model_name` | `str` | — | Model identifier (e.g., `"gpt-4.1-mini"`, `"claude-sonnet-4-20250514"`) |
 | `model_provider` | `str` | — | Provider name (e.g., `"openai"`, `"anthropic"`) |
-| `interface` | `str` | `"langchain"` | Adapter backend (see [Adapters](../04-core-concepts/adapters.md)) |
+| `interface` | `str` | `"langchain"` | Adapter backend (see [Adapters](../core_concepts/adapters.md)) |
 | `temperature` | `float` | `0.1` | Sampling temperature |
 | `max_tokens` | `int` | `8192` | Maximum response tokens |
 | `system_prompt` | `str` | auto | Auto-set based on role (answering vs parsing) |
@@ -122,7 +122,7 @@ print(f"Answering interface: {config.answering_models[0].interface}")
 print(f"Parsing interface: {config.parsing_models[0].interface}")
 ```
 
-The six available interfaces are: `langchain` (default, multi-provider), `openrouter`, `openai_endpoint`, `claude_agent_sdk`, `claude_tool`, and `manual`. See [Adapters Overview](../04-core-concepts/adapters.md) for when to use each.
+The six available interfaces are: `langchain` (default, multi-provider), `openrouter`, `openai_endpoint`, `claude_agent_sdk`, `claude_tool`, and `manual`. See [Adapters Overview](../core_concepts/adapters.md) for when to use each.
 
 ## Evaluation Modes
 
@@ -157,7 +157,7 @@ print(f"Rubric enabled: {config.rubric_enabled}")
     - `"template_and_rubric"` and `"rubric_only"` both require `rubric_enabled=True`
     - `"template_only"` requires `rubric_enabled=False` (the default)
 
-For a detailed comparison of what each mode includes, see [Evaluation Modes](../04-core-concepts/evaluation-modes.md).
+For a detailed comparison of what each mode includes, see [Evaluation Modes](../core_concepts/evaluation-modes.md).
 
 ## Feature Flags
 

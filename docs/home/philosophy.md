@@ -119,8 +119,8 @@ This separation means each component can be independently configured, tested, an
 
 ## Learn More
 
-- [Templates vs Rubrics](../04-core-concepts/template-vs-rubric.md) — Understand the two complementary evaluation units
-- [Answer Templates](../04-core-concepts/answer-templates.md) — Deep dive into template structure, `verify()`, and field types
-- [Evaluation Modes](../04-core-concepts/evaluation-modes.md) — How template-only, rubric-only, and combined modes work
+- [Templates vs Rubrics](../core_concepts/template-vs-rubric.md) — Understand the two complementary evaluation units
+- [Answer Templates](../core_concepts/answer-templates.md) — Deep dive into template structure, `verify()`, and field types
+- [Evaluation Modes](../core_concepts/evaluation-modes.md) — How template-only, rubric-only, and combined modes work
 
 **Back to**: [Home](index.md)
