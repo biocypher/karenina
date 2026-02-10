@@ -133,8 +133,8 @@ karenina init --dir ~/karenina-workspace
 
 ## Next Steps
 
-- [Environment Variables](../03-configuration/environment-variables.md) — Configure API keys and other settings in `.env`
-- [Presets](../03-configuration/presets.md) — Create reusable verification configurations in `presets/`
-- [Configuration Hierarchy](../03-configuration/index.md) — Understand how settings are resolved
-- [Running Verification](../06-running-verification/index.md) — Start evaluating with your new workspace
-- [CLI Reference: init](../09-cli-reference/init.md) — Full command reference
+- [Core Concepts](../04-core-concepts/index.md) — Understand checkpoints, answer templates, rubrics, and adapters
+- [Creating Benchmarks](../05-creating-benchmarks/index.md) — Build a benchmark with questions, templates, and rubric traits
+- [Running Verification](../06-running-verification/index.md) — Evaluate models against your benchmark
+- [Environment Variables](../03-configuration/environment-variables.md) — All available `.env` settings including API keys
+- [Presets](../03-configuration/presets.md) — Create reusable verification configurations for the `presets/` directory
