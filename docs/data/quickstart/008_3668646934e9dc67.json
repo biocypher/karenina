@@ -1,0 +1,30 @@
+{
+  "sequence": 8,
+  "prompt_hash": "3668646934e9dc67",
+  "model": "claude-haiku-4-5",
+  "request": {
+    "messages": [
+      {
+        "type": "system",
+        "content": "You are a knowledgeable assistant. Answer accurately and concisely."
+      },
+      {
+        "type": "human",
+        "content": "How many protein subunits does hemoglobin A have?"
+      }
+    ]
+  },
+  "response": {
+    "content": "Hemoglobin A has **4 protein subunits**:\n\n- 2 alpha (α) globin chains\n- 2 beta (β) globin chains\n\nThis tetrameric structure is essential for hemoglobin's cooperative binding of oxygen and its ability to function as an efficient oxygen transporter in red blood cells.",
+    "id": "lc_run--c6f3f3b0-7f1d-4214-b065-3183e89ea672-0",
+    "usage_metadata": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    },
+    "response_metadata": {
+      "model_name": "claude-haiku-4-5-20251001",
+      "stop_reason": "end_turn"
+    }
+  }
+}

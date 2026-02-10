@@ -318,8 +318,13 @@ class Benchmark:
         """Get template code for a question."""
         return self._template_manager.get_template(question_id)
 
-    def update_template(self, question_id: str, template_code: str) -> None:
-        """Update existing template."""
+    def update_template(self, question_id: str, template_code: str | type) -> None:
+        """Update existing template.
+
+        Args:
+            question_id: The question ID
+            template_code: Python code defining the Answer class, or a BaseAnswer subclass
+        """
         self._template_manager.update_template(question_id, template_code)
 
     def copy_template(self, from_id: str, to_id: str) -> None:

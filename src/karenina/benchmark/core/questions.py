@@ -5,7 +5,6 @@ CRUD operations and metadata management. Filtering and search operations
 are delegated to QuestionQueryBuilder for single responsibility.
 """
 
-import ast
 import inspect
 import logging
 from collections.abc import Iterator
@@ -20,50 +19,12 @@ if TYPE_CHECKING:
 from karenina.utils.checkpoint import add_question_to_benchmark
 
 from .question_query import QuestionQueryBuilder
+from .templates import _rename_answer_class_to_standard
 
 logger = logging.getLogger(__name__)
 
 # Sentinel value to detect if finished parameter was explicitly provided
 _NOT_PROVIDED = object()
-
-
-def _rename_answer_class_to_standard(source_code: str, original_class_name: str) -> str:
-    """
-    Rename a BaseAnswer subclass to 'Answer' in source code.
-
-    This allows users to define classes with any name (e.g., VenetoclaxAnswer),
-    but stores them with the standard 'Answer' name that the verification system expects.
-
-    Args:
-        source_code: The source code containing the class definition
-        original_class_name: The original name of the class to rename
-
-    Returns:
-        Modified source code with the class renamed to 'Answer'
-    """
-    # If already named "Answer", no change needed
-    if original_class_name == "Answer":
-        return source_code
-
-    try:
-        tree = ast.parse(source_code)
-
-        # Find and rename the class definition
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef) and node.name == original_class_name:
-                node.name = "Answer"
-
-        # Convert back to source code
-        return ast.unparse(tree)
-    except Exception:
-        # If AST parsing fails, fall back to simple string replacement
-        # This is a safety net but should rarely be needed
-        logger.debug(
-            "AST parsing failed for class rename %s -> Answer, falling back to string replacement",
-            original_class_name,
-            exc_info=True,
-        )
-        return source_code.replace(f"class {original_class_name}(", "class Answer(")
 
 
 class QuestionManager:
@@ -145,7 +106,6 @@ class QuestionManager:
         from karenina.schemas.entities import Question
 
         # Track whether user provided an answer template (before we set default)
-        user_provided_template = answer_template is not None
 
         # Handle Question object input
         if isinstance(question, Question):
@@ -214,12 +174,10 @@ class QuestionManager:
         # At this point, answer_template is guaranteed to be a string
         assert isinstance(answer_template, str), "answer_template should be a string at this point"
 
-        # Auto-set finished flag if user provided a template but didn't explicitly set finished
-        # This enables backend usage (like ManualTraces) to skip the manual mark_finished() call
-        # Frontend behavior is preserved since it always explicitly passes finished=False
+        # Default finished=True for backend/API usage — questions added programmatically
+        # are ready for verification. Frontend always explicitly passes finished=False.
         if finished is _NOT_PROVIDED:
-            # User didn't provide finished parameter - auto-set based on template presence
-            finished = bool(user_provided_template)
+            finished = True
         # else: User explicitly provided finished value, use it as-is
 
         # Type narrowing: finished is guaranteed to be bool at this point

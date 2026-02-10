@@ -1,0 +1,61 @@
+{
+  "sequence": 5,
+  "prompt_hash": "bfbc4f34c140bae9",
+  "model": "claude-haiku-4-5",
+  "request": {
+    "messages": [
+      {
+        "type": "system",
+        "content": "You are an expert evaluation designer extracting ground-truth attributes from a question and its ideal answer. Build a Pydantic-friendly schema capturing what a judge model should read from candidate responses.\n\nCRITICAL: Use the MINIMUM number of attributes necessary. One attribute per independent piece of information.\n\nType selection rules (in order of preference):\n1. For YES/NO questions: Use a single `bool` attribute.\n2. For single-value factual answers (IDs, names, numbers): Use a single attribute with the appropriate type:\n   - `Literal['value']` for exact text matches (IDs, codes, specific terms)\n   - `int` or `float` for numeric answers\n   - `bool` for presence/absence checks\n3. For categorical answers with few options: Use `Literal['option1', 'option2', ...]`\n4. For multiple independent items: Create ONE `bool` attribute per item.\n\nFORBIDDEN:\n- Never use `str`, `List[str]`, or `Dict[str, str]` types.\n- Never create redundant attributes that check the same information twice.\n- Never create a \"mentions_X\" boolean AND a Literal/value check for the same answer.\n\nExamples of CORRECT minimal schemas:\n- Q: \"What is the MESH ID for X?\" A: \"D010300\" → ONE attribute: `mesh_id: Literal['D010300']`\n- Q: \"Is X a symptom of Y?\" A: \"Yes\" → ONE attribute: `is_symptom: bool`\n- Q: \"What genes are involved?\" A: \"BRCA1, TP53\" → TWO attributes: `mentions_brca1: bool`, `mentions_tp53: bool`\n\nExample JSON output:\n{{\n  \"attributes\": [\n    {{\n      \"name\": \"mesh_id\",\n      \"type\": \"Literal['D010300']\",\n      \"ground_truth\": \"D010300\"\n    }}\n  ]\n}}"
+      },
+      {
+        "type": "human",
+        "content": "You receive an evaluation sample consisting of a question and its reference answer:\n\nQuestion:\nHow many protein subunits does hemoglobin A have?\n\nReference Answer:\n4\n\nIdentify the minimal set of structured attributes that a judge must extract from a candidate response to verify correctness. Construct a JSON object with a single key `attributes` containing a list of attribute definitions. Each definition must include `name`, `type`, and `ground_truth` fields, where `ground_truth` contains the expected correct value derived from the reference answer.\n\nWhen selecting types, follow these guidelines:\n- FORBIDDEN: Never use `str`, `List[str]`, or `Dict[str, str]` types.\n- Use `bool` to capture presence or absence of concepts, entities, or patterns. This is the primary evaluation mechanism.\n- When the reference answer suggests a categorical classification or scale, use `Literal` types with all reasonable values in that domain.\n- For multiple items in the reference answer, create separate boolean attributes for each item instead of using lists.\n- When the reference answer contains compound terms or phrases, treat them as single semantic units and create one boolean attribute for the complete concept, not separate attributes for individual words.\n\nReturn only valid JSON."
+      }
+    ]
+  },
+  "response": {
+    "content": [
+      {
+        "id": "toolu_015oXCsxojBRDActtsxbD2rp",
+        "input": {
+          "attributes": [
+            {
+              "name": "hemoglobin_a_subunit_count",
+              "type": "int",
+              "ground_truth": 4
+            }
+          ]
+        },
+        "name": "GroundTruthSpec",
+        "type": "tool_use"
+      }
+    ],
+    "id": "lc_run--2a9c844d-47aa-48de-a6da-6ce51b49f928-0",
+    "tool_calls": [
+      {
+        "name": "GroundTruthSpec",
+        "args": {
+          "attributes": [
+            {
+              "name": "hemoglobin_a_subunit_count",
+              "type": "int",
+              "ground_truth": 4
+            }
+          ]
+        },
+        "id": "toolu_015oXCsxojBRDActtsxbD2rp",
+        "type": "tool_call"
+      }
+    ],
+    "usage_metadata": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    },
+    "response_metadata": {
+      "model_name": "claude-haiku-4-5-20251001",
+      "stop_reason": "tool_use"
+    }
+  }
+}

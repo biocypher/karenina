@@ -245,6 +245,66 @@ class TestUpdateTemplate:
 
         assert "Updated" in manager.get_template(q_id)
 
+    def test_update_template_with_class(self) -> None:
+        """Test that update_template accepts a BaseAnswer subclass."""
+        from pydantic import Field
+
+        from karenina.schemas.entities import BaseAnswer
+
+        class Answer(BaseAnswer):
+            target: str = Field(description="Drug target")
+
+            def model_post_init(self, __context):
+                self.correct = {"target": "BCL2"}
+
+            def verify(self) -> bool:
+                return self.target.strip().upper() == self.correct["target"].upper()
+
+        benchmark = Benchmark.create(name="test")
+        manager = TemplateManager(benchmark)
+
+        q_id = benchmark.add_question("What is the drug target?", "BCL2")
+        manager.add_answer_template(q_id, VALID_TEMPLATE)
+
+        # Update with a class instead of a string
+        manager.update_template(q_id, Answer)
+
+        result = manager.get_template(q_id)
+        assert "target" in result
+        assert "BCL2" in result
+
+    def test_update_template_with_class_renames_to_answer(self) -> None:
+        """Test that a non-Answer class name is renamed to Answer."""
+        from pydantic import Field
+
+        from karenina.schemas.entities import BaseAnswer
+
+        class VenetoclaxAnswer(BaseAnswer):
+            target: str = Field(description="Drug target")
+
+            def verify(self) -> bool:
+                return len(self.target) > 0
+
+        benchmark = Benchmark.create(name="test")
+        manager = TemplateManager(benchmark)
+
+        q_id = benchmark.add_question("What is the drug target?", "BCL2")
+        manager.update_template(q_id, VenetoclaxAnswer)
+
+        result = manager.get_template(q_id)
+        assert "class Answer(" in result
+        assert "VenetoclaxAnswer" not in result
+
+    def test_update_template_with_non_baseanswer_class_raises(self) -> None:
+        """Test that passing a non-BaseAnswer class raises TypeError."""
+        benchmark = Benchmark.create(name="test")
+        manager = TemplateManager(benchmark)
+
+        q_id = benchmark.add_question("Test?", "Answer")
+
+        with pytest.raises(TypeError, match="must inherit from BaseAnswer"):
+            manager.update_template(q_id, str)
+
 
 @pytest.mark.unit
 class TestCopyTemplate:
@@ -304,7 +364,7 @@ class TestGetFinishedTemplates:
         benchmark = Benchmark.create(name="test")
         manager = TemplateManager(benchmark)
 
-        benchmark.add_question("Test?", "Answer")
+        benchmark.add_question("Test?", "Answer", finished=False)
 
         templates = manager.get_finished_templates()
 
@@ -317,9 +377,6 @@ class TestGetFinishedTemplates:
 
         q_id = benchmark.add_question("What is 2+2?", "4")
         manager.add_answer_template(q_id, VALID_TEMPLATE)
-
-        # Mark as finished by setting finished flag in cache
-        benchmark._questions_cache[q_id]["finished"] = True
 
         templates = manager.get_finished_templates()
 

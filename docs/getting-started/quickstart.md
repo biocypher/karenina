@@ -36,93 +36,74 @@ By the end you will have a working benchmark that evaluates LLM responses for bo
 ---
 
 ```python tags=["hide-cell"]
-# Mock cell: patches run_verification so the quickstart executes without live API keys.
+# Mock cell: replays captured LLM responses from docs/data/quickstart/ so the
+# quickstart executes without live API keys. The full pipeline logic runs;
+# only the raw model calls are mocked.
 # This cell is hidden in the rendered documentation.
-import datetime
+import hashlib
+import json
 import tempfile
-from unittest.mock import patch
+from pathlib import Path
 
-from karenina.schemas.results import VerificationResultSet
-from karenina.schemas.verification import VerificationConfig, VerificationResult
-from karenina.schemas.verification.model_identity import ModelIdentity
-from karenina.schemas.verification.result_components import (
-    VerificationResultMetadata,
-    VerificationResultRubric,
-    VerificationResultTemplate,
-)
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import AIMessage
 
-_MOCK_RESPONSES = {
-    "chromosomes": "There are 46 chromosomes in a human somatic cell — 23 pairs in total.",
-    "venetoclax": "Venetoclax targets BCL2 (B-cell lymphoma 2), an anti-apoptotic protein in the BH3 family.",
-    "hemoglobin": "Hemoglobin A has 4 protein subunits: two alpha and two beta globin chains.",
-}
+# Resolve fixtures directory (works from notebook, markdown, and repo root CWDs)
+_FIXTURES_DIR = None
+for _candidate in [Path("data/quickstart"), Path("../data/quickstart"), Path("docs/data/quickstart")]:
+    if _candidate.is_dir():
+        _FIXTURES_DIR = _candidate
+        break
+assert _FIXTURES_DIR is not None, "Could not find data/quickstart fixtures directory"
 
-
-def _mock_run_verification(self, config, question_ids=None, **kwargs):
-    """Return realistic mock results for documentation examples."""
-    qids = question_ids or self.get_question_ids()
-    mock_results = []
-    for qid in qids:
-        q = self.get_question(qid)
-        question_text = q["question"]
-        # Match question to mock response
-        response, verified = "Mock response", True
-        for key, resp in _MOCK_RESPONSES.items():
-            if key in question_text.lower():
-                response = resp
-                break
-        answering = ModelIdentity(model_name="gpt-4.1-mini", interface="langchain")
-        parsing = ModelIdentity(model_name="gpt-4.1-mini", interface="langchain")
-        ts = datetime.datetime.now(tz=datetime.UTC).isoformat()
-        result_id = VerificationResultMetadata.compute_result_id(
-            qid, answering, parsing, ts
-        )
-        template_result = VerificationResultTemplate(
-            raw_llm_response=response,
-            verify_result=verified,
-            template_verification_performed=True,
-        )
-        rubric_result = None
-        if config.rubric_enabled:
-            scores = {"Conciseness": 4}
-            regex_scores = {}
-            if "venetoclax" in question_text.lower():
-                regex_scores["Contains BCL2"] = True
-            rubric_result = VerificationResultRubric(
-                rubric_evaluation_performed=True,
-                rubric_evaluation_strategy="batch",
-                llm_trait_scores=scores,
-                regex_trait_scores=regex_scores if regex_scores else None,
-            )
-        result = VerificationResult(
-            metadata=VerificationResultMetadata(
-                question_id=qid,
-                template_id="mock_template",
-                completed_without_errors=True,
-                question_text=question_text,
-                raw_answer=q.get("raw_answer"),
-                answering=answering,
-                parsing=parsing,
-                execution_time=1.2,
-                timestamp=ts,
-                result_id=result_id,
-            ),
-            template=template_result,
-            rubric=rubric_result,
-        )
-        mock_results.append(result)
-    return VerificationResultSet(results=mock_results)
+# Load fixtures indexed by prompt hash for order-independent matching
+_fixtures_by_hash: dict[str, dict] = {}
+for _p in _FIXTURES_DIR.glob("*.json"):
+    _data = json.loads(_p.read_text())
+    _fixtures_by_hash[_data["prompt_hash"]] = _data
 
 
-_patcher_run = patch(
-    "karenina.benchmark.benchmark.Benchmark.run_verification",
-    _mock_run_verification,
-)
-_patcher_validate = patch.object(
-    VerificationConfig, "_validate_config", lambda self: None
-)
-_patcher_run.start()
-_patcher_validate.start()
+def _hash_messages(messages) -> str:
+    """Compute the same hash used during capture for fixture matching."""
+    normalized = []
+    for msg in messages:
+        content = msg.content if hasattr(msg, "content") else str(msg)
+        msg_type = msg.type if hasattr(msg, "type") else "unknown"
+        if isinstance(content, str):
+            normalized.append(f"{msg_type}:{content}")
+        elif isinstance(content, list):
+            text_parts = []
+            for block in content:
+                if isinstance(block, dict):
+                    text_parts.append(str(block.get("text", block.get("input", ""))))
+                else:
+                    text_parts.append(str(block))
+            normalized.append(f"{msg_type}:{'|'.join(text_parts)}")
+    return hashlib.sha256("|".join(normalized).encode()).hexdigest()[:16]
+
+
+# Save original ainvoke for restoration
+_original_ainvoke = BaseChatModel.ainvoke
+
+
+async def _replaying_ainvoke(self, input, config=None, **kwargs):
+    """Return the captured LLM response matching this request's prompt hash."""
+    messages = input if isinstance(input, list) else [input]
+    prompt_hash = _hash_messages(messages)
+    fixture = _fixtures_by_hash.get(prompt_hash)
+    if fixture is None:
+        raise ValueError(f"No fixture for prompt hash {prompt_hash}")
+    resp = fixture["response"]
+    return AIMessage(
+        content=resp["content"],
+        id=resp.get("id", "fixture"),
+        tool_calls=resp.get("tool_calls", []),
+        response_metadata=resp.get("response_metadata", {}),
+        usage_metadata=resp.get("usage_metadata"),
+    )
+
+
+BaseChatModel.ainvoke = _replaying_ainvoke
 
 # Temp directory for save/load examples
 _tmpdir = tempfile.mkdtemp()
@@ -144,6 +125,8 @@ benchmark = Benchmark.create(
 
 print(f"Created benchmark: {benchmark.name}")
 ```
+
+> **Learn more**: [Creating Checkpoints](../05-creating-benchmarks/creating-checkpoint.md) · [Core Concepts](../04-core-concepts/index.md)
 
 ---
 
@@ -179,6 +162,8 @@ for q in questions:
 print(f"Added {len(question_ids)} questions")
 ```
 
+> **Learn more**: [Adding Questions](../05-creating-benchmarks/adding-questions.md) — including bulk import from Excel, CSV, and TSV files
+
 ---
 
 ## Step 3: Write Answer Templates
@@ -191,61 +176,54 @@ Answer templates are Pydantic models that define how a Judge LLM should parse an
 
 The class must always be named `Answer` and inherit from `BaseAnswer`.
 
-Here is a template for the Venetoclax question:
+### Automatic Generation
+
+The fastest way to get started is to let Karenina generate templates for you using an LLM. This analyses each question and its reference answer, then produces a complete template:
 
 ```python
-venetoclax_template = '''
-from pydantic import Field
-from karenina.schemas.entities import BaseAnswer
+benchmark.generate_all_templates(
+    model="claude-haiku-4-5",
+    model_provider="anthropic",
+    temperature=0.0,
+)
 
-class Answer(BaseAnswer):
-    target: str = Field(description="The protein target of the drug mentioned in the response")
-
-    def model_post_init(self, __context):
-        self.correct = {"target": "BCL2"}
-
-    def verify(self) -> bool:
-        return self.target.strip().upper() == self.correct["target"].upper()
-'''
+print(f"Generated templates for {benchmark.question_count} questions")
 ```
 
-Add templates to each question using `update_template`:
+You can review a generated template to see what the LLM produced:
 
 ```python
-chromosomes_template = '''
-from pydantic import Field
-from karenina.schemas.entities import BaseAnswer
-
-class Answer(BaseAnswer):
-    count: int = Field(description="The number of chromosomes mentioned in the response")
-
-    def model_post_init(self, __context):
-        self.correct = {"count": 46}
-
-    def verify(self) -> bool:
-        return self.count == self.correct["count"]
-'''
-
-hemoglobin_template = '''
-from pydantic import Field
-from karenina.schemas.entities import BaseAnswer
-
-class Answer(BaseAnswer):
-    subunit_count: int = Field(description="The number of protein subunits mentioned in the response")
-
-    def model_post_init(self, __context):
-        self.correct = {"subunit_count": 4}
-
-    def verify(self) -> bool:
-        return self.subunit_count == self.correct["subunit_count"]
-'''
-
-templates = [chromosomes_template, venetoclax_template, hemoglobin_template]
-for qid, code in zip(question_ids, templates):
-    benchmark.update_template(qid, code)
-
-print(f"Added templates to {len(templates)} questions")
+generated_code = benchmark.get_template(question_ids[0])
+print(generated_code)
 ```
+
+### Manual Definition (Class-Based)
+
+When you need precise control over verification logic, define templates as Python classes and pass them directly. This is especially useful for domain-specific comparisons or multi-field extraction:
+
+```python
+from pydantic import Field
+from karenina.schemas.entities import BaseAnswer
+
+
+class Answer(BaseAnswer):
+    is_bcl2: bool = Field(
+        description="Whether the response identifies BCL2 as the putative target of the drug"
+    )
+
+    def model_post_init(self, __context):
+        self.correct = {"is_bcl2": True}
+
+    def verify(self) -> bool:
+        return self.is_bcl2 == self.correct["is_bcl2"]
+
+
+benchmark.update_template(question_ids[1], Answer)
+
+print(f"Updated template for Venetoclax question with class-based definition")
+```
+
+> **Learn more**: [Writing Templates](../05-creating-benchmarks/writing-templates.md) · [Generating Templates](../05-creating-benchmarks/generating-templates.md) · [Answer Templates (Concepts)](../04-core-concepts/answer-templates.md)
 
 ---
 
@@ -291,6 +269,8 @@ benchmark.add_question_rubric_trait(
 print(f"Added regex trait 'Contains BCL2' to question {venetoclax_qid}")
 ```
 
+> **Learn more**: [Defining Rubrics](../05-creating-benchmarks/defining-rubrics.md) · [All Four Trait Types](../04-core-concepts/rubrics/index.md) — LLM, regex, callable, and metric traits
+
 ---
 
 ## Step 5: Run Verification
@@ -298,13 +278,14 @@ print(f"Added regex trait 'Contains BCL2' to question {venetoclax_qid}")
 Configure the answering model (the model being evaluated) and the parsing model (the judge), then run verification.
 
 ```python
-from karenina.schemas import VerificationConfig, ModelConfig
+from karenina.schemas import ModelConfig, VerificationConfig
 
 config = VerificationConfig(
     answering_models=[
         ModelConfig(
-            id="gpt-4.1-mini",
-            model_name="gpt-4.1-mini",
+            id="claude-haiku-4-5",
+            model_name="claude-haiku-4-5",
+            model_provider="anthropic",
             interface="langchain",
             temperature=0.7,
             system_prompt="You are a knowledgeable assistant. Answer accurately and concisely.",
@@ -312,12 +293,14 @@ config = VerificationConfig(
     ],
     parsing_models=[
         ModelConfig(
-            id="gpt-4.1-mini",
-            model_name="gpt-4.1-mini",
+            id="claude-haiku-4-5",
+            model_name="claude-haiku-4-5",
+            model_provider="anthropic",
             interface="langchain",
             temperature=0.0,
         )
     ],
+    evaluation_mode="template_and_rubric",
     rubric_enabled=True,
 )
 
@@ -325,44 +308,43 @@ results = benchmark.run_verification(config)
 print(f"Verification complete — {len(results.results)} results")
 ```
 
+> **Learn more**: [Verification Config](../06-running-verification/verification-config.md) · [Multi-Model Evaluation](../06-running-verification/multi-model.md) · [Model Config Reference](../10-configuration-reference/model-config.md) · [CLI Verification](../09-cli-reference/verify.md)
+
 ---
 
 ## Step 6: Inspect Results
 
-### Iterate over results
+`VerificationResultSet` provides specialized accessors that convert results into pandas DataFrames for analysis.
 
-Each `VerificationResult` contains metadata, template verification, and rubric evaluation.
+### Template results
 
-```python
-for result in results.results:
-    q_text = result.metadata.question_text[:60]
-
-    # Template verification
-    if result.template and result.template.verify_result is not None:
-        status = "PASS" if result.template.verify_result else "FAIL"
-    else:
-        status = "N/A"
-
-    # Rubric scores
-    rubric_info = ""
-    if result.rubric and result.rubric.llm_trait_scores:
-        scores = ", ".join(f"{k}={v}" for k, v in result.rubric.llm_trait_scores.items())
-        rubric_info = f"  rubric: {scores}"
-
-    print(f"  [{status}] {q_text}{rubric_info}")
-```
-
-### Aggregate pass rate
+Use `get_template_results()` to access pass/fail data and field-level comparisons:
 
 ```python
-total = len(results.results)
-passed = sum(
-    1
-    for r in results.results
-    if r.template and r.template.verify_result
-)
-print(f"\nOverall pass rate: {passed}/{total} ({passed / total * 100:.0f}%)")
+template_results = results.get_template_results()
+df_templates = template_results.to_dataframe()
+
+df_templates[["question_id", "field_name", "gt_value", "llm_value", "field_match"]]
 ```
+
+### Pass rate
+
+```python
+template_results.aggregate_pass_rate(by="question_id")
+```
+
+### Rubric results
+
+Use `get_rubrics_results()` to access trait scores as a DataFrame:
+
+```python
+rubric_results = results.get_rubrics_results()
+df_rubrics = rubric_results.to_dataframe()
+
+df_rubrics[["question_id", "trait_name", "trait_score", "trait_type"]]
+```
+
+> **Learn more**: [DataFrame Analysis](../07-analyzing-results/dataframe-analysis.md) · [VerificationResult](../07-analyzing-results/verification-result.md) · [Exporting Results](../07-analyzing-results/exporting.md)
 
 ---
 
@@ -385,76 +367,12 @@ loaded = Benchmark.load(checkpoint_path)
 print(f"Loaded '{loaded.name}' with {loaded.question_count} questions")
 ```
 
+> **Learn more**: [Checkpoints](../04-core-concepts/checkpoints.md) · [Saving Benchmarks](../05-creating-benchmarks/saving-benchmarks.md) · [Loading Benchmarks](../06-running-verification/loading-benchmark.md)
+
 ```python tags=["hide-cell"]
-# Clean up mocks and temp directory
+# Restore original LLM behavior and clean up temp directory
 import shutil
 
-_patcher_run.stop()
-_patcher_validate.stop()
+BaseChatModel.ainvoke = _original_ainvoke
 shutil.rmtree(_tmpdir, ignore_errors=True)
 ```
-
----
-
-## Going Further
-
-### Automatic Template Generation
-
-Instead of writing templates by hand, Karenina can generate them using an LLM.
-Call `benchmark.generate_all_templates()` with model parameters:
-
-> ```python
-> benchmark.generate_all_templates(
->     model="gpt-4.1-mini",
->     model_provider="openai",
->     temperature=0.1,
-> )
-> ```
-
-See [Generating Templates](../05-creating-benchmarks/generating-templates.md) for details.
-
-### Extracting Questions from Files
-
-Import questions from Excel, CSV, or TSV files using `extract_questions_from_file`:
-
-> ```python
-> from karenina.benchmark.authoring.questions import extract_questions_from_file
->
-> questions = extract_questions_from_file(
->     file_path="questions.xlsx",
->     question_column="Question",
->     answer_column="Answer",
->     keywords_columns=[{"column": "Keywords", "separator": ","}],
-> )
-> ```
-
-See [Adding Questions](../05-creating-benchmarks/adding-questions.md) for details.
-
-### Using Different LLM Providers
-
-Karenina supports many backends. Pass different `interface` values to `ModelConfig`:
-
-> ```python
-> # Anthropic Claude (via LangChain)
-> ModelConfig(id="claude", model_name="claude-sonnet-4-5-20250929", interface="langchain")
->
-> # OpenRouter
-> ModelConfig(id="sonnet", model_name="anthropic/claude-sonnet-4-5-20250929", interface="openrouter")
->
-> # Local model (Ollama or any OpenAI-compatible endpoint)
-> ModelConfig(id="local", model_name="llama3", interface="openai_endpoint",
->             endpoint_base_url="http://localhost:11434/v1")
-> ```
-
----
-
-## Next Steps
-
-| Topic | Link |
-|-------|------|
-| Core concepts (checkpoints, templates, rubrics) | [Core Concepts](../04-core-concepts/index.md) |
-| Writing custom templates in depth | [Writing Templates](../05-creating-benchmarks/writing-templates.md) |
-| All four rubric trait types | [Rubrics](../04-core-concepts/rubrics/index.md) |
-| Verification configuration options | [Verification Config](../06-running-verification/verification-config.md) |
-| DataFrame-based result analysis | [DataFrame Analysis](../07-analyzing-results/dataframe-analysis.md) |
-| CLI verification (no Python needed) | [CLI Reference](../09-cli-reference/verify.md) |

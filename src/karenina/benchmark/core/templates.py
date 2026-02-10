@@ -1,7 +1,9 @@
 """Template management functionality for benchmarks."""
 
 import ast
+import inspect
 import logging
+import textwrap
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -15,6 +17,135 @@ from ..verification.utils.template_validation import validate_answer_template
 logger = logging.getLogger(__name__)
 
 
+def _rename_answer_class_to_standard(source_code: str, original_class_name: str) -> str:
+    """Rename a BaseAnswer subclass to 'Answer' in source code.
+
+    This allows users to define classes with any name (e.g., VenetoclaxAnswer),
+    but stores them with the standard 'Answer' name that the verification system expects.
+
+    Args:
+        source_code: The source code containing the class definition
+        original_class_name: The original name of the class to rename
+
+    Returns:
+        Modified source code with the class renamed to 'Answer'
+    """
+    if original_class_name == "Answer":
+        return source_code
+
+    try:
+        tree = ast.parse(source_code)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef) and node.name == original_class_name:
+                node.name = "Answer"
+        return ast.unparse(tree)
+    except Exception:
+        logger.debug(
+            "AST parsing failed for class rename %s -> Answer, falling back to string replacement",
+            original_class_name,
+            exc_info=True,
+        )
+        return source_code.replace(f"class {original_class_name}(", "class Answer(")
+
+
+def resolve_template_code(template: str | type) -> str:
+    """Convert a template argument to source code string.
+
+    Accepts either a source code string or a BaseAnswer subclass. When given
+    a class, extracts its source code and renames it to 'Answer' if needed.
+
+    Extraction order:
+    1. ``cls.get_source_code()`` — explicit ``_source_code`` attribute
+    2. ``inspect.getsource()`` — file-based classes
+    3. IPython cell history — classes defined in Jupyter notebooks
+
+    Args:
+        template: Template source code string or BaseAnswer subclass
+
+    Returns:
+        Template source code string ready for storage
+
+    Raises:
+        TypeError: If template is not a string or BaseAnswer subclass
+        ValueError: If source code cannot be extracted from the class
+    """
+    if isinstance(template, str):
+        return template
+
+    if inspect.isclass(template):
+        from karenina.schemas.entities import BaseAnswer
+
+        if not issubclass(template, BaseAnswer):
+            raise TypeError(f"Template class must inherit from BaseAnswer, got {template.__name__}")
+
+        original_class_name = getattr(template, "__name__", "Answer")
+        source_code = template.get_source_code()
+
+        if source_code is None:
+            try:
+                source_code = inspect.getsource(template)
+            except OSError:
+                source_code = _get_source_from_notebook(original_class_name)
+
+        if source_code is None:
+            raise ValueError(
+                f"Could not extract source code from class {original_class_name}. "
+                "For dynamically created classes, set _source_code on the class "
+                "or call cls.set_source_code_from_notebook() in Jupyter."
+            )
+
+        source_code = textwrap.dedent(source_code)
+        return _rename_answer_class_to_standard(source_code, original_class_name)
+
+    raise TypeError(f"template must be a string or BaseAnswer subclass, got {type(template).__name__}")
+
+
+def _get_source_from_notebook(class_name: str) -> str | None:
+    """Try to extract class source code from IPython/Jupyter cell history.
+
+    Args:
+        class_name: Name of the class to find
+
+    Returns:
+        Source code string if found, None otherwise
+    """
+    try:
+        from IPython import get_ipython  # type: ignore[attr-defined]
+
+        ip = get_ipython()  # type: ignore[no-untyped-call]
+        if ip is None:
+            return None
+
+        history = list(ip.history_manager.get_range())
+        for _, _, cell_content in reversed(history[-10:]):
+            if f"class {class_name}(" in cell_content:
+                lines = cell_content.strip().split("\n")
+                class_lines: list[str] = []
+                in_class = False
+                base_indent: int | None = None
+
+                for line in lines:
+                    if f"class {class_name}(" in line:
+                        in_class = True
+                        base_indent = len(line) - len(line.lstrip())
+                        class_lines.append(line)
+                    elif in_class:
+                        if line.strip() == "" or (
+                            base_indent is not None and len(line) - len(line.lstrip()) > base_indent
+                        ):
+                            class_lines.append(line)
+                        else:
+                            break
+
+                if class_lines:
+                    return "\n".join(class_lines)
+    except ImportError:
+        pass
+    except Exception:
+        logger.debug("Failed to extract source from notebook history", exc_info=True)
+    return None
+
+
 class TemplateManager:
     """Manager for answer template operations and validation."""
 
@@ -22,17 +153,19 @@ class TemplateManager:
         """Initialize with reference to benchmark base."""
         self.base = base
 
-    def add_answer_template(self, question_id: str, template_code: str) -> None:
+    def add_answer_template(self, question_id: str, template_code: str | type) -> None:
         """
         Add or update an answer template for a question.
 
         Args:
             question_id: The question ID
-            template_code: Python code defining the Answer class
+            template_code: Python code defining the Answer class, or a BaseAnswer subclass
 
         Raises:
+            TypeError: If template_code is not a string or BaseAnswer subclass
             ValueError: If question_id not found or template is invalid
         """
+        template_code = resolve_template_code(template_code)
         # Validate the template using the verification system
         is_valid, error_msg, _ = validate_answer_template(template_code)
         if not is_valid:
@@ -101,8 +234,13 @@ class TemplateManager:
 
         return str(template)
 
-    def update_template(self, question_id: str, template_code: str) -> None:
-        """Update existing template (alias for add_answer_template)."""
+    def update_template(self, question_id: str, template_code: str | type) -> None:
+        """Update existing template (alias for add_answer_template).
+
+        Args:
+            question_id: The question ID
+            template_code: Python code defining the Answer class, or a BaseAnswer subclass
+        """
         self.add_answer_template(question_id, template_code)
 
     def copy_template(self, from_id: str, to_id: str) -> None:

@@ -1,0 +1,59 @@
+{
+  "sequence": 4,
+  "prompt_hash": "be98b7c0696e80d8",
+  "model": "claude-haiku-4-5",
+  "request": {
+    "messages": [
+      {
+        "type": "system",
+        "content": "You craft instructional text for judge models who must parse a candidate response to a question. For every attribute in the provided ground-truth specification, produce a short, direct description that explains exactly what the judge should read for in the response and how to answer. Highlight boolean expectations clearly.\n\nGuidelines:\n- Reference attribute names verbatim.\n- Mention the expected type implicitly via phrasing (e.g., \"Answer with true or false if ...\" for booleans, \"Provide the count of ...\" for numeric fields).\n- For boolean attributes checking concept presence, allow semantic equivalence and related terms rather than requiring exact string matches. Focus on whether the underlying concept is conveyed.\n- When relevant, reference concrete response-focused examples such as \"Number of interacting genes mentioned in the response\" or \"Does the response cite a control group?\" to reinforce that extraction happens from the candidate answer.\n- Stay concise (<= 2 sentences per attribute).\n- Return only valid JSON.\n\nExample mapping:\n{{\n  \"field_descriptions\": {{\n    \"count_of_items\": \"Provide an integer equal to the number of items mentioned in the response.\",\n    \"mentions_first_concept\": \"Answer with true if the response refers to the first concept or semantically related terms; otherwise answer false.\",\n    \"mentions_second_concept\": \"Answer with true if the response refers to the second concept or semantically related terms; otherwise answer false.\",\n    \"classification_level\": \"Select the classification level mentioned in the response from the available options.\"\n  }}\n}}"
+      },
+      {
+        "type": "human",
+        "content": "Question:\nWhat is the approved drug target of Venetoclax?\n\nReference Answer:\nBCL2\n\nGround-truth attribute specification:\n{\"attributes\": [{\"name\": \"mentions_bcl2\", \"type\": \"bool\"}]}\n\nProduce JSON with key `field_descriptions` mapping attribute names to their instructional descriptions for judge prompts.\n\nEnsure descriptions communicate type expectations, especially emphasizing when boolean values should be used to flag presence of concepts. For boolean concept checks, focus on semantic meaning rather than exact word matching. Make it explicit that the judge is reading the candidate response to this question.\n\nReturn only valid JSON."
+      }
+    ]
+  },
+  "response": {
+    "content": [
+      {
+        "id": "toolu_01Ro6PQvrK6wPztEoP4q5veQ",
+        "input": {
+          "field_descriptions": [
+            {
+              "name": "mentions_bcl2",
+              "description": "Answer with true if the response identifies BCL2 or semantically related terms (such as BCL-2, B-cell lymphoma 2, or references to the BCL2 protein) as the drug target of Venetoclax; otherwise answer false."
+            }
+          ]
+        },
+        "name": "AttributeDescriptions",
+        "type": "tool_use"
+      }
+    ],
+    "id": "lc_run--e2a43dc9-e961-4472-8276-5cc0b48eda30-0",
+    "tool_calls": [
+      {
+        "name": "AttributeDescriptions",
+        "args": {
+          "field_descriptions": [
+            {
+              "name": "mentions_bcl2",
+              "description": "Answer with true if the response identifies BCL2 or semantically related terms (such as BCL-2, B-cell lymphoma 2, or references to the BCL2 protein) as the drug target of Venetoclax; otherwise answer false."
+            }
+          ]
+        },
+        "id": "toolu_01Ro6PQvrK6wPztEoP4q5veQ",
+        "type": "tool_call"
+      }
+    ],
+    "usage_metadata": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    },
+    "response_metadata": {
+      "model_name": "claude-haiku-4-5-20251001",
+      "stop_reason": "tool_use"
+    }
+  }
+}

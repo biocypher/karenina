@@ -1,0 +1,51 @@
+{
+  "sequence": 9,
+  "prompt_hash": "25a045816876eb50",
+  "model": "claude-haiku-4-5",
+  "request": {
+    "messages": [
+      {
+        "type": "system",
+        "content": "You are an evaluator that extracts structured information from responses.\n\nYou will receive:\n1. A response to parse (either a final answer or a complete trace)\n2. A JSON schema with descriptive fields indicating what information to extract\n\n# Extraction Protocol\n\n## 1. Focus on the Final Answer\n- Your primary extraction source is the **final answer** given to the user\n- Extract information from this answer according to the schema field descriptions\n\n## 2. Extract According to Schema\n- Each field description specifies WHAT to extract from the answer and HOW\n- Follow field descriptions precisely\n- Use `null` for information not present in the final answer (if field allows null)\n\n## 3. Validate Structure\n- Return valid JSON matching the provided schema exactly\n- Use correct data types for each field\n\n# Critical Rules\n\n**Answer-First**: Extract primarily from the final answer content.\n\n**Description Adherence**: Each field's description is authoritative for what and how to extract.\n\n**Fidelity**: Extract only what's actually stated. Don't infer or add information not present.\n\n**JSON Only**: Return ONLY the JSON object - no explanations, no markdown fences, no surrounding text."
+      },
+      {
+        "type": "human",
+        "content": "Parse the following response and extract structured information.\n\n**ORIGINAL QUESTION:**\nHow many chromosomes are in a human somatic cell?\n\n**RESPONSE TO PARSE:**\nA human somatic cell contains **46 chromosomes** (23 pairs).\n\nThese consist of 22 pairs of autosomes and 1 pair of sex chromosomes (XX or XY).\n\n**JSON SCHEMA (your response MUST conform to this):**\n```json\n{\n  \"additionalProperties\": true,\n  \"properties\": {\n    \"id\": {\n      \"anyOf\": [\n        {\n          \"type\": \"string\"\n        },\n        {\n          \"type\": \"null\"\n        }\n      ],\n      \"default\": null,\n      \"title\": \"Id\"\n    },\n    \"chromosome_count\": {\n      \"description\": \"Provide the integer count of chromosomes in a human somatic cell as stated or implied in the response. The expected answer is 46.\",\n      \"title\": \"Chromosome Count\",\n      \"type\": \"integer\"\n    }\n  },\n  \"required\": [\n    \"chromosome_count\"\n  ],\n  \"title\": \"Answer\",\n  \"type\": \"object\"\n}\n```\n\n**PARSING NOTES:**\n- Extract values for each field based on its description in the schema\n- If information for a field is not present, use null (if field allows null) or your best inference\n- Return ONLY the JSON object - no surrounding text\n\n**YOUR JSON RESPONSE:**"
+      }
+    ]
+  },
+  "response": {
+    "content": [
+      {
+        "id": "toolu_01YWRyniFnrbifVAa6UXHb6n",
+        "input": {
+          "chromosome_count": 46,
+          "id": null
+        },
+        "name": "Answer",
+        "type": "tool_use"
+      }
+    ],
+    "id": "lc_run--ea75d230-cb52-47e0-84e4-7883552129b4-0",
+    "tool_calls": [
+      {
+        "name": "Answer",
+        "args": {
+          "chromosome_count": 46,
+          "id": null
+        },
+        "id": "toolu_01YWRyniFnrbifVAa6UXHb6n",
+        "type": "tool_call"
+      }
+    ],
+    "usage_metadata": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    },
+    "response_metadata": {
+      "model_name": "claude-haiku-4-5-20251001",
+      "stop_reason": "tool_use"
+    }
+  }
+}
