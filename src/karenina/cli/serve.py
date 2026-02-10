@@ -39,6 +39,27 @@ MODEL_DEFAULTS: dict[str, str] = {
 }
 
 
+def _resolve_user_path(user_input: str, working_dir: Path) -> Path:
+    """Resolve a user-provided path relative to working_dir.
+
+    Absolute paths are returned as-is. Relative paths are joined with working_dir.
+    """
+    path = Path(user_input)
+    return path if path.is_absolute() else working_dir / path
+
+
+def _format_env_path(path: Path, working_dir: Path) -> str:
+    """Format a directory path for .env, relative to working_dir with ./ prefix.
+
+    Paths inside working_dir are written as ./relative. Paths outside are absolute.
+    """
+    try:
+        rel = path.resolve().relative_to(working_dir.resolve())
+        return f"./{rel}"
+    except ValueError:
+        return str(path.resolve())
+
+
 def _ensure_directory(path: Path) -> bool:
     """Create directory if it doesn't exist. Returns True if created."""
     if not path.exists():
@@ -93,9 +114,9 @@ def _write_env_file(
     env_file = working_dir / ".env"
     env_lines = [
         f"# Karenina Configuration ({header_comment})",
-        f"DB_PATH={dirs['db_path']}",
-        f"KARENINA_PRESETS_DIR={dirs['presets_dir']}",
-        f"MCP_PRESETS_DIR={dirs['mcp_presets_dir']}",
+        f"DB_PATH={_format_env_path(dirs['db_path'], working_dir)}",
+        f"KARENINA_PRESETS_DIR={_format_env_path(dirs['presets_dir'], working_dir)}",
+        f"MCP_PRESETS_DIR={_format_env_path(dirs['mcp_presets_dir'], working_dir)}",
         f"KARENINA_ASYNC_ENABLED={str(async_enabled).lower()}",
         f"KARENINA_ASYNC_MAX_WORKERS={async_workers}",
         "",
@@ -150,29 +171,21 @@ def run_advanced_setup(working_dir: Path) -> dict[str, Path]:
     console.print("[bold]1. Directory Configuration[/bold]")
     dirs: dict[str, Path] = {}
 
-    dirs["db_path"] = Path(
-        Prompt.ask(
-            "Database directory",
-            default=str(working_dir / "dbs"),
-        )
+    dirs["db_path"] = _resolve_user_path(
+        Prompt.ask("Database directory", default="dbs"),
+        working_dir,
     )
-    dirs["presets_dir"] = Path(
-        Prompt.ask(
-            "Presets directory",
-            default=str(working_dir / "presets"),
-        )
+    dirs["presets_dir"] = _resolve_user_path(
+        Prompt.ask("Presets directory", default="presets"),
+        working_dir,
     )
-    dirs["mcp_presets_dir"] = Path(
-        Prompt.ask(
-            "MCP presets directory",
-            default=str(working_dir / "mcp_presets"),
-        )
+    dirs["mcp_presets_dir"] = _resolve_user_path(
+        Prompt.ask("MCP presets directory", default="mcp_presets"),
+        working_dir,
     )
-    dirs["checkpoints_dir"] = Path(
-        Prompt.ask(
-            "Checkpoints directory",
-            default=str(working_dir / "checkpoints"),
-        )
+    dirs["checkpoints_dir"] = _resolve_user_path(
+        Prompt.ask("Checkpoints directory", default="checkpoints"),
+        working_dir,
     )
 
     _create_directories(dirs)
