@@ -120,15 +120,16 @@ async def _recording_ainvoke(self, input, config=None, **kwargs):
 
 def run_quickstart():
     """Run the quickstart flow end-to-end with real API calls."""
+    from pydantic import Field
+
     from karenina import Benchmark
-    from karenina.schemas.entities import BaseAnswer
     from karenina.schemas import (
         LLMRubricTrait,
         ModelConfig,
         RegexTrait,
         VerificationConfig,
     )
-    from pydantic import Field
+    from karenina.schemas.entities import BaseAnswer
 
     # Step 1
     benchmark = Benchmark.create(
@@ -250,7 +251,7 @@ def run_quickstart():
     tmpdir = tempfile.mkdtemp()
     checkpoint_path = Path(tmpdir) / "genomics_benchmark.jsonld"
     benchmark.save(checkpoint_path)
-    print(f"\nStep 7: Saved and loaded OK")
+    print("\nStep 7: Saved and loaded OK")
     loaded = Benchmark.load(checkpoint_path)
     print(f"  Loaded '{loaded.name}' with {loaded.question_count} questions")
     shutil.rmtree(tmpdir, ignore_errors=True)
