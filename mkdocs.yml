@@ -124,25 +124,28 @@ nav:
     - Quick Start: notebooks/quickstart.ipynb
     - Workspace Init: getting-started/workspace-init.md
   - Core Concepts:
-    - core-concepts.md
+    - Overview: core_concepts/index.md
     - Questions & Benchmarks: core_concepts/questions-and-benchmarks.md
     - Checkpoints: core_concepts/checkpoints.md
-    - Templates vs Rubrics: core_concepts/template-vs-rubric.md
-    - Answer Templates: notebooks/core_concepts/answer-templates.ipynb
-    - Rubrics:
-      - Overview: core_concepts/rubrics/index.md
-      - LLM Traits: notebooks/core_concepts/rubrics/llm-traits.ipynb
-      - Literal Traits: notebooks/core_concepts/rubrics/literal-traits.ipynb
-      - Regex Traits: notebooks/core_concepts/rubrics/regex-traits.ipynb
-      - Callable Traits: notebooks/core_concepts/rubrics/callable-traits.ipynb
-      - Metric Traits: notebooks/core_concepts/rubrics/metric-traits.ipynb
-    - Evaluation Modes: core_concepts/evaluation-modes.md
-    - Verification Pipeline: core_concepts/verification-pipeline.md
-    - Prompt Assembly: core_concepts/prompt-assembly.md
-    - Results & Scoring: core_concepts/results-and-scoring.md
-    - Adapters: core_concepts/adapters.md
-    - MCP Overview: core_concepts/mcp-overview.md
-    - Manual Interface: core_concepts/manual-interface.md
+    - Evaluation:
+      - Templates vs Rubrics: core_concepts/template-vs-rubric.md
+      - Answer Templates: notebooks/core_concepts/answer-templates.ipynb
+      - Rubric Traits:
+        - Overview: core_concepts/rubrics/index.md
+        - LLM Traits: notebooks/core_concepts/rubrics/llm-traits.ipynb
+        - Literal Traits: notebooks/core_concepts/rubrics/literal-traits.ipynb
+        - Regex Traits: notebooks/core_concepts/rubrics/regex-traits.ipynb
+        - Callable Traits: notebooks/core_concepts/rubrics/callable-traits.ipynb
+        - Metric Traits: notebooks/core_concepts/rubrics/metric-traits.ipynb
+      - Evaluation Modes: core_concepts/evaluation-modes.md
+      - Results & Scoring: core_concepts/results-and-scoring.md
+    - Pipeline:
+      - Verification Pipeline: core_concepts/verification-pipeline.md
+      - Prompt Assembly: core_concepts/prompt-assembly.md
+    - Infrastructure:
+      - Adapters: core_concepts/adapters.md
+      - MCP Overview: core_concepts/mcp-overview.md
+      - Manual Interface: core_concepts/manual-interface.md
     - Adele: core_concepts/adele.md
     - Few-Shot: core_concepts/few-shot.md
   - Workflows:

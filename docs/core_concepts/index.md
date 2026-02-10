@@ -84,7 +84,7 @@ A **checkpoint** is a JSON-LD file that stores everything needed to define and r
 
 ### Templates vs Rubrics
 
-Karenina's evaluation rests on two complementary building blocks: **answer templates** verify factual correctness by having a Judge LLM parse responses into structured schemas, while **rubrics** assess response quality through trait evaluators that examine the raw text.
+Karenina's evaluation rests on two complementary building blocks: **answer templates** verify factual correctness by having a Judge LLM parse responses into structured schemas, while **rubrics** assess response quality through trait evaluators that examine the raw text. Understanding when to use each — and when to use both together — is the foundation for effective benchmark design.
 
 [Read more about templates vs rubrics →](template-vs-rubric.md)
 
