@@ -120,7 +120,7 @@ class TestQuestionClassifier:
         classifier = QuestionClassifier()
 
         assert classifier._llm is None
-        assert classifier._model_name == "claude-3-5-haiku-latest"
+        assert classifier._model_name == "claude-haiku-4-5"
         assert classifier._provider == "anthropic"
         assert classifier._temperature == 0.0
 

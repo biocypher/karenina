@@ -57,7 +57,7 @@ class QuestionClassifier:
     def __init__(
         self,
         llm: LLMPort | None = None,
-        model_name: str = "claude-3-5-haiku-latest",
+        model_name: str = "claude-haiku-4-5",
         provider: str = "anthropic",
         temperature: float = 0.0,
         interface: str = "langchain",
@@ -76,7 +76,7 @@ class QuestionClassifier:
             llm: Optional pre-initialized LLMPort instance. If not provided,
                  one will be created using model_config or individual params.
             model_name: Model name to use if llm not provided.
-                       Defaults to claude-3-5-haiku-latest for efficiency.
+                       Defaults to claude-haiku-4-5 for efficiency.
             provider: Model provider to use if llm not provided.
             temperature: Temperature for LLM calls. Defaults to 0.0 for
                         deterministic classifications.

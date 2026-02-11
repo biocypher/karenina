@@ -52,6 +52,11 @@ plugins:
           - hide-input
         remove_all_outputs_tags:
           - hide-output
+  - gen-files:
+      scripts:
+        - scripts/gen_ref_pages.py
+  - literate-nav:
+      nav_file: SUMMARY.md
   - mkdocstrings:
       handlers:
         python:
@@ -127,6 +132,9 @@ nav:
     - Overview: core_concepts/index.md
     - Questions & Benchmarks: core_concepts/questions-and-benchmarks.md
     - Checkpoints: core_concepts/checkpoints.md
+    - Question Context:
+      - ADeLe: core_concepts/adele.md
+      - Few-Shot: core_concepts/few-shot.md
     - Evaluation:
       - Templates vs Rubrics: core_concepts/template-vs-rubric.md
       - Answer Templates: notebooks/core_concepts/answer-templates.ipynb
@@ -146,8 +154,6 @@ nav:
       - Adapters: core_concepts/adapters.md
       - MCP Overview: core_concepts/mcp-overview.md
       - Manual Interface: core_concepts/manual-interface.md
-    - Adele: core_concepts/adele.md
-    - Few-Shot: core_concepts/few-shot.md
   - Workflows:
     - workflows.md
     - Configuration:
@@ -184,22 +190,23 @@ nav:
       - Exporting: 07-analyzing-results/exporting.md
       - Iterating: 07-analyzing-results/iterating.md
   - Reference:
-    - reference.md
-    - CLI Reference:
-      - Overview: 09-cli-reference/index.md
-      - verify: 09-cli-reference/verify.md
-      - verify-status: 09-cli-reference/verify-status.md
-      - preset: 09-cli-reference/preset.md
-      - serve: 09-cli-reference/serve.md
-      - init: 09-cli-reference/init.md
-      - optimize: 09-cli-reference/optimize.md
+    - reference/index.md
     - Configuration Reference:
-      - Overview: 10-configuration-reference/index.md
-      - Environment Variables: 10-configuration-reference/env-vars.md
-      - VerificationConfig: 10-configuration-reference/verification-config.md
-      - ModelConfig: 10-configuration-reference/model-config.md
-      - PromptConfig: 10-configuration-reference/prompt-config.md
-      - Preset Schema: 10-configuration-reference/preset-schema.md
+      - Overview: reference/configuration/index.md
+      - Environment Variables: reference/configuration/env-vars.md
+      - VerificationConfig: reference/configuration/verification-config.md
+      - ModelConfig: reference/configuration/model-config.md
+      - PromptConfig: reference/configuration/prompt-config.md
+      - Preset Schema: reference/configuration/preset-schema.md
+    - CLI Reference:
+      - Overview: reference/cli/index.md
+      - verify: reference/cli/verify.md
+      - verify-status: reference/cli/verify-status.md
+      - preset: reference/cli/preset.md
+      - serve: reference/cli/serve.md
+      - init: reference/cli/init.md
+      - optimize: reference/cli/optimize.md
+    - API Reference: reference/api/
   - Advanced:
     - advanced.md
     - Pipeline:

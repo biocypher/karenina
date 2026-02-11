@@ -85,7 +85,7 @@ The `QuestionClassifier` evaluates questions against ADeLe dimensions using an L
 ```python
 from karenina.integrations.adele import QuestionClassifier
 
-# Default: uses claude-3-5-haiku-latest via Anthropic
+# Default: uses claude-haiku-4-5 via Anthropic
 classifier = QuestionClassifier()
 
 # Classify a single question
@@ -103,7 +103,7 @@ print(result.get_summary())  # {"attention_and_scan": "none (0)", ...}
 
 | Parameter | Type | Default | Purpose |
 |-----------|------|---------|---------|
-| `model_name` | str | `"claude-3-5-haiku-latest"` | Model for classification |
+| `model_name` | str | `"claude-haiku-4-5"` | Model for classification |
 | `provider` | str | `"anthropic"` | Model provider |
 | `interface` | str | `"langchain"` | Interface type |
 | `temperature` | float | `0.0` | LLM temperature (deterministic) |

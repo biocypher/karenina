@@ -32,13 +32,13 @@ classifier = QuestionClassifier(
 )
 ```
 
-The classifier uses an LLM to evaluate each question. The default model (`claude-3-5-haiku-latest`) is fast and cost-effective for classification tasks.
+The classifier uses an LLM to evaluate each question. The default model (`claude-haiku-4-5`) is fast and cost-effective for classification tasks.
 
 ### Constructor Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `model_name` | `str` | `"claude-3-5-haiku-latest"` | Model to use for classification |
+| `model_name` | `str` | `"claude-haiku-4-5"` | Model to use for classification |
 | `provider` | `str` | `"anthropic"` | LLM provider |
 | `interface` | `str` | `"langchain"` | Adapter interface |
 | `temperature` | `float` | `0.0` | LLM temperature (0.0 for deterministic results) |
