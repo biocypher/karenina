@@ -201,121 +201,190 @@ result = populated_answer.verify()  # True
 
 ## 🚀 Quick Start
 
-Get started with Karenina in just a few minutes! This example demonstrates the core workflow: create a benchmark, add questions, generate templates, and run verification.
+Get started with Karenina in minutes. This example walks you through creating a benchmark, adding questions, writing answer templates, defining rubric traits, running verification, and inspecting results.
 
 ### 1. Create a Benchmark
 
 ```python
 from karenina import Benchmark
 
-# Create a new benchmark
 benchmark = Benchmark.create(
     name="Genomics Knowledge Benchmark",
     description="Testing LLM knowledge of genomics and molecular biology",
     version="1.0.0",
-    creator="Your Name"
+    creator="Your Name",
 )
 ```
 
 ### 2. Add Questions
 
 ```python
-# Add questions with answers
 questions = [
-    ("How many chromosomes are in a human somatic cell?", "46"),
-    ("What is the approved drug target of Venetoclax?", "BCL2"),
-    ("How many protein subunits does hemoglobin A have?", "4")
+    {
+        "question": "How many chromosomes are in a human somatic cell?",
+        "answer": "46",
+    },
+    {
+        "question": "What is the approved drug target of Venetoclax?",
+        "answer": "BCL2",
+    },
+    {
+        "question": "How many protein subunits does hemoglobin A have?",
+        "answer": "4",
+    },
 ]
 
 question_ids = []
-for q, a in questions:
+for q in questions:
     qid = benchmark.add_question(
-        question=q,
-        raw_answer=a,
-        author={"name": "Bio Curator"}
+        question=q["question"],
+        raw_answer=q["answer"],
+        author={"name": "Bio Curator", "email": "curator@example.com"},
     )
     question_ids.append(qid)
 ```
 
-**Note:** You can also extract questions from Excel, CSV, or TSV files. See [Adding Questions](docs/using-karenina/adding-questions.md) for file extraction examples.
+**Note:** You can also extract questions from Excel, CSV, or TSV files. See [Adding Questions](docs/05-creating-benchmarks/adding-questions.md) for file extraction examples.
 
-### 3. Generate Templates Automatically
+### 3. Write Answer Templates
+
+Answer templates are Pydantic models that define how a Judge LLM should parse and verify a model's response. Each template declares **attributes** the judge must extract, stores the **correct values** in `model_post_init`, and implements a **`verify()`** method that compares extracted values to ground truth. The class must always be named `Answer` and inherit from `BaseAnswer`.
+
+#### Automatic Generation
+
+The fastest way to get started is to let Karenina generate templates for you using an LLM:
 
 ```python
-from karenina.schemas import ModelConfig
-
-# Configure the LLM for template generation
-model_config = ModelConfig(
-    id="gpt-4.1-mini",
-    model_provider="openai",
-    model_name="gpt-4.1-mini",
-    temperature=0.1,
-    interface="langchain"
+benchmark.generate_all_templates(
+    model="claude-haiku-4-5",
+    model_provider="anthropic",
+    temperature=0.0,
 )
-
-# Generate templates for all questions
-benchmark.generate_all_templates(model_config=model_config)
 ```
 
-**Note:** Templates can also be written manually for complex custom logic. See [Templates Guide](docs/using-karenina/templates.md) for details.
+#### Manual Definition (Class-Based)
 
-### 4. Add Rubrics (Optional)
+When you need precise control over verification logic, define templates as Python classes and pass them directly:
+
+```python
+from pydantic import Field
+from karenina.schemas.entities import BaseAnswer
+
+
+class Answer(BaseAnswer):
+    is_bcl2: bool = Field(
+        description="Whether the response identifies BCL2 as the putative target of the drug"
+    )
+
+    def model_post_init(self, __context):
+        self.correct = {"is_bcl2": True}
+
+    def verify(self) -> bool:
+        return self.is_bcl2 == self.correct["is_bcl2"]
+
+
+benchmark.update_template(question_ids[1], Answer)
+```
+
+**Note:** See [Templates Guide](docs/05-creating-benchmarks/writing-templates.md) for details on writing custom templates.
+
+### 4. Add Rubric Traits
+
+While templates verify **correctness**, rubrics assess **quality** — properties of the raw response like conciseness, safety, or format compliance. Karenina supports four trait types: LLM (with literal variant), regex, callable, and metric.
+
+#### Global Trait (evaluated for every question)
 
 ```python
 from karenina.schemas import LLMRubricTrait
 
-# Add a global rubric trait to assess answer quality
 benchmark.add_global_rubric_trait(
     LLMRubricTrait(
         name="Conciseness",
-        description="Rate how concise the answer is (1-5)",
-        kind="score"
+        description="Rate how concise the answer is on a scale of 1-5, where 1 is very verbose and 5 is extremely concise.",
+        kind="score",
     )
+)
+```
+
+#### Question-Specific Trait (evaluated for one question)
+
+```python
+from karenina.schemas import RegexTrait
+
+venetoclax_qid = question_ids[1]  # The Venetoclax question
+
+benchmark.add_question_rubric_trait(
+    venetoclax_qid,
+    RegexTrait(
+        name="Contains BCL2",
+        description="The response must mention BCL2",
+        pattern=r"\bBCL2\b",
+        case_sensitive=True,
+    ),
 )
 ```
 
 ### 5. Run Verification
 
 ```python
-from karenina.schemas import VerificationConfig
+from karenina.schemas import ModelConfig, VerificationConfig
 
-# Configure verification
 config = VerificationConfig(
-    answering_models=[model_config],
-    parsing_models=[model_config],
-    rubric_enabled=True
+    answering_models=[
+        ModelConfig(
+            id="claude-haiku-4-5",
+            model_name="claude-haiku-4-5",
+            model_provider="anthropic",
+            interface="langchain",
+            temperature=0.7,
+            system_prompt="You are a knowledgeable assistant. Answer accurately and concisely.",
+        )
+    ],
+    parsing_models=[
+        ModelConfig(
+            id="claude-haiku-4-5",
+            model_name="claude-haiku-4-5",
+            model_provider="anthropic",
+            interface="langchain",
+            temperature=0.0,
+        )
+    ],
+    evaluation_mode="template_and_rubric",
+    rubric_enabled=True,
 )
 
-# Run verification
 results = benchmark.run_verification(config)
-
-# Analyze results
-passed = sum(1 for r in results if r.template.verify_result)
-print(f"Pass Rate: {(passed/len(results)*100):.1f}%")
 ```
 
-### 6. Save and Export
+### 6. Inspect Results
+
+`VerificationResultSet` provides specialized accessors that convert results into pandas DataFrames for analysis.
 
 ```python
-# Save benchmark checkpoint
-benchmark.save("genomics_benchmark.jsonld")
+# Template results (pass/fail and field-level comparisons)
+template_results = results.get_template_results()
+df_templates = template_results.to_dataframe()
+df_templates[["question_id", "field_name", "gt_value", "llm_value", "field_match"]]
 
-# Export results to CSV
-from pathlib import Path
-benchmark.export_verification_results_to_file(
-    file_path=Path("results.csv"),
-    format="csv"
-)
+# Pass rate
+template_results.aggregate_pass_rate(by="question_id")
+
+# Rubric results (trait scores)
+rubric_results = results.get_rubrics_results()
+df_rubrics = rubric_results.to_dataframe()
+df_rubrics[["question_id", "trait_name", "trait_score", "trait_type"]]
 ```
 
-Congratulations! You've created your first Karenina benchmark with automatic template generation and rubric-based evaluation.
+### 7. Save and Load
 
-**Next steps**: Explore the [complete tutorial](docs/quickstart.md) for:
-- Question-specific rubrics (regex and metric-based)
-- File extraction from Excel/CSV
-- Multiple model comparison
-- Few-shot prompting
-- Result analysis and visualization
+```python
+benchmark.save("genomics_benchmark.jsonld")
+
+# Load it back later
+loaded = Benchmark.load("genomics_benchmark.jsonld")
+```
+
+**Next steps**: Explore the [Quick Start Tutorial](docs/getting-started/quickstart.md) for the complete walkthrough with executable examples.
 
 ## 💻 Command-Line Interface
 
@@ -329,14 +398,14 @@ karenina verify checkpoint.jsonld --preset default.json --verbose
 
 # Run with CLI arguments only (no preset required)
 karenina verify checkpoint.jsonld \
-  --answering-model gpt-4.1-mini \
-  --parsing-model gpt-4.1-mini \
+  --answering-model claude-haiku-4-5 \
+  --parsing-model claude-haiku-4-5 \
   --output results.csv
 
 # Override preset values with CLI flags
 karenina verify checkpoint.jsonld \
   --preset default.json \
-  --answering-model gpt-4o \
+  --answering-model claude-haiku-4-5 \
   --questions 0-5
 
 # Interactive configuration builder
@@ -360,9 +429,10 @@ karenina preset delete old-config
 
 ```bash
 # Start the web server (serves GUI + API)
+# On first run, you'll be prompted for configuration
 karenina serve --port 8080
 
-# Initialize the webapp (first-time setup)
+# Or initialize a workspace first without starting the server
 karenina init
 ```
 
@@ -370,7 +440,7 @@ karenina init
 
 ```bash
 # Inspect progressive save state from a previous run
-karenina verify-status results/
+karenina verify-status results.json.state
 ```
 
 ### Key Features
@@ -386,11 +456,11 @@ karenina verify-status results/
 
 The CLI supports flexible configuration with clear precedence:
 
-**CLI flags > Preset values > Environment variables > Defaults**
+**Interactive mode > CLI flags > Preset values > Environment variables > Defaults**
 
-This means you can use presets for base configuration and override specific values with CLI arguments as needed.
+When using `--interactive`, the wizard prompts take highest priority. Otherwise, you can use presets for base configuration and override specific values with CLI arguments as needed.
 
-For complete CLI documentation, including all options, examples, and CI/CD integration guides, see [CLI Verification](docs/using-karenina/cli-verification.md).
+For complete CLI documentation, including all options, examples, and CI/CD integration guides, see [CLI Reference](docs/reference/cli/index.md).
 
 ## 🎯 Why Templates
 
@@ -436,9 +506,9 @@ While templates excel at verifying **factual correctness**, many evaluation scen
 | Aspect | Answer Templates | Rubrics |
 |--------|-----------------|---------|
 | **Purpose** | Verify factual correctness | Assess qualitative traits, format, and metrics |
-| **Evaluation Method** | Programmatic field comparison | Four approaches:<br>• LLM judgment<br>• Regex patterns<br>• Custom Python functions<br>• Term extraction + metrics |
-| **Best for** | Precise, unambiguous answers | Subjective qualities, format validation, custom logic, quantitative analysis |
-| **Trait Types** | Single verification method | **Four types:**<br>• LLM-based (qualitative)<br>• Regex-based (format)<br>• Callable (custom Python)<br>• Metric-based (term extraction) |
+| **Evaluation Method** | Programmatic field comparison | Four approaches:<br>• LLM judgment (+ literal classification)<br>• Regex patterns<br>• Custom Python functions<br>• Term extraction + metrics |
+| **Best for** | Precise, unambiguous answers | Subjective qualities, categorical classification, format validation, custom logic, quantitative analysis |
+| **Trait Types** | Single verification method | **Four types:**<br>• LLM-based (boolean/score, + literal variant)<br>• Regex-based (format)<br>• Callable (custom Python)<br>• Metric-based (extraction completeness) |
 | **Output** | Pass/fail per field | • Boolean (binary traits)<br>• Scores 1-5 (score traits)<br>• Class index (literal traits)<br>• Precision/Recall/F1 (metric traits) |
 | **Examples** | `"BCL2"`, `"46 chromosomes"` | • "Is the answer concise?" (LLM)<br>• Match email pattern (regex)<br>• Extract diseases for F1 score (metric) |
 | **Scope** | Per question | Global or per question |
@@ -472,22 +542,22 @@ Custom Python functions for domain-specific evaluation logic:
 
 **4. Metric-Based Traits**
 
-Quantitative evaluation using confusion matrix metrics:
+Quantitative evaluation using confusion matrix metrics. Two modes:
 
-- Define terms that SHOULD appear (True Positives)
-- Define terms that SHOULD NOT appear (False Positives)
-- System computes precision, recall, F1, and optionally specificity/accuracy
+- **tp_only** — Define terms that should appear; computes precision, recall, F1
+- **full_matrix** — Define terms that should and should not appear; additionally computes specificity and accuracy
 
 **When to use what:**
 
 - Use **templates** when you need to verify specific factual content or structured data
 - Use **LLM-based rubrics** for subjective quality assessment (clarity, conciseness, tone)
+- Use **literal rubrics** for ordered categorical classification (e.g., quality tiers, tone levels)
 - Use **regex rubrics** for format compliance and deterministic keyword checks
 - Use **callable rubrics** for custom logic that requires programmatic evaluation
-- Use **metric rubrics** when evaluating classification accuracy by extracting and measuring term coverage
+- Use **metric rubrics** when evaluating extraction completeness and measuring term coverage
 - Use **both together** for comprehensive evaluation covering correctness AND quality
 
-[Learn more about Templates →](docs/using-karenina/templates.md) | [Learn more about Rubrics →](docs/using-karenina/rubrics.md)
+[Learn more about Templates →](docs/core_concepts/answer-templates.md) | [Learn more about Rubrics →](docs/core_concepts/rubrics/index.md)
 
 ## ✨ Features
 
@@ -533,7 +603,7 @@ Karenina provides comprehensive tools for every stage of the benchmarking workfl
 - **Preset Management**: Save and reuse verification configurations with full hierarchy support
 - **Progressive Save**: Automatic checkpointing during long verification runs with resume capability
 
-[View complete feature catalog →](docs/features.md)
+[View documentation →](docs/home/index.md)
 
 ## 📦 Installation
 
@@ -558,71 +628,54 @@ For other installation methods, see [uv's documentation](https://docs.astral.sh/
 **Note:** Karenina is not yet published to PyPI. Install from the GitHub repository:
 
 ```bash
-# Clone the repository
-git clone https://github.com/biocypher/karenina.git
-cd karenina
-
 # Install with uv (recommended)
-uv pip install -e .
+uv pip install "karenina @ git+https://github.com/biocypher/karenina.git"
 
 # Or use pip
-pip install -e .
+pip install "karenina @ git+https://github.com/biocypher/karenina.git"
 ```
 
-The `-e` flag installs in editable mode, allowing you to pull updates with `git pull` without reinstalling.
+This installs the core package with all required dependencies, including MCP client support, LangChain integrations, Anthropic SDK, and the CLI.
+
+### Optional Dependencies
+
+| Extra | Purpose |
+|-------|---------|
+| `dev` | Development and testing tools (pytest, ruff, mypy, mkdocs) |
+| `search` | Web search integration for agentic verification (Tavily) |
+| `examples` | Running example notebooks (Jupyter) |
+| `embeddings` | Embedding similarity checks (SentenceTransformers) |
+| `gepa` | GEPA prompt optimization integration |
+
+```bash
+# Example: install with embedding support
+uv pip install "karenina[embeddings] @ git+https://github.com/biocypher/karenina.git"
+```
 
 ### Environment Setup
 
-Configure API keys for LLM providers:
-
-| Provider | Variable | Models |
-|----------|----------|--------|
-| OpenAI | `OPENAI_API_KEY` | GPT-4, GPT-4 mini |
-| Google | `GOOGLE_API_KEY` | Gemini |
-| Anthropic | `ANTHROPIC_API_KEY` | Claude |
-| OpenRouter | `OPENROUTER_API_KEY` | Unified access |
-
-**Recommended: Create a `.env` file in your project root**
+Configure API keys for the LLM providers you plan to use:
 
 ```bash
-OPENAI_API_KEY="sk-..."
-GOOGLE_API_KEY="AIza..."
-ANTHROPIC_API_KEY="sk-ant-..."
-```
-
-Then add `.env` to `.gitignore` to prevent committing secrets:
-
-```bash
-echo ".env" >> .gitignore
-```
-
-**Alternative: Export to your shell**
-
-```bash
+# In your shell or a .env file in your working directory
 export OPENAI_API_KEY="sk-..."
+export ANTHROPIC_API_KEY="sk-ant-..."
+export GOOGLE_API_KEY="AI..."
 ```
 
-**Note**: API keys can also be passed programmatically via `extra_kwargs` in `ModelConfig`. See the [Configuration Guide](docs/configuration.md) for all options including feature toggles, execution control, and database settings.
+Alternatively, use `karenina init` to generate a `.env` template with all supported variables. See the [Configuration Guide](docs/03-configuration/index.md) for the full configuration hierarchy.
 
 ### Verify Installation
 
-Test that Karenina is installed correctly:
+```bash
+# Check CLI is available
+karenina --version
 
-```python
-from karenina import Benchmark
-
-# Create a simple benchmark
-benchmark = Benchmark.create(
-    name="test-benchmark",
-    description="Installation verification",
-    version="1.0.0"
-)
-
-print(f"✓ Karenina installed successfully!")
-print(f"✓ Benchmark created: {benchmark.name}")
+# Check Python import
+python -c "import karenina; print(karenina.__version__)"
 ```
 
-For detailed setup instructions, troubleshooting, and development installation, see the [Installation Guide](docs/install.md).
+For detailed setup instructions, troubleshooting, and development installation, see the [Installation Guide](docs/getting-started/installation.md).
 
 ## 📚 Documentation
 
@@ -641,30 +694,33 @@ Then open your browser to `http://127.0.0.1:8000` to browse the documentation wi
 
 ### Getting Started
 - [**Documentation Index**](docs/index.md) - Complete documentation overview with navigation
-- [**Installation Guide**](docs/install.md) - Detailed setup instructions and requirements
-- [**Quick Start Tutorial**](docs/quickstart.md) - Step-by-step guide to your first benchmark
-- [**Features Overview**](docs/features.md) - Complete feature catalog
+- [**Installation Guide**](docs/getting-started/installation.md) - Detailed setup instructions and requirements
+- [**Quick Start Tutorial**](docs/getting-started/quickstart.md) - Step-by-step guide to your first benchmark
+- [**Core Concepts**](docs/core_concepts/index.md) - Understand checkpoints, templates, and rubrics
 
-### User Guides
-- [**Defining Benchmarks**](docs/using-karenina/defining-benchmark.md) - Benchmark creation and metadata
-- [**Adding Questions**](docs/using-karenina/adding-questions.md) - File extraction and management
-- [**Templates**](docs/using-karenina/templates.md) - Creating and customizing answer templates
-- [**Rubrics**](docs/using-karenina/rubrics.md) - Evaluation criteria and trait types
-- [**Verification**](docs/using-karenina/verification.md) - Running evaluations and analyzing results
-- [**CLI Verification**](docs/using-karenina/cli-verification.md) - Command-line interface for automation
-- [**Saving & Loading**](docs/using-karenina/saving-loading.md) - Checkpoints, database, and export
+### Creating Benchmarks
+- [**Creating Checkpoints**](docs/05-creating-benchmarks/creating-checkpoint.md) - Benchmark creation and metadata
+- [**Adding Questions**](docs/05-creating-benchmarks/adding-questions.md) - File extraction and management
+- [**Writing Templates**](docs/05-creating-benchmarks/writing-templates.md) - Creating and customizing answer templates
+- [**Defining Rubrics**](docs/05-creating-benchmarks/defining-rubrics.md) - Evaluation criteria and trait types
+- [**Saving Benchmarks**](docs/05-creating-benchmarks/saving-benchmarks.md) - Checkpoints and export
 
-### Advanced Features
-- [**Deep-Judgment**](docs/advanced/deep-judgment.md) - Extract detailed feedback with excerpts
-- [**Few-Shot Prompting**](docs/advanced/few-shot.md) - Guide responses with examples
-- [**Abstention Detection**](docs/advanced/abstention-detection.md) - Handle model refusals
-- [**Embedding Check**](docs/advanced/embedding-check.md) - Semantic similarity fallback
-- [**Presets**](docs/advanced/presets.md) - Save and reuse verification configurations
+### Running Verification
+- [**Verification Config**](docs/06-running-verification/verification-config.md) - Configure and run evaluations
+- [**Multi-Model Evaluation**](docs/06-running-verification/multi-model.md) - Compare across models
+- [**CLI Verification**](docs/06-running-verification/cli.md) - Command-line interface for automation
+- [**Analyzing Results**](docs/07-analyzing-results/index.md) - DataFrames, export, and iteration
+
+### Advanced Pipeline
+- [**Deep-Judgment (Templates)**](docs/11-advanced-pipeline/deep-judgment-templates.md) - Extract detailed feedback with excerpts
+- [**Deep-Judgment (Rubrics)**](docs/11-advanced-pipeline/deep-judgment-rubrics.md) - Evidence-based rubric evaluation
+- [**Few-Shot Prompting**](docs/core_concepts/few-shot.md) - Guide responses with examples
+- [**Response Quality Checks**](docs/06-running-verification/response-quality-checks.md) - Abstention detection and sufficiency
+- [**Presets**](docs/03-configuration/presets.md) - Save and reuse verification configurations
 
 ### Reference
-- [**API Reference**](docs/api-reference.md) - Complete API documentation
-- [**Configuration**](docs/configuration.md) - Environment variables and defaults
-- [**Troubleshooting**](docs/troubleshooting.md) - Common issues and solutions
+- [**CLI Reference**](docs/reference/cli/index.md) - Complete CLI command documentation
+- [**Configuration**](docs/reference/configuration/index.md) - Environment variables and defaults
 
 ## 🤝 Contributing
 
