@@ -1,5 +1,9 @@
 # What is Karenina?
 
+!!! warning "Experimental Project"
+
+    Karenina is an experimental project still making its baby steps towards maturity. Best effort has been applied in creating a correct set of documentation, however some errors and imprecisions may be present. If you encounter any, please [open an issue](https://github.com/example/karenina/issues) on the GitHub repository and we will try to get them fixed as soon as possible.
+
 **Karenina** is a Python framework for defining, running, and sharing LLM benchmarks in a rigorous and reproducible way. It enables systematic evaluation of large language model performance through structured, verifiable testing.
 
 **New here?** Start with the **[Quick Start](../notebooks/quickstart.ipynb)** — a hands-on walkthrough that takes you from zero to a working benchmark in minutes.
