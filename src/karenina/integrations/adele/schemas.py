@@ -1,5 +1,8 @@
 """
-Pydantic schemas for ADeLe question classification.
+Pydantic schemas for ADeLe (Annotated Demand Levels) question classification.
+
+ADeLe rubrics from Zhou et al. (2025), arXiv:2503.06378.
+https://kinds-of-intelligence-cfi.github.io/ADELE/
 """
 
 from __future__ import annotations

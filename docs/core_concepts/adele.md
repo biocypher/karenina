@@ -1,8 +1,15 @@
 # ADeLe: Question Classification
 
-**ADeLe** (Assessment of Difficulty Level) is a framework for classifying questions along 18 cognitive dimensions. Each dimension measures a different aspect of question difficulty on a 6-level ordinal scale, giving you a detailed profile of what makes a question challenging.
+**ADeLe** (Annotated Demand Levels) is a framework for classifying questions along 18 cognitive dimensions. Each dimension measures a different aspect of question difficulty on a 6-level ordinal scale, giving you a detailed profile of what makes a question challenging.
 
 Karenina includes a built-in ADeLe integration that can classify your benchmark questions using an LLM, store the results in checkpoint metadata, and use them for filtering or analysis.
+
+!!! info "Attribution"
+    ADeLe was developed by Zhou, Pacchiardi, Martínez-Plumed, Collins et al. at the Leverhulme Centre for the Future of Intelligence (Cambridge) and the Center for Information Technology Policy (Princeton). The 18 demand-level rubrics and ordinal scale used in this integration are derived from their work.
+
+    **Paper**: Zhou, L., Pacchiardi, L., Martínez-Plumed, F., Collins, K.M., et al. (2025). *General Scales Unlock AI Evaluation with Explanatory and Predictive Power*. [arXiv:2503.06378](https://arxiv.org/abs/2503.06378)
+
+    **Project**: [https://kinds-of-intelligence-cfi.github.io/ADELE/](https://kinds-of-intelligence-cfi.github.io/ADELE/)
 
 ## The 18 Dimensions
 

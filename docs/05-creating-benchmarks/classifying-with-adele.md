@@ -1,6 +1,8 @@
 # Classifying Questions with ADeLe
 
-ADeLe (Assessment Dimensions for Language Evaluation) classifies your benchmark questions by cognitive complexity across 18 dimensions. This helps you understand what your benchmark measures and filter questions by difficulty.
+ADeLe (Annotated Demand Levels) classifies your benchmark questions by cognitive complexity across 18 dimensions. This helps you understand what your benchmark measures and filter questions by difficulty.
+
+> ADeLe was introduced in [Zhou et al. (2025)](https://arxiv.org/abs/2503.06378). See [ADeLe Concepts](../core_concepts/adele.md) for full attribution.
 
 !!! note "Concept vs Workflow"
     This page covers **how to run classification** in the benchmark creation workflow. For the full list of 18 dimensions and the ordinal scale, see [ADeLe Concepts](../core_concepts/adele.md).

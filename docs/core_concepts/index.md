@@ -20,7 +20,7 @@ Concepts are ordered to follow the evaluation pipeline — from what you're eval
 | **Adapters** | LLM backend interfaces (LangChain, Claude SDK, Claude Tool, Manual, and more) | [Adapters](adapters.md) |
 | **MCP** | Tool-augmented evaluation via Model Context Protocol servers | [MCP Overview](mcp-overview.md) |
 | **Manual Interface** | Evaluation using pre-recorded LLM traces instead of live API calls | [Manual Interface](manual-interface.md) |
-| **Adele** | 18-dimension question classification system | [Adele](adele.md) |
+| **ADeLe** | 18-dimension question classification system ([Zhou et al., 2025](https://arxiv.org/abs/2503.06378)) | [ADeLe](adele.md) |
 | **Few-Shot** | Example injection for improved LLM parsing accuracy | [Few-Shot](few-shot.md) |
 
 ---
@@ -157,11 +157,11 @@ The **manual interface** allows you to evaluate pre-recorded LLM traces instead 
 
 [Read more about the manual interface →](manual-interface.md)
 
-### Adele
+### ADeLe
 
-**Adele** is an 18-dimension question classification system that characterizes questions along axes like reasoning depth, domain specificity, and answer format. Classifications are stored in checkpoint metadata and can guide template design and evaluation strategy.
+**ADeLe** (Annotated Demand Levels; [Zhou et al., 2025](https://arxiv.org/abs/2503.06378)) is an 18-dimension question classification system that characterizes questions along axes like reasoning depth, domain specificity, and answer format. Classifications are stored in checkpoint metadata and can guide template design and evaluation strategy.
 
-[Read more about Adele →](adele.md)
+[Read more about ADeLe →](adele.md)
 
 ### Few-Shot
 

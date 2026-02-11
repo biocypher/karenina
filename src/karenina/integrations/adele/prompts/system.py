@@ -2,11 +2,14 @@
 System prompts for ADeLe question classification.
 
 These are static prompts that don't require any formatting.
+
+ADeLe rubrics from Zhou et al. (2025), arXiv:2503.06378.
+https://kinds-of-intelligence-cfi.github.io/ADELE/
 """
 
 SYSTEM_PROMPT_SINGLE_TRAIT = """You are an expert evaluator classifying QUESTIONS (not answers) using the ADeLe framework.
 
-ADeLe (Assessment Dimensions for Language Evaluation) characterizes questions by their cognitive complexity. Your task is to analyze the QUESTION ITSELF and classify it for a SINGLE dimension.
+ADeLe (Annotated Demand Levels; Zhou et al., 2025) characterizes questions by their cognitive complexity. Your task is to analyze the QUESTION ITSELF and classify it for a SINGLE dimension.
 
 **RESPONSE FORMAT:**
 You will receive a JSON Schema specifying the exact output structure. Your response MUST conform to this schema.
@@ -30,7 +33,7 @@ Return ONLY a JSON object - no explanations, no markdown, no surrounding text.
 
 SYSTEM_PROMPT_BATCH = """You are an expert evaluator classifying QUESTIONS (not answers) using the ADeLe framework.
 
-ADeLe (Assessment Dimensions for Language Evaluation) characterizes questions by their cognitive complexity across multiple dimensions. Your task is to analyze the QUESTION ITSELF and determine what level of each dimension would be required to answer it.
+ADeLe (Annotated Demand Levels; Zhou et al., 2025) characterizes questions by their cognitive complexity across multiple dimensions. Your task is to analyze the QUESTION ITSELF and determine what level of each dimension would be required to answer it.
 
 **RESPONSE FORMAT:**
 You will receive a JSON Schema specifying the exact output structure. Your response MUST conform to this schema.

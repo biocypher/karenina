@@ -1,9 +1,15 @@
 """
-ADeLe (Assessment Dimensions for Language Evaluation) integration for Karenina.
+ADeLe (Annotated Demand Levels) integration for Karenina.
 
 This module provides 18 pre-defined LLMRubricTrait objects based on the ADeLe
 evaluation framework. Each trait uses `kind="literal"` with 6 ordinal classes
 (levels 0-5) for evaluating various cognitive and processing dimensions.
+
+ADeLe was introduced in:
+    Zhou, L., Pacchiardi, L., Martínez-Plumed, F., Collins, K.M., et al. (2025).
+    "General Scales Unlock AI Evaluation with Explanatory and Predictive Power."
+    arXiv:2503.06378. https://arxiv.org/abs/2503.06378
+    Project: https://kinds-of-intelligence-cfi.github.io/ADELE/
 
 Available Traits (by snake_case name):
     - attention_and_scan (AS): Attention and scanning requirements

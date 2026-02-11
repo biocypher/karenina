@@ -1,11 +1,14 @@
 """
 ADeLe Question Classifier.
 
-Classifies questions using ADeLe rubrics via LLM-as-judge.
+Classifies questions using ADeLe (Annotated Demand Levels) rubrics via LLM-as-judge.
 This module adapts the existing LLMTraitEvaluator infrastructure
 to evaluate questions (instead of answers) against ADeLe dimensions.
 
 All LLM calls use LLMPort.with_structured_output() for consistent backend abstraction.
+
+ADeLe rubrics from Zhou et al. (2025), arXiv:2503.06378.
+https://kinds-of-intelligence-cfi.github.io/ADELE/
 """
 
 from __future__ import annotations
