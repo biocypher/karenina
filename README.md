@@ -13,7 +13,7 @@
 
 </div>
 
-> **Note:** Karenina is still experimental and under active, fast-paced development. APIs and features may change without notice. A first stable release will be available soon — stay tuned!
+> **⚠️ Experimental Project:** Karenina is still experimental and under active, fast-paced development. APIs and features may change without notice. Best effort has been applied in creating a correct set of documentation, however some errors and imprecisions may be present. If you encounter any, please [open an issue](https://github.com/biocypher/karenina/issues) on the GitHub repository and we will try to get them fixed as soon as possible.
 
 ---
 
