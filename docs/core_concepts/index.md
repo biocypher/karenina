@@ -1,6 +1,6 @@
 # Core Concepts
 
-This section covers the fundamental building blocks of Karenina. Each concept has a dedicated page with detailed explanations and, where applicable, executable examples.
+This section is about *understanding* — what Karenina's building blocks are, why they exist, and how they relate to each other. If you're looking for step-by-step task guides, see [Workflows](../workflows.md). If you need exact field names or CLI flags, see [Reference](../reference.md).
 
 ## Concepts at a Glance
 

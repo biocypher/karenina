@@ -1,6 +1,6 @@
 # Reference
 
-This section provides exhaustive reference documentation for Karenina's CLI commands and configuration options. For tutorial-style introductions with examples, see the [Workflows](workflows.md) section.
+This section is about *looking things up* — exhaustive tables of every CLI flag, config field, environment variable, and schema. No narrative or motivation, just the facts. For step-by-step guides, see [Workflows](workflows.md). For explanations of what these options mean and why they exist, see [Core Concepts](core_concepts/index.md).
 
 ---
 

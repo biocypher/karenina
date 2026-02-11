@@ -4,6 +4,19 @@
 
 **New here?** Start with the **[Quick Start](../notebooks/quickstart.ipynb)** — a hands-on walkthrough that takes you from zero to a working benchmark in minutes.
 
+## Documentation Structure
+
+This documentation is organized into four sections, each serving a different reader mindset:
+
+| Section | Reader mindset | What you'll find |
+|---------|---------------|-----------------|
+| **[Core Concepts](../core_concepts/index.md)** | *"Help me understand"* | Mental models and explanations — what templates, rubrics, pipelines, and adapters *are* and why they exist. Read this when you need to build intuition before doing anything. |
+| **[Workflows](../workflows.md)** | *"Help me do it"* | Step-by-step task guides — creating benchmarks, running verification, analyzing results. Read this when you have a specific goal and want to accomplish it. |
+| **[Reference](../reference.md)** | *"Help me look it up"* | Exhaustive tables of CLI flags, config fields, environment variables, and schemas. Read this when you already know what you want to do and just need the exact syntax. |
+| **[Advanced](../advanced.md)** | *"Help me extend it"* | Pipeline internals, adapter architecture, and custom stages. Read this when you need to debug, customize, or contribute to karenina itself. |
+
+---
+
 ## Key Capabilities
 
 - **Create benchmarks** from scratch or from existing question sets

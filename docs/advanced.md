@@ -1,6 +1,6 @@
 # Advanced
 
-This section covers Karenina's internal architecture for users who need to debug pipeline behavior, customize prompts, write custom stages, or create new LLM adapters.
+This section is about *extending* — Karenina's internal architecture for users who need to debug pipeline behavior, customize prompts, write custom stages, or create new LLM adapters. For the conceptual foundations, see [Core Concepts](core_concepts/index.md). For task-oriented guides, see [Workflows](workflows.md).
 
 ---
 
