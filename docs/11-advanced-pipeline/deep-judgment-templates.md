@@ -264,5 +264,5 @@ The only hard failure is in Stage 3 (parameter extraction via ParserPort), which
 - [Advanced Pipeline Overview](index.md) — Stage ordering and evaluation mode matrix
 - [13 Stages in Detail](stages.md) — Stage 10 (DeepJudgmentAutoFail) specifics
 - [Deep Judgment: Rubrics](deep-judgment-rubrics.md) — Per-trait deep judgment for rubric evaluation
-- [VerificationConfig Reference](../10-configuration-reference/verification-config.md) — All 33 configuration fields
+- [VerificationConfig Reference](../reference/configuration/verification-config.md) — All 33 configuration fields
 - [VerificationResult Structure](../07-analyzing-results/verification-result.md) — Complete result hierarchy

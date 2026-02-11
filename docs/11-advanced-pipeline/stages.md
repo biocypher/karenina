@@ -659,5 +659,5 @@ Errors are contained per-question:
 - [Deep Judgment: Templates](deep-judgment-templates.md) — Excerpt extraction and fuzzy matching details
 - [Deep Judgment: Rubrics](deep-judgment-rubrics.md) — Per-trait deep judgment configuration
 - [Prompt Assembly System](prompt-assembly.md) — How prompts are constructed for LLM calls
-- [VerificationConfig Reference](../10-configuration-reference/verification-config.md) — All 33 configuration fields
+- [VerificationConfig Reference](../reference/configuration/verification-config.md) — All 33 configuration fields
 - [VerificationResult Structure](../07-analyzing-results/verification-result.md) — Complete result hierarchy

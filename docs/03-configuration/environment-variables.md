@@ -1,6 +1,6 @@
 # Environment Variables
 
-Karenina reads environment variables to configure API keys, file paths, execution behavior, and verification features. This page groups variables by purpose and shows practical usage patterns. For an exhaustive reference table, see [Environment Variables Reference](../10-configuration-reference/env-vars.md).
+Karenina reads environment variables to configure API keys, file paths, execution behavior, and verification features. This page groups variables by purpose and shows practical usage patterns. For an exhaustive reference table, see [Environment Variables Reference](../reference/configuration/env-vars.md).
 
 !!! note "Precedence"
     Environment variables are the **third priority** in the configuration hierarchy — they're overridden by CLI arguments and preset values. See [Configuration Hierarchy](index.md) for details.
@@ -181,5 +181,5 @@ Environment variables that accept boolean values recognize these truthy strings 
 - [Configuration Hierarchy](index.md) — How environment variables fit into the precedence system
 - [Presets](presets.md) — Reusable configuration files that override environment variables
 - [Workspace Initialization](../getting-started/workspace-init.md) — `karenina init` creates default directories and `.env` template
-- [Environment Variables Reference](../10-configuration-reference/env-vars.md) — Exhaustive table of all variables
+- [Environment Variables Reference](../reference/configuration/env-vars.md) — Exhaustive table of all variables
 - [Running Verification](../06-running-verification/index.md) — Putting configuration into practice

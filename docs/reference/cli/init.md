@@ -46,8 +46,8 @@ Quick setup defaults:
 
 | Setting | Default Value |
 |---------|--------------|
-| Provider | `anthropic` |
-| Model | `claude-haiku-4-5` |
+| Provider | `openai` |
+| Model | `gpt-4.1-mini` |
 | Interface | `langchain` |
 | Async enabled | `true` |
 | Async workers | `2` |
@@ -63,8 +63,8 @@ Stores default LLM configuration used by the GUI and server:
 ```json
 {
   "default_interface": "langchain",
-  "default_provider": "anthropic",
-  "default_model": "claude-haiku-4-5",
+  "default_provider": "openai",
+  "default_model": "gpt-4.1-mini",
   "default_endpoint_base_url": ""
 }
 ```
@@ -123,7 +123,7 @@ Provider-specific default models:
 
 | Provider | Default Model |
 |----------|--------------|
-| `openai` | `claude-haiku-4-5` |
+| `openai` | `gpt-4.1-mini` |
 | `anthropic` | `claude-haiku-4-5` |
 | `google_genai` | `gemini-pro` |
 | `openrouter` | `openai/gpt-4o-mini` |
@@ -191,7 +191,7 @@ karenina init --advanced --force
 ## Related
 
 - [serve](serve.md) — Start the webapp server (also offers first-time setup)
-- [Workspace Initialization](../getting-started/workspace-init.md) — Tutorial with detailed explanations
-- [Environment Variables](../03-configuration/environment-variables.md) — All environment variable settings
-- [Configuration Hierarchy](../03-configuration/index.md) — How configuration layers interact
+- [Workspace Initialization](../../getting-started/workspace-init.md) — Tutorial with detailed explanations
+- [Environment Variables](../../03-configuration/environment-variables.md) — All environment variable settings
+- [Configuration Hierarchy](../../03-configuration/index.md) — How configuration layers interact
 - [CLI Reference](index.md) — Overview of all CLI commands

@@ -182,6 +182,6 @@ Your custom text is **appended to the system prompt** after all built-in and ada
 
 - [VerificationConfig](verification-config.md) — all configuration options including prompt_config
 - [Response Quality Checks](response-quality-checks.md) — abstention and sufficiency detection details
-- [PromptConfig Reference](../10-configuration-reference/prompt-config.md) — complete field reference table
+- [PromptConfig Reference](../reference/configuration/prompt-config.md) — complete field reference table
 - [Prompt Assembly System](../11-advanced-pipeline/prompt-assembly.md) — how the tri-section pattern works internally
 - [Using Presets](using-presets.md) — save prompt configurations in reusable presets

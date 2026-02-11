@@ -248,5 +248,5 @@ Factories should use `kwargs.get()` with defaults so they work even when keys ar
 - [Prompt Config](../06-running-verification/prompt-config.md) --- configure user instructions per task
 - [13 Stages in Detail](stages.md) --- which stages make LLM calls and use the assembler
 - [Available Adapters](../12-advanced-adapters/available-adapters.md) --- adapter-specific prompt behavior
-- [Verification Config Reference](../10-configuration-reference/verification-config.md) --- `prompt_config` field in `VerificationConfig`
+- [Verification Config Reference](../reference/configuration/verification-config.md) --- `prompt_config` field in `VerificationConfig`
 - [Pipeline Overview](index.md) --- how stages execute and interact

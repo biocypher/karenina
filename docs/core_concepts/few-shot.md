@@ -259,4 +259,4 @@ VerificationConfig validates few-shot settings:
 - [Adding Few-Shot Examples](../05-creating-benchmarks/few-shot-examples.md) — How to add examples to questions
 - [VerificationConfig Tutorial](../06-running-verification/verification-config.md) — Complete configuration setup
 - [Answer Templates](answer-templates.md) — What few-shot examples help with
-- [VerificationConfig Reference](../10-configuration-reference/verification-config.md) — Exhaustive field reference
+- [VerificationConfig Reference](../reference/configuration/verification-config.md) — Exhaustive field reference

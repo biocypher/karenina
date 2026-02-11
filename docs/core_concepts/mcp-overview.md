@@ -166,4 +166,4 @@ The verification pipeline can evaluate either the **final response** or the **fu
 - [Adapters](adapters.md) — Full adapter comparison and configuration
 - [Evaluation Modes](evaluation-modes.md) — How MCP interacts with template and rubric evaluation
 - [Manual Interface](manual-interface.md) — Alternative for reproducible testing without live tools
-- [VerificationConfig Reference](../10-configuration-reference/verification-config.md) — Trace handling and MCP-related config fields
+- [VerificationConfig Reference](../reference/configuration/verification-config.md) — Trace handling and MCP-related config fields

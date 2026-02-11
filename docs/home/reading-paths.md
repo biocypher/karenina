@@ -12,7 +12,7 @@ Choose the path that matches your goal:
 
 **CLI User** — Use Karenina from the command line:
 
-> [Installation](../getting-started/installation.md) → [Configuration](../03-configuration/index.md) → [CLI Reference](../09-cli-reference/index.md)
+> [Installation](../getting-started/installation.md) → [Configuration](../03-configuration/index.md) → [CLI Reference](../reference/cli/index.md)
 
 **Contributor** — Extend Karenina with custom adapters or pipeline stages:
 
@@ -57,8 +57,8 @@ Choose the path that matches your goal:
 
 | Section | What You'll Learn |
 |---------|-------------------|
-| [CLI Reference](../09-cli-reference/index.md) | Complete documentation for all CLI commands |
-| [Configuration Reference](../10-configuration-reference/index.md) | Exhaustive tables for all configuration options |
+| [CLI Reference](../reference/cli/index.md) | Complete documentation for all CLI commands |
+| [Configuration Reference](../reference/configuration/index.md) | Exhaustive tables for all configuration options |
 
 ## Advanced
 

@@ -1,9 +1,9 @@
 # Environment Variables Reference
 
-This is the exhaustive reference for every environment variable recognized by karenina. For a tutorial-style introduction with grouped explanations and examples, see [Environment Variables Tutorial](../03-configuration/environment-variables.md).
+This is the exhaustive reference for every environment variable recognized by karenina. For a tutorial-style introduction with grouped explanations and examples, see [Environment Variables Tutorial](../../03-configuration/environment-variables.md).
 
 !!! note "Precedence"
-    Environment variables are the **third priority** in the [configuration hierarchy](../03-configuration/index.md): CLI arguments and preset values override them; they override built-in defaults.
+    Environment variables are the **third priority** in the [configuration hierarchy](../../03-configuration/index.md): CLI arguments and preset values override them; they override built-in defaults.
 
 ---
 
@@ -123,7 +123,7 @@ In all cases, the effective precedence is: explicit argument > VerificationConfi
 
 ## Related
 
-- [Environment Variables Tutorial (section 03)](../03-configuration/environment-variables.md) — grouped explanations with usage examples
+- [Environment Variables Tutorial (section 03)](../../03-configuration/environment-variables.md) — grouped explanations with usage examples
 - [VerificationConfig Reference](verification-config.md) — fields that shadow embedding and async env vars
-- [Configuration Hierarchy (section 03)](../03-configuration/index.md) — how env vars fit into precedence
-- [Workspace Initialization](../getting-started/workspace-init.md) — `karenina init` creates `.env` template
+- [Configuration Hierarchy (section 03)](../../03-configuration/index.md) — how env vars fit into precedence
+- [Workspace Initialization](../../getting-started/workspace-init.md) — `karenina init` creates `.env` template

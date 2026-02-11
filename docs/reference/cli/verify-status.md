@@ -181,5 +181,5 @@ karenina verify --resume results.json.state
 ## Related
 
 - [verify](verify.md) — The `--progressive-save` and `--resume` options that create and use state files
-- [Running Verification](../06-running-verification/index.md) — Verification workflow guides
+- [Running Verification](../../06-running-verification/index.md) — Verification workflow guides
 - [CLI Reference](index.md) — Overview of all CLI commands

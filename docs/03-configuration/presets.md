@@ -60,7 +60,7 @@ The top-level fields:
 
 The `config` object contains all `VerificationConfig` fields. Model configurations are sanitized when saved — interface-specific fields that don't apply are removed, and `manual_traces` are excluded (they must be provided at runtime).
 
-See [Preset Schema Reference](../10-configuration-reference/preset-schema.md) for the complete schema specification.
+See [Preset Schema Reference](../reference/configuration/preset-schema.md) for the complete schema specification.
 
 ---
 
@@ -275,4 +275,4 @@ Examples:
 - [Environment Variables](environment-variables.md) — Setting project-wide defaults
 - [Workspace Initialization](../getting-started/workspace-init.md) — Creating a project with a `presets/` directory
 - [Running Verification](../06-running-verification/index.md) — Using presets in verification workflows
-- [Preset Schema Reference](../10-configuration-reference/preset-schema.md) — Complete preset JSON schema
+- [Preset Schema Reference](../reference/configuration/preset-schema.md) — Complete preset JSON schema

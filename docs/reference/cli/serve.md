@@ -58,7 +58,7 @@ When the server starts, it sets the following environment variables for the sess
 | `KARENINA_PRESETS_DIR` | `{working_dir}/presets` |
 | `MCP_PRESETS_DIR` | `{working_dir}/mcp_presets` |
 
-These variables control where the server stores databases, presets, and MCP presets. See [Environment Variables](../03-configuration/environment-variables.md) for details.
+These variables control where the server stores databases, presets, and MCP presets. See [Environment Variables](../../03-configuration/environment-variables.md) for details.
 
 ---
 
@@ -124,6 +124,6 @@ Starts with hot-reloading for active development.
 ## Related
 
 - [init](init.md) — Initialize a workspace without starting the server
-- [Configuration Hierarchy](../03-configuration/index.md) — How configuration layers interact
-- [Environment Variables](../03-configuration/environment-variables.md) — All environment variable settings
+- [Configuration Hierarchy](../../03-configuration/index.md) — How configuration layers interact
+- [Environment Variables](../../03-configuration/environment-variables.md) — All environment variable settings
 - [CLI Reference](index.md) — Overview of all CLI commands

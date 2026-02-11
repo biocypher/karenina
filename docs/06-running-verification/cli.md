@@ -2,7 +2,7 @@
 
 The `karenina verify` command runs verification directly from the terminal. It supports all the same configuration options available in the Python API — model selection, feature flags, evaluation modes, progressive save, and resume.
 
-This page covers practical CLI usage for running verification. For the complete option reference, see [karenina verify Reference](../09-cli-reference/verify.md).
+This page covers practical CLI usage for running verification. For the complete option reference, see [karenina verify Reference](../reference/cli/verify.md).
 
 ---
 
@@ -259,4 +259,4 @@ karenina verify benchmark.jsonld --preset config.json \
 - [VerificationConfig](verification-config.md) — Configure all verification settings
 - [Using Presets](using-presets.md) — Save and reuse configurations
 - [Response Quality Checks](response-quality-checks.md) — Abstention and sufficiency detection
-- [karenina verify Reference](../09-cli-reference/verify.md) — Complete option reference
+- [karenina verify Reference](../reference/cli/verify.md) — Complete option reference

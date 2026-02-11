@@ -13,7 +13,7 @@ jupyter:
 
 # Configuring Verification
 
-Every verification run is controlled by a `VerificationConfig` object. This page walks through the major configuration categories with practical examples. For an exhaustive field-by-field reference, see [VerificationConfig Reference](../10-configuration-reference/verification-config.md).
+Every verification run is controlled by a `VerificationConfig` object. This page walks through the major configuration categories with practical examples. For an exhaustive field-by-field reference, see [VerificationConfig Reference](../reference/configuration/verification-config.md).
 
 ```python tags=["hide-cell"]
 # Mock cell: patches VerificationConfig validation so examples execute without live API keys.
@@ -373,4 +373,4 @@ _ = _patcher_validate.stop()
 - [Using Presets](using-presets.md) — save and reuse configurations
 - [PromptConfig](prompt-config.md) — inject custom instructions into pipeline stages
 - [Response Quality Checks](response-quality-checks.md) — abstention and sufficiency detection
-- [VerificationConfig Reference](../10-configuration-reference/verification-config.md) — exhaustive field table
+- [VerificationConfig Reference](../reference/configuration/verification-config.md) — exhaustive field table

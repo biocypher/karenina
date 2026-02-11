@@ -70,7 +70,7 @@ karenina verify checkpoint.jsonld \
 
 CLI arguments are converted to a `VerificationConfig` internally using `from_overrides()`, which selectively applies only the flags you provide — unset flags don't override preset or default values.
 
-See [CLI Reference](../09-cli-reference/index.md) for all available flags.
+See [CLI Reference](../reference/cli/index.md) for all available flags.
 
 ### 2. Presets
 

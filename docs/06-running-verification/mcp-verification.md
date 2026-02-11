@@ -381,4 +381,4 @@ for result in results:
 - [Python API](python-api.md) — full Python API walkthrough
 - [Multi-Model Evaluation](multi-model.md) — comparing models
 - [Evaluation Modes](../core_concepts/evaluation-modes.md) — template, rubric, and combined modes
-- [Verification Config Reference](../10-configuration-reference/verification-config.md) — all `VerificationConfig` fields
+- [Verification Config Reference](../reference/configuration/verification-config.md) — all `VerificationConfig` fields

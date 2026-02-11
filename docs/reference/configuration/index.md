@@ -1,6 +1,6 @@
 # Configuration Reference
 
-This section provides exhaustive reference documentation for all configuration objects in karenina. For tutorial-style introductions with examples, see [Configuration](../03-configuration/index.md) and [Configuring Verification](../06-running-verification/verification-config.md).
+This section provides exhaustive reference documentation for all configuration objects in karenina. For tutorial-style introductions with examples, see [Configuration](../../03-configuration/index.md) and [Configuring Verification](../../06-running-verification/verification-config.md).
 
 ---
 
@@ -47,7 +47,7 @@ Environment variables
 Built-in defaults
 ```
 
-See [Configuration Hierarchy](../03-configuration/index.md) for details.
+See [Configuration Hierarchy](../../03-configuration/index.md) for details.
 
 ---
 
@@ -62,6 +62,6 @@ from karenina.schemas.verification import PromptConfig
 
 ## Related
 
-- [Configuration Tutorial (section 03)](../03-configuration/index.md) — conceptual overview with examples
-- [Configuring Verification (section 06)](../06-running-verification/verification-config.md) — tutorial with executable examples
-- [CLI Reference (section 09)](../09-cli-reference/index.md) — command-line options that map to these fields
+- [Configuration Tutorial (section 03)](../../03-configuration/index.md) — conceptual overview with examples
+- [Configuring Verification (section 06)](../../06-running-verification/verification-config.md) — tutorial with executable examples
+- [CLI Reference](../cli/index.md) — command-line options that map to these fields

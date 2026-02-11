@@ -321,5 +321,5 @@ close_engine(db_config)
 
 - [Analyzing Results](../07-analyzing-results/index.md) — Work with `VerificationResult` and DataFrames
 - [Exporting Results](../07-analyzing-results/exporting.md) — Export to JSON, CSV, or checkpoint formats
-- [VerificationConfig Reference](../10-configuration-reference/verification-config.md) — Full configuration options including `db_config`
+- [VerificationConfig Reference](../reference/configuration/verification-config.md) — Full configuration options including `db_config`
 - [Python API](python-api.md) — Running verification programmatically

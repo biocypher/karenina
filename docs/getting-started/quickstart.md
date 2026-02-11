@@ -308,7 +308,7 @@ results = benchmark.run_verification(config)
 print(f"Verification complete — {len(results.results)} results")
 ```
 
-> **Learn more**: [Verification Config](../06-running-verification/verification-config.md) · [Multi-Model Evaluation](../06-running-verification/multi-model.md) · [Model Config Reference](../10-configuration-reference/model-config.md) · [CLI Verification](../09-cli-reference/verify.md)
+> **Learn more**: [Verification Config](../06-running-verification/verification-config.md) · [Multi-Model Evaluation](../06-running-verification/multi-model.md) · [Model Config Reference](../reference/configuration/model-config.md) · [CLI Verification](../reference/cli/verify.md)
 
 ---
 

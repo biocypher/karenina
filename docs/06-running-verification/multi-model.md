@@ -395,7 +395,7 @@ requeued rather than blocked, keeping all workers busy.
 - [Verification Result structure](../07-analyzing-results/verification-result.md) — full result hierarchy
 - [DataFrame analysis](../07-analyzing-results/dataframe-analysis.md) — convert results to pandas DataFrames
 - [Python API verification](python-api.md) — single-model workflow
-- [VerificationConfig reference](../10-configuration-reference/verification-config.md) — all configuration fields
+- [VerificationConfig reference](../reference/configuration/verification-config.md) — all configuration fields
 - [CLI verification](cli.md) — run multi-model from the command line
 
 ```python tags=["hide-cell"]

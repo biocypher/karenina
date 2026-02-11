@@ -106,10 +106,10 @@ The verification system provides several configuration layers:
 
 | Configuration | Purpose | Details |
 |---------------|---------|---------|
-| **VerificationConfig** | Models, evaluation mode, feature flags | [Tutorial](verification-config.md) · [Reference](../10-configuration-reference/verification-config.md) |
-| **PromptConfig** | Custom instructions for LLM prompts | [Tutorial](prompt-config.md) · [Reference](../10-configuration-reference/prompt-config.md) |
+| **VerificationConfig** | Models, evaluation mode, feature flags | [Tutorial](verification-config.md) · [Reference](../reference/configuration/verification-config.md) |
+| **PromptConfig** | Custom instructions for LLM prompts | [Tutorial](prompt-config.md) · [Reference](../reference/configuration/prompt-config.md) |
 | **Presets** | Reusable configuration bundles | [Using presets](using-presets.md) · [Creating presets](../03-configuration/presets.md) |
-| **Environment variables** | API keys, paths, defaults | [Tutorial](../03-configuration/environment-variables.md) · [Reference](../10-configuration-reference/env-vars.md) |
+| **Environment variables** | API keys, paths, defaults | [Tutorial](../03-configuration/environment-variables.md) · [Reference](../reference/configuration/env-vars.md) |
 
 ---
 

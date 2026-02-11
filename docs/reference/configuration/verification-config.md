@@ -1,6 +1,6 @@
 # VerificationConfig Reference
 
-This is the exhaustive reference for all `VerificationConfig` fields. For a tutorial introduction with examples, see [VerificationConfig Tutorial](../06-running-verification/verification-config.md).
+This is the exhaustive reference for all `VerificationConfig` fields. For a tutorial introduction with examples, see [VerificationConfig Tutorial](../../06-running-verification/verification-config.md).
 
 `VerificationConfig` is a Pydantic model with **33 fields** organized into 10 categories below.
 
@@ -64,10 +64,10 @@ See [ModelConfig Reference](model-config.md) for all `ModelConfig` fields.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `abstention_enabled` | `bool` | `False` | Enable abstention/refusal detection. When the model refuses to answer, parsing is skipped and the result is auto-failed. Env var: `KARENINA_ABSTENTION_ENABLED`. |
+| `abstention_enabled` | `bool` | `False` | Enable abstention/refusal detection. When the model refuses to answer, parsing is skipped and the result is auto-failed. |
 | `sufficiency_enabled` | `bool` | `False` | Enable response sufficiency detection. When the response lacks enough information to fill the template, parsing is skipped and the result is auto-failed. |
 
-See [Response Quality Checks](../06-running-verification/response-quality-checks.md) for details.
+See [Response Quality Checks](../../06-running-verification/response-quality-checks.md) for details.
 
 ---
 
@@ -161,9 +161,9 @@ Each trait entry is validated as a `DeepJudgmentTraitConfig` with these fields:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `few_shot_config` | `FewShotConfig \| None` | `None` | Few-shot prompting configuration. Controls example injection into prompts. See [Few-Shot Configuration](../core_concepts/few-shot.md). |
-| `prompt_config` | `PromptConfig \| None` | `None` | Per-task prompt instruction overrides. Injects custom instructions into specific pipeline stages. See [PromptConfig Tutorial](../06-running-verification/prompt-config.md) and [PromptConfig Reference](prompt-config.md). |
-| `db_config` | `Any \| None` | `None` | `DBConfig` instance for automatic result persistence to a database. When set, results are saved after each verification run. See [Database Persistence](../06-running-verification/database-persistence.md). |
+| `few_shot_config` | `FewShotConfig \| None` | `None` | Few-shot prompting configuration. Controls example injection into prompts. See [Few-Shot Configuration](../../core_concepts/few-shot.md). |
+| `prompt_config` | `PromptConfig \| None` | `None` | Per-task prompt instruction overrides. Injects custom instructions into specific pipeline stages. See [PromptConfig Tutorial](../../06-running-verification/prompt-config.md) and [PromptConfig Reference](prompt-config.md). |
+| `db_config` | `Any \| None` | `None` | `DBConfig` instance for automatic result persistence to a database. When set, results are saved after each verification run. See [Database Persistence](../../06-running-verification/database-persistence.md). |
 
 ---
 
@@ -215,7 +215,6 @@ config = VerificationConfig.from_overrides(
 | `deep_judgment_rubric_max_excerpts` | `deep_judgment_rubric_max_excerpts_default` | Max excerpts per trait |
 | `deep_judgment_rubric_fuzzy_threshold` | `deep_judgment_rubric_fuzzy_match_threshold_default` | Fuzzy match threshold |
 | `deep_judgment_rubric_retry_attempts` | `deep_judgment_rubric_excerpt_retry_attempts_default` | Retry attempts |
-| `deep_judgment_rubric_search` | `deep_judgment_rubric_search_enabled` | Enable rubric search |
 | `deep_judgment_rubric_search_tool` | `deep_judgment_rubric_search_tool` | Rubric search tool |
 | `deep_judgment_rubric_config` | `deep_judgment_rubric_config` | Custom per-trait config |
 
@@ -228,7 +227,7 @@ config = VerificationConfig.from_overrides(
 | `sanitize_preset_name(name)` | Convert preset name to safe filename |
 | `validate_preset_metadata(name, description)` | Validate preset name and description |
 
-See [Presets](../03-configuration/presets.md) for usage details.
+See [Presets](../../03-configuration/presets.md) for usage details.
 
 ### Inspection Methods
 
@@ -247,4 +246,4 @@ Fields are resolved in this order (highest priority first):
 2. **Environment variables** (only for fields that support them — embedding and async settings)
 3. **Field defaults** defined on the class
 
-See [Configuration Hierarchy](../03-configuration/index.md) for the full precedence model including presets and CLI arguments.
+See [Configuration Hierarchy](../../03-configuration/index.md) for the full precedence model including presets and CLI arguments.

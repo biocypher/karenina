@@ -1,6 +1,6 @@
 # Preset Schema
 
-A preset file is a JSON document that wraps a complete `VerificationConfig` with metadata. This page documents the full schema specification. For creating and using presets, see [Presets](../03-configuration/presets.md).
+A preset file is a JSON document that wraps a complete `VerificationConfig` with metadata. This page documents the full schema specification. For creating and using presets, see [Presets](../../03-configuration/presets.md).
 
 ---
 
@@ -75,14 +75,12 @@ When a preset is saved, each model in `answering_models` and `parsing_models` is
 | Field | Included When | Description |
 |-------|--------------|-------------|
 | `max_retries` | Present in config | Retry attempts |
-| `max_tokens` | Present in config | Maximum response tokens |
 | `endpoint_base_url` | `interface == "openai_endpoint"` and value non-empty | Custom endpoint URL |
 | `endpoint_api_key` | `interface == "openai_endpoint"` and value non-empty | Custom API key |
 | `anthropic_base_url` | `interface` in `("claude_tool", "claude_agent_sdk")` and value non-empty | Custom Anthropic endpoint |
 | `anthropic_api_key` | `interface` in `("claude_tool", "claude_agent_sdk")` and value non-empty | Custom Anthropic API key |
 | `mcp_urls_dict` | Non-empty dict | MCP server URLs |
 | `mcp_tool_filter` | Non-empty list | Tool inclusion filter |
-| `mcp_tool_description_overrides` | Non-empty dict | Tool description overrides |
 | `agent_middleware` | Non-empty dict | Agent middleware config |
 | `extra_kwargs` | Non-empty dict | Vendor-specific parameters |
 | `max_context_tokens` | Not None | Token limit for summarization |
@@ -159,7 +157,6 @@ A preset with two answering models, template + rubric evaluation, and deep judgm
     "deep_judgment_rubric_max_excerpts_default": 7,
     "deep_judgment_rubric_fuzzy_match_threshold_default": 0.80,
     "deep_judgment_rubric_excerpt_retry_attempts_default": 2,
-    "deep_judgment_rubric_search_enabled": false,
     "deep_judgment_rubric_search_tool": "tavily",
     "deep_judgment_rubric_config": null,
     "few_shot_config": null,
@@ -279,7 +276,7 @@ When loading by name (not path), `resolve_preset_path()` searches the presets di
 
 ## Related
 
-- [Presets Tutorial](../03-configuration/presets.md) — creating, loading, and managing presets
-- [Using Presets in Verification](../06-running-verification/using-presets.md) — preset workflows
+- [Presets Tutorial](../../03-configuration/presets.md) — creating, loading, and managing presets
+- [Using Presets in Verification](../../06-running-verification/using-presets.md) — preset workflows
 - [VerificationConfig Reference](verification-config.md) — complete `config` object fields
 - [ModelConfig Reference](model-config.md) — model configuration fields within presets
