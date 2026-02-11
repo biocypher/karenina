@@ -1935,6 +1935,8 @@ dependencies = [
 dev = [
     { name = "ipython" },
     { name = "mkdocs" },
+    { name = "mkdocs-gen-files" },
+    { name = "mkdocs-literate-nav" },
     { name = "mkdocs-material" },
     { name = "mkdocstrings", extra = ["python"] },
     { name = "mypy" },
@@ -1970,7 +1972,9 @@ dev = [
     { name = "ipython" },
     { name = "jupyter" },
     { name = "mkdocs" },
+    { name = "mkdocs-gen-files" },
     { name = "mkdocs-jupyter" },
+    { name = "mkdocs-literate-nav" },
     { name = "mkdocs-material" },
     { name = "mkdocstrings", extra = ["python"] },
     { name = "nbconvert" },
@@ -2007,6 +2011,8 @@ requires-dist = [
     { name = "litellm", specifier = ">=1.80.11" },
     { name = "mcp", specifier = ">=1.25.0,<2" },
     { name = "mkdocs", marker = "extra == 'dev'", specifier = ">=1.5.0" },
+    { name = "mkdocs-gen-files", marker = "extra == 'dev'", specifier = ">=0.5.0" },
+    { name = "mkdocs-literate-nav", marker = "extra == 'dev'", specifier = ">=0.6.0" },
     { name = "mkdocs-material", marker = "extra == 'dev'", specifier = ">=9.0.0" },
     { name = "mkdocstrings", extras = ["python"], marker = "extra == 'dev'", specifier = ">=0.20.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
@@ -2040,7 +2046,9 @@ dev = [
     { name = "ipython", specifier = ">=9.6.0" },
     { name = "jupyter", specifier = ">=1.1.1" },
     { name = "mkdocs", specifier = ">=1.6.1" },
+    { name = "mkdocs-gen-files", specifier = ">=0.5.0" },
     { name = "mkdocs-jupyter", specifier = ">=0.25.1" },
+    { name = "mkdocs-literate-nav", specifier = ">=0.6.0" },
     { name = "mkdocs-material", specifier = ">=9.6.14" },
     { name = "mkdocstrings", extras = ["python"], specifier = ">=0.29.1" },
     { name = "nbconvert", specifier = ">=7.16.6" },
@@ -2528,6 +2536,18 @@ wheels = [
 ]
 
 [[package]]
+name = "mkdocs-gen-files"
+version = "0.6.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "mkdocs" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/61/35/f26349f7fa18414eb2e25d75a6fa9c7e3186c36e1d227c0b2d785a7bd5c4/mkdocs_gen_files-0.6.0.tar.gz", hash = "sha256:52022dc14dcc0451e05e54a8f5d5e7760351b6701eff816d1e9739577ec5635e", size = 8642 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8d/ec/72417415563c60ae01b36f0d497f1f4c803972f447ef4fb7f7746d6e07db/mkdocs_gen_files-0.6.0-py3-none-any.whl", hash = "sha256:815af15f3e2dbfda379629c1b95c02c8e6f232edf2a901186ea3b204ab1135b2", size = 8182 },
+]
+
+[[package]]
 name = "mkdocs-get-deps"
 version = "0.2.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2556,6 +2576,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/6c/23/6ffb8d2fd2117aa860a04c6fe2510b21bc3c3c085907ffdd851caba53152/mkdocs_jupyter-0.25.1.tar.gz", hash = "sha256:0e9272ff4947e0ec683c92423a4bfb42a26477c103ab1a6ab8277e2dcc8f7afe", size = 1626747 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/08/37/5f1fd5c3f6954b3256f8126275e62af493b96fb6aef6c0dbc4ee326032ad/mkdocs_jupyter-0.25.1-py3-none-any.whl", hash = "sha256:3f679a857609885d322880e72533ef5255561bbfdb13cfee2a1e92ef4d4ad8d8", size = 1456197 },
+]
+
+[[package]]
+name = "mkdocs-literate-nav"
+version = "0.6.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "mkdocs" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f6/5f/99aa379b305cd1c2084d42db3d26f6de0ea9bf2cc1d10ed17f61aff35b9a/mkdocs_literate_nav-0.6.2.tar.gz", hash = "sha256:760e1708aa4be86af81a2b56e82c739d5a8388a0eab1517ecfd8e5aa40810a75", size = 17419 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8a/84/b5b14d2745e4dd1a90115186284e9ee1b4d0863104011ab46abb7355a1c3/mkdocs_literate_nav-0.6.2-py3-none-any.whl", hash = "sha256:0a6489a26ec7598477b56fa112056a5e3a6c15729f0214bea8a4dbc55bd5f630", size = 13261 },
 ]
 
 [[package]]
