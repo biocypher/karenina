@@ -54,9 +54,6 @@ def wrap_sdk_error(e: Exception) -> PortError:
     Returns:
         A PortError subclass appropriate for the exception type.
 
-    Raises:
-        The returned PortError (caller should raise it).
-
     Example:
         >>> try:
         ...     await run_sdk_query()

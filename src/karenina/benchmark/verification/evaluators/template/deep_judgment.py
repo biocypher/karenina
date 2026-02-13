@@ -93,25 +93,27 @@ def deep_judgment_parse(
 
     Returns:
         Tuple of (parsed_answer, excerpts, reasoning, metadata):
-        - parsed_answer: BaseAnswer instance (same as standard parsing)
-        - excerpts: Dict mapping attribute names to lists of excerpt objects
-          Structure: {"attr": [{"text": str, "confidence": "low|medium|high", "similarity_score": float}]}
-          Empty list [] indicates no excerpts found (valid for refusals)
-        - reasoning: Dict mapping attribute names to reasoning text
-          Structure: {"attr": "reasoning explaining excerpt→value mapping"}
-        - metadata: Dict with execution info
-          Structure: {"stages_completed": [...], "model_calls": int, ...}
+        - parsed_answer: BaseAnswer instance (same as standard parsing).
+        - excerpts: Dict mapping attribute names to lists of excerpt objects.
+            Structure: `{"attr": [{"text": str, "confidence": "low|medium|high", "similarity_score": float}]}`.
+            Empty list `[]` indicates no excerpts found (valid for refusals).
+        - reasoning: Dict mapping attribute names to reasoning text.
+            Structure: `{"attr": "reasoning explaining excerpt->value mapping"}`.
+        - metadata: Dict with execution info.
+            Structure: `{"stages_completed": [...], "model_calls": int, ...}`.
 
     Raises:
         ValueError: If excerpt JSON parsing fails after all retries
         ParseError: If Stage 3 parsing fails after all adapter retries
 
     Example:
-        >>> parsed, excerpts, reasoning, meta = deep_judgment_parse(...)
-        >>> excerpts["drug_target"]
-        [{"text": "targets BCL-2", "confidence": "high", "similarity_score": 0.95}]
-        >>> reasoning["drug_target"]
-        "The excerpt clearly states BCL-2 as the target..."
+        ```python
+        parsed, excerpts, reasoning, meta = deep_judgment_parse(...)
+        excerpts["drug_target"]
+        # [{"text": "targets BCL-2", "confidence": "high", "similarity_score": 0.95}]
+        reasoning["drug_target"]
+        # "The excerpt clearly states BCL-2 as the target..."
+        ```
     """
     # Extract attribute names from template (excludes 'id', 'correct', 'regex')
     attribute_names = _extract_attribute_names_from_class(RawAnswer)

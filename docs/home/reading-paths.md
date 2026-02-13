@@ -4,11 +4,11 @@ Choose the path that matches your goal:
 
 **New User** — Learn Karenina from the ground up:
 
-> [Installation](../getting-started/installation.md) → [Quick Start](../notebooks/quickstart.ipynb) → [Core Concepts](../core-concepts.md) → [Creating Benchmarks](../05-creating-benchmarks/index.md) → [Running Verification](../06-running-verification/index.md) → [Analyzing Results](../07-analyzing-results/index.md)
+> [Installation](../getting-started/installation.md) → [Quick Start](../notebooks/quickstart.ipynb) → [Core Concepts](../core_concepts/index.md) → [Creating Benchmarks](../05-creating-benchmarks/index.md) → [Running Verification](../06-running-verification/index.md) → [Analyzing Results](../07-analyzing-results/index.md)
 
 **Power User** — Dive into advanced features:
 
-> [Core Concepts](../core-concepts.md) → [Pipeline Internals](../11-advanced-pipeline/index.md) → [Adapter Architecture](../12-advanced-adapters/index.md)
+> [Core Concepts](../core_concepts/index.md) → [Pipeline Internals](../11-advanced-pipeline/index.md) → [Adapter Architecture](../12-advanced-adapters/index.md)
 
 **CLI User** — Use Karenina from the command line:
 
@@ -32,7 +32,7 @@ Choose the path that matches your goal:
 
 | Section | What You'll Learn |
 |---------|-------------------|
-| [Overview](../core-concepts.md) | How all concepts fit together, ordered by pipeline flow |
+| [Overview](../core_concepts/index.md) | How all concepts fit together, ordered by pipeline flow |
 | [Questions & Benchmarks](../core_concepts/questions-and-benchmarks.md) | The central objects: questions bundled with templates, rubrics, and metadata |
 | [Checkpoints](../core_concepts/checkpoints.md) | The JSON-LD benchmark format: questions, templates, rubrics, and metadata |
 | [Templates vs Rubrics](../core_concepts/template-vs-rubric.md) | The two evaluation units: correctness (templates) vs quality (rubrics) |

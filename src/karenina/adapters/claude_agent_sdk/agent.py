@@ -435,7 +435,9 @@ class ClaudeSDKAgentAdapter:
             AgentResult from the agent execution.
 
         Raises:
-            Same exceptions as arun().
+            AgentExecutionError: If the agent fails during execution.
+            AgentTimeoutError: If execution exceeds the timeout.
+            AgentResponseError: If the response is malformed or invalid.
         """
         from karenina.benchmark.verification.executor import get_async_portal
 

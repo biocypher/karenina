@@ -16,7 +16,7 @@ This documentation is organized into four sections, each serving a different rea
 |---------|---------------|-----------------|
 | **[Core Concepts](../core_concepts/index.md)** | *"Help me understand"* | Mental models and explanations — what templates, rubrics, pipelines, and adapters *are* and why they exist. Read this when you need to build intuition before doing anything. |
 | **[Workflows](../workflows.md)** | *"Help me do it"* | Step-by-step task guides — creating benchmarks, running verification, analyzing results. Read this when you have a specific goal and want to accomplish it. |
-| **[Reference](../reference.md)** | *"Help me look it up"* | Exhaustive tables of CLI flags, config fields, environment variables, and schemas. Read this when you already know what you want to do and just need the exact syntax. |
+| **[Reference](../reference/index.md)** | *"Help me look it up"* | Exhaustive tables of CLI flags, config fields, environment variables, and schemas. Read this when you already know what you want to do and just need the exact syntax. |
 | **[Advanced](../advanced.md)** | *"Help me extend it"* | Pipeline internals, adapter architecture, and custom stages. Read this when you need to debug, customize, or contribute to karenina itself. |
 
 ---
@@ -72,4 +72,4 @@ For a deeper discussion, see [Templates vs Rubrics](../core_concepts/template-vs
 - [Philosophy](philosophy.md) — Why LLM-as-judge evaluation works
 - [Templates vs Rubrics](../core_concepts/template-vs-rubric.md) — Understanding the two evaluation units
 - [Installation](../getting-started/installation.md) — Install karenina and set up API keys
-- [Core Concepts](../core-concepts.md) — Deep dive into checkpoints, templates, rubrics, and more
+- [Core Concepts](../core_concepts/index.md) — Deep dive into checkpoints, templates, rubrics, and more

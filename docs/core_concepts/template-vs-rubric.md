@@ -160,4 +160,4 @@ For details on configuring evaluation modes, see [Evaluation Modes](evaluation-m
 - [Rubrics Overview](rubrics/index.md) — All four rubric trait types in detail
 - [Evaluation Modes](evaluation-modes.md) — How to configure template-only, rubric-only, and combined modes
 
-**Back to**: [Core Concepts](../core-concepts.md)
+**Back to**: [Core Concepts](index.md)

@@ -471,7 +471,8 @@ class LangChainAgentAdapter:
             AgentResult from the agent execution.
 
         Raises:
-            Same exceptions as arun().
+            AgentExecutionError: If the agent fails during execution.
+            AgentTimeoutError: If execution exceeds the timeout.
         """
         from karenina.benchmark.verification.executor import get_async_portal
 

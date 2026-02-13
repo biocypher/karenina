@@ -296,7 +296,9 @@ class AgentPort(Protocol):
             AgentResult from the agent execution.
 
         Raises:
-            Same exceptions as arun().
+            AgentExecutionError: If the agent fails during execution.
+            AgentTimeoutError: If the execution exceeds the timeout.
+            AgentResponseError: If the response is malformed or invalid.
 
         Note:
             This method creates a new event loop. Do not call from within

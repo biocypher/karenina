@@ -1,6 +1,6 @@
 # Workflows
 
-This section is about *doing* — step-by-step guides that take you from a starting point to a concrete outcome. Each page assumes you understand the relevant concepts (or links to them) and focuses on how to accomplish a specific task. For the underlying mental models, see [Core Concepts](core_concepts/index.md). For exhaustive option tables, see [Reference](reference.md).
+This section is about *doing* — step-by-step guides that take you from a starting point to a concrete outcome. Each page assumes you understand the relevant concepts (or links to them) and focuses on how to accomplish a specific task. For the underlying mental models, see [Core Concepts](core_concepts/index.md). For exhaustive option tables, see [Reference](reference/index.md).
 
 ---
 

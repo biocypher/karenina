@@ -138,7 +138,9 @@ def create_mcp_client_and_tools(
         Tuple of (client, tools) as in create_mcp_client_and_tools
 
     Raises:
-        Same exceptions as acreate_mcp_client_and_tools
+        ImportError: If langchain-mcp-adapters is not installed.
+        McpTimeoutError: If MCP client creation times out.
+        McpClientError: If MCP client creation or tool fetching fails.
     """
     from typing import cast
 

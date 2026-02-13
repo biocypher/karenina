@@ -198,6 +198,8 @@ class StepEval(BaseModel):
 
         Returns:
             dict: Mapping trace_id to aggregated results:
+
+                ```python
                 {
                     "trace_id": {
                         "llm": {"clarity": 4.5, "analysis_quality": 3.2},
@@ -211,15 +213,18 @@ class StepEval(BaseModel):
                     },
                     ...
                 }
+                ```
 
         Example:
-            >>> step_eval = StepEval()
-            >>> step_eval.verification_results = {
-            ...     "trace_1": [result1, result2, result3]
-            ... }
-            >>> aggregated = step_eval.aggregate_rubric_results()
-            >>> aggregated["trace_1"]["llm"]["clarity"]  # Averaged score
-            4.333
+            ```python
+            step_eval = StepEval()
+            step_eval.verification_results = {
+                "trace_1": [result1, result2, result3]
+            }
+            aggregated = step_eval.aggregate_rubric_results()
+            aggregated["trace_1"]["llm"]["clarity"]  # Averaged score
+            # 4.333
+            ```
         """
         aggregated = {}
 

@@ -197,55 +197,35 @@ class VerificationContext:
     the final VerificationResult. Stages read from and write to this context.
 
     Attributes:
-        # Identity & Metadata
-        question_id: Unique identifier for the question
-        template_id: MD5 hash of template code
-        question_text: The question to verify
-        template_code: Python code defining the Answer class
-
-        # Configuration
-        answering_model: Configuration for the answering LLM
-        parsing_model: Configuration for the parsing LLM
-        rubric: Optional rubric for evaluation
-        keywords: Keywords associated with the question
-
-        # Run Metadata
-        run_name: Optional run name for tracking
-        replicate: Replicate number (1, 2, 3, ...) for repeated runs of the same question
-
-        # Feature Flags
-        few_shot_enabled: Whether few-shot prompting is enabled
-        abstention_enabled: Whether abstention detection is enabled
-        sufficiency_enabled: Whether trace sufficiency detection is enabled
-        deep_judgment_enabled: Whether deep-judgment parsing is enabled
-
-        # Rubric Configuration
-        rubric_evaluation_strategy: Strategy for evaluating LLM rubric traits ("batch" or "sequential")
-
-        # Deep-Judgment Configuration
-        deep_judgment_max_excerpts_per_attribute: Max excerpts per attribute
-        deep_judgment_fuzzy_match_threshold: Similarity threshold for excerpts
-        deep_judgment_excerpt_retry_attempts: Retry attempts for excerpt validation
-        deep_judgment_search_enabled: Whether search enhancement is enabled
-        deep_judgment_search_tool: Search tool name or callable
-
-        # Few-Shot Configuration
-        few_shot_examples: List of question-answer pairs for few-shot prompting
-
-        # Answer Caching
+        question_id: Unique identifier for the question.
+        template_id: MD5 hash of template code.
+        question_text: The question to verify.
+        template_code: Python code defining the Answer class.
+        answering_model: Configuration for the answering LLM.
+        parsing_model: Configuration for the parsing LLM.
+        rubric: Optional rubric for evaluation.
+        keywords: Keywords associated with the question.
+        run_name: Optional run name for tracking.
+        replicate: Replicate number (1, 2, 3, ...) for repeated runs of the same question.
+        few_shot_enabled: Whether few-shot prompting is enabled.
+        abstention_enabled: Whether abstention detection is enabled.
+        sufficiency_enabled: Whether trace sufficiency detection is enabled.
+        deep_judgment_enabled: Whether deep-judgment parsing is enabled.
+        rubric_evaluation_strategy: Strategy for evaluating LLM rubric traits
+            ("batch" or "sequential").
+        deep_judgment_max_excerpts_per_attribute: Max excerpts per attribute.
+        deep_judgment_fuzzy_match_threshold: Similarity threshold for excerpts.
+        deep_judgment_excerpt_retry_attempts: Retry attempts for excerpt validation.
+        deep_judgment_search_enabled: Whether search enhancement is enabled.
+        deep_judgment_search_tool: Search tool name or callable.
+        few_shot_examples: List of question-answer pairs for few-shot prompting.
         cached_answer_data: Optional cached answer data from previous generation.
             If provided, GenerateAnswerStage will use this instead of calling LLM.
             Used to share answers across multiple judges.
-
-        # Artifacts (populated by stages)
-        artifacts: Dictionary storing stage outputs (raw_answer, parsed_answer, etc.)
-
-        # Result Builder (accumulates VerificationResult fields)
-        result_builder: Dictionary accumulating result fields
-
-        # Error Tracking
-        error: Optional error message if pipeline fails
-        completed_without_errors: Whether pipeline completed successfully
+        artifacts: Dictionary storing stage outputs (raw_answer, parsed_answer, etc.).
+        result_builder: Dictionary accumulating result fields.
+        error: Optional error message if pipeline fails.
+        completed_without_errors: Whether pipeline completed successfully.
     """
 
     # Identity & Metadata
