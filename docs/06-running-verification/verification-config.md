@@ -41,7 +41,7 @@ Configuration flows through a precedence hierarchy:
 
     CLI arguments > Preset values > Environment variables > Built-in defaults
 
-For details on this hierarchy, see [Configuration Hierarchy](../03-configuration/index.md).
+For details on this hierarchy, see [Configuration Hierarchy](../configuration/index.md).
 
 ## Model Configuration
 

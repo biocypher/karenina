@@ -12,7 +12,7 @@ Choose the path that matches your goal:
 
 **CLI User** — Use Karenina from the command line:
 
-> [Installation](../getting-started/installation.md) → [Configuration](../03-configuration/index.md) → [CLI Reference](../reference/cli/index.md)
+> [Installation](../getting-started/installation.md) → [Configuration](../configuration/index.md) → [CLI Reference](../reference/cli/index.md)
 
 **Contributor** — Extend Karenina with custom adapters or pipeline stages:
 
@@ -48,7 +48,7 @@ Choose the path that matches your goal:
 
 | Section | What You'll Learn |
 |---------|-------------------|
-| [Configuration](../03-configuration/index.md) | Configuration hierarchy: CLI args, presets, environment variables, defaults |
+| [Configuration](../configuration/index.md) | Configuration hierarchy: CLI args, presets, environment variables, defaults |
 | [Creating Benchmarks](../05-creating-benchmarks/index.md) | Author questions, write templates, define rubrics, and save checkpoints |
 | [Running Verification](../06-running-verification/index.md) | Configure and execute evaluation via Python API or CLI |
 | [Analyzing Results](../07-analyzing-results/index.md) | Inspect results, build DataFrames, export data, and iterate |

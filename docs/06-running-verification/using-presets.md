@@ -2,7 +2,7 @@
 
 Presets let you save and reload a complete `VerificationConfig` from a JSON file — model choices, feature flags, execution settings — so verification runs are consistent without reconfiguring every time.
 
-This page covers using presets in the verification workflow. For creating presets, managing preset files, and the preset directory system, see [Presets](../03-configuration/presets.md).
+This page covers using presets in the verification workflow. For creating presets, managing preset files, and the preset directory system, see [Presets](../configuration/presets.md).
 
 ---
 
@@ -25,7 +25,7 @@ config = VerificationConfig.from_preset(Path("presets/production-config.json"))
 results = benchmark.run_verification(config)
 ```
 
-`from_preset()` reads the `"config"` key from the preset JSON and constructs a `VerificationConfig` from it. All fields not present in the preset fall back to environment variables, then built-in defaults — following the standard [configuration hierarchy](../03-configuration/index.md).
+`from_preset()` reads the `"config"` key from the preset JSON and constructs a `VerificationConfig` from it. All fields not present in the preset fall back to environment variables, then built-in defaults — following the standard [configuration hierarchy](../configuration/index.md).
 
 ### CLI
 
@@ -113,7 +113,7 @@ See [VerificationConfig](verification-config.md) for the full list of configurab
 
 ## Override Precedence
 
-When combining presets with overrides, the [configuration hierarchy](../03-configuration/index.md) applies:
+When combining presets with overrides, the [configuration hierarchy](../configuration/index.md) applies:
 
 ```
 CLI Arguments / from_overrides()  (highest priority)
@@ -248,8 +248,8 @@ project/
 
 ## Next Steps
 
-- [Presets](../03-configuration/presets.md) — Creating, managing, and understanding preset files
+- [Presets](../configuration/presets.md) — Creating, managing, and understanding preset files
 - [VerificationConfig](verification-config.md) — All configuration fields and their defaults
 - [Python API](python-api.md) — Complete verification workflow in code
 - [CLI Verification](cli.md) — Running verification from the command line
-- [Configuration Hierarchy](../03-configuration/index.md) — How presets interact with CLI args, env vars, and defaults
+- [Configuration Hierarchy](../configuration/index.md) — How presets interact with CLI args, env vars, and defaults

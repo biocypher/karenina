@@ -108,8 +108,8 @@ The verification system provides several configuration layers:
 |---------------|---------|---------|
 | **VerificationConfig** | Models, evaluation mode, feature flags | [Tutorial](verification-config.md) · [Reference](../reference/configuration/verification-config.md) |
 | **PromptConfig** | Custom instructions for LLM prompts | [Tutorial](prompt-config.md) · [Reference](../reference/configuration/prompt-config.md) |
-| **Presets** | Reusable configuration bundles | [Using presets](using-presets.md) · [Creating presets](../03-configuration/presets.md) |
-| **Environment variables** | API keys, paths, defaults | [Tutorial](../03-configuration/environment-variables.md) · [Reference](../reference/configuration/env-vars.md) |
+| **Presets** | Reusable configuration bundles | [Using presets](using-presets.md) · [Creating presets](../configuration/presets.md) |
+| **Environment variables** | API keys, paths, defaults | [Tutorial](../configuration/environment-variables.md) · [Reference](../reference/configuration/env-vars.md) |
 
 ---
 
@@ -168,7 +168,7 @@ Before running verification, ensure you have:
 |-------------|-----|-----------------|
 | **Benchmark with questions** | Questions to evaluate | [Creating Benchmarks](../05-creating-benchmarks/index.md) |
 | **Templates and/or rubrics** | Evaluation criteria | [Answer Templates](../core_concepts/answer-templates.md) · [Rubrics](../core_concepts/rubrics/index.md) |
-| **LLM API keys** | Access to answering and parsing models | [Environment Variables](../03-configuration/environment-variables.md) |
+| **LLM API keys** | Access to answering and parsing models | [Environment Variables](../configuration/environment-variables.md) |
 | **Evaluation mode choice** | What to evaluate (correctness, quality, or both) | [Evaluation Modes](../core_concepts/evaluation-modes.md) |
 
 ---

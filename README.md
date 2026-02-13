@@ -663,7 +663,7 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 export GOOGLE_API_KEY="AI..."
 ```
 
-Alternatively, use `karenina init` to generate a `.env` template with all supported variables. See the [Configuration Guide](docs/03-configuration/index.md) for the full configuration hierarchy.
+Alternatively, use `karenina init` to generate a `.env` template with all supported variables. See the [Configuration Guide](docs/configuration/index.md) for the full configuration hierarchy.
 
 ### Verify Installation
 
@@ -716,7 +716,7 @@ Then open your browser to `http://127.0.0.1:8000` to browse the documentation wi
 - [**Deep-Judgment (Rubrics)**](docs/11-advanced-pipeline/deep-judgment-rubrics.md) - Evidence-based rubric evaluation
 - [**Few-Shot Prompting**](docs/core_concepts/few-shot.md) - Guide responses with examples
 - [**Response Quality Checks**](docs/06-running-verification/response-quality-checks.md) - Abstention detection and sufficiency
-- [**Presets**](docs/03-configuration/presets.md) - Save and reuse verification configurations
+- [**Presets**](docs/configuration/presets.md) - Save and reuse verification configurations
 
 ### Reference
 - [**CLI Reference**](docs/reference/cli/index.md) - Complete CLI command documentation

@@ -275,5 +275,5 @@ karenina verify checkpoint.jsonld --interactive --mode advanced
 - [CLI Verification Tutorial](../../06-running-verification/cli.md) — Step-by-step guide for common CLI workflows
 - [Python API](../../06-running-verification/python-api.md) — Programmatic verification alternative
 - [VerificationConfig Reference](../configuration/verification-config.md) — All configuration fields
-- [Configuration Hierarchy](../../03-configuration/index.md) — How CLI, presets, and env vars interact
+- [Configuration Hierarchy](../../configuration/index.md) — How CLI, presets, and env vars interact
 - [Using Presets](../../06-running-verification/using-presets.md) — Preset loading and overrides

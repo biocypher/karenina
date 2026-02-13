@@ -138,7 +138,7 @@ karenina verify checkpoint.jsonld --preset production.json \
   --abstention --deep-judgment
 ```
 
-This follows the standard [configuration hierarchy](../03-configuration/index.md): CLI arguments > Preset values > Environment variables > Defaults.
+This follows the standard [configuration hierarchy](../configuration/index.md): CLI arguments > Preset values > Environment variables > Defaults.
 
 ---
 
