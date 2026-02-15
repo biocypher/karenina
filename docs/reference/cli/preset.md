@@ -68,7 +68,7 @@ karenina preset list
 ┃ Name            ┃ Modified   ┃
 ┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━┩
 │ default         │ 2026-01-15 │
-│ gpt-4o-quick    │ 2026-01-20 │
+│ claude-haiku-quick │ 2026-01-20 │
 │ multi-model     │ 2026-02-01 │
 └─────────────────┴────────────┘
 
@@ -206,7 +206,7 @@ Same resolution errors as `preset show` — name not found or presets directory 
 
 ## Related
 
-- [Using Presets](../../06-running-verification/using-presets.md) — Guide to loading and overriding presets in verification workflows
+- [Using Presets](../../workflows/running-verification/full-evaluation.md) — Guide to loading and overriding presets in verification workflows
 - [Configuration Hierarchy](../../configuration/index.md) — How presets fit in the CLI > Preset > Env > Defaults chain
 - [Preset Schema Reference](../configuration/preset-schema.md) — Full preset file format documentation
 - [verify](verify.md) — The `--preset` option for loading presets during verification

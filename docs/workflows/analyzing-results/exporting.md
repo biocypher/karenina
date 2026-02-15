@@ -191,5 +191,5 @@ This returns a `dict[str, VerificationResult]` mapping result IDs to result obje
 - [Understand result structure](verification-result.md) — Fields available in each result
 - [Analyze with DataFrames](dataframe-analysis.md) — Build and explore DataFrames before exporting
 - [Iterate on your benchmark](iterating.md) — Use exports to identify and fix failures
-- [Run verification](../06-running-verification/python-api.md) — Generate results to export
-- [CLI export](../06-running-verification/cli.md) — Export directly from the command line with `--output`
+- [Run verification](../running-verification/basic-verification.md) — Generate results to export
+- [CLI export](../running-verification/basic-verification.md) — Export directly from the command line with `--output`

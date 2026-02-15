@@ -67,8 +67,8 @@ With `--json`, the command outputs a single JSON object suitable for scripting:
     "elapsed_seconds": 2742.5
   },
   "config": {
-    "answering_models": ["answering-1 (gpt-4o)"],
-    "parsing_models": ["parsing-1 (gpt-4o-mini)"],
+    "answering_models": ["answering-1 (claude-haiku-4-5)"],
+    "parsing_models": ["parsing-1 (claude-haiku-4-5)"],
     "replicate_count": 1
   },
   "files": {
@@ -181,5 +181,5 @@ karenina verify --resume results.json.state
 ## Related
 
 - [verify](verify.md) — The `--progressive-save` and `--resume` options that create and use state files
-- [Running Verification](../../06-running-verification/index.md) — Verification workflow guides
+- [Running Verification](../../workflows/running-verification/index.md) — Verification workflow guides
 - [CLI Reference](index.md) — Overview of all CLI commands

@@ -92,12 +92,12 @@ A `ModelIdentity` contains:
 | Field | Type | Description |
 |-------|------|-------------|
 | `interface` | `str` | Adapter interface (e.g., `"langchain"`, `"claude_agent_sdk"`) |
-| `model_name` | `str` | Model name (e.g., `"gpt-4.1"`, `"claude-sonnet-4-5-20250929"`) |
+| `model_name` | `str` | Model name (e.g., `"claude-haiku-4-5"`, `"claude-sonnet-4-5"`) |
 | `tools` | `list[str]` | MCP server names (only for answering models; empty for parsing models) |
 
 Convenience properties:
 
-- `metadata.answering_model` — Returns `answering.display_string` (e.g., `"langchain:gpt-4.1"`)
+- `metadata.answering_model` — Returns `answering.display_string` (e.g., `"langchain:claude-haiku-4-5"`)
 - `metadata.parsing_model` — Returns `parsing.display_string`
 
 ### Execution Fields
@@ -438,4 +438,4 @@ For verification against source code, here are the field counts per section:
 - [DataFrame Analysis](dataframe-analysis.md) — Convert results to pandas DataFrames for deeper analysis
 - [Exporting Results](exporting.md) — Save results as JSON or CSV
 - [Iterating](iterating.md) — Improve templates and rubrics based on results
-- [Running Verification](../06-running-verification/python-api.md) — If you haven't run verification yet
+- [Running Verification](../running-verification/basic-verification.md) — If you haven't run verification yet

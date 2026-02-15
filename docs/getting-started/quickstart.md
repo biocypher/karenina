@@ -317,7 +317,7 @@ results = benchmark.run_verification(config)
 print(f"Verification complete — {len(results.results)} results")
 ```
 
-> **Learn more**: [Verification Config](../06-running-verification/verification-config.md) · [Multi-Model Evaluation](../06-running-verification/multi-model.md) · [Model Config Reference](../reference/configuration/model-config.md) · [CLI Verification](../reference/cli/verify.md)
+> **Learn more**: [Verification Config](../workflows/running-verification/basic-verification.md) · [Multi-Model Evaluation](../workflows/running-verification/multi-model-comparison.md) · [Model Config Reference](../reference/configuration/model-config.md) · [CLI Verification](../reference/cli/verify.md)
 
 ---
 
@@ -353,7 +353,7 @@ df_rubrics = rubric_results.to_dataframe()
 df_rubrics[["question_id", "trait_name", "trait_score", "trait_type"]]
 ```
 
-> **Learn more**: [DataFrame Analysis](../07-analyzing-results/dataframe-analysis.md) · [VerificationResult](../07-analyzing-results/verification-result.md) · [Exporting Results](../07-analyzing-results/exporting.md)
+> **Learn more**: [DataFrame Analysis](../workflows/analyzing-results/dataframe-analysis.md) · [VerificationResult](../workflows/analyzing-results/verification-result.md) · [Exporting Results](../workflows/analyzing-results/exporting.md)
 
 ---
 
@@ -376,7 +376,7 @@ loaded = Benchmark.load(checkpoint_path)
 print(f"Loaded '{loaded.name}' with {loaded.question_count} questions")
 ```
 
-> **Learn more**: [Checkpoints](../core_concepts/checkpoints.md) · [Factual QA Benchmark](../workflows/creating-benchmarks/factual-qa-benchmark.md) · [Loading Benchmarks](../06-running-verification/loading-benchmark.md)
+> **Learn more**: [Checkpoints](../core_concepts/checkpoints.md) · [Factual QA Benchmark](../workflows/creating-benchmarks/factual-qa-benchmark.md) · [Loading Benchmarks](../workflows/running-verification/basic-verification.md)
 
 ```python tags=["hide-cell"]
 # Restore original LLM behavior and clean up temp directory

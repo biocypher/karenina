@@ -165,7 +165,7 @@ karenina verify checkpoint.jsonld --preset production-config.json --async-worker
 base_config = VerificationConfig.from_preset(Path("presets/production-config.json"))
 config = VerificationConfig.from_overrides(
     base=base_config,
-    answering_model="claude-sonnet-4-5-20250514",
+    answering_model="claude-sonnet-4-5",
     answering_provider="anthropic",
     answering_id="claude-sonnet",
 )
@@ -264,7 +264,7 @@ Examples:
 | Preset Name | Filename |
 |------------|----------|
 | `"Quick Test"` | `quick-test.json` |
-| `"GPT-4 vs Claude Comparison"` | `gpt-4-vs-claude-comparison.json` |
+| `"Haiku vs Sonnet Comparison"` | `haiku-vs-sonnet-comparison.json` |
 | `"My Config!"` | `my-config.json` |
 
 ---
@@ -274,5 +274,5 @@ Examples:
 - [Configuration Hierarchy](index.md) — How presets interact with CLI args, env vars, and defaults
 - [Environment Variables](environment-variables.md) — Setting project-wide defaults
 - [Workspace Initialization](../getting-started/workspace-init.md) — Creating a project with a `presets/` directory
-- [Running Verification](../06-running-verification/index.md) — Using presets in verification workflows
+- [Running Verification](../running-verification/index.md) — Using presets in verification workflows
 - [Preset Schema Reference](../reference/configuration/preset-schema.md) — Complete preset JSON schema

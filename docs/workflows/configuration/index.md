@@ -27,13 +27,13 @@ When Karenina resolves a configuration value, it checks sources in this order �
 When you run a command like:
 
 ```bash
-karenina verify checkpoint.jsonld --preset gpt-4o.json --answering-model claude-sonnet-4-5-20250514
+karenina verify checkpoint.jsonld --preset claude-haiku.json --answering-model claude-sonnet-4-5
 ```
 
 Karenina resolves configuration in three steps:
 
-1. **Load the preset** — All values from `gpt-4o.json` become the base configuration
-2. **Apply CLI overrides** — `--answering-model claude-sonnet-4-5-20250514` replaces the preset's answering model
+1. **Load the preset** — All values from `claude-haiku.json` become the base configuration
+2. **Apply CLI overrides** — `--answering-model claude-sonnet-4-5` replaces the preset's answering model
 3. **Fill remaining gaps** — Any fields not set by the preset or CLI are resolved from environment variables, then from built-in defaults
 
 The same precedence applies when using the Python API:
@@ -224,4 +224,4 @@ karenina verify checkpoint.jsonld --preset my-config.json --async-workers 8
 - [Presets](presets.md) — Creating, managing, and sharing configuration presets
 - [Workspace Initialization](../getting-started/workspace-init.md) — Setting up a new karenina project with `karenina init`
 - [Core Concepts](../core_concepts/index.md) — Understanding templates, rubrics, and evaluation modes
-- [Running Verification](../06-running-verification/index.md) — Putting configuration into practice
+- [Running Verification](../running-verification/index.md) — Putting configuration into practice

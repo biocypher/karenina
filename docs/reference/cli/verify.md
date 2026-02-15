@@ -174,7 +174,7 @@ karenina verify checkpoint.jsonld --preset default.json
 
 ```bash
 karenina verify checkpoint.jsonld --preset default.json \
-  --answering-model gpt-4o
+  --answering-model claude-haiku-4-5
 ```
 
 ### CLI arguments only (no preset)
@@ -246,10 +246,10 @@ karenina verify --resume results.json.state
 
 ```bash
 karenina verify checkpoint.jsonld --preset default.json \
-  --answering-model gpt-4o --output results_gpt4o.json
+  --answering-model claude-haiku-4-5 --output results_haiku.json
 
 karenina verify checkpoint.jsonld --preset default.json \
-  --answering-model claude-sonnet-4-5-20250514 --output results_claude.json
+  --answering-model claude-sonnet-4-5 --output results_sonnet.json
 ```
 
 ### Full-featured run
@@ -272,8 +272,8 @@ karenina verify checkpoint.jsonld --interactive --mode advanced
 
 ## Related
 
-- [CLI Verification Tutorial](../../06-running-verification/cli.md) — Step-by-step guide for common CLI workflows
-- [Python API](../../06-running-verification/python-api.md) — Programmatic verification alternative
+- [Running Verification](../../workflows/running-verification/basic-verification.md) — Step-by-step guide for common verification workflows
+- [Basic Verification (Python API)](../../workflows/running-verification/basic-verification.md) — Programmatic verification alternative
 - [VerificationConfig Reference](../configuration/verification-config.md) — All configuration fields
 - [Configuration Hierarchy](../../configuration/index.md) — How CLI, presets, and env vars interact
-- [Using Presets](../../06-running-verification/using-presets.md) — Preset loading and overrides
+- [Full Evaluation](../../workflows/running-verification/full-evaluation.md) — Preset loading and overrides

@@ -162,11 +162,11 @@ Adapters are configured through `ModelConfig`:
 ```python
 from karenina.schemas.config import ModelConfig
 
-# LangChain with OpenAI
+# LangChain with Anthropic
 config = ModelConfig(
-    id="gpt4",
-    model_name="gpt-4o",
-    model_provider="openai",
+    id="haiku",
+    model_name="claude-haiku-4-5",
+    model_provider="anthropic",
     interface="langchain",
 )
 
@@ -206,5 +206,5 @@ parser = get_parser(config)  # Returns ParserPort
 - [MCP Overview](mcp-overview.md) — Tool-augmented evaluation with MCP servers
 - [Manual Interface](manual-interface.md) — Using pre-recorded traces
 - [Evaluation Modes](evaluation-modes.md) — Controlling which evaluation units run
-- [Running Verification](../06-running-verification/index.md) — End-to-end verification workflow
+- [Running Verification](../workflows/running-verification/index.md) — End-to-end verification workflow
 - [Advanced Adapters](../12-advanced-adapters/index.md) — Ports and adapters architecture deep dive, writing custom adapters

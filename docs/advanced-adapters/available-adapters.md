@@ -39,9 +39,9 @@ The default adapter, supporting all LLM providers available through LangChain: A
 from karenina.schemas.config import ModelConfig
 
 config = ModelConfig(
-    id="gpt4",
-    model_name="gpt-4o",
-    model_provider="openai",  # Required for langchain
+    id="haiku",
+    model_name="claude-haiku-4-5",
+    model_provider="anthropic",  # Required for langchain
     interface="langchain",
 )
 ```

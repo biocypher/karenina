@@ -222,9 +222,9 @@ config = VerificationConfig.from_overrides(
     deep_judgment_rubric_retry_attempts=3,
     deep_judgment_rubric_search=True,
     deep_judgment_rubric_search_tool="tavily",
-    answering_model="gpt-4o",
+    answering_model="claude-haiku-4-5",
     answering_id="answering",
-    parsing_model="gpt-4o",
+    parsing_model="claude-haiku-4-5",
     parsing_id="parsing",
 )
 ```

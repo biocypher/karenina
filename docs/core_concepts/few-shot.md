@@ -257,6 +257,6 @@ VerificationConfig validates few-shot settings:
 ## Next Steps
 
 - [Scaled Authoring](../workflows/creating-benchmarks/scaled-authoring.md) — Few-shot examples in the benchmark authoring workflow
-- [VerificationConfig Tutorial](../06-running-verification/verification-config.md) — Complete configuration setup
+- [VerificationConfig Tutorial](../workflows/running-verification/basic-verification.md) — Complete configuration setup
 - [Answer Templates](answer-templates.md) — What few-shot examples help with
 - [VerificationConfig Reference](../reference/configuration/verification-config.md) — Exhaustive field reference

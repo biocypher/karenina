@@ -4,7 +4,7 @@ This section covers the internals of karenina's verification pipeline. Understan
 
 ## When You Need This
 
-Most users can work entirely with the interfaces described in [Running Verification](../06-running-verification/index.md) — load a benchmark, configure, run, and inspect results. The advanced pipeline documentation is for situations where you need to:
+Most users can work entirely with the interfaces described in [Running Verification](../workflows/running-verification/index.md) — load a benchmark, configure, run, and inspect results. The advanced pipeline documentation is for situations where you need to:
 
 - **Debug failures**: Understand why a specific stage failed or was skipped
 - **Tune deep judgment**: Configure excerpt extraction, fuzzy matching, and search-enhanced verification
@@ -120,8 +120,8 @@ Each stage implements `should_run(context)` to decide at runtime whether to exec
 
 ## Related
 
-- [Running Verification](../06-running-verification/index.md) — User-facing verification workflow
-- [VerificationConfig Tutorial](../06-running-verification/verification-config.md) — Configuring pipeline features
+- [Running Verification](../workflows/running-verification/index.md) — User-facing verification workflow
+- [VerificationConfig Tutorial](../workflows/running-verification/basic-verification.md) — Configuring pipeline features
 - [Evaluation Modes](../core_concepts/evaluation-modes.md) — How modes affect stage selection
 - [VerificationResult Structure](../07-analyzing-results/verification-result.md) — What the pipeline produces
 - [VerificationConfig Reference](../reference/configuration/verification-config.md) — All 33 configuration fields

@@ -115,7 +115,7 @@ A preset with two answering models, template + rubric evaluation, and deep judgm
       {
         "id": "claude-sonnet",
         "model_provider": null,
-        "model_name": "claude-sonnet-4-5-20250514",
+        "model_name": "claude-sonnet-4-5",
         "temperature": 0.0,
         "interface": "claude_agent_sdk",
         "system_prompt": null
@@ -236,7 +236,7 @@ The `name` field is converted to a safe filename via `sanitize_preset_name()`:
 | Name | Filename |
 |------|----------|
 | `"Quick Test"` | `quick-test.json` |
-| `"GPT-4 vs Claude Comparison"` | `gpt-4-vs-claude-comparison.json` |
+| `"Haiku vs Sonnet Comparison"` | `haiku-vs-sonnet-comparison.json` |
 | `"My Config!"` | `my-config.json` |
 | `""` (empty after sanitization) | `preset.json` |
 
@@ -277,6 +277,6 @@ When loading by name (not path), `resolve_preset_path()` searches the presets di
 ## Related
 
 - [Presets Tutorial](../../configuration/presets.md) — creating, loading, and managing presets
-- [Using Presets in Verification](../../06-running-verification/using-presets.md) — preset workflows
+- [Using Presets in Verification](../../workflows/running-verification/full-evaluation.md) — preset workflows
 - [VerificationConfig Reference](verification-config.md) — complete `config` object fields
 - [ModelConfig Reference](model-config.md) — model configuration fields within presets

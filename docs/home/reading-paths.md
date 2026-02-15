@@ -4,7 +4,7 @@ Choose the path that matches your goal:
 
 **New User** — Learn Karenina from the ground up:
 
-> [Installation](../getting-started/installation.md) → [Quick Start](../notebooks/quickstart.ipynb) → [Core Concepts](../core_concepts/index.md) → [Creating Benchmarks](../workflows/creating-benchmarks/index.md) → [Running Verification](../06-running-verification/index.md) → [Analyzing Results](../07-analyzing-results/index.md)
+> [Installation](../getting-started/installation.md) → [Quick Start](../notebooks/quickstart.ipynb) → [Core Concepts](../core_concepts/index.md) → [Creating Benchmarks](../workflows/creating-benchmarks/index.md) → [Running Verification](../workflows/running-verification/index.md) → [Analyzing Results](../workflows/analyzing-results/index.md)
 
 **Power User** — Dive into advanced features:
 
@@ -50,8 +50,8 @@ Choose the path that matches your goal:
 |---------|-------------------|
 | [Configuration](../configuration/index.md) | Configuration hierarchy: CLI args, presets, environment variables, defaults |
 | [Creating Benchmarks](../workflows/creating-benchmarks/index.md) | Author questions, write templates, define rubrics, and save checkpoints |
-| [Running Verification](../06-running-verification/index.md) | Configure and execute evaluation via Python API or CLI |
-| [Analyzing Results](../07-analyzing-results/index.md) | Inspect results, build DataFrames, export data, and iterate |
+| [Running Verification](../workflows/running-verification/index.md) | Configure and execute evaluation via Python API or CLI |
+| [Analyzing Results](../workflows/analyzing-results/index.md) | Inspect results, build DataFrames, export data, and iterate |
 
 ## Reference
 

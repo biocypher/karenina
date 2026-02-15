@@ -40,7 +40,7 @@ karenina verify checkpoint.jsonld --preset default.json
 
 ```bash
 karenina verify checkpoint.jsonld --preset default.json \
-  --answering-model gpt-4o \
+  --answering-model claude-haiku-4-5 \
   --questions 0,1,2
 ```
 
@@ -72,7 +72,7 @@ Most users start with a preset file that defines model providers, evaluation mod
 
 ```bash
 # Preset defines everything; CLI overrides just the model
-karenina verify checkpoint.jsonld --preset gpt-4o.json --answering-model claude-sonnet-4-5-20250514
+karenina verify checkpoint.jsonld --preset claude-haiku.json --answering-model claude-sonnet-4-5
 ```
 
 See [Configuration Hierarchy](../../configuration/index.md) for how presets, CLI arguments, and environment variables interact.
@@ -97,5 +97,5 @@ karenina verify checkpoint.jsonld --preset default.json --resume state_file.json
 ## Related
 
 - [Configuration](../../configuration/index.md) — How CLI arguments fit in the configuration hierarchy
-- [Running Verification](../../06-running-verification/index.md) — Python API and workflow guides
+- [Running Verification](../../workflows/running-verification/index.md) — Python API and workflow guides
 - [Configuration Reference](../configuration/index.md) — Complete reference for all configuration options

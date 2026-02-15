@@ -159,7 +159,7 @@ benchmark.save(Path("drug_targets.jsonld"))
 from karenina.schemas import VerificationConfig, ModelConfig
 
 config = VerificationConfig(
-    answering_models=[ModelConfig(id="answering", model_name="claude-sonnet-4-5-20250929", model_provider="anthropic")],
+    answering_models=[ModelConfig(id="answering", model_name="claude-sonnet-4-5", model_provider="anthropic")],
     parsing_models=[ModelConfig(id="parsing", model_name="claude-haiku-4-5", model_provider="anthropic")],
 )
 

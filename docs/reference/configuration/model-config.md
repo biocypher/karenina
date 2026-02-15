@@ -1,6 +1,6 @@
 # ModelConfig Reference
 
-This is the exhaustive reference for all `ModelConfig` fields. For a tutorial introduction with examples, see [VerificationConfig Tutorial](../../06-running-verification/verification-config.md) and [Adapters Overview](../../core_concepts/adapters.md).
+This is the exhaustive reference for all `ModelConfig` fields. For a tutorial introduction with examples, see [Basic Verification](../../workflows/running-verification/basic-verification.md) and [Adapters Overview](../../core_concepts/adapters.md).
 
 `ModelConfig` is a Pydantic model with **19 fields** organized into 7 categories below. Import: `from karenina.schemas import ModelConfig`.
 
@@ -11,7 +11,7 @@ This is the exhaustive reference for all `ModelConfig` fields. For a tutorial in
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `id` | `str \| None` | `None` | Unique identifier for this model configuration. **Required** for all non-manual interfaces. Defaults to `"manual"` for manual interface. Used in results to identify which model produced each result. |
-| `model_name` | `str \| None` | `None` | Model name passed to the underlying provider (e.g., `"gpt-4o"`, `"claude-sonnet-4-20250514"`, `"gemini-2.0-flash"`). **Required** for all non-manual interfaces. Defaults to `"manual"` for manual interface. |
+| `model_name` | `str \| None` | `None` | Model name passed to the underlying provider (e.g., `"claude-haiku-4-5"`, `"claude-sonnet-4-20250514"`, `"gemini-2.0-flash"`). **Required** for all non-manual interfaces. Defaults to `"manual"` for manual interface. |
 | `model_provider` | `str \| None` | `None` | LLM provider name (e.g., `"openai"`, `"anthropic"`, `"google_genai"`). **Required** only for the `langchain` interface (passed to `init_chat_model()`). Not required for other interfaces. |
 | `interface` | `Literal["langchain", "openrouter", "openai_endpoint", "claude_agent_sdk", "claude_tool", "manual"]` | `"langchain"` | Which adapter backend to use. See [Adapters Overview](../../core_concepts/adapters.md) for capabilities and trade-offs. |
 
@@ -130,7 +130,7 @@ Automatically summarizes conversation history when approaching token limits.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | `bool` | `True` | Enable automatic summarization (default: `True` for MCP agents). |
-| `model` | `str \| None` | `None` | Model for summarization (defaults to a lightweight model like gpt-4o-mini). |
+| `model` | `str \| None` | `None` | Model for summarization (defaults to a lightweight model like claude-haiku-4-5). |
 | `trigger_fraction` | `float` | `0.8` | Fraction of context window that triggers summarization (0.0–1.0). |
 | `trigger_tokens` | `int \| None` | `None` | Number of tokens that triggers summarization (overrides `trigger_fraction`). |
 | `keep_messages` | `int` | `20` | Number of recent messages to preserve after summarization. |
@@ -171,13 +171,13 @@ Reduces costs and latency by caching static prompt content on Anthropic's server
 
 ## Common Configuration Patterns
 
-**LangChain with OpenAI:**
+**LangChain with Anthropic:**
 
 ```python
 ModelConfig(
-    id="gpt-4o",
-    model_name="gpt-4o",
-    model_provider="openai",
+    id="haiku",
+    model_name="claude-haiku-4-5",
+    model_provider="anthropic",
     interface="langchain",
 )
 ```
@@ -233,7 +233,7 @@ ModelConfig(
 ## Related
 
 - [VerificationConfig Reference](verification-config.md) — uses `ModelConfig` for `answering_models` and `parsing_models`
-- [VerificationConfig Tutorial](../../06-running-verification/verification-config.md) — step-by-step configuration guide
+- [Basic Verification](../../workflows/running-verification/basic-verification.md) — step-by-step configuration guide
 - [Adapters Overview](../../core_concepts/adapters.md) — interface comparison and selection guide
 - [MCP Integration Overview](../../core_concepts/mcp-overview.md) — MCP architecture and adapter capabilities
 - [Environment Variables](../../configuration/environment-variables.md) — API keys and path configuration

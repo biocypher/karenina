@@ -1,6 +1,6 @@
 # VerificationConfig Reference
 
-This is the exhaustive reference for all `VerificationConfig` fields. For a tutorial introduction with examples, see [VerificationConfig Tutorial](../../06-running-verification/verification-config.md).
+This is the exhaustive reference for all `VerificationConfig` fields. For a tutorial introduction with examples, see [Basic Verification](../../workflows/running-verification/basic-verification.md).
 
 `VerificationConfig` is a Pydantic model with **33 fields** organized into 10 categories below.
 
@@ -67,7 +67,7 @@ See [ModelConfig Reference](model-config.md) for all `ModelConfig` fields.
 | `abstention_enabled` | `bool` | `False` | Enable abstention/refusal detection. When the model refuses to answer, parsing is skipped and the result is auto-failed. |
 | `sufficiency_enabled` | `bool` | `False` | Enable response sufficiency detection. When the response lacks enough information to fill the template, parsing is skipped and the result is auto-failed. |
 
-See [Response Quality Checks](../../06-running-verification/response-quality-checks.md) for details.
+See [Full Evaluation](../../workflows/running-verification/full-evaluation.md) for usage examples.
 
 ---
 
@@ -162,8 +162,33 @@ Each trait entry is validated as a `DeepJudgmentTraitConfig` with these fields:
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `few_shot_config` | `FewShotConfig \| None` | `None` | Few-shot prompting configuration. Controls example injection into prompts. See [Few-Shot Configuration](../../core_concepts/few-shot.md). |
-| `prompt_config` | `PromptConfig \| None` | `None` | Per-task prompt instruction overrides. Injects custom instructions into specific pipeline stages. See [PromptConfig Tutorial](../../06-running-verification/prompt-config.md) and [PromptConfig Reference](prompt-config.md). |
-| `db_config` | `Any \| None` | `None` | `DBConfig` instance for automatic result persistence to a database. When set, results are saved after each verification run. See [Database Persistence](../../06-running-verification/database-persistence.md). |
+| `prompt_config` | `PromptConfig \| None` | `None` | Per-task prompt instruction overrides. Injects custom instructions into specific pipeline stages. See [Full Evaluation](../../workflows/running-verification/full-evaluation.md) for usage and [PromptConfig Reference](prompt-config.md) for all fields. |
+| `db_config` | `DBConfig \| None` | `None` | `DBConfig` instance for automatic result persistence to a database. When set, results are saved after each verification run. See DBConfig fields below. |
+
+### DBConfig Fields
+
+`DBConfig` controls the database connection for auto-saving verification results. Import from `karenina.storage`:
+
+```python
+from karenina.storage import DBConfig
+
+db_config = DBConfig(storage_url="sqlite:///results.db")
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `storage_url` | `str` | *(required)* | SQLAlchemy database URL (e.g. `sqlite:///results.db`, `postgresql://user:pass@host/db`) |
+| `auto_create` | `bool` | `True` | Automatically create tables and views if missing |
+| `auto_commit` | `bool` | `True` | Commit transactions automatically after operations |
+| `echo` | `bool` | `False` | Log all SQL statements (useful for debugging) |
+| `pool_size` | `int` | `5` | Connection pool size (non-SQLite only) |
+| `max_overflow` | `int` | `10` | Max connections beyond pool_size (non-SQLite only) |
+| `pool_recycle` | `int` | `3600` | Recycle connections after N seconds (-1 to disable) |
+| `pool_pre_ping` | `bool` | `True` | Test connections before use |
+
+SQLite databases automatically set `pool_size=1` and `max_overflow=0`.
+
+Auto-save is controlled by the `AUTOSAVE_DATABASE` environment variable (`true`/`false`, default `true`). Auto-save only runs when `db_config` is set — without it, no database writes occur. Auto-save is non-blocking: failures are logged but do not raise exceptions.
 
 ---
 
@@ -175,8 +200,8 @@ Create a `VerificationConfig` by applying selective overrides to an optional bas
 
 ```python
 config = VerificationConfig.from_overrides(
-    answering_model="gpt-4o",
-    answering_provider="openai",
+    answering_model="claude-haiku-4-5",
+    answering_provider="anthropic",
     answering_id="my-answering",
     parsing_model="claude-haiku-4-5",
     parsing_provider="anthropic",

@@ -64,7 +64,7 @@ from karenina.schemas import ModelConfig
 
 model_config = ModelConfig(
     id="agent-claude",
-    model_name="claude-sonnet-4-5-20250929",
+    model_name="claude-sonnet-4-5",
     model_provider="anthropic",
     interface="langchain",
     mcp_urls_dict={
@@ -162,7 +162,7 @@ The verification pipeline can evaluate either the **final response** or the **fu
 
 ## Next Steps
 
-- [Running MCP-Enabled Verification](../06-running-verification/mcp-verification.md) — Step-by-step workflow with configuration examples
+- [Running MCP-Enabled Verification](../workflows/running-verification/mcp-agent-evaluation.md) — Step-by-step workflow with configuration examples
 - [Adapters](adapters.md) — Full adapter comparison and configuration
 - [Evaluation Modes](evaluation-modes.md) — How MCP interacts with template and rubric evaluation
 - [Manual Interface](manual-interface.md) — Alternative for reproducible testing without live tools

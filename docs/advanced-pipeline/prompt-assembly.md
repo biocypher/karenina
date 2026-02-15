@@ -211,7 +211,7 @@ config = VerificationConfig(
 )
 ```
 
-User instructions are appended to the system text after adapter instructions. See [PromptConfig](../06-running-verification/prompt-config.md) for details on injection points and fallback logic.
+User instructions are appended to the system text after adapter instructions. See [PromptConfig](../workflows/running-verification/full-evaluation.md) for details on injection points and fallback logic.
 
 ### Via Adapter Instructions (For Adapter Authors)
 
@@ -245,7 +245,7 @@ Factories should use `kwargs.get()` with defaults so they work even when keys ar
 
 ## Next Steps
 
-- [Prompt Config](../06-running-verification/prompt-config.md) --- configure user instructions per task
+- [Prompt Config](../workflows/running-verification/full-evaluation.md) --- configure user instructions per task
 - [13 Stages in Detail](stages.md) --- which stages make LLM calls and use the assembler
 - [Available Adapters](../12-advanced-adapters/available-adapters.md) --- adapter-specific prompt behavior
 - [Verification Config Reference](../reference/configuration/verification-config.md) --- `prompt_config` field in `VerificationConfig`

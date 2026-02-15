@@ -1,181 +1,72 @@
 # Running Verification
 
-This section walks through the complete workflow for executing a benchmark against LLMs — from loading a checkpoint to inspecting verification results.
+This section walks through running verification end-to-end — from loading a saved benchmark to inspecting results. Each tutorial is a complete, self-contained scenario focused on a specific verification workflow.
 
-## Workflow Overview
+Choose the scenario that matches your evaluation needs, or work through them in order of increasing complexity.
+
+## Choose Your Scenario
+
+| Scenario | Focus Area | What You'll Learn |
+|----------|-----------|-------------------|
+| [Basic Verification](basic-verification.md) | Template-only evaluation | Load, configure, run, inspect — the simplest verification path with `VerificationConfig`, result iteration, CLI equivalents |
+| [Full Evaluation](full-evaluation.md) | Template + rubric | Enable rubrics, abstention/sufficiency checks, embedding verification, `PromptConfig`, presets |
+| [Multi-Model Comparison](multi-model-comparison.md) | Comparing models | Multiple answering models, answer caching, replicates, DataFrames, model-level grouping |
+| [Deep Judgment](deep-judgment.md) | Excerpt-based reasoning | Deep judgment for templates and rubrics, excerpt extraction, hallucination risk, search validation |
+| [MCP Agent Evaluation](mcp-agent-evaluation.md) | Tool-using agents | MCP tool configuration, agent middleware, trace handling, recursion limits |
+| [Manual Interface](manual-interface-workflow.md) | Pre-recorded traces | Offline evaluation with pre-recorded responses, template iteration, parsing model comparison |
+
+---
+
+## Common Workflow
+
+All six scenarios follow this general pattern:
 
 ```
-Load benchmark from checkpoint or database
+Load benchmark
     │
     ▼
 Configure verification (models, evaluation mode, features)
     │
     ▼
-Run verification ─── Python API ─── or ─── CLI
+Run verification (all questions or a subset)
     │
     ▼
-Results generated (per question × model × replicate)
-    │
-    ▼
-Inspect, analyze, and export results
+Inspect results (iterate, filter, group, summarize)
 ```
 
-Each step has a dedicated page with detailed instructions and examples.
+### Key APIs
+
+| Operation | Method | Covered In |
+|-----------|--------|------------|
+| Load benchmark | `Benchmark.load("checkpoint.jsonld")` | All scenarios |
+| Full configuration | `VerificationConfig(answering_models=[...], ...)` | [Basic Verification](basic-verification.md) |
+| Quick configuration | `VerificationConfig.from_overrides(...)` | [Basic Verification](basic-verification.md) |
+| Load from preset | `VerificationConfig.from_preset(path)` | [Full Evaluation](full-evaluation.md) |
+| Run all questions | `benchmark.run_verification(config)` | All scenarios |
+| Run subset | `benchmark.run_verification(config, question_ids=[...])` | [Basic Verification](basic-verification.md) |
+| Iterate results | `for result in results: ...` | All scenarios |
+| Summary statistics | `results.get_summary()` | [Basic Verification](basic-verification.md) |
+| Filter results | `results.filter(completed_only=True)` | [Basic Verification](basic-verification.md) |
+| Group by model | `results.group_by_model()` | [Multi-Model Comparison](multi-model-comparison.md) |
+| Group by question | `results.group_by_question()` | [Multi-Model Comparison](multi-model-comparison.md) |
+| DataFrame analysis | `results.get_template_results().to_dataframe()` | [Multi-Model Comparison](multi-model-comparison.md) |
+| CLI verification | `karenina verify checkpoint.jsonld --preset ...` | All scenarios |
 
 ---
 
-## Workflow Steps
+## Core Concepts
 
-### 1. Load a Benchmark
+These concept pages provide the foundational knowledge that the scenarios build on:
 
-Start by loading an existing benchmark that contains questions and evaluation criteria (templates and/or rubrics):
-
-```python
-from karenina import Benchmark
-
-benchmark = Benchmark.load("my_benchmark.jsonld")
-
-# Inspect what's loaded
-print(f"Questions: {len(benchmark.questions)}")
-```
-
-[Load and inspect a benchmark →](loading-benchmark.md)
-
-### 2. Configure Verification
-
-Set up `VerificationConfig` to control how verification runs — which models to use, what evaluation mode, and which optional features to enable:
-
-```python
-from karenina.schemas import VerificationConfig, ModelConfig
-
-config = VerificationConfig(
-    answering_models=[
-        ModelConfig(id="claude-haiku-4-5", model_provider="anthropic",
-                    model_name="claude-haiku-4-5", interface="langchain")
-    ],
-    parsing_models=[
-        ModelConfig(id="haiku-judge", model_provider="anthropic",
-                    model_name="claude-haiku-4-5", temperature=0.0,
-                    interface="langchain")
-    ],
-    evaluation_mode="template_only"
-)
-```
-
-[Configure VerificationConfig →](verification-config.md) · [Inject custom instructions via PromptConfig →](prompt-config.md)
-
-### 3. Run Verification
-
-Execute verification using the Python API or CLI:
-
-**Python API:**
-
-```python
-results = benchmark.run_verification(config)
-print(f"Results: {len(results)} generated")
-```
-
-**CLI:**
-
-```bash
-karenina verify my_benchmark.jsonld --preset my_preset.json
-```
-
-[Run via Python API →](python-api.md) · [Run via CLI →](cli.md)
-
-### 4. Inspect Results
-
-Access results through the `VerificationResultSet` returned by `run_verification()`:
-
-```python
-# Access individual results
-for result in results.results:
-    print(f"Q: {result.question_id} → Pass: {result.verify_result}")
-
-# Or convert to DataFrames for analysis
-df = results.get_templates().to_dataframe()
-```
-
-[Understand result structure →](../07-analyzing-results/verification-result.md) · [Analyze with DataFrames →](../07-analyzing-results/dataframe-analysis.md)
-
----
-
-## Configuration Options
-
-The verification system provides several configuration layers:
-
-| Configuration | Purpose | Details |
-|---------------|---------|---------|
-| **VerificationConfig** | Models, evaluation mode, feature flags | [Tutorial](verification-config.md) · [Reference](../reference/configuration/verification-config.md) |
-| **PromptConfig** | Custom instructions for LLM prompts | [Tutorial](prompt-config.md) · [Reference](../reference/configuration/prompt-config.md) |
-| **Presets** | Reusable configuration bundles | [Using presets](using-presets.md) · [Creating presets](../configuration/presets.md) |
-| **Environment variables** | API keys, paths, defaults | [Tutorial](../configuration/environment-variables.md) · [Reference](../reference/configuration/env-vars.md) |
-
----
-
-## Execution Methods
-
-Karenina supports multiple ways to run verification:
-
-| Method | Best For | Page |
-|--------|----------|------|
-| **Python API** | Programmatic control, notebooks, custom workflows | [Python API](python-api.md) |
-| **CLI** | Terminal use, CI/CD, scripting | [CLI](cli.md) |
-| **Manual interface** | Pre-recorded traces, reproducibility, cost reduction | [Manual interface](manual-interface.md) |
-
----
-
-## Optional Features
-
-The verification pipeline supports several optional features that can be toggled via `VerificationConfig`:
-
-### Response Quality Checks
-
-Detect problematic responses *before* parsing to save cost:
-
-- **Abstention detection** — Identify when a model refuses to answer
-- **Sufficiency detection** — Identify incomplete or inadequate responses
-
-Both run before the parsing stage. If detected, the pipeline skips parsing and marks the result accordingly.
-
-[Response quality checks →](response-quality-checks.md)
-
-### Multi-Model Evaluation
-
-Compare performance across multiple LLMs by specifying multiple answering and/or parsing models. Karenina automatically generates all combinations and caches answers for efficiency.
-
-[Multi-model evaluation →](multi-model.md)
-
-### MCP-Enabled Verification
-
-Run tool-augmented evaluation by connecting LLMs to MCP servers. Configure tool access, middleware settings, and trace handling.
-
-[MCP-enabled verification →](mcp-verification.md)
-
-### Database Persistence
-
-Automatically save results to a SQLite database as verification completes. Results are immediately queryable without manual export.
-
-[Database persistence →](database-persistence.md)
-
----
-
-## What You Need
-
-Before running verification, ensure you have:
-
-| Requirement | Why | Where to Set Up |
-|-------------|-----|-----------------|
-| **Benchmark with questions** | Questions to evaluate | [Creating Benchmarks](../creating-benchmarks/index.md) |
-| **Templates and/or rubrics** | Evaluation criteria | [Answer Templates](../core_concepts/answer-templates.md) · [Rubrics](../core_concepts/rubrics/index.md) |
-| **LLM API keys** | Access to answering and parsing models | [Environment Variables](../configuration/environment-variables.md) |
-| **Evaluation mode choice** | What to evaluate (correctness, quality, or both) | [Evaluation Modes](../core_concepts/evaluation-modes.md) |
+- [Evaluation Modes](../../core_concepts/evaluation-modes.md) — How template-only, template+rubric, and rubric-only map to pipeline stages
+- [Answer Templates](../../core_concepts/answer-templates.md) — Template structure, field types, `verify()` semantics
+- [Rubrics](../../core_concepts/rubrics/index.md) — Trait types (LLM, regex, callable, metric), global vs per-question
+- [Adapters](../../core_concepts/adapters.md) — Port/adapter architecture, available backends
+- [Checkpoints](../../core_concepts/checkpoints.md) — JSON-LD format, save/load behavior
 
 ---
 
 ## Next Steps
 
-After running verification:
-
-- [Analyzing Results](../07-analyzing-results/index.md) — Inspect result structure, build DataFrames, export data
-- [Creating Benchmarks](../creating-benchmarks/index.md) — If you haven't created a benchmark yet
+- [Creating Benchmarks](../creating-benchmarks/index.md) — Build a benchmark to verify
+- [Analyzing Results](../analyzing-results/index.md) — DataFrame analysis, export, iteration

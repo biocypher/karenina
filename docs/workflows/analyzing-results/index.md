@@ -168,5 +168,5 @@ The data available in results depends on which [evaluation mode](../core_concept
 
 ## Next Steps
 
-- [Running Verification](../06-running-verification/index.md) — If you haven't run verification yet
+- [Running Verification](../running-verification/index.md) — If you haven't run verification yet
 - [Creating Benchmarks](../creating-benchmarks/index.md) — If you need to build or modify a benchmark

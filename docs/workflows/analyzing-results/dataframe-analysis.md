@@ -32,9 +32,9 @@ from karenina.schemas.verification.result_components import (
 )
 
 # Build mock results representing a verification run with template + rubric evaluation
-_answering_gpt4o = ModelIdentity(model_name="gpt-4o", interface="langchain")
-_answering_claude = ModelIdentity(model_name="claude-sonnet-4-20250514", interface="claude_agent_sdk")
-_parsing = ModelIdentity(model_name="gpt-4o-mini", interface="langchain")
+_answering_haiku = ModelIdentity(model_name="claude-haiku-4-5", interface="langchain")
+_answering_sonnet = ModelIdentity(model_name="claude-sonnet-4-20250514", interface="claude_agent_sdk")
+_parsing = ModelIdentity(model_name="claude-haiku-4-5", interface="langchain")
 _ts = datetime.datetime.now(tz=datetime.UTC).isoformat()
 
 
@@ -81,26 +81,26 @@ def _make_result(
 
 # Create results for two models across 3 questions
 _mock_results = [
-    # GPT-4o results
-    _make_result("q1", "What is the capital of France?", _answering_gpt4o, True, "Paris",
+    # Claude Haiku results
+    _make_result("q1", "What is the capital of France?", _answering_haiku, True, "Paris",
                  rubric_scores={"clarity": 4, "conciseness": True},
                  regex_scores={"no_hedging": True},
                  parsed_gt={"capital": "Paris"}, parsed_llm={"capital": "Paris"}),
-    _make_result("q2", "What is 6 multiplied by 7?", _answering_gpt4o, True, "42",
+    _make_result("q2", "What is 6 multiplied by 7?", _answering_haiku, True, "42",
                  rubric_scores={"clarity": 5, "conciseness": True},
                  parsed_gt={"result": "42"}, parsed_llm={"result": "42"}),
-    _make_result("q3", "What element has atomic number 8?", _answering_gpt4o, False, "Nitrogen",
+    _make_result("q3", "What element has atomic number 8?", _answering_haiku, False, "Nitrogen",
                  rubric_scores={"clarity": 3, "conciseness": False},
                  parsed_gt={"element": "Oxygen"}, parsed_llm={"element": "Nitrogen"}),
-    # Claude results
-    _make_result("q1", "What is the capital of France?", _answering_claude, True, "Paris",
+    # Claude Sonnet results
+    _make_result("q1", "What is the capital of France?", _answering_sonnet, True, "Paris",
                  rubric_scores={"clarity": 5, "conciseness": True},
                  regex_scores={"no_hedging": True},
                  parsed_gt={"capital": "Paris"}, parsed_llm={"capital": "Paris"}),
-    _make_result("q2", "What is 6 multiplied by 7?", _answering_claude, True, "42",
+    _make_result("q2", "What is 6 multiplied by 7?", _answering_sonnet, True, "42",
                  rubric_scores={"clarity": 5, "conciseness": True},
                  parsed_gt={"result": "42"}, parsed_llm={"result": "42"}),
-    _make_result("q3", "What element has atomic number 8?", _answering_claude, True, "Oxygen",
+    _make_result("q3", "What element has atomic number 8?", _answering_sonnet, True, "Oxygen",
                  rubric_scores={"clarity": 4, "conciseness": True},
                  parsed_gt={"element": "Oxygen"}, parsed_llm={"element": "Oxygen"}),
 ]
@@ -194,8 +194,8 @@ df_failed = failed.to_dataframe()
 print(f"Failed results: {len(failed)} (fields in DataFrame: {len(df_failed)})")
 
 # Filter by model (use the full display string: "interface:model_name")
-gpt_results = template_results.filter(answering_models=["langchain:gpt-4o"])
-print(f"GPT-4o results: {len(gpt_results)}")
+haiku_results = template_results.filter(answering_models=["langchain:claude-haiku-4-5"])
+print(f"Claude Haiku results: {len(haiku_results)}")
 ```
 
 ### Summary Statistics
@@ -368,4 +368,4 @@ The `VerificationResultSet` itself provides higher-level operations:
 - [VerificationResult Structure](verification-result.md) — understand the complete result hierarchy
 - [Exporting Results](exporting.md) — save results to JSON, CSV, or files
 - [Iterating on Benchmarks](iterating.md) — use analysis to improve templates and rubrics
-- [Running Verification](../06-running-verification/python-api.md) — how to generate results
+- [Running Verification](../running-verification/basic-verification.md) — how to generate results

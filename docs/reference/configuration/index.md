@@ -1,6 +1,6 @@
 # Configuration Reference
 
-This section provides exhaustive reference documentation for all configuration objects in karenina. For tutorial-style introductions with examples, see [Configuration](../../configuration/index.md) and [Configuring Verification](../../06-running-verification/verification-config.md).
+This section provides exhaustive reference documentation for all configuration objects in karenina. For tutorial-style introductions with examples, see [Configuration](../../configuration/index.md) and [Running Verification](../../workflows/running-verification/index.md).
 
 ---
 
@@ -13,6 +13,7 @@ This section provides exhaustive reference documentation for all configuration o
 | [ModelConfig](model-config.md) | Model identity, parameters, MCP, and middleware | 19 fields |
 | [PromptConfig](prompt-config.md) | Custom instruction injection into pipeline LLM calls | 6 fields |
 | [Preset Schema](preset-schema.md) | JSON format for saved configuration presets | Metadata + config |
+| [DBConfig](verification-config.md#dbconfig-fields) | Database connection for auto-saving results | 8 fields |
 
 ---
 
@@ -62,6 +63,6 @@ from karenina.schemas.verification import PromptConfig
 
 ## Related
 
-- [Configuration Tutorial (section 03)](../../configuration/index.md) — conceptual overview with examples
-- [Configuring Verification (section 06)](../../06-running-verification/verification-config.md) — tutorial with executable examples
+- [Configuration Tutorial](../../configuration/index.md) — conceptual overview with examples
+- [Running Verification](../../workflows/running-verification/index.md) — scenario-based verification tutorials
 - [CLI Reference](../cli/index.md) — command-line options that map to these fields
