@@ -1,10 +1,12 @@
 ---
 jupyter:
   jupytext:
+    formats: docs/core_concepts//md,docs/notebooks/core_concepts//ipynb
     text_representation:
       extension: .md
       format_name: markdown
       format_version: '1.3'
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python

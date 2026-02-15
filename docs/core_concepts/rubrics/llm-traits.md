@@ -1,10 +1,12 @@
 ---
 jupyter:
   jupytext:
+    formats: docs/core_concepts/rubrics//md,docs/notebooks/core_concepts/rubrics//ipynb
     text_representation:
       extension: .md
       format_name: markdown
       format_version: '1.3'
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
