@@ -203,4 +203,4 @@ except ValueError as e:
 - [Literal traits](literal-traits.md) -- ordered categorical classification
 - [Callable traits](callable-traits.md) -- custom Python functions
 - [Metric traits](metric-traits.md) -- precision, recall, F1 computation
-- [Defining rubrics](../../05-creating-benchmarks/defining-rubrics.md) -- adding traits to benchmarks
+- [Full Evaluation Benchmark](../../workflows/creating-benchmarks/full-evaluation-benchmark.md) -- adding traits to benchmarks

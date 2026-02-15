@@ -162,14 +162,10 @@ nav:
       - Presets: workflows/configuration/presets.md
     - Creating Benchmarks:
       - Overview: workflows/creating-benchmarks/index.md
-      - Creating a Checkpoint: notebooks/creating-benchmarks/creating-checkpoint.ipynb
-      - Adding Questions: notebooks/creating-benchmarks/adding-questions.ipynb
-      - Classifying with Adele: workflows/creating-benchmarks/classifying-with-adele.md
-      - Generating Templates: workflows/creating-benchmarks/generating-templates.md
-      - Writing Templates: notebooks/creating-benchmarks/writing-templates.ipynb
-      - Defining Rubrics: notebooks/creating-benchmarks/defining-rubrics.ipynb
-      - Few-Shot Examples: workflows/creating-benchmarks/few-shot-examples.md
-      - Saving Benchmarks: notebooks/creating-benchmarks/saving-benchmarks.ipynb
+      - Factual QA Benchmark: notebooks/creating-benchmarks/factual-qa-benchmark.ipynb
+      - Full Evaluation Benchmark: notebooks/creating-benchmarks/full-evaluation-benchmark.ipynb
+      - Quality Assessment: notebooks/creating-benchmarks/quality-assessment-benchmark.ipynb
+      - Scaled Authoring: notebooks/creating-benchmarks/scaled-authoring.ipynb
     - Running Verification:
       - Overview: workflows/running-verification/index.md
       - Loading a Benchmark: notebooks/running-verification/loading-benchmark.ipynb

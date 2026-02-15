@@ -236,4 +236,4 @@ for trait in rubric.llm_traits:
 - [Regex Traits](regex-traits.md) — pattern matching on raw response text
 - [Callable Traits](callable-traits.md) — custom Python evaluation functions
 - [Rubrics Overview](index.md) — when to use each trait type
-- [Defining Rubrics](../../05-creating-benchmarks/defining-rubrics.md) — adding traits to a benchmark
+- [Full Evaluation Benchmark](../../workflows/creating-benchmarks/full-evaluation-benchmark.md) — adding traits to a benchmark

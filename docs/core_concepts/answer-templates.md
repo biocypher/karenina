@@ -286,5 +286,5 @@ Every field description should address four elements:
 
 - [Rubrics](rubrics/index.md) — Assess response quality beyond correctness
 - [Evaluation Modes](evaluation-modes.md) — Choose between template-only, rubric-only, or both
-- [Creating Benchmarks](../05-creating-benchmarks/index.md) — Build benchmarks with templates and questions
+- [Creating Benchmarks](../workflows/creating-benchmarks/index.md) — Build benchmarks with templates and questions
 - [Philosophy](../home/philosophy.md) — Why the LLM-as-judge approach works

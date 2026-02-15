@@ -166,7 +166,7 @@ Before running verification, ensure you have:
 
 | Requirement | Why | Where to Set Up |
 |-------------|-----|-----------------|
-| **Benchmark with questions** | Questions to evaluate | [Creating Benchmarks](../05-creating-benchmarks/index.md) |
+| **Benchmark with questions** | Questions to evaluate | [Creating Benchmarks](../creating-benchmarks/index.md) |
 | **Templates and/or rubrics** | Evaluation criteria | [Answer Templates](../core_concepts/answer-templates.md) · [Rubrics](../core_concepts/rubrics/index.md) |
 | **LLM API keys** | Access to answering and parsing models | [Environment Variables](../configuration/environment-variables.md) |
 | **Evaluation mode choice** | What to evaluate (correctness, quality, or both) | [Evaluation Modes](../core_concepts/evaluation-modes.md) |
@@ -178,4 +178,4 @@ Before running verification, ensure you have:
 After running verification:
 
 - [Analyzing Results](../07-analyzing-results/index.md) — Inspect result structure, build DataFrames, export data
-- [Creating Benchmarks](../05-creating-benchmarks/index.md) — If you haven't created a benchmark yet
+- [Creating Benchmarks](../creating-benchmarks/index.md) — If you haven't created a benchmark yet

@@ -270,4 +270,4 @@ print(f"Total traits: {len(rubric.metric_traits)}")
 - [Regex Traits](regex-traits.md) -- Pattern matching on raw response text
 - [Callable Traits](callable-traits.md) -- Custom Python function evaluation
 - [Rubrics Overview](index.md) -- When to use each trait type
-- [Defining Rubrics](../../05-creating-benchmarks/defining-rubrics.md) -- Adding traits to benchmarks
+- [Full Evaluation Benchmark](../../workflows/creating-benchmarks/full-evaluation-benchmark.md) -- Adding traits to benchmarks

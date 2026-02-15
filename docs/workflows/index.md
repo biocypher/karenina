@@ -9,7 +9,7 @@ This section is about *doing* — step-by-step guides that take you from a start
 | Workflow | What You'll Do |
 |----------|---------------|
 | [Configuration](configuration/index.md) | Set up the configuration hierarchy: CLI args, presets, environment variables, defaults |
-| [Creating Benchmarks](05-creating-benchmarks/index.md) | Author questions, write templates, define rubrics, and save checkpoints |
+| [Creating Benchmarks](creating-benchmarks/index.md) | Author questions, write templates, define rubrics, and save checkpoints |
 | [Running Verification](06-running-verification/index.md) | Configure and execute evaluation via Python API or CLI |
 | [Analyzing Results](07-analyzing-results/index.md) | Inspect results, build DataFrames, export data, and iterate |
 

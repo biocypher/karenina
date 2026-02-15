@@ -231,4 +231,4 @@ for trait in rubric.callable_traits:
 - [Literal Traits](literal-traits.md) -- Ordered categorical classification via LLM
 - [Regex Traits](regex-traits.md) -- Deterministic pattern matching
 - [Metric Traits](metric-traits.md) -- Precision, recall, and F1 for extraction tasks
-- [Defining Rubrics](../../05-creating-benchmarks/defining-rubrics.md) -- Adding traits to benchmarks
+- [Full Evaluation Benchmark](../../workflows/creating-benchmarks/full-evaluation-benchmark.md) -- Adding traits to benchmarks

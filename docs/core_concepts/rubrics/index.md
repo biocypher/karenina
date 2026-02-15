@@ -147,4 +147,4 @@ This field is used by analysis tools and DataFrame builders to correctly interpr
 - [Callable traits](callable-traits.md) -- custom Python functions
 - [Metric traits](metric-traits.md) -- precision, recall, F1 computation
 - [Evaluation modes](../evaluation-modes.md) -- template_only, template_and_rubric, rubric_only
-- [Defining rubrics](../../05-creating-benchmarks/defining-rubrics.md) -- workflow guide for adding rubrics to benchmarks
+- [Full Evaluation Benchmark](../../workflows/creating-benchmarks/full-evaluation-benchmark.md) -- workflow guide for adding rubrics to benchmarks

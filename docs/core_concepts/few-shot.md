@@ -256,7 +256,7 @@ VerificationConfig validates few-shot settings:
 
 ## Next Steps
 
-- [Adding Few-Shot Examples](../05-creating-benchmarks/few-shot-examples.md) — How to add examples to questions
+- [Scaled Authoring](../workflows/creating-benchmarks/scaled-authoring.md) — Few-shot examples in the benchmark authoring workflow
 - [VerificationConfig Tutorial](../06-running-verification/verification-config.md) — Complete configuration setup
 - [Answer Templates](answer-templates.md) — What few-shot examples help with
 - [VerificationConfig Reference](../reference/configuration/verification-config.md) — Exhaustive field reference

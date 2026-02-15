@@ -134,7 +134,7 @@ karenina init --dir ~/karenina-workspace
 ## Next Steps
 
 - [Core Concepts](../core_concepts/index.md) — Understand checkpoints, answer templates, rubrics, and adapters
-- [Creating Benchmarks](../05-creating-benchmarks/index.md) — Build a benchmark with questions, templates, and rubric traits
+- [Creating Benchmarks](../workflows/creating-benchmarks/index.md) — Build a benchmark with questions, templates, and rubric traits
 - [Running Verification](../06-running-verification/index.md) — Evaluate models against your benchmark
 - [Environment Variables](../configuration/environment-variables.md) — All available `.env` settings including API keys
 - [Presets](../configuration/presets.md) — Create reusable verification configurations for the `presets/` directory

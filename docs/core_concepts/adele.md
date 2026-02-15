@@ -231,7 +231,7 @@ result_set = benchmark.run_verification(
 
 ## Next Steps
 
-- [Classifying questions in your benchmark](../05-creating-benchmarks/classifying-with-adele.md) — step-by-step workflow
+- [Scaled Authoring](../workflows/creating-benchmarks/scaled-authoring.md) — ADeLe classification in the benchmark authoring workflow
 - [Literal rubric traits](rubrics/literal-traits.md) — the trait type ADeLe dimensions use
 - [Running verification](../06-running-verification/index.md) — evaluate your benchmark
 - [Evaluation modes](evaluation-modes.md) — template, rubric, or both

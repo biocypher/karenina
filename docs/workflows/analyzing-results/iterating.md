@@ -361,5 +361,5 @@ benchmark.save_to_db("sqlite:///dbs/benchmarks.db")
 - [VerificationResult Structure](verification-result.md) — Understand all available result fields
 - [DataFrame Analysis](dataframe-analysis.md) — Detailed DataFrame analysis patterns
 - [Exporting Results](exporting.md) — Save results for sharing or archival
-- [Writing Custom Templates](../05-creating-benchmarks/writing-templates.md) — Template patterns for complex verify logic
-- [Defining Rubrics](../05-creating-benchmarks/defining-rubrics.md) — Creating and modifying rubric traits
+- [Factual QA Benchmark](../creating-benchmarks/factual-qa-benchmark.md) — Template patterns for complex verify logic
+- [Full Evaluation Benchmark](../creating-benchmarks/full-evaluation-benchmark.md) — Creating and modifying rubric traits

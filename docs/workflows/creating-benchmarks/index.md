@@ -1,138 +1,100 @@
 # Creating Benchmarks
 
-This section walks through the complete workflow for authoring a benchmark — from creating an empty checkpoint to saving a fully populated benchmark with questions, templates, rubrics, and few-shot examples.
+This section walks through building benchmarks end-to-end — from creating an empty checkpoint to saving a fully populated benchmark with questions, templates, rubrics, and few-shot examples.
 
-## Workflow Overview
+Each tutorial is a complete, self-contained scenario. Choose the one that matches your evaluation needs, or work through them in order to learn all the tools.
 
-```
-Create checkpoint
-    │
-    ▼
-Add questions (from dict or Question object)
-    │
-    ▼
-Classify questions with Adele [optional]
-    │
-    ▼
-Generate templates (automated) ─── or ─── Write custom templates
-    │
-    ▼
-Define rubrics (global and/or question-specific)
-    │
-    ▼
-Add few-shot examples [optional]
-    │
-    ▼
-Save (JSON-LD checkpoint or database)
-```
+## Choose Your Scenario
 
-Each step has a dedicated page with detailed instructions and executable examples.
+| Scenario | Evaluation Strategy | What You'll Learn |
+|----------|-------------------|-------------------|
+| [Factual QA Benchmark](factual-qa-benchmark.md) | Template-only | Hand-written templates: boolean decomposition, string normalization, numeric tolerance, regex in `verify()`, partial credit |
+| [Full Evaluation Benchmark](full-evaluation-benchmark.md) | Template + rubric | Custom templates combined with all 6 rubric trait types (LLM boolean, LLM score, LLM literal, regex, callable, metric) |
+| [Quality Assessment](quality-assessment-benchmark.md) | Rubric-only | No templates — quality evaluation for tasks with no single correct answer (safety, empathy, clarity) |
+| [Scaled Authoring](scaled-authoring.md) | Power user | Bulk ingestion, `generate_all_templates()`, `AnswerBuilder`, ADeLe classification, few-shot examples |
 
 ---
 
-## Workflow Steps
+## Evaluation Strategies
 
-### 1. Create a Checkpoint
+Karenina supports three evaluation strategies. Every benchmark uses one of these:
 
-Start by creating an empty benchmark with metadata (name, description, version, creator, keywords):
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Template-only                         │
+│  Questions + Templates → Correctness (pass/fail)        │
+│  "Is the extracted information correct?"                 │
+└─────────────────────────────────────────────────────────┘
 
-```python
-from karenina import Benchmark
+┌─────────────────────────────────────────────────────────┐
+│               Template + Rubric                          │
+│  Questions + Templates + Rubrics → Correctness + Quality │
+│  "Is it correct AND well-written?"                       │
+└─────────────────────────────────────────────────────────┘
 
-benchmark = Benchmark.create(
-    name="My Benchmark",
-    description="Evaluating LLM knowledge",
-    version="1.0.0"
-)
+┌─────────────────────────────────────────────────────────┐
+│                    Rubric-only                            │
+│  Questions + Rubrics → Quality assessment                │
+│  "Is it safe, clear, and appropriate?"                   │
+└─────────────────────────────────────────────────────────┘
 ```
 
-[Create a checkpoint from scratch →](creating-checkpoint.md)
+| Strategy | Required | Optional | Best For |
+|----------|----------|----------|----------|
+| **Template-only** | Questions, templates | ADeLe, few-shot | Factual questions with definitive answers |
+| **Template + rubric** | Questions, templates, rubrics | ADeLe, few-shot | Comprehensive evaluation (correctness + quality) |
+| **Rubric-only** | Questions, rubrics | ADeLe, few-shot | Subjective tasks, communication, safety |
 
-### 2. Add Questions
-
-Populate the benchmark with questions. You can add questions as simple dicts or as `Question` objects with rich metadata and sources:
-
-```python
-benchmark.add_question({
-    "text": "What is the capital of France?",
-    "acceptedAnswer": "Paris"
-})
-```
-
-[Add questions to a benchmark →](adding-questions.md)
-
-### 3. Classify Questions with Adele (Optional)
-
-Use the Adele classification system to characterize questions across 18 dimensions (reasoning depth, domain specificity, answer format, etc.). Classifications guide template design and can be used for filtering.
-
-[Classify questions with Adele →](classifying-with-adele.md)
-
-### 4. Add Evaluation Criteria
-
-Every question needs evaluation criteria. Karenina provides two complementary approaches:
-
-**Generate templates automatically** — Use an LLM to produce answer templates from your questions. Review and refine the generated code.
-
-[Generate templates automatically →](generating-templates.md)
-
-**Write custom templates** — Define your own Pydantic models with complex verification logic, multiple attributes, and domain-specific comparisons.
-
-[Write custom templates →](writing-templates.md)
-
-For background on what templates are and how they work, see [Answer Templates](../core_concepts/answer-templates.md).
-
-### 5. Define Rubrics
-
-Add rubric traits to evaluate response quality beyond factual correctness. Traits can be applied globally (all questions) or per-question:
-
-- **LLM traits** — Subjective assessment (boolean or score) via a Judge LLM
-- **Literal traits** — Ordered categorical classification via a Judge LLM
-- **Regex traits** — Pattern matching for format compliance
-- **Callable traits** — Custom Python functions
-- **Metric traits** — Precision/recall/F1 for extraction completeness
-
-[Define rubrics for a benchmark →](defining-rubrics.md)
-
-For background on rubric concepts, see [Rubrics](../core_concepts/rubrics/index.md).
-
-### 6. Add Few-Shot Examples (Optional)
-
-Inject example responses into the Judge LLM's parsing prompt to improve accuracy. Useful for complex or ambiguous response formats.
-
-[Add few-shot examples →](few-shot-examples.md)
-
-For background on few-shot configuration modes, see [Few-Shot](../core_concepts/few-shot.md).
-
-### 7. Save the Benchmark
-
-Persist the benchmark for sharing and future use:
-
-- **JSON-LD checkpoint** — Portable file for sharing, version control, and inspection
-- **Database** — SQLite storage for persistent management and querying
-
-```python
-# Save as checkpoint
-benchmark.save("my_benchmark.jsonld")
-
-# Save to database
-benchmark.save_to_db(storage="sqlite:///benchmarks.db")
-```
-
-[Save benchmarks →](saving-benchmarks.md)
+See [Evaluation Modes](../../core_concepts/evaluation-modes.md) for details on how these strategies map to pipeline behavior.
 
 ---
 
-## What You Need
+## Common Workflow
 
-Not every step is required. Here's a guide based on your evaluation strategy:
+All four scenarios follow this general pattern:
 
-| Evaluation Strategy | Required Steps | Optional Steps |
-|---------------------|---------------|----------------|
-| **Template-only** (correctness) | Create checkpoint, add questions, add templates, save | Adele, few-shot |
-| **Template + rubric** (correctness + quality) | Create checkpoint, add questions, add templates, define rubrics, save | Adele, few-shot |
-| **Rubric-only** (quality assessment) | Create checkpoint, add questions, define rubrics, save | Adele, few-shot |
+```
+Create benchmark
+    │
+    ▼
+Add questions (with or without templates)
+    │
+    ▼
+Define evaluation criteria (templates, rubrics, or both)
+    │
+    ▼
+Save checkpoint
+    │
+    ▼
+Reload and verify round-trip
+```
 
-See [Evaluation Modes](../core_concepts/evaluation-modes.md) for details on how these strategies map to pipeline behavior.
+### Key APIs
+
+| Operation | Method | Covered In |
+|-----------|--------|------------|
+| Create benchmark | `Benchmark.create(name, description, version)` | All scenarios |
+| Add question | `benchmark.add_question(question, raw_answer, answer_template=...)` | All scenarios |
+| Add template to existing question | `benchmark.add_answer_template(question_id, code_string)` | [Factual QA](factual-qa-benchmark.md) |
+| Generate templates automatically | `benchmark.generate_all_templates(model, model_provider)` | [Scaled Authoring](scaled-authoring.md) |
+| Build templates programmatically | `AnswerBuilder().add_attribute(...).compile()` | [Scaled Authoring](scaled-authoring.md) |
+| Add global rubric trait | `benchmark.add_global_rubric_trait(trait)` | [Full Evaluation](full-evaluation-benchmark.md), [Quality Assessment](quality-assessment-benchmark.md) |
+| Add per-question rubric trait | `benchmark.add_question_rubric_trait(question_id, trait)` | [Full Evaluation](full-evaluation-benchmark.md), [Quality Assessment](quality-assessment-benchmark.md) |
+| Save checkpoint | `benchmark.save("path.jsonld")` | All scenarios |
+| Load checkpoint | `Benchmark.load("path.jsonld")` | All scenarios |
+
+---
+
+## Core Concepts
+
+These concept pages provide the foundational knowledge that the scenarios build on:
+
+- [Answer Templates](../../core_concepts/answer-templates.md) — What templates are, field types, `verify()` semantics
+- [Rubrics](../../core_concepts/rubrics/index.md) — Trait types (LLM, regex, callable, metric), global vs per-question
+- [Checkpoints](../../core_concepts/checkpoints.md) — JSON-LD format, save/load behavior
+- [Evaluation Modes](../../core_concepts/evaluation-modes.md) — How template-only, template+rubric, and rubric-only map to pipeline stages
+- [ADeLe Classification](../../core_concepts/adele.md) — Question complexity dimensions
+- [Few-Shot Examples](../../core_concepts/few-shot.md) — Configuration modes and example selection
 
 ---
 
@@ -140,5 +102,5 @@ See [Evaluation Modes](../core_concepts/evaluation-modes.md) for details on how 
 
 Once your benchmark is built and saved, proceed to:
 
-- [Running Verification](../06-running-verification/index.md) — Execute the benchmark against LLMs
-- [Analyzing Results](../07-analyzing-results/index.md) — Inspect and compare verification outcomes
+- [Running Verification](../running-verification/index.md) — Execute the benchmark against LLMs
+- [Analyzing Results](../analyzing-results/index.md) — Inspect and compare verification outcomes

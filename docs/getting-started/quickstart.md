@@ -126,7 +126,7 @@ benchmark = Benchmark.create(
 print(f"Created benchmark: {benchmark.name}")
 ```
 
-> **Learn more**: [Creating Checkpoints](../05-creating-benchmarks/creating-checkpoint.md) · [Core Concepts](../core_concepts/index.md)
+> **Learn more**: [Creating Benchmarks](../workflows/creating-benchmarks/index.md) · [Core Concepts](../core_concepts/index.md)
 
 ---
 
@@ -162,7 +162,7 @@ for q in questions:
 print(f"Added {len(question_ids)} questions")
 ```
 
-> **Learn more**: [Adding Questions](../05-creating-benchmarks/adding-questions.md) — including bulk import from Excel, CSV, and TSV files
+> **Learn more**: [Factual QA Benchmark](../workflows/creating-benchmarks/factual-qa-benchmark.md) — including bulk import from Excel, CSV, and TSV files
 
 ---
 
@@ -228,7 +228,7 @@ benchmark.update_template(question_ids[1], Answer)
 print(f"Updated template for Venetoclax question with class-based definition")
 ```
 
-> **Learn more**: [Writing Templates](../05-creating-benchmarks/writing-templates.md) · [Generating Templates](../05-creating-benchmarks/generating-templates.md) · [Answer Templates (Concepts)](../core_concepts/answer-templates.md)
+> **Learn more**: [Factual QA Benchmark](../workflows/creating-benchmarks/factual-qa-benchmark.md) · [Scaled Authoring](../workflows/creating-benchmarks/scaled-authoring.md) · [Answer Templates (Concepts)](../core_concepts/answer-templates.md)
 
 ---
 
@@ -278,7 +278,7 @@ benchmark.add_question_rubric_trait(
 print(f"Added regex trait 'Contains BCL2' to question {venetoclax_qid}")
 ```
 
-> **Learn more**: [Defining Rubrics](../05-creating-benchmarks/defining-rubrics.md) · [All Four Trait Types](../core_concepts/rubrics/index.md) — LLM, regex, callable, and metric traits
+> **Learn more**: [Full Evaluation Benchmark](../workflows/creating-benchmarks/full-evaluation-benchmark.md) · [All Four Trait Types](../core_concepts/rubrics/index.md) — LLM, regex, callable, and metric traits
 
 ---
 
@@ -376,7 +376,7 @@ loaded = Benchmark.load(checkpoint_path)
 print(f"Loaded '{loaded.name}' with {loaded.question_count} questions")
 ```
 
-> **Learn more**: [Checkpoints](../core_concepts/checkpoints.md) · [Saving Benchmarks](../05-creating-benchmarks/saving-benchmarks.md) · [Loading Benchmarks](../06-running-verification/loading-benchmark.md)
+> **Learn more**: [Checkpoints](../core_concepts/checkpoints.md) · [Factual QA Benchmark](../workflows/creating-benchmarks/factual-qa-benchmark.md) · [Loading Benchmarks](../06-running-verification/loading-benchmark.md)
 
 ```python tags=["hide-cell"]
 # Restore original LLM behavior and clean up temp directory
