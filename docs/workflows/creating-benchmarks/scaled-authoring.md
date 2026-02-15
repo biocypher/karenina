@@ -146,8 +146,8 @@ With many questions added, `generate_all_templates()` uses an LLM to produce `An
 # Generate templates for all questions that don't have one
 with patch.object(type(benchmark), "generate_all_templates", _mock_generate_all_templates):
     results = benchmark.generate_all_templates(
-        model="gemini-2.0-flash",
-        model_provider="google_genai",
+        model="claude-haiku-4-5",
+        model_provider="anthropic",
         only_missing=True,
         progress_callback=lambda pct, msg: print(f"  {pct:.0f}%: {msg}"),
     )
@@ -198,7 +198,7 @@ print(f"Updated template for: {metformin_id[:50]}...")
 When to use each approach:
 
 - **AnswerBuilder**: Quick boolean/regex templates built from data — no string manipulation needed.
-- **Code strings**: Complex `verify()` logic, custom normalization, multi-step checks that need full Python expressiveness.
+- **Class definitions or code strings**: Complex `verify()` logic, custom normalization, multi-step checks that need full Python expressiveness.
 
 ---
 

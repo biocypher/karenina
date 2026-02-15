@@ -28,8 +28,13 @@ This scenario creates a benchmark that evaluates factual correctness using templ
 ```python tags=["hide-cell"]
 # Setup cell: hidden in rendered documentation.
 # No mocking needed — all examples create Benchmark objects locally.
+import re
 import tempfile
 from pathlib import Path
+
+from pydantic import Field
+
+from karenina.schemas.entities import BaseAnswer
 ```
 
 ---
@@ -52,14 +57,21 @@ print(f"Questions: {benchmark.question_count}")
 
 ## Add Questions with Templates
 
-Each question below demonstrates a different template pattern. Templates are passed as code strings via the `answer_template` parameter.
+Each question below demonstrates a different template pattern. For notebook compatibility, we use a two-step approach: first add the question, then define and attach the template class using `update_template()`.
 
 ### Question 1: Boolean Decomposition — Drug Target Identification
 
 Boolean fields check whether a concept is present in the response, delegating synonym handling to the judge through the field description. No string matching needed.
 
 ```python
-template_q1 = '''class Answer(BaseAnswer):
+# First, add the question
+q1_id = benchmark.add_question(
+    question="What is the approved pharmacological target of venetoclax?",
+    raw_answer="BCL2",
+)
+
+# Then define and attach the template
+class Answer(BaseAnswer):
     identifies_bcl2: bool = Field(
         description=(
             "True if the response identifies BCL2 (including Bcl-2, BCL-2, or "
@@ -91,14 +103,9 @@ template_q1 = '''class Answer(BaseAnswer):
             if getattr(self, field) == self.correct[field]
         )
         return matches / len(self.correct)
-'''
 
-q1_id = benchmark.add_question(
-    question="What is the approved pharmacological target of venetoclax?",
-    raw_answer="BCL2",
-    answer_template=template_q1,
-)
-print(f"Q1 added: {q1_id[:50]}...")
+benchmark.update_template(q1_id, Answer)
+print(f"Q1 added with template: {q1_id[:50]}...")
 ```
 
 Boolean decomposition avoids string matching entirely. Instead of extracting "BCL2" as text and comparing it, we ask the judge "Did the response identify BCL2?" This is more reliable because the judge handles synonyms (Bcl-2, BCL-2, B-cell lymphoma 2) through its description.
@@ -111,7 +118,12 @@ Boolean decomposition avoids string matching entirely. Instead of extracting "BC
 When you need the actual extracted value (not just presence), use a `str` field with normalization in `verify()`.
 
 ```python
-template_q2 = '''class Answer(BaseAnswer):
+q2_id = benchmark.add_question(
+    question="What gene is most commonly mutated in human cancers?",
+    raw_answer="TP53",
+)
+
+class Answer(BaseAnswer):
     gene_symbol: str = Field(
         description=(
             "The official HGNC gene symbol mentioned in the response as the most "
@@ -128,14 +140,9 @@ template_q2 = '''class Answer(BaseAnswer):
         extracted = self.gene_symbol.strip().upper().replace("-", "")
         expected = self.correct["gene_symbol"].upper()
         return extracted == expected
-'''
 
-q2_id = benchmark.add_question(
-    question="What gene is most commonly mutated in human cancers?",
-    raw_answer="TP53",
-    answer_template=template_q2,
-)
-print(f"Q2 added: {q2_id[:50]}...")
+benchmark.update_template(q2_id, Answer)
+print(f"Q2 added with template: {q2_id[:50]}...")
 ```
 
 Use string extraction when you need the value itself (for downstream analysis or display), or when the question has a single extractable answer with a canonical form. Boolean decomposition is better when you only care about presence and the concept has many synonyms.
@@ -145,7 +152,12 @@ Use string extraction when you need the value itself (for downstream analysis or
 Numeric fields use comparison with tolerance in `verify()`. For exact counts, set tolerance to zero; for measurements or estimates, use an appropriate margin.
 
 ```python
-template_q3 = '''class Answer(BaseAnswer):
+q3_id = benchmark.add_question(
+    question="How many chromosome pairs are in a normal human somatic cell?",
+    raw_answer="23",
+)
+
+class Answer(BaseAnswer):
     pair_count: int = Field(
         description=(
             "The number of chromosome pairs stated in the response, as a whole "
@@ -161,21 +173,16 @@ template_q3 = '''class Answer(BaseAnswer):
 
     def verify(self) -> bool:
         return abs(self.pair_count - self.correct["pair_count"]) <= self.tolerance
-'''
 
-q3_id = benchmark.add_question(
-    question="How many chromosome pairs are in a normal human somatic cell?",
-    raw_answer="23",
-    answer_template=template_q3,
-)
-print(f"Q3 added: {q3_id[:50]}...")
+benchmark.update_template(q3_id, Answer)
+print(f"Q3 added with template: {q3_id[:50]}...")
 ```
 
 For measurements where approximate answers are acceptable, increase the tolerance. Here is the same pattern applied to a temperature question with a `float` field:
 
 ```python
 # Example: numeric tolerance with float
-tolerance_example = '''class Answer(BaseAnswer):
+class Answer(BaseAnswer):
     temperature: float = Field(
         description=(
             "The boiling point temperature stated in the response, in degrees "
@@ -190,7 +197,7 @@ tolerance_example = '''class Answer(BaseAnswer):
 
     def verify(self) -> bool:
         return abs(self.temperature - self.correct["temperature"]) <= self.tolerance
-'''
+
 print("Tolerance example defined (not added to benchmark)")
 ```
 
@@ -202,7 +209,10 @@ print("Tolerance example defined (not added to benchmark)")
 When the judge might return a value in various formats, use `re.search()` in `verify()` to extract the relevant portion before comparison.
 
 ```python
-template_q4 = '''import re
+q4_id = benchmark.add_question(
+    question="What is the PubMed ID for the original CRISPR-Cas9 paper by Jinek et al. (2012)?",
+    raw_answer="PMID: 22745249",
+)
 
 class Answer(BaseAnswer):
     pubmed_id: str = Field(
@@ -218,18 +228,13 @@ class Answer(BaseAnswer):
 
     def verify(self) -> bool:
         # Extract digits from whatever format the judge returned
-        match = re.search(r"\\d{6,9}", self.pubmed_id)
+        match = re.search(r"\d{6,9}", self.pubmed_id)
         if not match:
             return False
         return match.group() == self.correct["pubmed_id"]
-'''
 
-q4_id = benchmark.add_question(
-    question="What is the PubMed ID for the original CRISPR-Cas9 paper by Jinek et al. (2012)?",
-    raw_answer="PMID: 22745249",
-    answer_template=template_q4,
-)
-print(f"Q4 added: {q4_id[:50]}...")
+benchmark.update_template(q4_id, Answer)
+print(f"Q4 added with template: {q4_id[:50]}...")
 ```
 
 Using `re.search()` in `verify()` is useful when the judge might extract the value in various formats. Here, whether the judge returns "22745249", "PMID: 22745249", or "PMID:22745249", the regex extracts the numeric portion for comparison.
@@ -239,7 +244,12 @@ Using `re.search()` in `verify()` is useful when the judge might extract the val
 For questions with multiple dimensions to evaluate, use several fields with both `verify()` (all-or-nothing) and `verify_granular()` (partial credit). Extract each check into a private helper method for clarity.
 
 ```python
-template_q5 = '''class Answer(BaseAnswer):
+q5_id = benchmark.add_question(
+    question="Describe the mechanism of action of imatinib.",
+    raw_answer="Imatinib is a tyrosine kinase inhibitor that selectively targets BCR-ABL.",
+)
+
+class Answer(BaseAnswer):
     drug_class: str = Field(
         description=(
             "The pharmacological class of imatinib as described in the response "
@@ -291,14 +301,9 @@ template_q5 = '''class Answer(BaseAnswer):
             self._check_selectivity(),
         ]
         return sum(checks) / len(checks)
-'''
 
-q5_id = benchmark.add_question(
-    question="Describe the mechanism of action of imatinib.",
-    raw_answer="Imatinib is a tyrosine kinase inhibitor that selectively targets BCR-ABL.",
-    answer_template=template_q5,
-)
-print(f"Q5 added: {q5_id[:50]}...")
+benchmark.update_template(q5_id, Answer)
+print(f"Q5 added with template: {q5_id[:50]}...")
 ```
 
 The pipeline calls `verify()` for the pass/fail result used in scoring. `verify_granular()` provides a 0.0--1.0 score for finer-grained analysis — here, getting 2 out of 3 checks correct yields 0.67 instead of a flat failure.

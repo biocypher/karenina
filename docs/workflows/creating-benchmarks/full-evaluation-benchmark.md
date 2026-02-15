@@ -30,6 +30,10 @@ This scenario combines templates and rubrics for comprehensive evaluation. Templ
 # No mocking needed — all examples create Benchmark objects locally.
 import tempfile
 from pathlib import Path
+
+from pydantic import Field
+
+from karenina.schemas.entities import BaseAnswer
 ```
 
 ---
@@ -54,7 +58,12 @@ Each question gets a template that defines how to check correctness. Templates h
 ### Question 1: Boolean Decomposition
 
 ```python
-template_q1 = '''class Answer(BaseAnswer):
+q1_id = benchmark.add_question(
+    question="What is the approved pharmacological target of trastuzumab?",
+    raw_answer="HER2 (ERBB2), which is overexpressed in certain breast cancers",
+)
+
+class Answer(BaseAnswer):
     identifies_her2: bool = Field(
         description=(
             "True if the response identifies HER2 (including ERBB2, ErbB-2, or "
@@ -80,20 +89,20 @@ template_q1 = '''class Answer(BaseAnswer):
     def verify_granular(self) -> float:
         matches = sum(1 for f in self.correct if getattr(self, f) == self.correct[f])
         return matches / len(self.correct)
-'''
 
-q1_id = benchmark.add_question(
-    question="What is the approved pharmacological target of trastuzumab?",
-    raw_answer="HER2 (ERBB2), which is overexpressed in certain breast cancers",
-    answer_template=template_q1,
-)
-print(f"Q1 added: {q1_id[:50]}...")
+benchmark.update_template(q1_id, Answer)
+print(f"Q1 added with template: {q1_id[:50]}...")
 ```
 
 ### Question 2: String Normalization
 
 ```python
-template_q2 = '''class Answer(BaseAnswer):
+q2_id = benchmark.add_question(
+    question="What class of drug is metformin?",
+    raw_answer="Biguanide",
+)
+
+class Answer(BaseAnswer):
     drug_class: str = Field(
         description=(
             "The pharmacological class of metformin as stated in the response, "
@@ -103,20 +112,20 @@ template_q2 = '''class Answer(BaseAnswer):
 
     def verify(self) -> bool:
         return self.drug_class.strip().lower() == "biguanide"
-'''
 
-q2_id = benchmark.add_question(
-    question="What class of drug is metformin?",
-    raw_answer="Biguanide",
-    answer_template=template_q2,
-)
-print(f"Q2 added: {q2_id[:50]}...")
+benchmark.update_template(q2_id, Answer)
+print(f"Q2 added with template: {q2_id[:50]}...")
 ```
 
 ### Question 3: Multi-Field Template
 
 ```python
-template_q3 = '''class Answer(BaseAnswer):
+q3_id = benchmark.add_question(
+    question="Describe how aspirin works as an anti-inflammatory.",
+    raw_answer="Aspirin irreversibly inhibits cyclooxygenase (COX) enzymes, reducing prostaglandin synthesis and thereby decreasing inflammation.",
+)
+
+class Answer(BaseAnswer):
     mechanism: str = Field(
         description=(
             "A brief summary of how aspirin reduces inflammation, as described "
@@ -139,14 +148,9 @@ template_q3 = '''class Answer(BaseAnswer):
     def verify(self) -> bool:
         enzyme_correct = self.target_enzyme.strip().upper() in ("COX", "CYCLOOXYGENASE")
         return enzyme_correct and self.mentions_irreversible
-'''
 
-q3_id = benchmark.add_question(
-    question="Describe how aspirin works as an anti-inflammatory.",
-    raw_answer="Aspirin irreversibly inhibits cyclooxygenase (COX) enzymes, reducing prostaglandin synthesis and thereby decreasing inflammation.",
-    answer_template=template_q3,
-)
-print(f"Q3 added: {q3_id[:50]}...")
+benchmark.update_template(q3_id, Answer)
+print(f"Q3 added with template: {q3_id[:50]}...")
 ```
 
 ## Add Global Rubric Traits

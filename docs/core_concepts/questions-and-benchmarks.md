@@ -107,7 +107,6 @@ benchmark.add_question(
 ### 3. Attach Templates
 
 ```python
-template_code = '''
 from pydantic import Field
 from karenina.schemas.entities import BaseAnswer
 
@@ -125,9 +124,8 @@ class Answer(BaseAnswer):
 
     def verify(self) -> bool:
         return self.target.strip().upper() == self.correct["target"].upper()
-'''
 
-benchmark.add_answer_template(question_id, template_code)
+benchmark.add_answer_template(question_id, Answer)
 ```
 
 ### 4. Add Rubric Traits (Optional)
