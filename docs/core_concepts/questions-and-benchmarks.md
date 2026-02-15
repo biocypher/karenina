@@ -112,7 +112,13 @@ from pydantic import Field
 from karenina.schemas.entities import BaseAnswer
 
 class Answer(BaseAnswer):
-    target: str = Field(description="The drug target mentioned in the response")
+    target: str = Field(
+        description=(
+            "The protein target of the drug as stated in the response. Use the "
+            "standard gene symbol in uppercase without hyphens (e.g., 'BCL2' not "
+            "'Bcl-2'). If multiple targets are mentioned, extract the primary one."
+        )
+    )
 
     def model_post_init(self, __context):
         self.correct = {"target": "BCL2"}
