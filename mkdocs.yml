@@ -155,40 +155,40 @@ nav:
       - MCP Overview: core_concepts/mcp-overview.md
       - Manual Interface: core_concepts/manual-interface.md
   - Workflows:
-    - workflows.md
+    - workflows/index.md
     - Configuration:
-      - Overview: configuration/index.md
-      - Environment Variables: configuration/environment-variables.md
-      - Presets: configuration/presets.md
+      - Overview: workflows/configuration/index.md
+      - Environment Variables: workflows/configuration/environment-variables.md
+      - Presets: workflows/configuration/presets.md
     - Creating Benchmarks:
-      - Overview: 05-creating-benchmarks/index.md
+      - Overview: workflows/creating-benchmarks/index.md
       - Creating a Checkpoint: notebooks/creating-benchmarks/creating-checkpoint.ipynb
       - Adding Questions: notebooks/creating-benchmarks/adding-questions.ipynb
-      - Classifying with Adele: 05-creating-benchmarks/classifying-with-adele.md
-      - Generating Templates: 05-creating-benchmarks/generating-templates.md
+      - Classifying with Adele: workflows/creating-benchmarks/classifying-with-adele.md
+      - Generating Templates: workflows/creating-benchmarks/generating-templates.md
       - Writing Templates: notebooks/creating-benchmarks/writing-templates.ipynb
       - Defining Rubrics: notebooks/creating-benchmarks/defining-rubrics.ipynb
-      - Few-Shot Examples: 05-creating-benchmarks/few-shot-examples.md
+      - Few-Shot Examples: workflows/creating-benchmarks/few-shot-examples.md
       - Saving Benchmarks: notebooks/creating-benchmarks/saving-benchmarks.ipynb
     - Running Verification:
-      - Overview: 06-running-verification/index.md
+      - Overview: workflows/running-verification/index.md
       - Loading a Benchmark: notebooks/running-verification/loading-benchmark.ipynb
       - Verification Config: notebooks/running-verification/verification-config.ipynb
-      - Prompt Config: 06-running-verification/prompt-config.md
-      - Response Quality Checks: 06-running-verification/response-quality-checks.md
-      - Using Presets: 06-running-verification/using-presets.md
+      - Prompt Config: workflows/running-verification/prompt-config.md
+      - Response Quality Checks: workflows/running-verification/response-quality-checks.md
+      - Using Presets: workflows/running-verification/using-presets.md
       - Python API: notebooks/running-verification/python-api.ipynb
-      - CLI: 06-running-verification/cli.md
-      - Manual Interface: 06-running-verification/manual-interface.md
+      - CLI: workflows/running-verification/cli.md
+      - Manual Interface: workflows/running-verification/manual-interface.md
       - Multi-Model: notebooks/running-verification/multi-model.ipynb
-      - MCP Verification: 06-running-verification/mcp-verification.md
-      - Database Persistence: 06-running-verification/database-persistence.md
+      - MCP Verification: workflows/running-verification/mcp-verification.md
+      - Database Persistence: workflows/running-verification/database-persistence.md
     - Analyzing Results:
-      - Overview: 07-analyzing-results/index.md
-      - Verification Result: 07-analyzing-results/verification-result.md
+      - Overview: workflows/analyzing-results/index.md
+      - Verification Result: workflows/analyzing-results/verification-result.md
       - DataFrame Analysis: notebooks/analyzing-results/dataframe-analysis.ipynb
-      - Exporting: 07-analyzing-results/exporting.md
-      - Iterating: 07-analyzing-results/iterating.md
+      - Exporting: workflows/analyzing-results/exporting.md
+      - Iterating: workflows/analyzing-results/iterating.md
   - Reference:
     - reference/index.md
     - Configuration Reference:
@@ -210,18 +210,18 @@ nav:
   - Advanced:
     - advanced.md
     - Pipeline:
-      - Overview: 11-advanced-pipeline/index.md
-      - Stages: 11-advanced-pipeline/stages.md
-      - Deep Judgment (Templates): 11-advanced-pipeline/deep-judgment-templates.md
-      - Deep Judgment (Rubrics): 11-advanced-pipeline/deep-judgment-rubrics.md
-      - Prompt Assembly: 11-advanced-pipeline/prompt-assembly.md
-      - Custom Stages: 11-advanced-pipeline/custom-stages.md
+      - Overview: advanced-pipeline/index.md
+      - Stages: advanced-pipeline/stages.md
+      - Deep Judgment (Templates): advanced-pipeline/deep-judgment-templates.md
+      - Deep Judgment (Rubrics): advanced-pipeline/deep-judgment-rubrics.md
+      - Prompt Assembly: advanced-pipeline/prompt-assembly.md
+      - Custom Stages: advanced-pipeline/custom-stages.md
     - Adapters:
-      - Overview: 12-advanced-adapters/index.md
-      - Ports: 12-advanced-adapters/ports.md
-      - Available Adapters: 12-advanced-adapters/available-adapters.md
-      - MCP Integration: 12-advanced-adapters/mcp-integration.md
-      - Writing Adapters: 12-advanced-adapters/writing-adapters.md
+      - Overview: advanced-adapters/index.md
+      - Ports: advanced-adapters/ports.md
+      - Available Adapters: advanced-adapters/available-adapters.md
+      - MCP Integration: advanced-adapters/mcp-integration.md
+      - Writing Adapters: advanced-adapters/writing-adapters.md
   - Contributing:
     - contributing.md
 
