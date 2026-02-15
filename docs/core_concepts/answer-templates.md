@@ -186,23 +186,99 @@ The embedding check result is stored alongside the template result — it does n
 
 ## Writing Good Field Descriptions
 
-Field descriptions are the **instructions the Judge LLM follows** when parsing a response. Clear descriptions lead to accurate extraction.
+### What the Judge Sees
 
-**Good descriptions** are specific and unambiguous:
+When the Judge LLM parses a response, it receives the JSON schema derived from your template — field names, types, and descriptions. The system prompt tells it: *"Each field's description is authoritative for what and how to extract. Follow field descriptions precisely."* This means your description **is** your specification. A vague description produces unreliable extractions because the judge has no other guidance for what you want.
 
-    # Good: tells the judge exactly what to look for
-    target: str = Field(description="The protein target of the drug mentioned in the response")
+### Two Strategies for Field Design
 
-    # Good: specifies format expectations
-    count: int = Field(description="The total count of items listed in the response, as an integer")
+There are two equally valid approaches to designing template fields. Choose based on what you need from the evaluation.
 
-**Weak descriptions** are vague or redundant:
+**Strategy 1: Boolean presence checks** — Use `bool` fields to check whether a concept appears in the response. This sidesteps string matching and normalization entirely. Best when you care about presence or absence, not the exact extracted text.
 
-    # Weak: too vague
-    target: str = Field(description="The target")
+```python
+class Answer(BaseAnswer):
+    identifies_bcl2_as_target: bool = Field(
+        description=(
+            "True if the response identifies BCL2 (including variants like Bcl-2, "
+            "BCL-2, or B-cell lymphoma 2) as the direct pharmacological target of "
+            "the drug. False if BCL2 is mentioned only as a pathway member or if "
+            "a different protein is identified as the primary target."
+        )
+    )
+```
 
-    # Weak: repeats the field name without adding guidance
-    count: int = Field(description="The count")
+This description specifies accepted name variants, distinguishes direct target from pathway mention, and tells the judge how to handle the ambiguous case (mentioned but not as primary target).
+
+**Strategy 2: String extraction with format expectations** — Use `str` fields when you need the actual extracted text for downstream analysis or complex verification logic. When using strings, always specify the expected format.
+
+```python
+class Answer(BaseAnswer):
+    gene_symbol: str = Field(
+        description=(
+            "The official HGNC gene symbol for the drug's molecular target, as stated "
+            "or implied in the response. Use uppercase without hyphens (e.g., 'BCL2' "
+            "not 'Bcl-2', 'TP53' not 'p53'). If multiple targets are mentioned, "
+            "extract the primary target — the one described as the direct binding partner."
+        )
+    )
+```
+
+This description specifies the format (HGNC standard, uppercase, no hyphens), provides normalization examples, and handles multi-target disambiguation.
+
+### Lists vs Boolean Decomposition
+
+When you expect a set of items (proteins, symptoms, references), you have two approaches.
+
+**`list[str]` extraction** — Use when the set of expected items is open-ended or you need the actual extracted terms for downstream analysis. Requires normalization in `verify()`.
+
+```python
+class Answer(BaseAnswer):
+    signaling_proteins: list[str] = Field(
+        description=(
+            "All proteins explicitly named as part of the signaling pathway in the "
+            "response. Use standard gene symbols in uppercase (e.g., 'EGFR', 'KRAS'). "
+            "Include only proteins the response explicitly associates with the pathway, "
+            "not proteins mentioned in other contexts."
+        )
+    )
+```
+
+**Boolean decomposition** (often simpler) — Use when you have a known set of expected items. Each field is an independent, unambiguous check. No string matching is needed in `verify()`, and you get per-item partial credit automatically.
+
+```python
+class Answer(BaseAnswer):
+    mentions_egfr: bool = Field(
+        description=(
+            "True if the response names EGFR (or ErbB1, HER1) as part of the "
+            "signaling pathway. False if EGFR is not mentioned or is mentioned "
+            "only outside the pathway context."
+        )
+    )
+    mentions_kras: bool = Field(
+        description=(
+            "True if the response names KRAS (or K-Ras, K-RAS) as part of the "
+            "signaling pathway. False otherwise."
+        )
+    )
+    mentions_braf: bool = Field(
+        description=(
+            "True if the response names BRAF (or B-Raf, B-RAF) as part of the "
+            "signaling pathway. False otherwise."
+        )
+    )
+```
+
+Each field is self-contained, accepts known synonyms, and `verify()` is trivial — `all(...)` for strict, `sum(...)/len(...)` for partial credit. The boolean approach avoids set comparison, string normalization, and gives you granular per-item results.
+
+### Anatomy of a Good Description
+
+Every field description should address four elements:
+
+- **What to extract**: What specific information, not just "the answer"
+- **Format expectations**: How to represent it — case, notation, units, naming standard
+- **Scope boundaries**: What counts and what doesn't — context restrictions, inclusion/exclusion rules
+- **Disambiguation**: How to handle ambiguity — multiple candidates, indirect mentions, edge cases
 
 ## Next Steps
 

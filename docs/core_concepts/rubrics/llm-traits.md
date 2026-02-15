@@ -165,31 +165,113 @@ print(clarity_trait.validate_score(True))  # False - booleans rejected for score
 
 ## Writing Effective Descriptions
 
-The trait description is what the parsing model reads to decide how to evaluate. Good descriptions are specific and include clear criteria.
+### What the Judge Sees
 
-**For boolean traits:**
+The judge receives the original question, the model's full response, and your trait description. It uses *only* your description to decide how to evaluate — there are no other criteria. The system prompt tells it to evaluate each trait "based on its specific criteria," which comes entirely from what you write in the description field. A vague description like "Is the response good?" gives the judge no actionable criteria.
 
-    Good: "Answer True if the response provides at least one specific example
-    to illustrate the concept. Answer False if the response is purely abstract
-    with no concrete examples."
+### Boolean Traits: Concrete Criteria and Edge Cases
 
-    Weak: "Does the answer have examples?"
+A good boolean description defines exactly what evidence makes the answer True or False, including the cases that are hardest to classify.
 
-**For score traits:**
+```python
+LLMRubricTrait(
+    name="Mechanistic Explanation",
+    description=(
+        "Answer True if the response explains the biological mechanism of action — "
+        "specifically HOW the drug interacts with its target at the molecular level "
+        "(e.g., binds to the BH3 domain, inhibits kinase activity, blocks receptor "
+        "dimerization). Simply naming the target without explaining the interaction "
+        "mechanism counts as False. Mentioning downstream effects (e.g., 'induces "
+        "apoptosis') without explaining the direct molecular interaction also counts "
+        "as False."
+    ),
+    kind="boolean",
+    higher_is_better=True,
+)
+```
 
-    Good: "Rate the conciseness of the response from 1 to 5.
-    1 = extremely verbose, includes much irrelevant information.
-    3 = reasonably concise but could be tighter.
-    5 = optimally concise, every sentence contributes to the answer."
+This description provides concrete examples of what True looks like and explicitly addresses the boundary cases (naming without explaining, downstream effects without mechanism) that would otherwise be ambiguous.
 
-    Weak: "How concise is it?"
+```python
+LLMRubricTrait(
+    name="Cites Primary Literature",
+    description=(
+        "Answer True if the response references at least one specific published study "
+        "by providing author names, journal names, or publication years (e.g., "
+        "'Tsujimoto et al., 1985' or 'published in Nature'). Generic references like "
+        "'studies have shown' or 'research suggests' without specific attributions "
+        "count as False."
+    ),
+    kind="boolean",
+    higher_is_better=True,
+)
+```
 
-**Key principles:**
+This description defines what "cites" means concretely — specific names, journals, or years — and draws a clear boundary against generic attributions.
 
-- **Be explicit** about what `True`/`False` or each score level means
-- **Anchor the scale** by describing what the extremes represent
-- **Provide context** for middle values when helpful
-- **Use the trait description** to tell the LLM exactly what to look for
+### Choosing Between Score and Literal
+
+If you can define distinct, named levels with observable criteria, use a **literal trait** — the judge classifies into a named category, which is more reliable than picking a number on a scale. Use **score** when the quality is genuinely continuous or when the levels aren't cleanly separable.
+
+**Literal trait** — each class has observable criteria and clear boundaries:
+
+```python
+LLMRubricTrait(
+    name="Clinical Relevance",
+    description="Rate how clinically relevant the response is for a practicing oncologist.",
+    kind="literal",
+    classes={
+        "theoretical": (
+            "Purely theoretical with no connection to clinical practice — discusses "
+            "only molecular biology, pathway diagrams, or in-vitro findings"
+        ),
+        "general_clinical": (
+            "Mentions clinical context but lacks specifics — e.g., 'used in cancer "
+            "treatment' without naming indications, patient populations, or regimens"
+        ),
+        "specific_clinical": (
+            "Names specific indications (e.g., CLL, AML) or patient populations, "
+            "but does not discuss treatment protocols or clinical data"
+        ),
+        "practice_level": (
+            "Discusses dosing, treatment lines, combination regimens, or compares "
+            "to standard-of-care options"
+        ),
+        "evidence_based": (
+            "Integrates clinical trial data, response rates, survival outcomes, "
+            "or references treatment guidelines (e.g., NCCN)"
+        ),
+    },
+    higher_is_better=True,
+)
+```
+
+Each class describes what's observable in the text, not abstract quality levels. The boundaries are clear — "names specific indications" separates `specific_clinical` from `general_clinical`.
+
+**Score trait** — for genuinely continuous qualities:
+
+```python
+LLMRubricTrait(
+    name="Explanation Depth",
+    description=(
+        "Rate how deeply the response explains the underlying biology. "
+        "1 = surface-level, only states the conclusion (e.g., 'BCL2 is important in cancer'). "
+        "3 = provides supporting detail (e.g., names the pathway and its role). "
+        "5 = thorough mechanistic explanation with molecular-level detail and context."
+    ),
+    kind="score",
+    higher_is_better=True,
+)
+```
+
+This score description anchors the scale at 1, 3, and 5 with concrete examples, leaving room for the judge to interpolate. Use score when the quality doesn't have crisp categorical boundaries.
+
+### Principles
+
+- **Concrete criteria**: What evidence in the text would make you assign True/False or each score level?
+- **Observable behaviors**: Describe what's *in the text*, not abstract qualities like "good" or "thorough"
+- **Edge case boundaries**: Explicitly address the cases that are hardest to classify
+- **Mutual exclusivity** (for literal traits): Class descriptions should make it clear where one category ends and the next begins
 
 ## The `higher_is_better` Field
 
@@ -224,8 +306,11 @@ Deep judgment enhances LLM trait evaluation by extracting **evidence** from the 
 evidence_trait = LLMRubricTrait(
     name="Scientific Context",
     description=(
-        "Answer True if the response provides scientific context, terminology, "
-        "or references to scientific knowledge. Answer False otherwise."
+        "Answer True if the response provides scientific context — references to "
+        "biological mechanisms, pathway names, experimental findings, or published "
+        "studies. Answer False if the response contains only general statements "
+        "without scientific grounding (e.g., 'it is used in medicine' with no "
+        "specifics about how or why)."
     ),
     kind="boolean",
     higher_is_better=True,
@@ -297,8 +382,10 @@ quality_rubric = Rubric(
         LLMRubricTrait(
             name="Safe Response",
             description=(
-                "Answer True if the response is safe and appropriate. "
-                "Answer False if it contains harmful or misleading content."
+                "Answer True if the response is safe and appropriate for a general "
+                "audience — no harmful instructions, no medically dangerous misinformation, "
+                "and no offensive language. Answer False if any of these are present, "
+                "even if the rest of the content is accurate."
             ),
             kind="boolean",
             higher_is_better=True,
@@ -306,7 +393,10 @@ quality_rubric = Rubric(
         LLMRubricTrait(
             name="Clarity",
             description=(
-                "Rate clarity from 1 (very confusing) to 5 (crystal clear)."
+                "Rate how clear and understandable the response is. "
+                "1 = very confusing, hard to follow, or uses jargon without explanation. "
+                "3 = adequate, understandable but could be better organized. "
+                "5 = exceptionally clear, well-structured, easy to follow on first read."
             ),
             kind="score",
             higher_is_better=True,
@@ -314,7 +404,10 @@ quality_rubric = Rubric(
         LLMRubricTrait(
             name="Conciseness",
             description=(
-                "Rate conciseness from 1 (extremely verbose) to 5 (optimally concise)."
+                "Rate conciseness of the response. "
+                "1 = extremely verbose with significant repetition or filler. "
+                "3 = reasonably concise but could be tighter. "
+                "5 = optimally concise, every sentence contributes to the answer."
             ),
             kind="score",
             higher_is_better=True,
