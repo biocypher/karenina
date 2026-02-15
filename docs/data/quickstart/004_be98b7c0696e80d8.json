@@ -17,7 +17,7 @@
   "response": {
     "content": [
       {
-        "id": "toolu_01Ro6PQvrK6wPztEoP4q5veQ",
+        "id": "toolu_01Cxo8rs5Lc3JQffam9pd7Lf",
         "input": {
           "field_descriptions": [
             {
@@ -27,10 +27,13 @@
           ]
         },
         "name": "AttributeDescriptions",
-        "type": "tool_use"
+        "type": "tool_use",
+        "caller": {
+          "type": "direct"
+        }
       }
     ],
-    "id": "lc_run--e2a43dc9-e961-4472-8276-5cc0b48eda30-0",
+    "id": "lc_run--e99a865d-e37a-4534-80cc-e29be6ec91fe-0",
     "tool_calls": [
       {
         "name": "AttributeDescriptions",
@@ -42,7 +45,7 @@
             }
           ]
         },
-        "id": "toolu_01Ro6PQvrK6wPztEoP4q5veQ",
+        "id": "toolu_01Cxo8rs5Lc3JQffam9pd7Lf",
         "type": "tool_call"
       }
     ],

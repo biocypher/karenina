@@ -207,15 +207,20 @@ from karenina.schemas.entities import BaseAnswer
 
 
 class Answer(BaseAnswer):
-    is_bcl2: bool = Field(
-        description="Whether the response identifies BCL2 as the putative target of the drug"
+    identifies_bcl2_as_target: bool = Field(
+        description=(
+            "True if the response identifies BCL2 (including Bcl-2, BCL-2, or "
+            "B-cell lymphoma 2) as the direct pharmacological target. False if "
+            "BCL2 is mentioned only as a pathway member or a different protein "
+            "is identified as the primary target."
+        )
     )
 
     def model_post_init(self, __context):
-        self.correct = {"is_bcl2": True}
+        self.correct = {"identifies_bcl2_as_target": True}
 
     def verify(self) -> bool:
-        return self.is_bcl2 == self.correct["is_bcl2"]
+        return self.identifies_bcl2_as_target == self.correct["identifies_bcl2_as_target"]
 
 
 benchmark.update_template(question_ids[1], Answer)
@@ -261,7 +266,11 @@ benchmark.add_question_rubric_trait(
     venetoclax_qid,
     RegexTrait(
         name="Contains BCL2",
-        description="The response must mention BCL2",
+        description=(
+            "The response explicitly mentions the gene symbol BCL2 (exact case-sensitive "
+            "match). This verifies the model uses the standard HGNC symbol rather than "
+            "only informal variants like 'Bcl-2' or 'B-cell lymphoma 2'."
+        ),
         pattern=r"\bBCL2\b",
         case_sensitive=True,
     ),

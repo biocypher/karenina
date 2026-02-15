@@ -17,34 +17,37 @@
   "response": {
     "content": [
       {
-        "id": "toolu_015oXCsxojBRDActtsxbD2rp",
+        "id": "toolu_01W5QksWeutW1T2eJimiones",
         "input": {
           "attributes": [
             {
-              "name": "hemoglobin_a_subunit_count",
+              "name": "num_protein_subunits",
               "type": "int",
               "ground_truth": 4
             }
           ]
         },
         "name": "GroundTruthSpec",
-        "type": "tool_use"
+        "type": "tool_use",
+        "caller": {
+          "type": "direct"
+        }
       }
     ],
-    "id": "lc_run--2a9c844d-47aa-48de-a6da-6ce51b49f928-0",
+    "id": "lc_run--e52302e4-a269-4e26-802c-5a5a1d18961d-0",
     "tool_calls": [
       {
         "name": "GroundTruthSpec",
         "args": {
           "attributes": [
             {
-              "name": "hemoglobin_a_subunit_count",
+              "name": "num_protein_subunits",
               "type": "int",
               "ground_truth": 4
             }
           ]
         },
-        "id": "toolu_015oXCsxojBRDActtsxbD2rp",
+        "id": "toolu_01W5QksWeutW1T2eJimiones",
         "type": "tool_call"
       }
     ],

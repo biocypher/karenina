@@ -17,7 +17,7 @@
   "response": {
     "content": [
       {
-        "id": "toolu_01FoTg96M1qqGh5fb3rifAXw",
+        "id": "toolu_01FFFCmTDoRKzkz28sAN5vt3",
         "input": {
           "attributes": [
             {
@@ -28,10 +28,13 @@
           ]
         },
         "name": "GroundTruthSpec",
-        "type": "tool_use"
+        "type": "tool_use",
+        "caller": {
+          "type": "direct"
+        }
       }
     ],
-    "id": "lc_run--419be9b6-845a-4683-ba64-71314f060831-0",
+    "id": "lc_run--22c94a08-f5d5-48a9-b663-dcc4d8ff9f4c-0",
     "tool_calls": [
       {
         "name": "GroundTruthSpec",
@@ -44,7 +47,7 @@
             }
           ]
         },
-        "id": "toolu_01FoTg96M1qqGh5fb3rifAXw",
+        "id": "toolu_01FFFCmTDoRKzkz28sAN5vt3",
         "type": "tool_call"
       }
     ],
