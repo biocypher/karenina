@@ -168,17 +168,12 @@ nav:
       - Scaled Authoring: notebooks/creating-benchmarks/scaled-authoring.ipynb
     - Running Verification:
       - Overview: workflows/running-verification/index.md
-      - Loading a Benchmark: notebooks/running-verification/loading-benchmark.ipynb
-      - Verification Config: notebooks/running-verification/verification-config.ipynb
-      - Prompt Config: workflows/running-verification/prompt-config.md
-      - Response Quality Checks: workflows/running-verification/response-quality-checks.md
-      - Using Presets: workflows/running-verification/using-presets.md
-      - Python API: notebooks/running-verification/python-api.ipynb
-      - CLI: workflows/running-verification/cli.md
-      - Manual Interface: workflows/running-verification/manual-interface.md
-      - Multi-Model: notebooks/running-verification/multi-model.ipynb
-      - MCP Verification: workflows/running-verification/mcp-verification.md
-      - Database Persistence: workflows/running-verification/database-persistence.md
+      - Basic Verification: notebooks/running-verification/basic-verification.ipynb
+      - Full Evaluation: notebooks/running-verification/full-evaluation.ipynb
+      - Multi-Model Comparison: notebooks/running-verification/multi-model-comparison.ipynb
+      - Deep Judgment: notebooks/running-verification/deep-judgment.ipynb
+      - MCP Agent Evaluation: notebooks/running-verification/mcp-agent-evaluation.ipynb
+      - Manual Interface: notebooks/running-verification/manual-interface-workflow.ipynb
     - Analyzing Results:
       - Overview: workflows/analyzing-results/index.md
       - Verification Result: workflows/analyzing-results/verification-result.md
