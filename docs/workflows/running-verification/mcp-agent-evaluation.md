@@ -327,8 +327,8 @@ print("CLI: karenina verify ... --preset mcp-preset.json --interface claude_agen
 
 ## Related Pages
 
-- [Basic Verification](basic-verification.md) — Non-MCP verification walkthrough
-- [Deep Judgment](deep-judgment.md) — Add deep judgment to MCP results
+- [Basic Verification](basic-verification.ipynb) — Non-MCP verification walkthrough
+- [Deep Judgment](deep-judgment.ipynb) — Add deep judgment to MCP results
 - [Adapters](../../core_concepts/adapters.md) — Full adapter comparison
 - [VerificationConfig Reference](../../reference/configuration/verification-config.md) — Trace handling fields
 

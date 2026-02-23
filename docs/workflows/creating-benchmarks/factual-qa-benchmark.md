@@ -373,7 +373,7 @@ shutil.rmtree(tmpdir, ignore_errors=True)
 
 ## Next Steps
 
-- [Full Evaluation Benchmark](full-evaluation-benchmark.md) — Add rubric traits for quality assessment
-- [Quality Assessment](quality-assessment-benchmark.md) — Rubric-only evaluation without templates
-- [Scaled Authoring](scaled-authoring.md) — Bulk workflows and auto-generation
-- [Answer Templates](../../core_concepts/answer-templates.md) — Deep dive into template concepts
+- [Full Evaluation Benchmark](full-evaluation-benchmark.ipynb) — Add rubric traits for quality assessment
+- [Quality Assessment](quality-assessment-benchmark.ipynb) — Rubric-only evaluation without templates
+- [Scaled Authoring](scaled-authoring.ipynb) — Bulk workflows and auto-generation
+- [Answer Templates](../core_concepts/answer-templates.ipynb) — Deep dive into template concepts

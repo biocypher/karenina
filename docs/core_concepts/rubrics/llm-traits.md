@@ -33,7 +33,7 @@ Two kinds are covered on this page:
 | **boolean** | `True` / `False` | Binary pass/fail judgments (safety, presence of citations) |
 | **score** | `int` in a configurable range | Gradable qualities on a scale (clarity 1-5, completeness 1-5) |
 
-For **literal** (ordered categorical classification), see the dedicated [literal traits](literal-traits.md) page.
+For **literal** (ordered categorical classification), see the dedicated [literal traits](literal-traits.ipynb) page.
 
 ## Boolean Kind
 
@@ -360,7 +360,6 @@ Extracted excerpts are validated against the actual response text using fuzzy st
 You can override per-trait deep judgment settings in `VerificationConfig`:
 
 ```python
-from karenina.schemas import VerificationConfig
 
 # deep_judgment_rubric_mode options:
 # - "disabled" (default): Deep judgment OFF for all rubric traits
@@ -369,7 +368,7 @@ from karenina.schemas import VerificationConfig
 # - "custom": Use a custom configuration dict
 ```
 
-For detailed deep judgment configuration, see [deep judgment rubrics](../../advanced-pipeline/deep-judgment-rubrics.md).
+For detailed deep judgment configuration, see [deep judgment rubrics](../../11-advanced-pipeline/deep-judgment-rubrics.md).
 
 ## Complete Example
 
@@ -427,9 +426,9 @@ for trait in quality_rubric.llm_traits:
 
 ## Next Steps
 
-- [Literal traits](literal-traits.md) -- ordered categorical classification (a specialized LLM trait kind)
-- [Regex traits](regex-traits.md) -- deterministic pattern matching
-- [Callable traits](callable-traits.md) -- custom Python functions
-- [Metric traits](metric-traits.md) -- precision, recall, F1 computation
+- [Literal traits](literal-traits.ipynb) -- ordered categorical classification (a specialized LLM trait kind)
+- [Regex traits](regex-traits.ipynb) -- deterministic pattern matching
+- [Callable traits](callable-traits.ipynb) -- custom Python functions
+- [Metric traits](metric-traits.ipynb) -- precision, recall, F1 computation
 - [Evaluation modes](../evaluation-modes.md) -- choosing when rubrics are evaluated
-- [Deep judgment rubrics](../../advanced-pipeline/deep-judgment-rubrics.md) -- advanced evidence-based evaluation
+- [Deep judgment rubrics](../../11-advanced-pipeline/deep-judgment-rubrics.md) -- advanced evidence-based evaluation

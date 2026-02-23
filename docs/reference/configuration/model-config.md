@@ -1,6 +1,6 @@
 # ModelConfig Reference
 
-This is the exhaustive reference for all `ModelConfig` fields. For a tutorial introduction with examples, see [Basic Verification](../../workflows/running-verification/basic-verification.md) and [Adapters Overview](../../core_concepts/adapters.md).
+This is the exhaustive reference for all `ModelConfig` fields. For a tutorial introduction with examples, see [Basic Verification](../../notebooks/running-verification/basic-verification.ipynb) and [Adapters Overview](../../core_concepts/adapters.md).
 
 `ModelConfig` is a Pydantic model with **19 fields** organized into 7 categories below. Import: `from karenina.schemas import ModelConfig`.
 
@@ -233,7 +233,7 @@ ModelConfig(
 ## Related
 
 - [VerificationConfig Reference](verification-config.md) — uses `ModelConfig` for `answering_models` and `parsing_models`
-- [Basic Verification](../../workflows/running-verification/basic-verification.md) — step-by-step configuration guide
+- [Basic Verification](../../notebooks/running-verification/basic-verification.ipynb) — step-by-step configuration guide
 - [Adapters Overview](../../core_concepts/adapters.md) — interface comparison and selection guide
 - [MCP Integration Overview](../../core_concepts/mcp-overview.md) — MCP architecture and adapter capabilities
 - [Environment Variables](../../workflows/configuration/environment-variables.md) — API keys and path configuration

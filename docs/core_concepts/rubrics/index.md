@@ -1,6 +1,6 @@
 # Rubrics
 
-Rubrics assess **qualitative traits of the raw response trace** rather than parsed, structured data. While [answer templates](../answer-templates.md) focus on *what* the model said (correctness), rubrics evaluate *how* it said it (quality dimensions like safety, conciseness, or thoroughness).
+Rubrics assess **qualitative traits of the raw response trace** rather than parsed, structured data. While [answer templates](../../notebooks/core_concepts/answer-templates.ipynb) focus on *what* the model said (correctness), rubrics evaluate *how* it said it (quality dimensions like safety, conciseness, or thoroughness).
 
 ## What Are Rubrics?
 
@@ -17,7 +17,7 @@ Unlike templates, which operate on parsed structured data via `verify()`, rubric
 
 | Use Case | Choose |
 |----------|--------|
-| Verify a factual answer is correct | [Answer template](../answer-templates.md) |
+| Verify a factual answer is correct | [Answer template](../../notebooks/core_concepts/answer-templates.ipynb) |
 | Assess subjective quality (clarity, conciseness) | Rubric (LLM trait) |
 | Check for required keywords or format patterns | Rubric (regex trait) |
 | Apply custom validation logic (word count, structure) | Rubric (callable trait) |
@@ -70,11 +70,11 @@ Karenina supports four types of evaluation traits, each suited for different eva
 
 | Trait Type | Returns | LLM Required | Best For |
 |------------|---------|--------------|----------|
-| [**LLMRubricTrait**](llm-traits.md) | `bool` or `int` | Yes | Subjective quality assessment (clarity, safety, tone) |
-| [**Literal traits**](literal-traits.md) | `int` (class index) | Yes | Ordered categorical classification (quality tiers, tone levels) |
-| [**RegexTrait**](regex-traits.md) | `bool` | No | Deterministic pattern matching (keywords, format compliance) |
-| [**CallableTrait**](callable-traits.md) | `bool` or `int` | No | Custom Python logic (word counts, structure checks) |
-| [**MetricRubricTrait**](metric-traits.md) | metrics dict | Yes | Extraction completeness (precision, recall, F1) |
+| [**LLMRubricTrait**](../../notebooks/core_concepts/rubrics/llm-traits.ipynb) | `bool` or `int` | Yes | Subjective quality assessment (clarity, safety, tone) |
+| [**Literal traits**](../../notebooks/core_concepts/rubrics/literal-traits.ipynb) | `int` (class index) | Yes | Ordered categorical classification (quality tiers, tone levels) |
+| [**RegexTrait**](../../notebooks/core_concepts/rubrics/regex-traits.ipynb) | `bool` | No | Deterministic pattern matching (keywords, format compliance) |
+| [**CallableTrait**](../../notebooks/core_concepts/rubrics/callable-traits.ipynb) | `bool` or `int` | No | Custom Python logic (word counts, structure checks) |
+| [**MetricRubricTrait**](../../notebooks/core_concepts/rubrics/metric-traits.ipynb) | metrics dict | Yes | Extraction completeness (precision, recall, F1) |
 
 ### LLMRubricTrait
 
@@ -83,11 +83,11 @@ LLM-evaluated traits where the parsing model uses its judgment to assess subject
 - **Boolean** -- true/false judgments (e.g., *"Is this response safe?"*)
 - **Score** -- numeric rating within a configurable range (e.g., *"Rate clarity from 1-5"*)
 
-LLM traits also support optional **deep judgment** for evidence-based evaluation with excerpt extraction and verification. See [LLM traits](llm-traits.md) for details.
+LLM traits also support optional **deep judgment** for evidence-based evaluation with excerpt extraction and verification. See [LLM traits](../../notebooks/core_concepts/rubrics/llm-traits.ipynb) for details.
 
 ### Literal Traits
 
-A specialized kind of LLM trait for **ordered categorical classification**. The LLM classifies the response into one of several predefined classes (e.g., formal/casual/technical tone, or poor/acceptable/good/excellent quality). Returns an integer index based on class order, with `higher_is_better` controlling interpretation. See [literal traits](literal-traits.md) for details.
+A specialized kind of LLM trait for **ordered categorical classification**. The LLM classifies the response into one of several predefined classes (e.g., formal/casual/technical tone, or poor/acceptable/good/excellent quality). Returns an integer index based on class order, with `higher_is_better` controlling interpretation. See [literal traits](../../notebooks/core_concepts/rubrics/literal-traits.ipynb) for details.
 
 ### RegexTrait
 
@@ -97,7 +97,7 @@ Deterministic pattern matching on the raw response text. Provides 100% reproduci
 - `case_sensitive` -- whether matching is case-sensitive (default: `True`)
 - `invert_result` -- invert the boolean result for negative matching (default: `False`)
 
-See [regex traits](regex-traits.md) for details and examples.
+See [regex traits](../../notebooks/core_concepts/rubrics/regex-traits.ipynb) for details and examples.
 
 ### CallableTrait
 
@@ -105,7 +105,7 @@ Custom Python functions serialized via cloudpickle. Supports both boolean (pass/
 
 **Security note:** Deserializing callable code can execute arbitrary Python. Only load callable traits from trusted sources.
 
-See [callable traits](callable-traits.md) for details and examples.
+See [callable traits](../../notebooks/core_concepts/rubrics/callable-traits.ipynb) for details and examples.
 
 ### MetricRubricTrait
 
@@ -114,7 +114,7 @@ Confusion matrix-based traits for measuring extraction completeness. Two evaluat
 - **tp_only** -- define what should be present; computes precision, recall, F1
 - **full_matrix** -- define both what should and should not be present; additionally computes specificity and accuracy
 
-See [metric traits](metric-traits.md) for details and examples.
+See [metric traits](../../notebooks/core_concepts/rubrics/metric-traits.ipynb) for details and examples.
 
 ## Choosing the Right Trait Type
 
@@ -141,10 +141,10 @@ This field is used by analysis tools and DataFrame builders to correctly interpr
 
 ## Next Steps
 
-- [LLM traits](llm-traits.md) -- boolean and score kinds with deep judgment
-- [Literal traits](literal-traits.md) -- ordered categorical classification
-- [Regex traits](regex-traits.md) -- deterministic pattern matching
-- [Callable traits](callable-traits.md) -- custom Python functions
-- [Metric traits](metric-traits.md) -- precision, recall, F1 computation
+- [LLM traits](../../notebooks/core_concepts/rubrics/llm-traits.ipynb) -- boolean and score kinds with deep judgment
+- [Literal traits](../../notebooks/core_concepts/rubrics/literal-traits.ipynb) -- ordered categorical classification
+- [Regex traits](../../notebooks/core_concepts/rubrics/regex-traits.ipynb) -- deterministic pattern matching
+- [Callable traits](../../notebooks/core_concepts/rubrics/callable-traits.ipynb) -- custom Python functions
+- [Metric traits](../../notebooks/core_concepts/rubrics/metric-traits.ipynb) -- precision, recall, F1 computation
 - [Evaluation modes](../evaluation-modes.md) -- template_only, template_and_rubric, rubric_only
-- [Full Evaluation Benchmark](../../workflows/creating-benchmarks/full-evaluation-benchmark.md) -- workflow guide for adding rubrics to benchmarks
+- [Full Evaluation Benchmark](../../notebooks/creating-benchmarks/full-evaluation-benchmark.ipynb) -- workflow guide for adding rubrics to benchmarks

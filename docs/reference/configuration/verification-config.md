@@ -1,6 +1,6 @@
 # VerificationConfig Reference
 
-This is the exhaustive reference for all `VerificationConfig` fields. For a tutorial introduction with examples, see [Basic Verification](../../workflows/running-verification/basic-verification.md).
+This is the exhaustive reference for all `VerificationConfig` fields. For a tutorial introduction with examples, see [Basic Verification](../../notebooks/running-verification/basic-verification.ipynb).
 
 `VerificationConfig` is a Pydantic model with **33 fields** organized into 10 categories below.
 
@@ -67,7 +67,7 @@ See [ModelConfig Reference](model-config.md) for all `ModelConfig` fields.
 | `abstention_enabled` | `bool` | `False` | Enable abstention/refusal detection. When the model refuses to answer, parsing is skipped and the result is auto-failed. |
 | `sufficiency_enabled` | `bool` | `False` | Enable response sufficiency detection. When the response lacks enough information to fill the template, parsing is skipped and the result is auto-failed. |
 
-See [Full Evaluation](../../workflows/running-verification/full-evaluation.md) for usage examples.
+See [Full Evaluation](../../notebooks/running-verification/full-evaluation.ipynb) for usage examples.
 
 ---
 
@@ -162,7 +162,7 @@ Each trait entry is validated as a `DeepJudgmentTraitConfig` with these fields:
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `few_shot_config` | `FewShotConfig \| None` | `None` | Few-shot prompting configuration. Controls example injection into prompts. See [Few-Shot Configuration](../../core_concepts/few-shot.md). |
-| `prompt_config` | `PromptConfig \| None` | `None` | Per-task prompt instruction overrides. Injects custom instructions into specific pipeline stages. See [Full Evaluation](../../workflows/running-verification/full-evaluation.md) for usage and [PromptConfig Reference](prompt-config.md) for all fields. |
+| `prompt_config` | `PromptConfig \| None` | `None` | Per-task prompt instruction overrides. Injects custom instructions into specific pipeline stages. See [Full Evaluation](../../notebooks/running-verification/full-evaluation.ipynb) for usage and [PromptConfig Reference](prompt-config.md) for all fields. |
 | `db_config` | `DBConfig \| None` | `None` | `DBConfig` instance for automatic result persistence to a database. When set, results are saved after each verification run. See DBConfig fields below. |
 
 ### DBConfig Fields

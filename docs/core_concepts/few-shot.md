@@ -256,7 +256,7 @@ VerificationConfig validates few-shot settings:
 
 ## Next Steps
 
-- [Scaled Authoring](../workflows/creating-benchmarks/scaled-authoring.md) — Few-shot examples in the benchmark authoring workflow
-- [VerificationConfig Tutorial](../workflows/running-verification/basic-verification.md) — Complete configuration setup
-- [Answer Templates](answer-templates.md) — What few-shot examples help with
+- [Scaled Authoring](../notebooks/creating-benchmarks/scaled-authoring.ipynb) — Few-shot examples in the benchmark authoring workflow
+- [VerificationConfig Tutorial](../notebooks/running-verification/basic-verification.ipynb) — Complete configuration setup
+- [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb) — What few-shot examples help with
 - [VerificationConfig Reference](../reference/configuration/verification-config.md) — Exhaustive field reference

@@ -121,7 +121,7 @@ Each stage implements `should_run(context)` to decide at runtime whether to exec
 ## Related
 
 - [Running Verification](../workflows/running-verification/index.md) — User-facing verification workflow
-- [VerificationConfig Tutorial](../workflows/running-verification/basic-verification.md) — Configuring pipeline features
+- [VerificationConfig Tutorial](../notebooks/running-verification/basic-verification.ipynb) — Configuring pipeline features
 - [Evaluation Modes](../core_concepts/evaluation-modes.md) — How modes affect stage selection
 - [VerificationResult Structure](../workflows/analyzing-results/verification-result.md) — What the pipeline produces
 - [VerificationConfig Reference](../reference/configuration/verification-config.md) — All 33 configuration fields

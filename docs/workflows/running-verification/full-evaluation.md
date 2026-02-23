@@ -139,7 +139,7 @@ benchmark = Benchmark.load(str(_tmp))
 print(f"{benchmark.name}: {benchmark.question_count} questions")
 ```
 
-For details on loading and inspecting benchmarks, see [Basic Verification](basic-verification.md).
+For details on loading and inspecting benchmarks, see [Basic Verification](basic-verification.ipynb).
 
 ---
 
@@ -309,8 +309,8 @@ for result in results:
 
 ## Related Pages
 
-- [Basic Verification](basic-verification.md) — Simpler template-only path
-- [Deep Judgment](deep-judgment.md) — Add excerpt-based reasoning to template and rubric evaluation
+- [Basic Verification](basic-verification.ipynb) — Simpler template-only path
+- [Deep Judgment](deep-judgment.ipynb) — Add excerpt-based reasoning to template and rubric evaluation
 - [VerificationConfig Reference](../../reference/configuration/verification-config.md) — All configuration fields
 - [PromptConfig Reference](../../reference/configuration/prompt-config.md) — Prompt injection points
 - [Preset Schema Reference](../../reference/configuration/preset-schema.md) — Preset JSON format

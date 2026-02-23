@@ -1,6 +1,6 @@
 # PromptConfig Reference
 
-This is the exhaustive reference for all `PromptConfig` fields. For a tutorial introduction with examples, see [Full Evaluation](../../workflows/running-verification/full-evaluation.md).
+This is the exhaustive reference for all `PromptConfig` fields. For a tutorial introduction with examples, see [Full Evaluation](../../notebooks/running-verification/full-evaluation.ipynb).
 
 `PromptConfig` is a Pydantic model with **6 fields** that inject custom user instructions into specific pipeline LLM calls. All fields are optional strings defaulting to `None`.
 
@@ -168,7 +168,7 @@ Only non-null fields need to be included — omitted fields default to `None`.
 
 ## See Also
 
-- [Full Evaluation](../../workflows/running-verification/full-evaluation.md) — when to use each field, examples, fallback logic explained
+- [Full Evaluation](../../notebooks/running-verification/full-evaluation.ipynb) — when to use each field, examples, fallback logic explained
 - [VerificationConfig Reference](verification-config.md) — the `prompt_config` field on VerificationConfig
 - [Prompt Assembly System](../../advanced-pipeline/prompt-assembly.md) — how the tri-section pattern works internally
-- [Full Evaluation (Quality Checks)](../../workflows/running-verification/full-evaluation.md) — abstention and sufficiency detection details
+- [Full Evaluation (Quality Checks)](../../notebooks/running-verification/full-evaluation.ipynb) — abstention and sufficiency detection details

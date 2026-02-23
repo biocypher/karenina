@@ -272,8 +272,8 @@ karenina verify checkpoint.jsonld --interactive --mode advanced
 
 ## Related
 
-- [Running Verification](../../workflows/running-verification/basic-verification.md) — Step-by-step guide for common verification workflows
-- [Basic Verification (Python API)](../../workflows/running-verification/basic-verification.md) — Programmatic verification alternative
+- [Running Verification](../../notebooks/running-verification/basic-verification.ipynb) — Step-by-step guide for common verification workflows
+- [Basic Verification (Python API)](../../notebooks/running-verification/basic-verification.ipynb) — Programmatic verification alternative
 - [VerificationConfig Reference](../configuration/verification-config.md) — All configuration fields
 - [Configuration Hierarchy](../../workflows/configuration/index.md) — How CLI, presets, and env vars interact
-- [Full Evaluation](../../workflows/running-verification/full-evaluation.md) — Preset loading and overrides
+- [Full Evaluation](../../notebooks/running-verification/full-evaluation.ipynb) — Preset loading and overrides

@@ -206,7 +206,7 @@ Same resolution errors as `preset show` — name not found or presets directory 
 
 ## Related
 
-- [Using Presets](../../workflows/running-verification/full-evaluation.md) — Guide to loading and overriding presets in verification workflows
+- [Using Presets](../../notebooks/running-verification/full-evaluation.ipynb) — Guide to loading and overriding presets in verification workflows
 - [Configuration Hierarchy](../../workflows/configuration/index.md) — How presets fit in the CLI > Preset > Env > Defaults chain
 - [Preset Schema Reference](../configuration/preset-schema.md) — Full preset file format documentation
 - [verify](verify.md) — The `--preset` option for loading presets during verification

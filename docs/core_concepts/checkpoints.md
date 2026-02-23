@@ -184,7 +184,7 @@ Answer templates are stored as `SoftwareSourceCode` objects inside `Question.has
 
 The `text` field contains the complete Python code as a string. At runtime, Karenina executes this code to instantiate the `Answer` class for verification. Questions without templates have no `hasPart` field.
 
-For details on writing templates, see [Answer Templates](answer-templates.md).
+For details on writing templates, see [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb).
 
 ## How Rubric Traits Are Stored
 
@@ -274,8 +274,8 @@ The current format version is `3.0.0-jsonld`. Karenina maintains backward compat
 
 ## Next Steps
 
-- [Answer Templates](answer-templates.md) — How templates evaluate correctness
+- [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb) — How templates evaluate correctness
 - [Rubrics](rubrics/index.md) — How rubric traits evaluate quality
 - [Evaluation Modes](evaluation-modes.md) — Choose between template, rubric, or combined evaluation
 - [Creating Benchmarks](../workflows/creating-benchmarks/index.md) — Build checkpoints from scratch
-- [Factual QA Benchmark](../workflows/creating-benchmarks/factual-qa-benchmark.md) — Save and round-trip checkpoints
+- [Factual QA Benchmark](../notebooks/creating-benchmarks/factual-qa-benchmark.ipynb) — Save and round-trip checkpoints

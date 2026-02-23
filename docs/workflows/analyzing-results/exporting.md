@@ -104,7 +104,7 @@ Supported extensions: `.json` (JSON format), `.csv` (CSV format). Other extensio
 
 ## DataFrame Export
 
-DataFrames built from the [DataFrame analysis](dataframe-analysis.md) workflow can be exported using standard pandas methods:
+DataFrames built from the [DataFrame analysis](../../notebooks/analyzing-results/dataframe-analysis.ipynb) workflow can be exported using standard pandas methods:
 
 ### Export to CSV
 
@@ -189,7 +189,7 @@ This returns a `dict[str, VerificationResult]` mapping result IDs to result obje
 ## Next Steps
 
 - [Understand result structure](verification-result.md) — Fields available in each result
-- [Analyze with DataFrames](dataframe-analysis.md) — Build and explore DataFrames before exporting
+- [Analyze with DataFrames](../../notebooks/analyzing-results/dataframe-analysis.ipynb) — Build and explore DataFrames before exporting
 - [Iterate on your benchmark](iterating.md) — Use exports to identify and fix failures
-- [Run verification](../running-verification/basic-verification.md) — Generate results to export
-- [CLI export](../running-verification/basic-verification.md) — Export directly from the command line with `--output`
+- [Run verification](../../notebooks/running-verification/basic-verification.ipynb) — Generate results to export
+- [CLI export](../../notebooks/running-verification/basic-verification.ipynb) — Export directly from the command line with `--output`

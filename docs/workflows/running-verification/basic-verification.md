@@ -392,8 +392,8 @@ Also configurable via `KARENINA_ASYNC_ENABLED` and `KARENINA_ASYNC_MAX_WORKERS` 
 
 ## Related Pages
 
-- [Full Evaluation](full-evaluation.md) — Add rubrics, quality checks, and presets
-- [Multi-Model Comparison](multi-model-comparison.md) — Compare models side-by-side
+- [Full Evaluation](full-evaluation.ipynb) — Add rubrics, quality checks, and presets
+- [Multi-Model Comparison](multi-model-comparison.ipynb) — Compare models side-by-side
 - [VerificationConfig Reference](../../reference/configuration/verification-config.md) — All configuration fields
 - [CLI Reference: verify](../../reference/cli/verify.md) — Full CLI options
 - [Analyzing Results](../analyzing-results/index.md) — DataFrame analysis and export

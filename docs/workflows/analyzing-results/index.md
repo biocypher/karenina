@@ -104,7 +104,7 @@ df.groupby("answering_model_name")["field_match"].mean()
 df_rubric.groupby("question_id")["trait_score"].mean()
 ```
 
-[Analyze results with DataFrames →](dataframe-analysis.md)
+[Analyze results with DataFrames →](../../notebooks/analyzing-results/dataframe-analysis.ipynb)
 
 ### 4. Export Results
 

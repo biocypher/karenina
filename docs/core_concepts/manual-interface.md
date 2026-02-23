@@ -135,7 +135,7 @@ Key configuration points:
 
 ## Next Steps
 
-- [Manual Interface Workflow](../workflows/running-verification/manual-interface-workflow.md) — Step-by-step workflow for running verification with manual traces
+- [Manual Interface Workflow](../notebooks/running-verification/manual-interface-workflow.ipynb) — Step-by-step workflow for running verification with manual traces
 - [Adapters Overview](adapters.md) — How the manual interface fits into the adapter system
-- [CLI Verification](../workflows/running-verification/manual-interface-workflow.md) — Using `--interface manual` from the command line
+- [CLI Verification](../notebooks/running-verification/manual-interface-workflow.ipynb) — Using `--interface manual` from the command line
 - [Running Verification](../workflows/running-verification/index.md) — Overview of all verification methods

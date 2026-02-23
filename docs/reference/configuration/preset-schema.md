@@ -277,6 +277,6 @@ When loading by name (not path), `resolve_preset_path()` searches the presets di
 ## Related
 
 - [Presets Tutorial](../../workflows/configuration/presets.md) — creating, loading, and managing presets
-- [Using Presets in Verification](../../workflows/running-verification/full-evaluation.md) — preset workflows
+- [Using Presets in Verification](../../notebooks/running-verification/full-evaluation.ipynb) — preset workflows
 - [VerificationConfig Reference](verification-config.md) — complete `config` object fields
 - [ModelConfig Reference](model-config.md) — model configuration fields within presets

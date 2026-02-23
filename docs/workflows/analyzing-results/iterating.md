@@ -359,7 +359,7 @@ benchmark.save_to_db("sqlite:///dbs/benchmarks.db")
 ## Next Steps
 
 - [VerificationResult Structure](verification-result.md) — Understand all available result fields
-- [DataFrame Analysis](dataframe-analysis.md) — Detailed DataFrame analysis patterns
+- [DataFrame Analysis](../../notebooks/analyzing-results/dataframe-analysis.ipynb) — Detailed DataFrame analysis patterns
 - [Exporting Results](exporting.md) — Save results for sharing or archival
-- [Factual QA Benchmark](../creating-benchmarks/factual-qa-benchmark.md) — Template patterns for complex verify logic
-- [Full Evaluation Benchmark](../creating-benchmarks/full-evaluation-benchmark.md) — Creating and modifying rubric traits
+- [Factual QA Benchmark](../../notebooks/creating-benchmarks/factual-qa-benchmark.ipynb) — Template patterns for complex verify logic
+- [Full Evaluation Benchmark](../../notebooks/creating-benchmarks/full-evaluation-benchmark.ipynb) — Creating and modifying rubric traits

@@ -36,7 +36,7 @@ Choose the path that matches your goal:
 | [Questions & Benchmarks](../core_concepts/questions-and-benchmarks.md) | The central objects: questions bundled with templates, rubrics, and metadata |
 | [Checkpoints](../core_concepts/checkpoints.md) | The JSON-LD benchmark format: questions, templates, rubrics, and metadata |
 | [Templates vs Rubrics](../core_concepts/template-vs-rubric.md) | The two evaluation units: correctness (templates) vs quality (rubrics) |
-| [Answer Templates](../core_concepts/answer-templates.md) | Pydantic models that define how a Judge LLM evaluates correctness |
+| [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb) | Pydantic models that define how a Judge LLM evaluates correctness |
 | [Rubrics](../core_concepts/rubrics/index.md) | Quality assessment with four trait types: LLM, regex, callable, metric |
 | [Evaluation Modes](../core_concepts/evaluation-modes.md) | Template-only, template-and-rubric, and rubric-only evaluation |
 | [Verification Pipeline](../core_concepts/verification-pipeline.md) | The 13-stage engine that executes evaluation end to end |

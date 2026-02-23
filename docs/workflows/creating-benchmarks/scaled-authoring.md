@@ -339,9 +339,9 @@ Save checkpoint
 
 ## Next Steps
 
-- [Factual QA Benchmark](factual-qa-benchmark.md) — Detailed template patterns (boolean, numeric, regex)
-- [Full Evaluation Benchmark](full-evaluation-benchmark.md) — Add rubric traits alongside templates
-- [Quality Assessment](quality-assessment-benchmark.md) — Rubric-only evaluation
-- [Answer Templates](../../core_concepts/answer-templates.md) — Template concepts
+- [Factual QA Benchmark](factual-qa-benchmark.ipynb) — Detailed template patterns (boolean, numeric, regex)
+- [Full Evaluation Benchmark](full-evaluation-benchmark.ipynb) — Add rubric traits alongside templates
+- [Quality Assessment](quality-assessment-benchmark.ipynb) — Rubric-only evaluation
+- [Answer Templates](../core_concepts/answer-templates.ipynb) — Template concepts
 - [ADeLe Concepts](../../core_concepts/adele.md) — Full ADeLe dimension reference
 - [Few-Shot Configuration](../../core_concepts/few-shot.md) — Advanced few-shot options

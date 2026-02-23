@@ -156,7 +156,7 @@ For details on configuring evaluation modes, see [Evaluation Modes](evaluation-m
 ## Learn More
 
 - [LLM Evaluation Philosophy](../home/philosophy.md) — Why Karenina uses LLMs as judges
-- [Answer Templates](answer-templates.md) — Deep dive into template structure, `verify()`, and field types
+- [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb) — Deep dive into template structure, `verify()`, and field types
 - [Rubrics Overview](rubrics/index.md) — All four rubric trait types in detail
 - [Evaluation Modes](evaluation-modes.md) — How to configure template-only, rubric-only, and combined modes
 

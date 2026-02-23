@@ -189,7 +189,7 @@ You interact with benchmarks through the `Benchmark` class — the managers are 
 ## Next Steps
 
 - [Checkpoints](checkpoints.md) — How benchmarks are persisted as JSON-LD files
-- [Answer Templates](answer-templates.md) — How correctness verification works
+- [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb) — How correctness verification works
 - [Rubrics](rubrics/index.md) — How quality assessment works
 - [Creating Benchmarks](../workflows/creating-benchmarks/index.md) — Step-by-step benchmark authoring workflow
 - [Evaluation Modes](evaluation-modes.md) — Choosing between template-only, rubric-only, or combined evaluation

@@ -6,6 +6,25 @@ repo_name: karenina
 
 exclude_docs: |
   _archive/
+  # Jupytext .md companion files — notebooks are the canonical source
+  getting-started/quickstart.md
+  core_concepts/answer-templates.md
+  core_concepts/rubrics/llm-traits.md
+  core_concepts/rubrics/literal-traits.md
+  core_concepts/rubrics/regex-traits.md
+  core_concepts/rubrics/callable-traits.md
+  core_concepts/rubrics/metric-traits.md
+  workflows/creating-benchmarks/factual-qa-benchmark.md
+  workflows/creating-benchmarks/full-evaluation-benchmark.md
+  workflows/creating-benchmarks/quality-assessment-benchmark.md
+  workflows/creating-benchmarks/scaled-authoring.md
+  workflows/running-verification/basic-verification.md
+  workflows/running-verification/full-evaluation.md
+  workflows/running-verification/multi-model-comparison.md
+  workflows/running-verification/deep-judgment.md
+  workflows/running-verification/mcp-agent-evaluation.md
+  workflows/running-verification/manual-interface-workflow.md
+  workflows/analyzing-results/dataframe-analysis.md
 
 theme:
   name: material

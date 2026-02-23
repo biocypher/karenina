@@ -173,7 +173,7 @@ echo $ANTHROPIC_API_KEY
 
 ## Next Steps
 
-- **[Quick Start](quickstart.md)** — End-to-end walkthrough: create a benchmark, run verification, inspect results
+- **[Quick Start](../notebooks/quickstart.ipynb)** — End-to-end walkthrough: create a benchmark, run verification, inspect results
 - **[Configuration](../workflows/configuration/index.md)** — Set up presets, environment variables, and workspace
 - **[Core Concepts](../core_concepts/index.md)** — Understand checkpoints, templates, and rubrics
 - **[Creating Benchmarks](../workflows/creating-benchmarks/index.md)** — Build your first benchmark

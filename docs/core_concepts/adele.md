@@ -231,7 +231,7 @@ result_set = benchmark.run_verification(
 
 ## Next Steps
 
-- [Scaled Authoring](../workflows/creating-benchmarks/scaled-authoring.md) — ADeLe classification in the benchmark authoring workflow
-- [Literal rubric traits](rubrics/literal-traits.md) — the trait type ADeLe dimensions use
+- [Scaled Authoring](../notebooks/creating-benchmarks/scaled-authoring.ipynb) — ADeLe classification in the benchmark authoring workflow
+- [Literal rubric traits](../notebooks/core_concepts/rubrics/literal-traits.ipynb) — the trait type ADeLe dimensions use
 - [Running verification](../workflows/running-verification/index.md) — evaluate your benchmark
 - [Evaluation modes](evaluation-modes.md) — template, rubric, or both

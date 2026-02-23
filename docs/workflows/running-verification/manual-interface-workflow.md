@@ -375,8 +375,8 @@ print("CLI: karenina verify ... --interface manual --manual-traces traces.json")
 
 ## Related Pages
 
-- [Basic Verification](basic-verification.md) — Live verification walkthrough
-- [Full Evaluation](full-evaluation.md) — Add rubrics to manual evaluation
+- [Basic Verification](basic-verification.ipynb) — Live verification walkthrough
+- [Full Evaluation](full-evaluation.ipynb) — Add rubrics to manual evaluation
 - [Adapters](../../core_concepts/adapters.md) — Manual adapter details
 - [CLI Reference: verify](../../reference/cli/verify.md) — `--interface` and `--manual-traces` options
 

@@ -235,7 +235,7 @@ print(f"DataFrame shape: {df.shape}")
 print(df[["question_id", "answering_model", "verify_result"]].head(10))
 ```
 
-See [DataFrame Analysis](../analyzing-results/dataframe-analysis.md) for advanced pivot tables and visualizations.
+See [DataFrame Analysis](../analyzing-results/dataframe-analysis.ipynb) for advanced pivot tables and visualizations.
 
 ---
 
@@ -295,9 +295,9 @@ print("CLI: sequential runs with --answering-model for each model")
 
 ## Related Pages
 
-- [Basic Verification](basic-verification.md) — Single-model verification walkthrough
-- [Full Evaluation](full-evaluation.md) — Add rubric evaluation to multi-model runs
-- [DataFrame Analysis](../analyzing-results/dataframe-analysis.md) — Advanced analysis with pandas
+- [Basic Verification](basic-verification.ipynb) — Single-model verification walkthrough
+- [Full Evaluation](full-evaluation.ipynb) — Add rubric evaluation to multi-model runs
+- [DataFrame Analysis](../analyzing-results/dataframe-analysis.ipynb) — Advanced analysis with pandas
 - [VerificationConfig Reference](../../reference/configuration/verification-config.md) — All configuration fields
 
 ```python tags=["hide-cell"]

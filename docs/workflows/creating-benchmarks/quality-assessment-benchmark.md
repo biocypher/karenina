@@ -341,7 +341,7 @@ shutil.rmtree(tmpdir, ignore_errors=True)
 
 ## Next Steps
 
-- [Factual QA Benchmark](factual-qa-benchmark.md) -- Template-only evaluation for factual correctness
-- [Full Evaluation Benchmark](full-evaluation-benchmark.md) -- Combine templates and rubrics
-- [Scaled Authoring](scaled-authoring.md) -- Bulk workflows and auto-generation
+- [Factual QA Benchmark](factual-qa-benchmark.ipynb) -- Template-only evaluation for factual correctness
+- [Full Evaluation Benchmark](full-evaluation-benchmark.ipynb) -- Combine templates and rubrics
+- [Scaled Authoring](scaled-authoring.ipynb) -- Bulk workflows and auto-generation
 - [Rubrics Overview](../../core_concepts/rubrics/index.md) -- Deep dive into rubric concepts

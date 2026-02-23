@@ -53,7 +53,7 @@ print(f"Created: {benchmark.name}")
 
 ## Add Questions with Templates
 
-Each question gets a template that defines how to check correctness. Templates here are kept brief since this tutorial focuses on rubric traits — see [Factual QA Benchmark](factual-qa-benchmark.md) for detailed template patterns.
+Each question gets a template that defines how to check correctness. Templates here are kept brief since this tutorial focuses on rubric traits — see [Factual QA Benchmark](factual-qa-benchmark.ipynb) for detailed template patterns.
 
 ### Question 1: Boolean Decomposition
 
@@ -365,7 +365,7 @@ shutil.rmtree(tmpdir, ignore_errors=True)
 
 ## Next Steps
 
-- [Factual QA Benchmark](factual-qa-benchmark.md) -- Template-only evaluation with detailed template patterns
-- [Quality Assessment](quality-assessment-benchmark.md) -- Rubric-only evaluation without templates
-- [Scaled Authoring](scaled-authoring.md) -- Bulk workflows and auto-generation
+- [Factual QA Benchmark](factual-qa-benchmark.ipynb) -- Template-only evaluation with detailed template patterns
+- [Quality Assessment](quality-assessment-benchmark.ipynb) -- Rubric-only evaluation without templates
+- [Scaled Authoring](scaled-authoring.ipynb) -- Bulk workflows and auto-generation
 - [Rubrics Overview](../../core_concepts/rubrics/index.md) -- Deep dive into rubric concepts and trait types

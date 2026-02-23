@@ -11,7 +11,7 @@ Concepts are ordered to follow the evaluation pipeline — from what you're eval
 | **Questions & Benchmarks** | The central objects: questions bundled with templates, rubrics, and metadata | [Questions & Benchmarks](questions-and-benchmarks.md) |
 | **Checkpoints** | JSON-LD files that store benchmarks (questions, templates, rubrics, results) | [Checkpoints](checkpoints.md) |
 | **Templates vs Rubrics** | The two evaluation units: correctness (templates) vs quality (rubrics) | [Templates vs Rubrics](template-vs-rubric.md) |
-| **Answer Templates** | Pydantic models that define how a Judge LLM parses and verifies responses | [Answer Templates](answer-templates.md) |
+| **Answer Templates** | Pydantic models that define how a Judge LLM parses and verifies responses | [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb) |
 | **Rubrics** | Trait-based evaluation of response quality (LLM, regex, callable, metric) | [Rubrics](rubrics/index.md) |
 | **Evaluation Modes** | Three modes controlling which evaluation units run (`template_only`, `template_and_rubric`, `rubric_only`) | [Evaluation Modes](evaluation-modes.md) |
 | **Verification Pipeline** | The 13-stage engine that executes evaluation end to end | [Verification Pipeline](verification-pipeline.md) |
@@ -92,7 +92,7 @@ Karenina's evaluation rests on two complementary building blocks: **answer templ
 
 **Answer templates** are Pydantic models that tell a Judge LLM how to parse a candidate response into structured fields. Each template implements a `verify()` method that compares parsed values against ground truth. This is the core mechanism for evaluating factual correctness.
 
-[Read more about answer templates →](answer-templates.md)
+[Read more about answer templates →](../notebooks/core_concepts/answer-templates.ipynb)
 
 ### Rubrics
 

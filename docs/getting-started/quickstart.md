@@ -162,7 +162,7 @@ for q in questions:
 print(f"Added {len(question_ids)} questions")
 ```
 
-> **Learn more**: [Factual QA Benchmark](../workflows/creating-benchmarks/factual-qa-benchmark.md) — including bulk import from Excel, CSV, and TSV files
+> **Learn more**: [Factual QA Benchmark](creating-benchmarks/factual-qa-benchmark.ipynb) — including bulk import from Excel, CSV, and TSV files
 
 ---
 
@@ -203,6 +203,7 @@ When you need precise control over verification logic, define templates as Pytho
 
 ```python
 from pydantic import Field
+
 from karenina.schemas.entities import BaseAnswer
 
 
@@ -225,10 +226,10 @@ class Answer(BaseAnswer):
 
 benchmark.update_template(question_ids[1], Answer)
 
-print(f"Updated template for Venetoclax question with class-based definition")
+print("Updated template for Venetoclax question with class-based definition")
 ```
 
-> **Learn more**: [Factual QA Benchmark](../workflows/creating-benchmarks/factual-qa-benchmark.md) · [Scaled Authoring](../workflows/creating-benchmarks/scaled-authoring.md) · [Answer Templates (Concepts)](../core_concepts/answer-templates.md)
+> **Learn more**: [Factual QA Benchmark](creating-benchmarks/factual-qa-benchmark.ipynb) · [Scaled Authoring](creating-benchmarks/scaled-authoring.ipynb) · [Answer Templates (Concepts)](core_concepts/answer-templates.ipynb)
 
 ---
 
@@ -278,7 +279,7 @@ benchmark.add_question_rubric_trait(
 print(f"Added regex trait 'Contains BCL2' to question {venetoclax_qid}")
 ```
 
-> **Learn more**: [Full Evaluation Benchmark](../workflows/creating-benchmarks/full-evaluation-benchmark.md) · [All Four Trait Types](../core_concepts/rubrics/index.md) — LLM, regex, callable, and metric traits
+> **Learn more**: [Full Evaluation Benchmark](creating-benchmarks/full-evaluation-benchmark.ipynb) · [All Four Trait Types](../core_concepts/rubrics/index.md) — LLM, regex, callable, and metric traits
 
 ---
 
@@ -317,7 +318,7 @@ results = benchmark.run_verification(config)
 print(f"Verification complete — {len(results.results)} results")
 ```
 
-> **Learn more**: [Verification Config](../workflows/running-verification/basic-verification.md) · [Multi-Model Evaluation](../workflows/running-verification/multi-model-comparison.md) · [Model Config Reference](../reference/configuration/model-config.md) · [CLI Verification](../reference/cli/verify.md)
+> **Learn more**: [Verification Config](running-verification/basic-verification.ipynb) · [Multi-Model Evaluation](running-verification/multi-model-comparison.ipynb) · [Model Config Reference](../reference/configuration/model-config.md) · [CLI Verification](../reference/cli/verify.md)
 
 ---
 
@@ -353,7 +354,7 @@ df_rubrics = rubric_results.to_dataframe()
 df_rubrics[["question_id", "trait_name", "trait_score", "trait_type"]]
 ```
 
-> **Learn more**: [DataFrame Analysis](../workflows/analyzing-results/dataframe-analysis.md) · [VerificationResult](../workflows/analyzing-results/verification-result.md) · [Exporting Results](../workflows/analyzing-results/exporting.md)
+> **Learn more**: [DataFrame Analysis](../07-analyzing-results/dataframe-analysis.md) · [VerificationResult](../07-analyzing-results/verification-result.md) · [Exporting Results](../07-analyzing-results/exporting.md)
 
 ---
 
@@ -366,7 +367,7 @@ from pathlib import Path
 
 checkpoint_path = Path(_tmpdir) / "genomics_benchmark.jsonld"
 benchmark.save(checkpoint_path)
-print(f"Saved to genomics_benchmark.jsonld")
+print("Saved to genomics_benchmark.jsonld")
 ```
 
 Load it back later:
@@ -376,7 +377,7 @@ loaded = Benchmark.load(checkpoint_path)
 print(f"Loaded '{loaded.name}' with {loaded.question_count} questions")
 ```
 
-> **Learn more**: [Checkpoints](../core_concepts/checkpoints.md) · [Factual QA Benchmark](../workflows/creating-benchmarks/factual-qa-benchmark.md) · [Loading Benchmarks](../workflows/running-verification/basic-verification.md)
+> **Learn more**: [Checkpoints](../core_concepts/checkpoints.md) · [Factual QA Benchmark](creating-benchmarks/factual-qa-benchmark.ipynb) · [Loading Benchmarks](running-verification/basic-verification.ipynb)
 
 ```python tags=["hide-cell"]
 # Restore original LLM behavior and clean up temp directory

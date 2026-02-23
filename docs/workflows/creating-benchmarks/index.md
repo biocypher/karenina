@@ -8,10 +8,10 @@ Each tutorial is a complete, self-contained scenario. Choose the one that matche
 
 | Scenario | Evaluation Strategy | What You'll Learn |
 |----------|-------------------|-------------------|
-| [Factual QA Benchmark](factual-qa-benchmark.md) | Template-only | Hand-written templates: boolean decomposition, string normalization, numeric tolerance, regex in `verify()`, partial credit |
-| [Full Evaluation Benchmark](full-evaluation-benchmark.md) | Template + rubric | Custom templates combined with all 6 rubric trait types (LLM boolean, LLM score, LLM literal, regex, callable, metric) |
-| [Quality Assessment](quality-assessment-benchmark.md) | Rubric-only | No templates — quality evaluation for tasks with no single correct answer (safety, empathy, clarity) |
-| [Scaled Authoring](scaled-authoring.md) | Power user | Bulk ingestion, `generate_all_templates()`, `AnswerBuilder`, ADeLe classification, few-shot examples |
+| [Factual QA Benchmark](../../notebooks/creating-benchmarks/factual-qa-benchmark.ipynb) | Template-only | Hand-written templates: boolean decomposition, string normalization, numeric tolerance, regex in `verify()`, partial credit |
+| [Full Evaluation Benchmark](../../notebooks/creating-benchmarks/full-evaluation-benchmark.ipynb) | Template + rubric | Custom templates combined with all 6 rubric trait types (LLM boolean, LLM score, LLM literal, regex, callable, metric) |
+| [Quality Assessment](../../notebooks/creating-benchmarks/quality-assessment-benchmark.ipynb) | Rubric-only | No templates — quality evaluation for tasks with no single correct answer (safety, empathy, clarity) |
+| [Scaled Authoring](../../notebooks/creating-benchmarks/scaled-authoring.ipynb) | Power user | Bulk ingestion, `generate_all_templates()`, `AnswerBuilder`, ADeLe classification, few-shot examples |
 
 ---
 
@@ -75,11 +75,11 @@ Reload and verify round-trip
 |-----------|--------|------------|
 | Create benchmark | `Benchmark.create(name, description, version)` | All scenarios |
 | Add question | `benchmark.add_question(question, raw_answer, answer_template=...)` | All scenarios |
-| Add template to existing question | `benchmark.add_answer_template(question_id, code_string)` | [Factual QA](factual-qa-benchmark.md) |
-| Generate templates automatically | `benchmark.generate_all_templates(model, model_provider)` | [Scaled Authoring](scaled-authoring.md) |
-| Build templates programmatically | `AnswerBuilder().add_attribute(...).compile()` | [Scaled Authoring](scaled-authoring.md) |
-| Add global rubric trait | `benchmark.add_global_rubric_trait(trait)` | [Full Evaluation](full-evaluation-benchmark.md), [Quality Assessment](quality-assessment-benchmark.md) |
-| Add per-question rubric trait | `benchmark.add_question_rubric_trait(question_id, trait)` | [Full Evaluation](full-evaluation-benchmark.md), [Quality Assessment](quality-assessment-benchmark.md) |
+| Add template to existing question | `benchmark.add_answer_template(question_id, code_string)` | [Factual QA](../../notebooks/creating-benchmarks/factual-qa-benchmark.ipynb) |
+| Generate templates automatically | `benchmark.generate_all_templates(model, model_provider)` | [Scaled Authoring](../../notebooks/creating-benchmarks/scaled-authoring.ipynb) |
+| Build templates programmatically | `AnswerBuilder().add_attribute(...).compile()` | [Scaled Authoring](../../notebooks/creating-benchmarks/scaled-authoring.ipynb) |
+| Add global rubric trait | `benchmark.add_global_rubric_trait(trait)` | [Full Evaluation](../../notebooks/creating-benchmarks/full-evaluation-benchmark.ipynb), [Quality Assessment](../../notebooks/creating-benchmarks/quality-assessment-benchmark.ipynb) |
+| Add per-question rubric trait | `benchmark.add_question_rubric_trait(question_id, trait)` | [Full Evaluation](../../notebooks/creating-benchmarks/full-evaluation-benchmark.ipynb), [Quality Assessment](../../notebooks/creating-benchmarks/quality-assessment-benchmark.ipynb) |
 | Save checkpoint | `benchmark.save("path.jsonld")` | All scenarios |
 | Load checkpoint | `Benchmark.load("path.jsonld")` | All scenarios |
 
@@ -89,7 +89,7 @@ Reload and verify round-trip
 
 These concept pages provide the foundational knowledge that the scenarios build on:
 
-- [Answer Templates](../../core_concepts/answer-templates.md) — What templates are, field types, `verify()` semantics
+- [Answer Templates](../../notebooks/core_concepts/answer-templates.ipynb) — What templates are, field types, `verify()` semantics
 - [Rubrics](../../core_concepts/rubrics/index.md) — Trait types (LLM, regex, callable, metric), global vs per-question
 - [Checkpoints](../../core_concepts/checkpoints.md) — JSON-LD format, save/load behavior
 - [Evaluation Modes](../../core_concepts/evaluation-modes.md) — How template-only, template+rubric, and rubric-only map to pipeline stages
