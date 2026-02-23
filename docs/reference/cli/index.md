@@ -75,7 +75,7 @@ Most users start with a preset file that defines model providers, evaluation mod
 karenina verify checkpoint.jsonld --preset claude-haiku.json --answering-model claude-sonnet-4-5
 ```
 
-See [Configuration Hierarchy](../../configuration/index.md) for how presets, CLI arguments, and environment variables interact.
+See [Configuration Hierarchy](../../workflows/configuration/index.md) for how presets, CLI arguments, and environment variables interact.
 
 ### Progressive save and resume
 
@@ -96,6 +96,6 @@ karenina verify checkpoint.jsonld --preset default.json --resume state_file.json
 
 ## Related
 
-- [Configuration](../../configuration/index.md) — How CLI arguments fit in the configuration hierarchy
+- [Configuration](../../workflows/configuration/index.md) — How CLI arguments fit in the configuration hierarchy
 - [Running Verification](../../workflows/running-verification/index.md) — Python API and workflow guides
 - [Configuration Reference](../configuration/index.md) — Complete reference for all configuration options

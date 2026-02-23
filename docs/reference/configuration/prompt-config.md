@@ -126,7 +126,7 @@ Your custom text is **appended to the system prompt** after all built-in and ada
 - Your instructions are seen by the LLM as additional guidance
 - The order gives your instructions the highest positional priority in the prompt
 
-See [Prompt Assembly System](../../11-advanced-pipeline/prompt-assembly.md) for implementation details.
+See [Prompt Assembly System](../../advanced-pipeline/prompt-assembly.md) for implementation details.
 
 ---
 
@@ -170,5 +170,5 @@ Only non-null fields need to be included — omitted fields default to `None`.
 
 - [Full Evaluation](../../workflows/running-verification/full-evaluation.md) — when to use each field, examples, fallback logic explained
 - [VerificationConfig Reference](verification-config.md) — the `prompt_config` field on VerificationConfig
-- [Prompt Assembly System](../../11-advanced-pipeline/prompt-assembly.md) — how the tri-section pattern works internally
+- [Prompt Assembly System](../../advanced-pipeline/prompt-assembly.md) — how the tri-section pattern works internally
 - [Full Evaluation (Quality Checks)](../../workflows/running-verification/full-evaluation.md) — abstention and sufficiency detection details

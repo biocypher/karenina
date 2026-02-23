@@ -1,6 +1,6 @@
 # Environment Variables
 
-Karenina reads environment variables to configure API keys, file paths, execution behavior, and verification features. This page groups variables by purpose and shows practical usage patterns. For an exhaustive reference table, see [Environment Variables Reference](../reference/configuration/env-vars.md).
+Karenina reads environment variables to configure API keys, file paths, execution behavior, and verification features. This page groups variables by purpose and shows practical usage patterns. For an exhaustive reference table, see [Environment Variables Reference](../../reference/configuration/env-vars.md).
 
 !!! note "Precedence"
     Environment variables are the **third priority** in the configuration hierarchy — they're overridden by CLI arguments and preset values. See [Configuration Hierarchy](index.md) for details.
@@ -60,7 +60,7 @@ ANTHROPIC_API_KEY="sk-ant-..."
 OPENAI_API_KEY="sk-..."
 ```
 
-The `karenina init` command creates a `.env` template with placeholder entries for all three main providers. See [Workspace Initialization](../getting-started/workspace-init.md) for details.
+The `karenina init` command creates a `.env` template with placeholder entries for all three main providers. See [Workspace Initialization](../../getting-started/workspace-init.md) for details.
 
 ---
 
@@ -140,7 +140,7 @@ EMBEDDING_CHECK=true
 EMBEDDING_CHECK_THRESHOLD=0.9
 ```
 
-The embedding check runs after template verification and provides an additional similarity-based signal. See [Answer Templates](../core_concepts/answer-templates.md) for how embedding checks integrate with template verification.
+The embedding check runs after template verification and provides an additional similarity-based signal. See [Answer Templates](../../core_concepts/answer-templates.md) for how embedding checks integrate with template verification.
 
 ---
 
@@ -180,6 +180,6 @@ Environment variables that accept boolean values recognize these truthy strings 
 
 - [Configuration Hierarchy](index.md) — How environment variables fit into the precedence system
 - [Presets](presets.md) — Reusable configuration files that override environment variables
-- [Workspace Initialization](../getting-started/workspace-init.md) — `karenina init` creates default directories and `.env` template
-- [Environment Variables Reference](../reference/configuration/env-vars.md) — Exhaustive table of all variables
-- [Running Verification](../running-verification/index.md) — Putting configuration into practice
+- [Workspace Initialization](../../getting-started/workspace-init.md) — `karenina init` creates default directories and `.env` template
+- [Environment Variables Reference](../../reference/configuration/env-vars.md) — Exhaustive table of all variables
+- [Running Verification](../../running-verification/index.md) — Putting configuration into practice

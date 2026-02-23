@@ -89,4 +89,4 @@ If the adapter does not support system prompts (reported via `PortCapabilities`)
 
 - [Verification Pipeline](verification-pipeline.md) — The 13 stages that use assembled prompts
 - [Adapters](adapters.md) — Which LLM backends are available
-- [Prompt Assembly Internals](../11-advanced-pipeline/prompt-assembly.md) — Technical deep dive into `PromptAssembler`, `AdapterInstructionRegistry`, and prompt tasks
+- [Prompt Assembly Internals](../advanced-pipeline/prompt-assembly.md) — Technical deep dive into `PromptAssembler`, `AdapterInstructionRegistry`, and prompt tasks

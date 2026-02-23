@@ -252,7 +252,7 @@ config = VerificationConfig.from_overrides(
 | `sanitize_preset_name(name)` | Convert preset name to safe filename |
 | `validate_preset_metadata(name, description)` | Validate preset name and description |
 
-See [Presets](../../configuration/presets.md) for usage details.
+See [Presets](../../workflows/configuration/presets.md) for usage details.
 
 ### Inspection Methods
 
@@ -271,4 +271,4 @@ Fields are resolved in this order (highest priority first):
 2. **Environment variables** (only for fields that support them — embedding and async settings)
 3. **Field defaults** defined on the class
 
-See [Configuration Hierarchy](../../configuration/index.md) for the full precedence model including presets and CLI arguments.
+See [Configuration Hierarchy](../../workflows/configuration/index.md) for the full precedence model including presets and CLI arguments.

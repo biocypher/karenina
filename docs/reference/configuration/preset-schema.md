@@ -1,6 +1,6 @@
 # Preset Schema
 
-A preset file is a JSON document that wraps a complete `VerificationConfig` with metadata. This page documents the full schema specification. For creating and using presets, see [Presets](../../configuration/presets.md).
+A preset file is a JSON document that wraps a complete `VerificationConfig` with metadata. This page documents the full schema specification. For creating and using presets, see [Presets](../../workflows/configuration/presets.md).
 
 ---
 
@@ -276,7 +276,7 @@ When loading by name (not path), `resolve_preset_path()` searches the presets di
 
 ## Related
 
-- [Presets Tutorial](../../configuration/presets.md) — creating, loading, and managing presets
+- [Presets Tutorial](../../workflows/configuration/presets.md) — creating, loading, and managing presets
 - [Using Presets in Verification](../../workflows/running-verification/full-evaluation.md) — preset workflows
 - [VerificationConfig Reference](verification-config.md) — complete `config` object fields
 - [ModelConfig Reference](model-config.md) — model configuration fields within presets

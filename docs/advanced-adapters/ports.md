@@ -430,6 +430,6 @@ from karenina.adapters.factory import get_llm, get_parser, get_agent
 
 - [Adapter Architecture](index.md) — how ports fit into the hexagonal architecture
 - [Available Adapters](available-adapters.md) — implementations for each port
-- [Prompt Assembly](../11-advanced-pipeline/prompt-assembly.md) — how messages are built before being passed to ports
-- [Verification Pipeline Stages](../11-advanced-pipeline/stages.md) — which stages use which ports
+- [Prompt Assembly](../advanced-pipeline/prompt-assembly.md) — how messages are built before being passed to ports
+- [Verification Pipeline Stages](../advanced-pipeline/stages.md) — which stages use which ports
 - [Writing Custom Adapters](writing-adapters.md) — implementing your own port adapter

@@ -70,7 +70,7 @@ karenina verify checkpoint.jsonld \
 
 CLI arguments are converted to a `VerificationConfig` internally using `from_overrides()`, which selectively applies only the flags you provide — unset flags don't override preset or default values.
 
-See [CLI Reference](../reference/cli/index.md) for all available flags.
+See [CLI Reference](../../reference/cli/index.md) for all available flags.
 
 ### 2. Presets
 
@@ -161,7 +161,7 @@ your-project/
 
 Use `--advanced` for an interactive setup that lets you customize directories, default provider, and model settings.
 
-See [Workspace Initialization](../getting-started/workspace-init.md) for details on all created files and options.
+See [Workspace Initialization](../../getting-started/workspace-init.md) for details on all created files and options.
 
 ---
 
@@ -222,6 +222,6 @@ karenina verify checkpoint.jsonld --preset my-config.json --async-workers 8
 
 - [Environment Variables](environment-variables.md) — Full list of environment variables and how to set them
 - [Presets](presets.md) — Creating, managing, and sharing configuration presets
-- [Workspace Initialization](../getting-started/workspace-init.md) — Setting up a new karenina project with `karenina init`
-- [Core Concepts](../core_concepts/index.md) — Understanding templates, rubrics, and evaluation modes
-- [Running Verification](../running-verification/index.md) — Putting configuration into practice
+- [Workspace Initialization](../../getting-started/workspace-init.md) — Setting up a new karenina project with `karenina init`
+- [Core Concepts](../../core_concepts/index.md) — Understanding templates, rubrics, and evaluation modes
+- [Running Verification](../../running-verification/index.md) — Putting configuration into practice

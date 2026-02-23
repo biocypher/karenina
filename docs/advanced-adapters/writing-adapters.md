@@ -551,5 +551,5 @@ config = VerificationConfig(
 - [Adapter Architecture](index.md) — Hexagonal architecture overview
 - [Port Types](ports.md) — Complete protocol signatures for all three ports
 - [Available Adapters](available-adapters.md) — Existing adapter implementations for reference
-- [Prompt Assembly](../11-advanced-pipeline/prompt-assembly.md) — How adapter instructions integrate into the prompt pipeline
-- [Custom Stages](../11-advanced-pipeline/custom-stages.md) — Extending the verification pipeline with custom stages
+- [Prompt Assembly](../advanced-pipeline/prompt-assembly.md) — How adapter instructions integrate into the prompt pipeline
+- [Custom Stages](../advanced-pipeline/custom-stages.md) — Extending the verification pipeline with custom stages

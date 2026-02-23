@@ -8,15 +8,15 @@ Choose the path that matches your goal:
 
 **Power User** — Dive into advanced features:
 
-> [Core Concepts](../core_concepts/index.md) → [Pipeline Internals](../11-advanced-pipeline/index.md) → [Adapter Architecture](../12-advanced-adapters/index.md)
+> [Core Concepts](../core_concepts/index.md) → [Pipeline Internals](../advanced-pipeline/index.md) → [Adapter Architecture](../advanced-adapters/index.md)
 
 **CLI User** — Use Karenina from the command line:
 
-> [Installation](../getting-started/installation.md) → [Configuration](../configuration/index.md) → [CLI Reference](../reference/cli/index.md)
+> [Installation](../getting-started/installation.md) → [Configuration](../workflows/configuration/index.md) → [CLI Reference](../reference/cli/index.md)
 
 **Contributor** — Extend Karenina with custom adapters or pipeline stages:
 
-> [Adapter Architecture](../12-advanced-adapters/index.md) → [Contributing](../13-contributing/index.md)
+> [Adapter Architecture](../advanced-adapters/index.md) → [Contributing](../contributing.md)
 
 ---
 
@@ -48,7 +48,7 @@ Choose the path that matches your goal:
 
 | Section | What You'll Learn |
 |---------|-------------------|
-| [Configuration](../configuration/index.md) | Configuration hierarchy: CLI args, presets, environment variables, defaults |
+| [Configuration](../workflows/configuration/index.md) | Configuration hierarchy: CLI args, presets, environment variables, defaults |
 | [Creating Benchmarks](../workflows/creating-benchmarks/index.md) | Author questions, write templates, define rubrics, and save checkpoints |
 | [Running Verification](../workflows/running-verification/index.md) | Configure and execute evaluation via Python API or CLI |
 | [Analyzing Results](../workflows/analyzing-results/index.md) | Inspect results, build DataFrames, export data, and iterate |
@@ -64,11 +64,11 @@ Choose the path that matches your goal:
 
 | Section | What You'll Learn |
 |---------|-------------------|
-| [Pipeline Internals](../11-advanced-pipeline/index.md) | The 13-stage verification pipeline, deep judgment, and prompt assembly |
-| [Adapter Architecture](../12-advanced-adapters/index.md) | Ports and adapters pattern, custom adapter creation, MCP deep dive |
+| [Pipeline Internals](../advanced-pipeline/index.md) | The 13-stage verification pipeline, deep judgment, and prompt assembly |
+| [Adapter Architecture](../advanced-adapters/index.md) | Ports and adapters pattern, custom adapter creation, MCP deep dive |
 
 ## Contributing
 
 | Section | What You'll Learn |
 |---------|-------------------|
-| [Contributing Guide](../13-contributing/index.md) | How to create adapters, extend the pipeline, and contribute |
+| [Contributing Guide](../contributing.md) | How to create adapters, extend the pipeline, and contribute |

@@ -328,5 +328,5 @@ class ToxicityCheckStage(BaseVerificationStage):
 - [13 Stages in Detail](stages.md) — reference for all built-in stages
 - [Prompt Assembly](prompt-assembly.md) — how prompts are constructed for LLM-calling stages
 - [Deep Judgment Templates](deep-judgment-templates.md) — deep verification internals
-- [Adapter Architecture](../12-advanced-adapters/index.md) — the ports and adapters system used by LLM-calling stages
+- [Adapter Architecture](../advanced-adapters/index.md) — the ports and adapters system used by LLM-calling stages
 - [VerificationConfig Reference](../reference/configuration/verification-config.md) — all configuration fields

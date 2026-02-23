@@ -369,7 +369,7 @@ from karenina.schemas import VerificationConfig
 # - "custom": Use a custom configuration dict
 ```
 
-For detailed deep judgment configuration, see [deep judgment rubrics](../../11-advanced-pipeline/deep-judgment-rubrics.md).
+For detailed deep judgment configuration, see [deep judgment rubrics](../../advanced-pipeline/deep-judgment-rubrics.md).
 
 ## Complete Example
 
@@ -432,4 +432,4 @@ for trait in quality_rubric.llm_traits:
 - [Callable traits](callable-traits.md) -- custom Python functions
 - [Metric traits](metric-traits.md) -- precision, recall, F1 computation
 - [Evaluation modes](../evaluation-modes.md) -- choosing when rubrics are evaluated
-- [Deep judgment rubrics](../../11-advanced-pipeline/deep-judgment-rubrics.md) -- advanced evidence-based evaluation
+- [Deep judgment rubrics](../../advanced-pipeline/deep-judgment-rubrics.md) -- advanced evidence-based evaluation

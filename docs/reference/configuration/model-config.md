@@ -236,4 +236,4 @@ ModelConfig(
 - [Basic Verification](../../workflows/running-verification/basic-verification.md) — step-by-step configuration guide
 - [Adapters Overview](../../core_concepts/adapters.md) — interface comparison and selection guide
 - [MCP Integration Overview](../../core_concepts/mcp-overview.md) — MCP architecture and adapter capabilities
-- [Environment Variables](../../configuration/environment-variables.md) — API keys and path configuration
+- [Environment Variables](../../workflows/configuration/environment-variables.md) — API keys and path configuration

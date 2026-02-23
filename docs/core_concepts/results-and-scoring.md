@@ -150,4 +150,4 @@ df = template_results.to_dataframe()
 
 - [Verification Pipeline](verification-pipeline.md) — The 13 stages that produce results
 - [Evaluation Modes](evaluation-modes.md) — How modes affect which results are available
-- [Analyzing Results](../07-analyzing-results/index.md) — Inspecting, aggregating, and exporting results
+- [Analyzing Results](../workflows/analyzing-results/index.md) — Inspecting, aggregating, and exporting results

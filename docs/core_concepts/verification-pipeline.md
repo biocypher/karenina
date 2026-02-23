@@ -117,4 +117,4 @@ This means you always get a result object back, even for questions where the mod
 - [Evaluation Modes](evaluation-modes.md) — How the three modes shape the pipeline
 - [Prompt Assembly](prompt-assembly.md) — How prompts are constructed for pipeline LLM calls
 - [Results and Scoring](results-and-scoring.md) — What the pipeline produces
-- [Pipeline Internals](../11-advanced-pipeline/index.md) — Deep dive into each stage, deep judgment, and custom stages
+- [Pipeline Internals](../advanced-pipeline/index.md) — Deep dive into each stage, deep judgment, and custom stages

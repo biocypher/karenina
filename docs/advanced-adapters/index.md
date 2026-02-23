@@ -156,7 +156,7 @@ For example, the `claude_tool` adapter strips JSON schema instructions from pars
 
 This mechanism keeps adapters as **pure executors** — they receive pre-assembled messages from the `PromptAssembler` and don't build prompts internally. Adapter-specific tuning is declarative, registered at import time.
 
-For the complete prompt assembly system, see [Prompt Assembly](../11-advanced-pipeline/prompt-assembly.md).
+For the complete prompt assembly system, see [Prompt Assembly](../advanced-pipeline/prompt-assembly.md).
 
 ---
 
@@ -209,6 +209,6 @@ Messages support structured content blocks — text, tool use, tool results, and
 ## Related
 
 - [Adapters Overview](../core_concepts/adapters.md) — Conceptual introduction to the adapter system
-- [Verification Pipeline](../11-advanced-pipeline/index.md) — How the pipeline uses ports during execution
-- [Prompt Assembly](../11-advanced-pipeline/prompt-assembly.md) — The tri-section prompt system and adapter instructions
+- [Verification Pipeline](../advanced-pipeline/index.md) — How the pipeline uses ports during execution
+- [Prompt Assembly](../advanced-pipeline/prompt-assembly.md) — The tri-section prompt system and adapter instructions
 - [Verification Config Reference](../reference/configuration/verification-config.md) — ModelConfig fields that configure adapters

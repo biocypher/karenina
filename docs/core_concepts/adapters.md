@@ -207,4 +207,4 @@ parser = get_parser(config)  # Returns ParserPort
 - [Manual Interface](manual-interface.md) — Using pre-recorded traces
 - [Evaluation Modes](evaluation-modes.md) — Controlling which evaluation units run
 - [Running Verification](../workflows/running-verification/index.md) — End-to-end verification workflow
-- [Advanced Adapters](../12-advanced-adapters/index.md) — Ports and adapters architecture deep dive, writing custom adapters
+- [Advanced Adapters](../advanced-adapters/index.md) — Ports and adapters architecture deep dive, writing custom adapters

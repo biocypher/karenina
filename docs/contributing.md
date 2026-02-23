@@ -52,21 +52,21 @@ Karenina is designed for extension in two main areas:
 
 The verification pipeline uses a stage-based architecture where each stage implements the `VerificationStage` protocol. You can add custom stages for new checks, validations, or evaluation steps.
 
-See [Advanced Pipeline](11-advanced-pipeline/index.md) for the full guide, including:
+See [Advanced Pipeline](advanced-pipeline/index.md) for the full guide, including:
 
-- [13 Stages in Detail](11-advanced-pipeline/stages.md) --- what each stage does
-- [Writing Custom Stages](11-advanced-pipeline/custom-stages.md) --- the `VerificationStage` protocol, `VerificationContext`, artifact keys, and a complete example
-- [Prompt Assembly](11-advanced-pipeline/prompt-assembly.md) --- the tri-section prompt system
+- [13 Stages in Detail](advanced-pipeline/stages.md) --- what each stage does
+- [Writing Custom Stages](advanced-pipeline/custom-stages.md) --- the `VerificationStage` protocol, `VerificationContext`, artifact keys, and a complete example
+- [Prompt Assembly](advanced-pipeline/prompt-assembly.md) --- the tri-section prompt system
 
 ### Creating Adapters
 
 Adapters connect the pipeline to LLM backends through three port protocols: `LLMPort`, `ParserPort`, and `AgentPort`. You can add adapters for new LLM providers or custom backends.
 
-See [Advanced Adapters](12-advanced-adapters/index.md) for the full guide, including:
+See [Advanced Adapters](advanced-adapters/index.md) for the full guide, including:
 
-- [Port Types](12-advanced-adapters/ports.md) --- protocol signatures for all three ports
-- [Available Adapters](12-advanced-adapters/available-adapters.md) --- existing adapter implementations and capabilities
-- [Writing Custom Adapters](12-advanced-adapters/writing-adapters.md) --- step-by-step guide with registration, factory functions, and prompt instructions
+- [Port Types](advanced-adapters/ports.md) --- protocol signatures for all three ports
+- [Available Adapters](advanced-adapters/available-adapters.md) --- existing adapter implementations and capabilities
+- [Writing Custom Adapters](advanced-adapters/writing-adapters.md) --- step-by-step guide with registration, factory functions, and prompt instructions
 
 ## Pull Request Process
 
@@ -90,6 +90,6 @@ src/karenina/
 
 ## Related
 
-- [Advanced Pipeline](11-advanced-pipeline/index.md) --- pipeline architecture and extension
-- [Advanced Adapters](12-advanced-adapters/index.md) --- adapter architecture and extension
+- [Advanced Pipeline](advanced-pipeline/index.md) --- pipeline architecture and extension
+- [Advanced Adapters](advanced-adapters/index.md) --- adapter architecture and extension
 - [Installation](getting-started/installation.md) --- basic setup and dependencies

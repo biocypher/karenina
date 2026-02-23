@@ -265,4 +265,4 @@ The only hard failure is in Stage 3 (parameter extraction via ParserPort), which
 - [13 Stages in Detail](stages.md) — Stage 10 (DeepJudgmentAutoFail) specifics
 - [Deep Judgment: Rubrics](deep-judgment-rubrics.md) — Per-trait deep judgment for rubric evaluation
 - [VerificationConfig Reference](../reference/configuration/verification-config.md) — All 33 configuration fields
-- [VerificationResult Structure](../07-analyzing-results/verification-result.md) — Complete result hierarchy
+- [VerificationResult Structure](../workflows/analyzing-results/verification-result.md) — Complete result hierarchy
