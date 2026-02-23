@@ -1,6 +1,6 @@
 # Advanced
 
-This section is about *extending* — Karenina's internal architecture for users who need to debug pipeline behavior, customize prompts, write custom stages, or create new LLM adapters. For the conceptual foundations, see [Core Concepts](core_concepts/index.md). For task-oriented guides, see [Workflows](workflows.md).
+This section is about *extending* — Karenina's internal architecture for users who need to debug pipeline behavior, customize prompts, write custom stages, or create new LLM adapters. For the conceptual foundations, see [Core Concepts](core_concepts/index.md). For task-oriented guides, see [Workflows](workflows/index.md).
 
 ---
 
@@ -8,14 +8,14 @@ This section is about *extending* — Karenina's internal architecture for users
 
 | Topic | What It Covers |
 |-------|---------------|
-| [Pipeline Internals](11-advanced-pipeline/index.md) | The 13-stage verification pipeline, deep judgment, prompt assembly, and custom stages |
-| [Adapter Architecture](12-advanced-adapters/index.md) | Ports and adapters (hexagonal architecture), available adapters, MCP integration, and writing custom adapters |
+| [Pipeline Internals](advanced-pipeline/index.md) | The 13-stage verification pipeline, deep judgment, prompt assembly, and custom stages |
+| [Adapter Architecture](advanced-adapters/index.md) | Ports and adapters (hexagonal architecture), available adapters, MCP integration, and writing custom adapters |
 
 ---
 
 ## When You Need This
 
-Most users can work entirely with the interfaces described in [Workflows](workflows.md). The advanced documentation is for situations where you need to:
+Most users can work entirely with the interfaces described in [Workflows](workflows/index.md). The advanced documentation is for situations where you need to:
 
 - **Debug failures** — Understand why a specific pipeline stage failed or was skipped
 - **Tune deep judgment** — Configure excerpt extraction, fuzzy matching, and search-enhanced verification
