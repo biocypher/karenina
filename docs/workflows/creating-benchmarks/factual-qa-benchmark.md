@@ -215,7 +215,7 @@ Note: this chromosome example is a standalone illustration, not added to the ben
 
 ### Question 4: Regex Checks (Discovery Date)
 
-Templates can define regex patterns via `self.regex` that the pipeline runs automatically against the **raw LLM response trace** (the full text the answering model produced, before parsing). The result is ANDed with `verify()` — both must pass for the template to succeed. This lets you check for patterns directly in what the model said, without relying on the judge to parse them.
+Templates can define regex patterns via `self.regex` that the pipeline runs automatically against the **raw LLM response trace** (the full text the answering model produced, before parsing). When a template has **no user-defined fields** — only `self.regex` — the pipeline detects this automatically, skips LLM parsing entirely, and no judge model is needed. This gives you classical pattern-matching evaluation through karenina's infrastructure.
 
 ```python
 q4_id = benchmark.add_question(
@@ -224,16 +224,7 @@ q4_id = benchmark.add_question(
 )
 
 class Answer(BaseAnswer):
-    discovery_date: str = Field(
-        description=(
-            "The date of penicillin's discovery. The response may format this as "
-            "'September 28, 1928', '1928-09-28', '28/09/1928', or simply '1928'. "
-            "Extract the full date if available, otherwise the year alone."
-        )
-    )
-
     def model_post_init(self, __context):
-        self.correct = {"discovery_date": "1928"}
         self.regex = {
             "mentions_discovery_year": {
                 "pattern": r"\b1928\b",
@@ -247,26 +238,18 @@ class Answer(BaseAnswer):
             },
         }
 
-    def verify(self) -> bool:
-        return "1928" in self.discovery_date
-
 benchmark.update_template(q4_id, Answer)
 print(f"Q4 added with template: {q4_id[:50]}...")
 ```
 
-Each entry in `self.regex` is a named check with a `pattern` (applied via `re.findall()` on the raw trace), an `expected` value, and a `match_type` that controls how matches are compared to `expected`:
+No fields, no `verify()`, no judge LLM — the regex patterns are the entire evaluation. Each entry in `self.regex` is a named check with a `pattern` (applied via `re.findall()` on the raw trace), an `expected` value, and a `match_type`:
 
 - **`"exact"`**: exactly one match, equal to `expected` (str). Use for specific terms.
 - **`"contains"`**: `expected` (str) is among the matches. Use when a pattern has alternations like `r"\b(activates|inhibits|blocks)\b"` and you want a specific one.
 - **`"count"`**: number of matches equals `expected` (int). Use for counting occurrences like citations.
 - **`"all"`**: all items in `expected` (list) are found in matches. Use when multiple terms must all appear.
 
-In the example above, `verify()` checks the parsed date field, while `self.regex` independently confirms the raw response mentions both "1928" and "Fleming". If the model's response omits Fleming entirely, the regex check fails even if the judge correctly extracts the date.
-
-<div class="admonition tip">
-<p class="admonition-title">Regex checks vs. regex in verify()</p>
-<p><code>self.regex</code> checks patterns in the <strong>raw response trace</strong> — what the answering model actually said. <code>re.search()</code> in <code>verify()</code> normalizes <strong>parsed field values</strong> — what the judge extracted. Use <code>self.regex</code> when you need to verify something about the original response. Use <code>re.search()</code> in <code>verify()</code> when the judge returns a value in unpredictable format (e.g., "September 28, 1928" vs "1928") and you need to extract the relevant portion.</p>
-</div>
+Regex-only templates can also be combined with fields when you want both structured extraction and pattern matching. In that case, `verify()` checks the parsed fields and `self.regex` independently checks the raw response — both must pass. See [Answer Templates: Regex Checks](../../core_concepts/answer-templates.md#regex-checks) for a combined example.
 
 ### Question 5: Multi-Field with Partial Credit (Vaccine Mechanism)
 
@@ -405,7 +388,7 @@ The five patterns above form a toolkit for factual verification. Most real bench
 | Boolean check | Known concept, multiple synonyms | You need the extracted value | Gene identification, pathway presence |
 | String extraction | Strict matching with programmatic control | Only need presence check (use boolean) | Blood types, gene symbols |
 | Numeric tolerance | Measurements or counts | Value is categorical, not numeric | Body temperature, chromosome counts |
-| Regex checks (`self.regex`) | Pattern must appear in raw response | Only need to normalize parsed field values | Year mentions, keyword presence, citation counts |
+| Regex checks (`self.regex`) | Pattern must appear in raw response; no fields = no LLM judge needed | Only need to normalize parsed field values | Year mentions, keyword presence, citation counts |
 | Multi-field + partial credit | Multiple dimensions, want granular scoring | Single-answer questions | Mechanisms, multi-part descriptions |
 
 ---
