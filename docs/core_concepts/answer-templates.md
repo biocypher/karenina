@@ -97,9 +97,9 @@ Because `verify()` is plain Python, you get:
 
 ### Validation
 
-`BaseAnswer` itself doesn't enforce that your template defines `verify()` or `model_post_init`. Instead, the pipeline validates templates before running them: stage 1 (`ValidateTemplate`) checks that `verify()` exists and is callable, and that `model_post_init` sets `self.correct` as a dictionary. If something is missing, you get a clear error before any LLM calls happen.
+`BaseAnswer` itself doesn't enforce that your template defines `verify()` or `model_post_init`. Instead, the pipeline validates templates before running them: stage 1 (`ValidateTemplate`) checks that `verify()` exists and is callable, and that `model_post_init` sets `self.correct` as a dictionary. If something is missing, you get a clear error before any LLM calls happen. The one exception is **regex-only templates** (no user-defined fields): `verify()` is optional since regex is the sole evaluation.
 
-`verify_granular()` is fully optional. The pipeline only calls it if your template defines it.
+`verify_granular()` and `verify_regex()` are fully optional. The pipeline only calls them if your template defines `verify_granular()` or sets `self.regex`, respectively.
 
 ## Naming Requirement
 
@@ -157,52 +157,167 @@ print(f"Number correct:   {parsed.atomic_number == parsed.correct['atomic_number
 print(f"Overall verify(): {parsed.verify()}")
 ```
 
-## Partial Credit with verify_granular
+## Template Patterns
 
-For multi-field templates, you can implement `verify_granular()` to return a score between 0.0 and 1.0 representing the fraction of correct fields:
+Five patterns form a toolkit for factual verification. Most real benchmarks use a mix: boolean fields for presence checks, string fields for extractable values, and numeric fields for measurements. Start with the simplest pattern that handles your ground truth, and reach for more complex ones only when needed.
+
+For step-by-step examples of implementing each pattern inside a benchmark, see [Factual QA Benchmark](../workflows/creating-benchmarks/factual-qa-benchmark.md).
+
+### Boolean Check
+
+A boolean field checks whether a concept is present in the response, delegating synonym handling to the judge through the field description. No string matching needed — `verify()` simply returns the boolean field.
 
 ```python
 class Answer(BaseAnswer):
-    capital: str = Field(description="The capital city mentioned")
-    population: int = Field(description="The population figure stated")
-    continent: str = Field(description="The continent mentioned")
-
-    def model_post_init(self, __context):
-        self.correct = {
-            "capital": "paris",
-            "population": 2161000,
-            "continent": "europe",
-        }
+    identifies_tp53: bool = Field(
+        description=(
+            "True if the response identifies TP53 (including p53, TP53, or "
+            "'tumor protein p53') as the single most commonly mutated gene "
+            "in human cancers. False if TP53 is mentioned as one of several "
+            "commonly mutated genes without being singled out as the most "
+            "frequent (e.g., 'TP53, KRAS, and PIK3CA are commonly mutated')."
+        )
+    )
 
     def verify(self) -> bool:
-        return (
-            self.capital.strip().lower() == self.correct["capital"]
-            and self.population == self.correct["population"]
-            and self.continent.strip().lower() == self.correct["continent"]
-        )
-
-    def verify_granular(self) -> float:
-        correct_count = 0
-        if self.capital.strip().lower() == self.correct["capital"]:
-            correct_count += 1
-        if self.population == self.correct["population"]:
-            correct_count += 1
-        if self.continent.strip().lower() == self.correct["continent"]:
-            correct_count += 1
-        return correct_count / 3
+        return self.identifies_tp53
 
 
-# 2 out of 3 fields correct
-parsed = Answer(capital="Paris", population=999, continent="Europe")
-print(f"verify():         {parsed.verify()}")
-print(f"verify_granular(): {parsed.verify_granular():.2f}")
+parsed = Answer(identifies_tp53=True)
+print(f"Correct answer verified: {parsed.verify()}")
+
+parsed_wrong = Answer(identifies_tp53=False)
+print(f"Wrong answer verified:   {parsed_wrong.verify()}")
 ```
 
-## Regex Checks
+A boolean check avoids string matching entirely. Instead of extracting "TP53" as text and comparing it, we ask the judge "Did the response identify TP53 as the most common?" This is more reliable because the judge handles synonyms (TP53, p53, tumor protein p53) through its description.
 
-Templates can define regex patterns via `self.regex` that the pipeline checks directly against the **raw LLM response trace** — the full text the answering model produced, before any parsing. This is karenina's equivalent of classical pattern-matching evaluation: instead of writing standalone regex scripts against raw outputs, you declare named patterns and the pipeline runs them as part of the standard verification flow.
+The key design decision is in the field description: it must be specific enough to disambiguate edge cases. The `identifies_tp53` description explicitly states that merely listing TP53 alongside other cancer genes should return False — the response must single it out as the *most commonly mutated*. Without this, the judge would likely return True for "TP53, KRAS, and PIK3CA are frequently mutated in cancer," which mentions TP53 but doesn't actually answer the question. Invest time in writing precise descriptions; they are the instructions your judge LLM follows.
 
-Set `self.regex` in `model_post_init` alongside `self.correct`. Each entry is a named check with a `pattern`, an `expected` value, and a `match_type` that controls comparison:
+Because `verify()` returns the field directly, `model_post_init` can be omitted — the expected answer is embedded in the field description itself. This makes boolean the simplest template pattern, but comes with an anchoring tradeoff: the judge sees the expected answer in the description. See [Ground Truth Exposure](#ground-truth-exposure-and-judge-anchoring) for when this matters.
+
+<div class="admonition tip">
+<p class="admonition-title">When to use boolean checks</p>
+<p>Prefer boolean fields when you need to check for the presence of a concept that has multiple valid surface forms. The judge handles normalization so <code>verify()</code> stays trivial. For checking multiple concepts independently with partial credit, see <a href="#multi-field-with-partial-credit">Multi-Field with Partial Credit</a>.</p>
+</div>
+
+### String Extraction
+
+Using `str` fields tells the judge to extract a specific piece of text. The judge acts as a *parser*: the field description guides what to look for and specifies the expected format, but the judge chooses the value based on what the response actually says. The correctness check happens in `verify()`, which the judge never sees.
+
+This keeps the judge unbiased -- the description specifies *what kind of value* to extract without revealing what the correct answer is. The tradeoff: since free text is more variable than a boolean, you need normalization logic in `verify()` to handle formatting differences.
+
+```python
+class Answer(BaseAnswer):
+    blood_type: str = Field(
+        description=(
+            "The blood type stated in the response as the most common worldwide. "
+            "Use standard notation: uppercase letter followed by '+' or '-' "
+            "(e.g., 'O+' not 'O positive' or 'type O'). If the response uses "
+            "the full name ('O positive'), normalize to shorthand ('O+')."
+        )
+    )
+
+    def model_post_init(self, __context):
+        self.correct = {"blood_type": "O+"}
+
+    def verify(self) -> bool:
+        extracted = self.blood_type.strip().upper().replace(" ", "")
+        # Normalize common variations
+        extracted = (
+            extracted
+            .replace("POSITIVE", "+")
+            .replace("NEGATIVE", "-")
+            .replace("POS", "+")
+            .replace("NEG", "-")
+        )
+        return extracted == self.correct["blood_type"]
+
+
+# Various formats the judge might return — normalization handles them
+for value in ["O+", "O positive", "o+", "O POSITIVE"]:
+    parsed = Answer(blood_type=value)
+    print(f"{value!r:>14} -> verify(): {parsed.verify()}")
+```
+
+Even though the description asks for standard notation, the judge may return "O positive" or "o+". Handling these variations in `verify()` is expected and keeps the correctness logic deterministic.
+
+<div class="admonition tip">
+<p class="admonition-title">When to use string extraction</p>
+<p>Prefer string fields when you need the actual value for downstream analysis, want to prevent judge anchoring on ground truth, or need programmatic control over matching (regex, substring, normalization). See <a href="#ground-truth-exposure-and-judge-anchoring">Ground Truth Exposure</a> for the tradeoff with boolean fields.</p>
+</div>
+
+### Numeric Tolerance
+
+Because `verify()` is plain Python, you can implement any verification logic you need. Numeric tolerance is a good example: the judge extracts a raw number, and your code decides what counts as "close enough." A body temperature of 37.2 degrees C is clinically normal even though the textbook value is 37.0 degrees C. Rather than trying to encode tolerance rules in a prompt, you write a programmatic comparison with an explicit margin.
+
+```python
+class Answer(BaseAnswer):
+    temperature_celsius: float = Field(
+        description=(
+            "The normal body temperature stated in the response, in degrees "
+            "Celsius. If the response gives the value in Fahrenheit (e.g., "
+            "98.6 F), extract the Celsius equivalent. If a range is given "
+            "(e.g., 36.5-37.5), extract the midpoint."
+        )
+    )
+
+    def model_post_init(self, __context):
+        self.correct = {"temperature_celsius": 37.0}
+        self.tolerance = 0.5  # Accept 36.5-37.5, reflecting natural variation
+
+    def verify(self) -> bool:
+        return abs(self.temperature_celsius - self.correct["temperature_celsius"]) <= self.tolerance
+
+
+# Various temperatures within and outside tolerance
+for temp in [37.0, 36.8, 37.5, 36.0, 38.0]:
+    parsed = Answer(temperature_celsius=temp)
+    print(f"{temp} C -> verify(): {parsed.verify()}")
+```
+
+For exact counts where only one value is correct, set `tolerance = 0`:
+
+```python
+class Answer(BaseAnswer):
+    pair_count: int = Field(
+        description=(
+            "The number of chromosome pairs in a normal human somatic cell, "
+            "as a whole number. If the response gives the total count (e.g., 46), "
+            "extract the number of pairs (23)."
+        )
+    )
+
+    def model_post_init(self, __context):
+        self.correct = {"pair_count": 23}
+        self.tolerance = 0  # Exact match: only 23 is correct
+
+    def verify(self) -> bool:
+        return abs(self.pair_count - self.correct["pair_count"]) <= self.tolerance
+
+
+parsed = Answer(pair_count=23)
+print(f"23 pairs -> verify(): {parsed.verify()}")
+parsed_wrong = Answer(pair_count=46)
+print(f"46 pairs -> verify(): {parsed_wrong.verify()}")
+```
+
+<div class="admonition tip">
+<p class="admonition-title">Choosing tolerance values</p>
+<p>Use <code>tolerance = 0</code> for exact counts (chromosomes, electrons). Use absolute tolerance for physical measurements with known precision (body temperature, boiling points). Use percentage-based tolerance for values that span wide ranges (e.g., <code>tolerance_pct = 10</code> to accept within 10%).</p>
+</div>
+
+### Regex Checks
+
+Templates can define regex patterns via `self.regex` that the pipeline checks directly against the **raw LLM response trace** -- the full text the answering model produced, before any parsing.
+
+Sometimes you may not want -- or may not be able to -- use an LLM judge for evaluation. Classical benchmarks often rely on static pattern matching: regex against raw outputs, with no model-based parsing involved. `self.regex` brings this approach into karenina: instead of writing standalone regex scripts outside the framework, you declare named patterns inside the template and the pipeline runs them as part of the standard verification flow. This lets you run classical pattern-matching benchmarks through karenina's pipeline, benefiting from its infrastructure (checkpoints, results, DataFrames, multi-model comparison) without requiring a judge LLM.
+
+When used alongside `verify()`, the pipeline ANDs both results -- both `verify()` and `verify_regex()` must pass for the template to succeed. When used alone (with `verify()` returning `True`), regex checks become the sole evaluation mechanism, giving you a pure pattern-matching benchmark.
+
+**Regex-only templates** (no user-defined fields) are detected automatically: the pipeline skips LLM parsing entirely, so no parsing model is needed. Since there are no fields to check, `verify()` is optional -- if omitted, field verification defaults to `True` and regex is the sole evaluation.
+
+Set `self.regex` in `model_post_init` (alongside `self.correct` if your template also has fields). Each entry is a named check with a `pattern`, an `expected` value, and a `match_type` that controls comparison:
 
 ```python
 class Answer(BaseAnswer):
@@ -232,21 +347,12 @@ class Answer(BaseAnswer):
         return "1928" in self.discovery_date
 
 
-# verify() checks the parsed field; verify_regex() checks the raw response
+# verify() checks the parsed field
 parsed = Answer(discovery_date="1928")
-
-# Raw response that mentions both year and Fleming → both checks pass
-result = parsed.verify_regex("Alexander Fleming discovered penicillin in 1928.")
-print(f"verify():      {parsed.verify()}")
-print(f"verify_regex(): success={result['success']}, checks={result['results']}")
-
-# Raw response missing Fleming → regex check fails even though verify() passes
-result2 = parsed.verify_regex("Penicillin was discovered in 1928.")
-print(f"\nverify():      {parsed.verify()}")
-print(f"verify_regex(): success={result2['success']}, checks={result2['results']}")
+print(f"verify(): {parsed.verify()}")
 ```
 
-The pipeline calls `verify_regex()` automatically during the VerifyTemplate stage. The result is ANDed with `verify()` — both must pass for the template to succeed. If no `self.regex` is defined, the check passes trivially.
+The pipeline calls `verify_regex()` automatically during the VerifyTemplate stage, passing the raw response trace. The result is ANDed with `verify()` -- both must pass for the template to succeed. If no `self.regex` is defined, the check passes trivially. In the example above, `verify()` passes because the parsed field contains "1928", but the template would still fail if the raw response didn't match both regex patterns (the year and Fleming's name).
 
 Four match types are available:
 
@@ -259,10 +365,7 @@ Four match types are available:
 
 ```python
 class Answer(BaseAnswer):
-    summary: str = Field(description="Summary of the response")
-
     def model_post_init(self, __context):
-        self.correct = {}
         self.regex = {
             # contains: check which alternation matched
             "has_mechanism_keyword": {
@@ -278,78 +381,118 @@ class Answer(BaseAnswer):
             },
         }
 
-    def verify(self) -> bool:
-        return True  # Only regex validation for this template
 
-
-parsed = Answer(summary="test")
-result = parsed.verify_regex(
-    "The drug inhibits COX enzymes [1], reducing inflammation [2] and pain [3]."
-)
-print(f"success: {result['success']}")
-print(f"checks:  {result['results']}")
+# No fields, no verify() — regex is the sole evaluation
+# Pipeline skips LLM parsing automatically
+parsed = Answer()
+print(f"verify_regex(): {parsed.verify_regex('The drug inhibits the target [1] [2] [3]')}")
 ```
 
 <div class="admonition tip">
 <p class="admonition-title">Regex checks vs. regex in verify()</p>
-<p><code>self.regex</code> checks patterns in the <strong>raw response trace</strong> — what the answering model actually said. <code>re.search()</code> in <code>verify()</code> normalizes <strong>parsed field values</strong> — what the judge extracted. Use <code>self.regex</code> when you need to verify that certain patterns appear in the original response. Use <code>re.search()</code> in <code>verify()</code> when the judge returns a value in variable format and you need to extract the relevant portion before comparison.</p>
+<p><code>self.regex</code> checks patterns in the <strong>raw response trace</strong> -- what the answering model actually said. <code>re.search()</code> in <code>verify()</code> normalizes <strong>parsed field values</strong> -- what the judge extracted. Use <code>self.regex</code> when you need to verify that certain patterns appear in the original response. Use <code>re.search()</code> in <code>verify()</code> when the judge returns a value in variable format and you need to extract the relevant portion before comparison.</p>
 </div>
 
-## Embedding Check
+### Multi-Field with Partial Credit
 
-When `embedding_check_enabled` is set in `VerificationConfig`, the pipeline runs a **semantic similarity check** (stage 9) after `verify()`. This uses a SentenceTransformer model to compare the raw LLM response against the expected answer, providing a secondary signal when string-based verification is too strict.
+For questions with multiple dimensions -- where you want to check delivery method *and* target protein *and* immune response independently -- use multiple fields with both `verify()` (all-or-nothing) and `verify_granular()` (partial credit scoring from 0.0 to 1.0).
 
-The embedding check is configured via three settings:
+Extracting each check into a private `_check_*` method keeps both `verify()` and `verify_granular()` readable and ensures the logic is defined once. This pattern is recommended whenever you have three or more fields to verify.
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `embedding_check_enabled` | `False` | Enable the embedding similarity check |
-| `embedding_check_model` | `all-MiniLM-L6-v2` | SentenceTransformer model name |
-| `embedding_check_threshold` | `0.85` | Similarity threshold (0.0-1.0) |
+```python
+class Answer(BaseAnswer):
+    delivery_mechanism: str = Field(
+        description=(
+            "How the vaccine delivers its payload, as described in the response "
+            "(e.g., 'mRNA instructions', 'messenger RNA', 'genetic code'). "
+            "Normalize to lowercase."
+        )
+    )
+    target_protein: str = Field(
+        description=(
+            "The protein that cells are instructed to produce (e.g., 'spike "
+            "protein'). Normalize to lowercase. If the response names a specific "
+            "variant, extract the general protein name."
+        )
+    )
+    mentions_immune_response: bool = Field(
+        description=(
+            "True if the response describes the resulting immune response "
+            "(antibody production, T-cell activation, or immune memory). "
+            "False if only the protein production step is mentioned without "
+            "describing what happens next."
+        )
+    )
 
-The embedding check result is stored alongside the template result — it does not override `verify()` but provides additional context for analysis.
+    def model_post_init(self, __context):
+        self.correct = {
+            "delivery_mechanism": "mrna",
+            "target_protein": "spike protein",
+            "mentions_immune_response": True,
+        }
+
+    def _check_delivery(self) -> bool:
+        mechanism = self.delivery_mechanism.strip().lower()
+        return "mrna" in mechanism or "messenger rna" in mechanism
+
+    def _check_target(self) -> bool:
+        return "spike" in self.target_protein.strip().lower()
+
+    def _check_immune_response(self) -> bool:
+        return self.mentions_immune_response == self.correct["mentions_immune_response"]
+
+    def verify(self) -> bool:
+        return (
+            self._check_delivery()
+            and self._check_target()
+            and self._check_immune_response()
+        )
+
+    def verify_granular(self) -> float:
+        checks = [
+            self._check_delivery(),
+            self._check_target(),
+            self._check_immune_response(),
+        ]
+        return sum(checks) / len(checks)
+
+
+# All fields correct
+parsed = Answer(
+    delivery_mechanism="mRNA instructions",
+    target_protein="spike protein",
+    mentions_immune_response=True,
+)
+print(f"verify():         {parsed.verify()}")
+print(f"verify_granular(): {parsed.verify_granular():.2f}")
+
+# 2 out of 3 correct — verify fails, but granular gives partial credit
+parsed2 = Answer(
+    delivery_mechanism="mRNA instructions",
+    target_protein="wrong protein",
+    mentions_immune_response=True,
+)
+print(f"\nverify():         {parsed2.verify()}")
+print(f"verify_granular(): {parsed2.verify_granular():.2f}")
+```
+
+The pipeline calls `verify()` for the pass/fail result used in scoring. `verify_granular()` provides a 0.0 to 1.0 score for finer-grained analysis -- getting 2 out of 3 checks correct yields 0.67 instead of a flat failure.
+
+### Pattern Summary
+
+| Pattern | Use When | Don't Use When | Example |
+|---------|----------|----------------|---------|
+| Boolean check | Known concept, multiple synonyms | You need the extracted value | Gene identification, pathway presence |
+| String extraction | Strict matching with programmatic control | Only need presence check (use boolean) | Blood types, gene symbols |
+| Numeric tolerance | Measurements or counts | Value is categorical, not numeric | Body temperature, chromosome counts |
+| Regex checks (`self.regex`) | Pattern must appear in raw response; no fields = no LLM judge needed | Only need to normalize parsed field values | Year mentions, keyword presence, citation counts |
+| Multi-field + partial credit | Multiple dimensions, want granular scoring | Single-answer questions | Mechanisms, multi-part descriptions |
 
 ## Writing Good Field Descriptions
 
 ### What the Judge Sees
 
-When the Judge LLM parses a response, it receives the JSON schema derived from your template — field names, types, and descriptions. The system prompt tells it: *"Each field's description is authoritative for what and how to extract. Follow field descriptions precisely."* This means your description **is** your specification. A vague description produces unreliable extractions because the judge has no other guidance for what you want.
-
-### Two Strategies for Field Design
-
-There are two approaches to designing template fields, each with a different tradeoff around how the judge interacts with ground truth. Choose based on what you need from the evaluation.
-
-**Strategy 1: Boolean presence checks** — Use `bool` fields to check whether a concept appears in the response. This sidesteps string matching and normalization entirely. Best when you care about presence or absence, not the exact extracted text.
-
-```python
-class Answer(BaseAnswer):
-    identifies_bcl2_as_target: bool = Field(
-        description=(
-            "True if the response identifies BCL2 (including variants like Bcl-2, "
-            "BCL-2, or B-cell lymphoma 2) as the direct pharmacological target of "
-            "the drug. False if BCL2 is mentioned only as a pathway member or if "
-            "a different protein is identified as the primary target."
-        )
-    )
-```
-
-This description specifies accepted name variants, distinguishes direct target from pathway mention, and tells the judge how to handle the ambiguous case (mentioned but not as primary target).
-
-**Strategy 2: String extraction with format expectations** — Use `str` fields when you need the actual extracted text for downstream analysis or complex verification logic. When using strings, always specify the expected format.
-
-```python
-class Answer(BaseAnswer):
-    gene_symbol: str = Field(
-        description=(
-            "The official HGNC gene symbol for the drug's molecular target, as stated "
-            "or implied in the response. Use uppercase without hyphens (e.g., 'BCL2' "
-            "not 'Bcl-2', 'TP53' not 'p53'). If multiple targets are mentioned, "
-            "extract the primary target — the one described as the direct binding partner."
-        )
-    )
-```
-
-This description specifies the format (HGNC standard, uppercase, no hyphens), provides normalization examples, and handles multi-target disambiguation.
+When the Judge LLM parses a response, it receives the JSON schema derived from your template -- field names, types, and descriptions. The system prompt tells it: *"Each field's description is authoritative for what and how to extract. Follow field descriptions precisely."* This means your description **is** your specification. A vague description produces unreliable extractions because the judge has no other guidance for what you want.
 
 ### Ground Truth Exposure and Judge Anchoring
 
@@ -365,7 +508,7 @@ This is a design tradeoff, not a right-or-wrong choice. Boolean fields are faste
 
 When you expect a set of items (proteins, symptoms, references), you have two approaches.
 
-**`list[str]` extraction** — Use when the set of expected items is open-ended or you need the actual extracted terms for downstream analysis. Requires normalization in `verify()`.
+**`list[str]` extraction** -- Use when the set of expected items is open-ended or you need the actual extracted terms for downstream analysis. Requires normalization in `verify()`.
 
 ```python
 class Answer(BaseAnswer):
@@ -379,7 +522,7 @@ class Answer(BaseAnswer):
     )
 ```
 
-**Individual boolean fields** (often simpler) — Use when you have a known set of expected items. Each field is an independent, unambiguous check. No string matching is needed in `verify()`, and you get per-item partial credit via `verify_granular()`.
+**Individual boolean fields** (often simpler) -- Use when you have a known set of expected items. Each field is an independent, unambiguous check. No string matching is needed in `verify()`, and you get per-item partial credit via `verify_granular()`.
 
 ```python
 class Answer(BaseAnswer):
@@ -404,20 +547,34 @@ class Answer(BaseAnswer):
     )
 ```
 
-Each field is self-contained, accepts known synonyms, and `verify()` is trivial — `all(...)` for strict, `sum(...)/len(...)` for partial credit. The boolean approach avoids set comparison, string normalization, and gives you granular per-item results.
+Each field is self-contained, accepts known synonyms, and `verify()` is trivial -- `all(...)` for strict, `sum(...)/len(...)` for partial credit. The boolean approach avoids set comparison, string normalization, and gives you granular per-item results.
 
 ### Anatomy of a Good Description
 
 Every field description should address four elements:
 
 - **What to extract**: What specific information, not just "the answer"
-- **Format expectations**: How to represent it — case, notation, units, naming standard
-- **Scope boundaries**: What counts and what doesn't — context restrictions, inclusion/exclusion rules
-- **Disambiguation**: How to handle ambiguity — multiple candidates, indirect mentions, edge cases
+- **Format expectations**: How to represent it -- case, notation, units, naming standard
+- **Scope boundaries**: What counts and what doesn't -- context restrictions, inclusion/exclusion rules
+- **Disambiguation**: How to handle ambiguity -- multiple candidates, indirect mentions, edge cases
+
+## Embedding Check
+
+When `embedding_check_enabled` is set in `VerificationConfig`, the pipeline runs a **semantic similarity check** (stage 9) after `verify()`. This uses a SentenceTransformer model to compare the raw LLM response against the expected answer, providing a secondary signal when string-based verification is too strict.
+
+The embedding check is configured via three settings:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `embedding_check_enabled` | `False` | Enable the embedding similarity check |
+| `embedding_check_model` | `all-MiniLM-L6-v2` | SentenceTransformer model name |
+| `embedding_check_threshold` | `0.85` | Similarity threshold (0.0-1.0) |
+
+The embedding check result is stored alongside the template result -- it does not override `verify()` but provides additional context for analysis.
 
 ## Next Steps
 
-- [Rubrics](rubrics/index.md) — Assess response quality beyond correctness
-- [Evaluation Modes](evaluation-modes.md) — Choose between template-only, rubric-only, or both
-- [Creating Benchmarks](../workflows/creating-benchmarks/index.md) — Build benchmarks with templates and questions
-- [Philosophy](../home/philosophy.md) — Why the LLM-as-judge approach works
+- [Rubrics](rubrics/index.md) -- Assess response quality beyond correctness
+- [Evaluation Modes](evaluation-modes.md) -- Choose between template-only, rubric-only, or both
+- [Factual QA Benchmark](../workflows/creating-benchmarks/factual-qa-benchmark.md) -- Step-by-step implementation of these patterns in a benchmark
+- [Philosophy](../home/philosophy.md) -- Why the LLM-as-judge approach works
