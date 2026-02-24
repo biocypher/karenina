@@ -67,13 +67,14 @@ def validate_answer_template(template_code: str) -> tuple[bool, str | None, type
         if not issubclass(Answer, BaseAnswer):
             return False, "Answer class must inherit from BaseAnswer", None
 
-        # Check if it has a verify method
-        if not hasattr(Answer, "verify"):
-            return False, "does not have a 'verify' method", None
+        # Check if it has a verify method (not required for regex-only templates)
+        from .template_parsing_helpers import is_regex_only_template
 
-        # Check if verify method is callable
-        if not callable(getattr(Answer, "verify", None)):
-            return False, "verify must be a callable method", None
+        if not is_regex_only_template(Answer):
+            if not hasattr(Answer, "verify"):
+                return False, "does not have a 'verify' method", None
+            if not callable(getattr(Answer, "verify", None)):
+                return False, "verify must be a callable method", None
 
         # The 'correct' field is optional, but if present via model_post_init, it must be a dict
         if "model_post_init" in Answer.__dict__:

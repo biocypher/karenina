@@ -2,6 +2,7 @@
 
 Tests cover:
 - is_regex_only_template() detection logic
+- Template validation (verify() optional for regex-only)
 - ParseTemplateStage fast path (skips LLM for regex-only templates)
 - VerifyTemplateStage without evaluator (regex-only verification)
 - End-to-end StageOrchestrator run with regex-only template
@@ -18,6 +19,9 @@ from karenina.benchmark.verification.stages import (
 )
 from karenina.benchmark.verification.utils.template_parsing_helpers import (
     is_regex_only_template,
+)
+from karenina.benchmark.verification.utils.template_validation import (
+    validate_answer_template,
 )
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.entities import BaseAnswer
@@ -38,9 +42,14 @@ class Answer(BaseAnswer):
                 "match_type": "contains",
             }
         }
+"""
 
-    def verify(self):
-        return True
+FIELD_TEMPLATE_NO_VERIFY_CODE = """\
+from karenina.schemas.entities import BaseAnswer
+from pydantic import Field
+
+class Answer(BaseAnswer):
+    target: str = Field(description="The target protein")
 """
 
 
@@ -135,6 +144,29 @@ class TestIsRegexOnlyTemplate:
     def test_positive_no_verify_method(self) -> None:
         """Regex-only template without verify() is still regex-only."""
         assert is_regex_only_template(RegexOnlyNoVerifyAnswer) is True
+
+
+# =============================================================================
+# Template Validation Tests
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestRegexOnlyValidation:
+    """Test that validate_answer_template allows regex-only templates without verify()."""
+
+    def test_regex_only_without_verify_passes(self) -> None:
+        """Regex-only template without verify() passes validation."""
+        is_valid, error_msg, answer_cls = validate_answer_template(REGEX_ONLY_TEMPLATE_CODE)
+        assert is_valid is True
+        assert error_msg is None
+        assert answer_cls is not None
+
+    def test_field_template_without_verify_fails(self) -> None:
+        """Template with fields but no verify() fails validation."""
+        is_valid, error_msg, _answer_cls = validate_answer_template(FIELD_TEMPLATE_NO_VERIFY_CODE)
+        assert is_valid is False
+        assert "verify" in error_msg
 
 
 # =============================================================================
