@@ -40,7 +40,7 @@ Response (free text)  →  Judge LLM  →  Filled template  →  verify()  →  
 Every template inherits from `BaseAnswer` and must be named `Answer`. A template has three required components:
 
 1. **Fields** with descriptions that guide the Judge LLM
-2. **`model_post_init`** to set ground truth values
+2. **`model_post_init`** to set ground truth values (and optionally `self.regex` for pattern-matching checks)
 3. **`verify`** to compare extracted values against ground truth
 
 Here is a simple template that checks whether an LLM correctly identified a drug target:
@@ -74,6 +74,32 @@ print(f"Extracted target: {parsed.target!r}")
 print(f"Ground truth:     {parsed.correct['target']!r}")
 print(f"Verified:         {parsed.verify()}")
 ```
+
+## Why These Three Components?
+
+You might wonder why templates need these specific pieces, and why they're shaped this way.
+
+### Why `model_post_init` for ground truth
+
+The Judge LLM receives the template's JSON schema (field names, types, and descriptions) to know what to extract. Ground truth needs to stay out of that schema so the judge acts as a pure parser, not a correctness checker. If the expected answers were regular Pydantic fields, they'd show up in the schema and bias the judge.
+
+`model_post_init` is Pydantic v2's hook that runs right after an instance is created. By the time it fires, the judge's extracted values are already in the fields, so you can safely attach the expected answers alongside them in `self.correct`. This works because `BaseAnswer` uses `extra="allow"`, letting Pydantic store the `correct` dictionary as an extra attribute without it appearing in the schema.
+
+### Why `verify` as a user-defined method
+
+The judge's job is to **extract** information from a response (fill in the schema). Whether that information is *correct* is a separate question, and one that should be answered by deterministic code, not another LLM call. That's what `verify()` does.
+
+Because `verify()` is plain Python, you get:
+
+- **Reproducibility**: the same extracted values always produce the same verdict, no matter what judge model you use
+- **Transparency**: anyone can read the code and see exactly what counts as "correct"
+- **Testability**: create an instance with sample values, call `verify()`, and check the result locally without any LLM
+
+### Validation
+
+`BaseAnswer` itself doesn't enforce that your template defines `verify()` or `model_post_init`. Instead, the pipeline validates templates before running them: stage 1 (`ValidateTemplate`) checks that `verify()` exists and is callable, and that `model_post_init` sets `self.correct` as a dictionary. If something is missing, you get a clear error before any LLM calls happen.
+
+`verify_granular()` is fully optional. The pipeline only calls it if your template defines it.
 
 ## Naming Requirement
 
@@ -172,6 +198,103 @@ print(f"verify():         {parsed.verify()}")
 print(f"verify_granular(): {parsed.verify_granular():.2f}")
 ```
 
+## Regex Checks
+
+Templates can define regex patterns via `self.regex` that the pipeline checks directly against the **raw LLM response trace** — the full text the answering model produced, before any parsing. This is karenina's equivalent of classical pattern-matching evaluation: instead of writing standalone regex scripts against raw outputs, you declare named patterns and the pipeline runs them as part of the standard verification flow.
+
+Set `self.regex` in `model_post_init` alongside `self.correct`. Each entry is a named check with a `pattern`, an `expected` value, and a `match_type` that controls comparison:
+
+```python
+class Answer(BaseAnswer):
+    discovery_date: str = Field(
+        description=(
+            "The date of penicillin's discovery as stated in the response. "
+            "Extract the full date if available, otherwise the year alone."
+        )
+    )
+
+    def model_post_init(self, __context):
+        self.correct = {"discovery_date": "1928"}
+        self.regex = {
+            "mentions_discovery_year": {
+                "pattern": r"\b1928\b",
+                "expected": "1928",
+                "match_type": "exact",
+            },
+            "mentions_fleming": {
+                "pattern": r"\bFleming\b",
+                "expected": "Fleming",
+                "match_type": "exact",
+            },
+        }
+
+    def verify(self) -> bool:
+        return "1928" in self.discovery_date
+
+
+# verify() checks the parsed field; verify_regex() checks the raw response
+parsed = Answer(discovery_date="1928")
+
+# Raw response that mentions both year and Fleming → both checks pass
+result = parsed.verify_regex("Alexander Fleming discovered penicillin in 1928.")
+print(f"verify():      {parsed.verify()}")
+print(f"verify_regex(): success={result['success']}, checks={result['results']}")
+
+# Raw response missing Fleming → regex check fails even though verify() passes
+result2 = parsed.verify_regex("Penicillin was discovered in 1928.")
+print(f"\nverify():      {parsed.verify()}")
+print(f"verify_regex(): success={result2['success']}, checks={result2['results']}")
+```
+
+The pipeline calls `verify_regex()` automatically during the VerifyTemplate stage. The result is ANDed with `verify()` — both must pass for the template to succeed. If no `self.regex` is defined, the check passes trivially.
+
+Four match types are available:
+
+| `match_type` | `expected` type | Passes when |
+|-------------|----------------|-------------|
+| `"exact"` | `str` | Exactly one match, equals `expected` |
+| `"contains"` | `str` | `expected` is among the matches (for alternation patterns) |
+| `"count"` | `int` | Number of matches equals `expected` |
+| `"all"` | `list[str]` | All items in `expected` found in matches |
+
+```python
+class Answer(BaseAnswer):
+    summary: str = Field(description="Summary of the response")
+
+    def model_post_init(self, __context):
+        self.correct = {}
+        self.regex = {
+            # contains: check which alternation matched
+            "has_mechanism_keyword": {
+                "pattern": r"\b(activates|inhibits|blocks)\b",
+                "expected": "inhibits",
+                "match_type": "contains",
+            },
+            # count: verify citation count
+            "has_three_citations": {
+                "pattern": r"\[\d+\]",
+                "expected": 3,
+                "match_type": "count",
+            },
+        }
+
+    def verify(self) -> bool:
+        return True  # Only regex validation for this template
+
+
+parsed = Answer(summary="test")
+result = parsed.verify_regex(
+    "The drug inhibits COX enzymes [1], reducing inflammation [2] and pain [3]."
+)
+print(f"success: {result['success']}")
+print(f"checks:  {result['results']}")
+```
+
+<div class="admonition tip">
+<p class="admonition-title">Regex checks vs. regex in verify()</p>
+<p><code>self.regex</code> checks patterns in the <strong>raw response trace</strong> — what the answering model actually said. <code>re.search()</code> in <code>verify()</code> normalizes <strong>parsed field values</strong> — what the judge extracted. Use <code>self.regex</code> when you need to verify that certain patterns appear in the original response. Use <code>re.search()</code> in <code>verify()</code> when the judge returns a value in variable format and you need to extract the relevant portion before comparison.</p>
+</div>
+
 ## Embedding Check
 
 When `embedding_check_enabled` is set in `VerificationConfig`, the pipeline runs a **semantic similarity check** (stage 9) after `verify()`. This uses a SentenceTransformer model to compare the raw LLM response against the expected answer, providing a secondary signal when string-based verification is too strict.
@@ -194,7 +317,7 @@ When the Judge LLM parses a response, it receives the JSON schema derived from y
 
 ### Two Strategies for Field Design
 
-There are two equally valid approaches to designing template fields. Choose based on what you need from the evaluation.
+There are two approaches to designing template fields, each with a different tradeoff around how the judge interacts with ground truth. Choose based on what you need from the evaluation.
 
 **Strategy 1: Boolean presence checks** — Use `bool` fields to check whether a concept appears in the response. This sidesteps string matching and normalization entirely. Best when you care about presence or absence, not the exact extracted text.
 
@@ -227,6 +350,16 @@ class Answer(BaseAnswer):
 ```
 
 This description specifies the format (HGNC standard, uppercase, no hyphens), provides normalization examples, and handles multi-target disambiguation.
+
+### Ground Truth Exposure and Judge Anchoring
+
+The choice between boolean and string fields has a subtle but important implication for how the judge LLM behaves.
+
+With **boolean fields**, it is common practice to embed the ground truth in the description: "True if the response identifies BCL2 as the target." This is convenient (no normalization needed, trivial `verify()`), but the judge sees the expected answer and may **anchor** on it rather than faithfully assessing what the response actually says.
+
+With **string fields**, the description tells the judge *what kind of value* to extract ("The protein target mentioned in the response") without revealing what the correct answer is. The judge acts as a **parser**: it extracts what it finds, and `verify()` handles the correctness check programmatically. This keeps the judge unbiased, but requires normalization in `verify()` since free text is more variable than a boolean.
+
+This is a design tradeoff, not a right-or-wrong choice. Boolean fields are faster to write and produce simpler templates. String fields provide a cleaner separation between extraction (judge) and evaluation (`verify()`). Being aware of this distinction helps you make an informed choice for each field in your template.
 
 ### Lists vs Boolean Decomposition
 

@@ -45,6 +45,8 @@ In short:
 
 A template is a Pydantic model that defines **what to extract** from the response and **how to check it**. The Judge LLM fills in the schema fields, and the `verify()` method compares them against expected values.
 
+Note that the judge's role varies by field type. With `str` fields, the judge is a pure parser: it extracts values that `verify()` then checks. With `bool` fields, the description often includes the expected answer ("True if TP53 is identified as the most common"), so the judge performs some evaluation during extraction. See [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb) for guidance on this tradeoff.
+
 ```python
 from pydantic import Field
 from karenina.schemas.entities import BaseAnswer
