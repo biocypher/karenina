@@ -157,8 +157,10 @@ print(f"Function result: {func('Hello world')}")  # Function result: 11
 print(f"Trait evaluate:  {length_trait.evaluate('Hello world')}")  # Trait evaluate:  11
 ```
 
-!!! warning "Security Warning"
-    Deserializing callable code can execute arbitrary Python code. Only load `CallableTrait` instances from **trusted sources**. `CallableTrait` cannot be created via the web API for security reasons.
+<div class="admonition warning">
+<p class="admonition-title">Security Warning</p>
+<p>Deserializing callable code can execute arbitrary Python code. Only load <code>CallableTrait</code> instances from <strong>trusted sources</strong>. <code>CallableTrait</code> cannot be created via the web API for security reasons.</p>
+</div>
 
 ## Serialization Best Practices
 

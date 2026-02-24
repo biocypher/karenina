@@ -139,19 +139,20 @@ print(prohibited_trait.evaluate("Contact me at user@example.com"))  # True (PII 
 print(prohibited_trait.evaluate("No personal info here."))          # False (no PII = good)
 ```
 
-!!! tip "invert_result vs higher_is_better"
-
-    These two fields serve different purposes:
-
-    - **`invert_result`** changes the **evaluation output** -- it flips `True` to `False` and vice versa
-    - **`higher_is_better`** changes the **interpretation** -- it tells analysis tools whether `True` is good or bad
-
-    For "absence" checks, you can use either approach:
-
-    - `invert_result=True, higher_is_better=True` -- output `True` when pattern is absent (good)
-    - `invert_result=False, higher_is_better=False` -- output `True` when pattern is present (bad)
-
-    Both encode the same intent. The `invert_result` approach is usually clearer because `True` means "passed the check."
+<div class="admonition tip">
+<p class="admonition-title">invert_result vs higher_is_better</p>
+<p>These two fields serve different purposes:</p>
+<ul>
+<li><strong><code>invert_result</code></strong> changes the <strong>evaluation output</strong> -- it flips <code>True</code> to <code>False</code> and vice versa</li>
+<li><strong><code>higher_is_better</code></strong> changes the <strong>interpretation</strong> -- it tells analysis tools whether <code>True</code> is good or bad</li>
+</ul>
+<p>For "absence" checks, you can use either approach:</p>
+<ul>
+<li><code>invert_result=True, higher_is_better=True</code> -- output <code>True</code> when pattern is absent (good)</li>
+<li><code>invert_result=False, higher_is_better=False</code> -- output <code>True</code> when pattern is present (bad)</li>
+</ul>
+<p>Both encode the same intent. The <code>invert_result</code> approach is usually clearer because <code>True</code> means "passed the check."</p>
+</div>
 
 ## Using Regex Traits in a Rubric
 

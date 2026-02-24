@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.18.1
+      jupytext_version: 1.19.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -323,19 +323,21 @@ shutil.rmtree(tmpdir, ignore_errors=True)
 
 ## When to Use Rubric-Only
 
-!!! tip "Rubric-only vs template-based evaluation"
-    Use rubric-only when:
-
-    - There's no single correct answer (communication, creativity, safety)
-    - You care about *how* the response is delivered, not *what* it contains
-    - Evaluation criteria are qualitative (empathy, clarity, tone)
-
-    Use templates (with or without rubrics) when:
-
-    - Questions have definitive correct answers
-    - You need to extract and verify specific facts
-
-    See [Evaluation Modes](../../core_concepts/evaluation-modes.md) for details.
+<div class="admonition tip">
+<p class="admonition-title">Rubric-only vs template-based evaluation</p>
+<p>Use rubric-only when:</p>
+<ul>
+<li>There's no single correct answer (communication, creativity, safety)</li>
+<li>You care about <em>how</em> the response is delivered, not <em>what</em> it contains</li>
+<li>Evaluation criteria are qualitative (empathy, clarity, tone)</li>
+</ul>
+<p>Use templates (with or without rubrics) when:</p>
+<ul>
+<li>Questions have definitive correct answers</li>
+<li>You need to extract and verify specific facts</li>
+</ul>
+<p>See <a href="../../core_concepts/evaluation-modes.md">Evaluation Modes</a> for details.</p>
+</div>
 
 ---
 

@@ -108,10 +108,14 @@ benchmark.update_template(q1_id, Answer)
 print(f"Q1 added with template: {q1_id[:50]}...")
 ```
 
-Boolean decomposition avoids string matching entirely. Instead of extracting "BCL2" as text and comparing it, we ask the judge "Did the response identify BCL2?" This is more reliable because the judge handles synonyms (Bcl-2, BCL-2, B-cell lymphoma 2) through its description.
+Boolean decomposition avoids string matching entirely. Instead of extracting "BCL2" as text and comparing it, we ask the judge "Did the response identify BCL2?" This is more reliable because the judge handles synonyms (double helix, double-stranded helix, Watson-Crick structure) through its description.
 
-!!! tip "When to use boolean decomposition"
-    Prefer boolean fields when you have a known set of concepts to check for and the concepts have multiple valid surface forms. Each `bool` field is an independent check — the judge handles normalization, and `verify()` stays trivial.
+The key design decision is in the field descriptions: they must be specific enough to disambiguate edge cases. The `identifies_double_helix` description explicitly states that "only single-stranded DNA" should return False. Without this, the judge might return True for a response that mentions DNA structure tangentially. Invest time in writing precise descriptions; they are the instructions your judge LLM follows.
+
+<div class="admonition tip">
+<p class="admonition-title">When to use boolean decomposition</p>
+<p>Prefer boolean fields when you have a known set of concepts to check for and the concepts have multiple valid surface forms. Each <code>bool</code> field is an independent check, and the judge handles normalization so <code>verify()</code> stays trivial.</p>
+</div>
 
 ### Question 2: String Normalization — Gene Symbol Extraction
 
@@ -201,8 +205,12 @@ class Answer(BaseAnswer):
 print("Tolerance example defined (not added to benchmark)")
 ```
 
-!!! tip "Choosing tolerance values"
-    Use `tolerance = 0` for exact counts (chromosomes, electrons). Use absolute tolerance for physical measurements with known precision (temperature, mass). Use percentage-based tolerance for values that span wide ranges (e.g., `tolerance_pct = 10` to accept within 10%).
+Note: this chromosome example is a standalone illustration, not added to the benchmark. The pattern is identical to Q3; only the tolerance value and field type (`int` vs `float`) change.
+
+<div class="admonition tip">
+<p class="admonition-title">Choosing tolerance values</p>
+<p>Use <code>tolerance = 0</code> for exact counts (chromosomes, electrons). Use absolute tolerance for physical measurements with known precision (body temperature, boiling points). Use percentage-based tolerance for values that span wide ranges (e.g., <code>tolerance_pct = 10</code> to accept within 10%).</p>
+</div>
 
 ### Question 4: Regex in verify() — PubMed ID Format
 
@@ -237,7 +245,12 @@ benchmark.update_template(q4_id, Answer)
 print(f"Q4 added with template: {q4_id[:50]}...")
 ```
 
-Using `re.search()` in `verify()` is useful when the judge might extract the value in various formats. Here, whether the judge returns "22745249", "PMID: 22745249", or "PMID:22745249", the regex extracts the numeric portion for comparison.
+The regex `\b((?:19|20)\d{2})\b` extracts any 4-digit year in the 1900 to 2099 range, regardless of surrounding text. Whether the judge returns "1928", "September 28, 1928", or "1928-09-28", the year is extracted for comparison. The gotcha: if the response mentions *other* years (e.g., "Fleming was born in 1881 and discovered penicillin in 1928"), the regex matches the first occurrence. For such cases, use a more anchored pattern like `r"discover.*?\b((?:19|20)\d{2})\b"` to match near the relevant context.
+
+<div class="admonition tip">
+<p class="admonition-title">When to use regex in verify()</p>
+<p>Use regex when the extracted value has a known format (IDs, dates, codes) but the judge may wrap it in variable surrounding text. For free-form text where format is completely unpredictable, boolean decomposition or string normalization is usually simpler.</p>
+</div>
 
 ### Question 5: Multi-Field with Partial Credit — Drug Mechanism
 
