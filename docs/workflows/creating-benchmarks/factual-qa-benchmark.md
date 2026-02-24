@@ -21,7 +21,7 @@ This notebook walks through five template patterns for factual verification, pro
 
 **What you'll learn:**
 
-- Boolean decomposition: check concept presence without string matching
+- Boolean check: check concept presence without string matching
 - String extraction: extract values and verify with programmatic logic
 - Numeric tolerance: accept answers within a specified range
 - Regex checks: define `self.regex` patterns checked against the raw response trace
@@ -59,19 +59,19 @@ print(f"Questions: {benchmark.question_count}")
 
 ## Add Questions with Templates
 
-Each question below demonstrates a different template pattern, ordered from simplest to most expressive. We start with boolean decomposition (the minimal approach), then progress through string extraction, numeric comparison, and regex handling, culminating in multi-field partial credit that combines several techniques. Each pattern builds on the previous. If you find a simpler pattern sufficient for your use case, you likely don't need the more complex ones.
+Each question below demonstrates a different template pattern, ordered from simplest to most expressive. We start with a boolean check (the minimal approach), then progress through string extraction, numeric comparison, and regex handling, culminating in multi-field partial credit that combines several techniques. Each pattern builds on the previous. If you find a simpler pattern sufficient for your use case, you likely don't need the more complex ones.
 
 For notebook compatibility, we use a two-step approach: first add the question, then define and attach the template class using `update_template()`.
 
-### Question 1: Boolean Decomposition (Cancer Genetics)
+### Question 1: Boolean Check (Cancer Genetics)
 
-Boolean fields check whether a concept is present in the response, delegating synonym handling to the judge through the field description. No string matching needed.
+A boolean field checks whether a concept is present in the response, delegating synonym handling to the judge through the field description. No string matching needed.
 
 ```python
 # First, add the question
 q1_id = benchmark.add_question(
     question="What gene is most commonly mutated in human cancers?",
-    raw_answer="TP53 is the most commonly mutated gene, acting as a tumor suppressor",
+    raw_answer="TP53 is the most commonly mutated gene in human cancers",
 )
 
 # Then define and attach the template
@@ -85,43 +85,21 @@ class Answer(BaseAnswer):
             "frequent (e.g., 'TP53, KRAS, and PIK3CA are commonly mutated')."
         )
     )
-    describes_tumor_suppressor_role: bool = Field(
-        description=(
-            "True if the response characterizes TP53 as a tumor suppressor "
-            "or describes its protective function (e.g., 'guardian of the "
-            "genome', induces apoptosis, cell cycle arrest). False if TP53 "
-            "is described only as an oncogene or if its function is not "
-            "mentioned at all."
-        )
-    )
-
-    def model_post_init(self, __context):
-        self.correct = {"identifies_tp53": True, "describes_tumor_suppressor_role": True}
 
     def verify(self) -> bool:
-        return all(
-            getattr(self, field) == self.correct[field]
-            for field in self.correct
-        )
-
-    def verify_granular(self) -> float:
-        matches = sum(
-            1 for field in self.correct
-            if getattr(self, field) == self.correct[field]
-        )
-        return matches / len(self.correct)
+        return self.identifies_tp53
 
 benchmark.update_template(q1_id, Answer)
 print(f"Q1 added with template: {q1_id[:50]}...")
 ```
 
-Boolean decomposition avoids string matching entirely. Instead of extracting "TP53" as text and comparing it, we ask the judge "Did the response identify TP53 as the most common?" This is more reliable because the judge handles synonyms (TP53, p53, tumor protein p53) through its description.
+A boolean check avoids string matching entirely. Instead of extracting "TP53" as text and comparing it, we ask the judge "Did the response identify TP53 as the most common?" This is more reliable because the judge handles synonyms (TP53, p53, tumor protein p53) through its description.
 
-The key design decision is in the field descriptions: they must be specific enough to disambiguate edge cases. The `identifies_tp53` description explicitly states that merely listing TP53 alongside other cancer genes should return False — the response must single it out as the *most commonly mutated*. Without this, the judge would likely return True for "TP53, KRAS, and PIK3CA are frequently mutated in cancer," which mentions TP53 but doesn't actually answer the question. Invest time in writing precise descriptions; they are the instructions your judge LLM follows.
+The key design decision is in the field description: it must be specific enough to disambiguate edge cases. The `identifies_tp53` description explicitly states that merely listing TP53 alongside other cancer genes should return False — the response must single it out as the *most commonly mutated*. Without this, the judge would likely return True for "TP53, KRAS, and PIK3CA are frequently mutated in cancer," which mentions TP53 but doesn't actually answer the question. Invest time in writing precise descriptions; they are the instructions your judge LLM follows.
 
 <div class="admonition tip">
-<p class="admonition-title">When to use boolean decomposition</p>
-<p>Prefer boolean fields when you have a known set of concepts to check for and the concepts have multiple valid surface forms. Each <code>bool</code> field is an independent check, and the judge handles normalization so <code>verify()</code> stays trivial.</p>
+<p class="admonition-title">When to use boolean checks</p>
+<p>Prefer boolean fields when you need to check for the presence of a concept and the concept has multiple valid surface forms. The judge handles normalization so <code>verify()</code> stays trivial. For checking multiple concepts independently with partial credit, see <a href="#question-5-multi-field-with-partial-credit-vaccine-mechanism">Multi-Field with Partial Credit</a>.</p>
 </div>
 
 ### Question 2: String Extraction (Blood Type Identification)
@@ -424,7 +402,7 @@ The five patterns above form a toolkit for factual verification. Most real bench
 
 | Pattern | Use When | Don't Use When | Example |
 |---------|----------|----------------|---------|
-| Boolean decomposition | Known concepts, multiple synonyms | You need the extracted value | Gene identification, pathway members |
+| Boolean check | Known concept, multiple synonyms | You need the extracted value | Gene identification, pathway presence |
 | String extraction | Strict matching with programmatic control | Only need presence check (use boolean) | Blood types, gene symbols |
 | Numeric tolerance | Measurements or counts | Value is categorical, not numeric | Body temperature, chromosome counts |
 | Regex checks (`self.regex`) | Pattern must appear in raw response | Only need to normalize parsed field values | Year mentions, keyword presence, citation counts |

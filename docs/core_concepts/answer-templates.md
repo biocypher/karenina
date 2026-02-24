@@ -361,7 +361,7 @@ With **string fields**, the description tells the judge *what kind of value* to 
 
 This is a design tradeoff, not a right-or-wrong choice. Boolean fields are faster to write and produce simpler templates. String fields provide a cleaner separation between extraction (judge) and evaluation (`verify()`). Being aware of this distinction helps you make an informed choice for each field in your template.
 
-### Lists vs Boolean Decomposition
+### Lists vs Individual Boolean Fields
 
 When you expect a set of items (proteins, symptoms, references), you have two approaches.
 
@@ -379,7 +379,7 @@ class Answer(BaseAnswer):
     )
 ```
 
-**Boolean decomposition** (often simpler) — Use when you have a known set of expected items. Each field is an independent, unambiguous check. No string matching is needed in `verify()`, and you get per-item partial credit automatically.
+**Individual boolean fields** (often simpler) — Use when you have a known set of expected items. Each field is an independent, unambiguous check. No string matching is needed in `verify()`, and you get per-item partial credit via `verify_granular()`.
 
 ```python
 class Answer(BaseAnswer):

@@ -55,12 +55,12 @@ print(f"Created: {benchmark.name}")
 
 Each question gets a template that defines how to check correctness. Templates here are kept brief since this tutorial focuses on rubric traits — see [Factual QA Benchmark](factual-qa-benchmark.ipynb) for detailed template patterns.
 
-### Question 1: Boolean Decomposition
+### Question 1: Boolean Check
 
 ```python
 q1_id = benchmark.add_question(
     question="What is the approved pharmacological target of trastuzumab?",
-    raw_answer="HER2 (ERBB2), which is overexpressed in certain breast cancers",
+    raw_answer="HER2 (ERBB2) is the target of trastuzumab",
 )
 
 class Answer(BaseAnswer):
@@ -71,24 +71,9 @@ class Answer(BaseAnswer):
             "False if HER2 is mentioned only in passing or a different target is named."
         )
     )
-    mentions_overexpression: bool = Field(
-        description=(
-            "True if the response mentions HER2 overexpression, amplification, or "
-            "elevated levels in the context of cancer treatment. False otherwise."
-        )
-    )
-
-    def model_post_init(self, __context):
-        self.correct = {"identifies_her2": True, "mentions_overexpression": True}
 
     def verify(self) -> bool:
-        return all(
-            getattr(self, f) == self.correct[f] for f in self.correct
-        )
-
-    def verify_granular(self) -> float:
-        matches = sum(1 for f in self.correct if getattr(self, f) == self.correct[f])
-        return matches / len(self.correct)
+        return self.identifies_her2
 
 benchmark.update_template(q1_id, Answer)
 print(f"Q1 added with template: {q1_id[:50]}...")
