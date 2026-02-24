@@ -46,11 +46,15 @@ class VerifyTemplateStage(BaseVerificationStage):
 
     @property
     def requires(self) -> list[str]:
-        """Artifacts required by this stage."""
+        """Artifacts required by this stage.
+
+        Note: TEMPLATE_EVALUATOR is not listed here because regex-only
+        templates set it to None (no LLM parsing needed). The evaluator
+        is checked at runtime instead.
+        """
         return [
             ArtifactKeys.PARSED_ANSWER,
             ArtifactKeys.RAW_LLM_RESPONSE,
-            ArtifactKeys.TEMPLATE_EVALUATOR,
         ]
 
     @property
@@ -98,36 +102,49 @@ class VerifyTemplateStage(BaseVerificationStage):
         parsed_answer = context.get_artifact(ArtifactKeys.PARSED_ANSWER)
         raw_llm_response = context.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
 
-        # Get evaluator from context (always created by ParseTemplateStage)
-        # ParseTemplateStage always sets template_evaluator when it succeeds,
-        # and if it fails, context.error is set so VerifyTemplateStage won't run.
+        # Get evaluator from context (created by ParseTemplateStage, or None for regex-only)
         evaluator = context.get_artifact(ArtifactKeys.TEMPLATE_EVALUATOR)
-        if evaluator is None:
-            error_msg = "template_evaluator not found in context - ParseTemplateStage must run first"
-            logger.error(error_msg)
-            context.mark_error(error_msg)
-            return
 
         try:
-            # Use evaluator methods for verification
-            field_result = evaluator.verify_fields(parsed_answer)
-            regex_result = evaluator.verify_regex(parsed_answer, raw_llm_response)
+            if evaluator is not None:
+                # Standard path: delegate to evaluator
+                field_result = evaluator.verify_fields(parsed_answer)
+                regex_result = evaluator.verify_regex(parsed_answer, raw_llm_response)
 
-            field_verification_result = field_result.success
-            regex_verification_results = {
-                "success": regex_result.success,
-                "results": regex_result.results,
-                "details": regex_result.details,
-            }
-            regex_extraction_results = regex_result.extraction_results
+                field_verification_result = field_result.success
+                regex_verification_results = {
+                    "success": regex_result.success,
+                    "results": regex_result.results,
+                    "details": regex_result.details,
+                }
+                regex_extraction_results = regex_result.extraction_results
 
-            # Check for errors
-            if field_result.error:
-                logger.warning(f"Field verification error: {field_result.error}")
-            if regex_result.error:
-                logger.warning(f"Regex verification error: {regex_result.error}")
+                if field_result.error:
+                    logger.warning("Field verification error: %s", field_result.error)
+                if regex_result.error:
+                    logger.warning("Regex verification error: %s", regex_result.error)
+            else:
+                # Regex-only path: no evaluator, call answer methods directly
+                logger.info("Regex-only verification — running verify_regex directly")
 
-            # Step 4: Combine field and regex verification results
+                # Field verification: call verify() if defined, else True (no fields)
+                if hasattr(parsed_answer, "verify") and callable(parsed_answer.verify):
+                    field_verification_result = parsed_answer.verify()
+                else:
+                    field_verification_result = True
+
+                # Regex verification: call verify_regex on the raw response
+                regex_raw = parsed_answer.verify_regex(raw_llm_response)
+                regex_verification_results = {
+                    "success": regex_raw["success"],
+                    "results": regex_raw["results"],
+                    "details": regex_raw["details"],
+                }
+                regex_extraction_results = {}
+                for field_name, details in regex_raw.get("details", {}).items():
+                    regex_extraction_results[field_name] = details.get("matches_found", [])
+
+            # Combine field and regex verification results
             verification_result = field_verification_result and regex_verification_results["success"]
 
             # Store results
@@ -146,16 +163,14 @@ class VerifyTemplateStage(BaseVerificationStage):
             context.set_result_field(ArtifactKeys.REGEX_OVERALL_SUCCESS, regex_verification_results["success"])
             context.set_result_field(ArtifactKeys.REGEX_EXTRACTION_RESULTS, regex_extraction_results)
 
-            # Step 5: Granular verification for multi-attribute templates
-            # verify_granular() returns a float (0.0-1.0) representing fraction of correct attributes
-            # Only generated for templates with 2+ attributes (see generator_code.py:157-170)
+            # Granular verification for multi-attribute templates
             if hasattr(parsed_answer, "verify_granular") and callable(parsed_answer.verify_granular):
                 try:
                     granular_result = parsed_answer.verify_granular()
                     context.set_result_field(ArtifactKeys.VERIFY_GRANULAR_RESULT, granular_result)
-                    logger.debug(f"Granular verification result: {granular_result}")
+                    logger.debug("Granular verification result: %s", granular_result)
                 except Exception as e:
-                    logger.warning(f"Granular verification failed: {e}")
+                    logger.warning("Granular verification failed: %s", e)
 
         except Exception as e:
             error_msg = f"Verification failed: {e}"

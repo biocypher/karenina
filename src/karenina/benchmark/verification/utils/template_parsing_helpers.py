@@ -67,6 +67,35 @@ def _extract_attribute_names_from_class(answer_class: type[BaseAnswer]) -> list[
     return [name for name in field_names if name not in ("id", "correct", "regex")]
 
 
+def is_regex_only_template(answer_class: type[BaseAnswer]) -> bool:
+    """Check if an Answer class is regex-only (no user-defined fields to parse).
+
+    A template is "regex-only" when it has no user-defined Pydantic fields
+    beyond the base fields (id, correct, regex). Such templates rely entirely
+    on regex pattern matching against the raw LLM response and do not require
+    an LLM judge for parsing.
+
+    Args:
+        answer_class: A Pydantic BaseAnswer subclass
+
+    Returns:
+        True if the template has no user-defined fields (regex-only)
+
+    Example:
+        >>> class RegexOnly(BaseAnswer):
+        ...     def model_post_init(self, __context):
+        ...         self.regex = {"check": {"pattern": r"\\d+", "expected": "42", "match_type": "exact"}}
+        >>> is_regex_only_template(RegexOnly)
+        True
+
+        >>> class WithFields(BaseAnswer):
+        ...     drug_target: str
+        >>> is_regex_only_template(WithFields)
+        False
+    """
+    return len(_extract_attribute_names_from_class(answer_class)) == 0
+
+
 def _extract_attribute_descriptions(json_schema: str, attribute_names: list[str]) -> dict[str, str]:
     """Extract attribute descriptions from JSON schema format instructions.
 

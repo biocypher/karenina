@@ -7,6 +7,7 @@ import logging
 from typing import Any
 
 from karenina.benchmark.verification.evaluators import TemplateEvaluator
+from karenina.benchmark.verification.utils.template_parsing_helpers import is_regex_only_template
 
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
@@ -116,9 +117,22 @@ class ParseTemplateStage(BaseVerificationStage):
             - Sets deep-judgment artifacts if enabled
             - Sets context.error if parsing fails
         """
+        Answer = context.get_artifact(ArtifactKeys.ANSWER)
+
+        # Fast path: regex-only templates need no LLM parsing
+        if is_regex_only_template(Answer):
+            logger.info("Regex-only template detected — skipping LLM parsing")
+            parsed_answer = Answer()
+            context.set_artifact(ArtifactKeys.PARSED_ANSWER, parsed_answer)
+            context.set_artifact(ArtifactKeys.TEMPLATE_EVALUATOR, None)
+            context.set_artifact(ArtifactKeys.PARSING_MODEL_STR, "regex_only (no LLM)")
+            context.set_artifact(ArtifactKeys.DEEP_JUDGMENT_PERFORMED, False)
+            context.set_result_field(ArtifactKeys.USED_FULL_TRACE, context.use_full_trace_for_template)
+            context.set_result_field(ArtifactKeys.TRACE_EXTRACTION_ERROR, None)
+            return
+
         parsing_model = context.parsing_model
         raw_llm_response = context.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
-        Answer = context.get_artifact(ArtifactKeys.ANSWER)
         RawAnswer = context.get_artifact(ArtifactKeys.RAW_ANSWER)
 
         # Retrieve usage tracker from previous stage or create new one
