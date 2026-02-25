@@ -42,7 +42,7 @@ Response (free text)  →  Judge LLM  →  Filled template  →  verify()  →  
 
 <div class="admonition note">
 <p class="admonition-title">This page teaches how templates work, not how to run them</p>
-<p>The code examples below instantiate templates manually and call <code>verify()</code> directly. This is for illustration only. It shows what the Judge LLM and verification pipeline do under the hood. In practice, you never call <code>verify()</code> yourself. Instead, you embed your template in a benchmark and run the <a href="../workflows/creating-benchmarks/factual-qa-benchmark.md">verification pipeline</a>, which handles answer generation, judge parsing, and verification automatically.</p>
+<p>The code examples below instantiate templates manually and call <code>verify()</code> directly. This is for illustration only. It shows what the Judge LLM and verification pipeline do under the hood. In practice, you never call <code>verify()</code> yourself. Instead, you embed your template in a benchmark and run the <a href="../workflows/creating-benchmarks/factual-qa-benchmark.md">verification pipeline</a>, which handles answer generation, judge parsing, and verification automatically. However, the <code>verify()</code> method itself must be written by the user (see <a href="#template-structure">Template Structure</a> below).</p>
 </div>
 
 ### Think of It Like a Form
@@ -56,19 +56,21 @@ If you have ever filled out a standardized form (a lab report, a clinical intake
 | The answer key stored in a locked drawer | `ground_truth` setting `self.correct` | You, the benchmark author |
 | The clerk who checks the filled form against the answer key | The `verify()` method | You, the benchmark author |
 
-This analogy captures something important: **the person filling in the form and the person checking it are not the same**. The form-filler (the judge) reads a document and writes down what they find. The checker (`verify()`) compares what was written down against known correct answers. Neither one needs to do the other's job.
+This analogy captures something important: **the person filling in the form and the person checking it are not the same**. The form-filler (the judge) reads a document and writes down what they find. The checker (`verify()`) compares what was written down against known correct answers.
 
-This separation is deliberate. It keeps each step simple, reliable, and independently testable. We will come back to this idea throughout the document, because it is the key to writing good templates.
+In practice, though, the analogy is not perfectly clean. Some form fields ask the judge to simply copy a value ("write down the city named as France's capital"), but others require genuine evaluation ("check this box if the response identifies BCL2 as the pharmacological target"). In the second case the judge is not merely parsing; it is making a judgment call. The judging problem and evaluation are intrinsically intermingled, and the boundary between "extracting information" and "performing an assessment" shifts depending on field design (see [Ground Truth Exposure](#ground-truth-exposure-and-judge-anchoring) below).
+
+What the architecture *does* guarantee is this: once the judge has filled in the form, everything that follows is deterministic, code-driven verification. The `verify()` method never consults the LLM again. That is the separation that matters, and it is the key to writing good templates. We will come back to this idea throughout the document.
 
 ### Three Parties, Three Jobs
 
 A template is a contract between three participants, each with a single, well-defined responsibility:
 
 1. **You (the benchmark author)** design the form: what fields to extract, what the correct answers are, and how to check them
-2. **The Judge LLM** reads the answering model's response and fills in the form: it extracts information, nothing more
+2. **The Judge LLM** reads the answering model's response and fills in the form
 3. **The `verify()` method** compares the filled-in values against the answer key and returns a pass/fail verdict
 
-Each participant has a single job. The `verify()` method never reads the original response. The judge extracts information without running correctness checks. How much of the expected answer the judge sees depends on your field design: string fields keep it fully hidden, while boolean fields often reveal it in their descriptions (see [Ground Truth Exposure](#ground-truth-exposure-and-judge-anchoring)). Regardless, the *evaluation* is always deterministic code in `verify()`, not an LLM judgment call. Swap out the judge model, and the same `verify()` logic still produces the same verdict from the same extracted values.
+The `verify()` method never reads the original response, and the judge never runs `verify()`. How much of the expected answer the judge sees depends on your field design: string fields keep it fully hidden, while boolean fields often reveal it in their descriptions (see [Ground Truth Exposure](#ground-truth-exposure-and-judge-anchoring)). Once the form is filled, evaluation is deterministic code. Swap out the judge model, and the same `verify()` logic still produces the same verdict from the same extracted values.
 
 ### How It Unfolds: A Walkthrough
 
@@ -130,11 +132,14 @@ Every template inherits from `BaseAnswer` and must be named `Answer`. A template
 Here is a simple template that checks whether an LLM correctly identified a drug target:
 
 ```python
+from typing import Literal
+
 from pydantic import Field
 
 from karenina.schemas.entities import BaseAnswer
+```
 
-
+```python
 class Answer(BaseAnswer):
     target: str = Field(description="The protein target of the drug mentioned in the response")
 
@@ -145,12 +150,6 @@ class Answer(BaseAnswer):
         return self.target.strip().upper().replace("-", "") == self.correct["target"].upper()
 ```
 
-> All subsequent examples assume these imports:
-> ```python
-> from pydantic import Field
-> from karenina.schemas.entities import BaseAnswer
-> ```
-
 Let's walk through what happens when this template is used:
 
 1. The Judge LLM reads the answering model's response and extracts the `target` field based on the description
@@ -160,7 +159,13 @@ Let's walk through what happens when this template is used:
 Because `BaseAnswer` uses Pydantic's `extra="allow"` configuration, you can attach any attribute to `self` inside `ground_truth`. The framework uses this for `self.correct` (expected values) and `self.regex` (pattern checks), and you can use it for custom attributes like `self.tolerance`. None of these appear in the JSON schema sent to the judge.
 
 ```python
-# Simulate what the Judge LLM produces after parsing a response
+# An answering model might produce a response like:
+#   "Venetoclax (ABT-199) is a selective inhibitor of the Bcl-2 protein. By
+#    binding directly to Bcl-2, it displaces pro-apoptotic proteins and
+#    restores the cell's ability to undergo programmed cell death."
+#
+# The Judge LLM would extract target="Bcl-2" from that response.
+# Here we populate the field directly to demonstrate verify().
 parsed = Answer(target="Bcl-2")
 print(f"Extracted target: {parsed.target!r}")
 print(f"Ground truth:     {parsed.correct['target']!r}")
@@ -174,7 +179,7 @@ Each component exists for a specific reason. The `ground_truth` method keeps the
 <p><code>ground_truth</code> is a karenina lifecycle method on <code>BaseAnswer</code>. It runs automatically after the instance is created and all fields are set. Unlike the underlying Pydantic hook it wraps, <code>ground_truth</code> takes no extra parameters: just <code>self</code>. You do not need deep Pydantic knowledge to use it: just define the method, set <code>self.correct</code> (and optionally <code>self.regex</code>), and the framework handles the rest.</p>
 </div>
 
-The separation between extraction and checking is the most important design idea in karenina's template system. The Judge LLM fills in the form: it reads the answering model's response and extracts values into the template's fields, nothing more. The `verify()` method checks the form: it compares the extracted values against `self.correct` and returns True or False, never seeing the original response. Deterministic code is more reliable than asking an LLM to make judgment calls, so this separation gives you reproducibility (the same extracted values always produce the same verdict), transparency (anyone can read `verify()` and see what counts as correct), and testability (you can call `verify()` on your laptop without any LLM or API key).
+The [separation between filling in the form and checking it](#think-of-it-like-a-form) is the most important design idea in karenina's template system. Because everything after the judge is deterministic code, you get reproducibility (the same extracted values always produce the same verdict), transparency (anyone can read `verify()` and see what counts as correct), and testability (you can call `verify()` on your laptop without any LLM or API key).
 
 The three-component structure also means each template is a self-contained evaluation unit that carries its own extraction schema and verification logic. Real benchmarks contain heterogeneous questions: one might use a boolean check, another a string extraction, a third regex only. The pipeline orchestrates execution, but each template decides what to extract and what "correct" means for its question. Add a new question type by writing a new template class; the pipeline runs it without modification.
 
@@ -196,7 +201,8 @@ class Answer(BaseAnswer):
         return self.value.strip() == self.correct["value"]
 
 
-# This works:
+# The Judge LLM would extract this from the answering model's response.
+# Here we populate the field directly to demonstrate verify().
 a = Answer(value="42")
 print(f"verify(): {a.verify()}")
 ```
@@ -217,6 +223,12 @@ Template fields can use any type that Pydantic supports. The field type guides b
 Here is a multi-field example that extracts and verifies two pieces of information:
 
 ```python
+# An answering model might produce a response like:
+#   "Oxygen is the eighth element on the periodic table, with an atomic
+#    number of 8. It is essential for aerobic respiration in most living
+#    organisms."
+
+
 class Answer(BaseAnswer):
     element: str = Field(description="The chemical element name mentioned in the response")
     atomic_number: int = Field(description="The atomic number stated in the response")
@@ -230,7 +242,8 @@ class Answer(BaseAnswer):
         return name_ok and number_ok
 
 
-# Both fields must match for verification to pass
+# The Judge LLM would extract element="Oxygen" and atomic_number=8 from
+# that response. Here we populate them directly to demonstrate verify().
 parsed = Answer(element="Oxygen", atomic_number=8)
 print(f"Element correct:  {parsed.element.strip().lower() == parsed.correct['element']}")
 print(f"Number correct:   {parsed.atomic_number == parsed.correct['atomic_number']}")
@@ -240,7 +253,10 @@ print(f"Overall verify(): {parsed.verify()}")
 `Literal` constrains the judge to a fixed set of values. Pydantic generates an `enum` in the JSON schema, so the judge can only return one of the allowed options:
 
 ```python
-from typing import Literal
+# An answering model might produce a response like:
+#   "The SNP rs28897696 in the BRCA1 gene results in a missense mutation,
+#    where a single nucleotide change causes a different amino acid to be
+#    incorporated into the protein."
 
 
 class Answer(BaseAnswer):
@@ -255,6 +271,8 @@ class Answer(BaseAnswer):
         return self.mutation_type == self.correct["mutation_type"]
 
 
+# The Judge LLM would extract mutation_type="missense" from that response.
+# Here we populate the field directly to demonstrate verify().
 parsed = Answer(mutation_type="missense")
 print(f"verify(): {parsed.verify()}")
 ```
@@ -270,6 +288,12 @@ For step-by-step examples of implementing each pattern inside a benchmark, see [
 In form terms, this is a checkbox: "Check this box if the letter mentions X." The judge reads the response and ticks yes or no. No string matching needed; `verify()` compares the boolean against `self.correct`. The judge handles synonym recognition through the field description, so it can recognize that "p53," "TP53," and "tumor protein p53" all refer to the same thing.
 
 ```python
+# An answering model might produce a response like:
+#   "TP53 is widely regarded as the single most commonly mutated gene in
+#    human cancers. Mutations in p53 are found in over 50% of all tumor
+#    types, making it a central focus of cancer genomics research."
+
+
 class Answer(BaseAnswer):
     identifies_tp53: bool = Field(
         description=(
@@ -288,6 +312,8 @@ class Answer(BaseAnswer):
         return self.identifies_tp53 == self.correct["identifies_tp53"]
 
 
+# The Judge LLM would extract identifies_tp53=True from that response.
+# Here we populate the field directly to demonstrate verify().
 parsed = Answer(identifies_tp53=True)
 print(f"Correct answer verified: {parsed.verify()}")
 
@@ -315,6 +341,12 @@ This is the cleanest separation between extraction and evaluation. The descripti
 The tradeoff: since free text is more variable than a yes/no checkbox, you need normalization logic in `verify()` to handle formatting differences (uppercase vs lowercase, "O positive" vs "O+", and so on).
 
 ```python
+# An answering model might produce a response like:
+#   "The most common blood type worldwide is O positive, found in roughly
+#    38% of the global population. It is especially prevalent in Central
+#    and South America."
+
+
 class Answer(BaseAnswer):
     blood_type: str = Field(
         description=(
@@ -344,7 +376,9 @@ class Answer(BaseAnswer):
         return extracted == self.correct["blood_type"]
 
 
-# Various formats the judge might return. Normalization handles them
+# The Judge LLM would extract blood_type="O positive" from that response.
+# Here we populate the field directly, simulating various formats the judge
+# might return. Normalization in verify() handles them all.
 for value in ["O+", "O positive", "o+", "O POSITIVE"]:
     parsed = Answer(blood_type=value)
     print(f"{value!r:>14} -> verify(): {parsed.verify()}")
@@ -364,6 +398,12 @@ The judge extracts a raw number; `verify()` decides whether it falls within an a
 This pattern shows the power of having `verify()` as plain code. A body temperature of 37.2 degrees C is clinically normal even though the textbook value is 37.0 degrees C. Rather than trying to encode tolerance rules in a prompt and hoping the LLM applies them consistently, you write a simple programmatic comparison with an explicit margin.
 
 ```python
+# An answering model might produce a response like:
+#   "Normal human body temperature is approximately 37.0 degrees Celsius
+#    (98.6 degrees Fahrenheit), though it can vary slightly depending on
+#    the time of day and measurement site."
+
+
 class Answer(BaseAnswer):
     temperature_celsius: float = Field(
         description=(
@@ -386,7 +426,8 @@ class Answer(BaseAnswer):
         return abs(self.temperature_celsius - self.correct["temperature_celsius"]) <= self.tolerance
 
 
-# Various temperatures within and outside tolerance
+# The Judge LLM would extract temperature_celsius=37.0 from that response.
+# Here we populate the field directly to demonstrate verify().
 for temp in [37.0, 36.8, 37.5, 36.0, 38.0]:
     parsed = Answer(temperature_celsius=temp)
     print(f"{temp} C -> verify(): {parsed.verify()}")
@@ -397,6 +438,11 @@ The `self.tolerance` attribute is not a built-in framework concept; it is a cust
 For exact counts where only one value is correct, set `tolerance = 0`:
 
 ```python
+# An answering model might produce a response like:
+#   "A normal human somatic cell contains 46 chromosomes, organized into
+#    23 pairs: 22 pairs of autosomes and one pair of sex chromosomes."
+
+
 class Answer(BaseAnswer):
     pair_count: int = Field(
         description=(
@@ -414,6 +460,8 @@ class Answer(BaseAnswer):
         return abs(self.pair_count - self.correct["pair_count"]) <= self.tolerance
 
 
+# The Judge LLM would extract pair_count=23 from that response.
+# Here we populate the field directly to demonstrate verify().
 parsed = Answer(pair_count=23)
 print(f"23 pairs -> verify(): {parsed.verify()}")
 parsed_wrong = Answer(pair_count=46)
@@ -440,6 +488,12 @@ When used alongside `verify()`, the pipeline ANDs both results: both `verify()` 
 Set `self.regex` in `ground_truth` (alongside `self.correct` if your template also has fields). Each entry is a named check with a `pattern`, an `expected` value, and a `match_type` that controls comparison:
 
 ```python
+# An answering model might produce a response like:
+#   "Penicillin was discovered in 1928 by Alexander Fleming, who noticed
+#    that a mold of the genus Penicillium inhibited bacterial growth on an
+#    agar plate."
+
+
 class Answer(BaseAnswer):
     discovery_date: str = Field(
         description=(
@@ -467,7 +521,9 @@ class Answer(BaseAnswer):
         return "1928" in self.discovery_date
 
 
-# verify() checks the parsed field
+# The Judge LLM would extract discovery_date="1928" from that response.
+# The regex checks also run against the raw response, matching "1928" and
+# "Fleming". Here we populate the field directly to demonstrate verify().
 parsed = Answer(discovery_date="1928")
 print(f"verify(): {parsed.verify()}")
 ```
@@ -491,6 +547,12 @@ Note: the `"exact"` match type requires exactly one match in the text. If your p
 </div>
 
 ```python
+# An answering model might produce a response like:
+#   "The drug inhibits the target [1] [2] [3]"
+#
+# No fields to extract; regex checks run directly against the raw response.
+
+
 class Answer(BaseAnswer):
     def ground_truth(self):
         self.regex = {
@@ -509,8 +571,9 @@ class Answer(BaseAnswer):
         }
 
 
-# No fields, no verify(). Regex is the sole evaluation
-# Pipeline skips LLM parsing automatically
+# No fields, no verify(). Regex is the sole evaluation; the pipeline skips
+# LLM parsing automatically. In production, verify_regex() receives the
+# answering model's raw response. Here we pass a string directly.
 parsed = Answer()
 result = parsed.verify_regex("The drug inhibits the target [1] [2] [3]")
 print(f"verify_regex() passed: {result['success']}")
@@ -535,6 +598,13 @@ For questions with multiple dimensions, where you want to check delivery method 
 Extracting each check into a private `_check_*` method keeps both `verify()` and `verify_granular()` readable and ensures the logic is defined once. This pattern is recommended whenever you have three or more fields to verify.
 
 ```python
+# An answering model might produce a response like:
+#   "mRNA vaccines work by delivering messenger RNA instructions into
+#    cells, which then produce the spike protein found on the surface of
+#    SARS-CoV-2. The immune system recognizes this foreign protein and
+#    mounts a defensive response, generating antibodies and memory T cells."
+
+
 class Answer(BaseAnswer):
     delivery_mechanism: str = Field(
         description=(
@@ -598,7 +668,9 @@ class Answer(BaseAnswer):
         return sum(checks) / len(checks)
 
 
-# All fields correct
+# The Judge LLM would extract delivery_mechanism="mRNA instructions",
+# target_protein="spike protein", and mentions_immune_response=True from
+# that response. Here we populate them directly to demonstrate verify().
 parsed = Answer(
     delivery_mechanism="mRNA instructions",
     target_protein="spike protein",
@@ -607,7 +679,7 @@ parsed = Answer(
 print(f"verify():         {parsed.verify()}")
 print(f"verify_granular(): {parsed.verify_granular():.2f}")
 
-# 2 out of 3 correct; verify fails, but granular gives partial credit
+# 2 out of 3 fields match ground truth; verify() fails, but granular gives partial credit
 parsed2 = Answer(
     delivery_mechanism="mRNA instructions",
     target_protein="wrong protein",
