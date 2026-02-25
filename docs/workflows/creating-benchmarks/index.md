@@ -8,9 +8,10 @@ Each tutorial is a complete, self-contained scenario. Choose the one that matche
 
 | Scenario | Evaluation Strategy | What You'll Learn |
 |----------|-------------------|-------------------|
+| [Benchmark Operations](../../notebooks/creating-benchmarks/benchmark-operations.ipynb) | All | Full Benchmark API: creating, populating, templates, rubrics, readiness, filtering, collection protocols |
 | [Factual QA Benchmark](../../notebooks/creating-benchmarks/factual-qa-benchmark.ipynb) | Template-only | Hand-written templates: boolean check, string normalization, numeric tolerance, regex in `verify()`, partial credit |
 | [Full Evaluation Benchmark](../../notebooks/creating-benchmarks/full-evaluation-benchmark.ipynb) | Template + rubric | Custom templates combined with all 6 rubric trait types (LLM boolean, LLM score, LLM literal, regex, callable, metric) |
-| [Quality Assessment](../../notebooks/creating-benchmarks/quality-assessment-benchmark.ipynb) | Rubric-only | No templates — quality evaluation for tasks with no single correct answer (safety, empathy, clarity) |
+| [Quality Assessment](../../notebooks/creating-benchmarks/quality-assessment-benchmark.ipynb) | Rubric-only | No templates: quality evaluation for tasks with no single correct answer (safety, empathy, clarity) |
 | [Scaled Authoring](../../notebooks/creating-benchmarks/scaled-authoring.ipynb) | Power user | Bulk ingestion, `generate_all_templates()`, `AnswerBuilder`, ADeLe classification, few-shot examples |
 
 ---
@@ -80,6 +81,8 @@ Reload and verify round-trip
 | Build templates programmatically | `AnswerBuilder().add_attribute(...).compile()` | [Scaled Authoring](../../notebooks/creating-benchmarks/scaled-authoring.ipynb) |
 | Add global rubric trait | `benchmark.add_global_rubric_trait(trait)` | [Full Evaluation](../../notebooks/creating-benchmarks/full-evaluation-benchmark.ipynb), [Quality Assessment](../../notebooks/creating-benchmarks/quality-assessment-benchmark.ipynb) |
 | Add per-question rubric trait | `benchmark.add_question_rubric_trait(question_id, trait)` | [Full Evaluation](../../notebooks/creating-benchmarks/full-evaluation-benchmark.ipynb), [Quality Assessment](../../notebooks/creating-benchmarks/quality-assessment-benchmark.ipynb) |
+| Check readiness | `benchmark.check_readiness()` | [Benchmark Operations](../../notebooks/creating-benchmarks/benchmark-operations.ipynb) |
+| Filter questions | `benchmark.filter_questions(finished=True, has_template=True)` | [Benchmark Operations](../../notebooks/creating-benchmarks/benchmark-operations.ipynb) |
 | Save checkpoint | `benchmark.save("path.jsonld")` | All scenarios |
 | Load checkpoint | `Benchmark.load("path.jsonld")` | All scenarios |
 
