@@ -321,7 +321,10 @@ class Answer(BaseAnswer):
             "The blood type stated in the response as the most common worldwide. "
             "Use standard notation: uppercase letter followed by '+' or '-' "
             "(e.g., 'O+' not 'O positive' or 'type O'). If the response uses "
-            "the full name ('O positive'), normalize to shorthand ('O+')."
+            "the full name ('O positive'), normalize to shorthand ('O+'). "
+            "If the response names multiple blood types, extract the one "
+            "identified as the most common overall. If the response distinguishes "
+            "by region, extract the type stated as most common globally."
         )
     )
 
@@ -365,9 +368,13 @@ class Answer(BaseAnswer):
     temperature_celsius: float = Field(
         description=(
             "The normal body temperature stated in the response, in degrees "
-            "Celsius. If the response gives the value in Fahrenheit (e.g., "
-            "98.6 F), extract the Celsius equivalent. If a range is given "
-            "(e.g., 36.5-37.5), extract the midpoint."
+            "Celsius. Extract the value stated as the standard or average "
+            "normal temperature, not extreme or atypical values. If the "
+            "response gives the value in Fahrenheit (e.g., 98.6 F), extract "
+            "the Celsius equivalent. If a range is given (e.g., 36.5-37.5), "
+            "extract the midpoint. If the response gives temperatures for "
+            "different measurement sites (oral, rectal, axillary), extract "
+            "the oral temperature or the one presented as the primary value."
         )
     )
 
@@ -531,16 +538,22 @@ Extracting each check into a private `_check_*` method keeps both `verify()` and
 class Answer(BaseAnswer):
     delivery_mechanism: str = Field(
         description=(
-            "How the vaccine delivers its payload, as described in the response "
-            "(e.g., 'mRNA instructions', 'messenger RNA', 'genetic code'). "
-            "Normalize to lowercase."
+            "The primary mechanism by which the vaccine delivers instructions "
+            "to cells, as described in the response (e.g., 'mRNA instructions', "
+            "'messenger RNA', 'genetic code'). Normalize to lowercase. Extract "
+            "the delivery method itself, not subsequent biological processes "
+            "(protein production, immune response). If the response describes "
+            "multiple steps, extract the initial delivery mechanism."
         )
     )
     target_protein: str = Field(
         description=(
-            "The protein that cells are instructed to produce (e.g., 'spike "
-            "protein'). Normalize to lowercase. If the response names a specific "
-            "variant, extract the general protein name."
+            "The protein that cells are instructed to produce, as described "
+            "in the response (e.g., 'spike protein'). Normalize to lowercase. "
+            "If the response names a specific variant (e.g., 'Wuhan spike "
+            "protein'), extract the general protein name. If the response "
+            "mentions multiple proteins, extract the one identified as the "
+            "primary target of the vaccine."
         )
     )
     mentions_immune_response: bool = Field(
