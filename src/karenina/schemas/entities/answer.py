@@ -44,6 +44,15 @@ class BaseAnswer(BaseModel):
             # The source code can be set manually after class creation
             cls._source_code = None
 
+        # Bridge: ground_truth(self) -> model_post_init(self, __context)
+        if "ground_truth" in cls.__dict__ and "model_post_init" not in cls.__dict__:
+            original_gt = cls.__dict__["ground_truth"]
+
+            def _bridged_model_post_init(self: Any, __context: Any) -> None:
+                original_gt(self)
+
+            cls.model_post_init = _bridged_model_post_init  # type: ignore[method-assign]
+
     @classmethod
     def get_source_code(cls) -> str | None:
         """Get the source code of this Answer class.

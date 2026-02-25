@@ -229,7 +229,7 @@ class AnswerBuilder:
         return f"""class {class_name}(BaseAnswer):
     regex: dict = Field(default_factory=dict, description="Regex validation patterns")
 
-    def model_post_init(self, __context):
+    def ground_truth(self):
         self.correct = {{}}
         self.regex = {regex_dict}
 
@@ -242,8 +242,8 @@ class AnswerBuilder:
         lines = base_code.split("\n")
         modified_lines = []
         in_class = False
-        in_model_post_init = False
-        model_post_init_indent = ""
+        in_init_method = False
+        init_method_indent = ""
         added_regex_field = False
 
         regex_dict = self._build_regex_dict()
@@ -269,25 +269,25 @@ class AnswerBuilder:
                 modified_lines.append("")
                 added_regex_field = True
 
-            if "def model_post_init(self, __context):" in line:
-                in_model_post_init = True
-                model_post_init_indent = line[: len(line) - len(line.lstrip())]
+            if "def model_post_init(self, __context):" in line or "def ground_truth(self):" in line:
+                in_init_method = True
+                init_method_indent = line[: len(line) - len(line.lstrip())]
                 modified_lines.append(line)
                 continue
 
-            if in_model_post_init and line.strip() == "" and len(modified_lines) > 0:
-                # Add regex initialization before empty line in model_post_init
+            if in_init_method and line.strip() == "" and len(modified_lines) > 0:
+                # Add regex initialization before empty line in ground_truth/model_post_init
                 modified_lines.append(line)
-                modified_lines.append(f"{model_post_init_indent}    self.regex = {regex_dict}")
-                in_model_post_init = False
+                modified_lines.append(f"{init_method_indent}    self.regex = {regex_dict}")
+                in_init_method = False
                 continue
 
             modified_lines.append(line)
 
-        # If we never added the regex field, add it before the def model_post_init
+        # If we never added the regex field, add it before the ground_truth/model_post_init method
         if not added_regex_field:
             for i, line in enumerate(modified_lines):
-                if "def model_post_init(self, __context):" in line:
+                if "def model_post_init(self, __context):" in line or "def ground_truth(self):" in line:
                     modified_lines.insert(
                         i, '    regex: dict = Field(default_factory=dict, description="Regex validation patterns")'
                     )

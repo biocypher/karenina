@@ -76,16 +76,17 @@ def validate_answer_template(template_code: str) -> tuple[bool, str | None, type
             if not callable(getattr(Answer, "verify", None)):
                 return False, "verify must be a callable method", None
 
-        # The 'correct' field is optional, but if present via model_post_init, it must be a dict
-        if "model_post_init" in Answer.__dict__:
+        # The 'correct' field is optional, but if present via ground_truth/model_post_init, it must be a dict
+        has_init = "model_post_init" in Answer.__dict__ or "ground_truth" in Answer.__dict__
+        if has_init:
             try:
                 from .template_parsing_helpers import create_test_instance_from_answer_class
 
                 test_instance, ground_truth = create_test_instance_from_answer_class(Answer)
                 if ground_truth is not None and not isinstance(ground_truth, dict):
-                    return False, "model_post_init must assign 'self.correct' as a dictionary", None
+                    return False, "ground_truth/model_post_init must assign 'self.correct' as a dictionary", None
             except Exception as e:
-                return False, f"Error testing model_post_init: {e}", None
+                return False, f"Error testing ground_truth/model_post_init: {e}", None
 
         return True, None, Answer
 

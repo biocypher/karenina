@@ -120,8 +120,8 @@ def generate_pydantic_class(
 
     lines.append("")
 
-    # model_post_init method
-    lines.append("    def model_post_init(self, __context):")
+    # ground_truth method
+    lines.append("    def ground_truth(self):")
 
     # Build correct dictionary
     correct_dict_items = []
