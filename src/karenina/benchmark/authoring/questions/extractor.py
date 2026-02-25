@@ -192,7 +192,7 @@ def extract_questions_from_file(
         question = Question(
             question=row[question_column],
             raw_answer=row[answer_column],
-            tags=[],  # No tags in the source data
+            keywords=[],  # No keywords in the source data
         )
 
         # Extract metadata
@@ -277,7 +277,7 @@ def generate_questions_file(
     id="{question.id}",
     question="""{question.question}""",
     raw_answer="""{question.raw_answer}""",
-    tags={question.tags}
+    keywords={question.keywords}
 )
 
 '''

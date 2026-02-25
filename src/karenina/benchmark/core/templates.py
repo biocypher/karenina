@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from .base import BenchmarkBase
 
+from karenina.schemas.entities.question import QuestionRegistryEntry
 from karenina.schemas.verification import FinishedTemplate
 
 from ..verification.utils.template_validation import validate_answer_template
@@ -269,7 +270,9 @@ class TemplateManager:
         """
         templates = []
         for q_id, q_data in self.base._questions_cache.items():
-            if q_data.get("finished", False) and (question_ids is None or q_id in question_ids):
+            if self.base._question_registry.get(q_id, QuestionRegistryEntry()).finished and (
+                question_ids is None or q_id in question_ids
+            ):
                 # Convert question rubric to dict format if present
                 question_rubric = None
                 if q_data.get("question_rubric"):

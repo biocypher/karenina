@@ -614,8 +614,15 @@ def build_repr(benchmark: Benchmark) -> str:
 # ---------------------------------------------------------------------------
 
 
-def convert_to_schema_org_question(question_data: dict[str, Any]) -> SchemaOrgQuestion:
-    """Convert internal question dictionary to SchemaOrgQuestion object."""
+def convert_to_schema_org_question(question_data: dict[str, Any], finished: bool = False) -> SchemaOrgQuestion:
+    """Convert internal question dictionary to SchemaOrgQuestion object.
+
+    Args:
+        question_data: Internal question dictionary from the questions cache.
+        finished: Whether the question is marked as finished. This is passed
+            separately because finished status lives in the question registry,
+            not in the cache dict.
+    """
     from ..schemas.checkpoint import (
         SchemaOrgAnswer,
         SchemaOrgPropertyValue,
@@ -643,8 +650,7 @@ def convert_to_schema_org_question(question_data: dict[str, Any]) -> SchemaOrgQu
         ]
 
     additional_properties = []
-    if question_data.get("finished") is not None:
-        additional_properties.append(SchemaOrgPropertyValue(name="finished", value=question_data["finished"]))
+    additional_properties.append(SchemaOrgPropertyValue(name="finished", value=finished))
 
     if question_data.get("custom_metadata"):
         for key, value in question_data["custom_metadata"].items():

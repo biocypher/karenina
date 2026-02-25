@@ -396,7 +396,7 @@ class TestGetFinishedTemplates:
             manager.add_answer_template(q_id, VALID_TEMPLATE)
         # Set finished after all template additions (add_answer_template triggers _rebuild_cache)
         for q_id in [q1, q2, q3]:
-            benchmark._questions_cache[q_id]["finished"] = True
+            benchmark._base._question_registry[q_id].finished = True
 
         templates = manager.get_finished_templates(question_ids={q1, q3})
 
@@ -413,7 +413,7 @@ class TestGetFinishedTemplates:
 
         q_id = benchmark.add_question("Question?", "Answer")
         manager.add_answer_template(q_id, VALID_TEMPLATE)
-        benchmark._questions_cache[q_id]["finished"] = True
+        benchmark._base._question_registry[q_id].finished = True
 
         templates = manager.get_finished_templates(question_ids={"nonexistent"})
 
@@ -430,7 +430,7 @@ class TestGetFinishedTemplates:
             manager.add_answer_template(q_id, VALID_TEMPLATE)
         # Set finished after all template additions
         for q_id in [q1, q2]:
-            benchmark._questions_cache[q_id]["finished"] = True
+            benchmark._base._question_registry[q_id].finished = True
 
         templates = manager.get_finished_templates(question_ids=None)
 
@@ -444,7 +444,7 @@ class TestGetFinishedTemplates:
         long_question = "This is a very long question text that exceeds one hundred characters and should be truncated in the preview field"
         q_id = benchmark.add_question(long_question, "Answer")
         manager.add_answer_template(q_id, VALID_TEMPLATE)
-        benchmark._questions_cache[q_id]["finished"] = True
+        benchmark._base._question_registry[q_id].finished = True
 
         templates = manager.get_finished_templates()
 

@@ -10,6 +10,8 @@ import re
 from collections import Counter
 from typing import TYPE_CHECKING, Any
 
+from karenina.schemas.entities.question import QuestionRegistryEntry
+
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
@@ -94,8 +96,11 @@ class QuestionQueryBuilder:
         results = []
 
         for _q_id, q_data in self.base._questions_cache.items():
-            # Check finished status
-            if finished is not None and q_data.get("finished", False) != finished:
+            # Check finished status (read from registry, not cache)
+            if (
+                finished is not None
+                and self.base._question_registry.get(_q_id, QuestionRegistryEntry()).finished != finished
+            ):
                 continue
 
             # Check template existence (non-default templates only)
@@ -162,9 +167,9 @@ class QuestionQueryBuilder:
         results = []
         field_parts = field_path.split(".")
 
-        for q_data in self.base._questions_cache.values():
+        for q_id, q_data in self.base._questions_cache.items():
             # Navigate to the field using dot notation
-            field_value = self._get_nested_field(q_data, field_parts)
+            field_value = self._get_nested_field_with_registry(q_id, q_data, field_parts)
 
             # Skip if field doesn't exist
             if field_value is None:
@@ -339,8 +344,9 @@ class QuestionQueryBuilder:
         values = []
 
         for q_data in questions:
+            q_id = q_data.get("id", "")
             # Navigate to the field using dot notation
-            field_value = self._get_nested_field(q_data, field_parts)
+            field_value = self._get_nested_field_with_registry(q_id, q_data, field_parts)
             # Add value to list (including None for missing fields)
             values.append(field_value)
 
@@ -385,6 +391,27 @@ class QuestionQueryBuilder:
         except (KeyError, TypeError, AttributeError):
             return None
         return field_value
+
+    def _get_nested_field_with_registry(self, q_id: str, data: dict[str, Any], field_parts: list[str]) -> Any:
+        """Navigate to a nested field, resolving registry fields like 'finished'.
+
+        The ``finished`` field lives in ``_question_registry``, not in the
+        cache dict.  This helper transparently resolves it so callers
+        (``filter_by_metadata``, ``count_by_field``) do not need special
+        cases.
+
+        Args:
+            q_id: The question ID (used for registry lookup)
+            data: The cache dictionary to navigate
+            field_parts: List of field names representing the path
+
+        Returns:
+            The value at the specified path, or None if not found
+        """
+        if field_parts == ["finished"]:
+            entry = self.base._question_registry.get(q_id, QuestionRegistryEntry())
+            return entry.finished
+        return self._get_nested_field(data, field_parts)
 
     def _matches_value(self, field_value: Any, value: Any, match_mode: str) -> bool:
         """Check if a field value matches the expected value based on match mode.

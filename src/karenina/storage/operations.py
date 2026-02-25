@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 
 from sqlalchemy import Select, select
 
+from ..schemas.entities.question import QuestionRegistryEntry as _QuestionRegistryEntry
 from ..utils.checkpoint import generate_template_id
 from .converters import orm_to_pydantic, pydantic_to_orm, update_orm_from_pydantic
 from .db_config import DBConfig
@@ -150,15 +151,19 @@ def save_benchmark(
                         id=question_id,
                         question_text=question_text,
                         raw_answer=q_data["raw_answer"],
-                        tags=q_data.get("keywords", []),  # Note: keywords key used for tags
+                        keywords=q_data.get("keywords", []),
                         few_shot_examples=q_data.get("few_shot_examples"),
+                        author=q_data.get("author"),
+                        sources=q_data.get("sources"),
+                        custom_metadata=q_data.get("custom_metadata"),
                     )
                     session.add(question_model)
                     added_questions_this_session.add(question_id)
 
             # Create or update benchmark-question association
             answer_template = q_data.get("answer_template", "")
-            finished = q_data.get("finished", False)
+            # Read finished status from the question registry (not the cache dict)
+            finished = benchmark._base._question_registry.get(question_id, _QuestionRegistryEntry()).finished
             keywords = q_data.get("keywords", [])
 
             # Compute template_id from answer_template (composite key component)
@@ -202,8 +207,7 @@ def save_benchmark(
                                     "answer_template": existing_bq.answer_template or "",
                                     "original_answer_template": existing_bq.original_answer_template or "",
                                     "finished": existing_bq.finished,
-                                    "tags": existing_question.tags or [],
-                                    "keywords": existing_bq.keywords or [],
+                                    "keywords": existing_bq.keywords or existing_question.keywords or [],
                                     "few_shot_examples": existing_question.few_shot_examples,
                                     "question_rubric": existing_bq.question_rubric,
                                     "last_modified": (
@@ -218,7 +222,6 @@ def save_benchmark(
                                     "answer_template": answer_template,
                                     "original_answer_template": q_data.get("original_answer_template", answer_template),
                                     "finished": finished,
-                                    "tags": q_data.get("tags", []),
                                     "keywords": keywords,
                                     "few_shot_examples": q_data.get("few_shot_examples"),
                                     "question_rubric": question_rubric_dict,
@@ -324,18 +327,21 @@ def load_benchmark(
             ).scalar_one()
 
             # Create Question object
-            # Use keywords from BenchmarkQuestionModel if available, fall back to QuestionModel.tags
-            keywords_list: list[str | None] = []
+            # Use keywords from BenchmarkQuestionModel if available, fall back to QuestionModel.keywords
+            keywords_list: list[str] = []
             if bq.keywords:
-                keywords_list = list(bq.keywords)
-            elif question_model.tags:
-                keywords_list = list(question_model.tags)
+                keywords_list = [k for k in bq.keywords if k is not None]
+            elif question_model.keywords:
+                keywords_list = [k for k in question_model.keywords if k is not None]
 
             question = Question(
                 question=question_model.question_text,
                 raw_answer=question_model.raw_answer,
-                tags=keywords_list,
+                keywords=keywords_list,
                 few_shot_examples=question_model.few_shot_examples,
+                author=question_model.author,
+                sources=question_model.sources,
+                custom_metadata=question_model.custom_metadata,
             )
 
             # Add question to benchmark with template

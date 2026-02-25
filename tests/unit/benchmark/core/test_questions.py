@@ -135,7 +135,7 @@ class TestAddQuestion:
 
         assert q_id in manager.base._questions_cache
         # Should be auto-marked as finished when template is provided
-        assert manager.base._questions_cache[q_id].get("finished") is True
+        assert manager.base._question_registry[q_id].finished is True
 
     def test_add_question_with_string_template(self) -> None:
         """Test adding question with string template."""
@@ -154,7 +154,7 @@ class TestAddQuestion:
 
         # With template - should be auto-finished
         q_id1 = manager.add_question("Q1?", "A1", answer_template=VALID_TEMPLATE)
-        assert manager.base._questions_cache[q_id1].get("finished") is True
+        assert manager.base._question_registry[q_id1].finished is True
 
     def test_add_question_explicit_finished_overrides_auto(self) -> None:
         """Test that explicit finished parameter overrides auto-detection."""
@@ -163,7 +163,7 @@ class TestAddQuestion:
 
         # Explicitly set finished=False even with template
         q_id = manager.add_question("Q1?", "A1", answer_template=VALID_TEMPLATE, finished=False)
-        assert manager.base._questions_cache[q_id].get("finished") is False
+        assert manager.base._question_registry[q_id].finished is False
 
     def test_add_question_without_template_creates_default(self) -> None:
         """Test that default template is created when none provided."""
@@ -765,7 +765,7 @@ class TestAddQuestionsBatch:
         ids = manager.add_questions_batch(questions_data)
 
         q_id = ids[0]
-        assert manager.base._questions_cache[q_id]["finished"] is True
+        assert manager.base._question_registry[q_id].finished is True
         assert manager.base._questions_cache[q_id]["author"]["name"] == "Author 1"
         assert manager.base._questions_cache[q_id]["custom_metadata"]["difficulty"] == "easy"
 
@@ -790,7 +790,7 @@ class TestMarkFinished:
         q_id = manager.add_question("Q?", "A", finished=initial_status)
         getattr(manager, method_name)(q_id)
 
-        assert manager.base._questions_cache[q_id]["finished"] is expected_status
+        assert manager.base._question_registry[q_id].finished is expected_status
 
     @pytest.mark.parametrize(
         "initial_status,method_name,expected_status",
@@ -810,8 +810,8 @@ class TestMarkFinished:
 
         getattr(manager, method_name)([q_id1, q_id2])
 
-        assert manager.base._questions_cache[q_id1]["finished"] is expected_status
-        assert manager.base._questions_cache[q_id2]["finished"] is expected_status
+        assert manager.base._question_registry[q_id1].finished is expected_status
+        assert manager.base._question_registry[q_id2].finished is expected_status
 
 
 @pytest.mark.unit
@@ -835,7 +835,7 @@ class TestToggleFinished:
         new_status = manager.toggle_finished(q_id)
 
         assert new_status is expected_status
-        assert manager.base._questions_cache[q_id]["finished"] is expected_status
+        assert manager.base._question_registry[q_id].finished is expected_status
 
     def test_toggle_nonexistent_raises(self) -> None:
         """Test that toggling nonexistent question raises ValueError."""

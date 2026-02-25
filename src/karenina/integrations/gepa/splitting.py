@@ -9,6 +9,7 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
 from karenina.integrations.gepa.data_types import BenchmarkSplit, KareninaDataInst
+from karenina.schemas.entities.question import QuestionRegistryEntry
 
 if TYPE_CHECKING:
     from karenina.benchmark.benchmark import Benchmark
@@ -281,10 +282,11 @@ def questions_to_data_insts(
         metadata: dict[str, Any] = {}
         if "author" in question:
             metadata["author"] = question["author"]
-        if "tags" in question or "keywords" in question:
-            metadata["tags"] = question.get("tags") or question.get("keywords")
-        if "finished" in question:
-            metadata["finished"] = question["finished"]
+        if "keywords" in question:
+            metadata["keywords"] = question.get("keywords")
+        # Get finished status from the question registry (not from the cache dict)
+        registry_entry = benchmark._base._question_registry.get(qid, QuestionRegistryEntry())
+        metadata["finished"] = registry_entry.finished
 
         instances.append(
             KareninaDataInst(

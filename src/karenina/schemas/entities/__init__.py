@@ -7,7 +7,7 @@ This module contains the fundamental entities used throughout Karenina:
 """
 
 from .answer import BaseAnswer, capture_answer_source
-from .question import Question
+from .question import Question, QuestionRegistryEntry
 from .rubric import (
     CallableTrait,
     LLMRubricTrait,
@@ -23,6 +23,7 @@ __all__ = [
     "BaseAnswer",
     "capture_answer_source",
     "Question",
+    "QuestionRegistryEntry",
     "Rubric",
     "LLMRubricTrait",
     "RegexTrait",

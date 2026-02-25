@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from karenina.schemas.checkpoint import JsonLdCheckpoint
+from karenina.schemas.entities.question import QuestionRegistryEntry
 from karenina.utils.checkpoint import (
     create_jsonld_benchmark,
     extract_questions_from_benchmark,
@@ -42,6 +43,7 @@ class BenchmarkBase:
         """
         self._checkpoint = create_jsonld_benchmark(name, description, version, creator)
         self._questions_cache: dict[str, dict[str, Any]] = {}
+        self._question_registry: dict[str, QuestionRegistryEntry] = {}
         self._rebuild_cache()
 
     @classmethod
@@ -81,6 +83,7 @@ class BenchmarkBase:
         instance = cls.__new__(cls)
         instance._checkpoint = checkpoint_data
         instance._questions_cache = {}
+        instance._question_registry = {}
         instance._rebuild_cache()
 
         return instance
@@ -132,11 +135,22 @@ class BenchmarkBase:
         return validate_jsonld_benchmark(self._checkpoint)
 
     def _rebuild_cache(self) -> None:
-        """Rebuild the internal questions cache from benchmark data."""
+        """Rebuild the internal questions cache and question registry from benchmark data."""
         self._questions_cache = {}
+        self._question_registry = {}
         questions = extract_questions_from_benchmark(self._checkpoint)
         for q in questions:
-            self._questions_cache[q["id"]] = q
+            q_id = q["id"]
+            # Extract finished into registry (removing it from the cache dict)
+            finished = q.pop("finished", False)
+            date_added = q.get("date_created", datetime.now().isoformat())
+            date_modified = q.get("date_modified", datetime.now().isoformat())
+            self._question_registry[q_id] = QuestionRegistryEntry(
+                finished=finished,
+                date_added=date_added,
+                date_modified=date_modified,
+            )
+            self._questions_cache[q_id] = q
 
     def _get_item_id(self, item: Any) -> str:
         """Get the ID for a DataFeedItem."""
@@ -275,7 +289,7 @@ class BenchmarkBase:
     @property
     def finished_count(self) -> int:
         """Get the number of finished questions."""
-        return sum(1 for q in self._questions_cache.values() if q.get("finished", False))
+        return sum(1 for entry in self._question_registry.values() if entry.finished)
 
     @property
     def is_empty(self) -> bool:
@@ -287,7 +301,10 @@ class BenchmarkBase:
         """Check if all questions have templates and are finished."""
         if self.is_empty:
             return False
-        return all(q.get("answer_template") and q.get("finished", False) for q in self._questions_cache.values())
+        return all(
+            q.get("answer_template") and self._question_registry.get(q_id, QuestionRegistryEntry()).finished
+            for q_id, q in self._questions_cache.items()
+        )
 
     def set_metadata(self, **metadata: Any) -> None:
         """

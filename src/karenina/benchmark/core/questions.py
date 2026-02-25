@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
     from .base import BenchmarkBase
 
+from karenina.schemas.entities.question import QuestionRegistryEntry
 from karenina.utils.checkpoint import add_question_to_benchmark
 
 from .question_query import QuestionQueryBuilder
@@ -25,6 +26,9 @@ logger = logging.getLogger(__name__)
 
 # Sentinel value to detect if finished parameter was explicitly provided
 _NOT_PROVIDED = object()
+
+# Default registry entry for lookups when a question is not yet in the registry
+_DEFAULT_REGISTRY_ENTRY = QuestionRegistryEntry()
 
 
 class QuestionManager:
@@ -114,8 +118,8 @@ class QuestionManager:
             # Use the Question object's auto-generated ID if no ID provided
             if question_id is None:
                 question_id = question.id
-            # Extract tags/keywords if provided
-            keywords = [tag for tag in question.tags if tag is not None] if question.tags else None
+            # Extract keywords if provided
+            keywords = question.keywords if question.keywords else None
             # Use few-shot examples from Question object if not overridden
             if few_shot_examples is None:
                 few_shot_examples = question.few_shot_examples
@@ -212,11 +216,12 @@ class QuestionManager:
         Returns:
             True if question was removed, False if not found
         """
-        # Remove from cache
+        # Remove from cache and registry
         if question_id not in self.base._questions_cache:
             return False
 
         del self.base._questions_cache[question_id]
+        self.base._question_registry.pop(question_id, None)
 
         # Remove from checkpoint data
         items_to_remove = []
@@ -295,8 +300,15 @@ class QuestionManager:
         return Question(
             question=q_data["question"],
             raw_answer=q_data["raw_answer"],
-            tags=q_data.get("keywords", []) or [],
+            keywords=q_data.get("keywords", []) or [],
             few_shot_examples=q_data.get("few_shot_examples"),
+            date_created=q_data.get("date_created", ""),
+            date_modified=q_data.get("date_modified", ""),
+            answer_template=q_data.get("answer_template"),
+            author=q_data.get("author"),
+            sources=q_data.get("sources"),
+            custom_metadata=q_data.get("custom_metadata"),
+            question_rubric=q_data.get("question_rubric"),
         )
 
     def get_all_questions_as_objects(self) -> list["Question"]:
@@ -316,8 +328,15 @@ class QuestionManager:
                 Question(
                     question=q_data["question"],
                     raw_answer=q_data["raw_answer"],
-                    tags=q_data.get("keywords", []) or [],
+                    keywords=q_data.get("keywords", []) or [],
                     few_shot_examples=q_data.get("few_shot_examples"),
+                    date_created=q_data.get("date_created", ""),
+                    date_modified=q_data.get("date_modified", ""),
+                    answer_template=q_data.get("answer_template"),
+                    author=q_data.get("author"),
+                    sources=q_data.get("sources"),
+                    custom_metadata=q_data.get("custom_metadata"),
+                    question_rubric=q_data.get("question_rubric"),
                 )
             )
         return objects
@@ -355,12 +374,11 @@ class QuestionManager:
         )
 
         # Add keywords separately if provided
-        if question_obj.tags:
+        if question_obj.keywords:
             # Update the question with keywords
             for item in self.base._checkpoint.dataFeedElement:
                 if self.base._get_item_id(item) == question_id:
-                    # Convert tags to appropriate format, filtering out None values
-                    item.keywords = [tag for tag in question_obj.tags if tag is not None]
+                    item.keywords = list(question_obj.keywords)
                     break
             # Rebuild cache to reflect changes
             self.base._rebuild_cache()
@@ -436,13 +454,14 @@ class QuestionManager:
             ValueError: If question not found
         """
         question_data = self.get_question(question_id)
+        registry_entry = self.base._question_registry.get(question_id)
         return {
             "id": question_data["id"],
             "question": question_data["question"],
             "raw_answer": question_data["raw_answer"],
             "date_created": question_data["date_created"],
             "date_modified": question_data["date_modified"],
-            "finished": question_data.get("finished", False),
+            "finished": registry_entry.finished if registry_entry else False,
             "author": question_data.get("author"),
             "sources": question_data.get("sources"),
             "custom_metadata": question_data.get("custom_metadata", {}),
@@ -564,7 +583,13 @@ class QuestionManager:
             ValueError: If question not found
         """
         question_data = self.get_question(question_id)
-        return {"created": question_data["date_created"], "modified": question_data["date_modified"]}
+        registry_entry = self.base._question_registry.get(question_id)
+        return {
+            "created": question_data["date_created"],
+            "modified": question_data["date_modified"],
+            "date_added": registry_entry.date_added if registry_entry else question_data["date_created"],
+            "registry_modified": registry_entry.date_modified if registry_entry else question_data["date_modified"],
+        }
 
     def clear_questions(self) -> int:
         """
@@ -575,6 +600,7 @@ class QuestionManager:
         """
         count = len(self.base._questions_cache)
         self.base._questions_cache.clear()
+        self.base._question_registry.clear()
         self.base._checkpoint.dataFeedElement.clear()
         self.base._checkpoint.dateModified = datetime.now().isoformat()
         return count
@@ -606,17 +632,17 @@ class QuestionManager:
 
     def mark_finished(self, question_id: str) -> None:
         """Mark a question as finished."""
-        if question_id in self.base._questions_cache:
-            # Update cache
-            self.base._questions_cache[question_id]["finished"] = True
+        if question_id in self.base._question_registry:
+            self.base._question_registry[question_id].finished = True
+            self.base._question_registry[question_id].date_modified = datetime.now().isoformat()
             # Update underlying JSON-LD structure
             self.base._update_question_property(question_id, "finished", True)
 
     def mark_unfinished(self, question_id: str) -> None:
         """Mark a question as unfinished."""
-        if question_id in self.base._questions_cache:
-            # Update cache
-            self.base._questions_cache[question_id]["finished"] = False
+        if question_id in self.base._question_registry:
+            self.base._question_registry[question_id].finished = False
+            self.base._question_registry[question_id].date_modified = datetime.now().isoformat()
             # Update underlying JSON-LD structure
             self.base._update_question_property(question_id, "finished", False)
 
@@ -643,13 +669,13 @@ class QuestionManager:
         Raises:
             ValueError: If question not found
         """
-        if question_id not in self.base._questions_cache:
+        if question_id not in self.base._question_registry:
             raise ValueError(f"Question not found: {question_id}")
 
-        current_status = self.base._questions_cache[question_id].get("finished", False)
-        new_status = not current_status
-        # Update cache
-        self.base._questions_cache[question_id]["finished"] = new_status
+        entry = self.base._question_registry[question_id]
+        new_status = not entry.finished
+        entry.finished = new_status
+        entry.date_modified = datetime.now().isoformat()
         # Update underlying JSON-LD structure
         self.base._update_question_property(question_id, "finished", new_status)
         return new_status
@@ -665,9 +691,17 @@ class QuestionManager:
             List of question IDs (if ids_only=True) or list of question dictionaries (if ids_only=False)
         """
         if ids_only:
-            return [q_id for q_id, q_data in self.base._questions_cache.items() if not q_data.get("finished", False)]
+            return [
+                q_id
+                for q_id in self.base._questions_cache
+                if not self.base._question_registry.get(q_id, _DEFAULT_REGISTRY_ENTRY).finished
+            ]
         else:
-            return [q_data for q_data in self.base._questions_cache.values() if not q_data.get("finished", False)]
+            return [
+                q_data
+                for q_id, q_data in self.base._questions_cache.items()
+                if not self.base._question_registry.get(q_id, _DEFAULT_REGISTRY_ENTRY).finished
+            ]
 
     def get_finished_questions(self, ids_only: bool = False) -> list[str] | list[dict[str, Any]]:
         """
@@ -680,9 +714,17 @@ class QuestionManager:
             List of question IDs (if ids_only=True) or list of question dictionaries (if ids_only=False)
         """
         if ids_only:
-            return [q_id for q_id, q_data in self.base._questions_cache.items() if q_data.get("finished", False)]
+            return [
+                q_id
+                for q_id in self.base._questions_cache
+                if self.base._question_registry.get(q_id, _DEFAULT_REGISTRY_ENTRY).finished
+            ]
         else:
-            return [q_data for q_data in self.base._questions_cache.values() if q_data.get("finished", False)]
+            return [
+                q_data
+                for q_id, q_data in self.base._questions_cache.items()
+                if self.base._question_registry.get(q_id, _DEFAULT_REGISTRY_ENTRY).finished
+            ]
 
     def filter_questions(
         self,

@@ -8,6 +8,7 @@ if TYPE_CHECKING:
     from .base import BenchmarkBase
     from .rubrics import RubricManager
 
+from karenina.schemas.entities.question import QuestionRegistryEntry
 from karenina.schemas.results import VerificationResultSet
 from karenina.schemas.verification import (
     FinishedTemplate,
@@ -50,7 +51,11 @@ class VerificationManager:
         """
         # If no question IDs provided, verify all finished questions
         if question_ids is None:
-            question_ids = [q_id for q_id, q in self.base._questions_cache.items() if q.get("finished", False)]
+            question_ids = [
+                q_id
+                for q_id in self.base._questions_cache
+                if self.base._question_registry.get(q_id, QuestionRegistryEntry()).finished
+            ]
 
         # Validate that all requested questions exist and are ready
         for q_id in question_ids:

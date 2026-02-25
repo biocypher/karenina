@@ -327,7 +327,7 @@ class TaskEval:
                 "id": question.id,
                 "question": question.question,
                 "raw_answer": question.raw_answer,
-                "keywords": question.tags,
+                "keywords": question.keywords,
                 "few_shot_examples": question.few_shot_examples,
                 "answer_template": getattr(question, "answer_template", None),
             }

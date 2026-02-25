@@ -43,7 +43,9 @@ def test_minimal_checkpoint_question_content(fixtures_dir: Path) -> None:
     assert "What is 2+2?" in q["question"]
     assert q["raw_answer"] == "4"
     # Note: minimal.jsonld doesn't have finished property, defaults to False
-    assert q["finished"] is False
+    # finished is tracked in the question registry, not the cache dict
+    q_id = q["id"]
+    assert benchmark._base._question_registry[q_id].finished is False
 
 
 @pytest.mark.unit
@@ -120,8 +122,8 @@ def test_multi_question_checkpoint_all_questions(fixtures_dir: Path) -> None:
     mq001 = benchmark.get_question("mq001")
     assert "boiling point" in mq001["question"].lower()
 
-    mq005 = benchmark.get_question("mq005")
-    assert mq005["finished"] is False  # This one is marked unfinished
+    # finished is tracked in the question registry, not the cache dict
+    assert benchmark._base._question_registry["mq005"].finished is False
 
 
 @pytest.mark.unit
