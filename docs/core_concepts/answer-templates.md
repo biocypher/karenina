@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.19.1
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -58,7 +58,54 @@ A template is a contract between three participants, each with a single, well-de
 2. **The Judge LLM** reads the answering model's response and fills in the form: it extracts information, nothing more
 3. **The `verify()` method** compares the filled-in values against the answer key and returns a pass/fail verdict
 
-No participant oversteps its role. The judge never sees the answer key. The `verify()` method never reads the original response. You, the author, define the rules but never need to run the evaluation yourself. This is what makes the system reproducible: swap out the judge model, and the same form with the same `verify()` logic still produces a deterministic result.
+Each participant has a single job. The `verify()` method never reads the original response. The judge extracts information without running correctness checks. How much of the expected answer the judge sees depends on your field design: string fields keep it fully hidden, while boolean fields often reveal it in their descriptions (see [Ground Truth Exposure](#ground-truth-exposure-and-judge-anchoring)). Regardless, the *evaluation* is always deterministic code in `verify()`, not an LLM judgment call. Swap out the judge model, and the same `verify()` logic still produces the same verdict from the same extracted values.
+
+### How It Unfolds: A Walkthrough
+
+To make this concrete, here is how the three participants interact during a single verification. Suppose the benchmark asks: *"How many pairs of chromosomes does a normal human somatic cell have?"*
+
+**Step 1: You define the question and its template.**
+
+The question text goes to the answering model. The template specifies what to extract and how to check it:
+
+```
+Template fields:    pair_count (int): "The number of chromosome pairs in a normal human somatic cell"
+Ground truth:       {"pair_count": 23}
+verify():           self.pair_count == self.correct["pair_count"]
+```
+
+**Step 2: The answering model produces a response.**
+
+The pipeline sends the question to the model being evaluated. It replies with free text:
+
+```
+"Human somatic cells are diploid, containing 46 chromosomes organized
+into 23 pairs. Of these, 22 are autosomal pairs and one is the sex
+chromosome pair (XX or XY)..."
+```
+
+**Step 3: The judge extracts structured data.**
+
+The Judge LLM receives the response and the template's JSON schema (field names, types, descriptions). It reads the response and fills in the fields:
+
+```
+Judge input:   response text + schema {"pair_count": {"type": "integer", "description": "The number of chromosome pairs..."}}
+Judge output:  {"pair_count": 23}
+```
+
+The judge does not see `ground_truth` or `verify()`. It acts as a reader, not an evaluator.
+
+**Step 4: `verify()` runs the programmatic check.**
+
+The filled template is instantiated, `ground_truth` attaches the expected values, and `verify()` compares:
+
+```
+Extracted:   23
+Expected:    23
+Result:      23 == 23  →  True
+```
+
+Note that the response mentions both 46 (total chromosomes) and 23 (pairs). The field description guides the judge to extract the right number. If the judge had extracted 46 instead, `verify()` would return False, correctly flagging a mismatch. The template author controls both what to ask for (the description) and what counts as correct (`verify()`).
 
 With this mental model in place, let's look at how templates are built in practice.
 
@@ -117,15 +164,13 @@ print(f"Verified:         {parsed.verify()}")
 
 Now that you have seen what a template looks like, let's step back and understand *why* it is built this way. Each component exists because of a specific design choice, and understanding those choices will help you write better templates. We will use the form analogy from earlier to keep things concrete.
 
-### The answer key stays hidden: `ground_truth`
+### Keeping ground truth out of the schema: `ground_truth`
 
-Remember the form analogy: the answer key is stored in a locked drawer. The person filling in the form (the judge) should never see it. Otherwise they might just copy the expected answers instead of honestly reading the document.
+The `ground_truth` method exists to keep the programmatic answer key out of the JSON schema that the judge receives. The Judge LLM sees field names, types, and descriptions to know what to extract. If correct answers were regular Pydantic fields, they would appear in that schema and could influence the judge's extraction. `ground_truth` runs after the instance is created, so you can attach expected values to `self.correct` without them ever appearing in the schema.
 
-In technical terms: the Judge LLM receives the template's JSON schema (field names, types, and descriptions) to know what to extract. If the correct answers were regular fields, they would appear in that schema and the judge could anchor on them instead of faithfully parsing the response. Ground truth needs to stay *out* of the schema so the judge acts as a pure reader, not a correctness checker.
+In practice, the degree of separation depends entirely on how you write your field descriptions. A string field makes it easy to describe *what kind of value* to extract without revealing the correct answer ("The gene mentioned as target in the response"). A boolean field that asks the same question almost always requires exposing the ground truth, because the judge needs to know *what* to check for ("True if the response identifies TP53 as the target"). This is a deliberate tradeoff, not a flaw: boolean fields trade some judge independence for simpler templates and better synonym handling. See [Ground Truth Exposure](#ground-truth-exposure-and-judge-anchoring) for a full discussion of when this matters.
 
-`ground_truth` is the method that makes this possible. It is a hook that runs right after an instance is created. By the time it fires, the judge's extracted values are already in the fields, so you can safely attach the expected answers alongside them in `self.correct`. The answers are there when `verify()` needs them, but invisible to the judge when it is doing its work.
-
-If you are not a Python developer, the key takeaway is simple: **put your correct answers in `ground_truth`, not in the field definitions.** The system handles the rest.
+If you are not a Python developer, the key takeaway is simple: **put your correct answers in `ground_truth`, not in the field definitions**, and be aware that your field descriptions control how much the judge can infer about the expected answer.
 
 <div class="admonition info">
 <p class="admonition-title">What is <code>ground_truth</code>?</p>
@@ -148,6 +193,14 @@ Why go through this trouble instead of just asking the judge "Was this answer co
 - **Reproducibility**: the same extracted values always produce the same verdict, no matter which judge model you use. Run it today, run it next year. Same result.
 - **Transparency**: anyone can read the `verify()` code and see exactly what counts as "correct." No prompt engineering mysteries.
 - **Testability**: you can create a template instance with sample values, call `verify()`, and check the result on your laptop without any LLM, API key, or network connection.
+
+### Templates as Self-Contained Evaluation Units
+
+The three-component structure serves a deeper architectural purpose: each template is a self-contained evaluation unit that carries its own extraction schema and verification logic.
+
+This matters because real benchmarks contain heterogeneous questions. One question might use a boolean check for concept identification, another might extract a string for exact matching, and a third might rely solely on regex against the raw response. The pipeline does not impose a question format or parsing regime. It orchestrates execution (generating answers, invoking the judge, running verification), but each template decides what to extract and what "correct" means for its question.
+
+This separation of concerns keeps the system flexible. You do not need to force every question into multiple-choice format, or require every response to follow a specific structure. The evaluation logic lives *inside* the template, not in the pipeline. Add a new question type by writing a new template class; the pipeline runs it without modification.
 
 ### Validation
 
@@ -583,7 +636,7 @@ The pipeline calls `verify()` for the pass/fail result used in scoring. `verify_
 
 ## Ground Truth Exposure and Judge Anchoring
 
-The choice between boolean and string fields has a subtle but important implication for how honestly the judge fills in your form.
+Earlier we noted that boolean fields often reveal the expected answer in their descriptions, while string fields keep it hidden. This section explores that tradeoff in detail, because it affects how reliably the judge extracts information from the response.
 
 Think of it this way: imagine your form has a checkbox that says "Check this box if the letter mentions Paris as the capital of France." The form-filler now knows what the expected answer is. They might check the box even if the letter only vaguely alludes to Paris, because the form's wording nudged them. This is **anchoring**: the expected answer influences the extraction.
 
