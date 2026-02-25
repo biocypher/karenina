@@ -10,9 +10,9 @@ Concepts are ordered to follow the evaluation pipeline — from what you're eval
 |---------|-----------|------|
 | **Questions & Benchmarks** | The central objects: questions bundled with templates, rubrics, and metadata | [Questions & Benchmarks](questions-and-benchmarks.md) |
 | **Checkpoints** | JSON-LD files that store benchmarks (questions, templates, rubrics, results) | [Checkpoints](checkpoints.md) |
-| **Templates vs Rubrics** | The two evaluation units: correctness (templates) vs quality (rubrics) | [Templates vs Rubrics](template-vs-rubric.md) |
 | **Answer Templates** | Pydantic models that define how a Judge LLM parses and verifies responses | [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb) |
 | **Rubrics** | Trait-based evaluation of response quality (LLM, regex, callable, metric) | [Rubrics](rubrics/index.md) |
+| **Templates vs Rubrics** | The two evaluation units: correctness (templates) vs quality (rubrics) | [Templates vs Rubrics](template-vs-rubric.md) |
 | **Evaluation Modes** | Three modes controlling which evaluation units run (`template_only`, `template_and_rubric`, `rubric_only`) | [Evaluation Modes](evaluation-modes.md) |
 | **Verification Pipeline** | The 13-stage engine that executes evaluation end to end | [Verification Pipeline](verification-pipeline.md) |
 | **Prompt Assembly** | How prompts are constructed for pipeline LLM calls (tri-section pattern) | [Prompt Assembly](prompt-assembly.md) |
@@ -82,12 +82,6 @@ A **checkpoint** is a JSON-LD file that stores everything needed to define and r
 
 [Read more about checkpoints →](checkpoints.md)
 
-### Templates vs Rubrics
-
-Karenina's evaluation rests on two complementary building blocks: **answer templates** verify factual correctness by having a Judge LLM parse responses into structured schemas, while **rubrics** assess response quality through trait evaluators that examine the raw text. Understanding when to use each — and when to use both together — is the foundation for effective benchmark design.
-
-[Read more about templates vs rubrics →](template-vs-rubric.md)
-
 ### Answer Templates
 
 **Answer templates** are Pydantic models that tell a Judge LLM how to parse a candidate response into structured fields. Each template implements a `verify()` method that compares parsed values against ground truth. This is the core mechanism for evaluating factual correctness.
@@ -96,9 +90,15 @@ Karenina's evaluation rests on two complementary building blocks: **answer templ
 
 ### Rubrics
 
-**Rubrics** evaluate qualitative traits of the raw response — independent of whether the answer is factually correct. Karenina provides four trait types: LLM traits, regex traits, callable traits, and metric traits. Rubrics can be applied globally (all questions) or per-question.
+**Rubrics** evaluate qualitative traits of the raw response, independent of whether the answer is factually correct. Karenina provides four trait types: LLM traits, regex traits, callable traits, and metric traits. Rubrics can be applied globally (all questions) or per-question.
 
 [Read more about rubrics →](rubrics/index.md)
+
+### Templates vs Rubrics
+
+Karenina's evaluation rests on two complementary building blocks: **answer templates** verify factual correctness by having a Judge LLM parse responses into structured schemas, while **rubrics** assess response quality through trait evaluators that examine the raw text. Understanding when to use each, and when to use both together, is the foundation for effective benchmark design.
+
+[Read more about templates vs rubrics →](template-vs-rubric.md)
 
 ### Evaluation Modes
 

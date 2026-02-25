@@ -151,21 +151,20 @@ nav:
     - Overview: core_concepts/index.md
     - Questions & Benchmarks: core_concepts/questions-and-benchmarks.md
     - Checkpoints: core_concepts/checkpoints.md
+    - Answer Templates: notebooks/core_concepts/answer-templates.ipynb
+    - Rubric Traits:
+      - Overview: core_concepts/rubrics/index.md
+      - LLM Traits: notebooks/core_concepts/rubrics/llm-traits.ipynb
+      - Literal Traits: notebooks/core_concepts/rubrics/literal-traits.ipynb
+      - Regex Traits: notebooks/core_concepts/rubrics/regex-traits.ipynb
+      - Callable Traits: notebooks/core_concepts/rubrics/callable-traits.ipynb
+      - Metric Traits: notebooks/core_concepts/rubrics/metric-traits.ipynb
+    - Templates vs Rubrics: core_concepts/template-vs-rubric.md
+    - Evaluation Modes: core_concepts/evaluation-modes.md
+    - Results & Scoring: core_concepts/results-and-scoring.md
     - Question Context:
       - ADeLe: core_concepts/adele.md
       - Few-Shot: core_concepts/few-shot.md
-    - Evaluation:
-      - Templates vs Rubrics: core_concepts/template-vs-rubric.md
-      - Answer Templates: notebooks/core_concepts/answer-templates.ipynb
-      - Rubric Traits:
-        - Overview: core_concepts/rubrics/index.md
-        - LLM Traits: notebooks/core_concepts/rubrics/llm-traits.ipynb
-        - Literal Traits: notebooks/core_concepts/rubrics/literal-traits.ipynb
-        - Regex Traits: notebooks/core_concepts/rubrics/regex-traits.ipynb
-        - Callable Traits: notebooks/core_concepts/rubrics/callable-traits.ipynb
-        - Metric Traits: notebooks/core_concepts/rubrics/metric-traits.ipynb
-      - Evaluation Modes: core_concepts/evaluation-modes.md
-      - Results & Scoring: core_concepts/results-and-scoring.md
     - Pipeline:
       - Verification Pipeline: core_concepts/verification-pipeline.md
       - Prompt Assembly: core_concepts/prompt-assembly.md

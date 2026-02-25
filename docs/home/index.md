@@ -70,6 +70,8 @@ For a deeper discussion, see [Templates vs Rubrics](../core_concepts/template-vs
 ## Next Steps
 
 - [Philosophy](philosophy.md) — Why LLM-as-judge evaluation works
-- [Templates vs Rubrics](../core_concepts/template-vs-rubric.md) — Understanding the two evaluation units
+- [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb) — How a Judge LLM parses and verifies responses
+- [Rubrics](../core_concepts/rubrics/index.md) — Trait-based quality assessment
+- [Templates vs Rubrics](../core_concepts/template-vs-rubric.md) — When to use which, and when to use both
 - [Installation](../getting-started/installation.md) — Install karenina and set up API keys
-- [Core Concepts](../core_concepts/index.md) — Deep dive into checkpoints, templates, rubrics, and more
+- [Core Concepts](../core_concepts/index.md) — Deep dive into checkpoints, pipelines, adapters, and more
