@@ -29,11 +29,21 @@ An answer template is a **Pydantic model** that serves two purposes:
 1. **Parsing instructions**: Field names and descriptions tell the Judge LLM what to extract from a free-text response
 2. **Verification logic**: The `verify()` method programmatically checks extracted values against expected answers
 
+<div class="admonition info">
+<p class="admonition-title">New to Pydantic?</p>
+<p><a href="https://docs.pydantic.dev/">Pydantic</a> is a Python library for defining structured data as classes with typed fields. When you write <code>target: str = Field(description="...")</code>, Pydantic knows that <code>target</code> must be a string and carries the description as metadata. Pydantic also generates a <strong>JSON schema</strong>: a machine-readable description of your fields, their types, and their descriptions. This JSON schema is what the Judge LLM receives as its extraction instructions. You do not need deep Pydantic knowledge to write templates.</p>
+</div>
+
 This is the core of Karenina's **LLM-as-judge** approach: the answering model produces natural text, the Judge LLM fills in the template's schema, and the template's code decides if the answer is correct.
 
 ```
 Response (free text)  →  Judge LLM  →  Filled template  →  verify()  →  True/False
 ```
+
+<div class="admonition note">
+<p class="admonition-title">This page teaches how templates work, not how to run them</p>
+<p>The code examples below instantiate templates manually and call <code>verify()</code> directly. This is for illustration only. It shows what the Judge LLM and verification pipeline do under the hood. In practice, you never call <code>verify()</code> yourself. Instead, you embed your template in a benchmark and run the <a href="../workflows/creating-benchmarks/factual-qa-benchmark.md">verification pipeline</a>, which handles answer generation, judge parsing, and verification automatically.</p>
+</div>
 
 ### Think of It Like a Form
 
@@ -132,7 +142,7 @@ class Answer(BaseAnswer):
         self.correct = {"target": "BCL2"}
 
     def verify(self) -> bool:
-        return self.target.strip().upper() == self.correct["target"].upper()
+        return self.target.strip().upper().replace("-", "") == self.correct["target"].upper()
 ```
 
 > All subsequent examples assume these imports:
@@ -147,6 +157,8 @@ Let's walk through what happens when this template is used:
 2. Pydantic creates an `Answer` instance, then `ground_truth` sets the expected value
 3. `verify()` compares the extracted target to "BCL2" (case-insensitive)
 
+Because `BaseAnswer` uses Pydantic's `extra="allow"` configuration, you can attach any attribute to `self` inside `ground_truth`. The framework uses this for `self.correct` (expected values) and `self.regex` (pattern checks), and you can use it for custom attributes like `self.tolerance`. None of these appear in the JSON schema sent to the judge.
+
 ```python
 # Simulate what the Judge LLM produces after parsing a response
 parsed = Answer(target="Bcl-2")
@@ -155,62 +167,22 @@ print(f"Ground truth:     {parsed.correct['target']!r}")
 print(f"Verified:         {parsed.verify()}")
 ```
 
-<div class="admonition note">
-<p class="admonition-title">This page teaches how templates work, not how to run them</p>
-<p>The code examples below instantiate templates manually and call <code>verify()</code> directly. This is for illustration only. It shows what the Judge LLM and verification pipeline do under the hood. In practice, you never call <code>verify()</code> yourself. Instead, you embed your template in a benchmark and run the <a href="../workflows/creating-benchmarks/factual-qa-benchmark.md">verification pipeline</a>, which handles answer generation, judge parsing, and verification automatically.</p>
-</div>
-
-## Why These Three Components?
-
-Now that you have seen what a template looks like, let's step back and understand *why* it is built this way. Each component exists because of a specific design choice, and understanding those choices will help you write better templates. We will use the form analogy from earlier to keep things concrete.
-
-### Keeping ground truth out of the schema: `ground_truth`
-
-The `ground_truth` method exists to keep the programmatic answer key out of the JSON schema that the judge receives. The Judge LLM sees field names, types, and descriptions to know what to extract. If correct answers were regular Pydantic fields, they would appear in that schema and could influence the judge's extraction. `ground_truth` runs after the instance is created, so you can attach expected values to `self.correct` without them ever appearing in the schema.
-
-In practice, the degree of separation depends entirely on how you write your field descriptions. A string field makes it easy to describe *what kind of value* to extract without revealing the correct answer ("The gene mentioned as target in the response"). A boolean field that asks the same question almost always requires exposing the ground truth, because the judge needs to know *what* to check for ("True if the response identifies TP53 as the target"). This is a deliberate tradeoff, not a flaw: boolean fields trade some judge independence for simpler templates and better synonym handling. See [Ground Truth Exposure](#ground-truth-exposure-and-judge-anchoring) for a full discussion of when this matters.
-
-If you are not a Python developer, the key takeaway is simple: **put your correct answers in `ground_truth`, not in the field definitions**, and be aware that your field descriptions control how much the judge can infer about the expected answer.
+Each component exists for a specific reason. The `ground_truth` method keeps the programmatic answer key out of the JSON schema that the judge receives. If correct answers were regular Pydantic fields, they would appear in the schema and could influence the judge's extraction. Because `ground_truth` runs after the instance is created, you can attach expected values to `self.correct` without them ever appearing in the schema. The degree of exposure depends on your field type; see [Ground Truth Exposure](#ground-truth-exposure-and-judge-anchoring) for the full tradeoff.
 
 <div class="admonition info">
 <p class="admonition-title">What is <code>ground_truth</code>?</p>
 <p><code>ground_truth</code> is a karenina lifecycle method on <code>BaseAnswer</code>. It runs automatically after the instance is created and all fields are set. Unlike the underlying Pydantic hook it wraps, <code>ground_truth</code> takes no extra parameters: just <code>self</code>. You do not need deep Pydantic knowledge to use it: just define the method, set <code>self.correct</code> (and optionally <code>self.regex</code>), and the framework handles the rest.</p>
 </div>
 
-### Extraction and checking are separate jobs: `verify()`
+The separation between extraction and checking is the most important design idea in karenina's template system. The Judge LLM fills in the form: it reads the answering model's response and extracts values into the template's fields, nothing more. The `verify()` method checks the form: it compares the extracted values against `self.correct` and returns True or False, never seeing the original response. Deterministic code is more reliable than asking an LLM to make judgment calls, so this separation gives you reproducibility (the same extracted values always produce the same verdict), transparency (anyone can read `verify()` and see what counts as correct), and testability (you can call `verify()` on your laptop without any LLM or API key).
 
-This is the most important design idea in karenina's template system, and where the form analogy is most useful.
+The three-component structure also means each template is a self-contained evaluation unit that carries its own extraction schema and verification logic. Real benchmarks contain heterogeneous questions: one might use a boolean check, another a string extraction, a third regex only. The pipeline orchestrates execution, but each template decides what to extract and what "correct" means for its question. Add a new question type by writing a new template class; the pipeline runs it without modification.
 
-Think about what happens with a real standardized form. One person reads the source document and fills in the blanks. A different person, or an automated system, checks the filled-in values against records. The form-filler does not decide whether the answers are correct. The checker does not go back and re-read the original document. Each actor has exactly one job.
+The pipeline validates templates before running them. Stage 1 (`ValidateTemplate`) checks that `verify()` exists and is callable, and that `ground_truth` sets `self.correct` as a dictionary. If something is missing, you get a clear error message before any LLM calls happen. For regex-only templates and optional methods like `verify_granular()`, see [Regex Checks](#regex-checks) and [Multi-Field with Partial Credit](#multi-field-with-partial-credit).
 
-Templates work the same way:
+### Naming Requirement
 
-- **The Judge LLM fills in the form**: it reads the answering model's response and extracts values into the template's fields. That is *all* it does. It does not evaluate, score, or judge correctness.
-- **`verify()` checks the form**: it compares the extracted values against `self.correct` and returns True or False. It never sees the original response. It works with the structured data the judge already extracted.
-
-Why go through this trouble instead of just asking the judge "Was this answer correct?" Because deterministic code is more reliable than asking an LLM to make judgment calls. By separating extraction from evaluation, you get:
-
-- **Reproducibility**: the same extracted values always produce the same verdict, no matter which judge model you use. Run it today, run it next year. Same result.
-- **Transparency**: anyone can read the `verify()` code and see exactly what counts as "correct." No prompt engineering mysteries.
-- **Testability**: you can create a template instance with sample values, call `verify()`, and check the result on your laptop without any LLM, API key, or network connection.
-
-### Templates as Self-Contained Evaluation Units
-
-The three-component structure serves a deeper architectural purpose: each template is a self-contained evaluation unit that carries its own extraction schema and verification logic.
-
-This matters because real benchmarks contain heterogeneous questions. One question might use a boolean check for concept identification, another might extract a string for exact matching, and a third might rely solely on regex against the raw response. The pipeline does not impose a question format or parsing regime. It orchestrates execution (generating answers, invoking the judge, running verification), but each template decides what to extract and what "correct" means for its question.
-
-This separation of concerns keeps the system flexible. You do not need to force every question into multiple-choice format, or require every response to follow a specific structure. The evaluation logic lives *inside* the template, not in the pipeline. Add a new question type by writing a new template class; the pipeline runs it without modification.
-
-### Validation
-
-You do not need to worry about forgetting a required component. `BaseAnswer` itself does not enforce that your template defines `verify()` or `ground_truth`, but the pipeline validates templates before running them. Stage 1 (`ValidateTemplate`) checks that `verify()` exists and is callable, and that `ground_truth` sets `self.correct` as a dictionary. If something is missing, you get a clear error message before any LLM calls happen.
-
-For regex-only templates and optional methods like `verify_granular()`, see [Regex Checks](#regex-checks) and [Multi-Field with Partial Credit](#multi-field-with-partial-credit).
-
-## Naming Requirement
-
-All answer template classes **must be named `Answer`**. The pipeline looks for this exact class name when executing template code.
+All answer template classes **must be named `Answer`**. The pipeline looks for this exact class name when executing template code. If you add templates through the Python API (e.g., `benchmark.templates.add_answer_template(q_id, MyCustomAnswer)`), the framework automatically renames your class to `Answer` internally. The naming requirement applies when writing template source code directly.
 
 ```python
 # Correct
@@ -327,11 +299,11 @@ A boolean check avoids string matching entirely. Instead of extracting "TP53" as
 
 The key design decision is in the field description: it must be specific enough to disambiguate edge cases. The `identifies_tp53` description explicitly states that merely listing TP53 alongside other cancer genes should return False; the response must single it out as the *most commonly mutated*. Without this, the judge would likely return True for "TP53, KRAS, and PIK3CA are frequently mutated in cancer," which mentions TP53 but doesn't actually answer the question. Invest time in writing precise descriptions; they are the instructions your judge LLM follows.
 
-Boolean templates follow the same three-component structure as other patterns. The difference is in `verify()`: instead of string normalization or numeric tolerance, it compares the extracted boolean against `self.correct` directly. This makes boolean the simplest template pattern, but it comes with an anchoring tradeoff: the judge sees the expected answer in the field description. See [Ground Truth Exposure](#ground-truth-exposure-and-judge-anchoring) for when this matters.
+Boolean templates follow the same three-component structure as other patterns. The difference is in `verify()`: instead of string normalization or numeric tolerance, it compares the extracted boolean against `self.correct` directly. This makes boolean the simplest template pattern, but it comes with an anchoring tradeoff: the judge sees the expected answer in the field description.
 
 <div class="admonition tip">
 <p class="admonition-title">When to use boolean checks</p>
-<p>Prefer boolean fields when you need to check for the presence of a concept that has multiple valid surface forms. The judge handles normalization so <code>verify()</code> stays trivial. For checking multiple concepts independently with partial credit, see <a href="#multi-field-with-partial-credit">Multi-Field with Partial Credit</a>.</p>
+<p>Boolean fields trade some judge independence for simpler verification. See <a href="#ground-truth-exposure-and-judge-anchoring">Ground Truth Exposure</a> for when this matters and how to choose between boolean and string fields. For checking multiple concepts independently with partial credit, see <a href="#multi-field-with-partial-credit">Multi-Field with Partial Credit</a>.</p>
 </div>
 
 ### String Extraction
@@ -413,6 +385,8 @@ for temp in [37.0, 36.8, 37.5, 36.0, 38.0]:
     print(f"{temp} C -> verify(): {parsed.verify()}")
 ```
 
+The `self.tolerance` attribute is not a built-in framework concept; it is a custom attribute you define for your own `verify()` logic. This works because `BaseAnswer` allows arbitrary attributes (see [Template Structure](#template-structure)).
+
 For exact counts where only one value is correct, set `tolerance = 0`:
 
 ```python
@@ -447,6 +421,8 @@ print(f"46 pairs -> verify(): {parsed_wrong.verify()}")
 ### Regex Checks
 
 Regex patterns search the **raw LLM response trace**: the full text the answering model produced, before any parsing.
+
+In form terms: sometimes you do not need a form-filler at all. Instead of having someone read the letter and fill in blanks, you search the letter directly for specific words or patterns. That is what regex checks do.
 
 Sometimes you may not want, or may not be able to, use an LLM judge for evaluation. Classical benchmarks often rely on static pattern matching: regex against raw outputs, with no model-based parsing involved. `self.regex` brings this approach into karenina: instead of writing standalone regex scripts outside the framework, you declare named patterns inside the template and the pipeline runs them as part of the standard verification flow. This lets you run classical pattern-matching benchmarks through karenina's pipeline, benefiting from its infrastructure (checkpoints, results, DataFrames, multi-model comparison) without requiring a judge LLM.
 
@@ -500,6 +476,8 @@ Four match types are available:
 | `"count"` | `int` | Number of matches equals `expected` |
 | `"all"` | `list[str]` | All items in `expected` found in matches |
 
+Note: the `"exact"` match type requires exactly one match in the text. If your pattern might match multiple times (e.g., a year appearing in several sentences), the check will fail even if the matched value is correct. Use `"contains"` instead when multiple matches are possible.
+
 <div class="admonition warning">
 <p class="admonition-title">Capture groups change matching behavior</p>
 <p>Python's <code>re.findall()</code> returns captured group content instead of full matches when the pattern contains parenthesized groups. For alternation like <code>r"\b(activates|inhibits|blocks)\b"</code>, this works correctly. But for patterns like <code>r"(\d+)\s*(mg|g)"</code>, it returns tuples (<code>[("500", "mg")]</code>), breaking string comparisons. Use non-capturing groups <code>(?:...)</code> when you need grouping but want the full match returned.</p>
@@ -532,6 +510,8 @@ print(f"verify_regex() passed: {result['success']}")
 print(f"Individual checks:     {result['results']}")
 ```
 
+`verify_regex()` returns a dictionary with three keys: `success` (bool, True if all checks passed), `results` (dict mapping check names to True/False), and `details` (dict mapping check names to diagnostic info including `matches_found`, `match_count`, and `failure_reason`). The `details` key is useful for debugging failing regex checks.
+
 <div class="admonition tip">
 <p class="admonition-title">Regex checks vs. regex in verify()</p>
 <p><code>self.regex</code> checks patterns in the <strong>raw response trace</strong>: what the answering model actually said. <code>re.search()</code> in <code>verify()</code> normalizes <strong>parsed field values</strong>: what the judge extracted. Use <code>self.regex</code> when you need to verify that certain patterns appear in the original response. Use <code>re.search()</code> in <code>verify()</code> when the judge returns a value in variable format and you need to extract the relevant portion before comparison.</p>
@@ -542,6 +522,8 @@ print(f"Individual checks:     {result['results']}")
 Sometimes a single question asks about multiple things at once, and getting two out of three right is better than zero. You want to know *which* parts were correct.
 
 For questions with multiple dimensions, where you want to check delivery method *and* target protein *and* immune response independently, use multiple fields with both `verify()` (all-or-nothing) and `verify_granular()` (partial credit scoring from 0.0 to 1.0).
+
+`verify_granular()` is not inherited from `BaseAnswer`; it is an optional method you define yourself. The pipeline detects it via `hasattr()` at runtime. If present, the pipeline calls it and records the score; if absent, only the `verify()` pass/fail result is used.
 
 Extracting each check into a private `_check_*` method keeps both `verify()` and `verify_granular()` readable and ensures the logic is defined once. This pattern is recommended whenever you have three or more fields to verify.
 
@@ -634,39 +616,7 @@ The pipeline calls `verify()` for the pass/fail result used in scoring. `verify_
 | Regex checks (`self.regex`) | Pattern must appear in raw response; no fields = no LLM judge needed | Only need to normalize parsed field values | Year mentions, keyword presence, citation counts |
 | Multi-field + partial credit | Multiple dimensions, want granular scoring | Single-answer questions | Mechanisms, multi-part descriptions |
 
-## Ground Truth Exposure and Judge Anchoring
-
-Earlier we noted that boolean fields often reveal the expected answer in their descriptions, while string fields keep it hidden. This section explores that tradeoff in detail, because it affects how reliably the judge extracts information from the response.
-
-Think of it this way: imagine your form has a checkbox that says "Check this box if the letter mentions Paris as the capital of France." The form-filler now knows what the expected answer is. They might check the box even if the letter only vaguely alludes to Paris, because the form's wording nudged them. This is **anchoring**: the expected answer influences the extraction.
-
-Now imagine the form has a blank that says "Write down the city named as France's capital." The form-filler writes what they find, without knowing whether you expect Paris, Lyon, or Marseille. The checking happens later, when the clerk compares the filled-in value against the answer key.
-
-This maps directly to template design:
-
-- **Boolean fields** often embed the ground truth in the description: "True if the response identifies BCL2 as the target." This is convenient (no normalization needed, trivial `verify()`), but the judge sees the expected answer and may anchor on it rather than faithfully assessing what the response actually says.
-- **String fields** tell the judge *what kind of value* to extract ("The protein target mentioned in the response") without revealing what the correct answer is. The judge acts as a pure reader, and `verify()` handles the correctness check separately. This keeps the judge unbiased, but requires normalization logic in `verify()` since free text is more variable than a boolean.
-
-This is a design tradeoff, not a right-or-wrong choice. Boolean fields are faster to write and produce simpler templates. String fields provide a cleaner separation between extraction (the judge) and evaluation (`verify()`). Being aware of this distinction helps you make an informed choice for each field in your template.
-
-| | Boolean field | String field |
-|--|--------------|-------------|
-| Judge sees correct answer? | Yes (in description) | No |
-| Anchoring risk | Higher | Lower |
-| `verify()` complexity | Simple equality check | Normalization required |
-| Best for | Known concepts with synonyms | Rigorous benchmarks, unbiased evaluation |
-
-## Writing Good Field Descriptions
-
-### What the Judge Sees
-
-Remember: the judge is the person reading the letter and filling in your form. The *only* guidance it has is the form itself: the field names, types, and descriptions from your template's JSON schema. The system prompt tells the judge: *"Each field's description is authoritative for what and how to extract. Follow field descriptions precisely."*
-
-This means your field description **is** your specification. If the instructions next to a blank on your form are vague ("write the answer here"), the form-filler will not know what you want. If they are precise ("write the patient's systolic blood pressure in mmHg, as stated in the clinical note"), the form-filler knows exactly what to look for and how to write it down. Invest time in your descriptions. They are the single most important part of your template, because they are the only thing the judge has to work with.
-
-For the tradeoff between boolean and string fields, see [Ground Truth Exposure and Judge Anchoring](#ground-truth-exposure-and-judge-anchoring) above.
-
-### Lists vs Individual Boolean Fields
+### Choosing Between Patterns: Lists vs Individual Booleans
 
 When you expect a set of items (proteins, symptoms, references), you have two approaches.
 
@@ -718,20 +668,177 @@ class Answer(BaseAnswer):
 
 Each field is self-contained, accepts known synonyms, and `verify()` is trivial: `all(...)` for strict, `sum(...)/len(...)` for partial credit. The boolean approach avoids set comparison, string normalization, and gives you granular per-item results.
 
+## Writing Good Field Descriptions
+
+### What the Judge Sees
+
+Remember: the judge is the person reading the letter and filling in your form. The *only* guidance it has is the form itself: the field names, types, and descriptions from your template's JSON schema. The system prompt tells the judge: *"Each field's description is authoritative for what and how to extract. Follow field descriptions precisely."*
+
+This means your field description **is** your specification. If the instructions next to a blank on your form are vague ("write the answer here"), the form-filler will not know what you want. If they are precise ("write the patient's systolic blood pressure in mmHg, as stated in the clinical note"), the form-filler knows exactly what to look for and how to write it down. Invest time in your descriptions. They are the single most important part of your template, because they are the only thing the judge has to work with.
+
+For the tradeoff between boolean and string fields, see [Ground Truth Exposure and Judge Anchoring](#ground-truth-exposure-and-judge-anchoring) below.
+
+### Ground Truth Exposure and Judge Anchoring
+
+Earlier we noted that boolean fields often reveal the expected answer in their descriptions, while string fields keep it hidden. This section explores that tradeoff in detail, because it affects how reliably the judge extracts information from the response.
+
+Think of it this way: imagine your form has a checkbox that says "Check this box if the letter mentions Paris as the capital of France." The form-filler now knows what the expected answer is. They might check the box even if the letter only vaguely alludes to Paris, because the form's wording nudged them. This is **anchoring**: the expected answer influences the extraction.
+
+Now imagine the form has a blank that says "Write down the city named as France's capital." The form-filler writes what they find, without knowing whether you expect Paris, Lyon, or Marseille. The checking happens later, when the clerk compares the filled-in value against the answer key.
+
+This maps directly to template design:
+
+- **Boolean fields** often embed the ground truth in the description: "True if the response identifies BCL2 as the target." This is convenient (no normalization needed, trivial `verify()`), but the judge sees the expected answer and may anchor on it rather than faithfully assessing what the response actually says.
+- **String fields** tell the judge *what kind of value* to extract ("The protein target mentioned in the response") without revealing what the correct answer is. The judge acts as a pure reader, and `verify()` handles the correctness check separately. This keeps the judge unbiased, but requires normalization logic in `verify()` since free text is more variable than a boolean.
+
+This is a design tradeoff, not a right-or-wrong choice. Boolean fields are faster to write and produce simpler templates. String fields provide a cleaner separation between extraction (the judge) and evaluation (`verify()`). Being aware of this distinction helps you make an informed choice for each field in your template.
+
+| | Boolean field | String field |
+|--|--------------|-------------|
+| Judge sees correct answer? | Yes (in description) | No |
+| Anchoring risk | Higher | Lower |
+| `verify()` complexity | Simple equality check | Normalization required |
+| Best for | Known concepts with synonyms | Rigorous benchmarks, unbiased evaluation |
+
 ### Anatomy of a Good Description
 
-Think of a field description as the instructions printed next to a blank on a well-designed form. Good instructions leave no room for guessing. Bad instructions lead to inconsistent or wrong answers, not because the form-filler is careless, but because they were not told what you needed.
+The judge receives a JSON schema generated from your template's fields. Each field's `description` is the judge's sole instruction for what to extract and how to format it. The field name and type provide structural hints, but the description carries the semantic weight. A vague description produces unpredictable extractions: the judge fills in whatever seems relevant, and `verify()` fails for reasons that have nothing to do with the answering model's correctness.
 
-Every field description should address four elements:
+The three examples below show how ambiguous descriptions cause extraction failures for the most common field types, and how rewriting them eliminates the ambiguity.
 
-- **What to extract**: What specific information are you looking for? Not just "the answer," but "the protein target of the drug" or "the year penicillin was discovered"
-- **Format expectations**: How should the form-filler write it down? Uppercase, lowercase, specific notation? ("Use standard ABO notation: 'O+' not 'O positive'")
-- **Scope boundaries**: What counts and what does not? Are you looking for something mentioned anywhere in the response, or only in a specific context? ("Only proteins the response explicitly associates with the pathway, not proteins mentioned in passing")
-- **Disambiguation**: What should the form-filler do when the response is ambiguous? Multiple candidates, indirect mentions, edge cases. Spell out how to handle them
+#### String Fields: Specify the Target, Not Just the Topic
+
+A common mistake with string fields is describing the topic area rather than the specific value to extract.
+
+**Before:**
+
+```python
+class Answer(BaseAnswer):
+    gene: str = Field(description="The gene mentioned in the response")
+```
+
+Suppose the answering model responds: *"Mutations in TP53 are found in over 50% of human cancers. Other frequently mutated genes include KRAS, PIK3CA, and PTEN. The p53 protein functions as a tumor suppressor..."*
+
+The judge sees one instruction: extract "the gene mentioned." But the response mentions four genes (TP53, KRAS, PIK3CA, PTEN). The judge has to guess which one you want. It might pick KRAS. It might extract "p53" instead of the HGNC symbol "TP53." Each run may produce a different result, and `verify()` fails intermittently for reasons that look like extraction bugs but are actually description bugs.
+
+**After:**
+
+```python
+class Answer(BaseAnswer):
+    gene: str = Field(
+        description=(
+            "The gene that the response identifies as the single most frequently "
+            "mutated gene in human cancers. Extract the official HGNC gene symbol "
+            "in uppercase (e.g., 'TP53', not 'p53' or 'tumor protein p53'). "
+            "If the response names multiple genes without singling one out as the "
+            "most frequent, extract the first gene mentioned."
+        )
+    )
+```
+
+The rewritten description addresses four things the judge needs:
+
+1. **What to extract**: not any gene, but the one singled out as the most frequently mutated
+2. **Format**: HGNC symbol, uppercase, with explicit counter-examples of wrong formats
+3. **Scope**: only the gene identified as the most frequent, not all genes in the response
+4. **Disambiguation**: a fallback rule (first mentioned) for when the response does not single one out
+
+The judge can now make a consistent choice. It reads the response, finds TP53 singled out as appearing in "over 50% of human cancers," and extracts "TP53" in the requested format. The other genes are mentioned but not as the most frequent, so the scope constraint excludes them.
+
+#### Boolean Fields: Define the Threshold, Not Just the Question
+
+Boolean fields look simple, but their descriptions carry a hidden burden: the judge must evaluate whether a condition is met, not just locate a value. A vague boolean description forces the judge to invent its own threshold for what counts as True.
+
+**Before:**
+
+```python
+class Answer(BaseAnswer):
+    has_interaction: bool = Field(
+        description="True if the response mentions a drug-drug interaction"
+    )
+```
+
+Suppose the answering model responds: *"In vitro studies suggest a potential interaction between Drug A and Drug B via CYP3A4 inhibition, but clinical trials have not confirmed this finding. The theoretical risk is considered low, and current guidelines do not recommend dose adjustment."*
+
+Does this response "mention a drug-drug interaction"? Technically yes: it discusses one. But the interaction is unconfirmed, theoretical, and clinically insignificant. The judge has no guidance on where to draw the line. It will likely return True, because an interaction is in fact mentioned. If your ground truth expects False (no clinically confirmed interaction), `verify()` fails. The judge extracted exactly what it was asked for; the description just asked the wrong question.
+
+**After:**
+
+```python
+class Answer(BaseAnswer):
+    has_clinically_confirmed_interaction: bool = Field(
+        description=(
+            "True if the response describes a drug-drug interaction that has been "
+            "confirmed in human clinical trials or is recognized in current "
+            "prescribing guidelines (e.g., listed as a contraindication or "
+            "requiring dose adjustment). False if the interaction is described as "
+            "theoretical, observed only in vitro or in animal models, or "
+            "explicitly called clinically insignificant. If the response describes "
+            "both confirmed and unconfirmed interactions, return True only if at "
+            "least one interaction meets the clinical confirmation threshold."
+        )
+    )
+```
+
+The rewritten description gives the judge a clear decision boundary. "Theoretical" and "in vitro only" map to False. "Confirmed in clinical trials" or "recognized in guidelines" map to True. The judge no longer invents a threshold; you defined one. The field name itself (`has_clinically_confirmed_interaction` instead of `has_interaction`) reinforces the intent, though the description is what the judge actually follows.
+
+#### List Fields: Control What Gets Included
+
+List fields invite a specific failure mode: over-extraction. Without clear boundaries, the judge collects everything that looks relevant, including items from different contexts, different entities, or different levels of certainty.
+
+**Before:**
+
+```python
+class Answer(BaseAnswer):
+    symptoms: list[str] = Field(description="The symptoms mentioned in the response")
+```
+
+Suppose the answering model responds: *"The patient presented with fever, fatigue, and joint pain. The differential diagnosis includes lupus (which can also cause a malar rash and photosensitivity) and rheumatoid arthritis (characterized by morning stiffness). The patient denied any history of headaches."*
+
+"Symptoms mentioned in the response" could mean anything. The judge might return `["fever", "fatigue", "joint pain", "malar rash", "photosensitivity", "morning stiffness", "headaches"]`, mixing the patient's presenting symptoms with symptoms of differential diagnoses and a denied symptom. If your ground truth expects only the presenting complaints, `verify()` fails because the extracted list is a superset of the correct answer.
+
+**After:**
+
+```python
+class Answer(BaseAnswer):
+    presenting_symptoms: list[str] = Field(
+        description=(
+            "The symptoms the patient presented with at the time of evaluation, "
+            "as explicitly stated in the response. Include only symptoms attributed "
+            "directly to the patient, not symptoms of differential diagnoses or "
+            "conditions mentioned for comparison. Exclude symptoms the patient "
+            "denied or that are described as absent. Return each symptom as a "
+            "separate item in lowercase (e.g., ['fever', 'joint pain'], not "
+            "['fever and joint pain']). If the response distinguishes between "
+            "signs and symptoms, include both."
+        )
+    )
+```
+
+Three changes make this description effective:
+
+1. **Scope**: "attributed directly to the patient" excludes symptoms of differential diagnoses. "Exclude symptoms the patient denied" handles the negation case.
+2. **Format**: "each symptom as a separate item in lowercase" prevents the judge from concatenating multiple symptoms into a single string or using inconsistent casing.
+3. **Disambiguation**: "if the response distinguishes between signs and symptoms, include both" prevents the judge from silently filtering out physical signs.
+
+The judge now returns `["fever", "fatigue", "joint pain"]`: the patient's actual presenting symptoms, cleanly separated and consistently formatted.
+
+#### Quick Reference
+
+Every field description should address four elements. The weight of each varies by field type, but omitting any of them invites unpredictable extractions.
+
+| Element | What It Does | Most Critical For |
+|---------|-------------|-------------------|
+| **What to extract** | Names the specific value, not just the topic. "The gene identified as most frequent," not "the gene mentioned." | All field types |
+| **Format** | Tells the judge how to write the value: casing, notation, symbol conventions, one item per entry for lists. | String and list fields |
+| **Scope** | Draws a boundary around what counts. Which mentions are in, which are out. | Boolean and list fields |
+| **Disambiguation** | Provides a fallback rule for edge cases: ambiguous mentions, multiple candidates, negated references. | All field types |
 
 ## Embedding Check
 
-When `embedding_check_enabled` is set in `VerificationConfig`, the pipeline runs a **semantic similarity check** (stage 9) after `verify()`. This uses a SentenceTransformer model to compare the raw LLM response against the expected answer, providing a secondary signal when string-based verification is too strict.
+While not part of template authoring itself, the embedding check is a pipeline feature that template authors should be aware of. It only runs when `verify()` fails.
+
+When `embedding_check_enabled` is set in `VerificationConfig`, the pipeline runs a **semantic similarity check** (stage 9) after `verify()`. This uses a SentenceTransformer model to compare the judge's parsed response fields against the expected answer fields, providing a secondary signal when string-based verification is too strict. The embedding check only runs when field verification (`verify()`) has failed; if `verify()` passes, this stage is skipped entirely.
 
 The embedding check is configured via three settings:
 
@@ -741,7 +848,7 @@ The embedding check is configured via three settings:
 | `embedding_check_model` | `all-MiniLM-L6-v2` | SentenceTransformer model name |
 | `embedding_check_threshold` | `0.85` | Similarity threshold (0.0-1.0) |
 
-The embedding check result is stored alongside the template result. It does not override `verify()` but provides additional context for analysis.
+The embedding check result is stored alongside the template result. When semantic similarity exceeds the threshold and `verify()` has failed, the embedding check can override the field verification result, upgrading it to a pass. The override is tracked via the `embedding_override_applied` flag in results.
 
 ## Common Pitfalls
 
@@ -754,7 +861,11 @@ The embedding check result is stored alongside the template result. It does not 
 | `verify_granular()` raises | Caught and logged as warning | Does NOT fail verification; granular score is absent |
 | Template validation fails (missing `verify()`, bad `self.correct`) | Stage 1 error; all subsequent stages skip | Error before any LLM calls |
 
-**Guard against `None` in `verify()`**: If the judge might fail to extract a value, check before using string methods:
+### Reserved field names
+
+`BaseAnswer` defines an `id` field (`id: str | None = None`) used internally for question ID injection. Do not use `id` as a field name in your templates. Your custom fields will shadow the inherited `id` field and may cause unexpected behavior during pipeline execution.
+
+**Guard against `None` in `verify()`**: If you declare a field as optional (`target: str | None = Field(...)`), the judge may return `None` when it cannot extract a value. Guard against it before calling string methods:
 
 ```python
 def verify(self) -> bool:
