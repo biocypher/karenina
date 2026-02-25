@@ -33,7 +33,7 @@ Choose the path that matches your goal:
 | Section | What You'll Learn |
 |---------|-------------------|
 | [Overview](../core_concepts/index.md) | How all concepts fit together, ordered by pipeline flow |
-| [Questions & Benchmarks](../core_concepts/questions-and-benchmarks.md) | The central objects: questions bundled with templates, rubrics, and metadata |
+| [Questions & Benchmarks](../core_concepts/questions-and-benchmarks/index.md) | The central objects: questions bundled with templates, rubrics, and metadata |
 | [Checkpoints](../core_concepts/checkpoints.md) | The JSON-LD benchmark format: questions, templates, rubrics, and metadata |
 | [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb) | Pydantic models that define how a Judge LLM evaluates correctness |
 | [Rubrics](../core_concepts/rubrics/index.md) | Quality assessment with four trait types: LLM, regex, callable, metric |

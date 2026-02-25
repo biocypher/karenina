@@ -8,7 +8,7 @@ Concepts are ordered to follow the evaluation pipeline — from what you're eval
 
 | Concept | What It Is | Page |
 |---------|-----------|------|
-| **Questions & Benchmarks** | The central objects: questions bundled with templates, rubrics, and metadata | [Questions & Benchmarks](questions-and-benchmarks.md) |
+| **Questions & Benchmarks** | The central objects: questions bundled with templates, rubrics, and metadata | [Questions & Benchmarks](questions-and-benchmarks/index.md) |
 | **Checkpoints** | JSON-LD files that store benchmarks (questions, templates, rubrics, results) | [Checkpoints](checkpoints.md) |
 | **Answer Templates** | Pydantic models that define how a Judge LLM parses and verifies responses | [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb) |
 | **Rubrics** | Trait-based evaluation of response quality (LLM, regex, callable, metric) | [Rubrics](rubrics/index.md) |
@@ -74,7 +74,7 @@ Questions & Benchmarks
 
 A **benchmark** is the central object in Karenina: a self-contained evaluation unit bundling questions, templates, rubrics, and metadata. **Questions** are the atomic unit — each has text, an expected answer, and optionally an attached template and question-specific rubric traits.
 
-[Read more about questions and benchmarks →](questions-and-benchmarks.md)
+[Read more about questions and benchmarks →](questions-and-benchmarks/index.md)
 
 ### Checkpoints
 

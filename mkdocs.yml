@@ -25,6 +25,8 @@ exclude_docs: |
   workflows/running-verification/mcp-agent-evaluation.md
   workflows/running-verification/manual-interface-workflow.md
   workflows/analyzing-results/dataframe-analysis.md
+  core_concepts/questions-and-benchmarks/benchmarks.md
+  core_concepts/questions-and-benchmarks/questions.md
 
 theme:
   name: material
@@ -149,7 +151,10 @@ nav:
     - Workspace Init: getting-started/workspace-init.md
   - Core Concepts:
     - Overview: core_concepts/index.md
-    - Questions & Benchmarks: core_concepts/questions-and-benchmarks.md
+    - Questions & Benchmarks:
+      - Overview: core_concepts/questions-and-benchmarks/index.md
+      - Benchmarks: notebooks/core_concepts/questions-and-benchmarks/benchmarks.ipynb
+      - Questions: notebooks/core_concepts/questions-and-benchmarks/questions.ipynb
     - Checkpoints: core_concepts/checkpoints.md
     - Answer Templates: notebooks/core_concepts/answer-templates.ipynb
     - Rubric Traits:
