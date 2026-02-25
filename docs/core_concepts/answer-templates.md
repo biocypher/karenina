@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.18.1
+      jupytext_version: 1.19.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -43,7 +43,7 @@ If you have ever filled out a standardized form — a lab report, a clinical int
 |-------------|---------------------|-------------------|
 | The blank form with labeled fields and instructions | The template's fields and their descriptions | You, the benchmark author |
 | The person reading a letter and filling in the form | The Judge LLM | The system (automatic) |
-| The answer key stored in a locked drawer | `model_post_init` setting `self.correct` | You, the benchmark author |
+| The answer key stored in a locked drawer | `ground_truth` setting `self.correct` | You, the benchmark author |
 | The clerk who checks the filled form against the answer key | The `verify()` method | You, the benchmark author |
 
 This analogy captures something important: **the person filling in the form and the person checking it are not the same**. The form-filler (the judge) reads a document and writes down what they find. The checker (`verify()`) compares what was written down against known correct answers. Neither one needs to do the other's job.
@@ -67,7 +67,7 @@ With this mental model in place, let's look at how templates are built in practi
 Every template inherits from `BaseAnswer` and must be named `Answer`. A template has three components:
 
 1. **Fields** with descriptions that guide the Judge LLM
-2. **`model_post_init`** to set ground truth values (and optionally `self.regex` for pattern-matching checks)
+2. **`ground_truth`** to set ground truth values (and optionally `self.regex` for pattern-matching checks)
 3. **`verify`** to compare extracted values against ground truth
 
 Here is a simple template that checks whether an LLM correctly identified a drug target:
@@ -81,7 +81,7 @@ from karenina.schemas.entities import BaseAnswer
 class Answer(BaseAnswer):
     target: str = Field(description="The protein target of the drug mentioned in the response")
 
-    def model_post_init(self, __context):
+    def ground_truth(self):
         self.correct = {"target": "BCL2"}
 
     def verify(self) -> bool:
@@ -97,7 +97,7 @@ class Answer(BaseAnswer):
 Let's walk through what happens when this template is used:
 
 1. The Judge LLM reads the answering model's response and extracts the `target` field based on the description
-2. Pydantic creates an `Answer` instance, then `model_post_init` sets the expected value
+2. Pydantic creates an `Answer` instance, then `ground_truth` sets the expected value
 3. `verify()` compares the extracted target to "BCL2" (case-insensitive)
 
 ```python
@@ -117,19 +117,19 @@ print(f"Verified:         {parsed.verify()}")
 
 Now that you have seen what a template looks like, let's step back and understand *why* it is built this way. Each component exists because of a specific design choice, and understanding those choices will help you write better templates. We will use the form analogy from earlier to keep things concrete.
 
-### The answer key stays hidden: `model_post_init`
+### The answer key stays hidden: `ground_truth`
 
 Remember the form analogy: the answer key is stored in a locked drawer. The person filling in the form (the judge) should never see it — otherwise they might just copy the expected answers instead of honestly reading the document.
 
 In technical terms: the Judge LLM receives the template's JSON schema (field names, types, and descriptions) to know what to extract. If the correct answers were regular fields, they would appear in that schema and the judge could anchor on them instead of faithfully parsing the response. Ground truth needs to stay *out* of the schema so the judge acts as a pure reader, not a correctness checker.
 
-`model_post_init` is the mechanism that makes this possible. It is a hook that runs right after an instance is created. By the time it fires, the judge's extracted values are already in the fields, so you can safely attach the expected answers alongside them in `self.correct`. The answers are there when `verify()` needs them, but invisible to the judge when it is doing its work.
+`ground_truth` is the method that makes this possible. It is a hook that runs right after an instance is created. By the time it fires, the judge's extracted values are already in the fields, so you can safely attach the expected answers alongside them in `self.correct`. The answers are there when `verify()` needs them, but invisible to the judge when it is doing its work.
 
-If you are not a Python developer, the key takeaway is simple: **put your correct answers in `model_post_init`, not in the field definitions.** The system handles the rest.
+If you are not a Python developer, the key takeaway is simple: **put your correct answers in `ground_truth`, not in the field definitions.** The system handles the rest.
 
 <div class="admonition info">
-<p class="admonition-title">What is <code>model_post_init</code>?</p>
-<p><code>model_post_init</code> is a standard Pydantic v2 lifecycle method — it runs automatically after the instance is created and all fields are set. The <code>__context</code> parameter is required by Pydantic's signature but unused in templates; treat it as boilerplate you must include. You do not need deep Pydantic knowledge to use it: just define the method, set <code>self.correct</code> (and optionally <code>self.regex</code>), and the framework handles the rest.</p>
+<p class="admonition-title">What is <code>ground_truth</code>?</p>
+<p><code>ground_truth</code> is a karenina lifecycle method on <code>BaseAnswer</code> — it runs automatically after the instance is created and all fields are set. Unlike the underlying Pydantic hook it wraps, <code>ground_truth</code> takes no extra parameters: just <code>self</code>. You do not need deep Pydantic knowledge to use it: just define the method, set <code>self.correct</code> (and optionally <code>self.regex</code>), and the framework handles the rest.</p>
 </div>
 
 ### Extraction and checking are separate jobs: `verify()`
@@ -151,7 +151,7 @@ Why go through this trouble instead of just asking the judge "Was this answer co
 
 ### Validation
 
-You do not need to worry about forgetting a required component. `BaseAnswer` itself does not enforce that your template defines `verify()` or `model_post_init` — but the pipeline validates templates before running them. Stage 1 (`ValidateTemplate`) checks that `verify()` exists and is callable, and that `model_post_init` sets `self.correct` as a dictionary. If something is missing, you get a clear error message before any LLM calls happen.
+You do not need to worry about forgetting a required component. `BaseAnswer` itself does not enforce that your template defines `verify()` or `ground_truth` — but the pipeline validates templates before running them. Stage 1 (`ValidateTemplate`) checks that `verify()` exists and is callable, and that `ground_truth` sets `self.correct` as a dictionary. If something is missing, you get a clear error message before any LLM calls happen.
 
 For regex-only templates and optional methods like `verify_granular()`, see [Regex Checks](#regex-checks) and [Multi-Field with Partial Credit](#multi-field-with-partial-credit).
 
@@ -164,7 +164,7 @@ All answer template classes **must be named `Answer`**. The pipeline looks for t
 class Answer(BaseAnswer):
     value: str = Field(description="The answer value")
 
-    def model_post_init(self, __context):
+    def ground_truth(self):
         self.correct = {"value": "42"}
 
     def verify(self) -> bool:
@@ -196,7 +196,7 @@ class Answer(BaseAnswer):
     element: str = Field(description="The chemical element name mentioned in the response")
     atomic_number: int = Field(description="The atomic number stated in the response")
 
-    def model_post_init(self, __context):
+    def ground_truth(self):
         self.correct = {"element": "oxygen", "atomic_number": 8}
 
     def verify(self) -> bool:
@@ -223,7 +223,7 @@ class Answer(BaseAnswer):
         description="The type of point mutation described in the response."
     )
 
-    def model_post_init(self, __context):
+    def ground_truth(self):
         self.correct = {"mutation_type": "missense"}
 
     def verify(self) -> bool:
@@ -256,7 +256,7 @@ class Answer(BaseAnswer):
         )
     )
 
-    def model_post_init(self, __context):
+    def ground_truth(self):
         self.correct = {"identifies_tp53": True}
 
     def verify(self) -> bool:
@@ -300,7 +300,7 @@ class Answer(BaseAnswer):
         )
     )
 
-    def model_post_init(self, __context):
+    def ground_truth(self):
         self.correct = {"blood_type": "O+"}
 
     def verify(self) -> bool:
@@ -346,7 +346,7 @@ class Answer(BaseAnswer):
         )
     )
 
-    def model_post_init(self, __context):
+    def ground_truth(self):
         self.correct = {"temperature_celsius": 37.0}
         self.tolerance = 0.5  # Accept 36.5-37.5, reflecting natural variation
 
@@ -372,7 +372,7 @@ class Answer(BaseAnswer):
         )
     )
 
-    def model_post_init(self, __context):
+    def ground_truth(self):
         self.correct = {"pair_count": 23}
         self.tolerance = 0  # Exact match: only 23 is correct
 
@@ -401,7 +401,7 @@ When used alongside `verify()`, the pipeline ANDs both results -- both `verify()
 
 **Regex-only templates** (no user-defined fields) are detected automatically: the pipeline skips LLM parsing entirely, so no parsing model is needed. Since there are no fields to check, `verify()` is optional -- if omitted, field verification defaults to `True` and regex is the sole evaluation.
 
-Set `self.regex` in `model_post_init` (alongside `self.correct` if your template also has fields). Each entry is a named check with a `pattern`, an `expected` value, and a `match_type` that controls comparison:
+Set `self.regex` in `ground_truth` (alongside `self.correct` if your template also has fields). Each entry is a named check with a `pattern`, an `expected` value, and a `match_type` that controls comparison:
 
 ```python
 class Answer(BaseAnswer):
@@ -412,7 +412,7 @@ class Answer(BaseAnswer):
         )
     )
 
-    def model_post_init(self, __context):
+    def ground_truth(self):
         self.correct = {"discovery_date": "1928"}
         self.regex = {
             "mentions_discovery_year": {
@@ -454,7 +454,7 @@ Four match types are available:
 
 ```python
 class Answer(BaseAnswer):
-    def model_post_init(self, __context):
+    def ground_truth(self):
         self.regex = {
             # contains: check which alternation matched
             "has_mechanism_keyword": {
@@ -517,7 +517,7 @@ class Answer(BaseAnswer):
         )
     )
 
-    def model_post_init(self, __context):
+    def ground_truth(self):
         self.correct = {
             "delivery_mechanism": "mrna",
             "target_protein": "spike protein",
@@ -630,7 +630,7 @@ class Answer(BaseAnswer):
         )
     )
 
-    def model_post_init(self, __context):
+    def ground_truth(self):
         self.correct = {"signaling_proteins": {"EGFR", "KRAS", "BRAF"}}
 
     def verify(self) -> bool:

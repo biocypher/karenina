@@ -74,7 +74,7 @@
         "hasPart": {
           "@type": "SoftwareSourceCode",
           "name": "What is the capital of France?... Answer Template",
-          "text": "from pydantic import Field\nfrom karenina.schemas.entities import BaseAnswer\n\nclass Answer(BaseAnswer):\n    capital: str = Field(description=\"The capital city mentioned in the response\")\n\n    def model_post_init(self, __context):\n        self.correct = {\"capital\": \"Paris\"}\n\n    def verify(self) -> bool:\n        return self.capital.strip().lower() == self.correct[\"capital\"].lower()\n",
+          "text": "from pydantic import Field\nfrom karenina.schemas.entities import BaseAnswer\n\nclass Answer(BaseAnswer):\n    capital: str = Field(description=\"The capital city mentioned in the response\")\n\n    def ground_truth(self):\n        self.correct = {\"capital\": \"Paris\"}\n\n    def verify(self) -> bool:\n        return self.capital.strip().lower() == self.correct[\"capital\"].lower()\n",
           "programmingLanguage": "Python",
           "codeRepository": "karenina-benchmarks"
         },
@@ -119,7 +119,7 @@
         "hasPart": {
           "@type": "SoftwareSourceCode",
           "name": "What is 6 multiplied by 7?... Answer Template",
-          "text": "from pydantic import Field\nfrom karenina.schemas.entities import BaseAnswer\n\nclass Answer(BaseAnswer):\n    result: int = Field(description=\"The numeric result of the calculation\")\n\n    def model_post_init(self, __context):\n        self.correct = {\"result\": 42}\n\n    def verify(self) -> bool:\n        return self.result == self.correct[\"result\"]\n",
+          "text": "from pydantic import Field\nfrom karenina.schemas.entities import BaseAnswer\n\nclass Answer(BaseAnswer):\n    result: int = Field(description=\"The numeric result of the calculation\")\n\n    def ground_truth(self):\n        self.correct = {\"result\": 42}\n\n    def verify(self) -> bool:\n        return self.result == self.correct[\"result\"]\n",
           "programmingLanguage": "Python",
           "codeRepository": "karenina-benchmarks"
         },
@@ -164,7 +164,7 @@
         "hasPart": {
           "@type": "SoftwareSourceCode",
           "name": "What element has the atomic nu... Answer Template",
-          "text": "from pydantic import Field\nfrom karenina.schemas.entities import BaseAnswer\n\nclass Answer(BaseAnswer):\n    element: str = Field(description=\"The chemical element name\")\n    symbol: str = Field(description=\"The chemical symbol\")\n\n    def model_post_init(self, __context):\n        self.correct = {\"element\": \"oxygen\", \"symbol\": \"O\"}\n\n    def verify(self) -> bool:\n        return (\n            self.element.strip().lower() == self.correct[\"element\"]\n            and self.symbol.strip().upper() == self.correct[\"symbol\"]\n        )\n",
+          "text": "from pydantic import Field\nfrom karenina.schemas.entities import BaseAnswer\n\nclass Answer(BaseAnswer):\n    element: str = Field(description=\"The chemical element name\")\n    symbol: str = Field(description=\"The chemical symbol\")\n\n    def ground_truth(self):\n        self.correct = {\"element\": \"oxygen\", \"symbol\": \"O\"}\n\n    def verify(self) -> bool:\n        return (\n            self.element.strip().lower() == self.correct[\"element\"]\n            and self.symbol.strip().upper() == self.correct[\"symbol\"]\n        )\n",
           "programmingLanguage": "Python",
           "codeRepository": "karenina-benchmarks"
         },

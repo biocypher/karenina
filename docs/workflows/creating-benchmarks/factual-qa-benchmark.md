@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.18.1
+      jupytext_version: 1.19.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -126,7 +126,7 @@ class Answer(BaseAnswer):
         )
     )
 
-    def model_post_init(self, __context):
+    def ground_truth(self):
         self.correct = {"blood_type": "O+"}
 
     def verify(self) -> bool:
@@ -172,7 +172,7 @@ class Answer(BaseAnswer):
         )
     )
 
-    def model_post_init(self, __context):
+    def ground_truth(self):
         self.correct = {"temperature_celsius": 37.0}
         self.tolerance = 0.5  # Accept 36.5-37.5, reflecting natural variation
 
@@ -196,7 +196,7 @@ class Answer(BaseAnswer):
         )
     )
 
-    def model_post_init(self, __context):
+    def ground_truth(self):
         self.correct = {"pair_count": 23}
         self.tolerance = 0  # Exact match: only 23 is correct
 
@@ -224,7 +224,7 @@ q4_id = benchmark.add_question(
 )
 
 class Answer(BaseAnswer):
-    def model_post_init(self, __context):
+    def ground_truth(self):
         self.regex = {
             "mentions_discovery_year": {
                 "pattern": r"\b1928\b",
@@ -288,7 +288,7 @@ class Answer(BaseAnswer):
         )
     )
 
-    def model_post_init(self, __context):
+    def ground_truth(self):
         self.correct = {
             "delivery_mechanism": "mrna",
             "target_protein": "spike protein",

@@ -157,7 +157,7 @@ from pydantic import Field
 class Answer(BaseAnswer):
     answer: str = Field(description="The name of the protein mentioned in the response")
 
-    def model_post_init(self, __context):
+    def ground_truth(self):
         self.correct = {"answer": "BCL2"}
 
     def verify(self) -> bool:
@@ -248,7 +248,7 @@ for q in questions:
 
 ### 3. Write Answer Templates
 
-Answer templates are Pydantic models that define how a Judge LLM should parse and verify a model's response. Each template declares **attributes** the judge must extract, stores the **correct values** in `model_post_init`, and implements a **`verify()`** method that compares extracted values to ground truth. The class must always be named `Answer` and inherit from `BaseAnswer`.
+Answer templates are Pydantic models that define how a Judge LLM should parse and verify a model's response. Each template declares **attributes** the judge must extract, stores the **correct values** in `ground_truth`, and implements a **`verify()`** method that compares extracted values to ground truth. The class must always be named `Answer` and inherit from `BaseAnswer`. (The older `model_post_init(self, __context)` spelling is also accepted for backward compatibility. But the `ground_truth` spelling is preferred)
 
 #### Automatic Generation
 
@@ -276,7 +276,7 @@ class Answer(BaseAnswer):
         description="Whether the response identifies BCL2 as the putative target of the drug"
     )
 
-    def model_post_init(self, __context):
+    def ground_truth(self):
         self.correct = {"is_bcl2": True}
 
     def verify(self) -> bool:

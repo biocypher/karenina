@@ -113,7 +113,7 @@ Here is a simplified checkpoint showing one question with a template and a rubri
         "hasPart": {
           "@type": "SoftwareSourceCode",
           "name": "What is the capital of France?... Answer Template",
-          "text": "from pydantic import Field\nfrom karenina.schemas.entities import BaseAnswer\n\nclass Answer(BaseAnswer):\n    capital: str = Field(description=\"The capital city named in the response, using the standard English name\")\n\n    def model_post_init(self, __context):\n        self.correct = {\"capital\": \"Paris\"}\n\n    def verify(self) -> bool:\n        return self.capital.strip().lower() == self.correct[\"capital\"].lower()\n",
+          "text": "from pydantic import Field\nfrom karenina.schemas.entities import BaseAnswer\n\nclass Answer(BaseAnswer):\n    capital: str = Field(description=\"The capital city named in the response, using the standard English name\")\n\n    def ground_truth(self):\n        self.correct = {\"capital\": \"Paris\"}\n\n    def verify(self) -> bool:\n        return self.capital.strip().lower() == self.correct[\"capital\"].lower()\n",
           "programmingLanguage": "Python",
           "codeRepository": "karenina-benchmarks"
         },

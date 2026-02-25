@@ -56,7 +56,7 @@ class Answer(BaseAnswer):
         description="Tissue where KRAS is most essential"
     )
 
-    def model_post_init(self, __context):
+    def ground_truth(self):
         self.correct = {"tissue": "pancreas"}
 
     def verify(self) -> bool:

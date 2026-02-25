@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.18.1
+      jupytext_version: 1.19.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -171,7 +171,7 @@ print(f"Added {len(question_ids)} questions")
 Answer templates are Pydantic models that define how a Judge LLM should parse and verify a model's response. Each template:
 
 1. Declares **attributes** the judge must extract (typed fields)
-2. Stores the **correct values** in `model_post_init`
+2. Stores the **correct values** in `ground_truth`
 3. Implements a **`verify()`** method that compares extracted values to ground truth
 
 The class must always be named `Answer` and inherit from `BaseAnswer`.
@@ -217,7 +217,7 @@ class Answer(BaseAnswer):
         )
     )
 
-    def model_post_init(self, __context):
+    def ground_truth(self):
         self.correct = {"identifies_bcl2_as_target": True}
 
     def verify(self) -> bool:

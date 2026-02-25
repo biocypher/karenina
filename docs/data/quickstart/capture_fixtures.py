@@ -118,6 +118,7 @@ async def _recording_ainvoke(self, input, config=None, **kwargs):
 
 # ── Quickstart code (same as the notebook, minus mocks) ──────────────
 
+
 def run_quickstart():
     """Run the quickstart flow end-to-end with real API calls."""
     from pydantic import Field
@@ -180,7 +181,7 @@ def run_quickstart():
             )
         )
 
-        def model_post_init(self, __context):
+        def ground_truth(self):
             self.correct = {"identifies_bcl2_as_target": True}
 
         def verify(self) -> bool:

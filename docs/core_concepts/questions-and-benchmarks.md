@@ -119,7 +119,7 @@ class Answer(BaseAnswer):
         )
     )
 
-    def model_post_init(self, __context):
+    def ground_truth(self):
         self.correct = {"target": "BCL2"}
 
     def verify(self) -> bool:

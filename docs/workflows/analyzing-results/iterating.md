@@ -143,7 +143,7 @@ class Answer(BaseAnswer):
         description="The official HGNC gene symbol mentioned in the response"
     )
 
-    def model_post_init(self, __context):
+    def ground_truth(self):
         self.correct = {"gene_symbol": "BCL2"}
 
     def verify(self) -> bool:
