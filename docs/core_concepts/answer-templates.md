@@ -108,6 +108,11 @@ print(f"Ground truth:     {parsed.correct['target']!r}")
 print(f"Verified:         {parsed.verify()}")
 ```
 
+<div class="admonition note">
+<p class="admonition-title">This page teaches how templates work, not how to run them</p>
+<p>The code examples below instantiate templates manually and call <code>verify()</code> directly. This is for illustration only — it shows what the Judge LLM and verification pipeline do under the hood. In practice, you never call <code>verify()</code> yourself. Instead, you embed your template in a benchmark and run the <a href="../workflows/creating-benchmarks/factual-qa-benchmark.md">verification pipeline</a>, which handles answer generation, judge parsing, and verification automatically.</p>
+</div>
+
 ## Why These Three Components?
 
 Now that you have seen what a template looks like, let's step back and understand *why* it is built this way. Each component exists because of a specific design choice, and understanding those choices will help you write better templates. We will use the form analogy from earlier to keep things concrete.
