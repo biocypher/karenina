@@ -1,6 +1,6 @@
 # Questions and Benchmarks
 
-A **benchmark** is the central object in Karenina: a self-contained evaluation unit that bundles questions, answer templates, rubric traits, and metadata into a portable, versioned package. A **question** is the atomic unit within a benchmark, carrying the text sent to the LLM and the reference answer used for verification.
+A **benchmark** is the central object in Karenina: a self-contained evaluation unit that bundles questions, [answer templates](../answer-templates.md), [rubric traits](../rubrics/index.md), and metadata into a portable, versioned package. A **question** is the atomic unit within a benchmark, carrying the text sent to the LLM and the reference answer used for [verification](../verification-pipeline.md).
 
 This page provides a conceptual overview and links to the deep dives on each component. For step-by-step authoring guides, see [Creating Benchmarks](../../workflows/creating-benchmarks/index.md).
 
@@ -33,7 +33,7 @@ A question has a **lightweight Pydantic model** and a **rich benchmark cache ent
 
 | Layer | Fields | Purpose |
 |-------|--------|---------|
-| `Question` object | `question`, `raw_answer`, `tags`, `few_shot_examples`, `id` (computed) | Portable, standalone; can exist outside a benchmark |
+| `Question` object | `question`, `raw_answer`, `tags`, [`few_shot_examples`](../few-shot.md), `id` (computed) | Portable, standalone; can exist outside a benchmark |
 | Benchmark cache | `finished`, `author`, `sources`, `custom_metadata`, `date_created`, `date_modified`, `answer_template`, `question_rubric` | Rich metadata that only makes sense in a benchmark context |
 
 When you call `benchmark.add_question(...)`, the benchmark creates a cache entry that wraps the Question data with these additional fields. To access the full picture, use `benchmark.get_question_metadata(question_id)`.
@@ -63,7 +63,7 @@ Each question can optionally have an **answer template** and **question-specific
 
 - **Question 1**: Evaluated with its template (correctness) + global rubric + question-specific rubric (quality)
 - **Question 2**: Evaluated with its template + global rubric only
-- **Question 3**: No template; can only be evaluated in `rubric_only` mode
+- **Question 3**: No template; can only be evaluated in [`rubric_only` mode](../evaluation-modes.md)
 
 For details on what templates and rubrics *do*, see [Answer Templates](../../notebooks/core_concepts/answer-templates.ipynb), [Rubrics](../rubrics/index.md), and [Templates vs Rubrics](../template-vs-rubric.md).
 
