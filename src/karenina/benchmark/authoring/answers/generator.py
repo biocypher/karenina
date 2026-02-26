@@ -46,6 +46,7 @@ __all__ = [
 
 if TYPE_CHECKING:
     from karenina.schemas.config import ModelConfig
+    from karenina.schemas.entities import Question
 
 
 class GroundTruthField(BaseModel):
@@ -172,15 +173,20 @@ def _generate_structured_outputs(
     answer: str,
     config: "ModelConfig",
     max_retries: int = 2,
+    answer_notes: str | None = None,
 ) -> dict[str, Any]:
     """Generate structured outputs (ground truth + field descriptions) using two-phase approach.
 
     Retry logic with error feedback is handled by the adapter's with_structured_output().
     """
+    answer_notes_section = ""
+    if answer_notes:
+        answer_notes_section = f"\nAnswer Notes (interpretation guidance):\n{answer_notes}\n"
+
     # Phase 1: Generate ground truth specification
     gt_result = _generate_structured_output(
         "ground_truth",
-        {"question": question, "answer": answer},
+        {"question": question, "answer": answer, "answer_notes_section": answer_notes_section},
         config,
         GroundTruthSpec,
         max_retries,
@@ -199,6 +205,7 @@ def _generate_structured_outputs(
         {
             "question": question,
             "answer": answer,
+            "answer_notes_section": answer_notes_section,
             "spec_json": json.dumps(spec_for_descriptions, ensure_ascii=False),
         },
         config,
@@ -258,8 +265,7 @@ def inject_question_id_into_answer_class(answer_class: type, question_id: str) -
 
 
 def generate_answer_template(
-    question: str,
-    raw_answer: str,
+    question_obj: "Question",
     model: str | None = None,
     model_provider: str | None = None,
     temperature: float | None = None,
@@ -272,8 +278,7 @@ def generate_answer_template(
     Generate an answer template using structured two-phase approach.
 
     Args:
-        question: The question to generate an answer template for.
-        raw_answer: The raw answer to the question.
+        question_obj: The Question object.
         model: The model to use (when not using config).
         model_provider: The provider of the model (when not using config).
         temperature: The temperature of the model (when not using config).
@@ -308,7 +313,13 @@ def generate_answer_template(
 
     # Phase 1 & 2: Generate structured outputs (ground truth + field descriptions)
     max_retries = getattr(model_config, "max_retries", 2)  # Default to 2 if not set
-    spec = _generate_structured_outputs(question, raw_answer, model_config, max_retries=max_retries)
+    spec = _generate_structured_outputs(
+        question_obj.question,
+        question_obj.raw_answer or "",
+        model_config,
+        max_retries=max_retries,
+        answer_notes=question_obj.answer_notes,
+    )
 
     # Phase 3: Generate Pydantic class code
     template_code = _generate_pydantic_class(spec)
@@ -337,8 +348,7 @@ def generate_answer_templates_from_questions_file(
     all_code_blocks = {}
     for _, question in tqdm(enumerate(all_questions)):
         answer_template = generate_answer_template(
-            question.question,
-            question.raw_answer or "",
+            question,
             model=model,
             model_provider=model_provider,
             interface=interface,

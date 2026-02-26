@@ -144,6 +144,7 @@ class Benchmark:
         sources: list[dict[str, Any]] | None = None,
         custom_metadata: dict[str, Any] | None = None,
         few_shot_examples: list[dict[str, str]] | None = None,
+        answer_notes: str | None = None,
     ) -> str:
         """Add a question to the benchmark."""
         return self._question_manager.add_question(
@@ -156,6 +157,7 @@ class Benchmark:
             sources,
             custom_metadata,
             few_shot_examples,
+            answer_notes=answer_notes,
         )
 
     def get_question_ids(self) -> list[str]:

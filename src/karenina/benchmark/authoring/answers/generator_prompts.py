@@ -54,7 +54,7 @@ Question:
 
 Reference Answer:
 {answer}
-
+{answer_notes_section}
 Identify the minimal set of structured attributes that a judge must extract from a candidate response to verify correctness. Construct a JSON object with a single key `attributes` containing a list of attribute definitions. Each definition must include `name`, `type`, and `ground_truth` fields, where `ground_truth` contains the expected correct value derived from the reference answer.
 
 When selecting types, follow these guidelines:
@@ -100,7 +100,7 @@ Question:
 
 Reference Answer:
 {answer}
-
+{answer_notes_section}
 Ground-truth attribute specification:
 {spec_json}
 

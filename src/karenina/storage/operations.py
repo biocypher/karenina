@@ -151,6 +151,7 @@ def save_benchmark(
                         id=question_id,
                         question_text=question_text,
                         raw_answer=q_data["raw_answer"],
+                        answer_notes=q_data.get("answer_notes"),
                         keywords=q_data.get("keywords", []),
                         few_shot_examples=q_data.get("few_shot_examples"),
                         author=q_data.get("author"),
@@ -204,6 +205,7 @@ def save_benchmark(
                                 "old_version": {
                                     "question": existing_question.question_text,
                                     "raw_answer": existing_question.raw_answer,
+                                    "answer_notes": existing_question.answer_notes,
                                     "answer_template": existing_bq.answer_template or "",
                                     "original_answer_template": existing_bq.original_answer_template or "",
                                     "finished": existing_bq.finished,
@@ -219,6 +221,7 @@ def save_benchmark(
                                 "new_version": {
                                     "question": question_text,
                                     "raw_answer": q_data["raw_answer"],
+                                    "answer_notes": q_data.get("answer_notes"),
                                     "answer_template": answer_template,
                                     "original_answer_template": q_data.get("original_answer_template", answer_template),
                                     "finished": finished,
@@ -339,6 +342,7 @@ def load_benchmark(
                 raw_answer=question_model.raw_answer,
                 keywords=keywords_list,
                 few_shot_examples=question_model.few_shot_examples,
+                answer_notes=question_model.answer_notes,
                 author=question_model.author,
                 sources=question_model.sources,
                 custom_metadata=question_model.custom_metadata,

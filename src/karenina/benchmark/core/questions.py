@@ -69,6 +69,7 @@ class QuestionManager:
         sources: list[dict[str, Any]] | None = None,
         custom_metadata: dict[str, Any] | None = None,
         few_shot_examples: list[dict[str, str]] | None = None,
+        answer_notes: str | None = None,
     ) -> str:
         """
         Add a question to the benchmark.
@@ -88,16 +89,17 @@ class QuestionManager:
             sources: Optional source documents
             custom_metadata: Optional custom metadata
             few_shot_examples: Optional list of few-shot examples with 'question' and 'answer' keys
+            answer_notes: Optional notes for interpreting the answer
 
         Returns:
             The question ID
 
         Examples:
             # Traditional usage with kwargs
-            q_id = manager.add_question("What is Python?", "A programming language")
+            q_id = manager.add_question("What is Python?", "A programming language", answer_notes="A general-purpose language")
 
             # New usage with Question object
-            q_obj = Question(question="What is Python?", raw_answer="A programming language")
+            q_obj = Question(question="What is Python?", raw_answer="A programming language", answer_notes="A general-purpose language")
             q_id = manager.add_question(q_obj)
 
             # New usage with Answer class - automatically marked as finished
@@ -108,8 +110,6 @@ class QuestionManager:
         """
         # Import Question class here to avoid circular imports
         from karenina.schemas.entities import Question
-
-        # Track whether user provided an answer template (before we set default)
 
         # Handle Question object input
         if isinstance(question, Question):
@@ -123,6 +123,9 @@ class QuestionManager:
             # Use few-shot examples from Question object if not overridden
             if few_shot_examples is None:
                 few_shot_examples = question.few_shot_examples
+            # Use answer notes from Question object if not overridden
+            if answer_notes is None:
+                answer_notes = question.answer_notes
         elif isinstance(question, str):
             # Traditional string input
             question_text = question
@@ -200,6 +203,7 @@ class QuestionManager:
             custom_metadata,
             keywords,  # Pass keywords from Question object if available
             few_shot_examples,
+            answer_notes=answer_notes,
         )
 
         # Update cache
@@ -305,6 +309,7 @@ class QuestionManager:
             date_created=q_data.get("date_created", ""),
             date_modified=q_data.get("date_modified", ""),
             answer_template=q_data.get("answer_template"),
+            answer_notes=q_data.get("answer_notes"),
             author=q_data.get("author"),
             sources=q_data.get("sources"),
             custom_metadata=q_data.get("custom_metadata"),
@@ -333,6 +338,7 @@ class QuestionManager:
                     date_created=q_data.get("date_created", ""),
                     date_modified=q_data.get("date_modified", ""),
                     answer_template=q_data.get("answer_template"),
+                    answer_notes=q_data.get("answer_notes"),
                     author=q_data.get("author"),
                     sources=q_data.get("sources"),
                     custom_metadata=q_data.get("custom_metadata"),
@@ -364,12 +370,11 @@ class QuestionManager:
         if question_id in self.base._questions_cache:
             raise ValueError(f"Question with ID {question_id} already exists")
 
-        # Add to benchmark using existing add_question method with the Question object's ID
+        # Add to benchmark using existing add_question method with the Question object
+        # Pass the Question object directly so add_question extracts all fields (including answer_notes)
         self.add_question(
-            question=question_obj.question,
-            raw_answer=question_obj.raw_answer,
+            question=question_obj,
             question_id=question_id,  # Use the Question object's auto-generated ID
-            few_shot_examples=question_obj.few_shot_examples,
             **metadata,
         )
 

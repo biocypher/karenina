@@ -82,6 +82,7 @@ class QuestionModel(Base):
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
     question_text: Mapped[str] = mapped_column(Text, nullable=False)  # Removed unique=True for composite key
     raw_answer: Mapped[str] = mapped_column(Text, nullable=False)
+    answer_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     keywords: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     author: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     sources: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, nullable=True)

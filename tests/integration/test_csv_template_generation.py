@@ -121,8 +121,7 @@ def test_template_generation_with_openai_endpoint(csv_file_path: Path, openai_en
 
         # Generate template using the mocked endpoint
         template_code = generate_answer_template(
-            question=first_question.question,
-            raw_answer=first_question.raw_answer,
+            question_obj=first_question,
             config=openai_endpoint_config,
         )
 
@@ -155,8 +154,7 @@ def test_batch_template_generation(csv_file_path: Path, openai_endpoint_config, 
             question, _ = questions_with_metadata[i]
 
             template_code = generate_answer_template(
-                question=question.question,
-                raw_answer=question.raw_answer,
+                question_obj=question,
                 config=openai_endpoint_config,
             )
 

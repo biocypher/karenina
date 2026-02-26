@@ -36,6 +36,9 @@ class Question(BaseModel):
     date_created: str = Field(default_factory=lambda: datetime.now().isoformat())
     date_modified: str = Field(default_factory=lambda: datetime.now().isoformat())
     answer_template: str | None = None
+    answer_notes: str | None = Field(
+        default=None, description="Free-text notes about how the answer should be interpreted"
+    )
     author: dict[str, Any] | None = None
     sources: list[dict[str, Any]] | None = None
     custom_metadata: dict[str, Any] | None = None

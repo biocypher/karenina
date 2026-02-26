@@ -55,13 +55,11 @@ def generate_template_for_question(
         }
 
     try:
-        question_data = benchmark._questions_cache[question_id]
-        question_text = question_data.get("question", "")
-        raw_answer = question_data.get("raw_answer", "")
+        # Get the Question object directly from the manager
+        question_obj = benchmark._question_manager.get_question_as_object(question_id)
 
         template_code = generate_answer_template(
-            question=question_text,
-            raw_answer=raw_answer,
+            question_obj=question_obj,
             model=model,
             model_provider=model_provider,
             temperature=temperature,

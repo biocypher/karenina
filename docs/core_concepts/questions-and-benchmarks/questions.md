@@ -62,6 +62,7 @@ The `Question` model carries core evaluation data and intrinsic metadata:
 | `date_created` | `str` | Now (ISO) | When the question was created |
 | `date_modified` | `str` | Now (ISO) | When the question was last modified |
 | `answer_template` | `str \| None` | `None` | Template code attached to this question |
+| `answer_notes` | `str \| None` | `None` | Notes on how to interpret the answer |
 | `author` | `dict \| None` | `None` | Author information (name, affiliation, etc.) |
 | `sources` | `list[dict] \| None` | `None` | Source documents or references |
 | `custom_metadata` | `dict \| None` | `None` | Arbitrary key-value pairs |
@@ -187,6 +188,19 @@ class Answer(BaseAnswer):
 </div>
 
 A poorly written `raw_answer` has practical consequences: the automatic template generator produces weaker templates because it has less signal to extract ground truth from, and reviewers scanning results cannot quickly tell whether a failure is a real model mistake or an ambiguous expectation.
+
+## Answer Notes
+
+`answer_notes` is a free-text field for storing supplementary information about the answer that isn't part of the direct `raw_answer`. While `raw_answer` should be a concise statement of the fact, `answer_notes` can hold:
+
+- **Edge cases**: "Accept 'BCL-2' or 'Bcl2', but not 'BCL-XL'."
+- **Reasoning**: Why a certain value is the correct one.
+- **Context**: "This value was updated in the 2024 clinical guidelines."
+- **Reviewer instructions**: Notes for humans manually reviewing the output.
+
+Like `raw_answer`, `answer_notes` is pure metadata. It is not sent to the answering model or the judge model during pipeline execution. It is intended for benchmark authors and human reviewers to provide extra context that doesn't belong in the primary reference answer.
+
+Its primary programmatic use is as secondary input to the automatic template generator (`karenina.benchmark.authoring.answers.generator`). While the generator primarily uses `raw_answer` to derive the template's structure and `ground_truth()`, it reads `answer_notes` for additional context on edge cases or specific verification rules. Providing detailed notes helps the generator produce more robust `verify()` methods and field descriptions.
 
 ## Keywords
 

@@ -14,6 +14,7 @@ Benchmark
 └── Questions[]
     ├── Question text          ← what to ask the LLM
     ├── Expected answer        ← raw_answer: human-readable reference answer
+    ├── Answer notes           ← optional free-text notes for interpreting the answer
     ├── Answer template        ← correctness verification code (Pydantic model)
     ├── Question-specific traits ← quality checks for this question only
     ├── Few-shot examples      ← optional parsing guidance for the Judge LLM

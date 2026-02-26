@@ -34,7 +34,7 @@ with patch.dict("sys.modules", mock_modules):
 
 Think of a benchmark as a sealed envelope containing a complete evaluation. Anyone who receives it has everything they need to run the evaluation without additional context. The benchmark carries:
 
-- **Questions**: what to ask the LLM, plus the expected answers (`raw_answer`)
+- **Questions**: what to ask the LLM, plus the expected answers (`raw_answer`) and optional interpretation notes (`answer_notes`)
 - **Answer templates**: the structured schemas and `verify()` logic that determine correctness
 - **Rubric traits**: quality assessments (conciseness, safety, citation style, etc.)
 - **Metadata**: name, version, description, creator, timestamps, and arbitrary custom properties
@@ -59,6 +59,7 @@ These four components are independently attachable. A question can exist without
 │  │             │ │             │           │
 │  │ text        │ │ text        │           │
 │  │ raw_answer  │ │ raw_answer  │           │
+│  │ notes       │ │ (no notes)  │           │
 │  │ template    │ │ template    │           │
 │  │ q-traits    │ │ (no traits) │           │
 │  └─────────────┘ └─────────────┘           │
@@ -104,7 +105,7 @@ print(f"Domain:  {benchmark.get_custom_property('domain')}")
 
 ## Questions Inside the Benchmark
 
-Questions are the basic building blocks within a benchmark. Each question carries the text sent to the LLM, a reference answer (`raw_answer`), and optional attachments (a template, rubric traits, few-shot examples, intrinsic metadata).
+Questions are the basic building blocks within a benchmark. Each question carries the text sent to the LLM, a reference answer (`raw_answer`), optional interpretation notes (`answer_notes`), and optional attachments (a template, rubric traits, few-shot examples, intrinsic metadata).
 
 The benchmark assigns each question a **deterministic ID** derived from its text. The same question text always produces the same ID, which enables reliable cross-referencing across checkpoint files and database records.
 
