@@ -5,10 +5,8 @@ Handles result export, summary display, progress bar rendering,
 output validation, and interactive output prompts.
 """
 
-from datetime import datetime
 from pathlib import Path
 
-import typer
 from rich.console import Console
 from rich.progress import (
     BarColumn,
@@ -38,8 +36,6 @@ console = Console()
 def validate_output_and_prompt(
     output: Path | None,
     progressive_save: bool,
-    resume: bool,
-    interactive: bool,
 ) -> tuple[Path | None, str | None]:
     """
     Validate output path and prompt for one if needed.
@@ -59,21 +55,6 @@ def validate_output_and_prompt(
     # Validate progressive save requires output
     if progressive_save and not output:
         cli_error("--progressive-save requires --output to be specified")
-
-    # Prompt for output file if not specified (and not resuming or interactive)
-    if not output and not resume and not interactive:
-        suggested = f"verification_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        console.print("[yellow]No output file specified.[/yellow]")
-        console.print(f"[dim]Suggested: {suggested}[/dim]")
-
-        user_input = typer.prompt("Output file path", default=suggested)
-        output = Path(user_input)
-
-        # Validate the prompted output path
-        try:
-            output_format = validate_output_path(output)
-        except ValueError as e:
-            cli_error(str(e), e)
 
     return output, output_format
 

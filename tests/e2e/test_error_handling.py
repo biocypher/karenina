@@ -119,8 +119,9 @@ def test_invalid_option(runner: CliRunner, minimal_checkpoint: Path) -> None:
 
     # Should fail with Typer error (exit code 2)
     assert result.exit_code == 2
-    # Should show "no such option" or similar
-    assert "option" in result.stdout.lower()
+    # Should show "no such option" or similar (check both stdout and stderr)
+    output = (result.stdout + result.stderr).lower()
+    assert "option" in output
 
 
 @pytest.mark.e2e

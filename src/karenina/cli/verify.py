@@ -343,7 +343,7 @@ def verify(
         async_execution = not no_async
 
         # Step 1: Validate output path and prompt if needed
-        output, output_format = validate_output_and_prompt(output, progressive_save, bool(resume), interactive)
+        output, output_format = validate_output_and_prompt(output, progressive_save)
 
         # Validate benchmark_path is provided unless resuming
         if not resume and not benchmark_path:
