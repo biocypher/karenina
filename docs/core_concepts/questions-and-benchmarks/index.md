@@ -1,8 +1,6 @@
 # Questions and Benchmarks
 
-A **benchmark** is Karenina's central object: think of it as a sealed envelope containing everything needed to reproduce an evaluation. It bundles questions, expected answers, verification logic, and quality checks into a single portable package. A **question** is the basic building block inside a benchmark, carrying the text sent to the LLM and a reference answer.
-
-This page provides a conceptual overview and links to the deep dives on each component. If this is your first time here, we recommend reading [Benchmarks](../../notebooks/core_concepts/questions-and-benchmarks/benchmarks.ipynb) first (the container), then [Questions](../../notebooks/core_concepts/questions-and-benchmarks/questions.ipynb) (what goes inside). For step-by-step authoring guides, see [Creating Benchmarks](../../workflows/creating-benchmarks/index.md).
+A **benchmark** is Karenina's self-contained evaluation package: questions, answer templates, rubric traits, and metadata bundled into a single portable unit. A **question** is the building block inside a benchmark, carrying the text sent to the LLM and a reference answer. This page provides a structural overview; the sub-pages cover each component in depth.
 
 ## Benchmark Structure
 
@@ -30,14 +28,7 @@ The sub-pages cover each layer in depth:
 
 ## Questions: Two Layers of Data
 
-Each question stores data at two levels:
-
-- **The Question object** carries everything intrinsic to the question itself: the question text, `raw_answer`, keywords, optional template code, optional rubric traits, and metadata like author and sources.
-- **The membership record** tracks the question's state within this benchmark: whether it is marked `finished` (ready for the [verification pipeline](../verification-pipeline.md)) and when it was added.
-
-This split exists because the same question can belong to multiple benchmarks. It might be finalized in a published benchmark but still under review in a draft.
-
-See [Questions](../../notebooks/core_concepts/questions-and-benchmarks/questions.ipynb) for the full field reference, deterministic IDs, and the `finished` flag.
+Each question stores data at two levels: the Question object itself (text, `raw_answer`, keywords, template, rubric traits, metadata) and a membership record tracking the question's state within this benchmark (`finished` flag, `date_added`). This split exists because the same question can belong to multiple benchmarks with different membership states. See [Questions](../../notebooks/core_concepts/questions-and-benchmarks/questions.ipynb) for the full field reference.
 
 ## How Questions, Templates, and Rubrics Connect
 
@@ -68,7 +59,7 @@ For details on what templates and rubrics *do*, see [Answer Templates](../../not
 
 ## The `finished` Flag
 
-Every question in a benchmark has a `finished` flag that gates pipeline entry: only finished questions are included when verification runs. The default varies by interface (the Python API defaults to `True`; the GUI defaults to `False`). See [Questions](../../notebooks/core_concepts/questions-and-benchmarks/questions.ipynb) for the full details, defaults, and troubleshooting.
+Only questions marked `finished=True` enter the verification pipeline. Defaults and troubleshooting are covered in [Questions](../../notebooks/core_concepts/questions-and-benchmarks/questions.ipynb#the-finished-flag).
 
 ## Evaluation Modes
 
@@ -81,6 +72,10 @@ The benchmark's composition (which questions have templates, which have rubrics)
 | `rubric_only` | No | Yes | Quality-only evaluation (open-ended questions) |
 
 See [Evaluation Modes](../evaluation-modes.md) for the complete stage matrix and configuration details.
+
+## Definition vs Execution
+
+The benchmark defines *what* to evaluate: which questions to ask, how to verify correctness, and what quality traits to assess. Runtime settings (which models to use, how many replicates, timeouts, caching) are specified separately in [`VerificationConfig`](../evaluation-modes.md). This separation means the same benchmark can be run against different models or configurations without modification. Results are stored in the database, not inside the benchmark.
 
 ## Next Steps
 

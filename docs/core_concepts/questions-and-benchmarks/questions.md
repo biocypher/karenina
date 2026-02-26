@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.19.1
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -67,6 +67,14 @@ The `Question` model carries core evaluation data and intrinsic metadata:
 | `custom_metadata` | `dict \| None` | `None` | Arbitrary key-value pairs |
 | `question_rubric` | `dict \| None` | `None` | Question-specific rubric traits |
 
+### What the Question Text Does in the Pipeline
+
+The `question` field is the prompt submitted to the answering LLM during the [verification pipeline](../verification-pipeline.md). By default, karenina sends it as a bare user message with no wrapping or hidden instructions.
+
+Two optional configurations add context around it: (1) a system prompt can be set on the answering [`ModelConfig`](../../reference/configuration/model-config.md), sent as a separate system message; (2) [few-shot examples](../few-shot.md), if enabled, are prepended in a `"Question: ...\nAnswer: ..."` format. Beyond these, nothing is injected. If the author needs the LLM to have background information, domain context, or task instructions, all of that must be included in the question text itself (or in a configured system prompt).
+
+The same text also appears in other pipeline stages: the [Judge LLM](../verification-pipeline.md) receives it as context during parsing, and [rubric evaluators](../rubrics/index.md) receive it when assessing response quality. Unlike the answering stage, the parsing and rubric stages have their own system prompts and [instruction builders](../prompt-assembly.md) assembled by the framework. The answering stage is deliberately bare: the benchmark author controls exactly what the model sees.
+
 ```python
 q = Question(
     question="What is the putative target of venetoclax?",
@@ -79,6 +87,16 @@ print(f"Raw answer: {q.raw_answer}")
 print(f"Keywords:   {q.keywords}")
 print(f"ID:         {q.id}")
 ```
+
+### What `raw_answer` Does (and Does Not Do)
+
+`raw_answer` is metadata for the benchmark author and downstream tooling. It is never sent to the answering LLM and never sent to the Judge LLM.
+
+Its primary programmatic use is as input to the automatic template generator (`karenina.benchmark.authoring.answers.generator`), which reads the question and `raw_answer` to derive a structured answer template with ground truth values and verification logic.
+
+It is also stored in verification results and exported in reports (CSV, markdown), so reviewers can see at a glance what the expected answer was.
+
+The template's [`ground_truth()` method](../answer-templates.md), not `raw_answer`, is what actually controls verification. `raw_answer` is the human-readable source from which the template author (or the generator) derives the programmatic answer key.
 
 <div class="admonition note">
 <p class="admonition-title">Backward compatibility: <code>tags</code> to <code>keywords</code></p>
@@ -168,13 +186,23 @@ class Answer(BaseAnswer):
 <p>Although <code>raw_answer</code> is not sent to the Judge LLM, it still matters. It is the reference you (the benchmark author) use when writing the template's <code>ground_truth()</code> method. A specific <code>raw_answer</code> like <code>"BCL2 (B-cell lymphoma 2)"</code> makes it clear what <code>self.correct</code> should contain, while a vague one like <code>"yes"</code> leaves the template author guessing. It also appears in verification results, so reviewers can see at a glance what the expected answer was.</p>
 </div>
 
+A poorly written `raw_answer` has practical consequences: the automatic template generator produces weaker templates because it has less signal to extract ground truth from, and reviewers scanning results cannot quickly tell whether a failure is a real model mistake or an ambiguous expectation.
+
 ## Keywords
 
-Keywords provide lightweight categorization for filtering and grouping questions within a benchmark. They are stored on the Question object and can be used with `search_questions()` or custom filters. For operational examples, see [Benchmark Operations](../../workflows/creating-benchmarks/benchmark-operations.md#filtering-and-search).
+Keywords are pure metadata for filtering and organization. They never reach any LLM (answering, judge, or rubric evaluator) and have no effect on pipeline execution. Their value is in managing benchmarks at scale: filtering with `search_questions()`, grouping results by topic during analysis, and slicing exports by domain or difficulty. For operational examples, see [Benchmark Operations](../../workflows/creating-benchmarks/benchmark-operations.md#filtering-and-search).
+
+## Metadata Fields
+
+`author`, `sources`, and `custom_metadata` are provenance and tracking metadata. They are never used in pipeline execution.
+
+`author` records who wrote the question (name, affiliation). `sources` records where the question or expected answer came from (papers, databases, textbooks). `custom_metadata` is an open dictionary for any domain-specific attributes (difficulty, regulatory category, review status).
+
+All three are preserved in [checkpoint files](../checkpoints.md), stored in the database, and included in exports. They are useful for audit trails, filtering during analysis, and compliance workflows that require provenance tracking.
 
 ## Few-Shot Examples
 
-Questions can carry example question-answer pairs that guide the [Judge LLM](../verification-pipeline.md) during parsing. These examples show the judge how similar questions should be parsed, improving accuracy for complex or ambiguous response formats. For configuration modes and best practices, see [Few-Shot](../few-shot.md).
+Questions can carry example question-answer pairs. When few-shot examples are enabled in `VerificationConfig`, they are prepended to the question text before it is sent to the answering LLM. Each example is rendered as `"Question: ...\nAnswer: ..."`, followed by the actual question in the same format. They are not sent to the Judge LLM during parsing. The primary use case is guiding the answering model's response format or demonstrating the expected level of detail. For configuration modes and best practices, see [Few-Shot](../few-shot.md).
 
 ## The `finished` Flag
 
@@ -185,7 +213,7 @@ The default depends on the interface:
 - **Python API** (`add_question()`): defaults to `finished=True`, because questions added programmatically are assumed to be complete
 - **GUI** (karenina-gui): always passes `finished=False`, prompting the user to review before verification
 
-Only finished questions are included when the verification pipeline runs. If `run_verification()` returns an empty result set, the most common cause is that all questions are marked `finished=False`.
+Only finished questions are included when the verification pipeline runs. The most common pipeline troubleshooting issue is an empty result set from `run_verification()`. In nearly all cases, this means every question is marked `finished=False`. This is especially common when questions were created in the GUI (which defaults to `finished=False`) and then run via the Python API without explicitly marking them finished first.
 
 For managing finished status (marking, toggling, batch operations), see [Benchmark Operations](../../workflows/creating-benchmarks/benchmark-operations.md#managing-question-state).
 

@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.19.1
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -67,6 +67,8 @@ These four components are independently attachable. A question can exist without
 
 What is *not* inside the benchmark: verification results. Results are generated when the benchmark is run and are stored separately (see [Persistence](#persistence) below).
 
+Self-contained means the [answer templates](../answer-templates.md) are stored as Python source code strings inside the benchmark. When verification runs, the pipeline compiles and executes this code. The recipient of a [checkpoint file](../checkpoints.md) has the exact verification logic, not just a reference to it. No access to the original codebase or template files is needed beyond karenina itself.
+
 ## Benchmark-Level Metadata
 
 Every benchmark carries identity metadata that tracks its evolution and purpose:
@@ -79,6 +81,8 @@ Every benchmark carries identity metadata that tracks its evolution and purpose:
 | `creator` | Who authored it |
 | `date_created` | When the benchmark was first created |
 | `date_modified` | When it was last changed |
+
+These fields serve two audiences. For the benchmark author, they track evolution (version bumps signal changes, timestamps show when). For consumers (colleagues, reviewers, automated systems), they provide identity (what this evaluates, who authored it, which iteration). None of these fields influence pipeline execution; they are carried in checkpoints and database records for human reference.
 
 Beyond these built-in fields, benchmarks support **custom properties**: arbitrary key-value pairs for domain-specific metadata. Use them for attributes that characterize the benchmark as a whole (domain, regulatory context, target audience). Per-question attributes belong on the question itself; see [Questions](questions.md).
 
@@ -107,6 +111,8 @@ The benchmark assigns each question a **deterministic ID** derived from its text
 Questions also have a **registry entry** that tracks benchmark membership state: whether the question is marked `finished` (ready for the verification pipeline) and when it was added.
 
 For the full question data model, see [Questions](questions.md).
+
+Because the same question text always produces the same MD5 hash, questions are automatically recognized across environments. Loading a checkpoint on a different machine matches results to questions without a central ID authority or coordination between teams.
 
 ## Persistence
 
@@ -158,15 +164,21 @@ The database stores both benchmark definitions and verification results. When yo
 
 In practice, you often use both: author a benchmark and save it as a checkpoint for sharing, then load it into a database-backed session to run verification and collect results.
 
+The typical workflow is: author a benchmark and save it as a checkpoint for version control and sharing. Load it into a database-backed session to run verification. The database accumulates results across runs, models, and configurations while the checkpoint stays unchanged. Re-running with a different model or configuration stores new results alongside old ones, all linked to the same benchmark definition.
+
 ## Key Concepts
 
 **A benchmark is a definition, not an execution.** The benchmark describes *what* to evaluate and *how* to check it. Running the evaluation is a separate step that requires a [`VerificationConfig`](../evaluation-modes.md) specifying which models to use, how many replicates, and other runtime settings.
 
-**Results live outside the benchmark.** After verification runs, results are stored in the database, not inside the benchmark object. This separation means you can run the same benchmark multiple times with different models or configurations and compare results without modifying the benchmark itself.
+**Results live outside the benchmark.** After verification runs, results are stored in the database, not inside the benchmark object. This separation means you can run the same benchmark multiple times with different models or configurations and compare results without modifying the benchmark itself. It also means deleting or re-creating a benchmark does not affect previously collected results.
 
 **Templates are executable code.** Answer templates are stored as Python source code strings. This makes benchmarks fully reproducible (the exact verification logic travels with the benchmark) but also means template code must be syntactically valid Python.
 
-**Questions without templates still exist.** A question can live in a benchmark without a template. This is useful during iterative authoring or for rubric-only evaluation. See [Evaluation Modes](../evaluation-modes.md) for how the pipeline handles different combinations of templates and rubrics.
+**Questions without templates still exist.** A question can live in a benchmark without a template. This is useful during iterative authoring (common in GUI workflows, where questions are typically added first, then templates and rubrics attached later as the benchmark takes shape) or for rubric-only evaluation. See [Evaluation Modes](../evaluation-modes.md) for how the pipeline handles different combinations of templates and rubrics.
+
+## What the Benchmark Does Not Control
+
+The benchmark defines *what* to evaluate: which questions to ask, how to verify correctness, what quality traits to assess. It does not define *how* to evaluate. Runtime settings (answering model, judge model, replicates, timeouts, caching) are specified in [`VerificationConfig`](../evaluation-modes.md) or loaded from a preset. This separation means the same benchmark can be run against different models without modification. The benchmark is the constant; the configuration is the variable.
 
 ## Next Steps
 
