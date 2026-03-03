@@ -61,7 +61,7 @@ plugins:
       include_source: true
       execute: false  # We pre-execute notebooks
       allow_errors: false
-      include: ["notebooks/*.ipynb", "notebooks/**/*.ipynb"]
+      include: ["*.ipynb"]
       ignore: []
       kernel_name: python3
       theme: auto
