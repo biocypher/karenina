@@ -13,9 +13,20 @@ jupyter:
     name: python3
 ---
 
-# Questions
+# Questions: The Heart of Evaluation
 
-A question is the basic building block of evaluation in Karenina. Each question carries the text sent to an LLM, a reference answer that anchors the evaluation, and intrinsic metadata (author, sources, timestamps, keywords). The `Question` model is self-contained: everything that describes the question itself lives on the object.
+A **Question object** is the fundamental building block and minimal unit of evaluation in Karenina. These objects are the primary units that compose [Benchmarks](benchmarks.md), which act as packages for organizing, versioning, and persisting collections of questions.
+
+It is important to distinguish between the **Question object** (the container) and its **`question` attribute** (the literal text prompt sent to the model).
+
+While the prompt is just one part of the package, a complete Question object anchors the entire [evaluation loop](../verification-pipeline.md)—connecting what you ask an LLM, what you expect as an answer, and how that answer is eventually verified.
+
+Think of a Question object as a self-contained package that carries:
+1.  **The Prompt (`question`)**: Exactly what the model sees.
+2.  **The Reference (`raw_answer`)**: What the human author knows to be true.
+3.  **The Verification (`answer_template`)**: The machine-readable logic required for evaluation (see [Answer Templates](../answer-templates.md)).
+4.  **The Rubric (`question_rubric`)**: Optional question-specific traits to augment benchmark-level quality checks (see [Rubrics](../rubrics/index.md)).
+5.  **The Context**: Metadata like keywords, sources, and authorship for organization and audit trails.
 
 ```python tags=["hide-cell"]
 # Mock cell: ensures examples execute without live API keys.
@@ -41,40 +52,9 @@ from karenina.schemas.entities import BaseAnswer
 from karenina.benchmark import Benchmark
 ```
 
-## What Is a Question?
+## Anatomy of a Question
 
-The `Question` model carries core evaluation data and intrinsic metadata:
-
-**Core fields:**
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `question` | `str` | Yes | The question text sent to the LLM (minimum 1 character) |
-| `raw_answer` | `str` | Yes | The human-readable reference answer (minimum 1 character) |
-| `keywords` | `list[str]` | No | Keywords for filtering and organization (default: empty list) |
-| `few_shot_examples` | `list[dict[str, str]] \| None` | No | Example question-answer pairs for parsing guidance |
-| `id` | `str` (computed) | Auto | Deterministic MD5 hash of the question text |
-
-**Intrinsic metadata** (carried on the Question object itself):
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `date_created` | `str` | Now (ISO) | When the question was created |
-| `date_modified` | `str` | Now (ISO) | When the question was last modified |
-| `answer_template` | `str \| None` | `None` | Template code attached to this question |
-| `answer_notes` | `str \| None` | `None` | Notes on how to interpret the answer |
-| `author` | `dict \| None` | `None` | Author information (name, affiliation, etc.) |
-| `sources` | `list[dict] \| None` | `None` | Source documents or references |
-| `custom_metadata` | `dict \| None` | `None` | Arbitrary key-value pairs |
-| `question_rubric` | `dict \| None` | `None` | Question-specific rubric traits |
-
-### What the Question Text Does in the Pipeline
-
-The `question` field is the prompt submitted to the answering LLM during the [verification pipeline](../verification-pipeline.md). By default, karenina sends it as a bare user message with no wrapping or hidden instructions.
-
-Two optional configurations add context around it: (1) a system prompt can be set on the answering [`ModelConfig`](../../reference/configuration/model-config.md), sent as a separate system message; (2) [few-shot examples](../few-shot.md), if enabled, are prepended in a `"Question: ...\nAnswer: ..."` format. Beyond these, nothing is injected. If the author needs the LLM to have background information, domain context, or task instructions, all of that must be included in the question text itself (or in a configured system prompt).
-
-The same text also appears in other pipeline stages: the [Judge LLM](../verification-pipeline.md) receives it as context during parsing, and [rubric evaluators](../rubrics/index.md) receive it when assessing response quality. Unlike the answering stage, the parsing and rubric stages have their own system prompts and [instruction builders](../prompt-assembly.md) assembled by the framework. The answering stage is deliberately bare: the benchmark author controls exactly what the model sees.
+At its simplest, a question bridges the gap between a raw prompt and a verifiable result. It only requires the text to send to the model and a human-readable reference answer.
 
 ```python
 q = Question(
@@ -89,24 +69,58 @@ print(f"Keywords:   {q.keywords}")
 print(f"ID:         {q.id}")
 ```
 
-### What `raw_answer` Does (and Does Not Do)
+### The Prompt (`question`)
+The `question` field is the literal text sent to the model being evaluated. Its behavior in the pipeline depends on the stage:
 
-`raw_answer` is metadata for the benchmark author and downstream tooling. It is never sent to the answering LLM and never sent to the Judge LLM.
+*   **Answering Stage (Bare Control)**: By default, Karenina sends the `question` as a bare user message. This stage is deliberately unmanaged to ensure the benchmark author has total control. Any background info, domain context, or specific formatting instructions must be included in the `question` text itself. The only framework-level additions are optional: a system prompt from the [`ModelConfig`](../../reference/configuration/model-config.md) or prepended [Few-Shot examples](../few-shot.md).
+*   **Parsing & Rubric Stages (Contextual Reference)**: The same `question` text is also sent to the [Judge LLM](../verification-pipeline.md) during parsing and to [rubric evaluators](../rubrics/index.md) when assessing response quality. Unlike the answering stage, these "evaluation" stages are managed by the framework using specialized system prompts and [instruction builders](../prompt-assembly.md) that provide the necessary context for parsing and judgment.
 
-Its primary programmatic use is as input to the automatic template generator (`karenina.benchmark.authoring.answers.generator`), which reads the question and `raw_answer` to derive a structured answer template with ground truth values and verification logic.
+### The Reference (`raw_answer`)
+The `raw_answer` is your human-readable "Source of Truth." **It is never sent to the answering LLM and never sent to the Judge LLM.**
 
-It is also stored in verification results and exported in reports (CSV, markdown), so reviewers can see at a glance what the expected answer was.
+Its role is purely programmatic and organizational:
+1.  **Template Generation**: It is the primary input for the automatic template generator, which derives structured ground truth and verification logic from it.
+2.  **Reference**: It is stored in results and exported in reports so human reviewers can see the expected answer at a glance.
+3.  **Ground Truth**: It serves as the source from which you derive the `self.correct` dictionary in your [Answer Template](../answer-templates.md).
 
-The template's [`ground_truth()` method](../answer-templates.md), not `raw_answer`, is what actually controls verification. `raw_answer` is the human-readable source from which the template author (or the generator) derives the programmatic answer key.
+### The Answer Template (`answer_template`)
+While the `raw_answer` is for humans, the `answer_template` is for the machine. It is a string containing the Python code for a `BaseAnswer` subclass (always named `Answer`).
 
-<div class="admonition note">
-<p class="admonition-title">Backward compatibility: <code>tags</code> to <code>keywords</code></p>
-<p>The field formerly named <code>tags</code> has been renamed to <code>keywords</code>. A model validator accepts the legacy <code>tags</code> key during construction and automatically converts it to <code>keywords</code>, so existing checkpoint files and code using <code>tags=</code> continue to work.</p>
-</div>
+This code defines:
+1.  **The Schema**: What fields the Judge LLM should extract from the model's response.
+2.  **The Verification**: The `verify()` method that programmatically compares extracted values against the ground truth.
 
-## Deterministic IDs
+Every question in a benchmark can have its own unique `answer_template`, allowing you to mix different types of questions (boolean, numeric, text extraction) in the same evaluation run. For a deep dive into writing these, see [Answer Templates](../answer-templates.md).
 
-Every question gets an ID computed as an MD5 hash of its text. The same question text always produces the same ID, which enables reliable cross-referencing between benchmarks, results, and traces.
+### The Rubric (`question_rubric`)
+While rubrics are typically defined at the benchmark level to evaluate all questions consistently, an individual question can carry its own `question_rubric`. These question-specific traits augment the global benchmark rubric, allowing you to add targeted quality checks (e.g., verifying a specific tone or format constraint) that only apply to this particular prompt. For more details on defining traits, see [Rubrics](../rubrics/index.md).
+
+## A Question's Journey
+
+When you run a benchmark, each question follows a predictable path through the [Verification Pipeline](../verification-pipeline.md):
+
+1.  **Generation**: The `question` text is sent to the answering LLM to produce a response.
+2.  **Parsing**: A "Judge" LLM receives a package of context: the original `question`, the model's response, the template's JSON schema, and internal parsing instructions. It extracts specific data points from the response into the structured schema.
+3.  **Verification**: The extracted data is checked against the programmatic "Ground Truth" (derived from your `raw_answer`) using the template's `verify()` logic.
+4.  **Rubric Evaluation**: If enabled, the `question` is passed to rubric evaluators along with the model's response to assess qualities like safety, conciseness, or citation style.
+5.  **Finalization**: The result—Pass or Fail, along with any rubric scores—is saved alongside the question's metadata.
+
+## Managing the Lifecycle
+
+### The `finished` Flag: "Are we ready?"
+
+The `finished` flag determines whether a question enters the [verification pipeline](../verification-pipeline.md). It is a property of the question's membership in a specific benchmark, not an intrinsic property of the question itself (see [Evaluation Modes](../evaluation-modes.md)).
+
+*   **Python API**: Defaults to `True`. Questions added via `add_question()` are assumed to be complete.
+*   **GUI**: Defaults to `False`. This ensures you review and "finish" questions before they enter a production verification run.
+
+*Note: If your verification run returns zero results, it almost always means your questions are marked `finished=False`.*
+
+### Deterministic IDs: Content-Addressable Identity
+
+Every question is assigned a unique identity (`id`) that acts as a **content-addressable fingerprint**. This ID is computed as a deterministic **MD5 hash of the `question` string** (UTF-8 encoded), resulting in a 32-character hexadecimal string.
+
+This approach ensures that "the same question" always carries the same identity across different benchmarks or evaluation runs, enabling stable historical tracking.
 
 ```python
 # The ID is deterministic: same text produces same ID
@@ -115,128 +129,78 @@ q2 = Question(question="What is the capital of France?", raw_answer="Paris")
 print(f"q1.id: {q1.id}")
 print(f"q2.id: {q2.id}")
 print(f"Same:  {q1.id == q2.id}")
-```
 
-```python
-# Under the hood: MD5 of the question text
+# Under the hood: MD5 of the UTF-8 encoded question text
+import hashlib
 manual_id = hashlib.md5("What is the capital of France?".encode("utf-8")).hexdigest()
 print(f"Manual hash: {manual_id}")
 print(f"Matches:     {manual_id == q1.id}")
 ```
 
-You can override the auto-generated ID by passing `question_id` when adding to a benchmark:
-
-```python
-benchmark = Benchmark.create(name="ID Demo", version="0.1.0")
-custom_id = benchmark.add_question(
-    question="What is the capital of France?",
-    raw_answer="Paris",
-    question_id="france-capital-001",
-)
-print(f"Custom ID: {custom_id}")
-```
+#### Key ID Behaviors:
+*   **Prompt-Exclusive**: The ID is derived **only** from the `question` text.
+*   **Metadata Independent**: Modifying the `raw_answer`, `answer_template`, `keywords`, or `author` does **not** change the ID. You can refine your evaluation logic without losing the question's historical identity.
+*   **Case & Whitespace Sensitive**: "What is BCL2?" and "What is bcl2?" (or adding a trailing space) will produce completely different IDs.
 
 <div class="admonition warning">
 <p class="admonition-title">Changing text changes the ID</p>
-<p>If you modify a question's text (even whitespace or capitalization), the auto-generated ID changes. This breaks cross-references to results and traces tied to the old ID. If you need to edit question text while preserving the ID, use a custom <code>question_id</code>.</p>
+<p>If you modify a question's text, its fingerprint changes. This breaks historical cross-references in your results. If you need to fix a typo while preserving an existing ID, you can pass a custom <code>question_id</code> when adding the question to a benchmark to override the automatic hashing.</p>
 </div>
 
 ## `raw_answer` vs Template `ground_truth`
 
-These two concepts are related but serve different purposes:
+While related, they serve different audiences:
 
-| Concept | Where It Lives | Who Sees It | Purpose |
-|---------|---------------|-------------|---------|
-| `raw_answer` | `Question.raw_answer` | Benchmark authors; stored in results for reference | Human-readable reference answer written in plain language |
-| `self.correct` | Set inside `ground_truth()` method | Only `verify()` | Programmatic answer key used by the `verify()` method to check correctness |
-
-The relationship: `raw_answer` is the source of truth from which the template author derives `self.correct`. A well-written `raw_answer` describes the expected answer in plain language. The `ground_truth()` method translates that into structured values that `verify()` can compare programmatically.
-
-`raw_answer` is **not** sent to the [Judge LLM](../verification-pipeline.md) during parsing. The Judge receives only the question text, the LLM's response, and the template's JSON schema. The `raw_answer` serves as the author's reference when writing the template's `ground_truth()` method, and it is stored in verification results for human review.
+| Concept | Where It Lives | Audience | Purpose |
+| :--- | :--- | :--- | :--- |
+| **`raw_answer`** | `Question.raw_answer` | Humans / Authors | A plain-language description of the correct answer. |
+| **`self.correct`** | `Answer.ground_truth()` | `verify()` method | A structured dictionary of values for programmatic comparison. |
 
 ```python
-# The raw_answer describes the expected answer in natural language
-q = Question(
-    question="What is the putative target of venetoclax?",
-    raw_answer="BCL2 (B-cell lymphoma 2), an anti-apoptotic protein",
-)
-
-# The template's ground_truth() derives structured values from that
-# (see Answer Templates for full details on BaseAnswer)
+# Example: raw_answer vs structured ground_truth
 class Answer(BaseAnswer):
-    target: str = Field(
-        description=(
-            "The direct protein target of venetoclax as stated in the response. "
-            "Extract the protein name or gene symbol (e.g., 'BCL2', 'Bcl-2', "
-            "'B-cell lymphoma 2'). If the response mentions multiple proteins, "
-            "extract only the one identified as the direct pharmacological "
-            "target, not downstream effectors or pathway members."
-        )
-    )
+    target: str = Field(description="The protein target.")
 
     def ground_truth(self):
         # Derived from raw_answer: "BCL2 (B-cell lymphoma 2)"
         self.correct = {"target": "BCL2"}
 
     def verify(self) -> bool:
-        return self.target.strip().upper().replace("-", "") == self.correct["target"]
+        return self.target.strip().upper() == self.correct["target"]
 ```
 
-<div class="admonition tip">
-<p class="admonition-title">Writing a good <code>raw_answer</code></p>
-<p>Although <code>raw_answer</code> is not sent to the Judge LLM, it still matters. It is the reference you (the benchmark author) use when writing the template's <code>ground_truth()</code> method. A specific <code>raw_answer</code> like <code>"BCL2 (B-cell lymphoma 2)"</code> makes it clear what <code>self.correct</code> should contain, while a vague one like <code>"yes"</code> leaves the template author guessing. It also appears in verification results, so reviewers can see at a glance what the expected answer was.</p>
-</div>
+## Detailed Reference: Metadata and Special Fields
 
-A poorly written `raw_answer` has practical consequences: the automatic template generator produces weaker templates because it has less signal to extract ground truth from, and reviewers scanning results cannot quickly tell whether a failure is a real model mistake or an ambiguous expectation.
+### Metadata for Organization and Context
+*   **`answer_notes`**: A free-text field for edge cases ("Accept 'Bcl2' but not 'BCL-XL'"), reasoning, or reviewer instructions. The automatic [template generator](../../workflows/creating-benchmarks/scaled-authoring.md) uses these notes to produce more robust `verify()` methods.
+*   **`keywords`**: Pure metadata for filtering and grouping. They never reach an LLM and have no effect on pipeline execution (see [Benchmark Operations](../../workflows/creating-benchmarks/benchmark-operations.md)).
+*   **`author` & `sources`**: Provenance tracking (who wrote it, where the answer came from). Preserved in [checkpoints](checkpoints.md) and exports for audit trails.
+*   **`custom_metadata`**: An open dictionary for any domain-specific attributes (e.g., "difficulty": "hard").
 
-## Answer Notes
+### Special Pipeline Fields
+*   **`few_shot_examples`**: A list of example question-answer pairs. When enabled in [VerificationConfig](../../reference/configuration/verification-config.md), these are prepended to the question to guide the answering model's format or level of detail. They are not sent to the Judge during parsing (see [Few-Shot](../few-shot.md)).
+*   **`answer_template`**: The Python code (subclass of `BaseAnswer`) that defines the parsing schema and `verify()` logic for this specific question.
+*   **`question_rubric`**: Question-specific rubric traits that augment the benchmark-level rubric.
 
-`answer_notes` is a free-text field for storing supplementary information about the answer that isn't part of the direct `raw_answer`. While `raw_answer` should be a concise statement of the fact, `answer_notes` can hold:
+### Field Reference Table
 
-- **Edge cases**: "Accept 'BCL-2' or 'Bcl2', but not 'BCL-XL'."
-- **Reasoning**: Why a certain value is the correct one.
-- **Context**: "This value was updated in the 2024 clinical guidelines."
-- **Reviewer instructions**: Notes for humans manually reviewing the output.
-
-Like `raw_answer`, `answer_notes` is pure metadata. It is not sent to the answering model or the judge model during pipeline execution. It is intended for benchmark authors and human reviewers to provide extra context that doesn't belong in the primary reference answer.
-
-Its primary programmatic use is as secondary input to the automatic template generator (`karenina.benchmark.authoring.answers.generator`). While the generator primarily uses `raw_answer` to derive the template's structure and `ground_truth()`, it reads `answer_notes` for additional context on edge cases or specific verification rules. Providing detailed notes helps the generator produce more robust `verify()` methods and field descriptions.
-
-## Keywords
-
-Keywords are pure metadata for filtering and organization. They never reach any LLM (answering, judge, or rubric evaluator) and have no effect on pipeline execution. Their value is in managing benchmarks at scale: filtering with `search_questions()`, grouping results by topic during analysis, and slicing exports by domain or difficulty. For operational examples, see [Benchmark Operations](../../workflows/creating-benchmarks/benchmark-operations.md#filtering-and-search).
-
-## Metadata Fields
-
-`author`, `sources`, and `custom_metadata` are provenance and tracking metadata. They are never used in pipeline execution.
-
-`author` records who wrote the question (name, affiliation). `sources` records where the question or expected answer came from (papers, databases, textbooks). `custom_metadata` is an open dictionary for any domain-specific attributes (difficulty, regulatory category, review status).
-
-All three are preserved in [checkpoint files](../checkpoints.md), stored in the database, and included in exports. They are useful for audit trails, filtering during analysis, and compliance workflows that require provenance tracking.
-
-## Few-Shot Examples
-
-Questions can carry example question-answer pairs. When few-shot examples are enabled in `VerificationConfig`, they are prepended to the question text before it is sent to the answering LLM. Each example is rendered as `"Question: ...\nAnswer: ..."`, followed by the actual question in the same format. They are not sent to the Judge LLM during parsing. The primary use case is guiding the answering model's response format or demonstrating the expected level of detail. For configuration modes and best practices, see [Few-Shot](../few-shot.md).
-
-## The `finished` Flag
-
-The `finished` flag determines whether a question enters the verification pipeline. It is tracked separately from the question's intrinsic data because `finished` is a property of the question's membership in a benchmark, not an intrinsic property of the question itself. A question can be finished in one benchmark and unfinished in another.
-
-The default depends on the interface:
-
-- **Python API** (`add_question()`): defaults to `finished=True`, because questions added programmatically are assumed to be complete
-- **GUI** (karenina-gui): always passes `finished=False`, prompting the user to review before verification
-
-Only finished questions are included when the verification pipeline runs. The most common pipeline troubleshooting issue is an empty result set from `run_verification()`. In nearly all cases, this means every question is marked `finished=False`. This is especially common when questions were created in the GUI (which defaults to `finished=False`) and then run via the Python API without explicitly marking them finished first.
-
-For managing finished status (marking, toggling, batch operations), see [Benchmark Operations](../../workflows/creating-benchmarks/benchmark-operations.md#managing-question-state).
-
+| Field | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `question` | `str` | Required | The prompt text sent to the LLM. |
+| `raw_answer` | `str` | Required | Human-readable reference answer (metadata). |
+| `keywords` | `list[str]` | `[]` | Keywords for filtering (formerly `tags`). |
+| `id` | `str` | Auto | Deterministic MD5 hash of the question text. |
+| `date_created` | `str` | Now (ISO) | Creation timestamp. |
+| `date_modified` | `str` | Now (ISO) | Last modification timestamp. |
+| `answer_notes` | `str \| None` | `None` | Metadata for edge cases or reasoning. |
+| `author` | `dict \| None` | `None` | Author information. |
+| `sources` | `list[dict] \| None` | `None` | Source documents or references. |
+| `answer_template` | `str \| None` | `None` | Required for evaluation; defines parsing and verification logic. |
+| `question_rubric` | `dict \| None` | `None` | Question-specific rubric traits. |
+| `custom_metadata` | `dict \| None` | `None` | Arbitrary key-value pairs. |
 ## Next Steps
 
-- [Benchmarks](benchmarks.md): the benchmark as a package, metadata, persistence
-- [Answer Templates](../answer-templates.md): how to write templates, field types, `ground_truth()` and `verify()`
-- [Evaluation Modes](../evaluation-modes.md): how `finished` status, templates, and rubrics determine what the pipeline runs
-- [Benchmark Operations](../../workflows/creating-benchmarks/benchmark-operations.md): adding questions, managing finished status, accessing question data, writing good `raw_answer` values
-- [Creating Benchmarks](../../workflows/creating-benchmarks/index.md): step-by-step authoring workflow
-- [Checkpoints](../checkpoints.md): how benchmarks persist as JSON-LD files
-- [Few-Shot](../few-shot.md): configuring example injection for parsing accuracy
+*   [Benchmarks](benchmarks.md): How questions are grouped into packages.
+*   [Answer Templates](../answer-templates.md): Writing the `verify()` logic for your questions.
+*   [Evaluation Modes](../evaluation-modes.md): How `finished` status and templates drive the pipeline.
+*   [Benchmark Operations](../../workflows/creating-benchmarks/benchmark-operations.md): Adding, searching, and managing questions at scale.
