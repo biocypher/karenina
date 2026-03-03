@@ -62,7 +62,7 @@ These concept pages provide the foundational knowledge that the scenarios build 
 - [Answer Templates](../../notebooks/core_concepts/answer-templates.ipynb) — Template structure, field types, `verify()` semantics
 - [Rubrics](../../core_concepts/rubrics/index.md) — Trait types (LLM, regex, callable, metric), global vs per-question
 - [Adapters](../../core_concepts/adapters.md) — Port/adapter architecture, available backends
-- [Checkpoints](../../core_concepts/checkpoints.md) — JSON-LD format, save/load behavior
+- [Checkpoints](../../core_concepts/questions-and-benchmarks/checkpoints.md) — JSON-LD format, save/load behavior
 
 ---
 

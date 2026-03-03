@@ -377,7 +377,7 @@ loaded = Benchmark.load(checkpoint_path)
 print(f"Loaded '{loaded.name}' with {loaded.question_count} questions")
 ```
 
-> **Learn more**: [Checkpoints](../core_concepts/checkpoints.md) · [Factual QA Benchmark](creating-benchmarks/factual-qa-benchmark.ipynb) · [Loading Benchmarks](running-verification/basic-verification.ipynb)
+> **Learn more**: [Checkpoints](../core_concepts/questions-and-benchmarks/checkpoints.md) · [Factual QA Benchmark](creating-benchmarks/factual-qa-benchmark.ipynb) · [Loading Benchmarks](running-verification/basic-verification.ipynb)
 
 ```python tags=["hide-cell"]
 # Restore original LLM behavior and clean up temp directory

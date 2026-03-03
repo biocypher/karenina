@@ -26,6 +26,7 @@ The sub-pages cover each layer in depth:
 
 - [**Benchmarks**](../../notebooks/core_concepts/questions-and-benchmarks/benchmarks.ipynb): the benchmark as a package, metadata, persistence (checkpoints and database)
 - [**Questions**](../../notebooks/core_concepts/questions-and-benchmarks/questions.ipynb): the Question schema, deterministic IDs, `raw_answer` vs `ground_truth`, the `finished` flag
+- [**Checkpoints**](checkpoints.md): the JSON-LD file format used for portable benchmark persistence
 
 ## Questions: Two Layers of Data
 
@@ -82,7 +83,7 @@ The benchmark defines *what* to evaluate: which questions to ask, how to verify 
 
 - [Benchmarks deep dive](../../notebooks/core_concepts/questions-and-benchmarks/benchmarks.ipynb): the benchmark as a package, metadata, persistence
 - [Questions deep dive](../../notebooks/core_concepts/questions-and-benchmarks/questions.ipynb): the Question schema, deterministic IDs, `raw_answer` vs `ground_truth`, the `finished` flag
-- [Checkpoints](../checkpoints.md): how benchmarks are persisted as JSON-LD files
+- [Checkpoints](checkpoints.md): how benchmarks are persisted as JSON-LD files
 - [Answer Templates](../../notebooks/core_concepts/answer-templates.ipynb): how correctness verification works
 - [Rubrics](../rubrics/index.md): how quality assessment works
 - [Creating Benchmarks](../../workflows/creating-benchmarks/index.md): step-by-step authoring workflow

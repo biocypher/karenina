@@ -155,7 +155,7 @@ nav:
       - Overview: core_concepts/questions-and-benchmarks/index.md
       - Benchmarks: notebooks/core_concepts/questions-and-benchmarks/benchmarks.ipynb
       - Questions: notebooks/core_concepts/questions-and-benchmarks/questions.ipynb
-    - Checkpoints: core_concepts/checkpoints.md
+      - "Checkpoints: The Memory of Evaluation": core_concepts/questions-and-benchmarks/checkpoints.md
     - Answer Templates: notebooks/core_concepts/answer-templates.ipynb
     - Rubric Traits:
       - Overview: core_concepts/rubrics/index.md

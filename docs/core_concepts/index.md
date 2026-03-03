@@ -9,7 +9,7 @@ Concepts are ordered to follow the evaluation pipeline — from what you're eval
 | Concept | What It Is | Page |
 |---------|-----------|------|
 | **Questions & Benchmarks** | The central objects: questions bundled with templates, rubrics, and metadata | [Questions & Benchmarks](questions-and-benchmarks/index.md) |
-| **Checkpoints** | JSON-LD files that store benchmarks (questions, templates, rubrics, results) | [Checkpoints](checkpoints.md) |
+| **Checkpoints** | JSON-LD files that store benchmarks (questions, templates, rubrics, results) | [Checkpoints](questions-and-benchmarks/checkpoints.md) |
 | **Answer Templates** | Pydantic models that define how a Judge LLM parses and verifies responses | [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb) |
 | **Rubrics** | Trait-based evaluation of response quality (LLM, regex, callable, metric) | [Rubrics](rubrics/index.md) |
 | **Templates vs Rubrics** | The two evaluation units: correctness (templates) vs quality (rubrics) | [Templates vs Rubrics](template-vs-rubric.md) |
@@ -80,7 +80,7 @@ A **benchmark** is the central object in Karenina: a self-contained evaluation u
 
 A **checkpoint** is a JSON-LD file that stores everything needed to define and reproduce a benchmark: questions, answer templates, rubric traits, metadata, and optionally verification results. Checkpoints use [Schema.org](https://schema.org) types for interoperability.
 
-[Read more about checkpoints →](checkpoints.md)
+[Read more about checkpoints →](questions-and-benchmarks/checkpoints.md)
 
 ### Answer Templates
 
