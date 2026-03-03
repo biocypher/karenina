@@ -13,9 +13,11 @@ jupyter:
     name: python3
 ---
 
-# Benchmarks
+# Benchmarks: The Reproducible Package
 
-A benchmark is Karenina's self-contained evaluation package. It bundles everything needed to reproduce an evaluation into a single portable unit: questions, answer templates, rubric traits, and metadata. You can save it, share it, load it in another environment, and get the same evaluation.
+A **Benchmark** is Karenina's self-contained evaluation package. It is the "sealed envelope" that bundles everything needed to reproduce an evaluation into a single portable unit.
+
+While a [Question object](questions.md) is the minimal unit of evaluation, the Benchmark is the container that organizes these units, attaches quality standards, and preserves the identity of the entire evaluation for sharing and version control.
 
 ```python tags=["hide-cell"]
 # Mock cell: ensures examples execute without live API keys.
@@ -30,16 +32,15 @@ with patch.dict("sys.modules", mock_modules):
     from karenina.benchmark import Benchmark
 ```
 
-## The Benchmark as a Package
+## Core Components of a Benchmark
 
-Think of a benchmark as a sealed envelope containing a complete evaluation. Anyone who receives it has everything they need to run the evaluation without additional context. The benchmark carries:
+Think of a benchmark as a complete kit. When you share a benchmark, you are handing someone a package composed of:
 
-- **Questions**: what to ask the LLM, plus the expected answers (`raw_answer`) and optional interpretation notes (`answer_notes`)
-- **Answer templates**: the structured schemas and `verify()` logic that determine correctness
-- **Rubric traits**: quality assessments (conciseness, safety, citation style, etc.)
-- **Metadata**: name, version, description, creator, timestamps, and arbitrary custom properties
-
-These four components are independently attachable. A question can exist without a template, without rubric traits, or without both. The benchmark holds them together as a unit.
+1.  **Questions**: The primary building blocks (see [Questions](questions.md)).
+    *   **Answer Templates**: The executable Python logic contained **within each question** that determines correctness (see [Answer Templates](../answer-templates.md)).
+    *   **Question-Specific Rubrics**: Quality standards defined for a single question.
+2.  **Global Rubric Traits**: Quality standards (safety, conciseness) defined at the **benchmark level** that apply to every question in the set (see [Rubrics](../rubrics/index.md)).
+3.  **Identity Metadata**: The name, version, and authorship information that defines the benchmark's purpose.
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -54,40 +55,20 @@ These four components are independently attachable. A question can exist without
 │  │  conciseness, citation_style, safety   │ │
 │  └────────────────────────────────────────┘ │
 │                                             │
-│  ┌─────────────┐ ┌─────────────┐           │
+│  ┌─────────────┐ ┌─────────────┐            │
 │  │ Question 1  │ │ Question 2  │  ...       │
-│  │             │ │             │           │
-│  │ text        │ │ text        │           │
-│  │ raw_answer  │ │ raw_answer  │           │
-│  │ notes       │ │ (no notes)  │           │
-│  │ template    │ │ template    │           │
-│  │ q-traits    │ │ (no traits) │           │
-│  └─────────────┘ └─────────────┘           │
+│  │             │ │             │            │
+│  │ text        │ │ text        │            │
+│  │ raw_answer  │ │ raw_answer  │            │
+│  │ notes       │ │ (no notes)  │            │
+│  │ template    │ │ template    │            │
+│  │ q-traits    │ │ (no traits) │            │
+│  └─────────────┘ └─────────────┘            │
 └─────────────────────────────────────────────┘
 ```
 
-What is *not* inside the benchmark: verification results. Results are generated when the benchmark is run and are stored separately (see [Persistence](#persistence) below).
-
-Self-contained means the [answer templates](../answer-templates.md) are stored as Python source code strings inside the benchmark. When verification runs, the pipeline compiles and executes this code. The recipient of a [checkpoint file](../checkpoints.md) has the exact verification logic, not just a reference to it. No access to the original codebase or template files is needed beyond karenina itself.
-
-## Benchmark-Level Metadata
-
-Every benchmark carries identity metadata that tracks its evolution and purpose:
-
-| Field | Purpose |
-|-------|---------|
-| `name` | Human-readable identifier |
-| `version` | Semantic version string (e.g., `"1.0.0"`) |
-| `description` | What this benchmark evaluates |
-| `creator` | Who authored it |
-| `date_created` | When the benchmark was first created |
-| `date_modified` | When it was last changed |
-
-These fields serve two audiences. For the benchmark author, they track evolution (version bumps signal changes, timestamps show when). For consumers (colleagues, reviewers, automated systems), they provide identity (what this evaluates, who authored it, which iteration). None of these fields influence pipeline execution; they are carried in checkpoints and database records for human reference.
-
-Beyond these built-in fields, benchmarks support **custom properties**: arbitrary key-value pairs for domain-specific metadata. Use them for attributes that characterize the benchmark as a whole (domain, regulatory context, target audience). Per-question attributes belong on the question itself; see [Questions](questions.md).
-
 ```python
+# Creating a benchmark and populating its identity
 benchmark = Benchmark.create(
     name="Drug Target Identification",
     description="Evaluate LLM accuracy on identifying drug targets from literature",
@@ -95,51 +76,44 @@ benchmark = Benchmark.create(
     creator="Pharmacology Team",
 )
 
+# You can also add custom properties for domain-specific tracking
 benchmark.set_custom_property("domain", "pharmacology")
-benchmark.set_custom_property("target_audience", "drug discovery teams")
 
-print(f"Name:    {benchmark.name}")
-print(f"Version: {benchmark.version}")
-print(f"Domain:  {benchmark.get_custom_property('domain')}")
+print(f"Benchmark: {benchmark.name} v{benchmark.version}")
+print(f"Domain:    {benchmark.get_custom_property('domain')}")
 ```
 
-## Questions Inside the Benchmark
+## Portable by Design
 
-Questions are the basic building blocks within a benchmark. Each question carries the text sent to the LLM, a reference answer (`raw_answer`), optional interpretation notes (`answer_notes`), and optional attachments (a template, rubric traits, few-shot examples, intrinsic metadata).
+Karenina is designed so that evaluation logic travels with the data. The [Question object](questions.md) is the atomic unit of portability: each question carries its own prompt, reference answer, verification logic, and qualitative evaluation criteria as a single self-contained package.
 
-The benchmark assigns each question a **deterministic ID** derived from its text. The same question text always produces the same ID, which enables reliable cross-referencing across checkpoint files and database records.
+*   **Templates as Code**: [Answer templates](../answer-templates.md) are stored as Python source code strings inside each question. The exact parsing schema and `verify()` logic travel with the question, not in an external file or registry.
+*   **Rubrics Included**: Question-level [rubric traits](../rubrics/index.md) are also embedded in the question definition. The instructions for qualitative evaluation (safety, citation style, conciseness) are part of the portable unit, not a separate configuration.
+*   **Self-Contained Definitions**: A benchmark's [checkpoint file](checkpoints.md) contains the complete evaluation definition: all questions, their templates, their rubrics, and all metadata. No external data files or source repositories are needed to understand or re-run the evaluation (though you still need the Karenina runtime and LLM API access).
 
-Questions also have a **registry entry** that tracks benchmark membership state: whether the question is marked `finished` (ready for the verification pipeline) and when it was added.
+## Benchmark vs. Run: "The What" vs. "The How"
 
-For the full question data model, see [Questions](questions.md).
+A common point of confusion is what a benchmark *doesn't* control.
 
-Because the same question text always produces the same MD5 hash, questions are automatically recognized across environments. Loading a checkpoint on a different machine matches results to questions without a central ID authority or coordination between teams.
+*   **The Benchmark** defines **WHAT** to evaluate (questions, logic, rubrics). It is a static definition.
+*   **The VerificationConfig** defines **HOW** to run it (which models to use, how many replicates, timeouts).
 
-## Persistence
+This separation is powerful: it means you can run the exact same benchmark against Claude, GPT-4, and Gemini, or run it multiple times with different temperatures, without ever modifying the benchmark itself. For more on execution settings, see [Evaluation Modes](../evaluation-modes.md).
 
-Benchmarks exist in memory while you build and run them. To share or reuse a benchmark, you persist it. Karenina provides two persistence paths:
+## A Benchmark's Journey
 
-### Checkpoint Files
+### 1. Authoring & Populating
+You start by creating a benchmark and adding questions. At this stage, questions are often marked `finished=False` while you refine their [answer templates](../answer-templates.md) and [rubrics](../rubrics/index.md).
 
-A checkpoint is a **JSON-LD file** (`.jsonld`) that captures the benchmark's definition: questions, templates, rubric traits, and metadata. Checkpoints are portable, human-readable, and version-control friendly. They are the primary way to share benchmarks across teams and environments.
+### 2. Persisting (Saving)
+Benchmarks exist in memory while you work, but they must be persisted to be useful. Karenina offers two paths:
 
-Checkpoints capture the benchmark's *definition*, not its results. They answer: "what should be evaluated and how?"
+| Path | Primary Use | What it Stores |
+| :--- | :--- | :--- |
+| **[Checkpoint File](checkpoints.md) (`.jsonld`)** | **Sharing & Versioning** | The Benchmark *definition* (Questions, Logic, Metadata). |
+| **[Database](../../workflows/analyzing-results/index.md)** | **Execution & Analysis** | The Benchmark *plus* all the [Verification Results](../../workflows/analyzing-results/verification-result.md) from every run. |
 
-```python
-from pathlib import Path
-
-# Save
-# benchmark.save(Path("drug_targets_v1.jsonld"))
-
-# Load in another environment
-# benchmark = Benchmark.load(Path("drug_targets_v1.jsonld"))
-```
-
-For the checkpoint format, Schema.org mapping, and serialization details, see [Checkpoints](../checkpoints.md).
-
-### Database Storage
-
-The database stores both benchmark definitions and verification results. When you run verification, results are written to the database and linked to the benchmark and its questions. The database is where results live; the benchmark itself does not contain them.
+For details on the portable JSON-LD format, see [Checkpoints](checkpoints.md). For working with stored results, see [Analyzing Results](../../workflows/analyzing-results/index.md).
 
 ```
 ┌──────────────────────────────────────┐
@@ -156,39 +130,26 @@ The database stores both benchmark definitions and verification results. When yo
 └──────────────────────────────────────┘
 ```
 
-**When to use which:**
+### 3. Execution
+When you "run" a benchmark, the framework pulls the questions and logic from the benchmark, uses a [VerificationConfig](../../reference/configuration/verification-config.md) to call the LLMs, and then writes the results to the database.
 
-| Path | Best for |
-|------|----------|
-| Checkpoint files | Sharing, version control, portability, archival |
-| Database | Running verification, storing results, querying across benchmarks |
+## Detailed Reference: Metadata Fields
 
-In practice, you often use both: author a benchmark and save it as a checkpoint for sharing, then load it into a database-backed session to run verification and collect results.
+Every benchmark carries built-in identity fields to track its evolution.
 
-The typical workflow is: author a benchmark and save it as a checkpoint for version control and sharing. Load it into a database-backed session to run verification. The database accumulates results across runs, models, and configurations while the checkpoint stays unchanged. Re-running with a different model or configuration stores new results alongside old ones, all linked to the same benchmark definition.
-
-## Key Concepts
-
-**A benchmark is a definition, not an execution.** The benchmark describes *what* to evaluate and *how* to check it. Running the evaluation is a separate step that requires a [`VerificationConfig`](../evaluation-modes.md) specifying which models to use, how many replicates, and other runtime settings.
-
-**Results live outside the benchmark.** After verification runs, results are stored in the database, not inside the benchmark object. This separation means you can run the same benchmark multiple times with different models or configurations and compare results without modifying the benchmark itself. It also means deleting or re-creating a benchmark does not affect previously collected results.
-
-**Templates are executable code.** Answer templates are stored as Python source code strings. This makes benchmarks fully reproducible (the exact verification logic travels with the benchmark) but also means template code must be syntactically valid Python.
-
-**Questions without templates still exist.** A question can live in a benchmark without a template. This is useful during iterative authoring (common in GUI workflows, where questions are typically added first, then templates and rubrics attached later as the benchmark takes shape) or for rubric-only evaluation. See [Evaluation Modes](../evaluation-modes.md) for how the pipeline handles different combinations of templates and rubrics.
-
-## What the Benchmark Does Not Control
-
-The benchmark defines *what* to evaluate: which questions to ask, how to verify correctness, what quality traits to assess. It does not define *how* to evaluate. Runtime settings (answering model, judge model, replicates, timeouts, caching) are specified in [`VerificationConfig`](../evaluation-modes.md) or loaded from a preset. This separation means the same benchmark can be run against different models without modification. The benchmark is the constant; the configuration is the variable.
+| Field | Description |
+| :--- | :--- |
+| `name` | Human-readable identifier for the benchmark. |
+| `version` | Semantic version string (e.g., `"1.2.0"`) to track iterations. |
+| `description` | A detailed explanation of what this benchmark evaluates. |
+| `creator` | The person or team responsible for the benchmark. |
+| `date_created` | ISO timestamp of when the benchmark was initialized. |
+| `date_modified` | ISO timestamp of the last change to the benchmark definition. |
 
 ## Next Steps
 
-- [Questions](questions.md): the Question schema, deterministic IDs, `raw_answer`, metadata layers, the `finished` flag
-- [Answer Templates](../answer-templates.md): how to write templates, field types, verification patterns
-- [Rubrics](../rubrics/index.md): trait types, global vs question-specific, quality assessment
-- [Templates vs Rubrics](../template-vs-rubric.md): when to use which
-- [Checkpoints](../checkpoints.md): how benchmarks persist as JSON-LD files
-- [Evaluation Modes](../evaluation-modes.md): template-only, rubric-only, and combined evaluation
-- [Benchmark Operations](../../workflows/creating-benchmarks/benchmark-operations.md): full operational API (creating, populating, readiness, filtering)
-- [Few-Shot](../few-shot.md): configuring example injection for parsing accuracy
-- [Creating Benchmarks](../../workflows/creating-benchmarks/index.md): step-by-step authoring scenarios
+*   [Questions](questions.md): Understanding the minimal unit of evaluation.
+*   [Answer Templates](../answer-templates.md): Writing the verification logic.
+*   [Checkpoints](checkpoints.md): How benchmarks persist as portable JSON-LD files.
+*   [Evaluation Modes](../evaluation-modes.md): How to configure and execute a benchmark run.
+*   [Benchmark Operations](../../workflows/creating-benchmarks/benchmark-operations.md): The full API for managing benchmarks programmatically.
