@@ -71,7 +71,9 @@ def _convert_metric_trait_to_rating(trait: MetricRubricTrait, rubric_type: str) 
         description=trait.description,
         bestRating=1.0,  # Metrics are in 0-1 range
         worstRating=0.0,
-        additionalType="GlobalMetricRubricTrait" if rubric_type == "global" else "QuestionSpecificMetricRubricTrait",
+        additionalType="karenina:GlobalMetricRubricTrait"
+        if rubric_type == "global"
+        else "karenina:QuestionSpecificMetricRubricTrait",
         additionalProperty=additional_props,
     )
 
@@ -91,7 +93,9 @@ def _convert_regex_trait_to_rating(trait: RegexTrait, rubric_type: str) -> Schem
         description=trait.description,
         bestRating=1,
         worstRating=0,
-        additionalType="GlobalRegexTrait" if rubric_type == "global" else "QuestionSpecificRegexTrait",
+        additionalType="karenina:GlobalRegexTrait"
+        if rubric_type == "global"
+        else "karenina:QuestionSpecificRegexTrait",
         additionalProperty=additional_props,
     )
 
@@ -126,7 +130,9 @@ def _convert_callable_trait_to_rating(trait: CallableTrait, rubric_type: str) ->
         description=trait.description,
         bestRating=best_rating,
         worstRating=worst_rating,
-        additionalType="GlobalCallableTrait" if rubric_type == "global" else "QuestionSpecificCallableTrait",
+        additionalType="karenina:GlobalCallableTrait"
+        if rubric_type == "global"
+        else "karenina:QuestionSpecificCallableTrait",
         additionalProperty=additional_props,
     )
 
@@ -168,7 +174,9 @@ def _convert_llm_trait_to_rating(trait: LLMRubricTrait, rubric_type: str) -> Sch
             description=trait.description,
             bestRating=1,
             worstRating=0,
-            additionalType="GlobalRubricTrait" if rubric_type == "global" else "QuestionSpecificRubricTrait",
+            additionalType="karenina:GlobalRubricTrait"
+            if rubric_type == "global"
+            else "karenina:QuestionSpecificRubricTrait",
             additionalProperty=additional_props,
         )
     elif trait.kind == "literal":
@@ -183,7 +191,9 @@ def _convert_llm_trait_to_rating(trait: LLMRubricTrait, rubric_type: str) -> Sch
             description=trait.description,
             bestRating=float(trait.max_score) if trait.max_score is not None else 0.0,
             worstRating=float(trait.min_score) if trait.min_score is not None else 0.0,
-            additionalType="GlobalLLMRubricTrait" if rubric_type == "global" else "QuestionSpecificLLMRubricTrait",
+            additionalType="karenina:GlobalLLMRubricTrait"
+            if rubric_type == "global"
+            else "karenina:QuestionSpecificLLMRubricTrait",
             additionalProperty=additional_props,
         )
     else:  # score
@@ -195,7 +205,9 @@ def _convert_llm_trait_to_rating(trait: LLMRubricTrait, rubric_type: str) -> Sch
             description=trait.description,
             bestRating=float(max_score),
             worstRating=float(min_score),
-            additionalType="GlobalRubricTrait" if rubric_type == "global" else "QuestionSpecificRubricTrait",
+            additionalType="karenina:GlobalRubricTrait"
+            if rubric_type == "global"
+            else "karenina:QuestionSpecificRubricTrait",
             additionalProperty=additional_props,
         )
 
@@ -216,24 +228,24 @@ def convert_rating_to_rubric_trait(
         ValueError: If the rating has an unrecognized additionalType
     """
     # Check if it's a MetricRubricTrait
-    if rating.additionalType in ["GlobalMetricRubricTrait", "QuestionSpecificMetricRubricTrait"]:
+    if rating.additionalType in ["karenina:GlobalMetricRubricTrait", "karenina:QuestionSpecificMetricRubricTrait"]:
         return _convert_rating_to_metric_trait(rating)
 
     # Handle RegexTrait
-    if rating.additionalType in ["GlobalRegexTrait", "QuestionSpecificRegexTrait"]:
+    if rating.additionalType in ["karenina:GlobalRegexTrait", "karenina:QuestionSpecificRegexTrait"]:
         return _convert_rating_to_regex_trait(rating)
 
     # Handle CallableTrait
-    if rating.additionalType in ["GlobalCallableTrait", "QuestionSpecificCallableTrait"]:
+    if rating.additionalType in ["karenina:GlobalCallableTrait", "karenina:QuestionSpecificCallableTrait"]:
         return _convert_rating_to_callable_trait(rating)
 
     # Handle LLMRubricTrait (default for GlobalRubricTrait, QuestionSpecificRubricTrait,
     # GlobalLLMRubricTrait, QuestionSpecificLLMRubricTrait)
     known_llm_types = [
-        "GlobalRubricTrait",
-        "QuestionSpecificRubricTrait",
-        "GlobalLLMRubricTrait",
-        "QuestionSpecificLLMRubricTrait",
+        "karenina:GlobalRubricTrait",
+        "karenina:QuestionSpecificRubricTrait",
+        "karenina:GlobalLLMRubricTrait",
+        "karenina:QuestionSpecificLLMRubricTrait",
     ]
     if rating.additionalType in known_llm_types or rating.additionalType is None:
         return _convert_rating_to_llm_trait(rating)
@@ -466,7 +478,7 @@ def strip_deep_judgment_config_from_checkpoint(checkpoint: JsonLdCheckpoint) -> 
     if checkpoint.rating:
         for rating in checkpoint.rating:
             if (
-                rating.additionalType in ["GlobalRubricTrait", "QuestionSpecificRubricTrait"]
+                rating.additionalType in ["karenina:GlobalRubricTrait", "karenina:QuestionSpecificRubricTrait"]
                 and rating.additionalProperty
             ):
                 # Filter out deep judgment properties
@@ -482,7 +494,7 @@ def strip_deep_judgment_config_from_checkpoint(checkpoint: JsonLdCheckpoint) -> 
         if item.item.rating:
             for rating in item.item.rating:
                 if (
-                    rating.additionalType in ["QuestionSpecificRubricTrait", "GlobalRubricTrait"]
+                    rating.additionalType in ["karenina:QuestionSpecificRubricTrait", "karenina:GlobalRubricTrait"]
                     and rating.additionalProperty
                 ):
                     # Filter out deep judgment properties

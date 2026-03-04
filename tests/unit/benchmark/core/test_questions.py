@@ -260,7 +260,7 @@ class TestAddQuestion:
         # Check checkpoint was updated with keywords
         for item in manager.base._checkpoint.dataFeedElement:
             if manager.base._get_item_id(item) == q_id:
-                assert item.keywords == ["programming", "language"]
+                assert item.item.keywords == ["programming", "language"]
                 break
         else:
             pytest.fail("Question not found in checkpoint")
@@ -496,7 +496,7 @@ class TestAddQuestionFromObject:
         # Check that keywords were set in checkpoint
         for item in manager.base._checkpoint.dataFeedElement:
             if manager.base._get_item_id(item) == q_id:
-                assert item.keywords == ["tag1", "tag2"]
+                assert item.item.keywords == ["tag1", "tag2"]
                 break
 
 

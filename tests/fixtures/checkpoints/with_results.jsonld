@@ -1,24 +1,17 @@
 {
   "@context": {
     "@version": 1.1,
-    "@vocab": "http://schema.org/",
-    "DataFeed": "DataFeed",
-    "DataFeedItem": "DataFeedItem",
-    "Question": "Question",
-    "Answer": "Answer",
-    "SoftwareSourceCode": "SoftwareSourceCode",
-    "Rating": "Rating",
-    "PropertyValue": "PropertyValue",
-    "text": "text",
-    "acceptedAnswer": {"@id": "acceptedAnswer", "@type": "@id"},
-    "hasPart": {"@id": "hasPart", "@type": "@id"},
+    "@vocab": "https://schema.org/",
+    "karenina": "urn:karenina:vocab:",
     "dataFeedElement": {"@id": "dataFeedElement", "@container": "@set"},
     "item": {"@id": "item", "@type": "@id"},
-    "rating": {"@id": "rating", "@container": "@set"},
-    "additionalProperty": {"@id": "additionalProperty", "@container": "@set"}
+    "acceptedAnswer": {"@id": "acceptedAnswer", "@type": "@id"},
+    "rating": {"@id": "contentRating", "@container": "@set"},
+    "additionalProperty": {"@id": "additionalProperty", "@container": "@set"},
+    "keywords": {"@id": "keywords", "@container": "@set"}
   },
   "@type": "DataFeed",
-  "@id": "test-with-results",
+  "@id": "urn:karenina:test:with-results",
   "name": "with-results-test",
   "description": "A benchmark with existing verification results for testing",
   "version": "0.1.0",
@@ -28,32 +21,32 @@
   "rating": [
     {
       "@type": "Rating",
-      "@id": "global-rubric-1",
+      "@id": "urn:karenina:test:global-rubric-1",
       "name": "Conciseness",
       "description": "Response should be concise and to the point",
       "bestRating": 5,
       "worstRating": 1,
-      "additionalType": "GlobalCallableTrait"
+      "additionalType": "karenina:GlobalCallableTrait"
     }
   ],
   "dataFeedElement": [
     {
       "@type": "DataFeedItem",
-      "@id": "q002",
+      "@id": "urn:karenina:test:q002",
       "dateCreated": "2025-01-11T00:00:00Z",
       "dateModified": "2025-01-11T12:00:00Z",
       "item": {
         "@type": "Question",
-        "@id": "q002-question",
+        "@id": "urn:karenina:test:q002-question",
         "text": "What is the capital of France?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "@id": "q002-answer",
+          "@id": "urn:karenina:test:q002-answer",
           "text": "Paris"
         },
         "hasPart": {
           "@type": "SoftwareSourceCode",
-          "@id": "q002-template",
+          "@id": "urn:karenina:test:q002-template",
           "name": "Capital City Answer Template",
           "text": "from karenina.schemas.entities import BaseAnswer\nfrom pydantic import Field\n\nclass Answer(BaseAnswer):\n    capital: str = Field(description=\"The capital city name\")\n\n    def model_post_init(self, __context):\n        self.correct = {\"capital\": \"Paris\"}\n\n    def verify(self) -> bool:\n        return self.capital.strip().lower() == self.correct[\"capital\"].strip().lower()\n",
           "programmingLanguage": "Python"
@@ -61,12 +54,12 @@
         "rating": [
           {
             "@type": "Rating",
-            "@id": "rubric-1",
+            "@id": "urn:karenina:test:rubric-1",
             "name": "Citations",
             "description": "Response should include citation markers",
             "bestRating": 1,
             "worstRating": 0,
-            "additionalType": "QuestionSpecificRegexTrait"
+            "additionalType": "karenina:QuestionSpecificRegexTrait"
           }
         ],
         "additionalProperty": [
@@ -91,9 +84,9 @@
               }
             }
           }
-        ]
-      },
-      "keywords": ["geography", "capitals"]
+        ],
+        "keywords": ["geography", "capitals"]
+      }
     }
   ],
   "additionalProperty": [

@@ -1,20 +1,8 @@
 {
   "@context": {
     "@version": 1.1,
-    "@vocab": "http://schema.org/",
-    "DataFeed": "DataFeed",
-    "DataFeedItem": "DataFeedItem",
-    "Question": "Question",
-    "Answer": "Answer",
-    "SoftwareSourceCode": "SoftwareSourceCode",
-    "Rating": "Rating",
-    "PropertyValue": "PropertyValue",
-    "version": "version",
-    "name": "name",
-    "description": "description",
-    "creator": "creator",
-    "dateCreated": "dateCreated",
-    "dateModified": "dateModified",
+    "@vocab": "https://schema.org/",
+    "karenina": "urn:karenina:vocab:",
     "dataFeedElement": {
       "@id": "dataFeedElement",
       "@container": "@set"
@@ -23,28 +11,18 @@
       "@id": "item",
       "@type": "@id"
     },
-    "text": "text",
     "acceptedAnswer": {
       "@id": "acceptedAnswer",
       "@type": "@id"
     },
-    "programmingLanguage": "programmingLanguage",
-    "codeRepository": "codeRepository",
     "rating": {
-      "@id": "rating",
+      "@id": "contentRating",
       "@container": "@set"
     },
-    "bestRating": "bestRating",
-    "worstRating": "worstRating",
-    "ratingExplanation": "ratingExplanation",
-    "additionalType": "additionalType",
     "additionalProperty": {
       "@id": "additionalProperty",
       "@container": "@set"
     },
-    "value": "value",
-    "url": "url",
-    "identifier": "identifier",
     "keywords": {
       "@id": "keywords",
       "@container": "@set"
@@ -75,8 +53,7 @@
           "@type": "SoftwareSourceCode",
           "name": "What is the capital of France?... Answer Template",
           "text": "from pydantic import Field\nfrom karenina.schemas.entities import BaseAnswer\n\nclass Answer(BaseAnswer):\n    capital: str = Field(description=\"The capital city mentioned in the response\")\n\n    def ground_truth(self):\n        self.correct = {\"capital\": \"Paris\"}\n\n    def verify(self) -> bool:\n        return self.capital.strip().lower() == self.correct[\"capital\"].lower()\n",
-          "programmingLanguage": "Python",
-          "codeRepository": "karenina-benchmarks"
+          "programmingLanguage": "Python"
         },
         "rating": [
           {
@@ -85,7 +62,7 @@
             "description": "Is the response concise and to the point?",
             "bestRating": 1.0,
             "worstRating": 0.0,
-            "additionalType": "QuestionSpecificRubricTrait",
+            "additionalType": "karenina:QuestionSpecificRubricTrait",
             "additionalProperty": [
               {
                 "@type": "PropertyValue",
@@ -120,8 +97,7 @@
           "@type": "SoftwareSourceCode",
           "name": "What is 6 multiplied by 7?... Answer Template",
           "text": "from pydantic import Field\nfrom karenina.schemas.entities import BaseAnswer\n\nclass Answer(BaseAnswer):\n    result: int = Field(description=\"The numeric result of the calculation\")\n\n    def ground_truth(self):\n        self.correct = {\"result\": 42}\n\n    def verify(self) -> bool:\n        return self.result == self.correct[\"result\"]\n",
-          "programmingLanguage": "Python",
-          "codeRepository": "karenina-benchmarks"
+          "programmingLanguage": "Python"
         },
         "rating": [
           {
@@ -130,7 +106,7 @@
             "description": "Rate the quality of the explanation provided with the answer",
             "bestRating": 5.0,
             "worstRating": 1.0,
-            "additionalType": "QuestionSpecificRubricTrait",
+            "additionalType": "karenina:QuestionSpecificRubricTrait",
             "additionalProperty": [
               {
                 "@type": "PropertyValue",
@@ -165,8 +141,7 @@
           "@type": "SoftwareSourceCode",
           "name": "What element has the atomic nu... Answer Template",
           "text": "from pydantic import Field\nfrom karenina.schemas.entities import BaseAnswer\n\nclass Answer(BaseAnswer):\n    element: str = Field(description=\"The chemical element name\")\n    symbol: str = Field(description=\"The chemical symbol\")\n\n    def ground_truth(self):\n        self.correct = {\"element\": \"oxygen\", \"symbol\": \"O\"}\n\n    def verify(self) -> bool:\n        return (\n            self.element.strip().lower() == self.correct[\"element\"]\n            and self.symbol.strip().upper() == self.correct[\"symbol\"]\n        )\n",
-          "programmingLanguage": "Python",
-          "codeRepository": "karenina-benchmarks"
+          "programmingLanguage": "Python"
         },
         "rating": [
           {
@@ -175,7 +150,7 @@
             "description": "Response includes a chemical symbol in parentheses like (O)",
             "bestRating": 1.0,
             "worstRating": 0.0,
-            "additionalType": "QuestionSpecificRegexTrait",
+            "additionalType": "karenina:QuestionSpecificRegexTrait",
             "additionalProperty": [
               {
                 "@type": "PropertyValue",
@@ -225,8 +200,7 @@
           "@type": "SoftwareSourceCode",
           "name": "Is 17 a prime number?... Answer Template",
           "text": "from pydantic import Field\nfrom karenina.schemas.entities import BaseAnswer\n\nclass Answer(BaseAnswer):\n    is_prime: bool = Field(description=\"Whether 17 is identified as prime\")\n\n    def verify(self) -> bool:\n        return self.is_prime is True\n",
-          "programmingLanguage": "Python",
-          "codeRepository": "karenina-benchmarks"
+          "programmingLanguage": "Python"
         },
         "additionalProperty": [
           {
@@ -253,8 +227,7 @@
           "@type": "SoftwareSourceCode",
           "name": "Explain the concept of machine... Answer Template",
           "text": "class Answer(BaseAnswer):\n    \"\"\"Answer template for: Explain the concept of machine learning in simple ...\"\"\"\n\n    response: str = Field(description=\"The answer response\")\n\n    def verify(self) -> bool:\n        # Default template: returns False to indicate custom verification needed\n        return False\n",
-          "programmingLanguage": "Python",
-          "codeRepository": "karenina-benchmarks"
+          "programmingLanguage": "Python"
         },
         "additionalProperty": [
           {

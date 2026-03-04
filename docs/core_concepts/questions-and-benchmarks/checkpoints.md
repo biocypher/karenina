@@ -1,6 +1,6 @@
 # Checkpoints: The Memory of Evaluation
 
-While a **Benchmark** is the logical package for your evaluation, a **Checkpoint** is its physical reality. It is the "Record of Truth"—a single, portable file that captures the complete state of a benchmark so it can be shared, version-controlled, and reproduced exactly in any environment.
+While a **Benchmark** is the logical package for your evaluation, a **Checkpoint** is its physical reality. It is the "Record of Truth": a single, portable file that captures the complete state of a benchmark so it can be shared, version-controlled, and reproduced exactly in any environment.
 
 Think of a checkpoint as the **Memory** of your evaluation. It doesn't just store questions; it stores the precise logic, quality standards, and provenance that define *why* a result is a pass or a fail.
 
@@ -97,7 +97,8 @@ For power users and tool developers, this section breaks down the technical mapp
 | **Reference Answer** | `Answer` | The human-readable `raw_answer`. |
 | **Verification Logic** | `SoftwareSourceCode` | The Python code for the `answer_template`. |
 | **Rubric Trait** | `Rating` | Qualitative assessments (global or local). |
-| **Metadata** | `PropertyValue` | Arbitrary key-value pairs (keywords, notes, etc.). |
+| **Keywords** | `keywords` on `Question` | Topic labels for categorization (native schema.org property). |
+| **Metadata** | `PropertyValue` | Arbitrary key-value pairs (notes, author, sources, etc.). |
 
 ### Deterministic IDs
 Question IDs in a checkpoint are content-addressable fingerprints. They are generated using an MD5 hash of the question text:
@@ -105,14 +106,69 @@ Question IDs in a checkpoint are content-addressable fingerprints. They are gene
 
 This ensures that the same question text always produces the same identity across any checkpoint file.
 
+### The `@context` Block
+
+The `@context` tells JSON-LD processors how to interpret property names. Karenina's canonical context:
+
+```json
+{
+  "@context": {
+    "@version": 1.1,
+    "@vocab": "https://schema.org/",
+    "karenina": "urn:karenina:vocab:",
+    "dataFeedElement": { "@id": "dataFeedElement", "@container": "@set" },
+    "item": { "@id": "item", "@type": "@id" },
+    "acceptedAnswer": { "@id": "acceptedAnswer", "@type": "@id" },
+    "rating": { "@id": "contentRating", "@container": "@set" },
+    "additionalProperty": { "@id": "additionalProperty", "@container": "@set" },
+    "keywords": { "@id": "keywords", "@container": "@set" }
+  }
+}
+```
+
+Key points:
+
+*   **`@vocab`** maps all unqualified terms to `https://schema.org/`. Only entries that add semantic information (container types, ID references, or remappings) are included explicitly.
+*   **`karenina`** defines a namespace prefix for Karenina-specific vocabulary. All `additionalType` values on `Rating` objects use this prefix (e.g., `karenina:GlobalRubricTrait`, `karenina:QuestionSpecificRegexTrait`).
+*   **`rating` → `contentRating`** remaps the JSON key `rating` to schema.org's [`contentRating`](https://schema.org/contentRating) property, which is the valid property on `CreativeWork` for accepting `Rating` values.
+
+### The `karenina:` Vocabulary Namespace
+
+Rubric traits are stored as `Rating` objects with an `additionalType` that identifies the trait kind and scope. All values use the `karenina:` namespace prefix:
+
+| `additionalType` | Trait Type | Scope |
+| :--- | :--- | :--- |
+| `karenina:GlobalRubricTrait` | LLM (boolean/score) | Global |
+| `karenina:GlobalLLMRubricTrait` | LLM (literal) | Global |
+| `karenina:GlobalRegexTrait` | Regex | Global |
+| `karenina:GlobalCallableTrait` | Callable | Global |
+| `karenina:GlobalMetricRubricTrait` | Metric | Global |
+| `karenina:QuestionSpecificRubricTrait` | LLM (boolean/score) | Per-question |
+| `karenina:QuestionSpecificLLMRubricTrait` | LLM (literal) | Per-question |
+| `karenina:QuestionSpecificRegexTrait` | Regex | Per-question |
+| `karenina:QuestionSpecificCallableTrait` | Callable | Per-question |
+| `karenina:QuestionSpecificMetricRubricTrait` | Metric | Per-question |
+
+Old checkpoints without the `karenina:` prefix are normalized automatically on load.
+
 ### Example Structure (Annotated JSON-LD)
 
 ```json
 {
-  "@context": { ... },
+  "@context": { "..." : "see above" },
   "@type": "DataFeed",
   "name": "Documentation Test Benchmark",
   "version": "1.0.0",
+  "rating": [
+    {
+      "@type": "Rating",
+      "name": "safety",
+      "description": "Response is safe and appropriate",
+      "bestRating": 1.0,
+      "worstRating": 0.0,
+      "additionalType": "karenina:GlobalRubricTrait"
+    }
+  ],
   "dataFeedElement": [
     {
       "@type": "DataFeedItem",
@@ -120,6 +176,7 @@ This ensures that the same question text always produces the same identity acros
       "item": {
         "@type": "Question",
         "text": "What is the capital of France?",
+        "keywords": ["geography", "europe"],
         "acceptedAnswer": { "@type": "Answer", "text": "Paris" },
         "hasPart": {
           "@type": "SoftwareSourceCode",

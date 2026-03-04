@@ -118,6 +118,17 @@ class BenchmarkBase:
         if not save_deep_judgment_config:
             strip_deep_judgment_config_from_checkpoint(checkpoint_to_save)
 
+        # Migrate to canonical format before saving
+        from karenina.schemas.checkpoint import SCHEMA_ORG_CONTEXT
+
+        checkpoint_to_save.context = SCHEMA_ORG_CONTEXT
+
+        # Migrate keywords from DataFeedItem to Question (old → new location)
+        for item in checkpoint_to_save.dataFeedElement:
+            if item.keywords and not item.item.keywords:
+                item.item.keywords = item.keywords
+            item.keywords = None
+
         # Convert to dict for JSON serialization
         benchmark_dict = checkpoint_to_save.model_dump(by_alias=True, exclude_none=True)
 

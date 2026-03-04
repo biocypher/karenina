@@ -383,7 +383,7 @@ class QuestionManager:
             # Update the question with keywords
             for item in self.base._checkpoint.dataFeedElement:
                 if self.base._get_item_id(item) == question_id:
-                    item.keywords = list(question_obj.keywords)
+                    item.item.keywords = list(question_obj.keywords)
                     break
             # Rebuild cache to reflect changes
             self.base._rebuild_cache()

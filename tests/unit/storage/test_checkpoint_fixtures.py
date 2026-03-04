@@ -72,7 +72,7 @@ def test_with_results_checkpoint_has_rubrics(fixtures_dir: Path) -> None:
     assert len(global_rubric.callable_traits) == 1
 
     # Check question-specific rubric exists
-    q_rubric = benchmark._rubric_manager.get_question_rubric("q002")
+    q_rubric = benchmark._rubric_manager.get_question_rubric("urn:karenina:test:q002")
     assert q_rubric is not None
 
 
@@ -89,7 +89,7 @@ def test_with_results_checkpoint_metadata(fixtures_dir: Path) -> None:
 
     # Check custom metadata with verification results
     # The "custom_" prefix is stripped during extraction
-    q = benchmark.get_question("q002")
+    q = benchmark.get_question("urn:karenina:test:q002")
     custom_metadata = q.get("custom_metadata", {})
     assert "verification_results" in custom_metadata
     assert custom_metadata["verification_results"]["template_result"]["passed"] is True
@@ -115,15 +115,15 @@ def test_multi_question_checkpoint_all_questions(fixtures_dir: Path) -> None:
 
     question_ids = benchmark.get_question_ids()
     assert len(question_ids) == 5
-    assert "mq001" in question_ids
-    assert "mq005" in question_ids
+    assert "urn:karenina:test:mq001" in question_ids
+    assert "urn:karenina:test:mq005" in question_ids
 
     # Check specific questions
-    mq001 = benchmark.get_question("mq001")
+    mq001 = benchmark.get_question("urn:karenina:test:mq001")
     assert "boiling point" in mq001["question"].lower()
 
     # finished is tracked in the question registry, not the cache dict
-    assert benchmark._base._question_registry["mq005"].finished is False
+    assert benchmark._base._question_registry["urn:karenina:test:mq005"].finished is False
 
 
 @pytest.mark.unit

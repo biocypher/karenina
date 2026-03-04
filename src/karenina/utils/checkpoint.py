@@ -232,6 +232,7 @@ def add_question_to_benchmark(
         ),
         rating=ratings,
         additionalProperty=additional_props,
+        keywords=keywords,
     )
 
     # Create the data feed item with ID
@@ -240,7 +241,6 @@ def add_question_to_benchmark(
         "dateCreated": timestamp,
         "dateModified": timestamp,
         "item": question_obj,
-        "keywords": keywords,
     }
     item = SchemaOrgDataFeedItem.model_validate(item_dict)
 
@@ -325,10 +325,11 @@ def extract_questions_from_benchmark(
                 for rating in question.rating
                 if rating.additionalType
                 in [
-                    "QuestionSpecificRubricTrait",
-                    "QuestionSpecificRegexTrait",
-                    "QuestionSpecificCallableTrait",
-                    "QuestionSpecificMetricRubricTrait",
+                    "karenina:QuestionSpecificRubricTrait",
+                    "karenina:QuestionSpecificLLMRubricTrait",
+                    "karenina:QuestionSpecificRegexTrait",
+                    "karenina:QuestionSpecificCallableTrait",
+                    "karenina:QuestionSpecificMetricRubricTrait",
                 ]
             ]
 
@@ -361,7 +362,7 @@ def extract_questions_from_benchmark(
                 "sources": sources,
                 "custom_metadata": custom_metadata if custom_metadata else None,
                 "question_rubric": question_rubric,
-                "keywords": item.keywords,
+                "keywords": question.keywords or getattr(item, "keywords", None),
                 "few_shot_examples": few_shot_examples,
                 "answer_notes": answer_notes,
             }
@@ -393,10 +394,11 @@ def extract_global_rubric_from_benchmark(
     if benchmark.rating:
         for rating in benchmark.rating:
             if rating.additionalType in [
-                "GlobalRubricTrait",
-                "GlobalRegexTrait",
-                "GlobalCallableTrait",
-                "GlobalMetricRubricTrait",
+                "karenina:GlobalRubricTrait",
+                "karenina:GlobalLLMRubricTrait",
+                "karenina:GlobalRegexTrait",
+                "karenina:GlobalCallableTrait",
+                "karenina:GlobalMetricRubricTrait",
             ]:
                 traits.append(convert_rating_to_rubric_trait(rating))
 
@@ -467,14 +469,16 @@ def validate_jsonld_benchmark(benchmark: JsonLdCheckpoint) -> tuple[bool, str]:
                 if item.item.rating:
                     for rating in item.item.rating:
                         if rating.additionalType not in [
-                            "GlobalRubricTrait",
-                            "QuestionSpecificRubricTrait",
-                            "GlobalRegexTrait",
-                            "QuestionSpecificRegexTrait",
-                            "GlobalCallableTrait",
-                            "QuestionSpecificCallableTrait",
-                            "GlobalMetricRubricTrait",
-                            "QuestionSpecificMetricRubricTrait",
+                            "karenina:GlobalRubricTrait",
+                            "karenina:QuestionSpecificRubricTrait",
+                            "karenina:GlobalRegexTrait",
+                            "karenina:QuestionSpecificRegexTrait",
+                            "karenina:GlobalCallableTrait",
+                            "karenina:QuestionSpecificCallableTrait",
+                            "karenina:GlobalMetricRubricTrait",
+                            "karenina:QuestionSpecificMetricRubricTrait",
+                            "karenina:GlobalLLMRubricTrait",
+                            "karenina:QuestionSpecificLLMRubricTrait",
                         ]:
                             return (
                                 False,
@@ -485,10 +489,11 @@ def validate_jsonld_benchmark(benchmark: JsonLdCheckpoint) -> tuple[bool, str]:
         if benchmark.rating:
             for rating in benchmark.rating:
                 if rating.additionalType not in [
-                    "GlobalRubricTrait",
-                    "GlobalRegexTrait",
-                    "GlobalCallableTrait",
-                    "GlobalMetricRubricTrait",
+                    "karenina:GlobalRubricTrait",
+                    "karenina:GlobalRegexTrait",
+                    "karenina:GlobalCallableTrait",
+                    "karenina:GlobalMetricRubricTrait",
+                    "karenina:GlobalLLMRubricTrait",
                 ]:
                     return (
                         False,
