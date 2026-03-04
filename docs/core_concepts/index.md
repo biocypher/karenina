@@ -10,6 +10,7 @@ Concepts are ordered to follow the evaluation pipeline — from what you're eval
 |---------|-----------|------|
 | **Questions & Benchmarks** | The central objects: questions bundled with templates, rubrics, and metadata | [Questions & Benchmarks](questions-and-benchmarks/index.md) |
 | **Checkpoints** | JSON-LD files that store benchmarks (questions, templates, rubrics, results) | [Checkpoints](questions-and-benchmarks/checkpoints.md) |
+| **TaskEval** | Evaluate any free text output using karenina's templates and rubrics (open-loop mode) | [TaskEval](task-eval.md) |
 | **Answer Templates** | Pydantic models that define how a Judge LLM parses and verifies responses | [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb) |
 | **Rubrics** | Trait-based evaluation of response quality (LLM, regex, callable, metric) | [Rubrics](rubrics/index.md) |
 | **Templates vs Rubrics** | The two evaluation units: correctness (templates) vs quality (rubrics) | [Templates vs Rubrics](template-vs-rubric.md) |
@@ -27,44 +28,50 @@ Concepts are ordered to follow the evaluation pipeline — from what you're eval
 
 ## How Concepts Fit Together
 
-Karenina's evaluation workflow connects these concepts in a clear pipeline:
+Karenina supports two entry points into a shared evaluation engine:
 
 ```
-Questions & Benchmarks
- ├── Questions           ← what to evaluate
- ├── Answer Templates    ← how to judge correctness
- └── Rubric Traits       ← how to judge quality
-         │
-         ▼
- Checkpoint (.jsonld)    ← portable persistence
-         │
-         ▼
- Evaluation Mode         ← which evaluation units to run
-         │
-         ▼
- Adapter                 ← which LLM backend to use
-  ├── LangChain, Claude SDK, Claude Tool, ...
-  └── optionally with MCP tools
-         │
-         ▼
- Verification Pipeline   ← 13-stage execution engine
-  ├── Prompt Assembly     ← constructs all LLM prompts
-  └── Stage by stage      ← generate, parse, verify, evaluate
-         │
-         ▼
- Results & Scoring       ← pass/fail, scores, traits, metrics
+Benchmark Mode (closed-loop)              TaskEval Mode (open-loop)
+─────────────────────────                 ────────────────────────
+Questions & Benchmarks                    Logged Outputs
+ ├── Questions        ← what to ask        ├── log()        ← plain text
+ ├── Answer Templates ← correctness        ├── log_trace()  ← Message traces
+ └── Rubric Traits    ← quality            ├── add_template()
+         │                                 └── add_rubric()
+         ▼                                         │
+ Checkpoint (.jsonld)                               │
+         │                                         │
+         └──────────────┬──────────────────────────┘
+                        ▼
+                Evaluation Mode     ← which evaluation units to run
+                        │
+                        ▼
+                Adapter             ← which LLM backend to use
+                 ├── LangChain, Claude SDK, Claude Tool, ...
+                 └── optionally with MCP tools
+                        │
+                        ▼
+                Verification Pipeline   ← 13-stage execution engine
+                 ├── Prompt Assembly     ← constructs all LLM prompts
+                 └── Stage by stage      ← generate*, parse, verify, evaluate
+                        │                  (*skipped in TaskEval)
+                        ▼
+                Results & Scoring   ← pass/fail, scores, traits, metrics
 ```
 
-1. A **benchmark** bundles questions with their templates and rubric traits
-2. **Checkpoints** persist benchmarks as portable JSON-LD files
-3. **Answer templates** define the structured schema a Judge LLM fills in, then `verify()` checks correctness
-4. **Rubric traits** evaluate quality dimensions of the raw response (safety, clarity, format compliance, etc.)
-5. The **evaluation mode** determines whether templates, rubrics, or both are used
-6. An **adapter** connects to the LLM backend that generates and parses responses
-7. **MCP** servers can provide tools to the answering model for tool-augmented evaluation
-8. The **verification pipeline** orchestrates 13 stages from generation through scoring
-9. **Prompt assembly** constructs all LLM prompts using a tri-section pattern
-10. **Results** capture everything that happened — pass/fail, scores, excerpts, and metadata
+**Shared concepts** (both modes):
+
+1. **Answer templates** define the structured schema a Judge LLM fills in, then `verify()` checks correctness
+2. **Rubric traits** evaluate quality dimensions of the raw response (safety, clarity, format compliance, etc.)
+3. The **evaluation mode** determines whether templates, rubrics, or both are used
+4. An **adapter** connects to the LLM backend that parses responses
+5. The **verification pipeline** orchestrates 13 stages from generation through scoring
+6. **Prompt assembly** constructs all LLM prompts using a tri-section pattern
+7. **Results** capture everything that happened: pass/fail, scores, excerpts, and metadata
+
+**Benchmark-specific**: A **benchmark** bundles questions with templates and rubrics. **Checkpoints** persist benchmarks as portable JSON-LD files. **MCP** servers can provide tools to the answering model.
+
+**TaskEval-specific**: **TaskEval** records pre-existing outputs via `log()` and `log_trace()`, attaches evaluation criteria, and feeds them into the pipeline as `cached_answer_data` (skipping answer generation).
 
 ---
 
@@ -81,6 +88,12 @@ A **benchmark** is the central object in Karenina: a self-contained evaluation u
 A **checkpoint** is a JSON-LD file that stores everything needed to define and reproduce a benchmark: questions, answer templates, rubric traits, metadata, and optionally verification results. Checkpoints use [Schema.org](https://schema.org) types for interoperability.
 
 [Read more about checkpoints →](questions-and-benchmarks/checkpoints.md)
+
+### TaskEval
+
+**TaskEval** evaluates any free text output using karenina's two evaluation primitives: templates for correctness and rubrics for quality. Instead of defining questions and generating answers (the Benchmark workflow), you supply existing text or structured traces and attach evaluation criteria. This is useful whenever you have outputs that need structured evaluation, whether from agent workflows or external systems.
+
+[Read more about TaskEval →](task-eval.md)
 
 ### Answer Templates
 
