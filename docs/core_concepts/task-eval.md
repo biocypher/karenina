@@ -22,11 +22,11 @@ TaskEval evaluates any free text output using karenina's two evaluation primitiv
 # This cell is hidden in rendered documentation.
 import sys
 from unittest.mock import MagicMock
+from pydantic import Field
+from karenina.schemas.entities import BaseAnswer
+from karenina.schemas.entities.rubric import LLMRubricTrait, Rubric
 
 _storage_mock = MagicMock()
-_storage_mock.DBConfig = MagicMock()
-_storage_mock.load_benchmark = MagicMock()
-_storage_mock.save_benchmark = MagicMock()
 for _mod in [
     "karenina.storage",
     "karenina.storage.generated_models",
@@ -36,108 +36,27 @@ for _mod in [
 ]:
     sys.modules[_mod] = _storage_mock
 
-from karenina.benchmark.task_eval import TaskEval, TaskEvalResult, StepEval
-from karenina.ports.messages import Message, ToolUseContent
-from karenina.schemas.entities import BaseAnswer
-from karenina.schemas.entities.rubric import LLMRubricTrait, RegexTrait, Rubric
-from karenina.schemas.config.models import ModelConfig
-from karenina.schemas.verification.config import VerificationConfig
-from karenina.schemas.verification import VerificationResult
-from karenina.schemas.verification.result_components import (
-    VerificationResultMetadata,
-    VerificationResultTemplate,
-    VerificationResultRubric,
-)
-from karenina.schemas.verification.model_identity import ModelIdentity
-from pydantic import Field
-from datetime import datetime
+from karenina.benchmark.task_eval import TaskEval
+from karenina.ports.messages import Message
 
-_mock_identity = ModelIdentity(interface="mock", model_name="mock-model")
-
-def _make_vr(qid, verify_result=True, llm_scores=None, regex_scores=None, response=""):
-    vr = VerificationResult(
-        metadata=VerificationResultMetadata(
-            question_id=qid, template_id="t1", completed_without_errors=True,
-            question_text="(mock)", answering=_mock_identity, parsing=_mock_identity,
-            execution_time=0.05, timestamp=datetime.now().isoformat(), result_id="abcdef0123456789",
-        ),
-        template=VerificationResultTemplate(
-            verify_result=verify_result, template_verification_performed=True,
-            raw_llm_response=response or "(trace)",
-        ),
+class Answer(BaseAnswer):
+    identifies_bcl2: bool = Field(
+        description="True if BCL2 is identified as the primary target."
     )
-    if llm_scores or regex_scores:
-        vr.rubric = VerificationResultRubric(
-            rubric_evaluation_performed=True,
-            llm_trait_scores=llm_scores or {}, regex_trait_scores=regex_scores or {},
-        )
-    return vr
-
-def _mock_evaluate(self, config, step_id=None, merge_strategy=None):
-    def _build_step(questions, logs, rubrics):
-        step = StepEval()
-        merged_text = " ".join(l.text for l in logs if l.text)
-        llm_scores, regex_scores = {}, {}
-        if rubrics:
-            for r in rubrics:
-                for t in r.llm_traits:
-                    llm_scores[t.name] = True if t.kind == "boolean" else 4
-                for t in r.regex_traits:
-                    regex_scores[t.name] = True
-        for q in questions:
-            qid = q.get("id", q.get("question", "q")[:8]) if isinstance(q, dict) else getattr(q, "id", "q")
-            step.verification_results[qid] = [
-                _make_vr(qid, verify_result=True, llm_scores=llm_scores or None,
-                         regex_scores=regex_scores or None, response=merged_text[:200])
-            ]
-        if not questions and rubrics:
-            step.verification_results["synthetic"] = [
-                _make_vr("synthetic", verify_result=True, llm_scores=llm_scores or None,
-                         regex_scores=regex_scores or None, response=merged_text[:200])
-            ]
-        return step
-    result = TaskEvalResult(task_id=self.task_id, metadata=self.metadata)
-    if step_id:
-        logs = self.step_logs.get(step_id, [])
-        qs = self.step_questions.get(step_id, self.global_questions)
-        rs = self.step_rubrics.get(step_id, self.global_rubrics)
-        result.per_step[step_id] = _build_step(qs, logs, rs)
-    else:
-        if self.global_questions or self.global_rubrics:
-            result.global_eval = _build_step(self.global_questions, self.global_logs, self.global_rubrics)
-        for sid in self._get_available_step_ids():
-            logs = self.step_logs.get(sid, [])
-            qs = self.step_questions.get(sid, [])
-            rs = self.step_rubrics.get(sid, [])
-            if qs or rs:
-                result.per_step[sid] = _build_step(
-                    qs or self.global_questions, logs, rs or self.global_rubrics
-                )
-    return result
-
-_orig_add_template = TaskEval.add_template
-
+    def ground_truth(self):
+        self.correct = {"identifies_bcl2": True}
+    def verify(self) -> bool:
+        return self.identifies_bcl2 == self.correct["identifies_bcl2"]
 
 def _mock_add_template(self, template_class, step_id=None):
-    question_dict = {
-        "id": template_class.__name__.lower(),
-        "question": "",
-        "raw_answer": "",
-        "answer_template": "mock_template",
-    }
-    self.add_question(question_dict, step_id=step_id)
-
+    self.add_question(
+        {"id": template_class.__name__.lower(), "question": "", "raw_answer": "", "answer_template": "mock"},
+        step_id=step_id,
+    )
 
 TaskEval.add_template = _mock_add_template
 
-TaskEval.evaluate = _mock_evaluate
-```
-
-```python
-from karenina.benchmark.task_eval import TaskEval
-from karenina.schemas.entities import BaseAnswer
-from karenina.schemas.entities.rubric import LLMRubricTrait, Rubric
-from pydantic import Field
+task = TaskEval(task_id="my-eval")
 ```
 
 ## What Is TaskEval?
@@ -190,6 +109,15 @@ See the [workflow page](../workflows/task-eval/index.md) for the complete code w
 
 A TaskEval instance holds two parallel scopes: global and per-step. Each scope stores logs (the text to evaluate), templates (correctness criteria), and rubrics (quality criteria).
 
+```python
+from karenina.benchmark.task_eval import TaskEval
+
+task = TaskEval(
+    task_id="agent-drug-target",
+    metadata={"model": "claude-haiku-4-5"},
+)
+```
+
 ```
 ┌───────────────────────────────────────────────────────┐
 │                      TaskEval                         │
@@ -230,95 +158,38 @@ The global scope evaluates all logs together. Per-step scopes evaluate only the 
 
 ## Attaching Evaluation Criteria
 
-TaskEval accepts two types of evaluation criteria: [answer templates](answer-templates.md) for correctness and [rubrics](rubrics/index.md) for quality. The [evaluation mode](evaluation-modes.md) is auto-detected based on what you attach.
-
-### Templates (correctness)
-
-Pass a `BaseAnswer` subclass directly via `add_template()`. No question text is needed; the template's fields and `verify()` method define what the judge LLM extracts and how correctness is determined.
+Pass a `BaseAnswer` subclass via `add_template()` for correctness checks, and a `Rubric` via `add_rubric()` for quality traits. The [evaluation mode](evaluation-modes.md) is auto-detected from what you attach: `template_only`, `rubric_only`, or `template_and_rubric`. Both can be scoped globally or to a specific step via the `step_id` parameter.
 
 ```python
-from karenina.schemas.entities import BaseAnswer
-from pydantic import Field
-
-class Answer(BaseAnswer):
-    identifies_bcl2: bool = Field(
-        description="True if the response identifies BCL2 as the primary target of venetoclax."
-    )
-    def ground_truth(self):
-        self.correct = {"identifies_bcl2": True}
-    def verify(self) -> bool:
-        return self.identifies_bcl2 == self.correct["identifies_bcl2"]
-
-task = TaskEval(task_id="my-eval")
-task.log("BCL2 is the primary pharmacological target of venetoclax.")
+# Correctness: judge LLM parses the response into Answer, then verify() runs
 task.add_template(Answer)
-```
 
-### Rubrics (quality)
-
-Attach a `Rubric` via `add_rubric()`. Rubric evaluation uses the same infrastructure as Benchmark: LLM traits, regex traits, callable traits, and metric traits. All Benchmark evaluation options apply, including batch vs sequential strategy and full-trace vs last-message scope.
-
-```python
-task = TaskEval(task_id="my-eval")
-task.log("BCL2 is the primary pharmacological target of venetoclax.")
+# Quality: each trait is scored independently by the judge LLM
 task.add_rubric(Rubric(llm_traits=[
-    LLMRubricTrait(name="conciseness", kind="boolean", description="True if the response is concise and direct.")
+    LLMRubricTrait(name="conciseness", kind="boolean",
+                   description="True if the response is direct and avoids unnecessary elaboration.")
 ]))
 ```
 
-### Both together
-
-Attach a template and rubric to the same TaskEval for combined correctness and quality evaluation:
-
-```python
-task = TaskEval(task_id="my-eval")
-task.log("BCL2 is the primary pharmacological target of venetoclax.")
-task.add_template(Answer)
-task.add_rubric(Rubric(llm_traits=[
-    LLMRubricTrait(name="conciseness", kind="boolean", description="True if the response is concise and direct.")
-]))
-```
+See the [workflow](../workflows/task-eval/index.md#step-3-attach-evaluation-criteria) for complete examples including rubric trait types and step-scoped criteria.
 
 ## Logging
 
-TaskEval provides two logging methods for recording agent outputs.
-
-### Text Logging
-
-Use `log()` for plain text outputs. The text is treated as potential answer content for evaluation.
+Use `log()` for plain text and `log_trace()` for structured `Message` traces from `karenina.ports.messages`. Both accept `step_id` to group output under a named step and `target` to control where the log is stored (`"global"`, `"step"`, or `"both"`).
 
 ```python
-task = TaskEval(task_id="my-eval")
-task.log("The primary target of venetoclax is BCL2.")
-task.log("Additional context about the drug mechanism.", step_id="reasoning")
-```
+# Plain text
+task.log("BCL2 is the primary pharmacological target of venetoclax.")
+task.log("Found 3 relevant papers.", step_id="retrieval")
 
-### Trace Logging
-
-Use `log_trace()` for structured `Message` traces from `karenina.ports.messages`. This preserves the full conversation structure, including tool calls and results.
-
-```python
-from karenina.ports.messages import Message, ToolUseContent
-
-task = TaskEval(task_id="my-eval")
+# Structured trace
 task.log_trace([
     Message.user("What is the target of venetoclax?"),
-    Message.assistant("Let me look that up.", tool_calls=[
-        ToolUseContent(id="call_1", name="search_db", input={"query": "venetoclax target"})
-    ]),
-    Message.tool_result(tool_use_id="call_1", content="BCL2 (B-cell lymphoma 2)"),
     Message.assistant("The primary pharmacological target of venetoclax is BCL2."),
 ])
 ```
 
-### Scoping Parameters
-
-Both methods accept `step_id` and `target` parameters:
-
-- **`step_id`**: Groups logs under a named step for per-phase evaluation
-- **`target`**: Controls where logs are stored: `"global"`, `"step"`, or `"both"` (default). When `target="both"` and a `step_id` is provided, the log is stored in both the global and step-specific stores.
-
-See the [workflow page](../workflows/task-eval/index.md) for full examples.
+See the [workflow](../workflows/task-eval/index.md#step-2-log-outputs) for complete parameter reference, tool call traces, and scoping examples.
 
 ## Merge Strategies
 
@@ -328,61 +199,12 @@ When evaluation runs, TaskEval combines logged outputs into a single response fo
 
 **`traces_only`**: Uses only logs that contain structured `Message` traces. Text-only logs are ignored. Use this when your text logs are debugging output that should not be part of the evaluated response.
 
-```python
-# Use traces_only when text logs are just debug output
-task = TaskEval(task_id="my-eval", merge_strategy="traces_only")
-task.log("Debug: starting search")  # ignored during evaluation
-task.log_trace([Message.assistant("BCL2 is the target.")])  # used
-```
+The strategy is set at construction time via `merge_strategy` and can be overridden per `evaluate()` call.
 
 ## Step-Specific Evaluation
 
 TaskEval supports both global and step-level scoping for logs, questions, and rubrics. This enables per-phase analysis of multi-step agent workflows.
 
-```python
-task = TaskEval(task_id="agent-run")
+When you call `evaluate()` without a `step_id`, TaskEval runs global evaluation and then auto-evaluates all steps that have logs. Results are available in `result.global_eval` and `result.per_step`. Pass `step_id` to evaluate only one step's logs and criteria.
 
-# Log outputs for each phase
-task.log("Found 3 relevant papers.", step_id="retrieval")
-task.log("BCL2 is the primary target based on the evidence.", step_id="synthesis")
-
-# Attach step-specific rubrics
-task.add_rubric(
-    Rubric(llm_traits=[
-        LLMRubricTrait(name="retrieval_quality", kind="boolean", description="True if relevant sources were found.")
-    ]),
-    step_id="retrieval",
-)
-task.add_rubric(
-    Rubric(llm_traits=[
-        LLMRubricTrait(name="synthesis_quality", kind="boolean", description="True if the synthesis is well-supported.")
-    ]),
-    step_id="synthesis",
-)
-```
-
-When you call `evaluate()` without a `step_id`, TaskEval runs global evaluation and then auto-evaluates all steps that have logs. Results are available in `result.global_eval` and `result.per_step`.
-
-## How TaskEval Uses the Pipeline
-
-TaskEval injects logged outputs as `cached_answer_data` into the [verification pipeline](verification-pipeline.md). This skips answer generation (stage 2) but runs all other relevant stages: template parsing (stage 7), template verification (stage 8), rubric evaluation (stage 11), and finalization (stage 13).
-
-Use `VerificationConfig(parsing_only=True)` since no answering model is needed; only a parsing (judge) model is required.
-
-```python
-from karenina.schemas.config.models import ModelConfig
-from karenina.schemas.verification.config import VerificationConfig
-
-config = VerificationConfig(
-    parsing_models=[ModelConfig(id="haiku", model_provider="anthropic", model_name="claude-haiku-4-5")],
-    parsing_only=True,
-)
-result = task.evaluate(config)
-```
-
-The pipeline treats logged output exactly like a live LLM response. All template parsing, verification, and rubric evaluation stages operate identically to the standard Benchmark workflow.
-
-<div class="admonition note">
-<p class="admonition-title">Pipeline Reuse</p>
-<p>TaskEval reuses the same verification pipeline as Benchmark. The only difference is that stage 2 (answer generation) is skipped because the response is already provided via <code>cached_answer_data</code>.</p>
-</div>
+See the [workflow](../workflows/task-eval/index.md#step-4-configure-and-evaluate) for step-scoped evaluation examples.
