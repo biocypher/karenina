@@ -103,7 +103,7 @@ You want to evaluate this along two dimensions. Did the response identify BCL2 a
 
 You would record this text with `log()`, attach a template for the BCL2 check and a rubric for conciseness and citation quality, then call `evaluate()`. The pipeline handles the rest.
 
-See the [workflow page](../workflows/task-eval/index.md) for the complete code walkthrough.
+See the [workflow page](../notebooks/task-eval/index.ipynb) for the complete code walkthrough.
 
 ### Object structure
 
@@ -171,7 +171,7 @@ task.add_rubric(Rubric(llm_traits=[
 ]))
 ```
 
-See the [workflow](../workflows/task-eval/index.md#step-3-attach-evaluation-criteria) for complete examples including rubric trait types and step-scoped criteria.
+See the [workflow](../notebooks/task-eval/index.ipynb#step-3-attach-evaluation-criteria) for complete examples including rubric trait types and step-scoped criteria.
 
 ## Logging
 
@@ -189,7 +189,7 @@ task.log_trace([
 ])
 ```
 
-See the [workflow](../workflows/task-eval/index.md#step-2-log-outputs) for complete parameter reference, tool call traces, and scoping examples.
+See the [workflow](../notebooks/task-eval/index.ipynb#step-2-log-outputs) for complete parameter reference, tool call traces, and scoping examples.
 
 ## Merge Strategies
 
@@ -207,4 +207,4 @@ TaskEval supports both global and step-level scoping for logs, questions, and ru
 
 When you call `evaluate()` without a `step_id`, TaskEval runs global evaluation and then auto-evaluates all steps that have logs. Results are available in `result.global_eval` and `result.per_step`. Pass `step_id` to evaluate only one step's logs and criteria.
 
-See the [workflow](../workflows/task-eval/index.md#step-4-configure-and-evaluate) for step-scoped evaluation examples.
+See the [workflow](../notebooks/task-eval/index.ipynb#step-4-configure-and-evaluate) for step-scoped evaluation examples.

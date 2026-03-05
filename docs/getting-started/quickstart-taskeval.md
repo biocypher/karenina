@@ -201,7 +201,7 @@ task.log(
 print(f"Logged {len(task.global_logs)} event(s)")
 ```
 
-> **Learn more**: [Logging methods](../workflows/task-eval/index.md#step-2-log-outputs) · [Structured trace logging](../workflows/task-eval/index.md#trace-logging)
+> **Learn more**: [Logging methods](../notebooks/task-eval/index.ipynb#step-2-log-outputs) · [Structured trace logging](../notebooks/task-eval/index.ipynb#trace-logging)
 
 ---
 
@@ -343,9 +343,9 @@ You can also export the full results as JSON or Markdown for downstream analysis
 print(result.export_json()[:300])
 ```
 
-For programmatic access to individual fields (template verdicts, rubric scores, metadata), see the [results inspection reference](../workflows/task-eval/index.md#step-5-inspect-results).
+For programmatic access to individual fields (template verdicts, rubric scores, metadata), see the [results inspection reference](../notebooks/task-eval/index.ipynb#step-5-inspect-results).
 
-> **Learn more**: [Results inspection](../workflows/task-eval/index.md#step-5-inspect-results) · [DataFrame analysis](../07-analyzing-results/dataframe-analysis.md)
+> **Learn more**: [Results inspection](../notebooks/task-eval/index.ipynb#step-5-inspect-results) · [DataFrame analysis](../07-analyzing-results/dataframe-analysis.md)
 
 ---
 
@@ -397,7 +397,7 @@ for step_id in ["retrieval", "synthesis"]:
     print(f"Step '{step_id}': {stats['rubric_traits_passed']}/{stats['rubric_traits_total']} traits passed")
 ```
 
-> **Learn more**: [Multi-step evaluation](../workflows/task-eval/index.md#step-4-configure-and-evaluate) · [Step scoping](../core_concepts/task-eval.md#step-specific-evaluation)
+> **Learn more**: [Multi-step evaluation](../notebooks/task-eval/index.ipynb#step-4-configure-and-evaluate) · [Step scoping](../core_concepts/task-eval.md#step-specific-evaluation)
 
 ---
 

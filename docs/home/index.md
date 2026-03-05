@@ -11,7 +11,7 @@
 
 Both modes share the same evaluation engine: answer templates for correctness, rubrics for quality, and a Judge LLM that parses free-text responses into structured schemas.
 
-**New here?** Start with the **[Quick Start](../notebooks/quickstart.ipynb)** for Benchmark mode, or jump to the **[TaskEval workflow](../workflows/task-eval/index.md)** if you already have outputs to evaluate.
+**New here?** Start with the **[Quick Start: Benchmark](../notebooks/quickstart.ipynb)** to run your first evaluation end-to-end, or the **[Quick Start: TaskEval](../notebooks/quickstart-taskeval.ipynb)** if you already have outputs to evaluate.
 
 ## Documentation Structure
 
