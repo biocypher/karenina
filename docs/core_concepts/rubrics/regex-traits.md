@@ -13,7 +13,7 @@ jupyter:
 
 # Regex Traits
 
-Regex traits use **regular expression pattern matching** to perform deterministic, repeatable checks on LLM responses. They require no LLM call for evaluation -- making them fast, free, and perfectly reproducible.
+Regex traits use **regular expression pattern matching** to perform deterministic, repeatable checks on LLM responses. They require no LLM call for evaluation, making them fast, free, and perfectly reproducible.
 
 ```python tags=["hide-cell"]
 # Mock cell: ensures examples execute without live API keys.
@@ -22,7 +22,9 @@ Regex traits use **regular expression pattern matching** to perform deterministi
 
 ## Overview
 
-A `RegexTrait` searches the model's response text for a regex pattern. If the pattern is found, the result is `True`; if not, `False`. You can invert this logic with `invert_result` and control case sensitivity with `case_sensitive`.
+A `RegexTrait` searches the model's raw response trace for a regex pattern during [stage 11 (RubricEvaluation)](../verification-pipeline.md) of the [verification pipeline](../verification-pipeline.md). If the pattern is found, the result is `True`; if not, `False`. You can invert this logic with `invert_result` and control case sensitivity with `case_sensitive`.
+
+Unlike [LLM traits](llm-traits.md), which send the response to the parsing model for subjective judgment, regex traits are evaluated entirely locally using Python's `re` module. This means zero cost, zero latency beyond the regex match itself, and perfect reproducibility: the same response always produces the same result.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -36,9 +38,27 @@ A `RegexTrait` searches the model's response text for a regex pattern. If the pa
 **Key characteristics:**
 
 - Always returns a **boolean** (`True` / `False`)
-- No LLM call required -- evaluated locally with Python's `re` module
+- No LLM call required; evaluated locally with Python's `re` module
 - Pattern is validated at construction time (invalid regex raises `ValueError`)
 - Operates on the **raw response trace** (the model's full output text)
+
+## How Regex Evaluation Works
+
+During stage 11, regex traits are evaluated locally with no LLM call:
+
+```
+Raw Response Trace
+        ↓
+  re.search(pattern, text)
+        ↓
+  Match found? → True / False
+        ↓
+  Apply invert_result (if set)
+        ↓
+  Final boolean result
+```
+
+Python's `re.search()` scans the entire raw response text. The result is deterministic: no model variability, no cost per evaluation, and no dependency on external services. This makes regex traits ideal for format compliance checks, keyword presence, and any pattern that can be expressed as a regular expression.
 
 ## Basic Usage
 
@@ -143,13 +163,13 @@ print(prohibited_trait.evaluate("No personal info here."))          # False (no 
 <p class="admonition-title">invert_result vs higher_is_better</p>
 <p>These two fields serve different purposes:</p>
 <ul>
-<li><strong><code>invert_result</code></strong> changes the <strong>evaluation output</strong> -- it flips <code>True</code> to <code>False</code> and vice versa</li>
-<li><strong><code>higher_is_better</code></strong> changes the <strong>interpretation</strong> -- it tells analysis tools whether <code>True</code> is good or bad</li>
+<li><strong><code>invert_result</code></strong> changes the <strong>evaluation output</strong>: it flips <code>True</code> to <code>False</code> and vice versa</li>
+<li><strong><code>higher_is_better</code></strong> changes the <strong>interpretation</strong>: it tells analysis tools whether <code>True</code> is good or bad</li>
 </ul>
 <p>For "absence" checks, you can use either approach:</p>
 <ul>
-<li><code>invert_result=True, higher_is_better=True</code> -- output <code>True</code> when pattern is absent (good)</li>
-<li><code>invert_result=False, higher_is_better=False</code> -- output <code>True</code> when pattern is present (bad)</li>
+<li><code>invert_result=True, higher_is_better=True</code>: output <code>True</code> when pattern is absent (good)</li>
+<li><code>invert_result=False, higher_is_better=False</code>: output <code>True</code> when pattern is present (bad)</li>
 </ul>
 <p>Both encode the same intent. The <code>invert_result</code> approach is usually clearer because <code>True</code> means "passed the check."</p>
 </div>
@@ -200,8 +220,7 @@ except ValueError as e:
 
 ## Next Steps
 
-- [LLM rubric traits](llm-traits.md) -- subjective assessment via LLM judgment
-- [Literal traits](literal-traits.md) -- ordered categorical classification
-- [Callable traits](callable-traits.md) -- custom Python functions
-- [Metric traits](metric-traits.md) -- precision, recall, F1 computation
-- [Full Evaluation Benchmark](../../workflows/creating-benchmarks/full-evaluation-benchmark.md) -- adding traits to benchmarks
+- [LLM rubric traits](llm-traits.md): boolean, score, and literal kinds
+- [Callable traits](callable-traits.md): custom Python functions
+- [Metric traits](metric-traits.md): precision, recall, F1 computation
+- [Full Evaluation Benchmark](../../workflows/creating-benchmarks/full-evaluation-benchmark.md): adding traits to benchmarks

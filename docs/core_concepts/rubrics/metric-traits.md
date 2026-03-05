@@ -22,7 +22,9 @@ Metric traits measure **extraction completeness** using a confusion-matrix appro
 
 ## Overview
 
-A `MetricRubricTrait` evaluates how well a response covers a set of expected items. Unlike other trait types that return a single boolean or score, metric traits return **multiple metrics** (precision, recall, F1, and optionally specificity and accuracy) computed from a confusion matrix.
+A `MetricRubricTrait` evaluates how well a response covers a set of expected items during [stage 11 (RubricEvaluation)](../verification-pipeline.md) of the [verification pipeline](../verification-pipeline.md). Unlike other trait types that return a single boolean or score, metric traits return **multiple metrics** (precision, recall, F1, and optionally specificity and accuracy) computed from a confusion matrix.
+
+The evaluation is a two-phase process. First, the parsing model categorizes each instruction into confusion matrix buckets (TP, FN, FP, and optionally TN). Then, metrics are computed programmatically from the counts. This means the LLM handles the subjective task (does this instruction match the response?) while the math is deterministic and reproducible.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -37,17 +39,45 @@ A `MetricRubricTrait` evaluates how well a response covers a set of expected ite
 **Key characteristics:**
 
 - Returns **multiple metrics** (not a single value) as a dictionary
-- Requires an **LLM call** -- the parsing model categorizes instructions into confusion matrix buckets
+- Requires an **LLM call**: the parsing model categorizes instructions into confusion matrix buckets
 - Two evaluation modes: `tp_only` (precision/recall/F1) and `full_matrix` (adds specificity/accuracy)
 - Instructions are natural-language descriptions, not regex patterns
+
+## How Metric Evaluation Works in the Pipeline
+
+During stage 11, the [prompt assembler](../../advanced-pipeline/prompt-assembly.md) builds messages for the parsing model containing:
+
+1. The original question text
+2. The model's raw response trace
+3. Your TP instructions (what should be present) and, in full matrix mode, TN instructions (what should not be present)
+
+The parsing model reads each instruction and categorizes it into a confusion matrix bucket based on whether the described content appears in the response. Karenina then computes the requested metrics programmatically from the bucket counts.
+
+```
+Question + Response + TP/TN Instructions
+                    ↓
+             Parsing Model
+                    ↓
+    Categorizes each instruction:
+      TP: "Mentions BCL2 gene" → found in response
+      FN: "Mentions chromosome 18" → missing from response
+      FP: extra content not matching any instruction
+                    ↓
+    Programmatic metric computation:
+      Precision = TP / (TP + FP)
+      Recall    = TP / (TP + FN)
+      F1        = harmonic mean
+```
+
+This two-phase design means the LLM handles only the subjective judgment (is this instruction satisfied?), while the metric computation is deterministic. The same confusion matrix always produces the same metrics.
 
 ## TP-Only Mode
 
 In `tp_only` mode, you define instructions for what **should be present** in the response. The parsing model then categorizes each instruction:
 
-- **TP (True Positive)**: Instruction found in the answer
-- **FN (False Negative)**: Instruction missing from the answer
-- **FP (False Positive)**: Extra content not matching any instruction
+- **TP (True Positive)**: instruction found in the answer (the response covers this expected item)
+- **FN (False Negative)**: instruction missing from the answer (the response failed to include this expected item)
+- **FP (False Positive)**: extra content not matching any instruction (the response included unexpected items)
 
 Available metrics: `precision`, `recall`, `f1`
 
@@ -93,10 +123,10 @@ For example, if you define 3 TP instructions and the response contains 2 of them
 
 In `full_matrix` mode, you define both what **should** and what **should not** be present. This adds specificity and accuracy to the available metrics:
 
-- **TP (True Positive)**: TP instruction found in the answer
-- **FN (False Negative)**: TP instruction missing from the answer
-- **TN (True Negative)**: TN instruction correctly absent
-- **FP (False Positive)**: TN instruction incorrectly present
+- **TP (True Positive)**: TP instruction found in the answer (expected item present, correctly)
+- **FN (False Negative)**: TP instruction missing from the answer (expected item absent, incorrectly)
+- **TN (True Negative)**: TN instruction correctly absent (unwanted content stayed out)
+- **FP (False Positive)**: TN instruction incorrectly present (unwanted content appeared)
 
 Available metrics: `precision`, `recall`, `specificity`, `accuracy`, `f1`
 
@@ -170,13 +200,17 @@ print(f"Repeated extraction: {no_dedup_trait.repeated_extraction}")
 
 ## Confusion Matrix Output
 
-When a metric trait is evaluated during verification, the results include both the computed metrics and the raw confusion matrix lists. This lets you inspect exactly which instructions were found, missed, or incorrectly present.
+When a metric trait is evaluated during verification, the results include both the computed metrics and the raw confusion matrix lists. This lets you inspect exactly which instructions were found, missed, or incorrectly present, providing full transparency into the LLM's categorization decisions.
 
-The result structure in `VerificationResult.rubric_results` includes:
+The result structure in `VerificationResult.rubric` includes:
 
     metric_trait_confusion_lists: dict[str, dict[str, list[str]]]
 
-For example, a TP-only trait might produce:
+Each key is a trait name, and each value maps bucket names to the instructions that fell into that bucket. For a TP-only trait:
+
+- **`"tp"`**: instructions the parsing model found in the response (expected items that were present)
+- **`"fn"`**: instructions the parsing model did not find (expected items that were missing)
+- **`"fp"`**: extra content the parsing model identified that didn't match any instruction
 
 ```python
 # Example output structure (from VerificationResult)
@@ -189,7 +223,7 @@ confusion_lists = {
 }
 ```
 
-And a full-matrix trait would additionally include a `"tn"` key with instructions that were correctly absent.
+For a full-matrix trait, the output additionally includes a `"tn"` key listing TN instructions that were correctly absent from the response.
 
 ## Validation
 
@@ -266,8 +300,8 @@ print(f"Total traits: {len(rubric.metric_traits)}")
 
 ## Next Steps
 
-- [LLM Rubric Traits](llm-traits.md) -- Boolean and score evaluation via LLM judgment
-- [Regex Traits](regex-traits.md) -- Pattern matching on raw response text
-- [Callable Traits](callable-traits.md) -- Custom Python function evaluation
-- [Rubrics Overview](index.md) -- When to use each trait type
-- [Full Evaluation Benchmark](../../workflows/creating-benchmarks/full-evaluation-benchmark.md) -- Adding traits to benchmarks
+- [LLM Rubric Traits](llm-traits.md): Boolean and score evaluation via LLM judgment
+- [Regex Traits](regex-traits.md): Pattern matching on raw response text
+- [Callable Traits](callable-traits.md): Custom Python function evaluation
+- [Rubrics Overview](index.md): When to use each trait type
+- [Full Evaluation Benchmark](../../workflows/creating-benchmarks/full-evaluation-benchmark.md): Adding traits to benchmarks

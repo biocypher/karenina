@@ -13,18 +13,21 @@ jupyter:
 
 # Callable Traits
 
-Callable traits evaluate LLM responses using **custom Python functions**. They give you full programmatic control over evaluation logic -- from simple word count checks to complex domain-specific scoring -- without requiring an LLM call.
+Callable traits evaluate LLM responses using **custom Python functions**. They give you full programmatic control over evaluation logic, from simple word count checks to complex domain-specific scoring, without requiring an LLM call.
 
 ```python tags=["hide-cell"]
 # Mock cell: ensures examples execute without live API keys.
-# This cell is hidden in rendered documentation.
 import warnings
 warnings.filterwarnings("ignore", message="Deserializing callable")
 ```
 
 ## Overview
 
-A `CallableTrait` wraps a Python function that takes the response text as input and returns either a boolean (pass/fail) or an integer score. The function is serialized using [cloudpickle](https://github.com/cloudpipe/cloudpickle) so it can be stored in checkpoint files.
+A `CallableTrait` wraps a Python function that runs locally during [stage 11 (RubricEvaluation)](../verification-pipeline.md) of the [verification pipeline](../verification-pipeline.md). The function receives the model's raw response text as a single string argument and returns either a boolean (pass/fail) or an integer score. No LLM call is involved: evaluation is deterministic and reproducible, with zero cost and zero latency beyond the function execution itself.
+
+Like [regex traits](regex-traits.md), callable traits are evaluated entirely locally. The difference is that callable traits can implement arbitrary Python logic (word counts, structure analysis, domain-specific scoring) while regex traits are limited to pattern matching.
+
+The function is serialized using [cloudpickle](https://github.com/cloudpipe/cloudpickle) so it can be stored in checkpoint files. Callable traits cannot be created via the web API for security reasons, since deserializing callable code executes arbitrary Python.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -40,14 +43,32 @@ A `CallableTrait` wraps a Python function that takes the response text as input 
 **Key characteristics:**
 
 - Returns **boolean** or **integer** depending on `kind`
-- No LLM call required -- evaluated locally by running your function
+- No LLM call required; evaluated locally by running your function
 - Function must accept exactly **one `str` parameter** (the response text)
-- Function is serialized via cloudpickle -- lambda functions and module-level functions work best
+- Function is serialized via cloudpickle; lambda functions and module-level functions work best
 - Use the `from_callable()` class method to create traits (handles serialization automatically)
+
+## How Callable Evaluation Works
+
+During stage 11, callable traits are evaluated locally with no LLM call:
+
+```
+Raw Response Trace (str)
+        ↓
+  Your Python function(text)
+        ↓
+  Returns bool or int
+        ↓
+  Apply invert_result (if boolean and set)
+        ↓
+  Final result stored in VerificationResult.rubric
+```
+
+The function receives the complete raw response text as a single string argument. Evaluation is deterministic: the same response always produces the same result, with no model variability.
 
 ## Creating with `from_callable()`
 
-Always use `CallableTrait.from_callable()` rather than constructing directly -- it validates the function signature and handles serialization:
+Always use `CallableTrait.from_callable()` rather than constructing directly; it validates the function signature and handles serialization:
 
 ```python
 from karenina.schemas import CallableTrait
@@ -166,11 +187,11 @@ print(f"Trait evaluate:  {length_trait.evaluate('Hello world')}")  # Trait evalu
 
 The function is serialized with cloudpickle when you call `from_callable()`. Follow these guidelines:
 
-- **Use lambda functions** for simple logic -- they serialize cleanly
-- **Use module-level named functions** for complex logic -- they are more reliable than nested functions
-- **Avoid closures over large objects** -- the entire closure state is serialized
-- **Avoid unpicklable state** -- database connections, file handles, and thread locks cannot be serialized
-- **Keep dependencies minimal** -- the deserializing environment must have the same packages installed
+- **Use lambda functions** for simple logic; they serialize cleanly
+- **Use module-level named functions** for complex logic; they are more reliable than nested functions
+- **Avoid closures over large objects**: the entire closure state is serialized
+- **Avoid unpicklable state**: database connections, file handles, and thread locks cannot be serialized
+- **Keep dependencies minimal**: the deserializing environment must have the same packages installed
 
 ```python
 # Good: lambda
@@ -229,8 +250,7 @@ for trait in rubric.callable_traits:
 
 ## Next Steps
 
-- [LLM Traits](llm-traits.md) -- Boolean and score traits evaluated by an LLM judge
-- [Literal Traits](literal-traits.md) -- Ordered categorical classification via LLM
-- [Regex Traits](regex-traits.md) -- Deterministic pattern matching
-- [Metric Traits](metric-traits.md) -- Precision, recall, and F1 for extraction tasks
-- [Full Evaluation Benchmark](../../workflows/creating-benchmarks/full-evaluation-benchmark.md) -- Adding traits to benchmarks
+- [LLM Traits](llm-traits.md): Boolean, score, and literal traits evaluated by an LLM judge
+- [Regex Traits](regex-traits.md): Deterministic pattern matching
+- [Metric Traits](metric-traits.md): Precision, recall, and F1 for extraction tasks
+- [Full Evaluation Benchmark](../../workflows/creating-benchmarks/full-evaluation-benchmark.md): Adding traits to benchmarks
