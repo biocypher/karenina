@@ -1,19 +1,16 @@
-"""Helper functions for TaskEval to reduce code duplication."""
+"""Helper functions for TaskEval."""
 
 import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from karenina.ports.messages import Message
     from karenina.schemas.entities import Rubric
 
-from karenina.schemas.config import ModelConfig
-
-from ..verification.evaluators import RubricEvaluator
+from .models import LogEvent
 
 logger = logging.getLogger(__name__)
-
-# Import the shared function from utils.parsing
 
 
 def check_rubric_conflicts(
@@ -66,126 +63,59 @@ def check_rubric_conflicts(
     return standalone_traits, question_traits
 
 
-def evaluate_standalone_rubrics(
-    parsing_model: ModelConfig,
-    merged_rubric: "Rubric | None",
-    concatenated_logs: str,
-    context: str = "global",
-) -> dict[str, int | bool]:
-    """Evaluate standalone rubrics for a given context.
+def convert_string_logs_to_messages(texts: list[str]) -> "list[Message]":
+    """Wrap each text string as an assistant Message.
 
     Args:
-        parsing_model: Model to use for evaluation
-        merged_rubric: The merged rubric to evaluate
-        concatenated_logs: The concatenated logs to evaluate against
-        context: Context string for the evaluation question
+        texts: List of text strings to convert.
 
     Returns:
-        Dictionary of rubric scores
+        List of Message objects, one per input text.
     """
-    rubric_scores: dict[str, int | bool] = {}
+    from karenina.ports.messages import Message
 
-    if merged_rubric and (merged_rubric.llm_traits or merged_rubric.regex_traits or merged_rubric.callable_traits):
-        try:
-            evaluator = RubricEvaluator(parsing_model)
-            question = f"Evaluate the overall quality of the {context} outputs."
-            rubric_scores, _, _ = evaluator.evaluate_rubric(
-                question=question, answer=concatenated_logs, rubric=merged_rubric
-            )
-        except Exception as e:
-            logger.warning("%s rubric evaluation failed: %s", context.title(), e)
-            rubric_scores = {}
-
-    return rubric_scores
+    return [Message.assistant(text) for text in texts if text]
 
 
-def evaluate_question_with_rubric(
-    question_dict: dict[str, Any],
-    response_text: str,
-    parsing_model: ModelConfig,
-    extract_traits_func: Callable[[str], list[Any]],
-    evaluate_response_func: Callable[..., dict[str, Any]],
-) -> dict[str, Any]:
-    """Evaluate a single question with its question-specific rubric.
+def merge_logs_and_traces(logs: list[LogEvent], strategy: str = "concatenate") -> "tuple[str, list[Message] | None]":
+    """Merge LogEvent entries into a response string and optional Message list.
+
+    This is the core merge logic for TaskEval evaluation. It combines text logs
+    and structured trace_messages from LogEvents into the formats needed by the
+    verification pipeline.
 
     Args:
-        question_dict: Question dictionary
-        response_text: Response text to evaluate
-        parsing_model: Model to use for parsing
-        extract_traits_func: Function to extract rubric traits from templates
-        evaluate_response_func: Function to evaluate the response
+        logs: List of LogEvent objects to merge.
+        strategy: Merge strategy.
+            "concatenate" (default): text logs converted to Messages plus
+                trace_messages combined; string produced via messages_to_raw_trace().
+            "traces_only": only LogEvents with trace_messages are used;
+                text-only logs are ignored.
 
     Returns:
-        Evaluation result dictionary
+        Tuple of (response_text_string, optional_message_list).
+        The string is always non-None (may be empty).
+        The message list is None when no Message objects are available.
     """
-    # Check if this question has a rubric that needs to be evaluated
-    question_rubric = None
-    answer_template = question_dict.get("answer_template")
-    if answer_template:
-        question_rubric_traits = extract_traits_func(answer_template)
-        if question_rubric_traits:
-            from karenina.schemas.entities import Rubric
+    from karenina.benchmark.verification.utils.trace_formatting import messages_to_raw_trace
+    from karenina.ports.messages import Message
 
-            question_rubric = Rubric(llm_traits=question_rubric_traits)
+    all_messages: list[Message] = []
 
-    # Evaluate the response with question-specific rubric
-    return evaluate_response_func(
-        question_dict=question_dict, response_text=response_text, parsing_model=parsing_model, rubric=question_rubric
-    )
+    if strategy == "traces_only":
+        for log in logs:
+            if log.trace_messages:
+                all_messages.extend(log.trace_messages)
+    else:
+        # "concatenate": combine text logs (as Messages) + trace_messages
+        for log in logs:
+            if log.trace_messages:
+                all_messages.extend(log.trace_messages)
+            elif log.text and log.text.strip():
+                all_messages.append(Message.assistant(log.text))
 
+    if not all_messages:
+        return "", None
 
-def process_questions_with_concatenated_logs(
-    questions: list[Any],
-    concatenated_logs: str,
-    parsing_model: ModelConfig,
-    normalize_question_func: Callable[..., dict[str, Any]],
-    extract_traits_func: Callable[[str], list[Any]],
-    evaluate_response_func: Callable[..., dict[str, Any]],
-) -> dict[str, list[dict[str, Any]]]:
-    """Process all questions against concatenated logs.
-
-    Args:
-        questions: List of questions to process
-        concatenated_logs: Concatenated logs text
-        parsing_model: Model to use for parsing
-        normalize_question_func: Function to normalize question format
-        extract_traits_func: Function to extract rubric traits
-        evaluate_response_func: Function to evaluate responses
-
-    Returns:
-        Dictionary mapping question IDs to evaluation results
-    """
-    question_verification: dict[str, list[dict[str, Any]]] = {}
-
-    for question in questions:
-        question_dict = normalize_question_func(question)
-        question_id = question_dict.get("id", "unknown")
-
-        # Evaluate with question-specific rubric
-        result = evaluate_question_with_rubric(
-            question_dict=question_dict,
-            response_text=concatenated_logs,
-            parsing_model=parsing_model,
-            extract_traits_func=extract_traits_func,
-            evaluate_response_func=evaluate_response_func,
-        )
-
-        # Only include question-specific rubric scores (NOT global standalone rubrics)
-        # Global standalone rubrics belong at the step level, not individual questions
-        question_specific_scores = result.get("verify_rubric", {})
-
-        # Store single evaluation result for all concatenated logs in TaskEval format
-        question_results = [
-            {
-                "agent_output": concatenated_logs,
-                "correct": result.get("verify_result", False),
-                "details": result.get("verify_granular_result"),
-                "success": result.get("success", False),
-                "error": result.get("error"),
-                "rubric_scores": question_specific_scores,  # Only question-specific scores
-            }
-        ]
-
-        question_verification[question_id] = question_results
-
-    return question_verification
+    response_text = messages_to_raw_trace(all_messages)
+    return response_text, all_messages

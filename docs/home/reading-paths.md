@@ -6,6 +6,10 @@ Choose the path that matches your goal:
 
 > [Installation](../getting-started/installation.md) → [Quick Start](../notebooks/quickstart.ipynb) → [Core Concepts](../core_concepts/index.md) → [Creating Benchmarks](../workflows/creating-benchmarks/index.md) → [Running Verification](../workflows/running-verification/index.md) → [Analyzing Results](../workflows/analyzing-results/index.md)
 
+**TaskEval User**: Evaluate existing outputs (agent traces, external text):
+
+> [Installation](../getting-started/installation.md) → [TaskEval](../core_concepts/task-eval.md) → [TaskEval Workflow](../notebooks/task-eval/index.ipynb) → [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb) → [Rubrics](../core_concepts/rubrics/index.md) → [Analyzing Results](../workflows/analyzing-results/index.md)
+
 **Power User** — Dive into advanced features:
 
 > [Core Concepts](../core_concepts/index.md) → [Pipeline Internals](../advanced-pipeline/index.md) → [Adapter Architecture](../advanced-adapters/index.md)
@@ -25,7 +29,8 @@ Choose the path that matches your goal:
 | Section | What You'll Learn |
 |---------|-------------------|
 | [Installation](../getting-started/installation.md) | Requirements, install commands, optional dependencies, troubleshooting |
-| [Quick Start](../notebooks/quickstart.ipynb) | Hands-on walkthrough from zero to a working benchmark |
+| [Quick Start: Benchmark](../notebooks/quickstart.ipynb) | Hands-on walkthrough from zero to a working benchmark |
+| [Quick Start: TaskEval](../notebooks/quickstart-taskeval.ipynb) | Evaluate pre-recorded outputs (agent traces, external text) |
 | [Workspace Init](../getting-started/workspace-init.md) | Set up a project directory with `karenina init` |
 
 ## Core Concepts
@@ -49,6 +54,7 @@ Choose the path that matches your goal:
 | Section | What You'll Learn |
 |---------|-------------------|
 | [Configuration](../workflows/configuration/index.md) | Configuration hierarchy: CLI args, presets, environment variables, defaults |
+| [Evaluating with TaskEval](../notebooks/task-eval/index.ipynb) | Evaluate pre-recorded agent traces against templates and rubrics |
 | [Creating Benchmarks](../workflows/creating-benchmarks/index.md) | Author questions, write templates, define rubrics, and save checkpoints |
 | [Running Verification](../workflows/running-verification/index.md) | Configure and execute evaluation via Python API or CLI |
 | [Analyzing Results](../workflows/analyzing-results/index.md) | Inspect results, build DataFrames, export data, and iterate |

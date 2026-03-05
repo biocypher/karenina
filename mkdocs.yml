@@ -8,6 +8,8 @@ exclude_docs: |
   _archive/
   # Jupytext .md companion files — notebooks are the canonical source
   getting-started/quickstart.md
+  getting-started/quickstart-taskeval.md
+  workflows/task-eval/index.md
   core_concepts/answer-templates.md
   core_concepts/rubrics/llm-traits.md
   core_concepts/rubrics/literal-traits.md
@@ -147,7 +149,8 @@ nav:
   - Getting Started:
     - getting-started/index.md
     - Installation: getting-started/installation.md
-    - Quick Start: notebooks/quickstart.ipynb
+    - "Quick Start: Benchmark": notebooks/quickstart.ipynb
+    - "Quick Start: TaskEval": notebooks/quickstart-taskeval.ipynb
     - Workspace Init: getting-started/workspace-init.md
   - Core Concepts:
     - Overview: core_concepts/index.md
@@ -179,6 +182,7 @@ nav:
       - Manual Interface: core_concepts/manual-interface.md
   - Workflows:
     - workflows/index.md
+    - Evaluating with TaskEval: notebooks/task-eval/index.ipynb
     - Configuration:
       - Overview: workflows/configuration/index.md
       - Environment Variables: workflows/configuration/environment-variables.md

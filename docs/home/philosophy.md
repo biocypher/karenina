@@ -25,7 +25,7 @@ Karenina uses a **Judge LLM** to bridge the gap between free-form responses and 
 
 ### How It Works
 
-1. The **answering model** generates a natural, unconstrained response
+1. A **response** is produced by an answering model (Benchmark mode) or supplied externally (TaskEval mode)
 2. A **Judge LLM** parses that response into a structured format (a Pydantic schema)
 3. A programmatic **`verify()` method** checks the structured output against ground truth
 
@@ -107,13 +107,13 @@ The right strategy depends on what you're evaluating. A benchmark might use temp
 
 Karenina maintains clear boundaries between three roles:
 
-| Role | Responsibility |
-|------|----------------|
-| **Answering model** | Generate responses (the model being evaluated) |
-| **Judge model** | Parse responses into structured data |
-| **Template** | Define evaluation criteria and verify correctness |
+| Role | Responsibility | Present in |
+|------|----------------|------------|
+| **Answering model** | Generate responses (the model being evaluated) | Benchmark only |
+| **Judge model** | Parse responses into structured data | Both modes |
+| **Template** | Define evaluation criteria and verify correctness | Both modes |
 
-This separation means each component can be independently configured, tested, and improved. You can change the judge model without rewriting templates, or add new templates without reconfiguring the judge.
+In TaskEval mode, the answering model role is omitted: you supply the response directly, and the judge model and template handle the rest. This separation means each component can be independently configured, tested, and improved. You can change the judge model without rewriting templates, or add new templates without reconfiguring the judge.
 
 ---
 

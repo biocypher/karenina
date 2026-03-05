@@ -122,6 +122,17 @@ class GenerateAnswerStage(BaseVerificationStage):
             self.set_artifact_and_result(context, "answering_mcp_servers", answering_mcp_servers)
             context.set_artifact(ArtifactKeys.ANSWERING_MODEL_STR, answering_model_str)
 
+            # Extract trace_messages from cached data (e.g. from TaskEval)
+            trace_messages_data = context.cached_answer_data.get("trace_messages")
+            if trace_messages_data:
+                from karenina.ports.messages import Message as PortMessage
+
+                if isinstance(trace_messages_data[0], dict):
+                    trace_msgs = [PortMessage.from_dict(m) for m in trace_messages_data]
+                else:
+                    trace_msgs = trace_messages_data
+                context.set_artifact(ArtifactKeys.TRACE_MESSAGES, trace_msgs)
+
             # Handle usage tracking for cached answers
             usage_tracker = UsageTracker()
             if usage_metadata:

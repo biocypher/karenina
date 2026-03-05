@@ -9,13 +9,16 @@ This section is about *doing* — step-by-step guides that take you from a start
 | Workflow | What You'll Do |
 |----------|---------------|
 | [Configuration](configuration/index.md) | Set up the configuration hierarchy: CLI args, presets, environment variables, defaults |
+| [Evaluating with TaskEval](../notebooks/task-eval/index.ipynb) | Evaluate pre-recorded agent traces against templates and rubrics |
 | [Creating Benchmarks](creating-benchmarks/index.md) | Author questions, write templates, define rubrics, and save checkpoints |
 | [Running Verification](running-verification/index.md) | Configure and execute evaluation via Python API or CLI |
 | [Analyzing Results](analyzing-results/index.md) | Inspect results, build DataFrames, export data, and iterate |
 
 ---
 
-## End-to-End Flow
+## End-to-End Flows
+
+### Benchmark Flow (closed-loop)
 
 ```
 Configure            Create Benchmark          Run Verification          Analyze Results
@@ -25,6 +28,16 @@ Configure presets    Add questions             Configure models          Filter 
                      Write templates           Choose eval mode          Build DataFrames
                      Define rubrics            Execute pipeline          Export and iterate
                      Save (.jsonld)            Collect results
+```
+
+### TaskEval Flow (open-loop)
+
+```
+Configure            Log Outputs               Attach Criteria           Evaluate & Inspect
+──────────────  →    ─────────────────    →    ─────────────────    →    ─────────────────
+Set up env vars      log() plain text          add_template(Answer)      evaluate(config)
+Configure models     log_trace() messages      add_rubric(Rubric)        Inspect results
+                     Scope by step_id          Scope by step_id          Export JSON/Markdown
 ```
 
 Each workflow section has an overview page with a visual diagram, followed by dedicated pages for each step. Pages include executable notebook examples where applicable.
