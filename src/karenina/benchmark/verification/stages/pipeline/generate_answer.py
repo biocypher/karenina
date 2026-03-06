@@ -215,7 +215,7 @@ class GenerateAnswerStage(BaseVerificationStage):
                     max_turns=answering_model.agent_middleware.limits.model_call_limit
                     if answering_model.agent_middleware
                     else 25,
-                    timeout=120,
+                    timeout=answering_model.agent_timeout or 180,
                     question_hash=question_hash,
                 )
 

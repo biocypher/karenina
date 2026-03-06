@@ -20,6 +20,8 @@ import concurrent.futures
 import logging
 from typing import Any
 
+from contextlib import AsyncExitStack
+
 from karenina.exceptions import McpClientError, McpTimeoutError
 from karenina.utils.mcp.tools import apply_tool_description_overrides
 
@@ -28,6 +30,7 @@ logger = logging.getLogger(__name__)
 # Re-export for backward compatibility
 __all__ = [
     "acreate_mcp_client_and_tools",
+    "acreate_persistent_mcp_tools",
     "create_mcp_client_and_tools",
     "cleanup_mcp_client",
     "apply_tool_description_overrides",
@@ -115,6 +118,96 @@ async def acreate_mcp_client_and_tools(
         ) from e
     except Exception as e:
         raise McpClientError(f"Failed to create MCP client or fetch tools: {e}") from e
+
+
+async def acreate_persistent_mcp_tools(
+    mcp_urls_dict: dict[str, str],
+    exit_stack: AsyncExitStack,
+    tool_filter: list[str] | None = None,
+    tool_description_overrides: dict[str, str] | None = None,
+) -> list[Any]:
+    """Create LangChain tools bound to persistent MCP sessions.
+
+    Unlike acreate_mcp_client_and_tools which creates tools that open a new
+    MCP session per tool call, this function creates persistent sessions that
+    stay alive for the duration of the exit_stack. This eliminates the per-call
+    connection overhead (4 HTTP round-trips per tool call).
+
+    Args:
+        mcp_urls_dict: Dictionary mapping server names to MCP server URLs.
+        exit_stack: AsyncExitStack that manages session lifecycles. Sessions
+            remain open until the exit stack closes.
+        tool_filter: Optional list of tool names to include.
+        tool_description_overrides: Optional dict mapping tool names to custom
+            descriptions.
+
+    Returns:
+        List of LangChain-compatible Tool objects bound to persistent sessions.
+
+    Raises:
+        ImportError: If required packages are not installed.
+        McpTimeoutError: If connecting to MCP servers times out.
+        McpClientError: If connection or tool loading fails.
+    """
+    try:
+        from langchain_mcp_adapters.tools import load_mcp_tools
+    except ImportError as e:
+        raise ImportError(
+            "langchain-mcp-adapters package is required for MCP support. "
+            "Install it with: uv add langchain-mcp-adapters"
+        ) from e
+
+    from karenina.utils.mcp.client import connect_mcp_session
+
+    all_tools: list[Any] = []
+
+    try:
+        for server_name, url in mcp_urls_dict.items():
+            config: dict[str, Any] = {"type": "http", "url": url}
+
+            # Create persistent session (registered with exit_stack for cleanup)
+            session = await asyncio.wait_for(
+                connect_mcp_session(exit_stack, config),
+                timeout=30.0,
+            )
+
+            # Load tools bound to this persistent session
+            server_tools = await asyncio.wait_for(
+                load_mcp_tools(session, server_name=server_name),
+                timeout=30.0,
+            )
+            all_tools.extend(server_tools)
+
+            logger.debug(
+                f"Loaded {len(server_tools)} tools from '{server_name}' with persistent session"
+            )
+
+    except TimeoutError as e:
+        raise McpTimeoutError(
+            "MCP server connection timed out after 30 seconds. "
+            "Check server availability and network connection.",
+            timeout_seconds=30,
+        ) from e
+    except Exception as e:
+        raise McpClientError(
+            f"Failed to create persistent MCP session or fetch tools: {e}"
+        ) from e
+
+    # Filter tools if tool_filter is provided
+    if tool_filter is not None:
+        allowed_tools = set(tool_filter)
+        all_tools = [
+            tool for tool in all_tools
+            if getattr(tool, "name", None) in allowed_tools
+        ]
+
+    # Apply tool description overrides if provided
+    if tool_description_overrides:
+        all_tools = apply_tool_description_overrides(all_tools, tool_description_overrides)
+
+    logger.info(f"Created {len(all_tools)} persistent MCP tools across {len(mcp_urls_dict)} servers")
+
+    return all_tools
 
 
 def create_mcp_client_and_tools(
