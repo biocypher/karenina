@@ -594,6 +594,9 @@ class ModelConfig(BaseModel):
     # For openai_endpoint interface without this value, auto-detected from /v1/models API if available.
     # For openrouter interface without this value, defaults to 100000 * trigger_fraction.
     max_context_tokens: int | None = None
+    # Timeout in seconds for agent execution. Overrides the default timeout (180s)
+    # used in answer generation. Set higher for complex questions with many tool calls.
+    agent_timeout: int | None = None
 
     @model_validator(mode="after")
     def validate_manual_interface(self) -> "ModelConfig":
