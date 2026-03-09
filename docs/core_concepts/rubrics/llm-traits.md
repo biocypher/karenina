@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.18.1
+      jupytext_version: 1.19.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -24,7 +24,7 @@ LLM rubric traits use the **parsing model's judgment** to assess observable qual
 
 ## Overview
 
-An `LLMRubricTrait` sends the original question and the model's response to the parsing model along with a trait description and scoring instructions. The parsing model then returns a structured result.
+An `LLMRubricTrait` sends the original question and the model's response to the parsing model along with the trait definition for that kind. The parsing model then returns a structured result.
 
 Three kinds are available:
 
@@ -32,18 +32,18 @@ Three kinds are available:
 |------|---------|----------|
 | **boolean** | `True` / `False` | Binary pass/fail judgments (safety, presence of citations) |
 | **score** | `int` in a configurable range | Gradable qualities on a scale (clarity 1-5, conciseness 1-5) |
-| **literal** | `int` (class index) | Ordered categorical classification (quality tiers, tone levels) |
+| **literal** | `int` (class index) | Categorical classification with named classes (quality tiers, response types, tone levels) |
 
-## Why the `description` Field Matters
+## Why the `description` Field Matters for Boolean and Score Traits
 
-LLM traits are evaluated during [stage 11 (RubricEvaluation)](../verification-pipeline.md) of the [verification pipeline](../verification-pipeline.md). During evaluation, the [prompt assembler](../../advanced-pipeline/prompt-assembly.md) builds a message for the parsing model containing: a **system prompt** assigning the evaluator role, and a **user prompt** with the original question text, the model's full response (trace), and your trait descriptions.
+LLM traits are evaluated during [stage 11 (RubricEvaluation)](../verification-pipeline.md) of the [verification pipeline](../verification-pipeline.md). During evaluation, the [prompt assembler](../../advanced-pipeline/prompt-assembly.md) builds a message for the parsing model containing: a **system prompt** assigning the evaluator role, and a **user prompt** with the original question text, the model's full response (trace), and your trait definition.
 
 ```
-Question + Response Trace + Trait Descriptions
+Question + Response Trace + Trait Definition
                     ↓
          ┌──────────────────┐
          │   Parsing Model  │  ← System: evaluator role
-         │                  │  ← User: question + trace + descriptions
+         │                  │  ← User: question + trace + trait definition
          └────────┬─────────┘
                   ↓
     Structured result per trait (bool or int)
@@ -51,14 +51,16 @@ Question + Response Trace + Trait Descriptions
     VerificationResult.rubric
 ```
 
-**The `description` field is the single most important part of an LLM trait.** It is the *only* channel through which you tell the parsing model what to evaluate and how. The model receives no other guidance beyond the system prompt and your description. A vague description like "Is the response good?" gives the judge no actionable criteria; a detailed description with concrete examples, edge cases, and domain context produces reliable judgments.
+For **boolean** and **score** traits, the `description` field is the main channel through which you tell the parsing model what to evaluate and how. A vague description like "Is the response good?" gives the judge no actionable criteria; a detailed description with concrete examples, edge cases, and domain context produces more reliable judgments.
+
+For **literal** traits, the situation is slightly different: the parsing model receives both the top-level `description` and the per-class descriptions in `classes`. In practice, the class descriptions do most of the work, while the top-level description provides scope and context.
 
 Two factors control evaluation quality:
 
-1. **Description quality**: A detailed description with observable criteria, worked examples, and explicit boundary cases produces consistent judgments. A vague one-liner produces unreliable noise.
+1. **Trait-definition quality**: For boolean and score traits, this mostly means the `description`. For literal traits, it means the combination of the top-level description and the class descriptions. Detailed, observable criteria with explicit boundary cases produce more consistent judgments.
 2. **Model capability**: More capable parsing models interpret nuanced descriptions more faithfully. If you need fine-grained distinctions (e.g., distinguishing "names the target" from "explains the mechanism"), use a stronger model. Simpler traits (e.g., "is a citation present?") are reliable even with smaller models.
 
-If multiple LLM traits exist on the same rubric, they can be evaluated in a single parsing call (batch strategy) or individually (sequential strategy), depending on adapter and configuration. Results are stored in `VerificationResult.rubric` and become available for analysis and DataFrame export.
+If multiple LLM traits exist on the same rubric, they can be evaluated in a single parsing call (batch strategy) or individually (sequential strategy), depending on the evaluation strategy and runtime configuration. Results are stored in `VerificationResult.rubric` and become available for analysis and DataFrame export.
 
 ## Boolean Kind
 
@@ -235,9 +237,14 @@ print(clarity_trait.validate_score(True))  # False - booleans rejected for score
 
 ## Literal Kind
 
-Literal traits perform **ordered categorical classification**. Instead of a binary yes/no or a numeric scale, the parsing model classifies the response into one of several predefined categories. The result is the **class index**, an integer indicating which category was selected.
+Literal traits perform **categorical classification**. Instead of a binary yes/no or a numeric scale, the parsing model classifies the response into one of several predefined categories. The stored score is the **class index**, an integer indicating which category was selected.
 
-Classification into named categories is more reliable than numeric scoring because the judge has concrete labels to choose from rather than an abstract scale. When your quality dimension has distinct, observable levels, literal traits produce more consistent results than score traits.
+Classification into named categories is often more reliable than numeric scoring because the judge has concrete labels to choose from rather than an abstract scale. Literal traits work well in two common situations:
+
+- You have **distinct categories** and care mainly about the class label.
+- You have **ordered levels** and want the class index to carry ordinal meaning.
+
+When your quality dimension has distinct, observable levels, literal traits often produce more consistent results than score traits.
 
 A literal trait is created by setting `kind="literal"` on `LLMRubricTrait` and providing a `classes` dictionary:
 
@@ -253,6 +260,8 @@ Key characteristics:
 - **Auto-ranged**: `min_score` is set to 0, `max_score` to `len(classes) - 1` automatically
 - **Descriptive**: Each class has a name and a description to guide the parsing model
 - **2-20 classes**: Must have at least 2 and at most 20 categories
+
+Even when your classes are conceptually distinct rather than "better" or "worse," Karenina still stores them as indices because that is how literal traits are represented internally. In those cases, treat the class **label** as the primary result and the numeric index as a stable storage convention.
 
 ### Writing Good Class Descriptions
 
@@ -310,10 +319,10 @@ LLMRubricTrait(
 
 ### How Literal Evaluation Works
 
-The parsing model receives class names and their descriptions as part of the evaluation prompt. It classifies the response by selecting the best-matching class name, which is then converted to an integer index:
+The parsing model receives the trait description, class names, and class descriptions as part of the evaluation prompt. It classifies the response by selecting the best-matching class name, which is then converted to an integer index:
 
 ```
-Question + Response + Class Definitions
+Question + Response + Trait Description + Class Definitions
                 ↓
          Parsing Model
                 ↓
@@ -324,35 +333,39 @@ Question + Response + Class Definitions
 
 This two-step process (classify by name, then map to index) is more reliable than asking the model to pick a number directly.
 
-### Creating a Literal Trait
+### Distinct Categories Example
 
 ```python
-tone_trait = LLMRubricTrait(
-    name="Response Tone",
-    description="Classify the overall tone of this response.",
+response_type_trait = LLMRubricTrait(
+    name="Response Type",
+    description="Classify what kind of answer this is.",
     kind="literal",
     classes={
-        "overly_simple": "Uses childish language, oversimplifies to the point of inaccuracy",
-        "accessible": "Clear and approachable while remaining accurate",
-        "technical": "Uses domain-specific jargon, assumes background knowledge",
+        "factual": "Response mainly presents objective facts or data",
+        "opinion": "Response mainly expresses subjective views or preferences",
+        "speculative": "Response mainly discusses possibilities, uncertainty, or hypotheticals",
+        "refusal": "Response declines to answer or redirects the question",
     },
-    higher_is_better=False,  # Context-dependent — no inherent "better" direction
+    higher_is_better=False,
 )
 
-print(f"Kind: {tone_trait.kind}")
-print(f"Classes: {list(tone_trait.classes.keys())}")
-print(f"Score range: {tone_trait.min_score} to {tone_trait.max_score}")
+print(f"Kind: {response_type_trait.kind}")
+print(f"Classes: {list(response_type_trait.classes.keys())}")
+print(f"Score range: {response_type_trait.min_score} to {response_type_trait.max_score}")
 ```
 
 The parsing model receives the class names and descriptions, then selects the one that best fits the response. The result is the class index:
 
-- `0` → "overly_simple"
-- `1` → "accessible"
-- `2` → "technical"
+- `0` → "factual"
+- `1` → "opinion"
+- `2` → "speculative"
+- `3` → "refusal"
+
+This is a good example of **distinct categories** rather than a quality ladder. There is no intrinsic "best" class here. The order is still stored numerically, but that ordering is mainly a convention for storage and downstream tooling. For display and interpretation, the label is usually more important than the index.
 
 ### Quality Tiers
 
-A common pattern is defining quality levels where order is meaningful:
+A second common pattern is defining quality levels where order is meaningful:
 
 ```python
 quality_trait = LLMRubricTrait(
@@ -413,7 +426,7 @@ print(f"Is 4 valid? {quality_trait.validate_score(4)}")    # Out of range
 print(f"Is True valid? {quality_trait.validate_score(True)}")  # Boolean rejected
 ```
 
-Literal traits also support [deep judgment](#deep-judgment-optional). When enabled, the parsing model extracts verbatim excerpts and provides reasoning for its classification.
+Literal traits are evaluated through the standard classification path. The [deep judgment](#deep-judgment-optional) guidance below is intended for boolean and score traits.
 
 ## The `higher_is_better` Field
 
@@ -423,12 +436,19 @@ This required field tells analysis tools how to interpret results:
 |------|------------------------|--------------------------|
 | boolean | `True` = positive outcome | `True` = negative outcome |
 | score | Higher scores = better | Higher scores = worse |
+| literal | Higher class indices are interpreted as better | Higher class indices are interpreted as worse |
 
 Most traits use `higher_is_better=True`. Use `False` for traits where a positive detection is bad (e.g., hallucination detected, contains prohibited content).
 
+For literal traits, `higher_is_better` does **not** affect classification itself. It only affects how downstream tooling interprets the numeric indices. If your classes are distinct categories rather than a quality ladder, choose a stable convention and rely on the class labels for human interpretation.
+
 ## Deep Judgment (Optional)
 
-Deep judgment enhances LLM trait evaluation by extracting **evidence** from the response to support the judgment. Instead of just returning a score or boolean, the parsing model also identifies specific text passages (excerpts) that justify its assessment.
+Deep judgment enhances LLM trait evaluation by extracting **evidence** from the response to support the judgment. It is currently best suited to **boolean** and **score** traits, where the final output is naturally a boolean or numeric score.
+
+Although the deep-judgment fields exist on `LLMRubricTrait` generally, the current deep-judgment pipeline extracts booleans or numeric scores and does not consume literal class definitions during scoring. In practice, use standard evaluation for literal traits.
+
+Instead of just returning a score or boolean, the parsing model also identifies specific text passages (excerpts) that justify its assessment.
 
 During the pipeline, deep judgment adds stages as a post-processing layer after the initial judgment in stage 11. When enabled, [stage 12 (DeepJudgmentRubric)](../verification-pipeline.md) runs the following sequence:
 
@@ -503,15 +523,21 @@ Deep judgment evaluation (stage 12, post-processing):
 
 ### Controlling Deep Judgment at Runtime
 
-You can override per-trait deep judgment settings in `VerificationConfig`:
+You can control rubric deep judgment at runtime through `VerificationConfig`:
 
 ```python
+from karenina.schemas import VerificationConfig
 
-# deep_judgment_rubric_mode options:
-# - "disabled" (default): Deep judgment OFF for all rubric traits
-# - "enable_all": Deep judgment ON for all LLM traits
-# - "use_checkpoint": Use per-trait settings from the checkpoint
-# - "custom": Use a custom configuration dict
+config = VerificationConfig(
+    deep_judgment_rubric_mode="enable_all",
+    deep_judgment_rubric_global_excerpts=True,
+)
+
+# deep_judgment_rubric_mode:
+# - "disabled": deep judgment OFF for rubric traits
+# - "enable_all": deep judgment ON for all LLM traits
+# - "use_checkpoint": use trait-level settings saved in the checkpoint
+# - "custom": use per-trait settings from deep_judgment_rubric_config
 ```
 
 For detailed deep judgment configuration, see [deep judgment rubrics](../../advanced-pipeline/deep-judgment-rubrics.md).

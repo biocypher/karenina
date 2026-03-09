@@ -1,10 +1,12 @@
 ---
 jupyter:
   jupytext:
+    formats: docs/core_concepts/rubrics//md,docs/notebooks/core_concepts/rubrics//ipynb
     text_representation:
       extension: .md
       format_name: markdown
       format_version: '1.3'
+      jupytext_version: 1.19.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -13,7 +15,7 @@ jupyter:
 
 # Metric Traits
 
-Metric traits measure **extraction completeness** using a confusion-matrix approach. You define a set of instructions describing what the response should (or should not) contain, and the parsing model checks each one. The result is a set of precision, recall, and F1 metrics computed from the confusion matrix.
+Metric traits use the **parsing model's judgment** to turn a response into a confusion matrix, then compute deterministic metrics from that matrix. They are useful when you already know the set of items a good answer should cover and you want coverage-style signals such as precision, recall, F1, specificity, or accuracy. For an overview of all trait types and how rubrics fit into the evaluation framework, see the [rubrics index](index.md).
 
 ```python tags=["hide-cell"]
 # Mock cell: ensures examples execute without live API keys.
@@ -22,72 +24,105 @@ Metric traits measure **extraction completeness** using a confusion-matrix appro
 
 ## Overview
 
-A `MetricRubricTrait` evaluates how well a response covers a set of expected items during [stage 11 (RubricEvaluation)](../verification-pipeline.md) of the [verification pipeline](../verification-pipeline.md). Unlike other trait types that return a single boolean or score, metric traits return **multiple metrics** (precision, recall, F1, and optionally specificity and accuracy) computed from a confusion matrix.
+A `MetricRubricTrait` evaluates a response during [stage 11 (RubricEvaluation)](../verification-pipeline.md) of the [verification pipeline](../verification-pipeline.md). Unlike other trait types that return a single boolean or score, metric traits return a **dictionary of metrics** computed from confusion-matrix buckets.
 
-The evaluation is a two-phase process. First, the parsing model categorizes each instruction into confusion matrix buckets (TP, FN, FP, and optionally TN). Then, metrics are computed programmatically from the counts. This means the LLM handles the subjective task (does this instruction match the response?) while the math is deterministic and reproducible.
+The evaluation has two parts:
+
+1. The parsing model reads the question, the response trace, and your instructions, then assigns content to confusion-matrix buckets.
+2. Karenina computes the requested metrics programmatically from the bucket counts.
+
+This split matters: the judgment step is LLM-based, but the math is deterministic. If the same confusion lists are produced again, the metric values will be identical.
+
+Two modes are available:
+
+| Mode | You define | Karenina can compute | Best For |
+|------|------------|----------------------|----------|
+| `tp_only` | What **should** be present | `precision`, `recall`, `f1` | Extraction coverage and expected-item recall |
+| `full_matrix` | What **should** be present and what **should not** be present | `precision`, `recall`, `specificity`, `accuracy`, `f1` | Coverage plus factual exclusion checks |
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `name` | `str` | *(required)* | Human-readable identifier |
-| `description` | `str \| None` | `None` | What this trait evaluates |
-| `evaluation_mode` | `Literal["tp_only", "full_matrix"]` | `"tp_only"` | Evaluation approach |
-| `metrics` | `list[str]` | *(required)* | Metrics to compute (mode-dependent) |
-| `tp_instructions` | `list[str]` | *(required)* | What SHOULD be present in the answer |
-| `tn_instructions` | `list[str]` | `[]` | What should NOT be present (required in `full_matrix` mode) |
-| `repeated_extraction` | `bool` | `True` | Deduplicate repeated excerpts |
+| `description` | `str \| None` | `None` | Optional scope or evaluator context |
+| `evaluation_mode` | `Literal["tp_only", "full_matrix"]` | `"tp_only"` | Whether you define only TP instructions or both TP and TN |
+| `metrics` | `list[str]` | *(required)* | Metrics to compute for this trait |
+| `tp_instructions` | `list[str]` | *(required)* | Items that should be present in the answer |
+| `tn_instructions` | `list[str]` | `[]` | Items that should not be present; required in `full_matrix` mode |
+| `repeated_extraction` | `bool` | `True` | Deduplicate repeated excerpts using case-insensitive exact matching |
 
-**Key characteristics:**
+## Why the Instruction Lists Matter
 
-- Returns **multiple metrics** (not a single value) as a dictionary
-- Requires an **LLM call**: the parsing model categorizes instructions into confusion matrix buckets
-- Two evaluation modes: `tp_only` (precision/recall/F1) and `full_matrix` (adds specificity/accuracy)
-- Instructions are natural-language descriptions, not regex patterns
-
-## How Metric Evaluation Works in the Pipeline
-
-During stage 11, the [prompt assembler](../../advanced-pipeline/prompt-assembly.md) builds messages for the parsing model containing:
-
-1. The original question text
-2. The model's raw response trace
-3. Your TP instructions (what should be present) and, in full matrix mode, TN instructions (what should not be present)
-
-The parsing model reads each instruction and categorizes it into a confusion matrix bucket based on whether the described content appears in the response. Karenina then computes the requested metrics programmatically from the bucket counts.
+For metric traits, the instruction lists are the scoring surface. The parsing model does not infer your rubric from the metric names alone; it relies on `tp_instructions`, `tn_instructions`, and optionally `description` to understand what counts.
 
 ```
-Question + Response + TP/TN Instructions
+Question + Response Trace + TP/TN Instructions
                     ↓
-             Parsing Model
-                    ↓
-    Categorizes each instruction:
-      TP: "Mentions BCL2 gene" → found in response
-      FN: "Mentions chromosome 18" → missing from response
-      FP: extra content not matching any instruction
-                    ↓
-    Programmatic metric computation:
-      Precision = TP / (TP + FP)
-      Recall    = TP / (TP + FN)
-      F1        = harmonic mean
+         ┌──────────────────┐
+         │   Parsing Model  │
+         │                  │
+         └────────┬─────────┘
+                  ↓
+      Confusion lists per trait (TP/FN/FP/TN)
+                  ↓
+      Deterministic metric computation
+                  ↓
+    VerificationResult.rubric.metric_trait_scores
 ```
 
-This two-phase design means the LLM handles only the subjective judgment (is this instruction satisfied?), while the metric computation is deterministic. The same confusion matrix always produces the same metrics.
+**Good instruction lists are:**
+
+- **Atomic**: each instruction represents one countable thing.
+- **Observable**: the evaluator can decide from the response text alone.
+- **Non-overlapping**: one answer excerpt should not satisfy many nearly identical instructions.
+- **Consistent in granularity**: avoid mixing tiny facts with very broad requirements in the same trait.
+
+**Strong**:
+
+    "Mentions BCL2"
+    "States that BCL2 inhibits apoptosis"
+    "Mentions chromosome 18"
+
+**Weak**:
+
+    "Covers the biology well"
+    "Is scientifically thorough"
+    "Talks about the important details"
+
+The `description` field is still useful, but it is supporting context, not the main scoring mechanism. Use it to narrow scope or explain domain context; use the instruction lists to define what is actually counted.
 
 ## TP-Only Mode
 
-In `tp_only` mode, you define instructions for what **should be present** in the response. The parsing model then categorizes each instruction:
+In `tp_only` mode, you define what **should** appear in the answer. The parsing model then separates the response into three usable buckets:
 
-- **TP (True Positive)**: instruction found in the answer (the response covers this expected item)
-- **FN (False Negative)**: instruction missing from the answer (the response failed to include this expected item)
-- **FP (False Positive)**: extra content not matching any instruction (the response included unexpected items)
+- **TP (True Positive)**: answer content that correctly matches a TP instruction
+- **FN (False Negative)**: expected content from the TP instructions that is missing
+- **FP (False Positive)**: answer content that looks like a candidate match in the same domain but should not count
 
 Available metrics: `precision`, `recall`, `f1`
+
+This mode is best when you care about coverage of expected items and do not need an explicit list of forbidden claims.
+
+### A Subtle Point About FP in `tp_only` Mode
+
+`tp_only` mode does **not** mean "every extra sentence becomes a false positive." In practice, FP is for answer content that appears to be trying to satisfy the TP instruction set but is not actually correct for that set.
+
+For example, if your TP instructions describe expected lung diseases, then unrelated filler text is not especially meaningful as FP. But incorrect diseases in the same category are.
+
+### Writing Good TP Instructions
+
+A good TP list defines the target set clearly enough that recall and precision are interpretable.
+
+- Use one instruction per target fact, entity, reference, or concept.
+- Write instructions at the same level of specificity.
+- Prefer concrete language over umbrella phrases.
+- Avoid pairs like `"Mentions BCL2"` and `"Discusses BCL2"` in the same trait unless they really mean different things.
 
 ```python
 from karenina.schemas import MetricRubricTrait
 
-# Check if a response covers key references
 reference_trait = MetricRubricTrait(
     name="Reference Coverage",
-    description="Check if response covers key references",
+    description="Check whether the answer covers the canonical papers for this topic.",
     evaluation_mode="tp_only",
     metrics=["precision", "recall", "f1"],
     tp_instructions=[
@@ -97,178 +132,182 @@ reference_trait = MetricRubricTrait(
     ],
 )
 
-print(f"Trait: {reference_trait.name}")
-print(f"Mode: {reference_trait.evaluation_mode}")
-print(f"Metrics: {reference_trait.metrics}")
-print(f"TP instructions: {len(reference_trait.tp_instructions)}")
-print(f"Required buckets: {reference_trait.get_required_buckets()}")
+print(reference_trait.get_required_buckets())
 ```
 
-### Metric Formulas
-
-The metrics are computed from the confusion matrix counts:
+### Metric Formulas in `tp_only` Mode
 
 | Metric | Formula | Interpretation |
-|--------|---------|---------------|
-| Precision | TP / (TP + FP) | Of items found, how many were expected? |
-| Recall | TP / (TP + FN) | Of expected items, how many were found? |
-| F1 | 2 * P * R / (P + R) | Harmonic mean of precision and recall |
+|--------|---------|----------------|
+| Precision | TP / (TP + FP) | Of the candidate matches the evaluator accepted or rejected, how many were correct? |
+| Recall | TP / (TP + FN) | Of the expected items, how many were found? |
+| F1 | 2 * P * R / (P + R) | Balanced summary of precision and recall |
 
-For example, if you define 3 TP instructions and the response contains 2 of them plus 1 extra item:
+If you define 3 TP instructions and the answer contains 2 of them plus 1 incorrect candidate in the same domain:
 
-- TP = 2, FN = 1, FP = 1
-- Precision = 2/3 = 0.67, Recall = 2/3 = 0.67, F1 = 0.67
+- TP = 2
+- FN = 1
+- FP = 1
+- Precision = 2/3
+- Recall = 2/3
+- F1 = 2/3
 
 ## Full Matrix Mode
 
-In `full_matrix` mode, you define both what **should** and what **should not** be present. This adds specificity and accuracy to the available metrics:
+In `full_matrix` mode, you define both what **should** appear and what **should not** appear. This gives the evaluator an explicit negative set and unlocks `specificity` and `accuracy`.
 
-- **TP (True Positive)**: TP instruction found in the answer (expected item present, correctly)
-- **FN (False Negative)**: TP instruction missing from the answer (expected item absent, incorrectly)
-- **TN (True Negative)**: TN instruction correctly absent (unwanted content stayed out)
-- **FP (False Positive)**: TN instruction incorrectly present (unwanted content appeared)
+- **TP (True Positive)**: answer content that matches a TP instruction
+- **FN (False Negative)**: TP instruction content that is missing
+- **TN (True Negative)**: TN instructions that are correctly absent
+- **FP (False Positive)**: answer content that matches a TN instruction and therefore should not be present
 
 Available metrics: `precision`, `recall`, `specificity`, `accuracy`, `f1`
 
+Use this mode when absence matters, for example factual accuracy, prohibited claims, or mutually exclusive alternatives.
+
+### Writing Good TN Instructions
+
+TN instructions should capture concrete wrong claims, not vague badness.
+
+**Strong**:
+
+    "Claims BCL2 is pro-apoptotic"
+    "States BCL2 is on chromosome 1"
+
+**Weak**:
+
+    "Contains inaccurate biology"
+    "Says something wrong"
+
+Good TN instructions are explicit enough that the evaluator can recognize both the presence and the absence of the claim.
+
 ```python
-# Check content accuracy with both positive and negative assertions
 accuracy_trait = MetricRubricTrait(
     name="Content Accuracy",
-    description="Check content accuracy for BCL2 gene information",
+    description="Check for correct BCL2 claims and flag known false statements.",
     evaluation_mode="full_matrix",
     metrics=["precision", "recall", "specificity", "accuracy", "f1"],
     tp_instructions=[
         "Mentions BCL2 gene",
-        "Discusses apoptosis regulation",
-        "References cancer research",
+        "States that BCL2 inhibits apoptosis",
+        "References cancer relevance",
     ],
     tn_instructions=[
-        "Claims BCL2 is pro-apoptotic",       # Should NOT be present (it's anti-apoptotic)
-        "States BCL2 is on chromosome 1",      # Should NOT be present (it's on chromosome 18)
+        "Claims BCL2 is pro-apoptotic",
+        "States BCL2 is on chromosome 1",
     ],
 )
 
-print(f"Trait: {accuracy_trait.name}")
-print(f"Mode: {accuracy_trait.evaluation_mode}")
-print(f"Metrics: {accuracy_trait.metrics}")
-print(f"TP instructions: {len(accuracy_trait.tp_instructions)}")
-print(f"TN instructions: {len(accuracy_trait.tn_instructions)}")
-print(f"Required buckets: {accuracy_trait.get_required_buckets()}")
+print(accuracy_trait.get_required_buckets())
 ```
 
-### Additional Metrics
+### Additional Metrics in `full_matrix` Mode
 
 | Metric | Formula | Interpretation |
-|--------|---------|---------------|
-| Specificity | TN / (TN + FP) | Of things that should be absent, how many actually are? |
-| Accuracy | (TP + TN) / (TP + TN + FP + FN) | Overall correctness across all instructions |
+|--------|---------|----------------|
+| Specificity | TN / (TN + FP) | Of the things that should be absent, how many actually stayed absent? |
+| Accuracy | (TP + TN) / (TP + TN + FP + FN) | Overall correctness across both expected and forbidden items |
 
 ## Choosing a Mode
 
 | Scenario | Mode | Why |
 |----------|------|-----|
-| Check if key facts are mentioned | `tp_only` | Only care about presence of expected items |
-| Verify entity extraction coverage | `tp_only` | Measure what was found vs. missed |
-| Check both correct and incorrect claims | `full_matrix` | Need to verify absence of wrong information |
-| Evaluate factual accuracy | `full_matrix` | Important to catch both missing truths and present falsehoods |
+| Check whether key entities or references were mentioned | `tp_only` | You care about expected coverage, not explicit forbidden claims |
+| Measure extraction quality against a known answer set | `tp_only` | Precision, recall, and F1 usually give the right signal |
+| Detect both correct facts and known false claims | `full_matrix` | You need an explicit negative set |
+| Evaluate factual accuracy where incorrect assertions matter | `full_matrix` | Specificity and accuracy depend on TN instructions |
 
-## The `repeated_extraction` Option
+If you are unsure, start with `tp_only`. Move to `full_matrix` when you can clearly enumerate the important wrong claims you want to guard against.
 
-By default, `repeated_extraction=True` deduplicates repeated excerpts using case-insensitive exact matching. This prevents the same instruction from being counted multiple times in the confusion matrix.
+## The `repeated_extraction` Field
+
+By default, `repeated_extraction=True` deduplicates each confusion-list bucket using case-insensitive exact matching. This prevents repeated excerpts from inflating metric counts.
 
 ```python
-# Default: deduplicate repeated extractions
 dedup_trait = MetricRubricTrait(
     name="Entity Check",
     evaluation_mode="tp_only",
     metrics=["precision", "recall"],
     tp_instructions=["Mentions mitochondria", "Mentions apoptosis"],
-    repeated_extraction=True,  # default
+    repeated_extraction=True,
 )
-print(f"Repeated extraction: {dedup_trait.repeated_extraction}")
 
-# Disable deduplication if the same instruction can legitimately appear multiple times
 no_dedup_trait = MetricRubricTrait(
-    name="Keyword Frequency",
+    name="Entity Frequency",
     evaluation_mode="tp_only",
     metrics=["precision", "recall"],
     tp_instructions=["Mentions mitochondria", "Mentions apoptosis"],
     repeated_extraction=False,
 )
-print(f"Repeated extraction: {no_dedup_trait.repeated_extraction}")
 ```
 
-## Confusion Matrix Output
+Leave deduplication enabled unless repeated occurrences are genuinely part of what you want to count.
 
-When a metric trait is evaluated during verification, the results include both the computed metrics and the raw confusion matrix lists. This lets you inspect exactly which instructions were found, missed, or incorrectly present, providing full transparency into the LLM's categorization decisions.
+## Results and Confusion Lists
 
-The result structure in `VerificationResult.rubric` includes:
+Metric trait outputs are stored separately from other rubric trait types:
 
-    metric_trait_confusion_lists: dict[str, dict[str, list[str]]]
+- `VerificationResult.rubric.metric_trait_scores`: metric values per trait
+- `VerificationResult.rubric.metric_trait_confusion_lists`: raw TP/TN/FP/FN lists per trait
 
-Each key is a trait name, and each value maps bucket names to the instructions that fell into that bucket. For a TP-only trait:
-
-- **`"tp"`**: instructions the parsing model found in the response (expected items that were present)
-- **`"fn"`**: instructions the parsing model did not find (expected items that were missing)
-- **`"fp"`**: extra content the parsing model identified that didn't match any instruction
+For a TP-only trait, the confusion lists typically look like this:
 
 ```python
-# Example output structure (from VerificationResult)
 confusion_lists = {
     "Reference Coverage": {
-        "tp": ["Mentions Tsujimoto et al., Science, 1985", "Mentions Adams & Cory, Science, 1998"],
-        "fn": ["Mentions Hockenbery et al., Nature, 1990"],
-        "fp": ["Discusses BCL2 protein structure"],
+        "tp": [
+            "Tsujimoto et al., Science, 1985",
+            "Adams & Cory, Science, 1998",
+        ],
+        "fn": ["Hockenbery et al., Nature, 1990"],
+        "fp": ["BAX, Cell, 1993"],
+        "tn": [],
     }
 }
 ```
 
-For a full-matrix trait, the output additionally includes a `"tn"` key listing TN instructions that were correctly absent from the response.
+The exact strings may be answer excerpts (`tp`, `fp`) or instruction-derived items (`fn`, `tn`), depending on the bucket. This makes it possible to inspect not just the metric values, but *why* those values were produced.
 
 ## Validation
 
-Metric traits enforce strict validation at construction time:
+Metric traits enforce validation when you construct them:
 
-- `tp_instructions` must be non-empty (always required)
+- `tp_instructions` must always be non-empty
 - `tn_instructions` must be non-empty in `full_matrix` mode
-- Metrics must be valid for the chosen mode
-- You cannot request `specificity` or `accuracy` in `tp_only` mode (they require TN)
+- Metric names must be valid
+- `specificity` and `accuracy` are not allowed in `tp_only` mode
 
 ```python
 from pydantic import ValidationError
 
-# Trying to use specificity in tp_only mode raises an error
 try:
     MetricRubricTrait(
         name="invalid",
         evaluation_mode="tp_only",
-        metrics=["specificity"],  # Not available in tp_only mode
-        tp_instructions=["test"],
+        metrics=["specificity"],
+        tp_instructions=["Mentions BCL2"],
     )
 except ValidationError as e:
-    print(f"Validation error: specificity requires full_matrix mode")
+    print("specificity requires full_matrix mode")
 
-# Missing tn_instructions in full_matrix mode
 try:
     MetricRubricTrait(
         name="invalid",
         evaluation_mode="full_matrix",
-        metrics=["precision"],
-        tp_instructions=["test"],
-        # tn_instructions missing!
+        metrics=["accuracy"],
+        tp_instructions=["Mentions BCL2"],
     )
 except ValidationError as e:
-    print(f"Validation error: full_matrix requires tn_instructions")
+    print("full_matrix mode requires tn_instructions")
 ```
 
 ## Using Metric Traits in a Rubric
 
-Metric traits are added to a `Rubric` via the `metric_traits` field:
+Metric traits are added to a `Rubric` through the `metric_traits` field:
 
 ```python
 from karenina.schemas import Rubric
 
-# Create traits for different aspects
 coverage_trait = MetricRubricTrait(
     name="Topic Coverage",
     evaluation_mode="tp_only",
@@ -289,19 +328,18 @@ accuracy_trait = MetricRubricTrait(
         "Mentions breast cancer indication",
     ],
     tn_instructions=[
-        "Claims the drug is a small molecule",  # It's a monoclonal antibody
+        "Claims the drug is a small molecule",
     ],
 )
 
 rubric = Rubric(metric_traits=[coverage_trait, accuracy_trait])
-print(f"Metric traits: {rubric.get_metric_trait_names()}")
-print(f"Total traits: {len(rubric.metric_traits)}")
+print(rubric.get_metric_trait_names())
 ```
 
 ## Next Steps
 
-- [LLM Rubric Traits](llm-traits.md): Boolean and score evaluation via LLM judgment
-- [Regex Traits](regex-traits.md): Pattern matching on raw response text
-- [Callable Traits](callable-traits.md): Custom Python function evaluation
+- [LLM Rubric Traits](llm-traits.md): Open-ended boolean, score, and literal judgments
+- [Regex Traits](regex-traits.md): Deterministic pattern matching on response text
+- [Callable Traits](callable-traits.md): Custom local Python evaluation logic
 - [Rubrics Overview](index.md): When to use each trait type
-- [Full Evaluation Benchmark](../../workflows/creating-benchmarks/full-evaluation-benchmark.md): Adding traits to benchmarks
+- [Full Evaluation Benchmark](../../workflows/creating-benchmarks/full-evaluation-benchmark.md): Adding traits to end-to-end benchmarks
