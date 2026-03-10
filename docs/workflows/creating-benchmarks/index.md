@@ -12,6 +12,7 @@ Each tutorial is a complete, self-contained scenario. Choose the one that matche
 | [Factual QA Benchmark](../../notebooks/creating-benchmarks/factual-qa-benchmark.ipynb) | Template-only | Hand-written templates: boolean check, string normalization, numeric tolerance, regex in `verify()`, partial credit |
 | [Full Evaluation Benchmark](../../notebooks/creating-benchmarks/full-evaluation-benchmark.ipynb) | Template + rubric | Custom templates combined with all 6 rubric trait types (LLM boolean, LLM score, LLM literal, regex, callable, metric) |
 | [Quality Assessment](../../notebooks/creating-benchmarks/quality-assessment-benchmark.ipynb) | Rubric-only | No templates: quality evaluation for tasks with no single correct answer (safety, empathy, clarity) |
+| [Choosing Rubric Traits](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb) | Template + rubric | Need-driven trait selection: 7 evaluation needs mapped to the right trait type, decision flowchart |
 | [Scaled Authoring](../../notebooks/creating-benchmarks/scaled-authoring.ipynb) | Power user | Bulk ingestion, `generate_all_templates()`, `AnswerBuilder`, ADeLe classification, few-shot examples |
 
 ---
