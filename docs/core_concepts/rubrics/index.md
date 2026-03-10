@@ -59,9 +59,13 @@ Rubrics are not designed for checking factual correctness. If you need to verify
 
 For example:
 
-- "Did the model return the correct gene symbol?" is a **template** question (requires ground truth).
-- "Did the model respond concisely?" is a **rubric** question (observable from the response alone).
-- "Did the model include citations?" is a **rubric** question (you can see whether citations are present without knowing the correct answer).
+- Given the question "Which is the putative target of venetoclax?", a **template** checks whether the response identifies `BCL2` as the target (ground truth verification).
+- For the same question, the user might attach an **[LLM trait](../../notebooks/core_concepts/rubrics/llm-traits.ipynb)** called "Generated answer mentions afety profile of the drug" to assess whether the response addresses safety. The trait is not a question sent to the model; it is an evaluation criterion applied to the response after the fact (subjective judgment on the raw text; no single correct answer).
+- A **[regex trait](../../notebooks/core_concepts/rubrics/regex-traits.ipynb)** such as "has bracket citations" checks whether the response contains at least one `[N]`-style citation (deterministic pattern match).
+- A **[callable trait](../../notebooks/core_concepts/rubrics/callable-traits.ipynb)** such as "under 150 words" runs custom Python logic against the response text.
+- A **[metric trait](../../notebooks/core_concepts/rubrics/metric-traits.ipynb)** such as "expected drug interactions mentioned" measures how many of a predefined list of items appear in the response (partial-coverage scoring).
+
+[MetricRubricTrait](../../notebooks/core_concepts/rubrics/metric-traits.ipynb) occupies a middle ground: it references a list of expected items, but unlike a template it produces a score on a continuum (precision, recall, F1) rather than a binary pass/fail. Mentioning 3 out of 5 expected drug interactions yields an F1 of 0.6, not a failure.
 
 No ground truth does not mean no specification. Rubric traits work better when the description makes your standard explicit. If you care about conciseness, say what that means in context: for example, "answers the question directly, avoids repetition, and stays under 120 words unless the prompt asks for detail." Clear trait descriptions improve the quality and consistency of evaluation even when no single correct answer exists.
 
@@ -78,6 +82,8 @@ Karenina supports four types of evaluation traits, each suited for different eva
 | [**RegexTrait**](../../notebooks/core_concepts/rubrics/regex-traits.ipynb) | `bool` | No | Deterministic pattern matching (keywords, format compliance) |
 | [**CallableTrait**](../../notebooks/core_concepts/rubrics/callable-traits.ipynb) | `bool` or `int` | No | Custom Python logic (word counts, structure checks) |
 | [**MetricRubricTrait**](../../notebooks/core_concepts/rubrics/metric-traits.ipynb) | metrics dict | Yes | Extraction completeness (precision, recall, F1) |
+
+Each trait type's sub-page includes a pipeline diagram showing how evaluation works during [stage 11 (RubricEvaluation)](../verification-pipeline.md), what data reaches the parsing model (for LLM-dependent traits), and how results flow to `VerificationResult.rubric`.
 
 ### 4.1. LLMRubricTrait
 
@@ -123,29 +129,7 @@ Two evaluation modes:
 
 See [metric traits](../../notebooks/core_concepts/rubrics/metric-traits.ipynb) for details and examples.
 
-## 5. A Trait's Journey Through the Pipeline
-
-Rubric traits are evaluated during [stage 11 (RubricEvaluation)](../verification-pipeline.md) of the verification pipeline, after template parsing and verification are complete. The flow depends on the trait type:
-
-1. **LLM traits and metric traits** send the original question, the model's raw response trace, and the trait description (or instructions) to the parsing model. The parsing model returns a structured judgment.
-2. **Regex and callable traits** are evaluated locally with no LLM call. The trait receives the raw response text and applies its logic (pattern matching or function execution) deterministically.
-3. If [deep judgment](../../advanced-pipeline/deep-judgment-rubrics.md) is enabled for any LLM trait, **stage 12 (DeepJudgmentRubric)** runs as a post-processing layer, extracting verbatim excerpts and validating them against the response.
-4. All trait results are assembled into the `VerificationResult.rubric` sub-object during stage 13 (FinalizeResult).
-
-## 6. What the Parsing Model Sees
-
-Not all trait types involve an LLM call. This distinction affects cost, latency, and reproducibility:
-
-| Trait Type | LLM Call? | What the Parsing Model Receives |
-|------------|-----------|--------------------------------|
-| **LLM traits** (boolean, score, literal) | Yes | System prompt (evaluator role) + user prompt with question text, response trace, and trait descriptions |
-| **Metric traits** | Yes | System prompt + user prompt with question text, response trace, and TP/TN instructions to categorize |
-| **Regex traits** | No | Nothing; evaluated locally via `re.search()` on the raw response |
-| **Callable traits** | No | Nothing; evaluated locally by calling the Python function with the response text |
-
-For LLM-dependent traits, the [prompt assembly](../../advanced-pipeline/prompt-assembly.md) system builds the messages using the same tri-section pattern (task instructions + adapter instructions + user instructions) used throughout the pipeline.
-
-## 7. Choosing the Right Trait Type
+## 5. Choosing the Right Trait Type
 
 | Need | Trait Type |
 |------|-----------|
@@ -157,7 +141,7 @@ For LLM-dependent traits, the [prompt assembly](../../advanced-pipeline/prompt-a
 | Deterministic, reproducible check | RegexTrait or CallableTrait |
 | Evidence-based evaluation with excerpts | LLMRubricTrait with deep judgment |
 
-## 8. The `higher_is_better` Field
+## 6. The `higher_is_better` Field
 
 All trait types (except MetricRubricTrait, where metrics are inherently "higher is better") include a `higher_is_better` field that controls directionality:
 
@@ -168,7 +152,7 @@ All trait types (except MetricRubricTrait, where metrics are inherently "higher 
 
 This field is used by analysis tools and DataFrame builders to correctly interpret and aggregate rubric results. It is also crucial for the GEPA optimization procedure, which relies on `higher_is_better` to determine the direction of improvement when optimizing prompts against rubric scores. GEPA documentation is forthcoming.
 
-## 9. Next Steps
+## 7. Next Steps
 
 - [LLM traits](../../notebooks/core_concepts/rubrics/llm-traits.ipynb): boolean and score kinds with deep judgment
 - [Literal traits](../../notebooks/core_concepts/rubrics/llm-traits.ipynb): ordered categorical classification (part of LLM traits)
