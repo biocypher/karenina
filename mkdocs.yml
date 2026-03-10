@@ -19,6 +19,7 @@ exclude_docs: |
   workflows/creating-benchmarks/factual-qa-benchmark.md
   workflows/creating-benchmarks/full-evaluation-benchmark.md
   workflows/creating-benchmarks/quality-assessment-benchmark.md
+  workflows/creating-benchmarks/choosing-rubric-traits.md
   workflows/creating-benchmarks/scaled-authoring.md
   workflows/running-verification/basic-verification.md
   workflows/running-verification/full-evaluation.md
@@ -192,6 +193,7 @@ nav:
       - Factual QA Benchmark: notebooks/creating-benchmarks/factual-qa-benchmark.ipynb
       - Full Evaluation Benchmark: notebooks/creating-benchmarks/full-evaluation-benchmark.ipynb
       - Quality Assessment: notebooks/creating-benchmarks/quality-assessment-benchmark.ipynb
+      - Choosing Rubric Traits: notebooks/creating-benchmarks/choosing-rubric-traits.ipynb
       - Scaled Authoring: notebooks/creating-benchmarks/scaled-authoring.ipynb
     - Running Verification:
       - Overview: workflows/running-verification/index.md
