@@ -6,7 +6,7 @@
 
 **Karenina** is a Python framework for structured LLM evaluation. It supports two modes:
 
-- **Benchmark** (closed-loop): Define questions, generate responses, and evaluate them through a 13-stage verification pipeline.
+- **Benchmark** (closed-loop): Define questions, generate responses, and evaluate them through a staged verification pipeline.
 - **TaskEval** (open-loop): Supply pre-recorded outputs from any source and evaluate them using the same pipeline.
 
 Both modes share the same evaluation engine: answer templates for correctness, rubrics for quality, and a Judge LLM that parses free-text responses into structured schemas.
