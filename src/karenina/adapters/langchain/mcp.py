@@ -18,11 +18,11 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import logging
+from contextlib import AsyncExitStack
 from typing import Any
 
-from contextlib import AsyncExitStack
-
 from karenina.exceptions import McpClientError, McpTimeoutError
+from karenina.ports.agent import MCPHttpServerConfig
 from karenina.utils.mcp.tools import apply_tool_description_overrides
 
 logger = logging.getLogger(__name__)
@@ -153,8 +153,7 @@ async def acreate_persistent_mcp_tools(
         from langchain_mcp_adapters.tools import load_mcp_tools
     except ImportError as e:
         raise ImportError(
-            "langchain-mcp-adapters package is required for MCP support. "
-            "Install it with: uv add langchain-mcp-adapters"
+            "langchain-mcp-adapters package is required for MCP support. Install it with: uv add langchain-mcp-adapters"
         ) from e
 
     from karenina.utils.mcp.client import connect_mcp_session
@@ -163,7 +162,7 @@ async def acreate_persistent_mcp_tools(
 
     try:
         for server_name, url in mcp_urls_dict.items():
-            config: dict[str, Any] = {"type": "http", "url": url}
+            config: MCPHttpServerConfig = {"type": "http", "url": url}
 
             # Create persistent session (registered with exit_stack for cleanup)
             session = await asyncio.wait_for(
@@ -178,28 +177,20 @@ async def acreate_persistent_mcp_tools(
             )
             all_tools.extend(server_tools)
 
-            logger.debug(
-                f"Loaded {len(server_tools)} tools from '{server_name}' with persistent session"
-            )
+            logger.debug(f"Loaded {len(server_tools)} tools from '{server_name}' with persistent session")
 
     except TimeoutError as e:
         raise McpTimeoutError(
-            "MCP server connection timed out after 30 seconds. "
-            "Check server availability and network connection.",
+            "MCP server connection timed out after 30 seconds. Check server availability and network connection.",
             timeout_seconds=30,
         ) from e
     except Exception as e:
-        raise McpClientError(
-            f"Failed to create persistent MCP session or fetch tools: {e}"
-        ) from e
+        raise McpClientError(f"Failed to create persistent MCP session or fetch tools: {e}") from e
 
     # Filter tools if tool_filter is provided
     if tool_filter is not None:
         allowed_tools = set(tool_filter)
-        all_tools = [
-            tool for tool in all_tools
-            if getattr(tool, "name", None) in allowed_tools
-        ]
+        all_tools = [tool for tool in all_tools if getattr(tool, "name", None) in allowed_tools]
 
     # Apply tool description overrides if provided
     if tool_description_overrides:
