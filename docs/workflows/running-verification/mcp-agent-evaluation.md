@@ -219,7 +219,7 @@ print(f"Total results: {len(results)}")
 
 ## Trace Handling
 
-MCP agents produce multi-turn traces (human → AI → tool → AI → ...). By default, only the **final AI message** is passed to template/rubric evaluation. You can change this:
+MCP agents produce multi-turn traces (human → AI → tool → AI → ...). By default, only the **final AI message** is passed to **template** evaluation, while **rubric** evaluation uses the **full trace**. You can configure both independently:
 
 ```python
 config_full_trace = VerificationConfig(

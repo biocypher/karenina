@@ -188,7 +188,7 @@ print(f"Added global trait: {citation_trait.name}")
 
 ### Callable Trait — Minimum Word Count
 
-Callable traits run a custom Python function on the response text. Like regex traits, they need no LLM call.
+Callable traits run a custom Python function on the response text. Karenina itself does not invoke an evaluator LLM for them, but your function may still call external services or another LLM if you choose.
 
 ```python
 from karenina.schemas import CallableTrait
