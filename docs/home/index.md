@@ -4,14 +4,24 @@
 
     Karenina is an experimental project still making its baby steps towards maturity. Best effort has been applied in creating a correct set of documentation, however some errors and imprecisions may be present. If you encounter any, please [open an issue](https://github.com/biocypher/karenina/issues) on the GitHub repository and we will try to get them fixed as soon as possible.
 
-**Karenina** is a Python framework for structured LLM evaluation. It supports two modes:
+**Karenina** is an open-source Python framework that simplifies how you define, run, and share LLM evaluations. Its core idea is formalizing ground truth as structured [answer templates](../notebooks/core_concepts/answer-templates.ipynb): Pydantic models that encode what a correct response looks like, letting a [Judge LLM](philosophy.md#the-llm-as-judge-approach) parse free-form responses into those schemas for programmatic verification. Combined with [rubrics](../core_concepts/rubrics/index.md) for quality assessment and support for classical methods like regex, Karenina provides a flexible [evaluation pipeline](../notebooks/core_concepts/verification-pipeline.ipynb) from quick checks to complex multi-trait scoring. It supports two modes:
 
 - **Benchmark** (closed-loop): Define questions, generate responses, and evaluate them through a staged verification pipeline.
 - **TaskEval** (open-loop): Supply pre-recorded outputs from any source and evaluate them using the same pipeline.
 
-Both modes share the same evaluation engine: answer templates for correctness, rubrics for quality, and a Judge LLM that parses free-text responses into structured schemas.
-
 **New here?** Start with the **[Quick Start: Benchmark](../notebooks/quickstart.ipynb)** to run your first evaluation end-to-end, or the **[Quick Start: TaskEval](../notebooks/quickstart-taskeval.ipynb)** if you already have outputs to evaluate.
+
+## Why This Approach
+
+1. **Naturalistic evaluation.** Traditional benchmarks force models into artificial formats (multiple-choice letters, regex-compliant strings) that differ from real-world usage and signal to the model that it is being evaluated. In Karenina, the answering model is never constrained: it produces the same kind of response a real user would receive. A separate [Judge LLM](philosophy.md#the-llm-as-judge-approach) evaluates the natural response after the fact.
+
+2. **Portable, self-contained benchmarks.** Each [question](../core_concepts/questions-and-benchmarks/index.md) carries its own verification logic and quality checks. A benchmark bundles questions, evaluation criteria, and metadata into a single [portable checkpoint](../core_concepts/questions-and-benchmarks/checkpoints.md) that anyone can reload, re-run against different models, or extend with new questions. Evaluation criteria travel with the data.
+
+3. **Bootstrapped authoring.** LLMs can [auto-generate evaluation code](../notebooks/creating-benchmarks/scaled-authoring.ipynb) from a simple spreadsheet of questions and answers, bootstrapping benchmark creation in minutes. Quality checks are defined declaratively, so adding them requires no custom infrastructure.
+
+4. **Expressivity.** [Templates](../notebooks/core_concepts/answer-templates.ipynb) combine natural-language field descriptions with programmatic verification logic, allowing flexible definitions of what it means to "pass": multiple attributes of different types, combined with arbitrary rules (exact match, normalization, numeric tolerance, partial credit, or any custom Python logic).
+
+5. **Benchmarks that measure what you care about.** Public benchmarks create incentives for model providers to optimize for the test rather than for real-world usefulness. By lowering the cost of creating domain-specific evaluations, Karenina lets teams build internal suites that measure the capabilities that actually matter for their deployment. When anyone can spin up a benchmark on their own terms, evaluation becomes harder to game, creating a race to the top where genuine model improvement is the only winning strategy.
 
 ## Documentation Structure
 
@@ -90,7 +100,7 @@ The two modes differ in where the response comes from:
 
 A common pattern: use a template to verify the model extracted the correct answer, then use rubrics to check that the response was concise, cited sources, and avoided hallucination. This works identically in both modes.
 
-For a deeper discussion, see [Templates vs Rubrics](../core_concepts/template-vs-rubric.md) and [Philosophy](philosophy.md).
+For a deeper discussion, see [Templates vs Rubrics](../notebooks/core_concepts/template-vs-rubric.ipynb) and [Philosophy](philosophy.md).
 
 ---
 
@@ -99,7 +109,7 @@ For a deeper discussion, see [Templates vs Rubrics](../core_concepts/template-vs
 - [Philosophy](philosophy.md) — Why LLM-as-judge evaluation works
 - [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb) — How a Judge LLM parses and verifies responses
 - [Rubrics](../core_concepts/rubrics/index.md) — Trait-based quality assessment
-- [Templates vs Rubrics](../core_concepts/template-vs-rubric.md) — When to use which, and when to use both
+- [Templates vs Rubrics](../notebooks/core_concepts/template-vs-rubric.ipynb) — When to use which, and when to use both
 - [TaskEval](../core_concepts/task-eval.md): Evaluate pre-recorded outputs without defining questions
 - [Installation](../getting-started/installation.md) — Install karenina and set up API keys
 - [Core Concepts](../core_concepts/index.md) — Deep dive into checkpoints, pipelines, adapters, and more
