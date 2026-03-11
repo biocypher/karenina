@@ -1,8 +1,8 @@
 site_name: Karenina Documentation
 site_description: Technical documentation for the Karenina LLM benchmarking library
-site_url: https://example.com
-repo_url: https://github.com/example/karenina
-repo_name: karenina
+site_url: https://biocypher.github.io/karenina/
+repo_url: https://github.com/biocypher/karenina
+repo_name: biocypher/karenina
 
 exclude_docs: |
   _archive/
@@ -30,6 +30,7 @@ exclude_docs: |
   workflows/analyzing-results/dataframe-analysis.md
   core_concepts/questions-and-benchmarks/benchmarks.md
   core_concepts/questions-and-benchmarks/questions.md
+  core_concepts/verification-pipeline.md
 
 theme:
   name: material
@@ -168,13 +169,13 @@ nav:
       - Callable Traits: notebooks/core_concepts/rubrics/callable-traits.ipynb
       - Metric Traits: notebooks/core_concepts/rubrics/metric-traits.ipynb
     - Templates vs Rubrics: core_concepts/template-vs-rubric.md
-    - Evaluation Modes: core_concepts/evaluation-modes.md
+    - Evaluation Modes: notebooks/core_concepts/evaluation-modes.ipynb
     - Results & Scoring: core_concepts/results-and-scoring.md
     - Question Context:
       - ADeLe: core_concepts/adele.md
       - Few-Shot: core_concepts/few-shot.md
     - Pipeline:
-      - Verification Pipeline: core_concepts/verification-pipeline.md
+      - Verification Pipeline: notebooks/core_concepts/verification-pipeline.ipynb
       - Prompt Assembly: core_concepts/prompt-assembly.md
     - Infrastructure:
       - Adapters: core_concepts/adapters.md
@@ -250,4 +251,4 @@ extra_css:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/example/karenina
+      link: https://github.com/biocypher/karenina
