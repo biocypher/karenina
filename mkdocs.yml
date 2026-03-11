@@ -32,6 +32,9 @@ exclude_docs: |
   core_concepts/questions-and-benchmarks/questions.md
   core_concepts/verification-pipeline.md
   core_concepts/evaluation-modes.md
+  core_concepts/template-vs-rubric.md
+  core_concepts/prompt-assembly.md
+  core_concepts/results-and-scoring.md
 
 theme:
   name: material
@@ -169,15 +172,15 @@ nav:
       - Regex Traits: notebooks/core_concepts/rubrics/regex-traits.ipynb
       - Callable Traits: notebooks/core_concepts/rubrics/callable-traits.ipynb
       - Metric Traits: notebooks/core_concepts/rubrics/metric-traits.ipynb
-    - Templates vs Rubrics: core_concepts/template-vs-rubric.md
+    - Templates vs Rubrics: notebooks/core_concepts/template-vs-rubric.ipynb
     - Evaluation Modes: notebooks/core_concepts/evaluation-modes.ipynb
-    - Results & Scoring: core_concepts/results-and-scoring.md
+    - Results & Scoring: notebooks/core_concepts/results-and-scoring.ipynb
     - Question Context:
       - ADeLe: core_concepts/adele.md
       - Few-Shot: core_concepts/few-shot.md
     - Pipeline:
       - Verification Pipeline: notebooks/core_concepts/verification-pipeline.ipynb
-      - Prompt Assembly: core_concepts/prompt-assembly.md
+      - Prompt Assembly: notebooks/core_concepts/prompt-assembly.ipynb
     - Infrastructure:
       - Adapters: core_concepts/adapters.md
       - MCP Overview: core_concepts/mcp-overview.md
