@@ -1,262 +1,420 @@
-# Few-Shot Configuration
+---
+jupyter:
+  jupytext:
+    formats: docs/core_concepts//md,docs/notebooks/core_concepts//ipynb
+    text_representation:
+      extension: .md
+      format_name: markdown
+      format_version: '1.3'
+      jupytext_version: 1.18.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
 
-Few-shot prompting provides example question-answer pairs to the LLM before asking the main question, guiding responses toward expected formats, styles, and content.
+# Few-Shot Examples
 
-## Why Use Few-Shot Prompting?
+Few-shot examples teach the **answering model** how to respond by prepending question-answer pairs to the prompt before the main question. They affect only the answering stage of the [verification pipeline](../notebooks/core_concepts/verification-pipeline.ipynb); the [Judge LLM](../notebooks/core_concepts/answer-templates.ipynb), [rubric evaluators](rubrics/index.md), and all other pipeline stages never see them.
 
-Few-shot examples can improve verification results by:
+```python tags=["hide-cell"]
+# Mock cell: ensures examples execute without live API keys.
+# This cell is hidden in rendered documentation.
+from karenina.schemas import (
+    FewShotConfig,
+    ModelConfig,
+    Question,
+    QuestionFewShotConfig,
+    VerificationConfig,
+)
+```
 
-- **Response quality** — Models learn from demonstrated good answers
-- **Consistency** — Responses follow patterns shown in examples
-- **Format adherence** — Models match the structure of examples
-- **Accuracy** — Examples clarify what kind of answer is expected
+## 1. What Are Few-Shot Examples?
 
-For example, if your examples show concise gene symbol answers like "BCL2" and "TP53", the model learns to respond with the standard symbol rather than a verbose explanation.
+A few-shot example is a `{"question": "...", "answer": "..."}` pair stored on a [question](../notebooks/core_concepts/questions-and-benchmarks/questions.ipynb). When verification runs, Karenina prepends the resolved examples to the prompt so the answering model sees a pattern before it encounters the real question:
 
-## Where Examples Come From
+```text
+Question: How many chromosomes in a human somatic cell?
+Answer: 46
 
-Few-shot examples are stored on individual questions as `question → answer` pairs. You add them when creating your benchmark:
+Question: How many base pairs in human mitochondrial DNA?
+Answer: 16569
+
+Question: How many subunits does hemoglobin A have?
+Answer:
+```
+
+The answering model receives this as a single user message. The trailing `Answer:` cues the model to continue in the same format.
+
+Few-shot examples are useful when:
+
+- **Responses should follow a specific format**: short gene symbols instead of verbose explanations, numeric values without units, or structured answers
+- **Consistency matters**: the model should respond uniformly across related questions
+- **The expected style is hard to specify in prose**: showing three good answers communicates the pattern more efficiently than describing it
+
+They are not useful when the answering model already produces responses in the format the template expects, or when the question domain is so varied that examples from one topic would confuse another.
+
+## 2. The Abstraction Boundary
+
+The most important idea: few-shot examples influence **how the answering model responds**, not how Karenina evaluates the response.
+
+| Pipeline component | Sees few-shot examples? | Why |
+|--------------------|:-----------------------:|-----|
+| **Answering model** (Stage 2: GenerateAnswer) | Yes | Examples are injected into the user message |
+| **Judge LLM** (Stage 7: ParseTemplate) | No | Receives the raw response and template schema only |
+| **Rubric evaluator** (Stage 11: RubricEvaluation) | No | Evaluates response qualities independently |
+| **Template verify()** (Stage 8: VerifyTemplate) | No | Programmatic check on parsed fields |
+
+Few-shot examples are a prompt engineering tool for the model being evaluated. They do not change the evaluation criteria, the parsing instructions, or the rubric definitions.
+
+## 3. How It Works
+
+Few-shot examples flow through three phases: storage, resolution, and injection.
+
+```text
+Phase 1: Storage
+  Question entity
+    └─ few_shot_examples: [{"question": "...", "answer": "..."}, ...]
+
+Phase 2: Resolution (at verification time)
+  FewShotConfig.resolve_examples_for_question()
+    ├─ Input: available examples from question, question ID, question text
+    ├─ Apply mode (all / k-shot / custom / none)
+    ├─ Apply exclusions
+    └─ Append external examples (question-specific, then global)
+
+Phase 3: Injection (GenerateAnswer stage)
+  _construct_few_shot_prompt()
+    ├─ Prepend each resolved example as "Question: ...\nAnswer: ..."
+    ├─ Append main question as "Question: ...\nAnswer:"
+    └─ Send as user message to answering model
+```
+
+**Storage** happens at benchmark creation time. You attach examples to individual questions via `benchmark.add_question()`. The examples live on the `Question` entity:
 
 ```python
-benchmark.add_question(
-    question_text="How many subunits does hemoglobin A have?",
+question = Question(
+    question="How many subunits does hemoglobin A have?",
     raw_answer="4",
     few_shot_examples=[
         {"question": "How many chromosomes in a human somatic cell?", "answer": "46"},
         {"question": "How many base pairs in human mitochondrial DNA?", "answer": "16569"},
     ],
 )
+print(f"Stored {len(question.few_shot_examples)} examples on question")
 ```
 
-The `FewShotConfig` on `VerificationConfig` controls **which** of these stored examples are actually used during verification and **how many**.
+**Resolution** happens at verification time. `FewShotConfig` on `VerificationConfig` controls which stored examples are actually used and how many. Resolution is per-question: each question can use a different mode and different k value.
 
-## The Five Modes
+**Injection** happens inside the GenerateAnswer stage. The resolved examples are formatted into a prompt string and sent as the user message. If no examples are resolved (or few-shot is disabled), the question text is sent unmodified.
 
-FewShotConfig supports five selection modes that control how examples are chosen:
+## 4. The Five Selection Modes
 
-| Mode | Description | Use Case |
-|------|-------------|----------|
-| `all` | Use all available examples | Small example sets (2-5 examples) |
-| `k-shot` | Randomly sample *k* examples | Large example sets where using all is costly |
-| `custom` | Select specific examples by index or hash | Curated sets where order/selection matters |
-| `none` | No examples used | Disable for specific questions |
-| `inherit` | Use parent (global) settings | Per-question default — falls back to global mode |
+`FewShotConfig` supports five modes that control which examples are included in the prompt. Four modes apply globally; the fifth (`inherit`) is for per-question delegation.
 
-### `all` Mode
+| Mode | Behavior | Best for |
+|------|----------|----------|
+| `all` | Use every example attached to the question | Small, curated example sets (2 to 5 examples) |
+| `k-shot` | Randomly sample *k* examples; uses question ID as seed for reproducibility | Large example pools where using all would be costly |
+| `custom` | Select specific examples by index position or MD5 hash | Curated selections where exact control matters |
+| `none` | No examples used | Disabling few-shot for specific questions or globally |
+| `inherit` | Delegate to the global mode and k value | Per-question default; questions without explicit config inherit automatically |
 
-Uses every example attached to a question. This is the **default global mode**.
+### `all` mode (default)
+
+Uses every example attached to the question. This is the default `global_mode`.
 
 ```python
-from karenina.schemas import FewShotConfig
-
-config = FewShotConfig(global_mode="all")
+all_config = FewShotConfig(global_mode="all")
+print(f"Mode: {all_config.global_mode}, enabled: {all_config.enabled}")
 ```
 
-Best when questions have a small number of carefully selected examples and you want them all included in the prompt.
+### `k-shot` mode
 
-### `k-shot` Mode
-
-Randomly samples *k* examples from the available set. Sampling uses the question ID as a seed for reproducibility — the same question always gets the same examples.
+Randomly samples *k* examples. The question ID seeds the random selection, so the same question always gets the same examples across runs.
 
 ```python
-config = FewShotConfig(global_mode="k-shot", global_k=3)
+k_shot_config = FewShotConfig(global_mode="k-shot", global_k=3)
+print(f"Mode: {k_shot_config.global_mode}, k: {k_shot_config.global_k}")
 ```
 
-Use when questions have many examples but you want to limit prompt length and cost. The default *k* is 3.
+If a question has fewer examples than *k*, all examples are used (no error). The default `global_k` is `3`.
 
-### `custom` Mode
+### `custom` mode
 
-Selects specific examples by index position or MD5 hash:
+Selects examples by integer index or MD5 hash of the example's question text:
 
 ```python
-from karenina.schemas import QuestionFewShotConfig
-
-# Select by index
-config = FewShotConfig(
+custom_config = FewShotConfig(
     global_mode="custom",
     question_configs={
         "question_1": QuestionFewShotConfig(
             mode="custom",
-            selected_examples=[0, 2, 4],  # Use examples at these indices
+            selected_examples=[0, 2],  # indices into the question's example list
         ),
     },
 )
-
-# Select by hash
-config = FewShotConfig(
-    global_mode="custom",
-    question_configs={
-        "question_1": QuestionFewShotConfig(
-            mode="custom",
-            selected_examples=["abc123def456..."],  # MD5 hash of example question text
-        ),
-    },
-)
+print(f"question_1 mode: {custom_config.question_configs['question_1'].mode}")
 ```
 
-Use when you've identified the most effective examples for each question and want deterministic selection.
-
-### `none` Mode
-
-Disables few-shot examples entirely:
+Use `FewShotConfig.generate_example_hash(question_text)` to compute the hash for a given example:
 
 ```python
-config = FewShotConfig(global_mode="none")
+example_hash = FewShotConfig.generate_example_hash("How many chromosomes in a human somatic cell?")
+print(f"Hash: {example_hash}")
 ```
 
-Or disable for a specific question while keeping the global mode:
+### `none` mode
+
+Disables few-shot entirely, globally or per-question:
 
 ```python
-config = FewShotConfig(
+# Globally disabled
+none_config = FewShotConfig(global_mode="none")
+
+# Disabled for one question, enabled for the rest
+mixed_config = FewShotConfig(
     global_mode="all",
     question_configs={
         "question_3": QuestionFewShotConfig(mode="none"),
     },
 )
+print(f"Global: {none_config.global_mode}")
+print(f"question_3 mode: {mixed_config.question_configs['question_3'].mode}")
 ```
 
-### `inherit` Mode
+### `inherit` mode
 
-Per-question default. When a question's mode is `inherit`, it uses the global mode and *k* value. This is the default for `QuestionFewShotConfig`, so questions without explicit overrides automatically inherit.
-
-## Per-Question Overrides
-
-Each question can have its own configuration that overrides the global settings:
+The default for `QuestionFewShotConfig`. When a question's mode is `inherit`, it uses the global mode and global k value. Questions without an entry in `question_configs` implicitly inherit.
 
 ```python
-config = FewShotConfig(
+default_q = QuestionFewShotConfig()
+print(f"Default per-question mode: {default_q.mode}")
+```
+
+## 5. Per-Question Overrides
+
+Each question can override the global settings independently. This is how you run different strategies for different parts of the benchmark:
+
+```python
+override_config = FewShotConfig(
     global_mode="k-shot",
     global_k=3,
     question_configs={
-        # This question uses all examples instead of k-shot
-        "question_1": QuestionFewShotConfig(mode="all"),
-        # This question uses 5 examples instead of the global 3
-        "question_2": QuestionFewShotConfig(mode="k-shot", k=5),
-        # This question has no examples
-        "question_3": QuestionFewShotConfig(mode="none"),
-        # This question inherits global settings (same as not listing it)
-        "question_4": QuestionFewShotConfig(mode="inherit"),
+        "question_1": QuestionFewShotConfig(mode="all"),           # use all examples
+        "question_2": QuestionFewShotConfig(mode="k-shot", k=5),   # sample 5 instead of 3
+        "question_3": QuestionFewShotConfig(mode="none"),           # disable entirely
+        # question_4 inherits: k-shot with k=3
     },
 )
+
+# Resolve effective config for each question
+for qid in ["question_1", "question_2", "question_3", "question_4"]:
+    effective = override_config.get_effective_config(qid)
+    print(f"{qid}: mode={effective.mode}, k={effective.k}")
 ```
 
-You can also exclude specific examples while using another mode:
+You can also exclude specific examples while keeping the mode:
 
 ```python
-config = FewShotConfig(
+exclusion_config = FewShotConfig(
     global_mode="all",
     question_configs={
         "question_1": QuestionFewShotConfig(
             mode="all",
-            excluded_examples=[2],  # Skip example at index 2
+            excluded_examples=[2],  # skip the example at index 2
         ),
     },
 )
+print(f"question_1 exclusions: {exclusion_config.question_configs['question_1'].excluded_examples}")
 ```
 
-## FewShotConfig Fields
+Exclusions accept both integer indices and MD5 hash strings, just like `selected_examples` in custom mode.
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | `bool` | `True` | Master switch — when `False`, no examples are used regardless of mode |
-| `global_mode` | `"all"` \| `"k-shot"` \| `"custom"` \| `"none"` | `"all"` | Default mode for all questions |
-| `global_k` | `int` | `3` | Number of examples for `k-shot` mode |
-| `question_configs` | `dict[str, QuestionFewShotConfig]` | `{}` | Per-question overrides keyed by question ID |
-| `global_external_examples` | `list[dict[str, str]]` | `[]` | External examples appended to every question |
+## 6. Resolution in Action
 
-## QuestionFewShotConfig Fields
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `mode` | `"all"` \| `"k-shot"` \| `"custom"` \| `"none"` \| `"inherit"` | `"inherit"` | Selection mode for this question |
-| `k` | `int \| None` | `None` | Override global *k* for this question |
-| `selected_examples` | `list[str \| int] \| None` | `None` | Indices or MD5 hashes for `custom` mode |
-| `external_examples` | `list[dict[str, str]] \| None` | `None` | Question-specific external examples |
-| `excluded_examples` | `list[str \| int] \| None` | `None` | Indices or hashes of examples to exclude |
-
-## External Examples
-
-You can add examples that don't come from the question's stored examples. These are appended after the resolved examples:
+`FewShotConfig.resolve_examples_for_question()` takes the stored examples and applies the mode logic. Here is a complete resolution example:
 
 ```python
-config = FewShotConfig(
+# A question with 5 stored examples
+examples = [
+    {"question": "What is the gene symbol for tumor protein p53?", "answer": "TP53"},
+    {"question": "What is the gene symbol for epidermal growth factor receptor?", "answer": "EGFR"},
+    {"question": "What is the gene symbol for vascular endothelial growth factor A?", "answer": "VEGFA"},
+    {"question": "What is the gene symbol for breast cancer type 1?", "answer": "BRCA1"},
+    {"question": "What is the gene symbol for programmed death-ligand 1?", "answer": "CD274"},
+]
+
+# Resolve with "all" mode
+config_all = FewShotConfig(global_mode="all")
+resolved = config_all.resolve_examples_for_question("q1", available_examples=examples)
+print(f"all mode: {len(resolved)} examples")
+
+# Resolve with k-shot (k=2)
+config_k = FewShotConfig(global_mode="k-shot", global_k=2)
+resolved_k = config_k.resolve_examples_for_question("q1", available_examples=examples)
+print(f"k-shot (k=2): {len(resolved_k)} examples -> {[e['answer'] for e in resolved_k]}")
+
+# Same question ID always gives same selection
+resolved_k2 = config_k.resolve_examples_for_question("q1", available_examples=examples)
+print(f"Reproducible: {resolved_k == resolved_k2}")
+
+# Resolve with "none" mode
+config_none = FewShotConfig(global_mode="none")
+resolved_none = config_none.resolve_examples_for_question("q1", available_examples=examples)
+print(f"none mode: {len(resolved_none)} examples")
+```
+
+## 7. External Examples
+
+External examples are question-answer pairs that do not come from the question's stored example list. They are appended after the resolved stored examples.
+
+Two levels exist: **global** external examples (appended to every question) and **question-specific** external examples (appended to one question only).
+
+```python
+external_config = FewShotConfig(
     global_mode="k-shot",
     global_k=2,
-    # These are added to every question
     global_external_examples=[
         {"question": "What is the capital of France?", "answer": "Paris"},
     ],
     question_configs={
-        "question_1": QuestionFewShotConfig(
+        "q1": QuestionFewShotConfig(
             mode="k-shot",
-            # These are added only to question_1
             external_examples=[
                 {"question": "What gene does imatinib target?", "answer": "BCR-ABL1"},
             ],
         ),
     },
 )
+
+resolved = external_config.resolve_examples_for_question("q1", available_examples=examples)
+print(f"Total examples for q1: {len(resolved)}")
+print(f"Last two (external): {[e['answer'] for e in resolved[-2:]]}")
 ```
 
-The resolution order is: resolved examples (from stored examples) → question-specific external → global external.
+The resolution order is: resolved stored examples, then question-specific external, then global external.
 
-## Convenience Constructors
+## 8. Convenience Constructors
 
-FewShotConfig provides factory methods for common patterns:
+`FewShotConfig` provides class methods for common setup patterns:
 
 ```python
-# From index selections
-config = FewShotConfig.from_index_selections({
+# Custom selections by index
+by_index = FewShotConfig.from_index_selections({
     "question_1": [0, 2, 4],
     "question_2": [1, 3],
 })
+print(f"from_index_selections: global_mode={by_index.global_mode}, "
+      f"questions={list(by_index.question_configs.keys())}")
 
-# From hash selections
-config = FewShotConfig.from_hash_selections({
-    "question_1": ["abc123...", "def456..."],
+# Custom selections by hash
+by_hash = FewShotConfig.from_hash_selections({
+    "question_1": [FewShotConfig.generate_example_hash("example question text")],
 })
+print(f"from_hash_selections: global_mode={by_hash.global_mode}")
 
 # Different k per question
-config = FewShotConfig.k_shot_for_questions({
+per_q_k = FewShotConfig.k_shot_for_questions({
     "question_1": 5,
     "question_2": 2,
 }, global_k=3)
+print(f"k_shot_for_questions: global_mode={per_q_k.global_mode}, global_k={per_q_k.global_k}")
 ```
 
-## Using FewShotConfig in Verification
+`from_index_selections` and `from_hash_selections` default to `global_mode="custom"`; `k_shot_for_questions` defaults to `global_mode="k-shot"`.
 
-Pass the config to `VerificationConfig`:
+## 9. Using FewShotConfig in Verification
+
+Pass the config to `VerificationConfig` via the `few_shot_config` field:
 
 ```python
-from karenina.schemas import VerificationConfig, FewShotConfig
-
 config = VerificationConfig(
-    answering_models=[...],
-    parsing_models=[...],
+    answering_models=[
+        ModelConfig(id="answerer", model_provider="anthropic", model_name="claude-haiku-4-5"),
+    ],
+    parsing_models=[
+        ModelConfig(id="judge", model_provider="anthropic", model_name="claude-haiku-4-5"),
+    ],
     few_shot_config=FewShotConfig(
         global_mode="k-shot",
         global_k=3,
     ),
 )
 
-# Check if few-shot is enabled
-config.is_few_shot_enabled()  # True
-
-# Get the config
-config.get_few_shot_config()  # FewShotConfig(...)
+print(f"Few-shot enabled: {config.is_few_shot_enabled()}")
+print(f"Config: {config.get_few_shot_config()}")
 ```
 
-## Validation
+When `few_shot_config` is `None` (the default) or `enabled=False`, the pipeline sends the question text directly to the answering model with no examples prepended.
 
-VerificationConfig validates few-shot settings:
+```python
+config_no_fs = VerificationConfig(
+    answering_models=[
+        ModelConfig(id="answerer", model_provider="anthropic", model_name="claude-haiku-4-5"),
+    ],
+    parsing_models=[
+        ModelConfig(id="judge", model_provider="anthropic", model_name="claude-haiku-4-5"),
+    ],
+)
+print(f"Few-shot enabled (no config): {config_no_fs.is_few_shot_enabled()}")
+```
 
-- In `k-shot` mode, the global *k* must be at least 1
-- Per-question *k* values must also be at least 1
-- You can validate that selections reference valid examples using `validate_selections()`
+### Validation
 
-## Next Steps
+`VerificationConfig` validates few-shot settings at construction time:
 
-- [Scaled Authoring](../notebooks/creating-benchmarks/scaled-authoring.ipynb) — Few-shot examples in the benchmark authoring workflow
-- [VerificationConfig Tutorial](../notebooks/running-verification/basic-verification.ipynb) — Complete configuration setup
-- [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb) — What few-shot examples help with
-- [VerificationConfig Reference](../reference/configuration/verification-config.md) — Exhaustive field reference
+- In `k-shot` mode, `global_k` must be at least 1
+- Per-question `k` values must be at least 1 when specified
+- `validate_selections()` checks that index and hash selections reference valid examples (call this explicitly after construction if you want bounds checking)
+
+```python
+# validate_selections returns a list of error messages (empty if valid)
+fs_config = FewShotConfig(
+    global_mode="custom",
+    question_configs={
+        "q1": QuestionFewShotConfig(mode="custom", selected_examples=[0, 1, 99]),
+    },
+)
+errors = fs_config.validate_selections({"q1": examples[:3]})
+print(f"Validation errors: {errors}")
+```
+
+## 10. Choosing the Right Mode
+
+| Situation | Recommended mode | Rationale |
+|-----------|-----------------|-----------|
+| 2 to 5 hand-picked examples per question | `all` | Small set; include everything |
+| 10+ examples per question, cost-sensitive | `k-shot` | Limits prompt length while preserving reproducibility |
+| Ablation study: which examples help most? | `custom` | Exact control over which examples appear |
+| Baseline comparison without examples | `none` | Clean zero-shot baseline |
+| Most questions share a strategy, a few differ | Per-question overrides with `inherit` default | Global mode covers the common case; overrides handle exceptions |
+
+**Litmus test for whether few-shot helps**: if the answering model already produces responses that your template can parse and verify, few-shot examples add cost without benefit. Try a zero-shot run first. Add examples when you observe format mismatches, verbose responses where concise ones are expected, or inconsistent answer styles across similar questions.
+
+## 11. FewShotConfig Field Reference
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | `bool` | `True` | Master switch; when `False`, no examples are used regardless of mode |
+| `global_mode` | `Literal["all", "k-shot", "custom", "none"]` | `"all"` | Default mode for all questions |
+| `global_k` | `int` | `3` | Number of examples for `k-shot` mode |
+| `question_configs` | `dict[str, QuestionFewShotConfig]` | `{}` | Per-question overrides keyed by question ID |
+| `global_external_examples` | `list[dict[str, str]]` | `[]` | External examples appended to every question |
+
+### QuestionFewShotConfig Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `mode` | `Literal["all", "k-shot", "custom", "none", "inherit"]` | `"inherit"` | Selection mode for this question |
+| `k` | `int \| None` | `None` | Override global k for this question (k-shot mode) |
+| `selected_examples` | `list[str \| int] \| None` | `None` | Indices or MD5 hashes for custom mode |
+| `external_examples` | `list[dict[str, str]] \| None` | `None` | Question-specific external examples |
+| `excluded_examples` | `list[str \| int] \| None` | `None` | Indices or hashes of examples to exclude |
+
+## 12. Next Steps
+
+- [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb): what few-shot examples help the answering model produce
+- [Verification Pipeline](../notebooks/core_concepts/verification-pipeline.ipynb): where GenerateAnswer fits in the 13-stage pipeline
+- [Running Verification](../workflows/running-verification/index.md): complete configuration and execution workflow
+- [VerificationConfig Reference](../reference/configuration/verification-config.md): exhaustive field reference including `few_shot_config`

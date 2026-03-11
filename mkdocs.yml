@@ -38,6 +38,8 @@ exclude_docs: |
   core_concepts/manual-interface.md
   core_concepts/adele.md
   core_concepts/mcp-overview.md
+  core_concepts/few-shot.md
+  core_concepts/task-eval.md
 
 theme:
   name: material
@@ -168,6 +170,7 @@ nav:
       - Benchmarks: notebooks/core_concepts/questions-and-benchmarks/benchmarks.ipynb
       - Questions: notebooks/core_concepts/questions-and-benchmarks/questions.ipynb
       - "Checkpoints: The Memory of Evaluation": core_concepts/questions-and-benchmarks/checkpoints.md
+    - TaskEval: notebooks/core_concepts/task-eval.ipynb
     - Answer Templates: notebooks/core_concepts/answer-templates.ipynb
     - Rubric Traits:
       - Overview: core_concepts/rubrics/index.md
@@ -180,7 +183,7 @@ nav:
     - Results & Scoring: notebooks/core_concepts/results-and-scoring.ipynb
     - Question Context:
       - ADeLe: notebooks/core_concepts/adele.ipynb
-      - Few-Shot: core_concepts/few-shot.md
+      - Few-Shot: notebooks/core_concepts/few-shot.ipynb
     - Pipeline:
       - Verification Pipeline: notebooks/core_concepts/verification-pipeline.ipynb
       - Prompt Assembly: notebooks/core_concepts/prompt-assembly.ipynb
