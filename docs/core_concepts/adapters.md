@@ -1,180 +1,225 @@
 # Adapters
 
-Adapters are LLM backend interfaces that handle communication with language models during verification. Karenina uses a **hexagonal architecture** (ports and adapters) where each adapter implements three port protocols — LLMPort, AgentPort, and ParserPort — providing a consistent API regardless of the underlying LLM provider.
+Adapters are the implementations behind Karenina's LLM backend abstraction. They translate port protocol calls into provider-specific API calls so the [verification pipeline](../advanced-pipeline/index.md) never talks to an LLM provider directly. It calls a port, and the adapter handles the rest.
 
-## Available Interfaces
+## 1. What Are Adapters?
 
-Karenina ships with six adapter interfaces:
+The verification pipeline needs LLMs for three distinct purposes: generating answers, parsing responses into structured data, and running quality checks and rubric evaluation. Rather than coding those interactions against a specific provider, the pipeline calls abstract **port protocols**. Adapters implement those protocols for specific backends.
 
-| Interface | Backend | MCP Support | Tools | Structured Output (Parser) | Fallback |
-|-----------|---------|:-----------:|:-----:|:--------------------------:|----------|
-| `langchain` | LangChain (multi-provider) | Yes | Yes | No (manual JSON fallback) | None |
-| `openrouter` | OpenRouter API | Yes | Yes | No (manual JSON fallback) | None |
-| `openai_endpoint` | OpenAI-compatible endpoints | Yes | Yes | No (manual JSON fallback) | None |
-| `claude_agent_sdk` | Anthropic Agent SDK | Yes | Yes | Yes (native) | `langchain` |
-| `claude_tool` | Anthropic Python SDK | Yes | Yes | Yes (native) | `langchain` |
-| `manual` | Pre-recorded traces | No | No | No | None |
+The most important idea is: **the pipeline does not know which LLM backend it is using.** Every pipeline stage sees the same port interface regardless of whether the backend is LangChain, the Anthropic Agent SDK, the Anthropic Python SDK, or a set of pre-recorded traces. Swapping backends means changing a single configuration field (`interface` on `ModelConfig`); no pipeline code changes.
 
----
+### 1.1. Adapters vs. Ports
 
-## Interface Details
+These two terms appear together frequently. They serve complementary roles:
 
-### `langchain` — Multi-Provider Default
+| Concept | What It Is | Who Defines It | Who Uses It |
+|---------|-----------|----------------|-------------|
+| **Port** | A Python `Protocol` class defining methods like `ainvoke()` or `aparse_to_pydantic()` | The framework (`karenina.ports`) | Pipeline stages |
+| **Adapter** | A concrete class implementing a port for a specific LLM backend | Each backend package (`karenina.adapters.*`) | The factory creates them; pipeline stages call them through the port interface |
 
-The default adapter, supporting all LLM providers available through LangChain: Anthropic Claude, OpenAI GPT, Google Gemini, and many more.
+Ports define the contract. Adapters fulfill it. You configure which adapter to use; the pipeline uses only the port interface.
 
-**When to use**: You need to evaluate across multiple providers, or you want the broadest model support.
+### 1.2. The Abstraction Boundary
 
-**Requirements**: `langchain_core` package (installed by default).
+What adapters handle:
 
-**Key features**:
+- Translating port method calls into provider-specific API calls
+- Authentication and connection management
+- Retry logic and error handling
+- Response format conversion into Karenina's unified `Message` and `AgentResult` types
+- Structured output enforcement (native API support or JSON parsing fallback)
 
-- Structured output via `with_structured_output()` on the LLM side
-- Parser uses manual JSON parsing fallback (no native structured output in parser)
-- Retry logic with exponential backoff
-- Usage metadata tracking
+What adapters do **not** handle:
 
-### `openrouter` — OpenRouter API
+- Prompt construction (handled by the [PromptAssembler](../advanced-pipeline/prompt-assembly.md))
+- Pipeline stage sequencing (handled by the [StageOrchestrator](../advanced-pipeline/index.md))
+- Result storage (handled by the results manager)
+- Which models to use (configured via [ModelConfig](../reference/configuration/verification-config.md))
 
-A **routing interface** that delegates to the LangChain adapter. Provides access to 200+ models from various providers through a single API.
+### 1.3. Duck Typing
 
-**When to use**: You want access to many models through one API key, or need models not directly available via other adapters.
+Adapters implement ports via **duck typing**, not class inheritance. Port protocols are Python `Protocol` classes. Any object with matching method signatures satisfies the contract:
 
-**Requirements**: `langchain_core` package, `OPENROUTER_API_KEY` environment variable.
+```python
+# Port protocol (in karenina/ports/llm.py)
+class LLMPort(Protocol):
+    async def ainvoke(self, messages: list[Message]) -> LLMResponse: ...
+    def invoke(self, messages: list[Message]) -> LLMResponse: ...
 
-**How it works**: Shares the same adapter implementations as `langchain` — the factory resolves `openrouter` to `langchain` at creation time.
+# Adapter (in karenina/adapters/langchain/llm.py)
+class LangChainLLMAdapter:  # No inheritance from LLMPort
+    async def ainvoke(self, messages: list[Message]) -> LLMResponse:
+        # LangChain-specific implementation
+        ...
+```
 
-### `openai_endpoint` — OpenAI-Compatible Endpoints
+This means you can create a new adapter without importing the port classes; just implement the right methods. Type checkers verify compliance statically.
 
-A **routing interface** that delegates to the LangChain adapter. Connects to any server implementing the OpenAI API specification.
+## 2. The Three Ports
 
-**When to use**: You run a local LLM server (LM Studio, Ollama, vLLM, etc.) or use a cloud provider with an OpenAI-compatible API.
+Each port protocol defines a specific type of LLM interaction used during verification:
 
-**Requirements**: `langchain_core` package, plus `endpoint_base_url` and `endpoint_api_key` on `ModelConfig`.
+| Port | Purpose | Key Methods | Used During |
+|------|---------|-------------|-------------|
+| **AgentPort** | Multi-turn agent execution with tools and MCP servers | `arun()` / `run()` | Stage 2: generate answer |
+| **ParserPort** | LLM-based structured output parsing (judge LLM fills a template schema) | `aparse_to_pydantic()` / `parse_to_pydantic()` | Stage 7: parse template |
+| **LLMPort** | Stateless single-call LLM invocation (no tool loop) | `ainvoke()` / `invoke()` | Stages 5, 6 (quality checks), 11 (rubric evaluation), deep judgment |
 
-**How it works**: Same adapter implementations as `langchain`, with endpoint URL and API key configured per model.
+All three follow an async-first design: the primary methods are `async` (`ainvoke`, `aparse_to_pydantic`, `arun`), with synchronous wrappers for convenience.
 
-### `claude_agent_sdk` — Native Anthropic Agent SDK
+### Capabilities
 
-Direct integration with Anthropic's Agent SDK, providing native access to all Claude-specific features.
+LLM and Parser adapters expose a `capabilities` property that the [PromptAssembler](../advanced-pipeline/prompt-assembly.md) reads when formatting prompts:
 
-**When to use**: You work exclusively with Claude models and want native structured output, thinking support, and direct SDK access.
+| Capability | Meaning | Effect When `False` |
+|------------|---------|---------------------|
+| `supports_system_prompt` | Adapter handles separate system messages | System text is prepended to the user message instead |
+| `supports_structured_output` | Adapter enforces JSON schema natively (parser only) | JSON schema instructions are added to the prompt text and the text response is parsed manually |
 
-**Requirements**: Claude Code CLI (`claude` binary) installed and available in PATH. Falls back to `langchain` if unavailable.
+For complete method signatures and detailed protocol documentation, see [Port Types](../advanced-adapters/ports.md).
 
-**Key features**:
+## 3. Available Interfaces
 
-- Native structured output in both LLM and parser (no JSON parsing fallback needed)
-- System prompt support in parser
-- Access to Claude-specific features (extended thinking, vision)
-- Direct Anthropic SDK usage for better type safety
+Karenina ships with six interfaces, configured via the `interface` field on `ModelConfig`. The default is `"langchain"`.
 
-### `claude_tool` — Anthropic SDK with Tool Runner
+| Interface | Backend | MCP | Tools | Parser: Native Structured Output | Fallback |
+|-----------|---------|:---:|:-----:|:-------------------------------:|----------|
+| `langchain` | LangChain (multi-provider) | Yes | Yes | No | None |
+| `openrouter` | OpenRouter API (routes to `langchain`) | Yes | Yes | No | None |
+| `openai_endpoint` | OpenAI-compatible endpoints (routes to `langchain`) | Yes | Yes | No | None |
+| `claude_agent_sdk` | Anthropic Agent SDK via Claude CLI | Yes | Yes | Yes | `langchain` |
+| `claude_tool` | Anthropic Python SDK (`anthropic` package) | Yes | Yes | Yes | `langchain` |
+| `manual` | Pre-recorded traces | No | No | N/A | None |
 
-A lighter-weight Anthropic integration that uses the `anthropic` Python SDK with a `tool_runner` for agentic workflows.
+The **"Parser: Native Structured Output"** column indicates whether the parser adapter uses the LLM API's built-in schema enforcement (tool use or JSON mode) rather than embedding JSON instructions in the prompt and parsing the text response. This distinction matters for parsing reliability on complex schemas. All non-manual LLM adapters support structured output on the LLM port via `with_structured_output()`.
 
-**When to use**: You want native Claude integration without the full Agent SDK, or prefer a simpler tool execution model.
+### 3.1. Interface Categories
 
-**Requirements**: `anthropic` Python package. Falls back to `langchain` if unavailable.
+The six interfaces fall into three categories.
 
-**Key features**:
+**Native adapters** have their own implementations of all three ports:
 
-- Native structured output in both LLM and parser
-- System prompt support in parser
-- Automatic tool execution loop via tool_runner
-- Simpler agent implementation compared to `claude_agent_sdk`
+- **`langchain`**: The default. Uses LangChain's `init_chat_model` and supports all LangChain-compatible providers: Anthropic, OpenAI, Google, and many more. The broadest-compatibility option.
+- **`claude_agent_sdk`**: Uses the Claude CLI (`claude` binary) for agent execution and the Anthropic Agent SDK for LLM and parser operations. Provides native structured output in the parser.
+- **`claude_tool`**: Uses the `anthropic` Python package directly with a tool_runner for agent execution. Provides native structured output in the parser without requiring the Claude CLI.
+- **`manual`**: Replays pre-recorded traces from `ManualTraceManager`. Only the agent port is functional; LLM and parser adapters raise `ManualInterfaceError` if invoked. See [Manual Interface](manual-interface.md).
 
-### `manual` — Pre-Recorded Traces
+**Routing interfaces** share the `langchain` adapter implementation with interface-specific configuration:
 
-A special-purpose interface that replays pre-recorded LLM traces instead of making live API calls.
+- **`openrouter`**: Routes to `langchain` with OpenRouter API configuration. Requires the `OPENROUTER_API_KEY` environment variable.
+- **`openai_endpoint`**: Routes to `langchain` with a custom base URL and API key. Requires `endpoint_base_url` and `endpoint_api_key` on `ModelConfig`.
 
-**When to use**: Testing, CI/CD pipelines, reproducibility, or evaluating responses from external systems.
+## 4. Choosing an Interface
 
-**Requirements**: Always available (no external dependencies).
+```
+1. Are you replaying pre-recorded traces (no live LLM calls)?
+   │
+   ├─ YES → manual
+   │
+   └─ NO
+       │
+       2. Do you need non-Anthropic models (OpenAI, Google, etc.)?
+          │
+          ├─ YES
+          │   │
+          │   3. Access many models through a single API key?
+          │      │
+          │      ├─ YES → openrouter
+          │      │
+          │      └─ NO
+          │          │
+          │          4. Running a local LLM server (Ollama, vLLM, LM Studio)?
+          │             │
+          │             ├─ YES → openai_endpoint
+          │             │
+          │             └─ NO → langchain
+          │
+          └─ NO (Claude models only)
+              │
+              5. Do you need native structured output in the parser?
+                 │
+                 ├─ YES
+                 │   │
+                 │   6. Is the Claude CLI available in PATH?
+                 │      │
+                 │      ├─ YES → claude_agent_sdk
+                 │      │
+                 │      └─ NO → claude_tool (requires anthropic package)
+                 │
+                 └─ NO → langchain (with model_provider="anthropic")
+```
 
-**Key features**:
+### Quick-Reference Table
 
-- No live LLM calls — returns stored traces by question hash
-- Thread-safe session storage via `ManualTraceManager`
-- Only the agent adapter is functional; LLM and parser adapters raise errors if invoked directly
+| Scenario | Recommended |
+|----------|-------------|
+| Getting started, not sure what to pick | `langchain` |
+| Multi-provider evaluation (Anthropic + OpenAI + Google) | `langchain` |
+| 200+ models through one API key | `openrouter` |
+| Local LLM server (Ollama, vLLM, LM Studio) | `openai_endpoint` |
+| Claude-only with full native features | `claude_agent_sdk` |
+| Claude-only, lightweight, no CLI dependency | `claude_tool` |
+| Replay pre-recorded traces (testing, CI, TaskEval) | `manual` |
 
-See [Manual Interface](manual-interface.md) for details on trace format and usage.
+### Tradeoffs
 
----
+| Interface | Advantage | Limitation |
+|-----------|-----------|------------|
+| `langchain` | Broadest model coverage; stable default | Parser uses JSON text parsing (less reliable on complex schemas) |
+| `openrouter` | Single API key for many models | Same parser limitation as `langchain`; depends on OpenRouter availability |
+| `openai_endpoint` | Works with any OpenAI-compatible server | Same parser limitation as `langchain`; requires per-model endpoint config |
+| `claude_agent_sdk` | Native structured output; thinking support; direct SDK access | Requires Claude CLI binary installed in PATH |
+| `claude_tool` | Native structured output without CLI dependency | Requires `anthropic` package; Claude models only |
+| `manual` | No live API calls; fully deterministic | Only agent port works; no generation or parsing |
 
-## Choosing an Adapter
+## 5. Routing and Fallback
 
-| Scenario | Recommended Interface |
-|----------|----------------------|
-| Evaluate across multiple LLM providers | `langchain` |
-| Access 200+ models via single API | `openrouter` |
-| Use a local LLM server (Ollama, vLLM, LM Studio) | `openai_endpoint` |
-| Claude-only evaluation with full SDK features | `claude_agent_sdk` |
-| Claude-only with lightweight tool support | `claude_tool` |
-| Replay pre-recorded traces (testing, CI) | `manual` |
-| Not sure / getting started | `langchain` (default) |
+### Routing Interfaces
 
----
+`openrouter` and `openai_endpoint` are **routing interfaces**. They resolve to the `langchain` adapter at creation time, sharing the same adapter implementation with interface-specific configuration (API keys, base URLs). From the pipeline's perspective, they behave identically to `langchain`.
 
-## Routing and Fallback
+### Automatic Fallback
 
-Two interfaces are **routing interfaces** that delegate to `langchain`:
+When an adapter's required dependency is missing, the factory transparently falls back to an alternative:
 
-- `openrouter` routes to `langchain` — same adapter code, different API endpoint
-- `openai_endpoint` routes to `langchain` — same adapter code, custom base URL
+| Interface | Dependency Check | Falls Back To |
+|-----------|-----------------|---------------|
+| `claude_agent_sdk` | `claude` CLI binary in PATH | `langchain` |
+| `claude_tool` | `anthropic` Python package importable | `langchain` |
+| `langchain` | `langchain_core` Python package importable | None (raises `AdapterUnavailableError`) |
+| `manual` | Always available | None (no dependency) |
 
-Two interfaces have **automatic fallback** to `langchain`:
+Fallback is automatic when `auto_fallback=True` (the default) in the factory functions. When fallback occurs, a warning is logged. Set `auto_fallback=False` to raise an error instead:
 
-- `claude_agent_sdk` falls back if the Claude CLI is not installed
-- `claude_tool` falls back if the `anthropic` package is not installed
+```python
+from karenina.adapters.factory import get_agent
 
-Fallback is automatic when `auto_fallback=True` (the default) in the factory functions.
+# Raise an error if claude_agent_sdk is not available (do not fall back)
+agent = get_agent(config, auto_fallback=False)
+```
 
----
+## 6. Configuration
 
-## Ports Architecture
+### ModelConfig
 
-Each adapter implements three port protocols defined in `karenina.ports`:
-
-| Port | Purpose | Key Methods |
-|------|---------|-------------|
-| **LLMPort** | Chat/completion calls | `invoke()`, `ainvoke()`, `with_structured_output()` |
-| **ParserPort** | Structured output parsing | `parse_to_pydantic()`, `aparse_to_pydantic()` |
-| **AgentPort** | Tool-using agents | `run()`, `arun()` |
-
-Adapters use **duck typing** for protocol compliance — they implement the required methods without explicitly inheriting from the protocol classes.
-
-Each port exposes a `capabilities` property reporting what the adapter supports:
-
-| Adapter | Parser: Structured Output | Parser: System Prompt |
-|---------|:-------------------------:|:---------------------:|
-| `langchain` | No | Yes |
-| `claude_agent_sdk` | Yes | Yes |
-| `claude_tool` | Yes | Yes |
-| `manual` | No | No |
-
----
-
-## Configuration
-
-Adapters are configured through `ModelConfig`:
+Adapters are configured through `ModelConfig`. The `interface` field selects the adapter; other fields provide backend-specific settings:
 
 ```python
 from karenina.schemas.config import ModelConfig
 
-# LangChain with Anthropic
+# Default: LangChain with Anthropic (langchain is the only interface
+# that requires model_provider)
 config = ModelConfig(
     id="haiku",
     model_name="claude-haiku-4-5",
     model_provider="anthropic",
-    interface="langchain",
+    interface="langchain",  # default; can be omitted
 )
 
-# Claude via Agent SDK
+# Claude via Agent SDK (native structured output in parser)
 config = ModelConfig(
     id="claude",
     model_name="claude-sonnet-4-20250514",
-    model_provider="anthropic",
     interface="claude_agent_sdk",
 )
 
@@ -182,29 +227,68 @@ config = ModelConfig(
 config = ModelConfig(
     id="local",
     model_name="llama-3-70b",
-    model_provider="openai",
     interface="openai_endpoint",
     endpoint_base_url="http://localhost:8000/v1",
     endpoint_api_key="not-needed",
 )
 ```
 
-The adapter factory functions create the appropriate adapter:
+<div class="admonition note">
+<p class="admonition-title">Provider requirements</p>
+<p>Only the <code>langchain</code> interface requires <code>model_provider</code> to be set. All other interfaces either assume a specific provider (<code>claude_agent_sdk</code>, <code>claude_tool</code>) or do not need one (<code>openrouter</code>, <code>openai_endpoint</code>, <code>manual</code>).</p>
+</div>
+
+### Factory Functions
+
+The three factory functions create port adapters from a `ModelConfig`:
 
 ```python
 from karenina.adapters.factory import get_llm, get_agent, get_parser
 
-llm = get_llm(config)       # Returns LLMPort
-agent = get_agent(config)    # Returns AgentPort
-parser = get_parser(config)  # Returns ParserPort
+llm = get_llm(config)       # Returns an LLMPort implementation
+agent = get_agent(config)    # Returns an AgentPort implementation
+parser = get_parser(config)  # Returns a ParserPort implementation
 ```
 
----
+All three functions:
 
-## Next Steps
+1. Read `model_config.interface` to select the adapter
+2. Validate required fields (model name; model provider for `langchain` only)
+3. Check adapter availability via the registry
+4. Fall back automatically if the preferred adapter is unavailable
+5. Return a port implementation (never `None`)
 
-- [MCP Overview](mcp-overview.md) — Tool-augmented evaluation with MCP servers
-- [Manual Interface](manual-interface.md) — Using pre-recorded traces
-- [Evaluation Modes](evaluation-modes.md) — Controlling which evaluation units run
-- [Running Verification](../workflows/running-verification/index.md) — End-to-end verification workflow
-- [Advanced Adapters](../advanced-adapters/index.md) — Ports and adapters architecture deep dive, writing custom adapters
+In normal usage, you do not call these functions directly. The verification pipeline calls them based on your `VerificationConfig`.
+
+## 7. How Adapters Connect to the Pipeline
+
+The pipeline creates and invokes adapters based on the model roles in your [VerificationConfig](../reference/configuration/verification-config.md). Each role can use a different interface:
+
+```
+VerificationConfig
+├── answering_models[0]  →  get_agent()  →  Stage 2: generate answer
+├── parsing_models[0]    →  get_parser() →  Stage 7: parse template
+│                        →  get_llm()    →  Stages 5-6: quality checks
+└── rubric_models[0]     →  get_llm()    →  Stage 11: rubric evaluation
+```
+
+For example, you might generate answers with `claude_agent_sdk` (for tool use and MCP) while parsing templates with `langchain` (to use a different judge model from a different provider). The pipeline does not care; it calls the same port methods in both cases.
+
+## 8. Adapter Instructions
+
+Each adapter family can register **adapter instructions** that customize the prompts the [PromptAssembler](../advanced-pipeline/prompt-assembly.md) builds. For example:
+
+- The `claude_tool` and `claude_agent_sdk` adapters strip JSON schema instructions from parsing prompts because their native structured output handles schema enforcement automatically
+- The `langchain` adapter adds explicit JSON formatting instructions since it parses the LLM's text response manually
+
+This mechanism keeps adapters as pure executors: they receive pre-assembled messages and do not build prompts internally. Adapter-specific prompt tuning is declarative and registered at import time. For the complete prompt assembly system, see [Prompt Assembly](../advanced-pipeline/prompt-assembly.md).
+
+## 9. Next Steps
+
+- [Port Types](../advanced-adapters/ports.md): Complete protocol signatures for LLMPort, ParserPort, and AgentPort
+- [Available Adapters](../advanced-adapters/available-adapters.md): Per-adapter features, configuration, and capabilities
+- [Writing Custom Adapters](../advanced-adapters/writing-adapters.md): Implementing and registering new adapters
+- [MCP Overview](mcp-overview.md): Tool-augmented evaluation with MCP servers
+- [Manual Interface](manual-interface.md): Pre-recorded traces for offline evaluation
+- [Evaluation Modes](../notebooks/core_concepts/evaluation-modes.ipynb): Controlling which evaluation units run
+- [Running Verification](../workflows/running-verification/index.md): End-to-end verification workflow
