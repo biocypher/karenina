@@ -4,7 +4,7 @@ While a **Benchmark** is the logical package for your evaluation, a **Checkpoint
 
 Think of a checkpoint as the **Memory** of your evaluation. It doesn't just store questions; it stores the precise logic, quality standards, and provenance that define *why* a result is a pass or a fail.
 
-## The "Record of Truth" Philosophy
+## 1. The "Record of Truth" Philosophy
 
 Karenina uses checkpoints to solve the "it works on my machine" problem in LLM evaluation. A checkpoint is designed to be:
 
@@ -12,7 +12,7 @@ Karenina uses checkpoints to solve the "it works on my machine" problem in LLM e
 *   **Human-Readable**: Even though it's a machine-interpretable format, you can open a checkpoint in any text editor and understand exactly what is being evaluated.
 *   **Semantically Rich**: By using **JSON-LD**, we anchor our evaluation data in the global [Schema.org](https://schema.org) standard, making your benchmarks interoperable with other AI safety and evaluation tools.
 
-## Anatomy of a Checkpoint
+## 2. Anatomy of a Checkpoint
 
 A checkpoint organizes your benchmark into a clear, nested hierarchy. When you look inside, you are seeing a snapshot of the **Four Pillars**:
 
@@ -47,9 +47,9 @@ A checkpoint organizes your benchmark into a clear, nested hierarchy. When you l
 └───────────────────────────────────────────────────────────┘
 ```
 
-## The Journey of a Checkpoint
+## 3. The Journey of a Checkpoint
 
-### 1. Capturing State (`save`)
+### 3.1. Capturing State (`save`)
 When you save a benchmark, Karenina serializes the in-memory Pydantic models into a clean, indented JSON-LD file. It automatically updates the "last modified" timestamp and ensures that all Python logic is safely converted to strings.
 
 ```python
@@ -59,10 +59,10 @@ from pathlib import Path
 benchmark.save(Path("drug_target_v1.jsonld"))
 ```
 
-### 2. Portability & Sharing
+### 3.2. Portability & Sharing
 Because it's a single file, a checkpoint can be committed to Git, sent to a colleague, or archived as part of a research paper. It captures the **Definition** of the evaluation, not the results, keeping the file lightweight and focused.
 
-### 3. Restoring Context (`load`)
+### 3.3. Restoring Context (`load`)
 Loading a checkpoint restores the complete evaluation context. Karenina validates the file structure, rebuilds the internal question cache, and prepares the Python templates for execution.
 
 ```python
@@ -73,7 +73,7 @@ from pathlib import Path
 benchmark = Benchmark.load(Path("drug_target_v1.jsonld"))
 ```
 
-## Why JSON-LD?
+## 4. Why JSON-LD?
 
 Karenina chose **JSON-LD** (JSON for Linked Data) over plain JSON or CSV for three critical reasons:
 
@@ -83,11 +83,11 @@ Karenina chose **JSON-LD** (JSON for Linked Data) over plain JSON or CSV for thr
 | **Interoperability** | Your benchmarks aren't locked into Karenina; they speak the language of the web (Schema.org). |
 | **Stability** | The format versioning allows us to evolve the framework while ensuring your old benchmarks still load correctly. |
 
-## Detailed Reference: The Checkpoint Specification
+## 5. Detailed Reference: The Checkpoint Specification
 
 For power users and tool developers, this section breaks down the technical mapping of a checkpoint file.
 
-### Schema.org Mapping
+### 5.1. Schema.org Mapping
 
 | Karenina Concept | Schema.org Type | Purpose |
 | :--- | :--- | :--- |
@@ -100,13 +100,13 @@ For power users and tool developers, this section breaks down the technical mapp
 | **Keywords** | `keywords` on `Question` | Topic labels for categorization (native schema.org property). |
 | **Metadata** | `PropertyValue` | Arbitrary key-value pairs (notes, author, sources, etc.). |
 
-### Deterministic IDs
+### 5.2. Deterministic IDs
 Question IDs in a checkpoint are content-addressable fingerprints. They are generated using an MD5 hash of the question text:
 `urn:uuid:question-{readable-prefix}-{8-char-hash}`
 
 This ensures that the same question text always produces the same identity across any checkpoint file.
 
-### The `@context` Block
+### 5.3. The `@context` Block
 
 The `@context` tells JSON-LD processors how to interpret property names. Karenina's canonical context:
 
@@ -132,7 +132,7 @@ Key points:
 *   **`karenina`** defines a namespace prefix for Karenina-specific vocabulary. All `additionalType` values on `Rating` objects use this prefix (e.g., `karenina:GlobalRubricTrait`, `karenina:QuestionSpecificRegexTrait`).
 *   **`rating` → `contentRating`** remaps the JSON key `rating` to schema.org's [`contentRating`](https://schema.org/contentRating) property, which is the valid property on `CreativeWork` for accepting `Rating` values.
 
-### The `karenina:` Vocabulary Namespace
+### 5.4. The `karenina:` Vocabulary Namespace
 
 Rubric traits are stored as `Rating` objects with an `additionalType` that identifies the trait kind and scope. All values use the `karenina:` namespace prefix:
 
@@ -151,7 +151,7 @@ Rubric traits are stored as `Rating` objects with an `additionalType` that ident
 
 Old checkpoints without the `karenina:` prefix are normalized automatically on load.
 
-### Example Structure (Annotated JSON-LD)
+### 5.5. Example Structure (Annotated JSON-LD)
 
 ```json
 {
@@ -189,7 +189,7 @@ Old checkpoints without the `karenina:` prefix are normalized automatically on l
 }
 ```
 
-## Next Steps
+## 6. Next Steps
 
 *   [Answer Templates](../../notebooks/core_concepts/answer-templates.ipynb): Understanding how the code inside a checkpoint is executed.
 *   [Rubrics](../rubrics/index.md): How different trait types are represented as `Rating` objects.

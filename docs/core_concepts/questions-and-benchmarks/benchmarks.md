@@ -32,7 +32,7 @@ with patch.dict("sys.modules", mock_modules):
     from karenina.benchmark import Benchmark
 ```
 
-## Core Components of a Benchmark
+## 1. Core Components of a Benchmark
 
 Think of a benchmark as a complete kit. When you share a benchmark, you are handing someone a package composed of:
 
@@ -83,7 +83,7 @@ print(f"Benchmark: {benchmark.name} v{benchmark.version}")
 print(f"Domain:    {benchmark.get_custom_property('domain')}")
 ```
 
-## Portable by Design
+## 2. Portable by Design
 
 Karenina is designed so that evaluation logic travels with the data. The [Question object](questions.md) is the atomic unit of portability: each question carries its own prompt, reference answer, verification logic, and qualitative evaluation criteria as a single self-contained package.
 
@@ -91,7 +91,7 @@ Karenina is designed so that evaluation logic travels with the data. The [Questi
 *   **Rubrics Included**: Question-level [rubric traits](../rubrics/index.md) are also embedded in the question definition. The instructions for qualitative evaluation (safety, citation style, conciseness) are part of the portable unit, not a separate configuration.
 *   **Self-Contained Definitions**: A benchmark's [checkpoint file](checkpoints.md) contains the complete evaluation definition: all questions, their templates, their rubrics, and all metadata. No external data files or source repositories are needed to understand or re-run the evaluation (though you still need the Karenina runtime and LLM API access).
 
-## Benchmark vs. Run: "The What" vs. "The How"
+## 3. Benchmark vs. Run: "The What" vs. "The How"
 
 A common point of confusion is what a benchmark *doesn't* control.
 
@@ -100,12 +100,12 @@ A common point of confusion is what a benchmark *doesn't* control.
 
 This separation is powerful: it means you can run the exact same benchmark against Claude, GPT-4, and Gemini, or run it multiple times with different temperatures, without ever modifying the benchmark itself. For more on execution settings, see [Evaluation Modes](../evaluation-modes.md).
 
-## A Benchmark's Journey
+## 4. A Benchmark's Journey
 
-### 1. Authoring & Populating
+### 4.1. Authoring & Populating
 You start by creating a benchmark and adding questions. At this stage, questions are often marked `finished=False` while you refine their [answer templates](../answer-templates.md) and [rubrics](../rubrics/index.md).
 
-### 2. Persisting (Saving)
+### 4.2. Persisting (Saving)
 Benchmarks exist in memory while you work, but they must be persisted to be useful. Karenina offers two paths:
 
 | Path | Primary Use | What it Stores |
@@ -130,10 +130,10 @@ For details on the portable JSON-LD format, see [Checkpoints](checkpoints.md). F
 └──────────────────────────────────────┘
 ```
 
-### 3. Execution
+### 4.3. Execution
 When you "run" a benchmark, the framework pulls the questions and logic from the benchmark, uses a [VerificationConfig](../../reference/configuration/verification-config.md) to call the LLMs, and then writes the results to the database.
 
-## Detailed Reference: Metadata Fields
+## 5. Detailed Reference: Metadata Fields
 
 Every benchmark carries built-in identity fields to track its evolution.
 
@@ -146,7 +146,7 @@ Every benchmark carries built-in identity fields to track its evolution.
 | `date_created` | ISO timestamp of when the benchmark was initialized. |
 | `date_modified` | ISO timestamp of the last change to the benchmark definition. |
 
-## Next Steps
+## 6. Next Steps
 
 *   [Questions](questions.md): Understanding the minimal unit of evaluation.
 *   [Answer Templates](../answer-templates.md): Writing the verification logic.
