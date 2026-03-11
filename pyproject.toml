@@ -25,6 +25,7 @@ classifiers = [
 ]
 dependencies = [
     "pydantic>=2.0.0",
+    "numpy<2.3",  # pandas 2.3.0 incompatible with numpy 2.3.x (groupby/reindex crash)
     "pandas>=2.0.0",
     "openpyxl>=3.0.0", # For Excel file support
     "aiohttp>=3.8.0",
