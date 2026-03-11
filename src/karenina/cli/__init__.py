@@ -19,8 +19,26 @@ app = typer.Typer(
 )
 
 
+def version_callback(value: bool) -> None:
+    """Print version and exit."""
+    if value:
+        from karenina import __version__
+
+        print(f"karenina {__version__}")
+        raise typer.Exit()
+
+
 @app.callback()
-def callback(ctx: typer.Context) -> None:
+def callback(
+    ctx: typer.Context,
+    _version: bool = typer.Option(
+        False,
+        "--version",
+        callback=version_callback,
+        is_eager=True,
+        help="Show version and exit.",
+    ),
+) -> None:
     """
     Karenina CLI for running benchmark verifications.
     """
