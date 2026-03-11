@@ -148,6 +148,6 @@ df = template_results.to_dataframe()
 
 ## Next Steps
 
-- [Verification Pipeline](verification-pipeline.md) — The 13 stages that produce results
-- [Evaluation Modes](evaluation-modes.md) — How modes affect which results are available
+- [Verification Pipeline](../notebooks/core_concepts/verification-pipeline.ipynb) — The 13 stages that produce results
+- [Evaluation Modes](../notebooks/core_concepts/evaluation-modes.ipynb) — How modes affect which results are available
 - [Analyzing Results](../workflows/analyzing-results/index.md) — Inspecting, aggregating, and exporting results

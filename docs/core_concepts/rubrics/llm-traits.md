@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.18.1
+      jupytext_version: 1.19.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -597,5 +597,5 @@ For detailed configuration (four modes, per-trait overrides, result fields, cost
 - [Regex traits](regex-traits.ipynb): deterministic pattern matching
 - [Callable traits](callable-traits.ipynb): custom Python functions
 - [Metric traits](metric-traits.ipynb): precision, recall, F1 computation
-- [Evaluation modes](../evaluation-modes.md): choosing when rubrics are evaluated
+- [Evaluation modes](../../notebooks/core_concepts/evaluation-modes.ipynb): choosing when rubrics are evaluated
 - [Deep judgment rubrics](../../advanced-pipeline/deep-judgment-rubrics.md): advanced evidence-based evaluation

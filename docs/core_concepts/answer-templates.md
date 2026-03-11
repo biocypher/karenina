@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.18.1
+      jupytext_version: 1.19.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -962,6 +962,6 @@ def verify(self) -> bool:
 ## 8. Next Steps
 
 - [Rubrics](rubrics/index.md): Assess response quality beyond correctness
-- [Evaluation Modes](evaluation-modes.md): Choose between template-only, rubric-only, or both
+- [Evaluation Modes](../notebooks/core_concepts/evaluation-modes.ipynb): Choose between template-only, rubric-only, or both
 - [Factual QA Benchmark](../workflows/creating-benchmarks/factual-qa-benchmark.md): Step-by-step implementation of these patterns in a benchmark
 - [Philosophy](../home/philosophy.md): Why the LLM-as-judge approach works

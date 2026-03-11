@@ -70,11 +70,11 @@ Given the question "Which is the putative target of venetoclax?", a [template](.
 | [**CallableTrait**](../../notebooks/core_concepts/rubrics/callable-traits.ipynb) | `bool` or `int` | No | "Under 150 words" | Created via `from_callable()`; Karenina runs your Python function locally, but the function may itself call external services. Serialized with cloudpickle; only load from trusted sources |
 | [**MetricRubricTrait**](../../notebooks/core_concepts/rubrics/metric-traits.ipynb) | metrics dict | Yes | "Expected drug interactions mentioned" | Two modes: `tp_only` (precision/recall/F1) and `full_matrix` (adds specificity/accuracy) |
 
-Trait descriptions are not questions sent to the model; they are evaluation criteria applied to the response after the fact. Each trait type's sub-page includes a [pipeline diagram](../verification-pipeline.md) showing how evaluation works (RubricEvaluation).
+Trait descriptions are not questions sent to the model; they are evaluation criteria applied to the response after the fact. Each trait type's sub-page includes a [pipeline diagram](../../notebooks/core_concepts/verification-pipeline.ipynb) showing how evaluation works (RubricEvaluation).
 
 No ground truth does not mean no specification. Rubric traits work better when the description makes your standard explicit. If you care about conciseness, say what that means in context: for example, "answers the question directly, avoids repetition, and stays under 120 words unless the prompt asks for detail." Clear trait descriptions improve the quality and consistency of evaluation even when no single correct answer exists.
 
-See [templates vs rubrics](../template-vs-rubric.md) for a full comparison, and [evaluation modes](../evaluation-modes.md) for how to combine them in a single benchmark.
+See [templates vs rubrics](../template-vs-rubric.md) for a full comparison, and [evaluation modes](../../notebooks/core_concepts/evaluation-modes.ipynb) for how to combine them in a single benchmark.
 
 ## 4. Choosing the Right Trait Type
 
@@ -145,5 +145,5 @@ This field is used by analysis tools and DataFrame builders to correctly interpr
 - [Regex traits](../../notebooks/core_concepts/rubrics/regex-traits.ipynb): deterministic pattern matching
 - [Callable traits](../../notebooks/core_concepts/rubrics/callable-traits.ipynb): custom Python functions
 - [Metric traits](../../notebooks/core_concepts/rubrics/metric-traits.ipynb): precision, recall, F1 computation
-- [Evaluation modes](../evaluation-modes.md): template_only, template_and_rubric, rubric_only
+- [Evaluation modes](../../notebooks/core_concepts/evaluation-modes.ipynb): template_only, template_and_rubric, rubric_only
 - [Full Evaluation Benchmark](../../notebooks/creating-benchmarks/full-evaluation-benchmark.ipynb): workflow guide for adding rubrics to benchmarks

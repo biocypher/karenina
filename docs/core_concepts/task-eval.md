@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.18.1
+      jupytext_version: 1.19.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -158,7 +158,7 @@ The global scope evaluates all logs together. Per-step scopes evaluate only the 
 
 ## Attaching Evaluation Criteria
 
-Pass a `BaseAnswer` subclass via `add_template()` for correctness checks, and a `Rubric` via `add_rubric()` for quality traits. The [evaluation mode](evaluation-modes.md) is auto-detected from what you attach: `template_only`, `rubric_only`, or `template_and_rubric`. Both can be scoped globally or to a specific step via the `step_id` parameter.
+Pass a `BaseAnswer` subclass via `add_template()` for correctness checks, and a `Rubric` via `add_rubric()` for quality traits. The [evaluation mode](../notebooks/core_concepts/evaluation-modes.ipynb) is auto-detected from what you attach: `template_only`, `rubric_only`, or `template_and_rubric`. Both can be scoped globally or to a specific step via the `step_id` parameter.
 
 ```python
 # Correctness: judge LLM parses the response into Answer, then verify() runs

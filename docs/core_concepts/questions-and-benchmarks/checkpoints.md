@@ -193,5 +193,5 @@ Old checkpoints without the `karenina:` prefix are normalized automatically on l
 
 *   [Answer Templates](../../notebooks/core_concepts/answer-templates.ipynb): Understanding how the code inside a checkpoint is executed.
 *   [Rubrics](../rubrics/index.md): How different trait types are represented as `Rating` objects.
-*   [Evaluation Modes](../evaluation-modes.md): How to run the evaluation defined in your checkpoint.
+*   [Evaluation Modes](../../notebooks/core_concepts/evaluation-modes.ipynb): How to run the evaluation defined in your checkpoint.
 *   [Creating Benchmarks](../../workflows/creating-benchmarks/index.md): Step-by-step guides for building your first checkpoint.

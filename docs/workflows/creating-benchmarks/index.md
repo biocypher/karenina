@@ -47,7 +47,7 @@ Karenina supports three evaluation strategies. Every benchmark uses one of these
 | **Template + rubric** | Questions, templates, rubrics | ADeLe, few-shot | Comprehensive evaluation (correctness + quality) |
 | **Rubric-only** | Questions, rubrics | ADeLe, few-shot | Subjective tasks, communication, safety |
 
-See [Evaluation Modes](../../core_concepts/evaluation-modes.md) for details on how these strategies map to pipeline behavior.
+See [Evaluation Modes](../../notebooks/core_concepts/evaluation-modes.ipynb) for details on how these strategies map to pipeline behavior.
 
 ---
 
@@ -96,7 +96,7 @@ These concept pages provide the foundational knowledge that the scenarios build 
 - [Answer Templates](../../notebooks/core_concepts/answer-templates.ipynb) — What templates are, field types, `verify()` semantics
 - [Rubrics](../../core_concepts/rubrics/index.md) — Trait types (LLM, regex, callable, metric), global vs per-question
 - [Checkpoints](../../core_concepts/questions-and-benchmarks/checkpoints.md) — JSON-LD format, save/load behavior
-- [Evaluation Modes](../../core_concepts/evaluation-modes.md) — How template-only, template+rubric, and rubric-only map to pipeline stages
+- [Evaluation Modes](../../notebooks/core_concepts/evaluation-modes.ipynb) — How template-only, template+rubric, and rubric-only map to pipeline stages
 - [ADeLe Classification](../../core_concepts/adele.md) — Question complexity dimensions
 - [Few-Shot Examples](../../core_concepts/few-shot.md) — Configuration modes and example selection
 

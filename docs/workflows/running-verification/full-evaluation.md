@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.18.1
+      jupytext_version: 1.19.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -179,7 +179,7 @@ print(f"Sufficiency:{config.sufficiency_enabled}")
 print(f"Embedding:  {config.embedding_check_enabled}")
 ```
 
-When abstention is detected, parsing and rubric stages are skipped — the result is auto-failed. When sufficiency is insufficient, the same skipping applies. See [Evaluation Modes](../../core_concepts/evaluation-modes.md) for stage-skipping rules.
+When abstention is detected, parsing and rubric stages are skipped — the result is auto-failed. When sufficiency is insufficient, the same skipping applies. See [Evaluation Modes](../../notebooks/core_concepts/evaluation-modes.ipynb) for stage-skipping rules.
 
 ---
 

@@ -58,7 +58,7 @@ Inspect results (iterate, filter, group, summarize)
 
 These concept pages provide the foundational knowledge that the scenarios build on:
 
-- [Evaluation Modes](../../core_concepts/evaluation-modes.md) — How template-only, template+rubric, and rubric-only map to pipeline stages
+- [Evaluation Modes](../../notebooks/core_concepts/evaluation-modes.ipynb) — How template-only, template+rubric, and rubric-only map to pipeline stages
 - [Answer Templates](../../notebooks/core_concepts/answer-templates.ipynb) — Template structure, field types, `verify()` semantics
 - [Rubrics](../../core_concepts/rubrics/index.md) — Trait types (LLM, regex, callable, metric), global vs per-question
 - [Adapters](../../core_concepts/adapters.md) — Port/adapter architecture, available backends

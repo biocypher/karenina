@@ -55,7 +55,7 @@ Each question can optionally have an **answer template** and **question-specific
 
 - **Question 1**: Evaluated with its template (correctness) + global rubric + question-specific rubric (quality)
 - **Question 2**: Evaluated with its template + global rubric only
-- **Question 3**: No template; can only be evaluated in [`rubric_only` mode](../evaluation-modes.md)
+- **Question 3**: No template; can only be evaluated in [`rubric_only` mode](../../notebooks/core_concepts/evaluation-modes.ipynb)
 
 For details on what templates and rubrics *do*, see [Answer Templates](../../notebooks/core_concepts/answer-templates.ipynb), [Rubrics](../rubrics/index.md), and [Templates vs Rubrics](../template-vs-rubric.md).
 
@@ -73,11 +73,11 @@ The benchmark's composition (which questions have templates, which have rubrics)
 | `template_and_rubric` | Yes | Yes | Correctness + quality assessment |
 | `rubric_only` | No | Yes | Quality-only evaluation (open-ended questions) |
 
-See [Evaluation Modes](../evaluation-modes.md) for the complete stage matrix and configuration details.
+See [Evaluation Modes](../../notebooks/core_concepts/evaluation-modes.ipynb) for the complete stage matrix and configuration details.
 
 ## 6. Definition vs Execution
 
-The benchmark defines *what* to evaluate: which questions to ask, how to verify correctness, and what quality traits to assess. Runtime settings (which models to use, how many replicates, timeouts, caching) are specified separately in [`VerificationConfig`](../evaluation-modes.md). This separation means the same benchmark can be run against different models or configurations without modification. Results are stored in the database, not inside the benchmark.
+The benchmark defines *what* to evaluate: which questions to ask, how to verify correctness, and what quality traits to assess. Runtime settings (which models to use, how many replicates, timeouts, caching) are specified separately in [`VerificationConfig`](../../notebooks/core_concepts/evaluation-modes.ipynb). This separation means the same benchmark can be run against different models or configurations without modification. Results are stored in the database, not inside the benchmark.
 
 ## 7. Next Steps
 

@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.18.1
+      jupytext_version: 1.19.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -319,7 +319,7 @@ result = task.evaluate(config)
 print(f"Evaluation complete: {result.summary()}")
 ```
 
-> **Learn more**: [Evaluation modes](../core_concepts/evaluation-modes.md) · [Model Config](../reference/configuration/model-config.md)
+> **Learn more**: [Evaluation modes](../notebooks/core_concepts/evaluation-modes.ipynb) · [Model Config](../reference/configuration/model-config.md)
 
 ---
 

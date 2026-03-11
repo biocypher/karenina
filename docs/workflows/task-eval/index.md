@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.18.1
+      jupytext_version: 1.19.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -315,7 +315,7 @@ The per-call override takes precedence over the instance default.
 
 ## Step 3: Attach Evaluation Criteria
 
-Attach [templates](../../core_concepts/answer-templates.md), [rubrics](../../core_concepts/rubrics/index.md), or both. TaskEval auto-detects the [evaluation mode](../../core_concepts/evaluation-modes.md) based on what you provide:
+Attach [templates](../../core_concepts/answer-templates.md), [rubrics](../../core_concepts/rubrics/index.md), or both. TaskEval auto-detects the [evaluation mode](../../notebooks/core_concepts/evaluation-modes.ipynb) based on what you provide:
 
 | You attach | Evaluation mode | What happens |
 |------------|----------------|--------------|

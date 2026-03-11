@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.18.1
+      jupytext_version: 1.19.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -336,7 +336,7 @@ shutil.rmtree(tmpdir, ignore_errors=True)
 <li>Questions have definitive correct answers</li>
 <li>You need to extract and verify specific facts</li>
 </ul>
-<p>See <a href="../../core_concepts/evaluation-modes.md">Evaluation Modes</a> for details.</p>
+<p>See <a href="../../notebooks/core_concepts/evaluation-modes.ipynb">Evaluation Modes</a> for details.</p>
 </div>
 
 ---

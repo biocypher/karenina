@@ -164,6 +164,6 @@ The verification pipeline can evaluate either the **final response** or the **fu
 
 - [Running MCP-Enabled Verification](../notebooks/running-verification/mcp-agent-evaluation.ipynb) — Step-by-step workflow with configuration examples
 - [Adapters](adapters.md) — Full adapter comparison and configuration
-- [Evaluation Modes](evaluation-modes.md) — How MCP interacts with template and rubric evaluation
+- [Evaluation Modes](../notebooks/core_concepts/evaluation-modes.ipynb) — How MCP interacts with template and rubric evaluation
 - [Manual Interface](manual-interface.md) — Alternative for reproducible testing without live tools
 - [VerificationConfig Reference](../reference/configuration/verification-config.md) — Trace handling and MCP-related config fields

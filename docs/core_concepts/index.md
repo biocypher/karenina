@@ -14,8 +14,8 @@ Concepts are ordered to follow the evaluation pipeline — from what you're eval
 | **Answer Templates** | Pydantic models that define how a Judge LLM parses and verifies responses | [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb) |
 | **Rubrics** | Trait-based evaluation of response quality (LLM, regex, callable, metric) | [Rubrics](rubrics/index.md) |
 | **Templates vs Rubrics** | The two evaluation units: correctness (templates) vs quality (rubrics) | [Templates vs Rubrics](template-vs-rubric.md) |
-| **Evaluation Modes** | Three modes controlling which evaluation units run (`template_only`, `template_and_rubric`, `rubric_only`) | [Evaluation Modes](evaluation-modes.md) |
-| **Verification Pipeline** | The 13-stage engine that executes evaluation end to end | [Verification Pipeline](verification-pipeline.md) |
+| **Evaluation Modes** | Three modes controlling which evaluation units run (`template_only`, `template_and_rubric`, `rubric_only`) | [Evaluation Modes](../notebooks/core_concepts/evaluation-modes.ipynb) |
+| **Verification Pipeline** | The 13-stage engine that executes evaluation end to end | [Verification Pipeline](../notebooks/core_concepts/verification-pipeline.ipynb) |
 | **Prompt Assembly** | How prompts are constructed for pipeline LLM calls (tri-section pattern) | [Prompt Assembly](prompt-assembly.md) |
 | **Results & Scoring** | What verification produces: pass/fail, scores, traits, and metrics | [Results & Scoring](results-and-scoring.md) |
 | **Adapters** | LLM backend interfaces (LangChain, Claude SDK, Claude Tool, Manual, and more) | [Adapters](adapters.md) |
@@ -123,13 +123,13 @@ Karenina supports three evaluation modes that control which units run during ver
 | `template_and_rubric` | Yes | Yes |
 | `rubric_only` | No | Yes |
 
-[Read more about evaluation modes →](evaluation-modes.md)
+[Read more about evaluation modes →](../notebooks/core_concepts/evaluation-modes.ipynb)
 
 ### Verification Pipeline
 
 The **verification pipeline** is a 13-stage execution engine. Stages are grouped into setup, generation, guards, template processing, rubric evaluation, and finalization. The evaluation mode controls which stages are active.
 
-[Read more about the verification pipeline →](verification-pipeline.md)
+[Read more about the verification pipeline →](../notebooks/core_concepts/verification-pipeline.ipynb)
 
 ### Prompt Assembly
 

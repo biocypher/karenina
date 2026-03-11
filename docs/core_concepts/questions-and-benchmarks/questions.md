@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.18.1
+      jupytext_version: 1.19.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -109,7 +109,7 @@ When you run a benchmark, each question follows a predictable path through the [
 
 ### 3.1. The `finished` Flag: "Are we ready?"
 
-The `finished` flag determines whether a question enters the [verification pipeline](../verification-pipeline.md). It is a property of the question's membership in a specific benchmark, not an intrinsic property of the question itself (see [Evaluation Modes](../evaluation-modes.md)).
+The `finished` flag determines whether a question enters the [verification pipeline](../verification-pipeline.md). It is a property of the question's membership in a specific benchmark, not an intrinsic property of the question itself (see [Evaluation Modes](../../notebooks/core_concepts/evaluation-modes.ipynb)).
 
 *   **Python API**: Defaults to `True`. Questions added via `add_question()` are assumed to be complete.
 *   **GUI**: Defaults to `False`. This ensures you review and "finish" questions before they enter a production verification run.
@@ -202,5 +202,5 @@ class Answer(BaseAnswer):
 
 *   [Benchmarks](benchmarks.md): How questions are grouped into packages.
 *   [Answer Templates](../answer-templates.md): Writing the `verify()` logic for your questions.
-*   [Evaluation Modes](../evaluation-modes.md): How `finished` status and templates drive the pipeline.
+*   [Evaluation Modes](../../notebooks/core_concepts/evaluation-modes.ipynb): How `finished` status and templates drive the pipeline.
 *   [Benchmark Operations](../../workflows/creating-benchmarks/benchmark-operations.md): Adding, searching, and managing questions at scale.

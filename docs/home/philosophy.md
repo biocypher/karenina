@@ -121,6 +121,6 @@ In TaskEval mode, the answering model role is omitted: you supply the response d
 
 - [Templates vs Rubrics](../core_concepts/template-vs-rubric.md) — Understand the two complementary evaluation units
 - [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb) — Deep dive into template structure, `verify()`, and field types
-- [Evaluation Modes](../core_concepts/evaluation-modes.md) — How template-only, rubric-only, and combined modes work
+- [Evaluation Modes](../notebooks/core_concepts/evaluation-modes.ipynb) — How template-only, rubric-only, and combined modes work
 
 **Back to**: [Home](index.md)

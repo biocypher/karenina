@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.18.1
+      jupytext_version: 1.19.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -98,7 +98,7 @@ A common point of confusion is what a benchmark *doesn't* control.
 *   **The Benchmark** defines **WHAT** to evaluate (questions, logic, rubrics). It is a static definition.
 *   **The VerificationConfig** defines **HOW** to run it (which models to use, how many replicates, timeouts).
 
-This separation is powerful: it means you can run the exact same benchmark against Claude, GPT-4, and Gemini, or run it multiple times with different temperatures, without ever modifying the benchmark itself. For more on execution settings, see [Evaluation Modes](../evaluation-modes.md).
+This separation is powerful: it means you can run the exact same benchmark against Claude, GPT-4, and Gemini, or run it multiple times with different temperatures, without ever modifying the benchmark itself. For more on execution settings, see [Evaluation Modes](../../notebooks/core_concepts/evaluation-modes.ipynb).
 
 ## 4. A Benchmark's Journey
 
@@ -151,5 +151,5 @@ Every benchmark carries built-in identity fields to track its evolution.
 *   [Questions](questions.md): Understanding the minimal unit of evaluation.
 *   [Answer Templates](../answer-templates.md): Writing the verification logic.
 *   [Checkpoints](checkpoints.md): How benchmarks persist as portable JSON-LD files.
-*   [Evaluation Modes](../evaluation-modes.md): How to configure and execute a benchmark run.
+*   [Evaluation Modes](../../notebooks/core_concepts/evaluation-modes.ipynb): How to configure and execute a benchmark run.
 *   [Benchmark Operations](../../workflows/creating-benchmarks/benchmark-operations.md): The full API for managing benchmarks programmatically.
