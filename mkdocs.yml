@@ -35,6 +35,9 @@ exclude_docs: |
   core_concepts/template-vs-rubric.md
   core_concepts/prompt-assembly.md
   core_concepts/results-and-scoring.md
+  core_concepts/manual-interface.md
+  core_concepts/adele.md
+  core_concepts/mcp-overview.md
 
 theme:
   name: material
@@ -176,15 +179,15 @@ nav:
     - Evaluation Modes: notebooks/core_concepts/evaluation-modes.ipynb
     - Results & Scoring: notebooks/core_concepts/results-and-scoring.ipynb
     - Question Context:
-      - ADeLe: core_concepts/adele.md
+      - ADeLe: notebooks/core_concepts/adele.ipynb
       - Few-Shot: core_concepts/few-shot.md
     - Pipeline:
       - Verification Pipeline: notebooks/core_concepts/verification-pipeline.ipynb
       - Prompt Assembly: notebooks/core_concepts/prompt-assembly.ipynb
     - Infrastructure:
       - Adapters: core_concepts/adapters.md
-      - MCP Overview: core_concepts/mcp-overview.md
-      - Manual Interface: core_concepts/manual-interface.md
+      - MCP Overview: notebooks/core_concepts/mcp-overview.ipynb
+      - Manual Interface: notebooks/core_concepts/manual-interface.ipynb
   - Workflows:
     - workflows/index.md
     - Evaluating with TaskEval: notebooks/task-eval/index.ipynb

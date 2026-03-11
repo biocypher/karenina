@@ -1,66 +1,107 @@
+---
+jupyter:
+  jupytext:
+    formats: docs/core_concepts//md,docs/notebooks/core_concepts//ipynb
+    text_representation:
+      extension: .md
+      format_name: markdown
+      format_version: '1.3'
+      jupytext_version: 1.18.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
 # MCP Integration
 
-**Model Context Protocol (MCP)** is a standardized protocol that enables LLMs to access external tools and data sources during verification. When an answering model has MCP access, it can invoke tools — web search, database queries, API calls, file operations — instead of relying solely on its training data.
+MCP (Model Context Protocol) transforms the answering model from a single-shot text generator into a multi-turn **agent** with tool access. Instead of relying solely on training data, the model can call external tools (web search, database queries, API endpoints, file operations) to gather information before producing its final response.
 
-## Why Use MCP in Verification?
+MCP integration is purely an **answering model concern**. It changes how the response is generated, not how the response is evaluated. The [verification pipeline](verification-pipeline.md), [answer templates](answer-templates.md), and [rubrics](rubrics/index.md) work identically regardless of whether the response came from a simple LLM call or a multi-turn agent session.
 
-Standard verification sends a question to an LLM and evaluates the response. MCP-enabled verification gives the LLM **tool access**, turning it into an agent that can gather information before answering.
+```python tags=["hide-cell"]
+# Mock cell: ensures examples execute without live API keys.
+# This cell is hidden in rendered documentation.
+```
 
-**Use cases**:
+## 1. Why MCP Exists in Karenina
 
-- **Current information** — Search the web for recent drug approvals or regulatory changes
-- **Database access** — Query genomics databases for gene annotations
-- **API integration** — Call external services for real-time data
-- **File operations** — Read data files or configuration
-- **Custom tools** — Domain-specific tools for specialized benchmarks
+Standard verification sends a question to an LLM, receives a single response, and evaluates it. This works when the question can be answered from training data alone. Some evaluation scenarios, however, require the model to access external information:
 
-**Example**: A benchmark question asks "What is the current FDA approval status of drug X?" With MCP, the LLM can search for the latest information rather than relying on its training data cutoff.
+- **Current information**: drug approval statuses, regulatory changes, recent publications
+- **Structured databases**: genomics databases, clinical trial registries, knowledge graphs
+- **Custom tools**: domain-specific calculators, internal APIs, file readers
+- **Tool-use evaluation**: benchmarks that test the model's ability to choose and use tools effectively
 
-## When to Use MCP vs Simple LLM
+MCP provides a standardized protocol for giving the model tool access. You configure MCP servers and Karenina handles connection, tool discovery, the agent loop, and trace capture automatically.
 
-| Scenario | Recommendation |
-|----------|---------------|
-| Questions have definitive answers from training data | Simple LLM (no MCP) |
-| Questions require current or real-time information | MCP with web search |
-| Questions need data from specific databases | MCP with database tools |
-| Benchmark tests tool usage ability itself | MCP required |
-| Reproducibility is the top priority | Simple LLM or [manual interface](manual-interface.md) |
-| Cost and latency must be minimized | Simple LLM (MCP adds overhead) |
+## 2. When to Use MCP
 
-MCP verification takes longer and costs more (multiple LLM calls per question due to tool use loops), so use it only when tool access is needed.
+| Scenario | Recommendation | Why |
+|----------|---------------|-----|
+| Questions answerable from training data | Simple LLM (no MCP) | Faster, cheaper, more reproducible |
+| Questions requiring current or real-time information | MCP with appropriate servers | Training data has a cutoff date |
+| Questions needing data from specific databases | MCP with database tools | Model cannot access databases without tools |
+| Benchmark tests tool-use ability itself | MCP required | The tool usage is the capability being evaluated |
+| Reproducibility is the top priority | Simple LLM or [manual interface](manual-interface.md) | MCP results vary with external state |
+| Cost and latency must be minimized | Simple LLM | MCP adds multiple LLM calls per question |
 
-## Architecture
+!!! tip "Litmus test"
 
-MCP integration involves three components:
+    If the question includes phrases like "current status of," "latest data on," or "look up in [database]," MCP is likely appropriate. If the question asks about established knowledge ("What is the mechanism of action of aspirin?"), simple LLM is sufficient and more reproducible.
+
+MCP verification costs more and takes longer than simple LLM verification. Each question triggers a multi-turn agent loop with multiple LLM calls and tool invocations. Use MCP only when the evaluation genuinely requires external information or when tool use is itself the capability being tested.
+
+## 3. Architecture
+
+MCP integration sits between the question and the [verification pipeline](verification-pipeline.md), replacing the single LLM call with an agent loop:
 
 ```
                           ┌─────────────────┐
                           │   MCP Servers    │
                           │  (external tools)│
                           └────────┬─────────┘
-                                   │ tool calls
+                                   │ tool calls & results
                                    ▼
-┌──────────┐    question    ┌─────────────┐    parsed answer    ┌──────────┐
-│ Karenina │ ──────────────►│  Agent Port │ ──────────────────► │ Pipeline │
-│          │                │  (adapter)  │                     │ (verify) │
-└──────────┘                └─────────────┘                     └──────────┘
+┌──────────┐    question    ┌─────────────┐    response + trace    ┌────────────┐
+│ Karenina │ ──────────────►│  AgentPort  │ ─────────────────────► │ Evaluation │
+│          │                │  (adapter)  │                        │ Pipeline   │
+└──────────┘                └─────────────┘                        └────────────┘
                                    │
                               multi-turn
                               agent loop
 ```
 
-1. **MCP Servers** — External processes that expose tools via the MCP protocol (HTTP or stdio transport)
-2. **Agent Port** — The adapter's `AgentPort` implementation connects to servers, discovers tools, and runs the agent loop
-3. **Agent Middleware** — Configurable retry logic, execution limits, conversation summarization, and prompt caching
+Three components work together:
 
-The agent loop runs multiple LLM calls: the model generates a response, optionally invokes tools, receives tool results, and continues until it produces a final answer or hits a limit.
+| Component | Role | Configured via |
+|-----------|------|----------------|
+| **MCP Servers** | External processes that expose tools via the MCP protocol (HTTP or stdio transport) | `ModelConfig.mcp_urls_dict` |
+| **AgentPort adapter** | Connects to servers, discovers tools, runs the multi-turn agent loop, captures the trace | `ModelConfig.interface` (selects the [adapter](adapters.md)) |
+| **Agent middleware** | Retry logic, execution limits, conversation summarization, prompt caching | `ModelConfig.agent_middleware` |
 
-## Configuration
+The agent loop iterates: the model receives the question plus available tools, generates a response, optionally invokes tools, receives tool results, and continues until it produces a final answer or hits a configured limit.
 
-MCP is configured on `ModelConfig`, not `VerificationConfig`. Each answering model can have its own MCP server configuration:
+### 3.1 The Abstraction Boundary
+
+MCP changes the **generation** side of the pipeline. Everything downstream remains the same:
+
+| Pipeline concern | With MCP | Without MCP |
+|------------------|----------|-------------|
+| **Response generation** | Multi-turn agent loop with tool calls | Single LLM call |
+| **Trace capture** | Full conversation (messages + tool calls + results) | Single response |
+| **Template parsing** | Identical: Judge LLM parses response into schema | Same |
+| **Template verification** | Identical: `verify()` checks parsed values | Same |
+| **Rubric evaluation** | Identical: traits assess observable response properties | Same |
+
+The only pipeline-level difference is that two `VerificationConfig` fields control whether the full agent trace or only the final response is sent to the parsing and evaluation models (see [Section 7](#7-trace-handling)).
+
+## 4. Configuration
+
+MCP is configured on `ModelConfig`, not on `VerificationConfig`. Each answering model can have its own MCP server configuration:
 
 ```python
-from karenina.schemas import ModelConfig
+from karenina.schemas.config.models import ModelConfig
 
 model_config = ModelConfig(
     id="agent-claude",
@@ -72,98 +113,178 @@ model_config = ModelConfig(
         "web_search": "https://search-server.example.com/mcp/",
     },
 )
+
+print(f"Agent mode: {'enabled' if model_config.mcp_urls_dict else 'disabled'}")
+print(f"MCP servers: {list(model_config.mcp_urls_dict.keys())}")
+print(f"Tool filter: {model_config.mcp_tool_filter}")
+print(f"Agent timeout: {model_config.agent_timeout}")
 ```
 
-### Key MCP Fields on ModelConfig
+Setting `mcp_urls_dict` is the trigger that switches from simple LLM invocation to agent-based execution. All other MCP-related fields are optional refinements.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `mcp_urls_dict` | `dict[str, str] \| None` | Map of server names to URLs. Setting this enables MCP agent mode. |
-| `mcp_tool_filter` | `list[str] \| None` | Restrict which tools the agent can use (by tool name). If `None`, all discovered tools are available. |
-| `mcp_tool_description_overrides` | `dict[str, str] \| None` | Override tool descriptions sent to the LLM (useful for optimizing tool selection). |
-| `max_context_tokens` | `int \| None` | Token threshold for triggering conversation summarization. |
-| `agent_middleware` | `AgentMiddlewareConfig \| None` | Middleware stack controlling retry, limits, summarization, and caching. |
+### 4.1 MCP Fields on ModelConfig
 
-### Agent Middleware
+| Field | Type | Default | Purpose |
+|-------|------|---------|---------|
+| `mcp_urls_dict` | `dict[str, str] \| None` | `None` | Map of server names to URLs. Setting this enables MCP agent mode. |
+| `mcp_tool_filter` | `list[str] \| None` | `None` | Restrict which discovered tools the agent can use (by tool name). `None` means all tools are available. |
+| `mcp_tool_description_overrides` | `dict[str, str] \| None` | `None` | Replace tool descriptions sent to the LLM. Useful for improving tool selection accuracy. |
+| `max_context_tokens` | `int \| None` | `None` | Token threshold for triggering conversation summarization. When omitted, the adapter auto-detects from the model's context window. |
+| `agent_middleware` | `AgentMiddlewareConfig \| None` | `None` | Controls retry behavior, execution limits, summarization, and prompt caching. Only used when `mcp_urls_dict` is set. |
+| `agent_timeout` | `int \| None` | `None` | Timeout in seconds for agent execution. Overrides the default (180s). Set higher for complex questions with many tool calls. |
 
-The `AgentMiddlewareConfig` controls agent execution behavior. It only applies when `mcp_urls_dict` is set.
+## 5. Agent Middleware
 
-| Component | Config Class | Key Settings | Defaults |
-|-----------|-------------|-------------|----------|
+`AgentMiddlewareConfig` controls agent execution behavior and only applies when `mcp_urls_dict` is set. It groups five sub-configurations, each with sensible defaults:
+
+```python
+from karenina.schemas.config.models import (
+    AgentMiddlewareConfig,
+    AgentLimitConfig,
+    SummarizationConfig,
+)
+
+middleware = AgentMiddlewareConfig(
+    limits=AgentLimitConfig(
+        model_call_limit=40,    # default: 25
+        tool_call_limit=80,     # default: 50
+    ),
+    summarization=SummarizationConfig(
+        trigger_fraction=0.7,   # default: 0.8
+        keep_messages=30,       # default: 20
+    ),
+)
+
+model_config = ModelConfig(
+    id="agent-claude",
+    model_name="claude-sonnet-4-5",
+    model_provider="anthropic",
+    interface="langchain",
+    mcp_urls_dict={"biocontext": "https://mcp.biocontext.ai/mcp/"},
+    agent_middleware=middleware,
+)
+
+print(f"Model call limit: {middleware.limits.model_call_limit}")
+print(f"Tool call limit: {middleware.limits.tool_call_limit}")
+print(f"Exit behavior: {middleware.limits.exit_behavior}")
+print(f"Summarization: trigger at {middleware.summarization.trigger_fraction:.0%}, keep {middleware.summarization.keep_messages} messages")
+print(f"Model retry: {middleware.model_retry.max_retries} retries, on_failure='{middleware.model_retry.on_failure}'")
+print(f"Tool retry: {middleware.tool_retry.max_retries} retries, on_failure='{middleware.tool_retry.on_failure}'")
+print(f"Prompt caching: enabled={middleware.prompt_caching.enabled}, ttl='{middleware.prompt_caching.ttl}'")
+```
+
+### 5.1 Sub-Configurations
+
+| Component | Config Class | Key Fields | Defaults |
+|-----------|-------------|------------|----------|
 | **Execution limits** | `AgentLimitConfig` | `model_call_limit`, `tool_call_limit`, `exit_behavior` | 25 model calls, 50 tool calls, `"end"` |
-| **Model retry** | `ModelRetryConfig` | `max_retries`, `backoff_factor`, `on_failure` | 2 retries, 2.0x backoff, `"continue"` |
-| **Tool retry** | `ToolRetryConfig` | `max_retries`, `backoff_factor`, `on_failure` | 3 retries, 2.0x backoff, `"return_message"` |
-| **Summarization** | `SummarizationConfig` | `enabled`, `trigger_fraction`, `keep_messages` | Enabled, 80% threshold, keep 20 messages |
-| **Prompt caching** | `PromptCachingConfig` | `enabled`, `ttl`, `unsupported_model_behavior` | Enabled, 5 min TTL, `"warn"` for non-Anthropic |
+| **Model retry** | `ModelRetryConfig` | `max_retries`, `backoff_factor`, `initial_delay`, `on_failure` | 2 retries, 2.0x backoff, 2.0s initial delay, `"continue"` |
+| **Tool retry** | `ToolRetryConfig` | `max_retries`, `backoff_factor`, `initial_delay`, `on_failure` | 3 retries, 2.0x backoff, 1.0s initial delay, `"return_message"` |
+| **Summarization** | `SummarizationConfig` | `enabled`, `trigger_fraction`, `keep_messages` | `True`, 0.8, 20 messages |
+| **Prompt caching** | `PromptCachingConfig` | `enabled`, `ttl`, `unsupported_model_behavior` | `True`, `"5m"`, `"warn"` |
 
-**Summarization** automatically condenses conversation history when it approaches the context window limit, preventing failures on long multi-turn interactions.
+**Execution limits** prevent runaway agents. When `model_call_limit` or `tool_call_limit` is reached, the `exit_behavior` field determines whether the agent returns a partial response (`"end"`) or blocks further calls but continues (`"continue"`). The pipeline's RecursionLimitAutoFail stage (Stage 3) auto-fails verification if a limit was hit.
 
-**Prompt caching** reduces costs and latency for Anthropic models by caching static content (system prompts, tool definitions) on Anthropic's servers. Only applies to Anthropic models with the `langchain` interface.
+**Summarization** condenses conversation history when the token count approaches the context window, preventing failures on long multi-turn interactions. Only the `langchain` adapter exposes the full `SummarizationConfig`; the `claude_agent_sdk` and `claude_tool` adapters use built-in summarization.
 
-## Adapter-Specific MCP Handling
+**Prompt caching** reduces cost and latency for Anthropic models by caching static content (system prompts, tool definitions) on Anthropic's servers. Only applies to Anthropic models with the `langchain` interface. The `ttl` field accepts `"5m"` or `"1h"`.
 
-Each adapter connects to MCP servers differently:
+## 6. Adapter-Specific MCP Behavior
+
+Each [adapter](adapters.md) implements MCP differently. The adapter is selected by the `interface` field on `ModelConfig`.
 
 | Feature | `langchain` | `claude_agent_sdk` | `claude_tool` |
 |---------|:-----------:|:------------------:|:-------------:|
-| **Transport** | HTTP/SSE | HTTP/SSE + Stdio | HTTP/SSE |
-| **MCP library** | `langchain-mcp-adapters` | Anthropic Agent SDK | `mcp` Python SDK |
+| **Transport** | HTTP/SSE | HTTP/SSE + stdio | HTTP/SSE |
+| **MCP library** | `langchain-mcp-adapters` | Claude Agent SDK | `mcp` Python SDK |
 | **Tool filtering** | Yes | Yes | Yes |
 | **Description overrides** | Yes | Yes | Yes |
-| **Prompt caching middleware** | Yes (Anthropic only) | No | No |
-| **Summarization middleware** | Yes (configurable) | Built-in | Built-in |
-| **Retry middleware** | Yes (configurable) | Yes | Yes |
+| **Configurable middleware** | Full (`AgentMiddlewareConfig`) | Limits only | Limits only |
+| **Prompt caching** | Middleware-based (Anthropic only) | No | Native (`cache_control`) |
+| **Summarization** | Configurable | Built-in (SDK-managed) | Built-in |
 | **Stdio servers** | No | Yes | No |
-| **Requires CLI** | No | Yes (Claude Code) | No |
 
-### `langchain` — Middleware-Based
+### 6.1 Choosing an Adapter for MCP
 
-The default adapter uses `langchain-mcp-adapters` to connect to MCP servers over HTTP. Tools are wrapped as LangChain `Tool` objects and passed to a LangGraph agent. The full middleware stack (retry, limits, summarization, prompt caching) is configurable via `AgentMiddlewareConfig`.
+| Scenario | Adapter | Why |
+|----------|---------|-----|
+| General-purpose MCP with configurable middleware | `langchain` | Full control over retry, summarization, caching behavior |
+| Need local stdio-based MCP servers | `claude_agent_sdk` | Only adapter supporting stdio transport |
+| Direct Anthropic API without framework overhead | `claude_tool` | Uses Anthropic SDK directly with native prompt caching |
+| Non-Anthropic models (OpenAI, Google) with MCP | `langchain` | Multi-provider support via LangChain |
+| Pre-recorded traces, no live tools | `manual` | Does not support MCP; raises `ValueError` if `mcp_urls_dict` is set |
 
-### `claude_agent_sdk` — Native Anthropic
+The `openrouter` and `openai_endpoint` interfaces delegate to the `langchain` adapter internally, so they inherit the same MCP behavior.
 
-Uses Anthropic's Agent SDK with native MCP session support. The only adapter that supports **stdio transport** (local subprocess MCP servers). Requires Claude Code CLI installed.
+For implementation details on how each adapter connects, discovers tools, runs the agent loop, and captures traces, see the [MCP Integration Deep Dive](../advanced-adapters/mcp-integration.md).
 
-### `claude_tool` — Direct SDK
+## 7. Trace Handling
 
-Uses the `mcp` Python SDK to connect to HTTP/SSE servers directly. Session lifecycle is managed automatically via `AsyncExitStack` with cleanup on completion.
+After agent execution, the full conversation trace (assistant responses, tool calls, tool results) is captured in two formats:
 
-### `openrouter` / `openai_endpoint` — Via LangChain
+- **`trace_messages`**: structured list of `Message` objects with typed content blocks (text, tool use, tool result, thinking)
+- **`raw_trace`**: legacy string serialization for backward compatibility and debugging
 
-These routing interfaces delegate to the `langchain` adapter, so they inherit the same MCP behavior.
+Two `VerificationConfig` fields control what the downstream evaluation models receive:
 
-### `manual` — No MCP
+```python
+from karenina.schemas.verification.config import VerificationConfig
 
-The manual interface uses pre-recorded traces and **does not support MCP**. Configuring `mcp_urls_dict` on a manual model raises a `ValueError`.
+# Minimal config to demonstrate trace handling fields
+judge = ModelConfig(id="judge", model_name="claude-haiku-4-5", model_provider="anthropic", interface="langchain")
+config = VerificationConfig(
+    answering_models=[model_config],  # MCP-enabled model from Section 5
+    parsing_models=[judge],
+    use_full_trace_for_template=False,  # default: only final AI message for parsing
+    use_full_trace_for_rubric=True,     # default: full trace for rubric evaluation
+)
 
-## MCP Execution Flow
+print(f"Template sees full trace: {config.use_full_trace_for_template}")
+print(f"Rubric sees full trace: {config.use_full_trace_for_rubric}")
+```
 
-When verification runs with MCP enabled:
+| Field | Type | Default | Effect |
+|-------|------|---------|--------|
+| `use_full_trace_for_template` | `bool` | `False` | `True`: template parsing sees the complete trace. `False`: only the final AI message is passed to the Judge LLM. |
+| `use_full_trace_for_rubric` | `bool` | `True` | `True`: rubric evaluation sees the complete trace. `False`: only the final AI message is evaluated. |
 
-1. **Connect** — Adapter connects to MCP servers listed in `mcp_urls_dict`
-2. **Discover tools** — Available tools are fetched from each server
-3. **Filter** — If `mcp_tool_filter` is set, only matching tools are exposed to the LLM
-4. **Run agent loop** — The LLM receives the question plus available tools and runs a multi-turn loop (generate → call tools → receive results → continue)
-5. **Apply middleware** — Retry logic handles transient failures; summarization condenses long conversations; limits cap execution
-6. **Capture trace** — All messages (assistant responses + tool calls + tool results) are captured as `trace_messages`
-7. **Return result** — Final response, full trace, and usage metadata are returned for pipeline evaluation
+!!! note
 
-## Trace Handling
+    The full trace is **always captured and stored** regardless of these settings. These flags only control what input the parsing and evaluation models receive. If set to `False` and the trace does not end with an AI message, the corresponding verification stage will fail.
 
-After agent execution, the trace is available in two formats:
+The defaults reflect typical evaluation patterns: template parsing usually needs only the final answer (the model's conclusion after tool use), while rubric evaluation benefits from the full trace (to assess qualities like tool selection, reasoning process, or citation of retrieved information).
 
-- **`trace_messages`** — Structured list of `Message` objects (assistant and tool messages only, excluding user messages)
-- **`raw_trace`** — Legacy string serialization of all messages
+## 8. MCP Execution Lifecycle
 
-The verification pipeline can evaluate either the **final response** or the **full trace**. This is controlled by two `VerificationConfig` fields:
+When verification runs with MCP enabled, the following lifecycle executes per question:
 
-- `use_full_trace_for_template` — Use the complete trace (not just the final answer) for template parsing
-- `use_full_trace_for_rubric` — Use the complete trace for rubric evaluation
+```
+1. Connect       Adapter connects to MCP servers listed in mcp_urls_dict
+       │
+2. Discover      Available tools are fetched from each server
+       │
+3. Filter        mcp_tool_filter restricts the tool set;
+       │         description overrides are applied
+       │
+4. Agent loop    LLM receives question + tools → generates response →
+       │         calls tools → receives results → continues until
+       │         final answer or limit reached
+       │
+5. Middleware     Retry handles transient failures; summarization
+       │         condenses long conversations; limits cap execution
+       │
+6. Capture       All messages captured as trace_messages and raw_trace
+       │
+7. Return        AgentResult with final_response, traces, usage metadata,
+                 and limit_reached flag
+```
 
-## Next Steps
+The `AgentResult` feeds into the standard [verification pipeline](verification-pipeline.md) at the GenerateAnswer stage (Stage 2). If `limit_reached` is `True`, the RecursionLimitAutoFail stage (Stage 3) marks verification as auto-failed while preserving the captured trace for inspection.
 
-- [Running MCP-Enabled Verification](../notebooks/running-verification/mcp-agent-evaluation.ipynb) — Step-by-step workflow with configuration examples
-- [Adapters](adapters.md) — Full adapter comparison and configuration
-- [Evaluation Modes](../notebooks/core_concepts/evaluation-modes.ipynb) — How MCP interacts with template and rubric evaluation
-- [Manual Interface](manual-interface.md) — Alternative for reproducible testing without live tools
-- [VerificationConfig Reference](../reference/configuration/verification-config.md) — Trace handling and MCP-related config fields
+## 9. Next Steps
+
+1. [MCP-enabled verification workflow](../workflows/running-verification/mcp-agent-evaluation.md): step-by-step configuration and execution
+2. [MCP Integration Deep Dive](../advanced-adapters/mcp-integration.md): adapter internals, connection lifecycle, trace capture, message conversion
+3. [Adapters](adapters.md): adapter comparison and port/adapter architecture
+4. [Evaluation modes](evaluation-modes.md): how MCP interacts with template and rubric evaluation
+5. [Manual interface](manual-interface.md): alternative for reproducible testing without live tools
