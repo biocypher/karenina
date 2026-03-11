@@ -1,10 +1,12 @@
 ---
 jupyter:
   jupytext:
+    formats: docs/core_concepts/rubrics//md,docs/notebooks/core_concepts/rubrics//ipynb
     text_representation:
       extension: .md
       format_name: markdown
       format_version: '1.3'
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -296,5 +298,5 @@ except ValueError as e:
 - [LLM rubric traits](llm-traits.md): boolean, score, and literal kinds
 - [Callable traits](callable-traits.md): custom Python functions
 - [Metric traits](metric-traits.md): precision, recall, F1 computation
-- [Templates vs rubrics](../template-vs-rubric.md): choosing between correctness checks and rubric-style evaluation
+- [Templates vs rubrics](../../notebooks/core_concepts/template-vs-rubric.ipynb): choosing between correctness checks and rubric-style evaluation
 - [Full Evaluation Benchmark](../../workflows/creating-benchmarks/full-evaluation-benchmark.md): adding traits to benchmarks

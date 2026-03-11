@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.19.1
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -35,7 +35,15 @@ import hashlib
 from unittest.mock import MagicMock, patch
 
 mock_modules = {}
-for mod in ["sqlalchemy", "sqlalchemy.orm", "sqlalchemy.ext", "sqlalchemy.ext.declarative"]:
+for mod in [
+    "sqlalchemy", "sqlalchemy.orm", "sqlalchemy.ext",
+    "sqlalchemy.ext.declarative", "sqlalchemy.engine",
+    "sqlalchemy.sql", "sqlalchemy.event",
+    "karenina.storage", "karenina.storage.base",
+    "karenina.storage.engine", "karenina.storage.db_config",
+    "karenina.storage.models", "karenina.storage.generated_models",
+    "karenina.storage.auto_mapper", "karenina.storage.operations",
+]:
     mock_modules[mod] = MagicMock()
 
 with patch.dict("sys.modules", mock_modules):
@@ -72,8 +80,8 @@ print(f"ID:         {q.id}")
 ### 1.1. The Prompt (`question`)
 The `question` field is the literal text sent to the model being evaluated. Its behavior in the pipeline depends on the stage:
 
-*   **Answering Stage (Bare Control)**: By default, Karenina sends the `question` as a bare user message. This stage is deliberately unmanaged to ensure the benchmark author has total control. Any background info, domain context, or specific formatting instructions must be included in the `question` text itself. The only framework-level additions are optional: a system prompt from the [`ModelConfig`](../../reference/configuration/model-config.md) or prepended [Few-Shot examples](../few-shot.md).
-*   **Parsing & Rubric Stages (Contextual Reference)**: The same `question` text is also sent to the [Judge LLM](../verification-pipeline.md) during parsing and to [rubric evaluators](../rubrics/index.md) when assessing response quality. Unlike the answering stage, these "evaluation" stages are managed by the framework using specialized system prompts and [instruction builders](../prompt-assembly.md) that provide the necessary context for parsing and judgment.
+*   **Answering Stage (Bare Control)**: By default, Karenina sends the `question` as a bare user message. This stage is deliberately unmanaged to ensure the benchmark author has total control. Any background info, domain context, or specific formatting instructions must be included in the `question` text itself. The only framework-level additions are optional: a system prompt from the [`ModelConfig`](../../reference/configuration/model-config.md) or prepended [Few-Shot examples](../../notebooks/core_concepts/few-shot.ipynb).
+*   **Parsing & Rubric Stages (Contextual Reference)**: The same `question` text is also sent to the [Judge LLM](../verification-pipeline.md) during parsing and to [rubric evaluators](../rubrics/index.md) when assessing response quality. Unlike the answering stage, these "evaluation" stages are managed by the framework using specialized system prompts and [instruction builders](../../notebooks/core_concepts/prompt-assembly.ipynb) that provide the necessary context for parsing and judgment.
 
 ### 1.2. The Reference (`raw_answer`)
 The `raw_answer` is your human-readable "Source of Truth." **It is never sent to the answering LLM and never sent to the Judge LLM.**
@@ -178,7 +186,7 @@ class Answer(BaseAnswer):
 *   **`custom_metadata`**: An open dictionary for any domain-specific attributes (e.g., "difficulty": "hard").
 
 ### 5.2. Special Pipeline Fields
-*   **`few_shot_examples`**: A list of example question-answer pairs. When enabled in [VerificationConfig](../../reference/configuration/verification-config.md), these are prepended to the question to guide the answering model's format or level of detail. They are not sent to the Judge during parsing (see [Few-Shot](../few-shot.md)).
+*   **`few_shot_examples`**: A list of example question-answer pairs. When enabled in [VerificationConfig](../../reference/configuration/verification-config.md), these are prepended to the question to guide the answering model's format or level of detail. They are not sent to the Judge during parsing (see [Few-Shot](../../notebooks/core_concepts/few-shot.ipynb)).
 *   **`answer_template`**: The Python code (subclass of `BaseAnswer`) that defines the parsing schema and `verify()` logic for this specific question.
 *   **`question_rubric`**: Question-specific rubric traits that augment the benchmark-level rubric.
 

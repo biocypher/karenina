@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.19.1
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -241,7 +241,7 @@ ADeLe provides:
 - **Ordinal scores** from 0 (none) to 5 (very high) on each dimension
 - **Filtering support** — select question subsets by complexity for targeted evaluation
 
-See [ADeLe Concepts](../../core_concepts/adele.md) for the full dimension list and scoring reference.
+See [ADeLe Concepts](../../notebooks/core_concepts/adele.ipynb) for the full dimension list and scoring reference.
 
 ---
 
@@ -286,7 +286,7 @@ print(f"K: {few_shot_config.global_k}")
 print(f"Global external examples: {len(few_shot_config.global_external_examples)}")
 ```
 
-See [Few-Shot Configuration](../../core_concepts/few-shot.md) for the full configuration reference.
+See [Few-Shot Configuration](../../notebooks/core_concepts/few-shot.ipynb) for the full configuration reference.
 
 ---
 
@@ -343,5 +343,5 @@ Save checkpoint
 - [Full Evaluation Benchmark](full-evaluation-benchmark.ipynb) — Add rubric traits alongside templates
 - [Quality Assessment](quality-assessment-benchmark.ipynb) — Rubric-only evaluation
 - [Answer Templates](../core_concepts/answer-templates.ipynb) — Template concepts
-- [ADeLe Concepts](../../core_concepts/adele.md) — Full ADeLe dimension reference
-- [Few-Shot Configuration](../../core_concepts/few-shot.md) — Advanced few-shot options
+- [ADeLe Concepts](../../notebooks/core_concepts/adele.ipynb) — Full ADeLe dimension reference
+- [Few-Shot Configuration](../../notebooks/core_concepts/few-shot.ipynb) — Advanced few-shot options

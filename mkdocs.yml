@@ -31,6 +31,7 @@ exclude_docs: |
   core_concepts/questions-and-benchmarks/benchmarks.md
   core_concepts/questions-and-benchmarks/questions.md
   core_concepts/verification-pipeline.md
+  core_concepts/evaluation-modes.md
 
 theme:
   name: material

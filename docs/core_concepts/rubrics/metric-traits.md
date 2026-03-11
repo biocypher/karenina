@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.19.1
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -427,5 +427,5 @@ print(rubric.get_metric_trait_names())
 - [LLM Rubric Traits](llm-traits.md): open-ended boolean, score, and literal judgments
 - [Regex Traits](regex-traits.md): deterministic pattern matching on response text
 - [Callable Traits](callable-traits.md): custom local Python evaluation logic
-- [Templates vs rubrics](../template-vs-rubric.md): choosing between correctness checks and rubric-style evaluation
+- [Templates vs rubrics](../../notebooks/core_concepts/template-vs-rubric.ipynb): choosing between correctness checks and rubric-style evaluation
 - [Rubrics Overview](index.md): when to use each trait type

@@ -1,10 +1,12 @@
 ---
 jupyter:
   jupytext:
+    formats: docs/core_concepts/rubrics//md,docs/notebooks/core_concepts/rubrics//ipynb
     text_representation:
       extension: .md
       format_name: markdown
       format_version: '1.3'
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -276,4 +278,4 @@ for trait in rubric.callable_traits:
 - [LLM traits](llm-traits.md): boolean, score, and literal traits evaluated by an LLM judge
 - [Regex traits](regex-traits.md): deterministic pattern matching
 - [Metric traits](metric-traits.md): precision, recall, and F1 for extraction tasks
-- [Templates vs rubrics](../template-vs-rubric.md): choosing between correctness checks and rubric-style evaluation
+- [Templates vs rubrics](../../notebooks/core_concepts/template-vs-rubric.ipynb): choosing between correctness checks and rubric-style evaluation
