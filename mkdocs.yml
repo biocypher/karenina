@@ -164,7 +164,6 @@ nav:
     - Rubric Traits:
       - Overview: core_concepts/rubrics/index.md
       - LLM Traits: notebooks/core_concepts/rubrics/llm-traits.ipynb
-      - Literal Traits: notebooks/core_concepts/rubrics/literal-traits.ipynb
       - Regex Traits: notebooks/core_concepts/rubrics/regex-traits.ipynb
       - Callable Traits: notebooks/core_concepts/rubrics/callable-traits.ipynb
       - Metric Traits: notebooks/core_concepts/rubrics/metric-traits.ipynb
