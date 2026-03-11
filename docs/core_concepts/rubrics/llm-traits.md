@@ -28,7 +28,7 @@ An `LLMRubricTrait` sends the original question, the model's raw response trace,
 
 LLM rubric traits are meant for qualities you can judge by reading the answer itself, without needing ground truth. Typical examples include whether a biomedical answer presents evidence in a usable style rather than a vague one, hedges appropriately when discussing off-label use, or develops its reasoning as a coherent chain rather than a pile of disconnected claims.
 
-Use `LLMRubricTrait` when the evaluation genuinely needs semantic judgment. If the check can be expressed as a deterministic pattern or Python function, prefer [Regex traits](regex-traits.ipynb) or [Callable traits](callable-traits.ipynb): they are faster, cheaper, and perfectly reproducible.
+Use `LLMRubricTrait` when the evaluation genuinely needs semantic judgment. If the check can be expressed as an exact pattern or a Python-defined rule, prefer [Regex traits](regex-traits.ipynb) or [Callable traits](callable-traits.ipynb). Pure local regex/callable checks are faster, cheaper, and more reproducible.
 
 ### 1.1 Philosophy
 
@@ -127,6 +127,10 @@ Boolean traits answer a yes/no question about the response. The parsing model re
 ### 4.1 Writing Boolean Descriptions
 
 A good boolean description defines exactly what evidence makes the answer True or False, including the cases that are hardest to classify. Describe what is observable in the text, not abstract quality labels.
+
+```python
+from karenina.schemas.entities.rubric import LLMRubricTrait
+```
 
 ```python
 LLMRubricTrait(
@@ -562,8 +566,19 @@ You can control rubric deep judgment at runtime through `VerificationConfig`:
 
 ```python
 from karenina.schemas import VerificationConfig
+from karenina.schemas.config import ModelConfig
 
 config = VerificationConfig(
+    parsing_only=True,
+    parsing_models=[
+        ModelConfig(
+            id="haiku-parser",
+            model_name="claude-haiku-4-5",
+            model_provider="anthropic",
+            interface="langchain",
+            temperature=0.0,
+        )
+    ],
     deep_judgment_rubric_mode="enable_all",
     deep_judgment_rubric_global_excerpts=True,
 )

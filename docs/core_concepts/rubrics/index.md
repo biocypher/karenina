@@ -2,6 +2,10 @@
 
 Rubrics evaluate **how** a model responded by assessing observable properties of the raw response trace, properties that do not require ground truth. While [answer templates](../../notebooks/core_concepts/answer-templates.ipynb) verify *what* the model said (factual correctness against a known answer), rubrics assess qualities like safety, conciseness, tone, or the presence of specific elements (citations, disclaimers).
 
+!!! tip "Trace filtering"
+
+    For agent workflows, `VerificationConfig.use_full_trace_for_rubric` controls whether rubric evaluation uses the full trace (`True`, the default) or only the final AI message (`False`). See the [VerificationConfig Reference](../../reference/configuration/verification-config.md#trace-filtering) for the config fields and [MCP-enabled verification](../../workflows/running-verification/mcp-agent-evaluation.md#trace-handling) for an end-to-end example.
+
 Rubrics come in four trait types (LLM, regex, callable, metric) that work differently: some require an LLM call, others run locally with no model involved. They can be applied **globally** across all questions or **per-question** for domain-specific checks.
 
 ## 1. What Are Rubrics?
@@ -63,7 +67,7 @@ Given the question "Which is the putative target of venetoclax?", a [template](.
 | [**LLMRubricTrait**](../../notebooks/core_concepts/rubrics/llm-traits.ipynb) (score) | `int` | Yes | "Rate clarity from 1-5" | Configurable range |
 | [**LLMRubricTrait**](../../notebooks/core_concepts/rubrics/llm-traits.ipynb) (literal) | `int` | Yes | "Classify tone as formal/casual/technical" | Returns index based on class order; `higher_is_better` controls direction |
 | [**RegexTrait**](../../notebooks/core_concepts/rubrics/regex-traits.ipynb) | `bool` | No | "Has bracket citations `[N]`" | 100% reproducible; supports `case_sensitive` and `invert_result` options |
-| [**CallableTrait**](../../notebooks/core_concepts/rubrics/callable-traits.ipynb) | `bool` or `int` | No | "Under 150 words" | Created via `from_callable()`; serialized with cloudpickle; not available in GUI. Only load from trusted sources (deserialization executes arbitrary Python) |
+| [**CallableTrait**](../../notebooks/core_concepts/rubrics/callable-traits.ipynb) | `bool` or `int` | No | "Under 150 words" | Created via `from_callable()`; Karenina runs your Python function locally, but the function may itself call external services. Serialized with cloudpickle; only load from trusted sources |
 | [**MetricRubricTrait**](../../notebooks/core_concepts/rubrics/metric-traits.ipynb) | metrics dict | Yes | "Expected drug interactions mentioned" | Two modes: `tp_only` (precision/recall/F1) and `full_matrix` (adds specificity/accuracy) |
 
 Trait descriptions are not questions sent to the model; they are evaluation criteria applied to the response after the fact. Each trait type's sub-page includes a [pipeline diagram](../verification-pipeline.md) showing how evaluation works (RubricEvaluation).
@@ -81,7 +85,7 @@ See [templates vs rubrics](../template-vs-rubric.md) for a full comparison, and 
 | Exact keyword or format validation | RegexTrait | [Regex trait](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-3-exact-keywordformat-validation-regex) |
 | Complex validation logic (word counts, structure) | CallableTrait | [Callable trait](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-4-complex-validation-logic-callable) |
 | Precision/recall/F1 measurement | MetricRubricTrait | [Metric trait](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-5-precisionrecallf1-metric-trait) |
-| Deterministic, reproducible check | RegexTrait or CallableTrait | [Inverted regex](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-6-deterministic-reproducible-check-regex-inverted) |
+| Deterministic, reproducible check | RegexTrait, or CallableTrait if your function is pure local code | [Inverted regex](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-6-deterministic-reproducible-check-regex-inverted) |
 | Evidence-based evaluation with excerpts | LLMRubricTrait with deep judgment | [Deep judgment](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-7-evidence-based-with-excerpts-llm-boolean--deep-judgment) |
 
 For a hands-on tutorial that walks through each of these needs with a complete example, see [Choosing the Right Rubric Trait Type](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb).
@@ -121,7 +125,7 @@ For a hands-on tutorial that walks through each of these needs with a complete e
                  Anchor the scale at 3+ points with concrete criteria.
 ```
 
-**Priority heuristic**: prefer deterministic traits (regex, callable) over LLM traits when possible. They are faster, cheaper, and perfectly reproducible. Use LLM traits only when the evaluation genuinely requires language understanding.
+**Priority heuristic**: prefer regex traits, and prefer pure local callable traits, over LLM traits when possible. They are usually faster, cheaper, and more reproducible. Callable traits inherit those properties only if the function itself stays local and deterministic. Use LLM traits when the evaluation genuinely requires language understanding or when your callable would just re-implement an external judge.
 
 ## 5. The `higher_is_better` Field
 

@@ -13,18 +13,49 @@ jupyter:
 
 # Regex Traits
 
-Regex traits use **regular expression pattern matching** to perform deterministic, repeatable checks on LLM responses. They require no LLM call for evaluation, making them fast, free, and perfectly reproducible.
+Regex traits use **regular expression pattern matching** to perform deterministic, repeatable checks on LLM responses. They are the rubric trait type for **exact textual predicates**: use them when success or failure can be defined as "this pattern appears in the raw response trace" or "this pattern does not appear." They require no LLM call for evaluation, making them fast, free, and perfectly reproducible.
 
 ```python tags=["hide-cell"]
 # Mock cell: ensures examples execute without live API keys.
 # This cell is hidden in rendered documentation.
 ```
 
-## Overview
+## 1. What Regex Traits Are
 
-A `RegexTrait` searches the model's raw response trace for a regex pattern during [stage 11 (RubricEvaluation)](../verification-pipeline.md) of the [verification pipeline](../verification-pipeline.md). If the pattern is found, the result is `True`; if not, `False`. You can invert this logic with `invert_result` and control case sensitivity with `case_sensitive`.
+A `RegexTrait` searches the model's raw response trace for a regex pattern during [RubricEvaluation](../verification-pipeline.md) of the [verification pipeline](../verification-pipeline.md). If the pattern is found, the result is `True`; if not, `False`. You can invert this logic with `invert_result` and control case sensitivity with `case_sensitive`.
 
-Unlike [LLM traits](llm-traits.md), which send the response to the parsing model for subjective judgment, regex traits are evaluated entirely locally using Python's `re` module. This means zero cost, zero latency beyond the regex match itself, and perfect reproducibility: the same response always produces the same result.
+Regex traits are meant for checks that can be reduced to an **exact textual rule**. Typical examples include whether a response contains bracket citations, follows a required answer tag format, includes a disclaimer string, or avoids a small set of prohibited phrases.
+
+Use `RegexTrait` when the evaluation is genuinely about the presence or absence of a literal text pattern. If the check requires semantic interpretation, prefer [LLM traits](llm-traits.md). If the check is deterministic but more complex than a regex match, prefer [Callable traits](callable-traits.md).
+
+### 1.1 Philosophy
+
+The most important idea is that the `pattern` field is the evaluation spec. The regex pattern, not the `description`, determines what passes and what fails.
+
+That means good regex traits define **textual contracts**:
+
+- what exact string form should count as a match
+- what spelling, punctuation, or whitespace variation should still count
+- what nearby text should *not* accidentally count
+
+**The abstraction boundary.** Regex traits are strongest when the evaluation question is "does the text literally contain this form?" They are a poor fit for questions like "does the response discuss safety?" or "does the answer mention evidence in a meaningful way?" unless those ideas are tied to a specific textual marker.
+
+| Better fit for Regex Traits | Better fit for other tools |
+|-----------------------------|----------------------------|
+| "Does the answer contain bracket citations like `[3]`?" | "Does the answer use evidence well?" → [LLM trait](llm-traits.md) |
+| "Is the answer wrapped in `[ANSWER]...[/ANSWER]` tags?" | "Does the answer satisfy structured gold fields?" → template verification |
+| "Does the response avoid these exact hedge words?" | "Does the answer follow a deterministic rule that needs parsing logic?" → [Callable trait](callable-traits.md) |
+
+A useful litmus test: if you can point to the literal text span that should make the trait pass or fail, a regex trait is probably the right abstraction.
+
+<div class="admonition tip">
+<p class="admonition-title">Regex evaluation also exists inside templates</p>
+<p>If you need regex checks as part of template verification rather than as rubric traits, see <a href="../answer-templates.md#regex-checks">Answer Templates, section 4.4: Regex Checks</a>. Template-level <code>self.regex</code> checks run against the same raw response trace, but they live inside the template verification flow instead of the rubric system.</p>
+</div>
+
+## 2. Overview
+
+Unlike [LLM traits](llm-traits.md), which send the response to the parsing model for judgment, regex traits are evaluated entirely locally using Python's `re` module. This means zero cost, zero latency beyond the regex match itself, and perfect reproducibility: the same response always produces the same result.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -39,50 +70,103 @@ Unlike [LLM traits](llm-traits.md), which send the response to the parsing model
 
 - Always returns a **boolean** (`True` / `False`)
 - No LLM call required; evaluated locally with Python's `re` module
-- Pattern is validated at construction time (invalid regex raises `ValueError`)
+- Pattern is validated at construction time
 - Operates on the **raw response trace** (the model's full output text)
 
-## How Regex Evaluation Works
+## 3. How Regex Evaluation Works
 
-During stage 11, regex traits are evaluated locally with no LLM call:
+During rubric evaluation, regex traits are evaluated locally with no LLM call:
 
 ```
-Raw Response Trace
-        ↓
-  re.search(pattern, text)
-        ↓
-  Match found? → True / False
-        ↓
-  Apply invert_result (if set)
-        ↓
-  Final boolean result
+Previous Stages
+                  │
+                  ▼
+┌─── RubricEvaluation ─────────────────────────────┐
+│                                                   │
+│  Raw Response Trace                  No LLM call  │
+│           │                                       │
+│           ▼                                       │
+│   re.search(pattern, text)                        │
+│           │                                       │
+│           ▼                                       │
+│   Match found? → True / False                     │
+│           │                                       │
+│   Apply invert_result (if set)                    │
+│           │                                       │
+│   Final boolean result                            │
+└───────────┬───────────────────────────────────────┘
+            │
+            ▼
+FinalizeResult → VerificationResult.rubric
 ```
 
-Python's `re.search()` scans the entire raw response text. The result is deterministic: no model variability, no cost per evaluation, and no dependency on external services. This makes regex traits ideal for format compliance checks, keyword presence, and any pattern that can be expressed as a regular expression.
+Regex traits skip stage 12 (DeepJudgmentRubric), which applies only to [LLM traits](llm-traits.md) with [deep judgment](../../advanced-pipeline/deep-judgment-rubrics.md) enabled.
 
-## Basic Usage
+Python's `re.search()` scans the entire raw response text. This makes regex traits ideal for format compliance checks, keyword presence, and any requirement that can be written as a literal text pattern.
 
-The simplest regex trait checks whether a pattern appears in the response:
+## 4. Writing Good Patterns
+
+The main challenge with regex traits is not the API. It is choosing the right textual contract.
+
+Good patterns are usually:
+
+- **Specific**: they match the intended textual form, not a broad category of nearby text
+- **Bounded**: they use anchors or word boundaries when partial matches would be misleading
+- **Tolerance-aware**: they allow the whitespace or punctuation variation you actually expect
+- **Readable**: they are short enough that future readers can tell what they enforce
+
+**Weak**:
+
+    r"citation"
+    r"ANSWER"
+    r".*@.*"
+
+**Stronger**:
+
+    r"\[\d+\]"
+    r"\[ANSWER\].*?\[/ANSWER\]"
+    r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"
+
+Two common tools make patterns safer:
+
+- `\b` word boundaries when you want whole words, not substrings
+- explicit escaping like `\[` and `\]` when matching literal punctuation
+
+### 4.1 Basic Presence Check
 
 ```python
 from karenina.schemas import RegexTrait
 
-# Check that the response includes a citation like [1], [2], etc.
 citation_trait = RegexTrait(
     name="Has Citations",
     description="Check that the response includes numbered citations",
     pattern=r"\[\d+\]",
-    higher_is_better=True,  # Finding citations is good
+    higher_is_better=True,
 )
 
-# Evaluate against sample responses
 print(citation_trait.evaluate("The drug targets BCL2 [1] and KRAS [2]."))  # True
 print(citation_trait.evaluate("The drug targets BCL2 and KRAS."))          # False
 ```
 
-## Case-Insensitive Matching
+### 4.2 Enforcing Answer Formats
 
-By default, matching is case-sensitive. Set `case_sensitive=False` to ignore case:
+A common use case is verifying that the model followed a required answering format:
+
+```python
+format_trait = RegexTrait(
+    name="Answer Format",
+    description="Check that the answer is enclosed in [ANSWER] tags",
+    pattern=r"\[ANSWER\].*?\[/ANSWER\]",
+    higher_is_better=True,
+)
+
+print(format_trait.evaluate("The gene is [ANSWER]BCL2[/ANSWER]."))  # True
+print(format_trait.evaluate("The gene is BCL2."))                   # False
+```
+
+## 5. Case Sensitivity
+
+By default, matching is case-sensitive. Set `case_sensitive=False` when the textual contract should ignore case.
 
 ```python
 keyword_trait = RegexTrait(
@@ -93,70 +177,59 @@ keyword_trait = RegexTrait(
     higher_is_better=True,
 )
 
-# Both match because case_sensitive=False
 print(keyword_trait.evaluate("Machine Learning is a broad field."))   # True
 print(keyword_trait.evaluate("We used machine learning techniques.")) # True
 print(keyword_trait.evaluate("We used deep learning techniques."))    # False
 ```
 
-## Inverted Matching (Negative Checks)
+Use case-insensitive matching deliberately. If capitalization itself matters to the required format, keep `case_sensitive=True`.
 
-Use `invert_result=True` when you want to check that a pattern is **absent**. The match result is flipped: a match becomes `False`, no match becomes `True`.
+## 6. Inverted Matching
+
+Use `invert_result=True` when you want to check that a pattern is **absent**. The raw regex match is still the same; only the returned boolean is flipped.
 
 ```python
-# Check that the response does NOT contain hedging language
 no_hedging_trait = RegexTrait(
     name="No Hedging",
     description="Ensure the response avoids hedging phrases",
     pattern=r"\b(maybe|perhaps|possibly|might be|could be)\b",
     case_sensitive=False,
-    invert_result=True,       # No match = True (good)
-    higher_is_better=True,    # True = no hedging = good
-)
-
-print(no_hedging_trait.evaluate("The answer is 42."))              # True (no hedging)
-print(no_hedging_trait.evaluate("The answer is perhaps 42."))      # False (hedging found)
-```
-
-## Enforcing Answer Formats
-
-A common use case is verifying that the model followed a required answering format:
-
-```python
-# Verify the answer follows the [ANSWER] format
-format_trait = RegexTrait(
-    name="Answer Format",
-    description="Check that the answer is enclosed in [ANSWER] tags",
-    pattern=r"\[ANSWER\].*?\[/ANSWER\]",
+    invert_result=True,
     higher_is_better=True,
 )
 
-print(format_trait.evaluate("The gene is [ANSWER]BCL2[/ANSWER]."))  # True
-print(format_trait.evaluate("The gene is BCL2."))                    # False
+print(no_hedging_trait.evaluate("The answer is 42."))         # True
+print(no_hedging_trait.evaluate("The answer is perhaps 42.")) # False
 ```
 
-## The `higher_is_better` Field
+This is usually the clearest way to express an absence check because `True` means the response passed the rule.
+
+## 7. The `higher_is_better` Field
 
 This required field tells analysis tools how to interpret the result:
 
 | `higher_is_better` | Meaning |
 |--------------------|---------|
-| `True` | A match (or inverted non-match) is a **positive** outcome |
-| `False` | A match (or inverted non-match) is a **negative** outcome |
+| `True` | A match (or inverted non-match) is a positive outcome |
+| `False` | A match (or inverted non-match) is a negative outcome |
 
-Most regex traits use `higher_is_better=True`. Use `False` for traits where finding the pattern indicates a problem, and you are **not** using `invert_result`:
+`invert_result` and `higher_is_better` solve different problems:
+
+- `invert_result` changes the **evaluation output**
+- `higher_is_better` changes the **downstream interpretation**
+
+Most regex traits use `higher_is_better=True`. Use `False` when finding the pattern indicates a problem and you want the raw `True` result to mean "problem detected."
 
 ```python
-# Detecting prohibited content (match = bad)
 prohibited_trait = RegexTrait(
     name="Contains PII",
     description="Detect personally identifiable information (email addresses)",
-    pattern=r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b",
-    higher_is_better=False,  # Finding PII is bad
+    pattern=r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
+    higher_is_better=False,
 )
 
-print(prohibited_trait.evaluate("Contact me at user@example.com"))  # True (PII found = bad)
-print(prohibited_trait.evaluate("No personal info here."))          # False (no PII = good)
+print(prohibited_trait.evaluate("Contact me at user@example.com"))  # True
+print(prohibited_trait.evaluate("No personal info here."))          # False
 ```
 
 <div class="admonition tip">
@@ -174,7 +247,7 @@ print(prohibited_trait.evaluate("No personal info here."))          # False (no 
 <p>Both encode the same intent. The <code>invert_result</code> approach is usually clearer because <code>True</code> means "passed the check."</p>
 </div>
 
-## Using Regex Traits in a Rubric
+## 8. Using Regex Traits in a Rubric
 
 Regex traits can be combined with other trait types in a `Rubric`:
 
@@ -203,7 +276,7 @@ for trait in quality_rubric.regex_traits:
     print(f"  {trait.name}: pattern={trait.pattern!r}")
 ```
 
-## Pattern Validation
+## 9. Pattern Validation
 
 The regex pattern is validated at construction time. Invalid patterns raise a `ValueError`:
 
@@ -218,9 +291,10 @@ except ValueError as e:
     print(f"Error: {e}")
 ```
 
-## Next Steps
+## 10. Next Steps
 
 - [LLM rubric traits](llm-traits.md): boolean, score, and literal kinds
 - [Callable traits](callable-traits.md): custom Python functions
 - [Metric traits](metric-traits.md): precision, recall, F1 computation
+- [Templates vs rubrics](../template-vs-rubric.md): choosing between correctness checks and rubric-style evaluation
 - [Full Evaluation Benchmark](../../workflows/creating-benchmarks/full-evaluation-benchmark.md): adding traits to benchmarks
