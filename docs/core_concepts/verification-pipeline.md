@@ -426,7 +426,7 @@ for i, s in enumerate(orch.stages, 1):
 ## 10. Next Steps
 
 - [Evaluation Modes](../notebooks/core_concepts/evaluation-modes.ipynb): how the three modes shape which stages run
-- [Prompt Assembly](prompt-assembly.md): how prompts are constructed for the Judge LLM and rubric evaluators
+- [Prompt Assembly](../notebooks/core_concepts/prompt-assembly.ipynb): how prompts are constructed for the Judge LLM and rubric evaluators
 - [Results and Scoring](results-and-scoring.md): what the pipeline produces and how to read it
 - [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb): writing the `verify()` logic that stage 8 executes
 - [Rubrics](rubrics/index.md): defining the traits that stage 11 evaluates

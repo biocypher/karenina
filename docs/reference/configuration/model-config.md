@@ -58,7 +58,7 @@ These fields apply when `interface="claude_agent_sdk"` or `interface="claude_too
 
 ## MCP Configuration
 
-These fields configure MCP (Model Context Protocol) tool access. See [MCP Integration Overview](../../core_concepts/mcp-overview.md) for architecture and usage patterns.
+These fields configure MCP (Model Context Protocol) tool access. See [MCP Integration Overview](../../notebooks/core_concepts/mcp-overview.ipynb) for architecture and usage patterns.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -152,7 +152,7 @@ Reduces costs and latency by caching static prompt content on Anthropic's server
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `manual_traces` | `ManualTraces \| None` | `None` | Pre-recorded trace data for the manual interface. **Required** when `interface="manual"`. Excluded from serialization. See [Manual Interface](../../core_concepts/manual-interface.md) for format details. |
+| `manual_traces` | `ManualTraces \| None` | `None` | Pre-recorded trace data for the manual interface. **Required** when `interface="manual"`. Excluded from serialization. See [Manual Interface](../../notebooks/core_concepts/manual-interface.ipynb) for format details. |
 
 **Validation rules:**
 
@@ -235,5 +235,5 @@ ModelConfig(
 - [VerificationConfig Reference](verification-config.md) — uses `ModelConfig` for `answering_models` and `parsing_models`
 - [Basic Verification](../../notebooks/running-verification/basic-verification.ipynb) — step-by-step configuration guide
 - [Adapters Overview](../../core_concepts/adapters.md) — interface comparison and selection guide
-- [MCP Integration Overview](../../core_concepts/mcp-overview.md) — MCP architecture and adapter capabilities
+- [MCP Integration Overview](../../notebooks/core_concepts/mcp-overview.ipynb) — MCP architecture and adapter capabilities
 - [Environment Variables](../../workflows/configuration/environment-variables.md) — API keys and path configuration

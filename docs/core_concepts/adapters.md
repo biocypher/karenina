@@ -102,7 +102,7 @@ The six interfaces fall into three categories.
 - **`langchain`**: The default. Uses LangChain's `init_chat_model` and supports all LangChain-compatible providers: Anthropic, OpenAI, Google, and many more. The broadest-compatibility option.
 - **`claude_agent_sdk`**: Uses the Claude CLI (`claude` binary) for agent execution and the Anthropic Agent SDK for LLM and parser operations. Provides native structured output in the parser.
 - **`claude_tool`**: Uses the `anthropic` Python package directly with a tool_runner for agent execution. Provides native structured output in the parser without requiring the Claude CLI.
-- **`manual`**: Replays pre-recorded traces from `ManualTraceManager`. Only the agent port is functional; LLM and parser adapters raise `ManualInterfaceError` if invoked. See [Manual Interface](manual-interface.md).
+- **`manual`**: Replays pre-recorded traces from `ManualTraceManager`. Only the agent port is functional; LLM and parser adapters raise `ManualInterfaceError` if invoked. See [Manual Interface](../notebooks/core_concepts/manual-interface.ipynb).
 
 **Routing interfaces** share the `langchain` adapter implementation with interface-specific configuration:
 
@@ -288,7 +288,7 @@ This mechanism keeps adapters as pure executors: they receive pre-assembled mess
 - [Port Types](../advanced-adapters/ports.md): Complete protocol signatures for LLMPort, ParserPort, and AgentPort
 - [Available Adapters](../advanced-adapters/available-adapters.md): Per-adapter features, configuration, and capabilities
 - [Writing Custom Adapters](../advanced-adapters/writing-adapters.md): Implementing and registering new adapters
-- [MCP Overview](mcp-overview.md): Tool-augmented evaluation with MCP servers
-- [Manual Interface](manual-interface.md): Pre-recorded traces for offline evaluation
+- [MCP Overview](../notebooks/core_concepts/mcp-overview.ipynb): Tool-augmented evaluation with MCP servers
+- [Manual Interface](../notebooks/core_concepts/manual-interface.ipynb): Pre-recorded traces for offline evaluation
 - [Evaluation Modes](../notebooks/core_concepts/evaluation-modes.ipynb): Controlling which evaluation units run
 - [Running Verification](../workflows/running-verification/index.md): End-to-end verification workflow

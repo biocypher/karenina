@@ -10,19 +10,19 @@ Concepts are ordered to follow the evaluation pipeline — from what you're eval
 |---------|-----------|------|
 | **Questions & Benchmarks** | The central objects: questions bundled with templates, rubrics, and metadata | [Questions & Benchmarks](questions-and-benchmarks/index.md) |
 | **Checkpoints** | JSON-LD files that store benchmarks (questions, templates, rubrics, results) | [Checkpoints](questions-and-benchmarks/checkpoints.md) |
-| **TaskEval** | Evaluate any free text output using karenina's templates and rubrics (open-loop mode) | [TaskEval](task-eval.md) |
+| **TaskEval** | Evaluate any free text output using karenina's templates and rubrics (open-loop mode) | [TaskEval](../notebooks/core_concepts/task-eval.ipynb) |
 | **Answer Templates** | Pydantic models that define how a Judge LLM parses and verifies responses | [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb) |
 | **Rubrics** | Trait-based evaluation of response quality (LLM, regex, callable, metric) | [Rubrics](rubrics/index.md) |
-| **Templates vs Rubrics** | The two evaluation units: correctness (templates) vs quality (rubrics) | [Templates vs Rubrics](template-vs-rubric.md) |
+| **Templates vs Rubrics** | The two evaluation units: correctness (templates) vs quality (rubrics) | [Templates vs Rubrics](../notebooks/core_concepts/template-vs-rubric.ipynb) |
 | **Evaluation Modes** | Three modes controlling which evaluation units run (`template_only`, `template_and_rubric`, `rubric_only`) | [Evaluation Modes](../notebooks/core_concepts/evaluation-modes.ipynb) |
 | **Verification Pipeline** | The 13-stage engine that executes evaluation end to end | [Verification Pipeline](../notebooks/core_concepts/verification-pipeline.ipynb) |
-| **Prompt Assembly** | How prompts are constructed for pipeline LLM calls (tri-section pattern) | [Prompt Assembly](prompt-assembly.md) |
-| **Results & Scoring** | What verification produces: pass/fail, scores, traits, and metrics | [Results & Scoring](results-and-scoring.md) |
+| **Prompt Assembly** | How prompts are constructed for pipeline LLM calls (tri-section pattern) | [Prompt Assembly](../notebooks/core_concepts/prompt-assembly.ipynb) |
+| **Results & Scoring** | What verification produces: pass/fail, scores, traits, and metrics | [Results & Scoring](../notebooks/core_concepts/results-and-scoring.ipynb) |
 | **Adapters** | LLM backend interfaces (LangChain, Claude SDK, Claude Tool, Manual, and more) | [Adapters](adapters.md) |
-| **MCP** | Tool-augmented evaluation via Model Context Protocol servers | [MCP Overview](mcp-overview.md) |
-| **Manual Interface** | Evaluation using pre-recorded LLM traces instead of live API calls | [Manual Interface](manual-interface.md) |
-| **ADeLe** | 18-dimension question classification system ([Zhou et al., 2025](https://arxiv.org/abs/2503.06378)) | [ADeLe](adele.md) |
-| **Few-Shot** | Example injection for improved LLM parsing accuracy | [Few-Shot](few-shot.md) |
+| **MCP** | Tool-augmented evaluation via Model Context Protocol servers | [MCP Overview](../notebooks/core_concepts/mcp-overview.ipynb) |
+| **Manual Interface** | Evaluation using pre-recorded LLM traces instead of live API calls | [Manual Interface](../notebooks/core_concepts/manual-interface.ipynb) |
+| **ADeLe** | 18-dimension question classification system ([Zhou et al., 2025](https://arxiv.org/abs/2503.06378)) | [ADeLe](../notebooks/core_concepts/adele.ipynb) |
+| **Few-Shot** | Example injection for improved LLM response accuracy | [Few-Shot](../notebooks/core_concepts/few-shot.ipynb) |
 
 ---
 
@@ -93,7 +93,7 @@ A **checkpoint** is a JSON-LD file that stores everything needed to define and r
 
 **TaskEval** evaluates any free text output using karenina's two evaluation primitives: templates for correctness and rubrics for quality. Instead of defining questions and generating answers (the Benchmark workflow), you supply existing text or structured traces and attach evaluation criteria. This is useful whenever you have outputs that need structured evaluation, whether from agent workflows or external systems.
 
-[Read more about TaskEval →](task-eval.md)
+[Read more about TaskEval →](../notebooks/core_concepts/task-eval.ipynb)
 
 ### Answer Templates
 
@@ -111,7 +111,7 @@ A **checkpoint** is a JSON-LD file that stores everything needed to define and r
 
 Karenina's evaluation rests on two complementary building blocks: **answer templates** verify factual correctness by having a Judge LLM parse responses into structured schemas, while **rubrics** assess response quality through trait evaluators that examine the raw text. Understanding when to use each, and when to use both together, is the foundation for effective benchmark design.
 
-[Read more about templates vs rubrics →](template-vs-rubric.md)
+[Read more about templates vs rubrics →](../notebooks/core_concepts/template-vs-rubric.ipynb)
 
 ### Evaluation Modes
 
@@ -135,13 +135,13 @@ The **verification pipeline** is a 13-stage execution engine. Stages are grouped
 
 The **PromptAssembler** constructs all LLM prompts using a tri-section pattern: task instructions (from the pipeline stage), adapter instructions (backend-specific adjustments), and user instructions (your custom overrides via `PromptConfig`).
 
-[Read more about prompt assembly →](prompt-assembly.md)
+[Read more about prompt assembly →](../notebooks/core_concepts/prompt-assembly.ipynb)
 
 ### Results & Scoring
 
 The pipeline produces a **`VerificationResult`** per question containing template results (pass/fail, parsed fields), rubric results (per-trait scores), and metadata (timing, model info, errors). Result collections support aggregation and DataFrame export.
 
-[Read more about results and scoring →](results-and-scoring.md)
+[Read more about results and scoring →](../notebooks/core_concepts/results-and-scoring.ipynb)
 
 ### Adapters
 
@@ -162,22 +162,22 @@ The pipeline produces a **`VerificationResult`** per question containing templat
 
 The **Model Context Protocol** (MCP) enables tool-augmented evaluation, where the answering model can use external tools (databases, APIs, code execution) during verification. This is essential for evaluating agentic capabilities.
 
-[Read more about MCP →](mcp-overview.md)
+[Read more about MCP →](../notebooks/core_concepts/mcp-overview.ipynb)
 
 ### Manual Interface
 
 The **manual interface** allows you to evaluate pre-recorded LLM traces instead of making live API calls. This is useful for reproducibility, cost reduction, and evaluating responses from models not directly supported by karenina adapters.
 
-[Read more about the manual interface →](manual-interface.md)
+[Read more about the manual interface →](../notebooks/core_concepts/manual-interface.ipynb)
 
 ### ADeLe
 
 **ADeLe** (Annotated Demand Levels; [Zhou et al., 2025](https://arxiv.org/abs/2503.06378)) is an 18-dimension question classification system that characterizes questions along axes like reasoning depth, domain specificity, and answer format. Classifications are stored in checkpoint metadata and can guide template design and evaluation strategy.
 
-[Read more about ADeLe →](adele.md)
+[Read more about ADeLe →](../notebooks/core_concepts/adele.ipynb)
 
 ### Few-Shot
 
-**Few-shot configuration** controls how example responses are injected into the Judge LLM's parsing prompt. Providing examples can improve parsing accuracy, especially for complex or ambiguous response formats. Modes include `all`, `k-shot`, `custom`, and `none`.
+**Few-shot examples** teach the answering model how to respond by prepending question-answer pairs to the prompt. They affect only the answering stage; the Judge LLM and rubric evaluators never see them. Modes include `all`, `k-shot`, `custom`, and `none`.
 
-[Read more about few-shot configuration →](few-shot.md)
+[Read more about few-shot examples →](../notebooks/core_concepts/few-shot.ipynb)

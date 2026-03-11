@@ -97,8 +97,8 @@ These concept pages provide the foundational knowledge that the scenarios build 
 - [Rubrics](../../core_concepts/rubrics/index.md) — Trait types (LLM, regex, callable, metric), global vs per-question
 - [Checkpoints](../../core_concepts/questions-and-benchmarks/checkpoints.md) — JSON-LD format, save/load behavior
 - [Evaluation Modes](../../notebooks/core_concepts/evaluation-modes.ipynb) — How template-only, template+rubric, and rubric-only map to pipeline stages
-- [ADeLe Classification](../../core_concepts/adele.md) — Question complexity dimensions
-- [Few-Shot Examples](../../core_concepts/few-shot.md) — Configuration modes and example selection
+- [ADeLe Classification](../../notebooks/core_concepts/adele.ipynb) — Question complexity dimensions
+- [Few-Shot Examples](../../notebooks/core_concepts/few-shot.ipynb) — Configuration modes and example selection
 
 ---
 

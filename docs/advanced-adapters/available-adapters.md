@@ -314,7 +314,7 @@ No system prompt support, no structured output, no MCP, no tools. The manual ada
 - **External traces**: Evaluate responses from models or systems outside karenina
 - **Development**: Iterate on templates and rubrics without waiting for LLM responses
 
-See [Manual Interface](../core_concepts/manual-interface.md) for trace format and workflow details.
+See [Manual Interface](../notebooks/core_concepts/manual-interface.ipynb) for trace format and workflow details.
 
 ---
 

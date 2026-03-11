@@ -16,7 +16,7 @@ A **rubric** is a collection of evaluation traits that assess observable propert
 - **Complement templates**: templates check factual correctness via `verify()`; rubrics assess qualities that characterize the answer style or structure
 - **Multiple trait types**: four types (LLM, regex, callable, metric) with different execution models
 
-Unlike templates, which operate on parsed structured data, rubrics evaluate the **raw response text** directly. See [templates vs rubrics](../template-vs-rubric.md) for a full comparison of the two evaluation building blocks.
+Unlike templates, which operate on parsed structured data, rubrics evaluate the **raw response text** directly. See [templates vs rubrics](../../notebooks/core_concepts/template-vs-rubric.ipynb) for a full comparison of the two evaluation building blocks.
 
 A `Rubric` in Karenina is a collector object that gathers traits of different types into separate lists:
 
@@ -74,7 +74,7 @@ Trait descriptions are not questions sent to the model; they are evaluation crit
 
 No ground truth does not mean no specification. Rubric traits work better when the description makes your standard explicit. If you care about conciseness, say what that means in context: for example, "answers the question directly, avoids repetition, and stays under 120 words unless the prompt asks for detail." Clear trait descriptions improve the quality and consistency of evaluation even when no single correct answer exists.
 
-See [templates vs rubrics](../template-vs-rubric.md) for a full comparison, and [evaluation modes](../../notebooks/core_concepts/evaluation-modes.ipynb) for how to combine them in a single benchmark.
+See [templates vs rubrics](../../notebooks/core_concepts/template-vs-rubric.ipynb) for a full comparison, and [evaluation modes](../../notebooks/core_concepts/evaluation-modes.ipynb) for how to combine them in a single benchmark.
 
 ## 4. Choosing the Right Trait Type
 

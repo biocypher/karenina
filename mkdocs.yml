@@ -16,6 +16,7 @@ exclude_docs: |
   core_concepts/rubrics/regex-traits.md
   core_concepts/rubrics/callable-traits.md
   core_concepts/rubrics/metric-traits.md
+  core_concepts/template-vs-rubric.md
   workflows/creating-benchmarks/factual-qa-benchmark.md
   workflows/creating-benchmarks/full-evaluation-benchmark.md
   workflows/creating-benchmarks/quality-assessment-benchmark.md
@@ -31,15 +32,14 @@ exclude_docs: |
   core_concepts/questions-and-benchmarks/benchmarks.md
   core_concepts/questions-and-benchmarks/questions.md
   core_concepts/verification-pipeline.md
-  core_concepts/evaluation-modes.md
-  core_concepts/template-vs-rubric.md
   core_concepts/prompt-assembly.md
-  core_concepts/results-and-scoring.md
   core_concepts/manual-interface.md
   core_concepts/adele.md
-  core_concepts/mcp-overview.md
   core_concepts/few-shot.md
   core_concepts/task-eval.md
+  core_concepts/evaluation-modes.md
+  core_concepts/mcp-overview.md
+  core_concepts/results-and-scoring.md
 
 theme:
   name: material

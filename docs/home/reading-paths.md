@@ -42,10 +42,10 @@ Choose the path that matches your goal:
 | [Checkpoints](../core_concepts/questions-and-benchmarks/checkpoints.md) | The JSON-LD benchmark format: questions, templates, rubrics, and metadata |
 | [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb) | Pydantic models that define how a Judge LLM evaluates correctness |
 | [Rubrics](../core_concepts/rubrics/index.md) | Quality assessment with four trait types: LLM, regex, callable, metric |
-| [Templates vs Rubrics](../core_concepts/template-vs-rubric.md) | When to use which evaluation unit, and when to use both together |
+| [Templates vs Rubrics](../notebooks/core_concepts/template-vs-rubric.ipynb) | When to use which evaluation unit, and when to use both together |
 | [Evaluation Modes](../notebooks/core_concepts/evaluation-modes.ipynb) | Template-only, template-and-rubric, and rubric-only evaluation |
 | [Verification Pipeline](../notebooks/core_concepts/verification-pipeline.ipynb) | The 13-stage engine that executes evaluation end to end |
-| [Prompt Assembly](../core_concepts/prompt-assembly.md) | How prompts are constructed for pipeline LLM calls |
+| [Prompt Assembly](../notebooks/core_concepts/prompt-assembly.ipynb) | How prompts are constructed for pipeline LLM calls |
 | [Results & Scoring](../core_concepts/results-and-scoring.md) | What verification produces: pass/fail, scores, traits, and metrics |
 | [Adapters](../core_concepts/adapters.md) | LLM backend interfaces: LangChain, Claude SDK, OpenRouter, and more |
 

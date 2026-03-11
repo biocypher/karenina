@@ -57,7 +57,7 @@ Each question can optionally have an **answer template** and **question-specific
 - **Question 2**: Evaluated with its template + global rubric only
 - **Question 3**: No template; can only be evaluated in [`rubric_only` mode](../../notebooks/core_concepts/evaluation-modes.ipynb)
 
-For details on what templates and rubrics *do*, see [Answer Templates](../../notebooks/core_concepts/answer-templates.ipynb), [Rubrics](../rubrics/index.md), and [Templates vs Rubrics](../template-vs-rubric.md).
+For details on what templates and rubrics *do*, see [Answer Templates](../../notebooks/core_concepts/answer-templates.ipynb), [Rubrics](../rubrics/index.md), and [Templates vs Rubrics](../../notebooks/core_concepts/template-vs-rubric.ipynb).
 
 ## 4. The `finished` Flag
 

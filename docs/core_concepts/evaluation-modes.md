@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.19.1
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -245,7 +245,7 @@ In `rubric_only`, `TaskEval` can evaluate logs even when no explicit template is
 
 ## 7. Next Steps
 
-- [Templates vs Rubrics](template-vs-rubric.md): the conceptual distinction between correctness and quality
+- [Templates vs Rubrics](../notebooks/core_concepts/template-vs-rubric.ipynb): the conceptual distinction between correctness and quality
 - [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb): how parsing and `verify()` work
 - [Rubrics](rubrics/index.md): trait types and selection guidance
 - [Verification Pipeline](verification-pipeline.md): the full stage-by-stage execution model

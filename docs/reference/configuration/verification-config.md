@@ -161,7 +161,7 @@ Each trait entry is validated as a `DeepJudgmentTraitConfig` with these fields:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `few_shot_config` | `FewShotConfig \| None` | `None` | Few-shot prompting configuration. Controls example injection into prompts. See [Few-Shot Configuration](../../core_concepts/few-shot.md). |
+| `few_shot_config` | `FewShotConfig \| None` | `None` | Few-shot prompting configuration. Controls example injection into prompts. See [Few-Shot Configuration](../../notebooks/core_concepts/few-shot.ipynb). |
 | `prompt_config` | `PromptConfig \| None` | `None` | Per-task prompt instruction overrides. Injects custom instructions into specific pipeline stages. See [Full Evaluation](../../notebooks/running-verification/full-evaluation.ipynb) for usage and [PromptConfig Reference](prompt-config.md) for all fields. |
 | `db_config` | `DBConfig \| None` | `None` | `DBConfig` instance for automatic result persistence to a database. When set, results are saved after each verification run. See DBConfig fields below. |
 
