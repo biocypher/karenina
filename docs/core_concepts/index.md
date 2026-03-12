@@ -85,7 +85,7 @@ A **benchmark** is the central object in Karenina: a self-contained evaluation u
 
 ### Checkpoints
 
-A **checkpoint** is a JSON-LD file that stores everything needed to define and reproduce a benchmark: questions, answer templates, rubric traits, metadata, and optionally verification results. Checkpoints use [Schema.org](https://schema.org) types for interoperability.
+A **checkpoint** is a JSON-LD file that stores everything needed to define and reproduce a benchmark: questions, answer templates, rubric traits and metadata. Checkpoints use [Schema.org](https://schema.org) types for interoperability.
 
 [Read more about checkpoints →](questions-and-benchmarks/checkpoints.md)
 
