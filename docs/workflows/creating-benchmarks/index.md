@@ -14,6 +14,8 @@ Each tutorial is a complete, self-contained scenario. Choose the one that matche
 | [Quality Assessment](../../notebooks/creating-benchmarks/quality-assessment-benchmark.ipynb) | Rubric-only | No templates: quality evaluation for tasks with no single correct answer (safety, empathy, clarity) |
 | [Choosing Rubric Traits](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb) | Template + rubric | Need-driven trait selection: 7 evaluation needs mapped to the right trait type, decision flowchart |
 | [Scaled Authoring](../../notebooks/creating-benchmarks/scaled-authoring.ipynb) | Power user | Bulk ingestion, `generate_all_templates()`, `AnswerBuilder`, ADeLe classification, few-shot examples |
+| [AI-Assisted Authoring](../../notebooks/creating-benchmarks/ai-assisted-authoring.ipynb) | Template generation | `generate_answer_template()`, `AnswerBuilder`, two-phase generation, batch `generate_all_templates()` |
+| [ADeLe Classification](../../notebooks/creating-benchmarks/adele-classification.ipynb) | Question profiling | 18-dimension classification, `QuestionClassifier`, batch scoring, ADeLe rubrics, complexity filtering |
 
 ---
 
