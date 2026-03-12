@@ -25,11 +25,11 @@ warnings.filterwarnings("ignore", message="Deserializing callable")
 
 ## 1. What Callable Traits Are
 
-A `CallableTrait` wraps a Python function that runs locally during [RubricEvaluation](../verification-pipeline.md) of the [verification pipeline](../verification-pipeline.md). The function receives the configured rubric evaluation input as a single string argument and returns either a boolean (pass/fail) or an integer score.
+A `CallableTrait` wraps a Python function that runs locally during [RubricEvaluation](../../verification-pipeline/) of the [verification pipeline](../../verification-pipeline/). The function receives the configured rubric evaluation input as a single string argument and returns either a boolean (pass/fail) or an integer score.
 
 Callable traits are meant for checks that need **custom programmatic logic**. Typical examples include minimum length requirements, repetition checks, sentence counts, heuristic term counts, or custom evaluators that combine multiple strategies under one Python entrypoint.
 
-Use `CallableTrait` when the built-in traits do not express the evaluation shape you need cleanly. If the check is an exact text pattern, prefer [Regex traits](regex-traits.md). If the check fits Karenina's built-in semantic judgment path, prefer [LLM traits](llm-traits.md). Reach for `CallableTrait` when you need custom orchestration, validation, or scoring logic beyond those built-in abstractions.
+Use `CallableTrait` when the built-in traits do not express the evaluation shape you need cleanly. If the check is an exact text pattern, prefer [Regex traits](../regex-traits/). If the check fits Karenina's built-in semantic judgment path, prefer [LLM traits](../llm-traits/). Reach for `CallableTrait` when you need custom orchestration, validation, or scoring logic beyond those built-in abstractions.
 
 ### 1.1 Philosophy
 
@@ -43,23 +43,23 @@ That means good callable traits define **explicit code-level rules**:
 
 **The abstraction boundary.** Callable traits are best thought of as the escape hatch trait type. In principle, a callable can re-implement the behavior of other trait types or even call an external model. In practice, you should prefer the built-in traits when they already match the assessment you want:
 
-- use [Regex traits](regex-traits.md) for exact textual predicates
-- use [LLM traits](llm-traits.md) for Karenina-managed semantic judgment
-- use [Metric traits](metric-traits.md) for checklist-style precision/recall evaluation
+- use [Regex traits](../regex-traits/) for exact textual predicates
+- use [LLM traits](../llm-traits/) for Karenina-managed semantic judgment
+- use [Metric traits](../metric-traits/) for checklist-style precision/recall evaluation
 
 Reach for `CallableTrait` when your assessment does not fit those built-in shapes cleanly, or when you need custom orchestration across them.
 
 | Better fit for Callable Traits | Usually better fit for built-in tools |
 |--------------------------------|---------------------------------------|
-| "Run a custom scoring heuristic over the response text" | "Does the response match this exact citation format?" → [Regex trait](regex-traits.md) |
-| "Combine several local checks into one programmatic score" | "Does the answer use evidence convincingly?" → [LLM trait](llm-traits.md) |
+| "Run a custom scoring heuristic over the response text" | "Does the response match this exact citation format?" → [Regex trait](../regex-traits/) |
+| "Combine several local checks into one programmatic score" | "Does the answer use evidence convincingly?" → [LLM trait](../llm-traits/) |
 | "Call a custom evaluator pipeline that Karenina does not model directly" | "Did the parsed answer match the gold structured fields?" → template verification |
 
 A useful litmus test: if you find yourself wanting an assessment that Karenina's built-in trait types do not model cleanly, but you can express it behind a single Python function, a callable trait is probably the right abstraction.
 
 ## 2. Overview
 
-Karenina evaluates callable traits by running your Python function locally. The difference from [regex traits](regex-traits.md) is that callable traits can implement arbitrary Python logic while regex traits are limited to pattern matching.
+Karenina evaluates callable traits by running your Python function locally. The difference from [regex traits](../regex-traits/) is that callable traits can implement arbitrary Python logic while regex traits are limited to pattern matching.
 
 The function is serialized using [cloudpickle](https://github.com/cloudpipe/cloudpickle) so it can be stored in checkpoint files. That makes callable traits portable across Karenina workflows, but it also means deserializing them executes Python code.
 
@@ -111,7 +111,7 @@ Previous Stages
 FinalizeResult → VerificationResult.rubric
 ```
 
-Callable traits skip stage 12 (DeepJudgmentRubric), which applies only to [LLM traits](llm-traits.md) with [deep judgment](../../advanced-pipeline/deep-judgment-rubrics.md) enabled.
+Callable traits skip stage 12 (DeepJudgmentRubric), which applies only to [LLM traits](../llm-traits/) with [deep judgment](../../../../advanced-pipeline/deep-judgment-rubrics/) enabled.
 
 If your function is pure local code, evaluation is deterministic: the same string input always produces the same result. If your function calls external services, including an LLM, reproducibility, latency, and cost depend on that implementation.
 
@@ -275,7 +275,7 @@ for trait in rubric.callable_traits:
 
 ## 10. Next Steps
 
-- [LLM traits](llm-traits.md): boolean, score, and literal traits evaluated by an LLM judge
-- [Regex traits](regex-traits.md): deterministic pattern matching
-- [Metric traits](metric-traits.md): precision, recall, and F1 for extraction tasks
-- [Templates vs rubrics](../../notebooks/core_concepts/template-vs-rubric.ipynb): choosing between correctness checks and rubric-style evaluation
+- [LLM traits](../llm-traits/): boolean, score, and literal traits evaluated by an LLM judge
+- [Regex traits](../regex-traits/): deterministic pattern matching
+- [Metric traits](../metric-traits/): precision, recall, and F1 for extraction tasks
+- [Templates vs rubrics](../../template-vs-rubric/): choosing between correctness checks and rubric-style evaluation

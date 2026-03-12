@@ -19,7 +19,7 @@ The **verification pipeline** is the execution engine that turns a question and 
 
 The most important idea is that the pipeline is a **result-producing machine**: it always returns a `VerificationResult`, even when the model fails, abstains, or a stage throws an exception. Individual stages may skip, fail, or override earlier outcomes, but the pipeline itself never crashes without producing an output.
 
-The pipeline does **not** define what correctness means (that is the [answer template](../notebooks/core_concepts/answer-templates.ipynb)'s job), what quality criteria matter (that is the [rubric](rubrics/index.md)'s job), or which models to use (that is [VerificationConfig](../reference/configuration/verification-config.md)'s job). The pipeline orchestrates those components in a specific order and manages the flow of data between them.
+The pipeline does **not** define what correctness means (that is the [answer template](../answer-templates/)'s job), what quality criteria matter (that is the [rubric](../../../core_concepts/rubrics/)'s job), or which models to use (that is [VerificationConfig](../../../reference/configuration/verification-config/)'s job). The pipeline orchestrates those components in a specific order and manages the flow of data between them.
 
 ```python tags=["hide-cell"]
 # Mock cell: ensures examples execute without live API keys.
@@ -83,7 +83,7 @@ The pipeline groups its stages into functional categories. Within each category,
   Finalization      13. FinalizeResult                  Yes (always last)
 ```
 
-**"Template modes"** means `template_only` or `template_and_rubric`. In `rubric_only` mode, stages 1 and 6 through 10 are omitted entirely at the orchestrator level. See [Evaluation Modes](../notebooks/core_concepts/evaluation-modes.ipynb) for the full matrix and decision guidance.
+**"Template modes"** means `template_only` or `template_and_rubric`. In `rubric_only` mode, stages 1 and 6 through 10 are omitted entirely at the orchestrator level. See [Evaluation Modes](../evaluation-modes/) for the full matrix and decision guidance.
 
 ## 3. How It Works: Execution Lifecycle
 
@@ -284,7 +284,7 @@ In `template_and_rubric` mode, both paths execute. A rubric failure does not aff
 
 ## 6. How Evaluation Mode Shapes the Pipeline
 
-The [evaluation mode](../notebooks/core_concepts/evaluation-modes.ipynb) controls which stages `StageOrchestrator.from_config()` includes. The rubric must have at least one trait for rubric stages to be added.
+The [evaluation mode](../evaluation-modes/) controls which stages `StageOrchestrator.from_config()` includes. The rubric must have at least one trait for rubric stages to be added.
 
 ```python
 # Build a rubric to demonstrate mode differences
@@ -425,9 +425,9 @@ for i, s in enumerate(orch.stages, 1):
 
 ## 10. Next Steps
 
-- [Evaluation Modes](../notebooks/core_concepts/evaluation-modes.ipynb): how the three modes shape which stages run
-- [Prompt Assembly](../notebooks/core_concepts/prompt-assembly.ipynb): how prompts are constructed for the Judge LLM and rubric evaluators
-- [Results and Scoring](results-and-scoring.md): what the pipeline produces and how to read it
-- [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb): writing the `verify()` logic that stage 8 executes
-- [Rubrics](rubrics/index.md): defining the traits that stage 11 evaluates
-- [Pipeline Internals](../advanced-pipeline/index.md): deep dive into each stage, deep judgment, and custom stages
+- [Evaluation Modes](../evaluation-modes/): how the three modes shape which stages run
+- [Prompt Assembly](../prompt-assembly/): how prompts are constructed for the Judge LLM and rubric evaluators
+- [Results and Scoring](../results-and-scoring/): what the pipeline produces and how to read it
+- [Answer Templates](../answer-templates/): writing the `verify()` logic that stage 8 executes
+- [Rubrics](../../../core_concepts/rubrics/): defining the traits that stage 11 evaluates
+- [Pipeline Internals](../../../advanced-pipeline/): deep dive into each stage, deep judgment, and custom stages

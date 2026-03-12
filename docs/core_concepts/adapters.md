@@ -1,6 +1,6 @@
 # Adapters
 
-Adapters are the implementations behind Karenina's LLM backend abstraction. They translate port protocol calls into provider-specific API calls so the [verification pipeline](../advanced-pipeline/index.md) never talks to an LLM provider directly. It calls a port, and the adapter handles the rest.
+Adapters are the implementations behind Karenina's LLM backend abstraction. They translate port protocol calls into provider-specific API calls so the [verification pipeline](../../../advanced-pipeline/) never talks to an LLM provider directly. It calls a port, and the adapter handles the rest.
 
 ## 1. What Are Adapters?
 
@@ -31,10 +31,10 @@ What adapters handle:
 
 What adapters do **not** handle:
 
-- Prompt construction (handled by the [PromptAssembler](../advanced-pipeline/prompt-assembly.md))
-- Pipeline stage sequencing (handled by the [StageOrchestrator](../advanced-pipeline/index.md))
+- Prompt construction (handled by the [PromptAssembler](../../../advanced-pipeline/prompt-assembly/))
+- Pipeline stage sequencing (handled by the [StageOrchestrator](../../../advanced-pipeline/))
 - Result storage (handled by the results manager)
-- Which models to use (configured via [ModelConfig](../reference/configuration/verification-config.md))
+- Which models to use (configured via [ModelConfig](../../../reference/configuration/verification-config/))
 
 ### 1.3. Duck Typing
 
@@ -69,14 +69,14 @@ All three follow an async-first design: the primary methods are `async` (`ainvok
 
 ### Capabilities
 
-LLM and Parser adapters expose a `capabilities` property that the [PromptAssembler](../advanced-pipeline/prompt-assembly.md) reads when formatting prompts:
+LLM and Parser adapters expose a `capabilities` property that the [PromptAssembler](../../../advanced-pipeline/prompt-assembly/) reads when formatting prompts:
 
 | Capability | Meaning | Effect When `False` |
 |------------|---------|---------------------|
 | `supports_system_prompt` | Adapter handles separate system messages | System text is prepended to the user message instead |
 | `supports_structured_output` | Adapter enforces JSON schema natively (parser only) | JSON schema instructions are added to the prompt text and the text response is parsed manually |
 
-For complete method signatures and detailed protocol documentation, see [Port Types](../advanced-adapters/ports.md).
+For complete method signatures and detailed protocol documentation, see [Port Types](../../../advanced-adapters/ports/).
 
 ## 3. Available Interfaces
 
@@ -102,7 +102,7 @@ The six interfaces fall into three categories.
 - **`langchain`**: The default. Uses LangChain's `init_chat_model` and supports all LangChain-compatible providers: Anthropic, OpenAI, Google, and many more. The broadest-compatibility option.
 - **`claude_agent_sdk`**: Uses the Claude CLI (`claude` binary) for agent execution and the Anthropic Agent SDK for LLM and parser operations. Provides native structured output in the parser.
 - **`claude_tool`**: Uses the `anthropic` Python package directly with a tool_runner for agent execution. Provides native structured output in the parser without requiring the Claude CLI.
-- **`manual`**: Replays pre-recorded traces from `ManualTraceManager`. Only the agent port is functional; LLM and parser adapters raise `ManualInterfaceError` if invoked. See [Manual Interface](../notebooks/core_concepts/manual-interface.ipynb).
+- **`manual`**: Replays pre-recorded traces from `ManualTraceManager`. Only the agent port is functional; LLM and parser adapters raise `ManualInterfaceError` if invoked. See [Manual Interface](../manual-interface/).
 
 **Routing interfaces** share the `langchain` adapter implementation with interface-specific configuration:
 
@@ -262,7 +262,7 @@ In normal usage, you do not call these functions directly. The verification pipe
 
 ## 7. How Adapters Connect to the Pipeline
 
-The pipeline creates and invokes adapters based on the model roles in your [VerificationConfig](../reference/configuration/verification-config.md). Each role can use a different interface:
+The pipeline creates and invokes adapters based on the model roles in your [VerificationConfig](../../../reference/configuration/verification-config/). Each role can use a different interface:
 
 ```
 VerificationConfig
@@ -276,19 +276,19 @@ For example, you might generate answers with `claude_agent_sdk` (for tool use an
 
 ## 8. Adapter Instructions
 
-Each adapter family can register **adapter instructions** that customize the prompts the [PromptAssembler](../advanced-pipeline/prompt-assembly.md) builds. For example:
+Each adapter family can register **adapter instructions** that customize the prompts the [PromptAssembler](../../../advanced-pipeline/prompt-assembly/) builds. For example:
 
 - The `claude_tool` and `claude_agent_sdk` adapters strip JSON schema instructions from parsing prompts because their native structured output handles schema enforcement automatically
 - The `langchain` adapter adds explicit JSON formatting instructions since it parses the LLM's text response manually
 
-This mechanism keeps adapters as pure executors: they receive pre-assembled messages and do not build prompts internally. Adapter-specific prompt tuning is declarative and registered at import time. For the complete prompt assembly system, see [Prompt Assembly](../advanced-pipeline/prompt-assembly.md).
+This mechanism keeps adapters as pure executors: they receive pre-assembled messages and do not build prompts internally. Adapter-specific prompt tuning is declarative and registered at import time. For the complete prompt assembly system, see [Prompt Assembly](../../../advanced-pipeline/prompt-assembly/).
 
 ## 9. Next Steps
 
-- [Port Types](../advanced-adapters/ports.md): Complete protocol signatures for LLMPort, ParserPort, and AgentPort
-- [Available Adapters](../advanced-adapters/available-adapters.md): Per-adapter features, configuration, and capabilities
-- [Writing Custom Adapters](../advanced-adapters/writing-adapters.md): Implementing and registering new adapters
-- [MCP Overview](../notebooks/core_concepts/mcp-overview.ipynb): Tool-augmented evaluation with MCP servers
-- [Manual Interface](../notebooks/core_concepts/manual-interface.ipynb): Pre-recorded traces for offline evaluation
-- [Evaluation Modes](../notebooks/core_concepts/evaluation-modes.ipynb): Controlling which evaluation units run
-- [Running Verification](../workflows/running-verification/index.md): End-to-end verification workflow
+- [Port Types](../../../advanced-adapters/ports/): Complete protocol signatures for LLMPort, ParserPort, and AgentPort
+- [Available Adapters](../../../advanced-adapters/available-adapters/): Per-adapter features, configuration, and capabilities
+- [Writing Custom Adapters](../../../advanced-adapters/writing-adapters/): Implementing and registering new adapters
+- [MCP Overview](../mcp-overview/): Tool-augmented evaluation with MCP servers
+- [Manual Interface](../manual-interface/): Pre-recorded traces for offline evaluation
+- [Evaluation Modes](../evaluation-modes/): Controlling which evaluation units run
+- [Running Verification](../../../workflows/running-verification/): End-to-end verification workflow

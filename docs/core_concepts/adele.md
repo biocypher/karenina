@@ -17,7 +17,7 @@ jupyter:
 
 **ADeLe** (Annotated Demand Levels) is a framework for classifying *questions* along 18 cognitive dimensions. It characterizes what makes a question hard, not how well a model answered it.
 
-[Answer templates](../notebooks/core_concepts/answer-templates.ipynb) and [rubrics](rubrics/index.md) evaluate responses. ADeLe evaluates the questions themselves: how much reasoning, knowledge, attention, or metacognition a question demands. The output is a difficulty profile (18 scores on a 0-5 ordinal scale) that you can use to filter benchmarks, stratify analyses, or understand your question set before any model runs.
+[Answer templates](../answer-templates/) and [rubrics](../../../core_concepts/rubrics/) evaluate responses. ADeLe evaluates the questions themselves: how much reasoning, knowledge, attention, or metacognition a question demands. The output is a difficulty profile (18 scores on a 0-5 ordinal scale) that you can use to filter benchmarks, stratify analyses, or understand your question set before any model runs.
 
 !!! info "Attribution"
     ADeLe was developed by Zhou, Pacchiardi, Martinez-Plumed, Collins et al. at the Leverhulme Centre for the Future of Intelligence (Cambridge) and the Center for Information Technology Policy (Princeton). The 18 demand-level rubrics and ordinal scale used in this integration are derived from their work.
@@ -108,12 +108,12 @@ QuestionClassifier.classify_batch = _mock_classify_batch
 
 ADeLe classifies a question into 18 independent dimensions, each scored on a 6-level ordinal scale (0 = none, 5 = expert-level). The result is a structured profile of the cognitive demands the question places on a solver.
 
-**The abstraction boundary**: ADeLe is a question-level annotation tool. It does not participate in the [verification pipeline](../notebooks/core_concepts/verification-pipeline.ipynb), does not evaluate responses, and does not affect how templates or rubrics run. Classifications are metadata: they describe the question, not the evaluation.
+**The abstraction boundary**: ADeLe is a question-level annotation tool. It does not participate in the [verification pipeline](../verification-pipeline/), does not evaluate responses, and does not affect how templates or rubrics run. Classifications are metadata: they describe the question, not the evaluation.
 
 | Concept | What it evaluates | When it runs |
 |---|---|---|
-| [Answer template](../notebooks/core_concepts/answer-templates.ipynb) | Correctness of the response (parsed fields vs ground truth) | During verification pipeline (stages 7-8) |
-| [Rubric](rubrics/index.md) | Quality of the response (observable traits of raw text) | During verification pipeline (stage 11) |
+| [Answer template](../answer-templates/) | Correctness of the response (parsed fields vs ground truth) | During verification pipeline (stages 7-8) |
+| [Rubric](../../../core_concepts/rubrics/) | Quality of the response (observable traits of raw text) | During verification pipeline (stage 11) |
 | **ADeLe** | Cognitive demands of the question itself | Before or independent of verification |
 
 ## 2. Why It Exists
@@ -204,7 +204,7 @@ The classifier supports two strategies for how it sends dimensions to the LLM:
 
 ### Under the hood
 
-Each ADeLe dimension is implemented as an `LLMRubricTrait` with `kind="literal"` and 6 classes corresponding to the ordinal scale. The classifier uses these traits to build its prompts but does not route through the [verification pipeline](../notebooks/core_concepts/verification-pipeline.ipynb). It calls the LLM directly via `LLMPort.with_structured_output()` to get reliable structured responses. Parsed rubric files are cached with `lru_cache` so repeated classifications do not re-parse the bundled rubric definitions.
+Each ADeLe dimension is implemented as an `LLMRubricTrait` with `kind="literal"` and 6 classes corresponding to the ordinal scale. The classifier uses these traits to build its prompts but does not route through the [verification pipeline](../verification-pipeline/). It calls the LLM directly via `LLMPort.with_structured_output()` to get reliable structured responses. Parsed rubric files are cached with `lru_cache` so repeated classifications do not re-parse the bundled rubric definitions.
 
 ## 5. Using the QuestionClassifier
 
@@ -355,11 +355,11 @@ print(f"Class names: {list(trait.classes.keys())}")
 print(f"First class description (truncated): {list(trait.classes.values())[0][:120]}...")
 ```
 
-These traits are the same type described in [LLM rubric traits (literal kind)](../notebooks/core_concepts/rubrics/llm-traits.ipynb). The difference is context: when used through the `QuestionClassifier`, they evaluate question difficulty; when attached to a rubric, they would evaluate response properties.
+These traits are the same type described in [LLM rubric traits (literal kind)](../rubrics/llm-traits/). The difference is context: when used through the `QuestionClassifier`, they evaluate question difficulty; when attached to a rubric, they would evaluate response properties.
 
 ## 7. Storing and Loading Results
 
-Classification results can be persisted in [checkpoint](questions-and-benchmarks/checkpoints.md) metadata and reconstructed later.
+Classification results can be persisted in [checkpoint](../../../core_concepts/questions-and-benchmarks/checkpoints/) metadata and reconstructed later.
 
 ```python
 from karenina.integrations.adele import QuestionClassificationResult
@@ -438,8 +438,8 @@ The LLM is lazily initialized on first use. If you pass `llm`, it is used direct
 
 ## 9. Next Steps
 
-- [Scaled Authoring](../notebooks/creating-benchmarks/scaled-authoring.ipynb): ADeLe classification in the benchmark authoring workflow
-- [LLM rubric traits (literal kind)](../notebooks/core_concepts/rubrics/llm-traits.ipynb): the trait type ADeLe dimensions use internally
-- [Rubrics](rubrics/index.md): how trait-based evaluation works
-- [Running verification](../workflows/running-verification/index.md): evaluate your benchmark after filtering by ADeLe scores
-- [Evaluation modes](../notebooks/core_concepts/evaluation-modes.ipynb): template, rubric, or both
+- [Scaled Authoring](../../creating-benchmarks/scaled-authoring/): ADeLe classification in the benchmark authoring workflow
+- [LLM rubric traits (literal kind)](../rubrics/llm-traits/): the trait type ADeLe dimensions use internally
+- [Rubrics](../../../core_concepts/rubrics/): how trait-based evaluation works
+- [Running verification](../../../workflows/running-verification/): evaluate your benchmark after filtering by ADeLe scores
+- [Evaluation modes](../evaluation-modes/): template, rubric, or both

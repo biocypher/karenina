@@ -37,7 +37,7 @@ Karenina supports three pipeline modes:
 | `template_and_rubric` | Yes | Yes | No | Runs where you need correctness and quality side by side |
 | `rubric_only` | No | Yes | No | Open-ended outputs, trace audits, or quality-only evaluation |
 
-Use [answer templates](../notebooks/core_concepts/answer-templates.ipynb) when you can say what the right answer is. Use [rubrics](rubrics/index.md) when you want to score observable qualities of the response. Use evaluation mode to decide whether a run activates one path or both.
+Use [answer templates](../answer-templates/) when you can say what the right answer is. Use [rubrics](../../../core_concepts/rubrics/) when you want to score observable qualities of the response. Use evaluation mode to decide whether a run activates one path or both.
 
 ## 2. Philosophy / Core Idea
 
@@ -235,7 +235,7 @@ At the low-level `run_single_model_verification(...)` API, passing a non-empty r
 
 ### TaskEval behavior
 
-[TaskEval](task-eval.md) infers the mode from what you attach:
+[TaskEval](../task-eval/) infers the mode from what you attach:
 
 - template only -> `template_only`
 - rubric only -> `rubric_only`
@@ -245,9 +245,9 @@ In `rubric_only`, `TaskEval` can evaluate logs even when no explicit template is
 
 ## 7. Next Steps
 
-- [Templates vs Rubrics](../notebooks/core_concepts/template-vs-rubric.ipynb): the conceptual distinction between correctness and quality
-- [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb): how parsing and `verify()` work
-- [Rubrics](rubrics/index.md): trait types and selection guidance
-- [Verification Pipeline](verification-pipeline.md): the full stage-by-stage execution model
-- [Results and Scoring](results-and-scoring.md): how to read `VerificationResult`
-- [VerificationConfig Reference](../reference/configuration/verification-config.md): complete configuration fields
+- [Templates vs Rubrics](../template-vs-rubric/): the conceptual distinction between correctness and quality
+- [Answer Templates](../answer-templates/): how parsing and `verify()` work
+- [Rubrics](../../../core_concepts/rubrics/): trait types and selection guidance
+- [Verification Pipeline](../verification-pipeline/): the full stage-by-stage execution model
+- [Results and Scoring](../results-and-scoring/): how to read `VerificationResult`
+- [VerificationConfig Reference](../../../reference/configuration/verification-config/): complete configuration fields

@@ -24,11 +24,11 @@ Regex traits use **regular expression pattern matching** to perform deterministi
 
 ## 1. What Regex Traits Are
 
-A `RegexTrait` searches the model's raw response trace for a regex pattern during [RubricEvaluation](../verification-pipeline.md) of the [verification pipeline](../verification-pipeline.md). If the pattern is found, the result is `True`; if not, `False`. You can invert this logic with `invert_result` and control case sensitivity with `case_sensitive`.
+A `RegexTrait` searches the model's raw response trace for a regex pattern during [RubricEvaluation](../../verification-pipeline/) of the [verification pipeline](../../verification-pipeline/). If the pattern is found, the result is `True`; if not, `False`. You can invert this logic with `invert_result` and control case sensitivity with `case_sensitive`.
 
 Regex traits are meant for checks that can be reduced to an **exact textual rule**. Typical examples include whether a response contains bracket citations, follows a required answer tag format, includes a disclaimer string, or avoids a small set of prohibited phrases.
 
-Use `RegexTrait` when the evaluation is genuinely about the presence or absence of a literal text pattern. If the check requires semantic interpretation, prefer [LLM traits](llm-traits.md). If the check is deterministic but more complex than a regex match, prefer [Callable traits](callable-traits.md).
+Use `RegexTrait` when the evaluation is genuinely about the presence or absence of a literal text pattern. If the check requires semantic interpretation, prefer [LLM traits](../llm-traits/). If the check is deterministic but more complex than a regex match, prefer [Callable traits](../callable-traits/).
 
 ### 1.1 Philosophy
 
@@ -44,20 +44,20 @@ That means good regex traits define **textual contracts**:
 
 | Better fit for Regex Traits | Better fit for other tools |
 |-----------------------------|----------------------------|
-| "Does the answer contain bracket citations like `[3]`?" | "Does the answer use evidence well?" → [LLM trait](llm-traits.md) |
+| "Does the answer contain bracket citations like `[3]`?" | "Does the answer use evidence well?" → [LLM trait](../llm-traits/) |
 | "Is the answer wrapped in `[ANSWER]...[/ANSWER]` tags?" | "Does the answer satisfy structured gold fields?" → template verification |
-| "Does the response avoid these exact hedge words?" | "Does the answer follow a deterministic rule that needs parsing logic?" → [Callable trait](callable-traits.md) |
+| "Does the response avoid these exact hedge words?" | "Does the answer follow a deterministic rule that needs parsing logic?" → [Callable trait](../callable-traits/) |
 
 A useful litmus test: if you can point to the literal text span that should make the trait pass or fail, a regex trait is probably the right abstraction.
 
 <div class="admonition tip">
 <p class="admonition-title">Regex evaluation also exists inside templates</p>
-<p>If you need regex checks as part of template verification rather than as rubric traits, see <a href="../answer-templates.md#regex-checks">Answer Templates, section 4.4: Regex Checks</a>. Template-level <code>self.regex</code> checks run against the same raw response trace, but they live inside the template verification flow instead of the rubric system.</p>
+<p>If you need regex checks as part of template verification rather than as rubric traits, see <a href="../../answer-templates/#44-regex-checks">Answer Templates, section 4.4: Regex Checks</a>. Template-level <code>self.regex</code> checks run against the same raw response trace, but they live inside the template verification flow instead of the rubric system.</p>
 </div>
 
 ## 2. Overview
 
-Unlike [LLM traits](llm-traits.md), which send the response to the parsing model for judgment, regex traits are evaluated entirely locally using Python's `re` module. This means zero cost, zero latency beyond the regex match itself, and perfect reproducibility: the same response always produces the same result.
+Unlike [LLM traits](../llm-traits/), which send the response to the parsing model for judgment, regex traits are evaluated entirely locally using Python's `re` module. This means zero cost, zero latency beyond the regex match itself, and perfect reproducibility: the same response always produces the same result.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -102,7 +102,7 @@ Previous Stages
 FinalizeResult → VerificationResult.rubric
 ```
 
-Regex traits skip stage 12 (DeepJudgmentRubric), which applies only to [LLM traits](llm-traits.md) with [deep judgment](../../advanced-pipeline/deep-judgment-rubrics.md) enabled.
+Regex traits skip stage 12 (DeepJudgmentRubric), which applies only to [LLM traits](../llm-traits/) with [deep judgment](../../../../advanced-pipeline/deep-judgment-rubrics/) enabled.
 
 Python's `re.search()` scans the entire raw response text. This makes regex traits ideal for format compliance checks, keyword presence, and any requirement that can be written as a literal text pattern.
 
@@ -295,8 +295,8 @@ except ValueError as e:
 
 ## 10. Next Steps
 
-- [LLM rubric traits](llm-traits.md): boolean, score, and literal kinds
-- [Callable traits](callable-traits.md): custom Python functions
-- [Metric traits](metric-traits.md): precision, recall, F1 computation
-- [Templates vs rubrics](../../notebooks/core_concepts/template-vs-rubric.ipynb): choosing between correctness checks and rubric-style evaluation
-- [Full Evaluation Benchmark](../../workflows/creating-benchmarks/full-evaluation-benchmark.md): adding traits to benchmarks
+- [LLM rubric traits](../llm-traits/): boolean, score, and literal kinds
+- [Callable traits](../callable-traits/): custom Python functions
+- [Metric traits](../metric-traits/): precision, recall, F1 computation
+- [Templates vs rubrics](../../template-vs-rubric/): choosing between correctness checks and rubric-style evaluation
+- [Full Evaluation Benchmark](../../../creating-benchmarks/full-evaluation-benchmark/): adding traits to benchmarks

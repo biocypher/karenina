@@ -4,7 +4,7 @@ Rubrics evaluate **how** a model responded by assessing observable properties of
 
 !!! tip "Trace filtering"
 
-    For agent workflows, `VerificationConfig.use_full_trace_for_rubric` controls whether rubric evaluation uses the full trace (`True`, the default) or only the final AI message (`False`). See the [VerificationConfig Reference](../../reference/configuration/verification-config.md#trace-filtering) for the config fields and [MCP-enabled verification](../../workflows/running-verification/mcp-agent-evaluation.md#trace-handling) for an end-to-end example.
+    For agent workflows, `VerificationConfig.use_full_trace_for_rubric` controls whether rubric evaluation uses the full trace (`True`, the default) or only the final AI message (`False`). See the [VerificationConfig Reference](../../reference/configuration/verification-config.md#trace-filtering) for the config fields and [MCP-enabled verification](../../notebooks/running-verification/mcp-agent-evaluation.ipynb#trace-handling) for an end-to-end example.
 
 Rubrics come in four trait types (LLM, regex, callable, metric) that work differently: some require an LLM call, others run locally with no model involved. They can be applied **globally** across all questions or **per-question** for domain-specific checks.
 
@@ -55,7 +55,7 @@ Once created, a rubric needs to be attached to an evaluation object. In benchmar
 | **Benchmark + Question** | Attach rubrics at both levels | The current question | You need both shared benchmark-wide traits and prompt-specific checks | Karenina merges both trait sets for that question; trait names must be unique across scopes or a `ValueError` is raised |
 | **TaskEval** | Attach a rubric with `task_eval.add_rubric()`; pass `step_id` for step-specific evaluation | All recorded text or one named step | You are evaluating free-text output outside the benchmark loop | Traits evaluate against the TaskEval global scope or the selected step scope |
 
-See [Full Evaluation Benchmark](../../notebooks/creating-benchmarks/full-evaluation-benchmark.ipynb) for benchmark usage and [TaskEval](../task-eval.md) for free-text evaluation. Each trait type has its own sub-page with full API details.
+See [Full Evaluation Benchmark](../../notebooks/creating-benchmarks/full-evaluation-benchmark.ipynb) for benchmark usage and [TaskEval](../../notebooks/core_concepts/task-eval.ipynb) for free-text evaluation. Each trait type has its own sub-page with full API details.
 
 ## 3. Trait Type Overview
 

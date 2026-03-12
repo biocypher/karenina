@@ -17,7 +17,7 @@ jupyter:
 
 MCP (Model Context Protocol) transforms the answering model from a single-shot text generator into a multi-turn **agent** with tool access. Instead of relying solely on training data, the model can call external tools (web search, database queries, API endpoints, file operations) to gather information before producing its final response.
 
-MCP integration is purely an **answering model concern**. It changes how the response is generated, not how the response is evaluated. The [verification pipeline](verification-pipeline.md), [answer templates](answer-templates.md), and [rubrics](rubrics/index.md) work identically regardless of whether the response came from a simple LLM call or a multi-turn agent session.
+MCP integration is purely an **answering model concern**. It changes how the response is generated, not how the response is evaluated. The [verification pipeline](../verification-pipeline/), [answer templates](../answer-templates/), and [rubrics](../../../core_concepts/rubrics/) work identically regardless of whether the response came from a simple LLM call or a multi-turn agent session.
 
 ```python tags=["hide-cell"]
 # Mock cell: ensures examples execute without live API keys.
@@ -43,7 +43,7 @@ MCP provides a standardized protocol for giving the model tool access. You confi
 | Questions requiring current or real-time information | MCP with appropriate servers | Training data has a cutoff date |
 | Questions needing data from specific databases | MCP with database tools | Model cannot access databases without tools |
 | Benchmark tests tool-use ability itself | MCP required | The tool usage is the capability being evaluated |
-| Reproducibility is the top priority | Simple LLM or [manual interface](manual-interface.md) | MCP results vary with external state |
+| Reproducibility is the top priority | Simple LLM or [manual interface](../manual-interface/) | MCP results vary with external state |
 | Cost and latency must be minimized | Simple LLM | MCP adds multiple LLM calls per question |
 
 !!! tip "Litmus test"
@@ -54,7 +54,7 @@ MCP verification costs more and takes longer than simple LLM verification. Each 
 
 ## 3. Architecture
 
-MCP integration sits between the question and the [verification pipeline](verification-pipeline.md), replacing the single LLM call with an agent loop:
+MCP integration sits between the question and the [verification pipeline](../verification-pipeline/), replacing the single LLM call with an agent loop:
 
 ```
                           ┌─────────────────┐
@@ -77,7 +77,7 @@ Three components work together:
 | Component | Role | Configured via |
 |-----------|------|----------------|
 | **MCP Servers** | External processes that expose tools via the MCP protocol (HTTP or stdio transport) | `ModelConfig.mcp_urls_dict` |
-| **AgentPort adapter** | Connects to servers, discovers tools, runs the multi-turn agent loop, captures the trace | `ModelConfig.interface` (selects the [adapter](adapters.md)) |
+| **AgentPort adapter** | Connects to servers, discovers tools, runs the multi-turn agent loop, captures the trace | `ModelConfig.interface` (selects the [adapter](../../../core_concepts/adapters/)) |
 | **Agent middleware** | Retry logic, execution limits, conversation summarization, prompt caching | `ModelConfig.agent_middleware` |
 
 The agent loop iterates: the model receives the question plus available tools, generates a response, optionally invokes tools, receives tool results, and continues until it produces a final answer or hits a configured limit.
@@ -191,7 +191,7 @@ print(f"Prompt caching: enabled={middleware.prompt_caching.enabled}, ttl='{middl
 
 ## 6. Adapter-Specific MCP Behavior
 
-Each [adapter](adapters.md) implements MCP differently. The adapter is selected by the `interface` field on `ModelConfig`.
+Each [adapter](../../../core_concepts/adapters/) implements MCP differently. The adapter is selected by the `interface` field on `ModelConfig`.
 
 | Feature | `langchain` | `claude_agent_sdk` | `claude_tool` |
 |---------|:-----------:|:------------------:|:-------------:|
@@ -216,7 +216,7 @@ Each [adapter](adapters.md) implements MCP differently. The adapter is selected 
 
 The `openrouter` and `openai_endpoint` interfaces delegate to the `langchain` adapter internally, so they inherit the same MCP behavior.
 
-For implementation details on how each adapter connects, discovers tools, runs the agent loop, and captures traces, see the [MCP Integration Deep Dive](../advanced-adapters/mcp-integration.md).
+For implementation details on how each adapter connects, discovers tools, runs the agent loop, and captures traces, see the [MCP Integration Deep Dive](../../../advanced-adapters/mcp-integration/).
 
 ## 7. Trace Handling
 
@@ -279,12 +279,12 @@ When verification runs with MCP enabled, the following lifecycle executes per qu
                  and limit_reached flag
 ```
 
-The `AgentResult` feeds into the standard [verification pipeline](verification-pipeline.md) at the GenerateAnswer stage (Stage 2). If `limit_reached` is `True`, the RecursionLimitAutoFail stage (Stage 3) marks verification as auto-failed while preserving the captured trace for inspection.
+The `AgentResult` feeds into the standard [verification pipeline](../verification-pipeline/) at the GenerateAnswer stage (Stage 2). If `limit_reached` is `True`, the RecursionLimitAutoFail stage (Stage 3) marks verification as auto-failed while preserving the captured trace for inspection.
 
 ## 9. Next Steps
 
-1. [MCP-enabled verification workflow](../workflows/running-verification/mcp-agent-evaluation.md): step-by-step configuration and execution
-2. [MCP Integration Deep Dive](../advanced-adapters/mcp-integration.md): adapter internals, connection lifecycle, trace capture, message conversion
-3. [Adapters](adapters.md): adapter comparison and port/adapter architecture
-4. [Evaluation modes](evaluation-modes.md): how MCP interacts with template and rubric evaluation
-5. [Manual interface](manual-interface.md): alternative for reproducible testing without live tools
+1. [MCP-enabled verification workflow](../../running-verification/mcp-agent-evaluation/): step-by-step configuration and execution
+2. [MCP Integration Deep Dive](../../../advanced-adapters/mcp-integration/): adapter internals, connection lifecycle, trace capture, message conversion
+3. [Adapters](../../../core_concepts/adapters/): adapter comparison and port/adapter architecture
+4. [Evaluation modes](../evaluation-modes/): how MCP interacts with template and rubric evaluation
+5. [Manual interface](../manual-interface/): alternative for reproducible testing without live tools

@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.19.1
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -15,7 +15,7 @@ jupyter:
 
 # LLM Rubric Traits
 
-LLM rubric traits use the **parsing model as an evaluator LLM** to judge observable properties of a model's raw response trace. They are the flexible rubric trait type: use them when the check requires language understanding, interpretation, or classification rather than exact pattern matching or deterministic logic. For an overview of all rubric trait types, see the [rubrics index](index.md).
+LLM rubric traits use the **parsing model as an evaluator LLM** to judge observable properties of a model's raw response trace. They are the flexible rubric trait type: use them when the check requires language understanding, interpretation, or classification rather than exact pattern matching or deterministic logic. For an overview of all rubric trait types, see the [rubrics index](../../../../core_concepts/rubrics/).
 
 ```python tags=["hide-cell"]
 # Mock cell: ensures examples execute without live API keys.
@@ -28,7 +28,7 @@ An `LLMRubricTrait` sends the original question, the model's raw response trace,
 
 LLM rubric traits are meant for qualities you can judge by reading the answer itself, without needing ground truth. Typical examples include whether a biomedical answer presents evidence in a usable style rather than a vague one, hedges appropriately when discussing off-label use, or develops its reasoning as a coherent chain rather than a pile of disconnected claims.
 
-Use `LLMRubricTrait` when the evaluation genuinely needs semantic judgment. If the check can be expressed as an exact pattern or a Python-defined rule, prefer [Regex traits](regex-traits.ipynb) or [Callable traits](callable-traits.ipynb). Pure local regex/callable checks are faster, cheaper, and more reproducible.
+Use `LLMRubricTrait` when the evaluation genuinely needs semantic judgment. If the check can be expressed as an exact pattern or a Python-defined rule, prefer [Regex traits](../regex-traits/) or [Callable traits](../callable-traits/). Pure local regex/callable checks are faster, cheaper, and more reproducible.
 
 ### 1.1 Philosophy
 
@@ -73,7 +73,7 @@ Choose the kind based on the shape of the judgment:
 
 ## 3. Why the `description` Field Matters
 
-LLM traits are evaluated during [RubricEvaluation](../verification-pipeline.md) of the [verification pipeline](../verification-pipeline.md). During evaluation, the [prompt assembler](../../advanced-pipeline/prompt-assembly.md) builds a message for the parsing model containing: a **system prompt** assigning the evaluator role, and a **user prompt** with the original question text, the model's full response trace, and your trait definition.
+LLM traits are evaluated during [RubricEvaluation](../../verification-pipeline/) of the [verification pipeline](../../verification-pipeline/). During evaluation, the [prompt assembler](../../../../advanced-pipeline/prompt-assembly/) builds a message for the parsing model containing: a **system prompt** assigning the evaluator role, and a **user prompt** with the original question text, the model's full response trace, and your trait definition.
 
 ```
 Previous Stages
@@ -112,7 +112,7 @@ Two factors control evaluation quality:
 1. **Trait-definition quality**: For boolean and score traits, this mostly means the `description`. For literal traits, it means the combination of the top-level `description` and the class descriptions. Detailed, observable criteria with explicit boundary cases produce more consistent judgments.
 2. **Model capability**: More capable parsing models interpret nuanced descriptions more faithfully. If you need fine-grained distinctions, use a stronger model. Simpler judgments are reliable even with smaller models.
 
-If multiple LLM traits exist on the same rubric, Karenina uses `VerificationConfig.rubric_evaluation_strategy` to decide whether to evaluate them in a single parsing call (`"batch"`, the default) or one by one (`"sequential"`). Results are stored in `VerificationResult.rubric` and become available for analysis and DataFrame export. See the [VerificationConfig reference](../../reference/configuration/verification-config.md) for the full field definition.
+If multiple LLM traits exist on the same rubric, Karenina uses `VerificationConfig.rubric_evaluation_strategy` to decide whether to evaluate them in a single parsing call (`"batch"`, the default) or one by one (`"sequential"`). Results are stored in `VerificationResult.rubric` and become available for analysis and DataFrame export. See the [VerificationConfig reference](../../../../reference/configuration/verification-config/) for the full field definition.
 
 ## 4. Boolean Kind
 
@@ -590,12 +590,12 @@ config = VerificationConfig(
 # - "custom": use per-trait settings from deep_judgment_rubric_config
 ```
 
-For detailed configuration (four modes, per-trait overrides, result fields, cost considerations), see [deep judgment rubrics](../../advanced-pipeline/deep-judgment-rubrics.md).
+For detailed configuration (four modes, per-trait overrides, result fields, cost considerations), see [deep judgment rubrics](../../../../advanced-pipeline/deep-judgment-rubrics/).
 
 ## 9. Next Steps
 
-- [Regex traits](regex-traits.ipynb): deterministic pattern matching
-- [Callable traits](callable-traits.ipynb): custom Python functions
-- [Metric traits](metric-traits.ipynb): precision, recall, F1 computation
-- [Evaluation modes](../../notebooks/core_concepts/evaluation-modes.ipynb): choosing when rubrics are evaluated
-- [Deep judgment rubrics](../../advanced-pipeline/deep-judgment-rubrics.md): advanced evidence-based evaluation
+- [Regex traits](../regex-traits/): deterministic pattern matching
+- [Callable traits](../callable-traits/): custom Python functions
+- [Metric traits](../metric-traits/): precision, recall, F1 computation
+- [Evaluation modes](../../evaluation-modes/): choosing when rubrics are evaluated
+- [Deep judgment rubrics](../../../../advanced-pipeline/deep-judgment-rubrics/): advanced evidence-based evaluation

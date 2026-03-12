@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.19.1
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -42,7 +42,7 @@ Response (free text)  →  Judge LLM  →  Filled template  →  verify()  →  
 
 <div class="admonition note">
 <p class="admonition-title">This page teaches how templates work, not how to run them</p>
-<p>The code examples below instantiate templates manually and call <code>verify()</code> directly. This is for illustration only. It shows what the Judge LLM and verification pipeline do under the hood. In practice, you never call <code>verify()</code> yourself. Instead, you embed your template in a benchmark and run the <a href="../workflows/creating-benchmarks/factual-qa-benchmark.md">verification pipeline</a>, which handles answer generation, judge parsing, and verification automatically. However, the <code>verify()</code> method itself must be written by the user (see <a href="#template-structure">Template Structure</a> below).</p>
+<p>The code examples below instantiate templates manually and call <code>verify()</code> directly. This is for illustration only. It shows what the Judge LLM and verification pipeline do under the hood. In practice, you never call <code>verify()</code> yourself. Instead, you embed your template in a benchmark and run the <a href="../../creating-benchmarks/factual-qa-benchmark/">verification pipeline</a>, which handles answer generation, judge parsing, and verification automatically. However, the <code>verify()</code> method itself must be written by the user (see <a href="#2-template-structure">Template Structure</a> below).</p>
 </div>
 
 ### 1.1. Think of It Like a Form
@@ -58,7 +58,7 @@ If you have ever filled out a standardized form (a lab report, a clinical intake
 
 This analogy captures something important: **the person filling in the form and the person checking it are not the same**. The form-filler (the judge) reads a document and writes down what they find. The checker (`verify()`) compares what was written down against known correct answers.
 
-In practice, though, the analogy is not perfectly clean. Some form fields ask the judge to simply copy a value ("write down the city named as France's capital"), but others require genuine evaluation ("check this box if the response identifies BCL2 as the pharmacological target"). In the second case the judge is not merely parsing; it is making a judgment call. The judging problem and evaluation are intrinsically intermingled, and the boundary between "extracting information" and "performing an assessment" shifts depending on field design (see [Ground Truth Exposure](#ground-truth-exposure-and-judge-anchoring) below).
+In practice, though, the analogy is not perfectly clean. Some form fields ask the judge to simply copy a value ("write down the city named as France's capital"), but others require genuine evaluation ("check this box if the response identifies BCL2 as the pharmacological target"). In the second case the judge is not merely parsing; it is making a judgment call. The judging problem and evaluation are intrinsically intermingled, and the boundary between "extracting information" and "performing an assessment" shifts depending on field design (see [Ground Truth Exposure](#52-ground-truth-exposure-and-judge-anchoring) below).
 
 What the architecture *does* guarantee is this: once the judge has filled in the form, everything that follows is deterministic, code-driven verification. The `verify()` method never consults the LLM again. That is the separation that matters, and it is the key to writing good templates. We will come back to this idea throughout the document.
 
@@ -70,7 +70,7 @@ A template is a contract between three participants, each with a single, well-de
 2. **The Judge LLM** reads the answering model's response and fills in the form
 3. **The `verify()` method** compares the filled-in values against the answer key and returns a pass/fail verdict
 
-The `verify()` method never reads the original response, and the judge never runs `verify()`. How much of the expected answer the judge sees depends on your field design: string fields keep it fully hidden, while boolean fields often reveal it in their descriptions (see [Ground Truth Exposure](#ground-truth-exposure-and-judge-anchoring)). Once the form is filled, evaluation is deterministic code. Swap out the judge model, and the same `verify()` logic still produces the same verdict from the same extracted values.
+The `verify()` method never reads the original response, and the judge never runs `verify()`. How much of the expected answer the judge sees depends on your field design: string fields keep it fully hidden, while boolean fields often reveal it in their descriptions (see [Ground Truth Exposure](#52-ground-truth-exposure-and-judge-anchoring)). Once the form is filled, evaluation is deterministic code. Swap out the judge model, and the same `verify()` logic still produces the same verdict from the same extracted values.
 
 ### 1.3. How It Unfolds: A Walkthrough
 
@@ -172,18 +172,18 @@ print(f"Ground truth:     {parsed.correct['target']!r}")
 print(f"Verified:         {parsed.verify()}")
 ```
 
-Each component exists for a specific reason. The `ground_truth` method keeps the programmatic answer key out of the JSON schema that the judge receives. If correct answers were regular Pydantic fields, they would appear in the schema and could influence the judge's extraction. Because `ground_truth` runs after the instance is created, you can attach expected values to `self.correct` without them ever appearing in the schema. The degree of exposure depends on your field type; see [Ground Truth Exposure](#ground-truth-exposure-and-judge-anchoring) for the full tradeoff.
+Each component exists for a specific reason. The `ground_truth` method keeps the programmatic answer key out of the JSON schema that the judge receives. If correct answers were regular Pydantic fields, they would appear in the schema and could influence the judge's extraction. Because `ground_truth` runs after the instance is created, you can attach expected values to `self.correct` without them ever appearing in the schema. The degree of exposure depends on your field type; see [Ground Truth Exposure](#52-ground-truth-exposure-and-judge-anchoring) for the full tradeoff.
 
 <div class="admonition info">
 <p class="admonition-title">What is <code>ground_truth</code>?</p>
 <p><code>ground_truth</code> is a karenina lifecycle method on <code>BaseAnswer</code>. It runs automatically after the instance is created and all fields are set. Unlike the underlying Pydantic hook it wraps, <code>ground_truth</code> takes no extra parameters: just <code>self</code>. You do not need deep Pydantic knowledge to use it: just define the method, set <code>self.correct</code> (and optionally <code>self.regex</code>), and the framework handles the rest.</p>
 </div>
 
-The [separation between filling in the form and checking it](#think-of-it-like-a-form) is the most important design idea in karenina's template system. Because everything after the judge is deterministic code, you get reproducibility (the same extracted values always produce the same verdict), transparency (anyone can read `verify()` and see what counts as correct), and testability (you can call `verify()` on your laptop without any LLM or API key).
+The [separation between filling in the form and checking it](#11-think-of-it-like-a-form) is the most important design idea in karenina's template system. Because everything after the judge is deterministic code, you get reproducibility (the same extracted values always produce the same verdict), transparency (anyone can read `verify()` and see what counts as correct), and testability (you can call `verify()` on your laptop without any LLM or API key).
 
 The three-component structure also means each template is a self-contained evaluation unit that carries its own extraction schema and verification logic. Real benchmarks contain heterogeneous questions: one might use a boolean check, another a string extraction, a third regex only. The pipeline orchestrates execution, but each template decides what to extract and what "correct" means for its question. Add a new question type by writing a new template class; the pipeline runs it without modification.
 
-The pipeline validates templates before running them. Stage 1 (`ValidateTemplate`) checks that `verify()` exists and is callable, and that `ground_truth` sets `self.correct` as a dictionary. If something is missing, you get a clear error message before any LLM calls happen. For regex-only templates and optional methods like `verify_granular()`, see [Regex Checks](#regex-checks) and [Multi-Field with Partial Credit](#multi-field-with-partial-credit).
+The pipeline validates templates before running them. Stage 1 (`ValidateTemplate`) checks that `verify()` exists and is callable, and that `ground_truth` sets `self.correct` as a dictionary. If something is missing, you get a clear error message before any LLM calls happen. For regex-only templates and optional methods like `verify_granular()`, see [Regex Checks](#44-regex-checks) and [Multi-Field with Partial Credit](#45-multi-field-with-partial-credit).
 
 ### 2.1. Naming Requirement
 
@@ -281,7 +281,7 @@ print(f"verify(): {parsed.verify()}")
 
 Five patterns form a toolkit for factual verification. Most real benchmarks use a mix: boolean fields for presence checks, string fields for extractable values, and numeric fields for measurements. Start with the simplest pattern that handles your ground truth, and reach for more complex ones only when needed.
 
-For step-by-step examples of implementing each pattern inside a benchmark, see [Factual QA Benchmark](../workflows/creating-benchmarks/factual-qa-benchmark.md).
+For step-by-step examples of implementing each pattern inside a benchmark, see [Factual QA Benchmark](../../creating-benchmarks/factual-qa-benchmark/).
 
 ### 4.1. Boolean Check
 
@@ -329,7 +329,12 @@ Boolean templates follow the same three-component structure as other patterns. T
 
 <div class="admonition tip">
 <p class="admonition-title">When to use boolean checks</p>
-<p>Boolean fields trade some judge independence for simpler verification. See <a href="#ground-truth-exposure-and-judge-anchoring">Ground Truth Exposure</a> for when this matters and how to choose between boolean and string fields. For checking multiple concepts independently with partial credit, see <a href="#multi-field-with-partial-credit">Multi-Field with Partial Credit</a>.</p>
+<p>Boolean fields trade some judge independence for simpler verification. See <a href="#52-ground-truth-exposure-and-judge-anchoring">Ground Truth Exposure</a> for when this matters and how to choose between boolean and string fields. For checking multiple concepts independently with partial credit, see <a href="#45-multi-field-with-partial-credit">Multi-Field with Partial Credit</a>.</p>
+</div>
+
+<div class="admonition tip">
+<p class="admonition-title">No ground truth? Boolean fields as judgment delegates</p>
+<p>When you cannot provide a definitive correct answer but still want a gating pass/fail verdict, a <code>bool</code> field can delegate the judgment entirely to the Judge LLM. Set the description to a judgment criterion (not an extraction instruction) and hardcode ground truth to <code>True</code>. The same idea extends to <code>int</code> fields with a threshold gate. See <a href="../template-vs-rubric/#41-boolean-fields-as-judgment-delegates">Boolean Fields as Judgment Delegates</a> in Templates vs Rubrics.</p>
 </div>
 
 ### 4.2. String Extraction
@@ -388,7 +393,7 @@ Even though the description asks for standard notation, the judge may return "O 
 
 <div class="admonition tip">
 <p class="admonition-title">When to use string extraction</p>
-<p>Prefer string fields when you need the actual value for downstream analysis, want to prevent judge anchoring on ground truth, or need programmatic control over matching (regex, substring, normalization). See <a href="#ground-truth-exposure-and-judge-anchoring">Ground Truth Exposure</a> for the tradeoff with boolean fields.</p>
+<p>Prefer string fields when you need the actual value for downstream analysis, want to prevent judge anchoring on ground truth, or need programmatic control over matching (regex, substring, normalization). See <a href="#52-ground-truth-exposure-and-judge-anchoring">Ground Truth Exposure</a> for the tradeoff with boolean fields.</p>
 </div>
 
 ### 4.3. Numeric Tolerance
@@ -433,7 +438,7 @@ for temp in [37.0, 36.8, 37.5, 36.0, 38.0]:
     print(f"{temp} C -> verify(): {parsed.verify()}")
 ```
 
-The `self.tolerance` attribute is not a built-in framework concept; it is a custom attribute you define for your own `verify()` logic. This works because `BaseAnswer` allows arbitrary attributes (see [Template Structure](#template-structure)).
+The `self.tolerance` attribute is not a built-in framework concept; it is a custom attribute you define for your own `verify()` logic. This works because `BaseAnswer` allows arbitrary attributes (see [Template Structure](#2-template-structure)).
 
 For exact counts where only one value is correct, set `tolerance = 0`:
 
@@ -761,7 +766,7 @@ Remember: the judge is the person reading the letter and filling in your form. T
 
 This means your field description **is** your specification. If the instructions next to a blank on your form are vague ("write the answer here"), the form-filler will not know what you want. If they are precise ("write the patient's systolic blood pressure in mmHg, as stated in the clinical note"), the form-filler knows exactly what to look for and how to write it down. Invest time in your descriptions. They are the single most important part of your template, because they are the only thing the judge has to work with.
 
-For the tradeoff between boolean and string fields, see [Ground Truth Exposure and Judge Anchoring](#ground-truth-exposure-and-judge-anchoring) below.
+For the tradeoff between boolean and string fields, see [Ground Truth Exposure and Judge Anchoring](#52-ground-truth-exposure-and-judge-anchoring) below.
 
 ### 5.2. Ground Truth Exposure and Judge Anchoring
 
@@ -961,7 +966,7 @@ def verify(self) -> bool:
 
 ## 8. Next Steps
 
-- [Rubrics](rubrics/index.md): Assess response quality beyond correctness
-- [Evaluation Modes](../notebooks/core_concepts/evaluation-modes.ipynb): Choose between template-only, rubric-only, or both
-- [Factual QA Benchmark](../workflows/creating-benchmarks/factual-qa-benchmark.md): Step-by-step implementation of these patterns in a benchmark
-- [Philosophy](../home/philosophy.md): Why the LLM-as-judge approach works
+- [Rubrics](../../../core_concepts/rubrics/): Assess response quality beyond correctness
+- [Evaluation Modes](../evaluation-modes/): Choose between template-only, rubric-only, or both
+- [Factual QA Benchmark](../../creating-benchmarks/factual-qa-benchmark/): Step-by-step implementation of these patterns in a benchmark
+- [Philosophy](../../../home/philosophy/): Why the LLM-as-judge approach works

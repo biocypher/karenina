@@ -367,7 +367,7 @@ _ = _patcher.stop()
 
 ## 8. Next Steps
 
-- [Verification Pipeline](../notebooks/core_concepts/verification-pipeline.ipynb): the 13 stages that use assembled prompts
-- [Adapters](adapters.md): which LLM backends are available and how they differ
-- [Prompt Assembly Internals](../advanced-pipeline/prompt-assembly.md): technical deep dive into `PromptAssembler`, `AdapterInstructionRegistry`, `PromptTask`, and `PortCapabilities`
-- [Prompt Config Reference](../reference/configuration/prompt-config.md): full field documentation for `PromptConfig`
+- [Verification Pipeline](../verification-pipeline/): the 13 stages that use assembled prompts
+- [Adapters](../../../core_concepts/adapters/): which LLM backends are available and how they differ
+- [Prompt Assembly Internals](../../../advanced-pipeline/prompt-assembly/): technical deep dive into `PromptAssembler`, `AdapterInstructionRegistry`, `PromptTask`, and `PortCapabilities`
+- [Prompt Config Reference](../../../reference/configuration/prompt-config/): full field documentation for `PromptConfig`

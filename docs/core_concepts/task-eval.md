@@ -15,7 +15,7 @@ jupyter:
 
 # TaskEval
 
-TaskEval applies Karenina's evaluation engine ([templates](answer-templates.md) for correctness, [rubrics](rubrics/index.md) for quality) to text you supply, without generating responses.
+TaskEval applies Karenina's evaluation engine ([templates](../answer-templates/) for correctness, [rubrics](../../../core_concepts/rubrics/) for quality) to text you supply, without generating responses.
 
 ```python tags=["hide-cell"]
 # Mock cell: ensures examples execute without live API keys.
@@ -61,7 +61,7 @@ task = TaskEval(task_id="my-eval")
 
 ## 1. What Is TaskEval?
 
-Karenina has two evaluation workflows. [Benchmark](questions-and-benchmarks/index.md) is a closed-loop workflow: it defines questions, sends them to an answering model through the [verification pipeline](verification-pipeline.md), and evaluates the generated responses. TaskEval is the open-loop counterpart. You supply pre-existing text (an agent trace, a pipeline output, a human-written response) and evaluate it using the same pipeline, the same templates, the same rubrics, and the same judge LLM. No question definition or answer generation is required.
+Karenina has two evaluation workflows. [Benchmark](../../../core_concepts/questions-and-benchmarks/) is a closed-loop workflow: it defines questions, sends them to an answering model through the [verification pipeline](../verification-pipeline/), and evaluates the generated responses. TaskEval is the open-loop counterpart. You supply pre-existing text (an agent trace, a pipeline output, a human-written response) and evaluate it using the same pipeline, the same templates, the same rubrics, and the same judge LLM. No question definition or answer generation is required.
 
 **The abstraction boundary**: TaskEval handles recording text, attaching evaluation criteria, and routing evaluation through the verification pipeline. It does not generate responses, manage questions, or provide persistence. It is a stateless evaluation container: you populate it, evaluate, and read the results.
 
@@ -107,15 +107,15 @@ If your process has distinct phases, you can assign each log entry to a named **
 
 ### 3.2 Phase 2: Attach Evaluation Criteria
 
-Once text is recorded, you attach evaluation criteria: [templates](answer-templates.md) for correctness, [rubrics](rubrics/index.md) for quality, or both.
+Once text is recorded, you attach evaluation criteria: [templates](../answer-templates/) for correctness, [rubrics](../../../core_concepts/rubrics/) for quality, or both.
 
 A template is a structured Pydantic schema that tells the judge LLM what to extract from the text, paired with a `verify()` method that checks the extracted values against ground truth. A rubric defines qualitative dimensions (conciseness, citation quality, logical coherence) that the judge LLM scores independently from factual correctness.
 
-Criteria can be attached **globally** (evaluated against all recorded text) or to a **specific step** (evaluated against only that step's logs). The [evaluation mode](../notebooks/core_concepts/evaluation-modes.ipynb) is auto-detected from what you attach: `template_only`, `rubric_only`, or `template_and_rubric`.
+Criteria can be attached **globally** (evaluated against all recorded text) or to a **specific step** (evaluated against only that step's logs). The [evaluation mode](../evaluation-modes/) is auto-detected from what you attach: `template_only`, `rubric_only`, or `template_and_rubric`.
 
 ### 3.3 Phase 3: Evaluate
 
-Calling `evaluate()` sends the recorded text through Karenina's [verification pipeline](verification-pipeline.md). The pipeline's judge LLM parses the text into any attached templates, runs `verify()`, and scores each rubric trait. TaskEval returns a `TaskEvalResult` containing verification outcomes for both global and per-step scopes.
+Calling `evaluate()` sends the recorded text through Karenina's [verification pipeline](../verification-pipeline/). The pipeline's judge LLM parses the text into any attached templates, runs `verify()`, and scores each rubric trait. TaskEval returns a `TaskEvalResult` containing verification outcomes for both global and per-step scopes.
 
 ### 3.4 Walkthrough
 
@@ -128,7 +128,7 @@ You want to evaluate this along two dimensions:
 1. **Correctness**: Did the response identify BCL2 as the primary target? This is a template check: a boolean field (`identifies_bcl2`) and a `verify()` method that compares it against ground truth.
 2. **Quality**: Is the response concise and well cited? These are rubric traits, scored by the judge LLM.
 
-You would record this text with `log()`, attach a template for the BCL2 check and a rubric for conciseness, then call `evaluate()`. The verification pipeline handles judge parsing, `verify()`, and trait scoring. The [workflow page](../notebooks/task-eval/index.ipynb) shows the complete code for this scenario.
+You would record this text with `log()`, attach a template for the BCL2 check and a rubric for conciseness, then call `evaluate()`. The verification pipeline handles judge parsing, `verify()`, and trait scoring. The [workflow page](../../task-eval/) shows the complete code for this scenario.
 
 ## 4. Benchmark vs TaskEval
 
@@ -190,7 +190,7 @@ task = TaskEval(
 
 The global scope evaluates all logs together. Per-step scopes evaluate only the logs, templates, and rubrics attached to that step. When you call `evaluate()` without a `step_id`, TaskEval runs global evaluation first, then automatically evaluates each step that has data.
 
-The constructor accepts two additional parameters: `merge_strategy` (see [Merge Strategies](#8-merge-strategies)) and `callable_registry`, a `dict[str, Callable]` for pre-registering functions used by [callable rubric traits](rubrics/callable-traits.md).
+The constructor accepts two additional parameters: `merge_strategy` (see [Merge Strategies](#8-merge-strategies)) and `callable_registry`, a `dict[str, Callable]` for pre-registering functions used by [callable rubric traits](../rubrics/callable-traits/).
 
 ## 6. Attaching Evaluation Criteria
 
@@ -220,7 +220,7 @@ task.add_rubric(Rubric(llm_traits=[
 <p><code>add_template()</code> extracts the source code of your <code>BaseAnswer</code> subclass using <code>inspect.getsource()</code>. The class must be defined in a <code>.py</code> file or Jupyter notebook, not constructed dynamically at runtime. For dynamically defined templates, use <code>add_question()</code> with template source code passed as a string in the <code>answer_template</code> field.</p>
 </div>
 
-If your rubric includes [callable traits](rubrics/callable-traits.md), register the callable functions before calling `evaluate()`:
+If your rubric includes [callable traits](../rubrics/callable-traits/), register the callable functions before calling `evaluate()`:
 
 ```python
 task.register_callable("under_150_words", lambda text: len(text.split()) < 150)
@@ -228,7 +228,7 @@ task.register_callable("under_150_words", lambda text: len(text.split()) < 150)
 
 When multiple rubrics are attached to the same scope, TaskEval merges them into a single rubric. Trait names must be unique across all rubrics in the same scope; duplicate names raise a `ValueError`.
 
-See the [workflow](../notebooks/task-eval/index.ipynb#step-3-attach-evaluation-criteria) for complete examples including all trait types and step-scoped criteria.
+See the [workflow](../../task-eval/#step-3-attach-evaluation-criteria) for complete examples including all trait types and step-scoped criteria.
 
 ## 7. Logging
 
@@ -258,7 +258,7 @@ Without a `step_id`, only the global scope receives the log regardless of the `t
 
 `log_trace()` also accepts a plain string, which is automatically wrapped as a single `Message.assistant()` object. When structured traces contain tool calls, the full message structure (including tool use and tool results) is preserved for the pipeline.
 
-See the [workflow](../notebooks/task-eval/index.ipynb#step-2-log-outputs) for complete parameter reference and tool call trace examples.
+See the [workflow](../../task-eval/#step-2-log-outputs) for complete parameter reference and tool call trace examples.
 
 ## 8. Merge Strategies
 
@@ -287,7 +287,7 @@ Results are structured as:
 
 To evaluate only one step, pass `step_id` to `evaluate()`.
 
-See the [workflow](../notebooks/task-eval/index.ipynb#step-4-configure-and-evaluate) for step-scoped evaluation examples.
+See the [workflow](../../task-eval/#step-4-configure-and-evaluate) for step-scoped evaluation examples.
 
 ## 10. Result Objects
 
@@ -305,8 +305,8 @@ See the [workflow](../notebooks/task-eval/index.ipynb#step-4-configure-and-evalu
 
 ## 11. Next Steps
 
-- [TaskEval workflow](../notebooks/task-eval/index.ipynb): step-by-step guide with complete code
-- [Answer templates](answer-templates.md): writing templates for correctness evaluation
-- [Rubrics](rubrics/index.md): defining quality traits
-- [Verification pipeline](verification-pipeline.md): the 13-stage pipeline TaskEval routes through
-- [Evaluation modes](../notebooks/core_concepts/evaluation-modes.ipynb): `template_only`, `rubric_only`, `template_and_rubric`
+- [TaskEval workflow](../../task-eval/): step-by-step guide with complete code
+- [Answer templates](../answer-templates/): writing templates for correctness evaluation
+- [Rubrics](../../../core_concepts/rubrics/): defining quality traits
+- [Verification pipeline](../verification-pipeline/): the 13-stage pipeline TaskEval routes through
+- [Evaluation modes](../evaluation-modes/): `template_only`, `rubric_only`, `template_and_rubric`

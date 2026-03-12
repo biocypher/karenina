@@ -15,7 +15,7 @@ jupyter:
 
 # Results and Scoring
 
-Every question that passes through the [verification pipeline](verification-pipeline.md) produces a **`VerificationResult`**: a nested Pydantic model that captures everything that happened during evaluation, from the raw response to the final pass/fail verdict. This page explains the result data model, how scoring works, how to access and aggregate results, and how to export them for analysis.
+Every question that passes through the [verification pipeline](../verification-pipeline/) produces a **`VerificationResult`**: a nested Pydantic model that captures everything that happened during evaluation, from the raw response to the final pass/fail verdict. This page explains the result data model, how scoring works, how to access and aggregate results, and how to export them for analysis.
 
 ```python tags=["hide-cell"]
 # Mock cell: ensures examples execute without live API keys.
@@ -251,7 +251,7 @@ print(f"Length: {len(id1)} characters")
 
 ## 3. Template Results: The Correctness Record
 
-The `template` sub-object (`VerificationResultTemplate`) is present whenever template evaluation ran (`template_only` or `template_and_rubric` [evaluation modes](../notebooks/core_concepts/evaluation-modes.ipynb)). It records the full chain from raw response to pass/fail verdict.
+The `template` sub-object (`VerificationResultTemplate`) is present whenever template evaluation ran (`template_only` or `template_and_rubric` [evaluation modes](../evaluation-modes/)). It records the full chain from raw response to pass/fail verdict.
 
 ### 3.1. The Primary Correctness Signal: `verify_result`
 
@@ -261,9 +261,9 @@ Several pipeline stages can override this value before finalization:
 
 | Stage | Override Behavior |
 |-------|-------------------|
-| [Abstention check](verification-pipeline.md) | Sets `verify_result` to `False` if the model refused to answer |
-| [Sufficiency check](verification-pipeline.md) | Sets `verify_result` to `False` if the response lacks sufficient information |
-| [Embedding check](verification-pipeline.md) | Can override `verify_result` based on semantic similarity threshold |
+| [Abstention check](../verification-pipeline/) | Sets `verify_result` to `False` if the model refused to answer |
+| [Sufficiency check](../verification-pipeline/) | Sets `verify_result` to `False` if the response lacks sufficient information |
+| [Embedding check](../verification-pipeline/) | Can override `verify_result` based on semantic similarity threshold |
 
 The corresponding `*_override_applied` boolean fields record whether an override occurred, so you can always distinguish "failed on its own merits" from "overridden by a guard stage."
 
@@ -360,7 +360,7 @@ print("Trait lookup:", result.rubric.get_trait_by_name("has_citations"))
 
 ## 5. Deep Judgment Results (Optional)
 
-When [deep judgment](../notebooks/core_concepts/rubrics/llm-traits.ipynb) is enabled, additional evidence-based results are captured. Deep judgment adds excerpt extraction, per-attribute reasoning, and optional hallucination risk assessment on top of standard evaluation.
+When [deep judgment](../rubrics/llm-traits/) is enabled, additional evidence-based results are captured. Deep judgment adds excerpt extraction, per-attribute reasoning, and optional hallucination risk assessment on top of standard evaluation.
 
 ### 5.1. Template Deep Judgment
 
@@ -390,7 +390,7 @@ The `deep_judgment_rubric` sub-object (`VerificationResultDeepJudgmentRubric`) r
 
 ## 6. How Results Vary by Evaluation Mode
 
-The [evaluation mode](../notebooks/core_concepts/evaluation-modes.ipynb) determines which sub-objects are populated:
+The [evaluation mode](../evaluation-modes/) determines which sub-objects are populated:
 
 | Sub-object | `template_only` | `template_and_rubric` | `rubric_only` |
 |------------|:---------------:|:---------------------:|:-------------:|
@@ -629,7 +629,7 @@ print([m for m in dir(ResultsManager) if not m.startswith("_")])
 
 ## 11. How Results Are Built: The FinalizeResult Stage
 
-The [FinalizeResult stage](verification-pipeline.md) (stage 13) always runs as the last step in the pipeline. It constructs the `VerificationResult` from the accumulated `VerificationContext`:
+The [FinalizeResult stage](../verification-pipeline/) (stage 13) always runs as the last step in the pipeline. It constructs the `VerificationResult` from the accumulated `VerificationContext`:
 
 1. Collects all artifacts written by previous stages
 2. Extracts parsed ground truth and LLM responses from the parsed answer object
@@ -643,7 +643,7 @@ This stage handles both success and error cases. If the pipeline errors at stage
 
 ## 12. Next Steps
 
-- [Verification Pipeline](verification-pipeline.md): The 13 stages that produce results
-- [Evaluation Modes](../notebooks/core_concepts/evaluation-modes.ipynb): How modes affect which result sub-objects are populated
-- [Rubrics](rubrics/index.md): Defining the traits that populate rubric results
-- [Answer Templates](answer-templates.md): Writing the `verify()` logic that produces `verify_result`
+- [Verification Pipeline](../verification-pipeline/): The 13 stages that produce results
+- [Evaluation Modes](../evaluation-modes/): How modes affect which result sub-objects are populated
+- [Rubrics](../../../core_concepts/rubrics/): Defining the traits that populate rubric results
+- [Answer Templates](../answer-templates/): Writing the `verify()` logic that produces `verify_result`

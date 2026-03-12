@@ -18,7 +18,7 @@ A checkpoint organizes your benchmark into a clear, nested hierarchy. When you l
 
 1.  **Benchmark Metadata**: The identity (name, version, creator) and the timeline (when it was born and last modified).
 2.  **The Global Standards**: [Rubric traits](../rubrics/index.md) that apply to every question in the set.
-3.  **The Questions**: A collection of [Question objects](../questions.md), each wrapped in a unique identity.
+3.  **The Questions**: A collection of [Question objects](../../notebooks/core_concepts/questions-and-benchmarks/questions.ipynb), each wrapped in a unique identity.
 4.  **The Local Logic**: The specific [Answer Templates](../../notebooks/core_concepts/answer-templates.ipynb) and question-specific rubrics attached to individual prompts.
 
 ```
