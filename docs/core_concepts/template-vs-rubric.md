@@ -230,30 +230,7 @@ Both patterns above have rubric counterparts: `LLMRubricTrait` with `kind="boole
 
 If you find yourself delegating most fields to the Judge LLM, consider whether rubric traits would be a better fit. A template where every field is a judgment delegate has lost the deterministic verification that makes templates reproducible.
 
-## 5. What Each Evaluator Sees
-
-Understanding what inputs each evaluation path receives clarifies why the two building blocks are complementary, not interchangeable.
-
-| Input | Template (Judge LLM) | Template (`verify()`) | Rubric (evaluator) |
-|---|---|---|---|
-| Question text | Yes | No | Yes |
-| LLM response | Yes | No (sees parsed fields) | Yes (raw trace) |
-| JSON schema (field names, types, descriptions) | Yes | N/A | No |
-| Parsed field values | N/A | Yes | No |
-| Ground truth (`self.correct`) | No | Yes | No |
-| `raw_answer` | No | No | No |
-| Trait definition (name, description, kind) | N/A | N/A | Yes |
-
-Key observations:
-
-- The Judge LLM never sees ground truth. Its job is schema extraction, not correctness judgment.
-- `verify()` never sees the raw response. It only works with the parsed, structured fields.
-- Rubric evaluators never see the template, the schema, or the parsed fields. They work on the raw text.
-- `raw_answer` is never sent to any LLM. It exists for human review and for deriving `self.correct`.
-
-These information boundaries are deliberate. They make each evaluation path focused and auditable: you can inspect exactly what each component saw when it made its judgment.
-
-## 6. When to Use Each
+## 5. When to Use Each
 
 ### Use templates when:
 
@@ -287,7 +264,7 @@ These information boundaries are deliberate. They make each evaluation path focu
 
 **Priority heuristic for rubric trait type selection**: prefer regex or callable traits over LLM traits when possible. They are faster, cheaper, and fully reproducible. Use LLM traits when the evaluation genuinely requires language understanding. See the [decision flowchart](../../../core_concepts/rubrics/#decision-flowchart) in the rubrics docs for detailed trait type selection guidance.
 
-## 7. Evaluation Modes
+## 6. Evaluation Modes
 
 The `evaluation_mode` field on [VerificationConfig](../../../reference/configuration/verification-config/) controls which building blocks are active during a pipeline run:
 
@@ -301,7 +278,7 @@ Setting `evaluation_mode` to `template_and_rubric` or `rubric_only` automaticall
 
 For details on configuring evaluation modes, see [Evaluation Modes](../evaluation-modes/).
 
-## 8. Worked Example: Both Together
+## 7. Worked Example: Both Together
 
 Consider the question: *"Which is the putative target of venetoclax?"*
 
@@ -373,7 +350,7 @@ print(f"Regex trait '{has_citations.name}' on sample without citations: {has_cit
 
 The template verdict and rubric scores are independent. A response could correctly identify BCL2 (template passes) but fail to explain the mechanism (LLM trait returns `False`) and include no citations (regex trait returns `False`).
 
-## 9. Next Steps
+## 8. Next Steps
 
 - [Answer Templates](../answer-templates/): deep dive into template structure, `verify()`, and field types
 - [Rubrics](../../../core_concepts/rubrics/): all trait types, attachment scoping, and the `higher_is_better` field
