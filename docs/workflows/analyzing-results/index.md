@@ -106,7 +106,22 @@ df_rubric.groupby("question_id")["trait_score"].mean()
 
 [Analyze results with DataFrames →](../../notebooks/analyzing-results/dataframe-analysis.ipynb)
 
-### 4. Export Results
+### 4. Persist to Database
+
+Save benchmarks and verification results to a database for long-term storage, querying, and cross-run comparison:
+
+```python
+from karenina.storage import DBConfig
+from karenina.storage.operations import save_benchmark, save_verification_results
+
+db_config = DBConfig(storage_url="sqlite:///results.db")
+save_benchmark(benchmark, db_config)
+save_verification_results(results_dict, db_config, run_id="run-001", benchmark_name="my-benchmark")
+```
+
+[Persist results to database →](../../notebooks/analyzing-results/database-persistence.ipynb)
+
+### 5. Export Results
 
 Save results for sharing, external analysis, or archival:
 
@@ -124,7 +139,7 @@ df.to_csv("template_analysis.csv", index=False)
 
 [Export results →](exporting.md)
 
-### 5. Iterate on Your Benchmark
+### 6. Iterate on Your Benchmark
 
 Use analysis findings to improve your benchmark:
 

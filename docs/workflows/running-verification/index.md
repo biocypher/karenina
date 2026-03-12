@@ -14,12 +14,14 @@ Choose the scenario that matches your evaluation needs, or work through them in 
 | [Deep Judgment](../../notebooks/running-verification/deep-judgment.ipynb) | Excerpt-based reasoning | Deep judgment for templates and rubrics, excerpt extraction, hallucination risk, search validation |
 | [MCP Agent Evaluation](../../notebooks/running-verification/mcp-agent-evaluation.ipynb) | Tool-using agents | MCP tool configuration, agent middleware, trace handling, recursion limits |
 | [Manual Interface](../../notebooks/running-verification/manual-interface-workflow.ipynb) | Pre-recorded traces | Offline evaluation with pre-recorded responses, template iteration, parsing model comparison |
+| [Progressive Save](../../notebooks/running-verification/progressive-save.ipynb) | Resumable runs | Checkpoint progress incrementally, resume interrupted runs, `.state`/`.tmp` files, `ProgressiveSaveManager` |
+| [Few-Shot Configuration](../../notebooks/running-verification/few-shot-configuration.ipynb) | Example injection | Global modes (all, k-shot, custom, none), per-question overrides, `FewShotConfig`, example resolution |
 
 ---
 
 ## Common Workflow
 
-All six scenarios follow this general pattern:
+All eight scenarios follow this general pattern:
 
 ```
 Load benchmark
