@@ -1,0 +1,268 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080">
+  <defs>
+    <!-- Shadow filter -->
+    <filter id="shadow" x="-5%" y="-5%" width="115%" height="115%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000000" flood-opacity="0.1"/>
+    </filter>
+    <filter id="shadowSm" x="-5%" y="-5%" width="112%" height="112%">
+      <feDropShadow dx="0" dy="1" stdDeviation="3" flood-color="#000000" flood-opacity="0.08"/>
+    </filter>
+
+    <!-- Mode label gradients -->
+    <linearGradient id="gradMode2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#4285F4"/>
+      <stop offset="100%" stop-color="#0097A7"/>
+    </linearGradient>
+
+    <!-- Arrow markers -->
+    <marker id="arrBlue" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+      <polygon points="0 0, 7 2.5, 0 5" fill="#4285F4"/>
+    </marker>
+    <marker id="arrTeal" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+      <polygon points="0 0, 7 2.5, 0 5" fill="#0097A7"/>
+    </marker>
+    <marker id="arrGray" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+      <polygon points="0 0, 7 2.5, 0 5" fill="#B0BEC5"/>
+    </marker>
+    <marker id="arrGreen" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+      <polygon points="0 0, 7 2.5, 0 5" fill="#4CAF50"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1920" height="1080" fill="#FFFFFF"/>
+
+  <!-- Title -->
+  <text x="100" y="80" font-family="Trebuchet MS, Arial, sans-serif" font-size="44" font-weight="bold" fill="#1A4565">Three Evaluation Modes</text>
+  <!-- Blue underline -->
+  <rect x="100" y="94" width="180" height="4" rx="2" fill="#4285F4"/>
+
+  <!-- ====================================================================== -->
+  <!-- CONTENT GROUP (shifted down for centering)                             -->
+  <!-- ====================================================================== -->
+  <g transform="translate(0,90)">
+
+  <!-- Column headers (subtle, above strip 1) -->
+  <text x="555" y="172" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#78909C" opacity="0.7">Generate</text>
+  <text x="715" y="172" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#78909C" opacity="0.7">Guards</text>
+  <text x="875" y="172" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#78909C" opacity="0.7">Pre-Parse</text>
+  <text x="1035" y="172" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#4285F4" opacity="0.7">Template</text>
+  <text x="1195" y="172" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#0097A7" opacity="0.7">Rubric</text>
+  <text x="1355" y="172" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#78909C" opacity="0.7">Finalize</text>
+
+  <!-- ====================================================================== -->
+  <!-- STRIP 1: template_only (y center ~280)                                 -->
+  <!-- ====================================================================== -->
+
+  <!-- Mode name card -->
+  <g filter="url(#shadow)">
+    <rect x="80" y="230" width="280" height="52" rx="8" fill="#4285F4"/>
+  </g>
+  <text x="220" y="263" text-anchor="middle" font-family="'Courier New', Courier, monospace" font-size="22" font-weight="bold" fill="#FFFFFF">template_only</text>
+
+  <!-- Pipeline blocks -->
+  <!-- Generate (active) -->
+  <g filter="url(#shadowSm)">
+    <rect x="485" y="233" width="140" height="48" rx="8" fill="#4285F4"/>
+  </g>
+  <text x="555" y="263" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="15" font-weight="bold" fill="#FFFFFF">Generate</text>
+  <!-- Arrow -->
+  <line x1="630" y1="257" x2="642" y2="257" stroke="#4285F4" stroke-width="2" marker-end="url(#arrBlue)"/>
+
+  <!-- Guards (active) -->
+  <g filter="url(#shadowSm)">
+    <rect x="645" y="233" width="140" height="48" rx="8" fill="#4285F4"/>
+  </g>
+  <text x="715" y="263" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="15" font-weight="bold" fill="#FFFFFF">Guards</text>
+  <!-- Arrow -->
+  <line x1="790" y1="257" x2="802" y2="257" stroke="#4285F4" stroke-width="2" marker-end="url(#arrBlue)"/>
+
+  <!-- Pre-Parse (active) -->
+  <g filter="url(#shadowSm)">
+    <rect x="805" y="233" width="140" height="48" rx="8" fill="#4285F4"/>
+  </g>
+  <text x="875" y="263" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="15" font-weight="bold" fill="#FFFFFF">Pre-Parse</text>
+  <!-- Arrow -->
+  <line x1="950" y1="257" x2="962" y2="257" stroke="#4285F4" stroke-width="2" marker-end="url(#arrBlue)"/>
+
+  <!-- Template (active, with checkmark) -->
+  <g filter="url(#shadowSm)">
+    <rect x="965" y="233" width="140" height="48" rx="8" fill="#4285F4"/>
+  </g>
+  <text x="1025" y="263" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="15" font-weight="bold" fill="#FFFFFF">Template</text>
+  <!-- Checkmark -->
+  <g transform="translate(1078, 241)">
+    <circle cx="10" cy="10" r="9" fill="rgba(255,255,255,0.3)" stroke="#FFFFFF" stroke-width="1.2"/>
+    <polyline points="5,10 8,13 15,6" fill="none" stroke="#FFFFFF" stroke-width="1.8"/>
+  </g>
+  <!-- Arrow (dimmed) -->
+  <line x1="1110" y1="257" x2="1122" y2="257" stroke="#B0BEC5" stroke-width="2" marker-end="url(#arrGray)"/>
+
+  <!-- Rubric (DIMMED) -->
+  <rect x="1125" y="233" width="140" height="48" rx="8" fill="#E0E4E8" opacity="0.6"/>
+  <text x="1195" y="263" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="15" fill="#B0BEC5" text-decoration="line-through">Rubric</text>
+  <!-- Arrow -->
+  <line x1="1270" y1="257" x2="1282" y2="257" stroke="#4285F4" stroke-width="2" marker-end="url(#arrBlue)"/>
+
+  <!-- Finalize (active) -->
+  <g filter="url(#shadowSm)">
+    <rect x="1285" y="233" width="140" height="48" rx="8" fill="#4285F4"/>
+  </g>
+  <text x="1355" y="263" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="15" font-weight="bold" fill="#FFFFFF">Finalize</text>
+
+  <!-- Best for label -->
+  <g filter="url(#shadowSm)">
+    <rect x="1480" y="233" width="360" height="48" rx="8" fill="#F5F7FA"/>
+  </g>
+  <text x="1660" y="263" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="18" fill="#78909C">Best for: factual accuracy</text>
+
+  <!-- ====================================================================== -->
+  <!-- Divider 1                                                              -->
+  <!-- ====================================================================== -->
+  <line x1="80" y1="340" x2="1840" y2="340" stroke="#E0E4E8" stroke-width="1"/>
+
+  <!-- ====================================================================== -->
+  <!-- STRIP 2: template_and_rubric (y center ~460)                           -->
+  <!-- ====================================================================== -->
+
+  <!-- Mode name card (gradient) -->
+  <g filter="url(#shadow)">
+    <rect x="80" y="430" width="280" height="52" rx="8" fill="url(#gradMode2)"/>
+  </g>
+  <text x="220" y="463" text-anchor="middle" font-family="'Courier New', Courier, monospace" font-size="19" font-weight="bold" fill="#FFFFFF">template_and_rubric</text>
+
+  <!-- Pipeline blocks -->
+  <!-- Generate (active) -->
+  <g filter="url(#shadowSm)">
+    <rect x="485" y="433" width="140" height="48" rx="8" fill="#4285F4"/>
+  </g>
+  <text x="555" y="463" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="15" font-weight="bold" fill="#FFFFFF">Generate</text>
+  <line x1="630" y1="457" x2="642" y2="457" stroke="#4285F4" stroke-width="2" marker-end="url(#arrBlue)"/>
+
+  <!-- Guards (active) -->
+  <g filter="url(#shadowSm)">
+    <rect x="645" y="433" width="140" height="48" rx="8" fill="#4285F4"/>
+  </g>
+  <text x="715" y="463" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="15" font-weight="bold" fill="#FFFFFF">Guards</text>
+  <line x1="790" y1="457" x2="802" y2="457" stroke="#4285F4" stroke-width="2" marker-end="url(#arrBlue)"/>
+
+  <!-- Pre-Parse (active) -->
+  <g filter="url(#shadowSm)">
+    <rect x="805" y="433" width="140" height="48" rx="8" fill="#4285F4"/>
+  </g>
+  <text x="875" y="463" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="15" font-weight="bold" fill="#FFFFFF">Pre-Parse</text>
+  <line x1="950" y1="457" x2="962" y2="457" stroke="#4285F4" stroke-width="2" marker-end="url(#arrBlue)"/>
+
+  <!-- Template (HIGHLIGHTED blue) -->
+  <g filter="url(#shadowSm)">
+    <rect x="965" y="433" width="140" height="48" rx="8" fill="#4285F4"/>
+  </g>
+  <text x="1035" y="463" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="15" font-weight="bold" fill="#FFFFFF">Template</text>
+  <line x1="1110" y1="457" x2="1122" y2="457" stroke="#0097A7" stroke-width="2" marker-end="url(#arrTeal)"/>
+
+  <!-- Rubric (HIGHLIGHTED teal) -->
+  <g filter="url(#shadowSm)">
+    <rect x="1125" y="433" width="140" height="48" rx="8" fill="#0097A7"/>
+  </g>
+  <text x="1195" y="463" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="15" font-weight="bold" fill="#FFFFFF">Rubric</text>
+  <line x1="1270" y1="457" x2="1282" y2="457" stroke="#4CAF50" stroke-width="2" marker-end="url(#arrGreen)"/>
+
+  <!-- Finalize (active) -->
+  <g filter="url(#shadowSm)">
+    <rect x="1285" y="433" width="140" height="48" rx="8" fill="#4285F4"/>
+  </g>
+  <text x="1355" y="463" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="15" font-weight="bold" fill="#FFFFFF">Finalize</text>
+
+  <!-- Best for label -->
+  <g filter="url(#shadowSm)">
+    <rect x="1480" y="433" width="360" height="48" rx="8" fill="#F5F7FA"/>
+  </g>
+  <text x="1660" y="463" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="18" fill="#78909C">Best for: comprehensive evaluation</text>
+
+  <!-- ====================================================================== -->
+  <!-- Divider 2                                                              -->
+  <!-- ====================================================================== -->
+  <line x1="80" y1="540" x2="1840" y2="540" stroke="#E0E4E8" stroke-width="1"/>
+
+  <!-- ====================================================================== -->
+  <!-- STRIP 3: rubric_only (y center ~660)                                   -->
+  <!-- ====================================================================== -->
+
+  <!-- Mode name card -->
+  <g filter="url(#shadow)">
+    <rect x="80" y="630" width="280" height="52" rx="8" fill="#0097A7"/>
+  </g>
+  <text x="220" y="663" text-anchor="middle" font-family="'Courier New', Courier, monospace" font-size="22" font-weight="bold" fill="#FFFFFF">rubric_only</text>
+
+  <!-- Pipeline blocks -->
+  <!-- Generate (active) -->
+  <g filter="url(#shadowSm)">
+    <rect x="485" y="633" width="140" height="48" rx="8" fill="#0097A7"/>
+  </g>
+  <text x="555" y="663" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="15" font-weight="bold" fill="#FFFFFF">Generate</text>
+  <line x1="630" y1="657" x2="642" y2="657" stroke="#0097A7" stroke-width="2" marker-end="url(#arrTeal)"/>
+
+  <!-- Guards (active) -->
+  <g filter="url(#shadowSm)">
+    <rect x="645" y="633" width="140" height="48" rx="8" fill="#0097A7"/>
+  </g>
+  <text x="715" y="663" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="15" font-weight="bold" fill="#FFFFFF">Guards</text>
+  <line x1="790" y1="657" x2="802" y2="657" stroke="#0097A7" stroke-width="2" marker-end="url(#arrTeal)"/>
+
+  <!-- Pre-Parse (active) -->
+  <g filter="url(#shadowSm)">
+    <rect x="805" y="633" width="140" height="48" rx="8" fill="#0097A7"/>
+  </g>
+  <text x="875" y="663" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="15" font-weight="bold" fill="#FFFFFF">Pre-Parse</text>
+  <!-- Arrow (dimmed to template) -->
+  <line x1="950" y1="657" x2="962" y2="657" stroke="#B0BEC5" stroke-width="2" marker-end="url(#arrGray)"/>
+
+  <!-- Template (DIMMED) -->
+  <rect x="965" y="633" width="140" height="48" rx="8" fill="#E0E4E8" opacity="0.6"/>
+  <text x="1035" y="663" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="15" fill="#B0BEC5" text-decoration="line-through">Template</text>
+  <!-- Arrow -->
+  <line x1="1110" y1="657" x2="1122" y2="657" stroke="#0097A7" stroke-width="2" marker-end="url(#arrTeal)"/>
+
+  <!-- Rubric (HIGHLIGHTED teal) -->
+  <g filter="url(#shadowSm)">
+    <rect x="1125" y="633" width="140" height="48" rx="8" fill="#0097A7"/>
+  </g>
+  <text x="1195" y="663" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="15" font-weight="bold" fill="#FFFFFF">Rubric</text>
+  <line x1="1270" y1="657" x2="1282" y2="657" stroke="#0097A7" stroke-width="2" marker-end="url(#arrTeal)"/>
+
+  <!-- Finalize (active) -->
+  <g filter="url(#shadowSm)">
+    <rect x="1285" y="633" width="140" height="48" rx="8" fill="#0097A7"/>
+  </g>
+  <text x="1355" y="663" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="15" font-weight="bold" fill="#FFFFFF">Finalize</text>
+
+  <!-- Best for label -->
+  <g filter="url(#shadowSm)">
+    <rect x="1480" y="633" width="360" height="48" rx="8" fill="#F5F7FA"/>
+  </g>
+  <text x="1660" y="663" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="18" fill="#78909C">Best for: style &amp; reasoning</text>
+
+  <!-- ====================================================================== -->
+  <!-- Legend                                                                  -->
+  <!-- ====================================================================== -->
+  <g transform="translate(580, 800)">
+    <!-- Active (Template) -->
+    <rect x="0" y="0" width="28" height="16" rx="4" fill="#4285F4"/>
+    <text x="38" y="13" font-family="Roboto, Arial, sans-serif" font-size="16" fill="#1A4565">Active (Template)</text>
+
+    <!-- Active (Rubric) -->
+    <rect x="220" y="0" width="28" height="16" rx="4" fill="#0097A7"/>
+    <text x="258" y="13" font-family="Roboto, Arial, sans-serif" font-size="16" fill="#1A4565">Active (Rubric)</text>
+
+    <!-- Skipped -->
+    <rect x="440" y="0" width="28" height="16" rx="4" fill="#E0E4E8" opacity="0.6"/>
+    <text x="478" y="13" font-family="Roboto, Arial, sans-serif" font-size="16" fill="#78909C">Skipped</text>
+  </g>
+
+  </g><!-- end content group -->
+
+  <!-- ====================================================================== -->
+  <!-- Bottom accent bar                                                      -->
+  <!-- ====================================================================== -->
+  <rect x="0" y="1074" width="1920" height="6" fill="#4285F4"/>
+</svg>

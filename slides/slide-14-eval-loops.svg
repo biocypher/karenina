@@ -1,0 +1,186 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080">
+  <defs>
+    <!-- Shadows -->
+    <filter id="shadowLane" x="-2%" y="-4%" width="104%" height="112%">
+      <feDropShadow dx="0" dy="4" stdDeviation="12" flood-color="#1A4565" flood-opacity="0.10"/>
+    </filter>
+    <filter id="shadowBlock" x="-8%" y="-12%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="3" stdDeviation="8" flood-color="#1A4565" flood-opacity="0.12"/>
+    </filter>
+    <filter id="shadowHighlight" x="-10%" y="-15%" width="125%" height="140%">
+      <feDropShadow dx="0" dy="5" stdDeviation="12" flood-color="#1A4565" flood-opacity="0.18"/>
+    </filter>
+    <filter id="shadowDiamond" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="2" stdDeviation="6" flood-color="#1A4565" flood-opacity="0.12"/>
+    </filter>
+    <!-- Arrow markers -->
+    <marker id="arrowBlue" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 Z" fill="#4285F4"/>
+    </marker>
+    <marker id="arrowTeal" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 Z" fill="#0097A7"/>
+    </marker>
+    <marker id="arrowGray" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 Z" fill="#B0BEC5"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1920" height="1080" fill="#FFFFFF"/>
+
+  <!-- Bottom accent bar -->
+  <rect x="0" y="1074" width="1920" height="6" fill="#4285F4"/>
+
+  <!-- Title -->
+  <text x="100" y="80" font-family="Trebuchet MS, Arial, sans-serif" font-size="44" font-weight="bold" fill="#1A4565">Two Evaluation Loops</text>
+  <!-- Title underline -->
+  <rect x="100" y="94" width="200" height="4" rx="2" fill="#4285F4"/>
+
+  <!-- Content group shifted down for vertical centering -->
+  <g transform="translate(0,70)">
+  <!-- ============================================ -->
+  <!-- LANE 1: BENCHMARK                            -->
+  <!-- ============================================ -->
+  <g filter="url(#shadowLane)">
+    <rect x="100" y="160" width="1720" height="280" rx="12" fill="#F5F7FA"/>
+    <!-- Left accent border -->
+    <rect x="100" y="160" width="6" height="280" rx="3" fill="#4285F4"/>
+  </g>
+
+  <!-- Lane label with flag icon -->
+  <g transform="translate(140, 190)">
+    <!-- Flag icon -->
+    <line x1="0" y1="0" x2="0" y2="28" stroke="#4285F4" stroke-width="2.5"/>
+    <path d="M3,0 L24,6 L3,14 Z" fill="#4285F4"/>
+  </g>
+  <text x="175" y="212" font-family="Roboto, Arial, sans-serif" font-size="28" font-weight="bold" fill="#4285F4">Benchmark</text>
+
+  <!-- Block 1: Define Questions -->
+  <g filter="url(#shadowBlock)">
+    <rect x="175" y="260" width="250" height="80" rx="10" fill="#4285F4" fill-opacity="0.10" stroke="#4285F4" stroke-width="1.5"/>
+  </g>
+  <text x="300" y="307" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="20" font-weight="600" fill="#1A4565">Define Questions</text>
+
+  <!-- Arrow 1->2 -->
+  <line x1="433" y1="300" x2="498" y2="300" stroke="#4285F4" stroke-width="2" marker-end="url(#arrowBlue)"/>
+
+  <!-- Block 2: Generate Answers -->
+  <g filter="url(#shadowBlock)">
+    <rect x="506" y="260" width="250" height="80" rx="10" fill="#4285F4" fill-opacity="0.10" stroke="#4285F4" stroke-width="1.5"/>
+  </g>
+  <text x="631" y="307" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="20" font-weight="600" fill="#1A4565">Generate Answers</text>
+  <!-- Annotation above -->
+  <text x="631" y="248" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="16" font-style="italic" fill="#78909C">LLM generates</text>
+
+  <!-- Arrow 2->3 -->
+  <line x1="764" y1="300" x2="878" y2="300" stroke="#4285F4" stroke-width="2" marker-end="url(#arrowBlue)"/>
+
+  <!-- Block 3: Evaluate (HIGHLIGHTED) -->
+  <g filter="url(#shadowHighlight)">
+    <rect x="886" y="250" width="250" height="100" rx="12" fill="#4285F4"/>
+  </g>
+  <text x="1011" y="308" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="22" font-weight="bold" fill="#FFFFFF">Evaluate</text>
+
+  <!-- Arrow 3->4 -->
+  <line x1="1144" y1="300" x2="1258" y2="300" stroke="#4285F4" stroke-width="2" marker-end="url(#arrowBlue)"/>
+
+  <!-- Block 4: Results -->
+  <g filter="url(#shadowBlock)">
+    <rect x="1266" y="260" width="250" height="80" rx="10" fill="#4285F4" fill-opacity="0.10" stroke="#4285F4" stroke-width="1.5"/>
+  </g>
+  <text x="1391" y="307" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="20" font-weight="600" fill="#1A4565">Results</text>
+
+  <!-- ============================================ -->
+  <!-- LANE 2: TASKEVAL                             -->
+  <!-- ============================================ -->
+  <g filter="url(#shadowLane)">
+    <rect x="100" y="500" width="1720" height="280" rx="12" fill="#F5F7FA"/>
+    <!-- Left accent border -->
+    <rect x="100" y="500" width="6" height="280" rx="3" fill="#0097A7"/>
+  </g>
+
+  <!-- Lane label with clipboard icon -->
+  <g transform="translate(140, 530)">
+    <!-- Clipboard icon -->
+    <rect x="3" y="4" width="22" height="26" rx="3" fill="none" stroke="#0097A7" stroke-width="2.2"/>
+    <rect x="8" y="0" width="12" height="8" rx="2" fill="none" stroke="#0097A7" stroke-width="2"/>
+    <line x1="9" y1="15" x2="19" y2="15" stroke="#0097A7" stroke-width="1.5"/>
+    <line x1="9" y1="21" x2="17" y2="21" stroke="#0097A7" stroke-width="1.5"/>
+  </g>
+  <text x="175" y="555" font-family="Roboto, Arial, sans-serif" font-size="28" font-weight="bold" fill="#0097A7">TaskEval</text>
+
+  <!-- Block 1: Supply Traces -->
+  <g filter="url(#shadowBlock)">
+    <rect x="175" y="600" width="250" height="80" rx="10" fill="#0097A7" fill-opacity="0.10" stroke="#0097A7" stroke-width="1.5"/>
+  </g>
+  <text x="300" y="647" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="20" font-weight="600" fill="#1A4565">Supply Traces</text>
+  <!-- Annotation above -->
+  <text x="300" y="588" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="16" font-style="italic" fill="#78909C">Pre-recorded</text>
+
+  <!-- Arrow 1->2 -->
+  <line x1="433" y1="640" x2="498" y2="640" stroke="#B0BEC5" stroke-width="2" marker-end="url(#arrowGray)"/>
+
+  <!-- Block 2: Skip Generation (DASHED, dimmed, with X) -->
+  <rect x="506" y="600" width="250" height="80" rx="10" fill="#E0E4E8" stroke="#B0BEC5" stroke-width="2" stroke-dasharray="8,4"/>
+  <text x="631" y="647" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="20" font-weight="600" fill="#B0BEC5">Skip Generation</text>
+  <!-- X overlay -->
+  <line x1="526" y1="620" x2="736" y2="660" stroke="#E57373" stroke-width="3" stroke-linecap="round" opacity="0.6"/>
+  <line x1="526" y1="660" x2="736" y2="620" stroke="#E57373" stroke-width="3" stroke-linecap="round" opacity="0.6"/>
+
+  <!-- Arrow 2->3 -->
+  <line x1="764" y1="640" x2="878" y2="640" stroke="#0097A7" stroke-width="2" marker-end="url(#arrowTeal)"/>
+
+  <!-- Block 3: Evaluate (HIGHLIGHTED) -->
+  <g filter="url(#shadowHighlight)">
+    <rect x="886" y="590" width="250" height="100" rx="12" fill="#0097A7"/>
+  </g>
+  <text x="1011" y="648" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="22" font-weight="bold" fill="#FFFFFF">Evaluate</text>
+
+  <!-- Arrow 3->4 -->
+  <line x1="1144" y1="640" x2="1258" y2="640" stroke="#0097A7" stroke-width="2" marker-end="url(#arrowTeal)"/>
+
+  <!-- Block 4: Results -->
+  <g filter="url(#shadowBlock)">
+    <rect x="1266" y="600" width="250" height="80" rx="10" fill="#0097A7" fill-opacity="0.10" stroke="#0097A7" stroke-width="1.5"/>
+  </g>
+  <text x="1391" y="647" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="20" font-weight="600" fill="#1A4565">Results</text>
+
+  <!-- ============================================ -->
+  <!-- CONNECTING VISUAL: SAME diamond               -->
+  <!-- ============================================ -->
+  <!-- Dashed vertical connector between the two Evaluate blocks -->
+  <line x1="1011" y1="358" x2="1011" y2="440" stroke="#78909C" stroke-width="2" stroke-dasharray="6,4"/>
+  <line x1="1011" y1="500" x2="1011" y2="582" stroke="#78909C" stroke-width="2" stroke-dasharray="6,4"/>
+
+  <!-- Diamond badge centered between lanes -->
+  <g filter="url(#shadowDiamond)">
+    <polygon points="1011,440 1055,470 1011,500 967,470" fill="#FFFFFF" stroke="#78909C" stroke-width="2"/>
+  </g>
+  <text x="1011" y="476" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="16" font-weight="bold" fill="#1A4565">SAME</text>
+
+  <!-- ============================================ -->
+  <!-- BOTTOM BRACKET AND TEXT                      -->
+  <!-- ============================================ -->
+  <!-- Curly brace spanning Evaluate+Results columns (x: ~886 to ~1516) -->
+  <g transform="translate(0, 830)">
+    <!-- Left arm -->
+    <path d="M886,0 C886,18 920,28 960,28" fill="none" stroke="#78909C" stroke-width="2.5"/>
+    <!-- Left to center -->
+    <path d="M960,28 C1050,28 1140,28 1190,28 C1195,28 1201,32 1201,38" fill="none" stroke="#78909C" stroke-width="2.5"/>
+    <!-- Center point (tip) -->
+    <circle cx="1201" cy="40" r="3" fill="#78909C"/>
+    <!-- Center to right -->
+    <path d="M1201,38 C1201,32 1207,28 1212,28 C1262,28 1352,28 1442,28" fill="none" stroke="#78909C" stroke-width="2.5"/>
+    <!-- Right arm -->
+    <path d="M1442,28 C1482,28 1516,18 1516,0" fill="none" stroke="#78909C" stroke-width="2.5"/>
+  </g>
+
+  <!-- Bottom text -->
+  <text x="1201" y="910" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="24" font-weight="bold" fill="#1A4565">Same pipeline, same evaluation criteria</text>
+
+  <!-- Subtle decorative dots -->
+  <circle cx="1201" cy="945" r="3" fill="#4285F4" opacity="0.4"/>
+  <circle cx="1185" cy="945" r="3" fill="#0097A7" opacity="0.4"/>
+  <circle cx="1217" cy="945" r="3" fill="#FFAB40" opacity="0.4"/>
+  </g>
+</svg>

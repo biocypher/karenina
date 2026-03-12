@@ -1,0 +1,261 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080">
+  <defs>
+    <style>
+      .title-font { font-family: "Trebuchet MS", Arial, sans-serif; }
+      .body-font { font-family: Roboto, Arial, sans-serif; }
+    </style>
+    <!-- Card drop shadow -->
+    <filter id="shadow" x="-4%" y="-4%" width="112%" height="112%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000000" flood-opacity="0.10"/>
+    </filter>
+    <!-- Slightly heavier shadow for the main card -->
+    <filter id="shadowLg" x="-4%" y="-4%" width="112%" height="112%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000000" flood-opacity="0.12"/>
+    </filter>
+    <!-- Small shadow for mini cards -->
+    <filter id="shadowSm" x="-4%" y="-4%" width="116%" height="116%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#000000" flood-opacity="0.08"/>
+    </filter>
+    <!-- Gradient for the blueprint header -->
+    <linearGradient id="headerGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#4285F4"/>
+      <stop offset="100%" stop-color="#5C9CF5"/>
+    </linearGradient>
+    <!-- Gradient for the PASS badge -->
+    <linearGradient id="passGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#4CAF50"/>
+      <stop offset="100%" stop-color="#66BB6A"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ========== BACKGROUND ========== -->
+  <rect width="1920" height="1080" fill="#FFFFFF"/>
+
+  <!-- ========== BOTTOM ACCENT BAR ========== -->
+  <rect x="0" y="1074" width="1920" height="6" fill="#4285F4"/>
+
+  <!-- ========== TITLE ========== -->
+  <text x="100" y="80" class="title-font" fill="#1A4565" font-size="44" font-weight="bold">Answer Templates</text>
+  <!-- Blue underline -->
+  <rect x="100" y="94" width="320" height="4" rx="2" fill="#4285F4"/>
+
+  <!-- ========== MAIN BLUEPRINT CARD ========== -->
+  <!-- Outer card: 1200x750, centered horizontally at x=160 (giving some left bias for annotation space) -->
+  <rect x="100" y="140" width="1200" height="780" rx="16" fill="#FFFFFF" stroke="#4285F4" stroke-width="2" filter="url(#shadowLg)"/>
+
+  <!-- Card header strip -->
+  <rect x="100" y="140" width="1200" height="60" rx="16" fill="url(#headerGrad)"/>
+  <!-- Square off bottom corners of header by overlaying a rect -->
+  <rect x="100" y="176" width="1200" height="24" fill="url(#headerGrad)"/>
+
+  <!-- Header text: template name -->
+  <text x="140" y="180" class="body-font" fill="#FFFFFF" font-size="28" font-weight="bold">DrugTargetAnswer</text>
+
+  <!-- Template icon (document with grid) on right of header -->
+  <g transform="translate(1230, 152)">
+    <!-- Document body -->
+    <rect x="0" y="0" width="32" height="38" rx="4" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+    <!-- Grid lines -->
+    <line x1="8" y1="10" x2="24" y2="10" stroke="#FFFFFF" stroke-width="1.5" opacity="0.8"/>
+    <line x1="8" y1="18" x2="24" y2="18" stroke="#FFFFFF" stroke-width="1.5" opacity="0.8"/>
+    <line x1="8" y1="26" x2="24" y2="26" stroke="#FFFFFF" stroke-width="1.5" opacity="0.8"/>
+    <line x1="16" y1="6" x2="16" y2="32" stroke="#FFFFFF" stroke-width="1.5" opacity="0.8"/>
+  </g>
+
+  <!-- ======================================================== -->
+  <!-- SECTION 1: Fields (y: 220 to 470) -->
+  <!-- ======================================================== -->
+
+  <!-- Section label with grid icon -->
+  <g transform="translate(140, 234)">
+    <!-- Small grid icon -->
+    <rect x="0" y="0" width="8" height="8" rx="1" fill="#4285F4"/>
+    <rect x="10" y="0" width="8" height="8" rx="1" fill="#4285F4"/>
+    <rect x="0" y="10" width="8" height="8" rx="1" fill="#4285F4"/>
+    <rect x="10" y="10" width="8" height="8" rx="1" fill="#4285F4"/>
+  </g>
+  <text x="170" y="250" class="body-font" fill="#4285F4" font-size="20" font-weight="bold">Fields</text>
+
+  <!-- Field Row 1: target -->
+  <rect x="140" y="268" width="1120" height="52" rx="8" fill="#F5F7FA" filter="url(#shadowSm)"/>
+  <!-- Field icon (small box) -->
+  <g transform="translate(158, 280)">
+    <rect x="0" y="2" width="22" height="22" rx="4" fill="#4285F4" opacity="0.15"/>
+    <text x="5" y="18" class="body-font" fill="#4285F4" font-size="14" font-weight="bold">T</text>
+  </g>
+  <text x="196" y="300" class="body-font" fill="#1A4565" font-size="20" font-weight="bold">target</text>
+  <!-- Separator dot -->
+  <circle cx="310" cy="296" r="3" fill="#E0E4E8"/>
+  <text x="326" y="300" class="body-font" fill="#78909C" font-size="18">str</text>
+  <circle cx="380" cy="296" r="3" fill="#E0E4E8"/>
+  <text x="396" y="300" class="body-font" fill="#78909C" font-size="18" font-style="italic">Primary drug target identified</text>
+
+  <!-- Field Row 2: mechanism -->
+  <rect x="140" y="330" width="1120" height="52" rx="8" fill="#F5F7FA" filter="url(#shadowSm)"/>
+  <g transform="translate(158, 342)">
+    <rect x="0" y="2" width="22" height="22" rx="4" fill="#4285F4" opacity="0.15"/>
+    <text x="4" y="18" class="body-font" fill="#4285F4" font-size="14" font-weight="bold">M</text>
+  </g>
+  <text x="196" y="362" class="body-font" fill="#1A4565" font-size="20" font-weight="bold">mechanism</text>
+  <circle cx="360" cy="358" r="3" fill="#E0E4E8"/>
+  <text x="376" y="362" class="body-font" fill="#78909C" font-size="18">str</text>
+  <circle cx="430" cy="358" r="3" fill="#E0E4E8"/>
+  <text x="446" y="362" class="body-font" fill="#78909C" font-size="18" font-style="italic">Mechanism of action described</text>
+
+  <!-- Field Row 3: approved -->
+  <rect x="140" y="392" width="1120" height="52" rx="8" fill="#F5F7FA" filter="url(#shadowSm)"/>
+  <g transform="translate(158, 404)">
+    <rect x="0" y="2" width="22" height="22" rx="4" fill="#4285F4" opacity="0.15"/>
+    <text x="5" y="18" class="body-font" fill="#4285F4" font-size="14" font-weight="bold">A</text>
+  </g>
+  <text x="196" y="424" class="body-font" fill="#1A4565" font-size="20" font-weight="bold">approved</text>
+  <circle cx="348" cy="420" r="3" fill="#E0E4E8"/>
+  <text x="364" y="424" class="body-font" fill="#78909C" font-size="18">bool</text>
+  <circle cx="428" cy="420" r="3" fill="#E0E4E8"/>
+  <text x="444" y="424" class="body-font" fill="#78909C" font-size="18" font-style="italic">FDA approval status</text>
+
+  <!-- Subtle divider between Fields and Ground Truth -->
+  <line x1="160" y1="468" x2="1240" y2="468" stroke="#E0E4E8" stroke-width="1"/>
+
+  <!-- ======================================================== -->
+  <!-- SECTION 2: Ground Truth (y: 478 to 640) -->
+  <!-- ======================================================== -->
+
+  <!-- Lock icon -->
+  <g transform="translate(140, 484)">
+    <!-- Lock body -->
+    <rect x="2" y="8" width="16" height="12" rx="3" fill="#0097A7"/>
+    <!-- Lock shackle -->
+    <path d="M5,8 V5 Q5,0 10,0 Q15,0 15,5 V8" fill="none" stroke="#0097A7" stroke-width="2"/>
+  </g>
+  <text x="170" y="500" class="body-font" fill="#0097A7" font-size="20" font-weight="bold">Ground Truth</text>
+
+  <!-- Pills row: target = "BCL2" -->
+  <g transform="translate(160, 518)">
+    <rect x="0" y="0" width="260" height="42" rx="21" fill="#0097A7" fill-opacity="0.10"/>
+    <text x="20" y="28" class="body-font" fill="#0097A7" font-size="18" font-weight="bold">target</text>
+    <text x="98" y="28" class="body-font" fill="#0097A7" font-size="18">=</text>
+    <text x="120" y="28" class="body-font" fill="#0097A7" font-size="18">"BCL2"</text>
+  </g>
+
+  <!-- mechanism = "BH3 mimetic" -->
+  <g transform="translate(440, 518)">
+    <rect x="0" y="0" width="340" height="42" rx="21" fill="#0097A7" fill-opacity="0.10"/>
+    <text x="20" y="28" class="body-font" fill="#0097A7" font-size="18" font-weight="bold">mechanism</text>
+    <text x="142" y="28" class="body-font" fill="#0097A7" font-size="18">=</text>
+    <text x="164" y="28" class="body-font" fill="#0097A7" font-size="18">"BH3 mimetic"</text>
+  </g>
+
+  <!-- approved = True -->
+  <g transform="translate(800, 518)">
+    <rect x="0" y="0" width="250" height="42" rx="21" fill="#0097A7" fill-opacity="0.10"/>
+    <text x="20" y="28" class="body-font" fill="#0097A7" font-size="18" font-weight="bold">approved</text>
+    <text x="118" y="28" class="body-font" fill="#0097A7" font-size="18">=</text>
+    <text x="140" y="28" class="body-font" fill="#0097A7" font-size="18">True</text>
+  </g>
+
+  <!-- Subtle divider -->
+  <line x1="160" y1="584" x2="1240" y2="584" stroke="#E0E4E8" stroke-width="1"/>
+
+  <!-- ======================================================== -->
+  <!-- SECTION 3: Verify (y: 594 to 900) -->
+  <!-- ======================================================== -->
+
+  <!-- Shield icon -->
+  <g transform="translate(142, 598)">
+    <path d="M10,0 L20,4 L20,14 Q20,22 10,26 Q0,22 0,14 L0,4 Z" fill="#4CAF50" opacity="0.9"/>
+    <polyline points="6,13 9,17 15,10" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="170" y="618" class="body-font" fill="#4CAF50" font-size="20" font-weight="bold">verify()</text>
+
+  <!-- Comparison Row 1: "BCL2" == "BCL2" -> check -->
+  <g transform="translate(180, 640)">
+    <!-- Parsed value chip -->
+    <rect x="0" y="0" width="140" height="38" rx="8" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1"/>
+    <text x="18" y="26" class="body-font" fill="#1A4565" font-size="17">"BCL2"</text>
+    <!-- Arrow -->
+    <line x1="156" y1="19" x2="196" y2="19" stroke="#78909C" stroke-width="2" marker-end="url(#arrowhead)"/>
+    <!-- Equals badge -->
+    <rect x="204" y="2" width="50" height="34" rx="8" fill="#4285F4" fill-opacity="0.10"/>
+    <text x="218" y="26" class="body-font" fill="#4285F4" font-size="18" font-weight="bold">==</text>
+    <!-- Arrow -->
+    <line x1="268" y1="19" x2="308" y2="19" stroke="#78909C" stroke-width="2"/>
+    <!-- Expected value chip -->
+    <rect x="316" y="0" width="140" height="38" rx="8" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1"/>
+    <text x="334" y="26" class="body-font" fill="#1A4565" font-size="17">"BCL2"</text>
+    <!-- Arrow to check -->
+    <line x1="472" y1="19" x2="512" y2="19" stroke="#78909C" stroke-width="2"/>
+    <!-- Green check circle -->
+    <circle cx="532" cy="19" r="16" fill="#4CAF50"/>
+    <polyline points="524,19 530,25 542,14" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Comparison Row 2: "BH3 mimetic" == "BH3 mimetic" -> check -->
+  <g transform="translate(180, 692)">
+    <rect x="0" y="0" width="140" height="38" rx="8" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1"/>
+    <text x="10" y="26" class="body-font" fill="#1A4565" font-size="15">"BH3 mimetic"</text>
+    <line x1="156" y1="19" x2="196" y2="19" stroke="#78909C" stroke-width="2"/>
+    <rect x="204" y="2" width="50" height="34" rx="8" fill="#4285F4" fill-opacity="0.10"/>
+    <text x="218" y="26" class="body-font" fill="#4285F4" font-size="18" font-weight="bold">==</text>
+    <line x1="268" y1="19" x2="308" y2="19" stroke="#78909C" stroke-width="2"/>
+    <rect x="316" y="0" width="140" height="38" rx="8" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1"/>
+    <text x="326" y="26" class="body-font" fill="#1A4565" font-size="15">"BH3 mimetic"</text>
+    <line x1="472" y1="19" x2="512" y2="19" stroke="#78909C" stroke-width="2"/>
+    <circle cx="532" cy="19" r="16" fill="#4CAF50"/>
+    <polyline points="524,19 530,25 542,14" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Comparison Row 3: True == True -> check -->
+  <g transform="translate(180, 744)">
+    <rect x="0" y="0" width="140" height="38" rx="8" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1"/>
+    <text x="38" y="26" class="body-font" fill="#1A4565" font-size="17">True</text>
+    <line x1="156" y1="19" x2="196" y2="19" stroke="#78909C" stroke-width="2"/>
+    <rect x="204" y="2" width="50" height="34" rx="8" fill="#4285F4" fill-opacity="0.10"/>
+    <text x="218" y="26" class="body-font" fill="#4285F4" font-size="18" font-weight="bold">==</text>
+    <line x1="268" y1="19" x2="308" y2="19" stroke="#78909C" stroke-width="2"/>
+    <rect x="316" y="0" width="140" height="38" rx="8" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1"/>
+    <text x="354" y="26" class="body-font" fill="#1A4565" font-size="17">True</text>
+    <line x1="472" y1="19" x2="512" y2="19" stroke="#78909C" stroke-width="2"/>
+    <circle cx="532" cy="19" r="16" fill="#4CAF50"/>
+    <polyline points="524,19 530,25 542,14" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- PASS badge -->
+  <g transform="translate(180, 804)">
+    <rect x="0" y="0" width="580" height="50" rx="25" fill="url(#passGrad)" filter="url(#shadow)"/>
+    <!-- Checkmark icon -->
+    <circle cx="36" cy="25" r="14" fill="#FFFFFF" fill-opacity="0.25"/>
+    <polyline points="28,25 34,31 46,20" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="64" y="33" class="body-font" fill="#FFFFFF" font-size="24" font-weight="bold">PASS</text>
+    <text x="130" y="33" class="body-font" fill="#FFFFFF" font-size="20" fill-opacity="0.85">All fields match ground truth</text>
+  </g>
+
+  <!-- ========== RIGHT SIDE ANNOTATION ========== -->
+  <g transform="translate(1370, 700)">
+    <rect x="0" y="0" width="440" height="140" rx="12" fill="#F5F7FA" stroke="#4285F4" stroke-width="2" stroke-dasharray="8,4" filter="url(#shadow)"/>
+    <!-- Small pointer triangle on left -->
+    <polygon points="-12,50 0,42 0,58" fill="#F5F7FA" stroke="#4285F4" stroke-width="2" stroke-dasharray="0"/>
+
+    <!-- Annotation icon: info circle -->
+    <circle cx="32" cy="40" r="14" fill="#4285F4" fill-opacity="0.12"/>
+    <text x="28" y="46" class="body-font" fill="#4285F4" font-size="18" font-weight="bold">i</text>
+
+    <text x="56" y="44" class="body-font" fill="#1A4565" font-size="19">The Judge LLM fills in the fields.</text>
+    <text x="56" y="74" class="body-font" fill="#78909C" font-size="17">verify() checks them against</text>
+    <text x="56" y="98" class="body-font" fill="#78909C" font-size="17">ground truth.</text>
+
+    <!-- Small decorative line -->
+    <line x1="56" y1="114" x2="200" y2="114" stroke="#4285F4" stroke-width="1" opacity="0.3"/>
+  </g>
+
+  <!-- ========== DECORATIVE ELEMENTS ========== -->
+  <!-- Subtle top-right corner accent -->
+  <g transform="translate(1760, 30)" opacity="0.08">
+    <circle cx="0" cy="0" r="80" fill="#4285F4"/>
+    <circle cx="60" cy="60" r="50" fill="#0097A7"/>
+  </g>
+
+  <!-- Small label beneath title area -->
+  <text x="100" y="120" class="body-font" fill="#78909C" font-size="18">Structured schemas define how the Judge LLM parses and verifies each answer</text>
+
+</svg>

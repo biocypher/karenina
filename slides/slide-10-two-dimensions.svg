@@ -1,0 +1,161 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080">
+  <defs>
+    <filter id="matrixShadow" x="-2%" y="-2%" width="104%" height="108%">
+      <feDropShadow dx="0" dy="4" stdDeviation="10" flood-color="#1A4565" flood-opacity="0.10"/>
+    </filter>
+    <filter id="bannerShadow" x="-1%" y="-5%" width="102%" height="115%">
+      <feDropShadow dx="0" dy="2" stdDeviation="5" flood-color="#1A4565" flood-opacity="0.08"/>
+    </filter>
+    <filter id="iconShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#000000" flood-opacity="0.12"/>
+    </filter>
+    <linearGradient id="bgGrad2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#FAFBFD"/>
+    </linearGradient>
+    <!-- Quadrant fills -->
+    <linearGradient id="passHighFill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4CAF50" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#4CAF50" stop-opacity="0.10"/>
+    </linearGradient>
+    <linearGradient id="failHighFill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFAB40" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#FFAB40" stop-opacity="0.10"/>
+    </linearGradient>
+    <linearGradient id="passLowFill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFAB40" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#FFAB40" stop-opacity="0.10"/>
+    </linearGradient>
+    <linearGradient id="failLowFill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#E53935" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#E53935" stop-opacity="0.10"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1920" height="1080" fill="url(#bgGrad2)"/>
+
+  <!-- Bottom accent bar -->
+  <rect x="0" y="1074" width="1920" height="6" fill="#4285F4"/>
+
+  <!-- Title -->
+  <text x="100" y="80" font-family="Trebuchet MS, Arial, sans-serif" font-size="44" font-weight="bold" fill="#1A4565">Two Dimensions of Evaluation</text>
+  <!-- Blue underline -->
+  <rect x="100" y="94" width="480" height="4" rx="2" fill="#4285F4"/>
+
+  <!-- ==================== 2x2 MATRIX ==================== -->
+  <!-- Matrix container with shadow -->
+  <g filter="url(#matrixShadow)">
+    <rect x="310" y="200" width="1340" height="660" rx="16" fill="#FFFFFF" stroke="#E0E4E8" stroke-width="2"/>
+  </g>
+
+  <!-- ==================== COLUMN HEADERS ==================== -->
+  <!-- "Template: Pass" header -->
+  <g transform="translate(510,160)">
+    <!-- Checkmark icon -->
+    <circle cx="12" cy="14" r="10" fill="#4CAF50" opacity="0.15"/>
+    <path d="M6,14 L10,18 L18,10" stroke="#4CAF50" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="30" y="20" font-family="Roboto, Arial, sans-serif" font-size="22" font-weight="bold" fill="#4CAF50">Template: Pass</text>
+  </g>
+  <!-- "Template: Fail" header -->
+  <g transform="translate(1140,160)">
+    <!-- X icon -->
+    <circle cx="12" cy="14" r="10" fill="#E53935" opacity="0.15"/>
+    <path d="M7,9 L17,19 M17,9 L7,19" stroke="#E53935" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <text x="30" y="20" font-family="Roboto, Arial, sans-serif" font-size="22" font-weight="bold" fill="#E53935">Template: Fail</text>
+  </g>
+
+  <!-- ==================== ROW HEADERS (rotated) ==================== -->
+  <!-- "Rubric: High" (top row) -->
+  <g transform="translate(275,420)">
+    <text transform="rotate(-90)" font-family="Roboto, Arial, sans-serif" font-size="22" font-weight="bold" fill="#4285F4" text-anchor="middle">Rubric: High</text>
+  </g>
+  <!-- "Rubric: Low" (bottom row) -->
+  <g transform="translate(275,740)">
+    <text transform="rotate(-90)" font-family="Roboto, Arial, sans-serif" font-size="22" font-weight="bold" fill="#78909C" text-anchor="middle">Rubric: Low</text>
+  </g>
+
+  <!-- ==================== GRID LINES ==================== -->
+  <!-- Vertical center divider -->
+  <line x1="980" y1="200" x2="980" y2="860" stroke="#E0E4E8" stroke-width="2"/>
+  <!-- Horizontal center divider -->
+  <line x1="310" y1="530" x2="1650" y2="530" stroke="#E0E4E8" stroke-width="2"/>
+
+  <!-- ==================== QUADRANT: TOP-LEFT (Pass + High) ==================== -->
+  <rect x="312" y="202" width="666" height="326" rx="14" fill="url(#passHighFill)"/>
+  <!-- Large green circle with checkmark -->
+  <g filter="url(#iconShadow)" transform="translate(560,310)">
+    <circle cx="0" cy="0" r="32" fill="#4CAF50" opacity="0.18"/>
+    <circle cx="0" cy="0" r="24" fill="#4CAF50"/>
+    <path d="M-10,0 L-4,7 L10,-7" stroke="#FFFFFF" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <!-- Text -->
+  <text x="610" y="306" font-family="Roboto, Arial, sans-serif" font-size="22" font-weight="bold" fill="#1A4565">Correct &amp; well-explained</text>
+  <text x="610" y="336" font-family="Roboto, Arial, sans-serif" font-size="18" fill="#4CAF50">Best outcome</text>
+  <!-- Star decoration -->
+  <g transform="translate(900,260)" opacity="0.3">
+    <polygon points="12,0 15,9 24,9 17,14 19,24 12,18 5,24 7,14 0,9 9,9" fill="#FFAB40"/>
+  </g>
+  <g transform="translate(920,240)" opacity="0.15">
+    <polygon points="8,0 10,6 16,6 11,10 13,16 8,12 3,16 5,10 0,6 6,6" fill="#FFAB40"/>
+  </g>
+
+  <!-- ==================== QUADRANT: TOP-RIGHT (Fail + High) ==================== -->
+  <rect x="982" y="202" width="666" height="326" rx="14" fill="url(#failHighFill)"/>
+  <!-- Large amber circle with ! -->
+  <g filter="url(#iconShadow)" transform="translate(1230,310)">
+    <circle cx="0" cy="0" r="32" fill="#FFAB40" opacity="0.18"/>
+    <circle cx="0" cy="0" r="24" fill="#FFAB40"/>
+    <text x="0" y="6" font-family="Roboto, Arial, sans-serif" font-size="28" font-weight="bold" fill="#FFFFFF" text-anchor="middle" dominant-baseline="middle">!</text>
+  </g>
+  <!-- Text -->
+  <text x="1280" y="306" font-family="Roboto, Arial, sans-serif" font-size="22" font-weight="bold" fill="#1A4565">Wrong but clear reasoning</text>
+  <text x="1280" y="336" font-family="Roboto, Arial, sans-serif" font-size="18" fill="#FFAB40">Reasoning quality preserved</text>
+
+  <!-- ==================== QUADRANT: BOTTOM-LEFT (Pass + Low) ==================== -->
+  <rect x="312" y="532" width="666" height="326" rx="14" fill="url(#passLowFill)"/>
+  <!-- Amber circle with ~ -->
+  <g filter="url(#iconShadow)" transform="translate(560,640)">
+    <circle cx="0" cy="0" r="32" fill="#FFAB40" opacity="0.18"/>
+    <circle cx="0" cy="0" r="24" fill="#FFAB40"/>
+    <text x="0" y="4" font-family="Roboto, Arial, sans-serif" font-size="30" font-weight="bold" fill="#FFFFFF" text-anchor="middle" dominant-baseline="middle">~</text>
+  </g>
+  <!-- Text -->
+  <text x="610" y="636" font-family="Roboto, Arial, sans-serif" font-size="22" font-weight="bold" fill="#1A4565">Correct but unclear</text>
+  <text x="610" y="666" font-family="Roboto, Arial, sans-serif" font-size="18" fill="#FFAB40">Right answer, poor explanation</text>
+
+  <!-- ==================== QUADRANT: BOTTOM-RIGHT (Fail + Low) ==================== -->
+  <rect x="982" y="532" width="666" height="326" rx="14" fill="url(#failLowFill)"/>
+  <!-- Red circle with X -->
+  <g filter="url(#iconShadow)" transform="translate(1230,640)">
+    <circle cx="0" cy="0" r="32" fill="#E53935" opacity="0.18"/>
+    <circle cx="0" cy="0" r="24" fill="#E53935"/>
+    <path d="M-8,-8 L8,8 M8,-8 L-8,8" stroke="#FFFFFF" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+  </g>
+  <!-- Text -->
+  <text x="1280" y="636" font-family="Roboto, Arial, sans-serif" font-size="22" font-weight="bold" fill="#1A4565">Wrong &amp; poorly presented</text>
+  <text x="1280" y="666" font-family="Roboto, Arial, sans-serif" font-size="18" fill="#E53935">Worst outcome</text>
+
+  <!-- ==================== SUMMARY BANNER ==================== -->
+  <g filter="url(#bannerShadow)">
+    <rect x="260" y="910" width="1400" height="70" rx="12" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1.5"/>
+  </g>
+  <!-- Templates part -->
+  <text x="400" y="953" font-family="Roboto, Arial, sans-serif" font-size="22" fill="#1A4565">
+    <tspan font-weight="bold" fill="#4285F4">Templates</tspan><tspan>: did it get the right answer?</tspan>
+  </text>
+  <!-- Separator dot -->
+  <text x="960" y="952" font-family="Roboto, Arial, sans-serif" font-size="28" fill="#E0E4E8" text-anchor="middle">&#xB7;</text>
+  <!-- Rubrics part -->
+  <text x="1010" y="953" font-family="Roboto, Arial, sans-serif" font-size="22" fill="#1A4565">
+    <tspan font-weight="bold" fill="#0097A7">Rubrics</tspan><tspan>: did it answer well?</tspan>
+  </text>
+
+  <!-- ==================== SUBTLE DECORATIONS ==================== -->
+  <!-- Top-right decorative circles -->
+  <circle cx="1840" cy="60" r="40" fill="#4285F4" opacity="0.04"/>
+  <circle cx="1870" cy="90" r="25" fill="#0097A7" opacity="0.04"/>
+
+  <!-- Slide number -->
+  <text x="1860" y="1060" font-family="Roboto, Arial, sans-serif" font-size="16" fill="#78909C" text-anchor="end">10</text>
+</svg>

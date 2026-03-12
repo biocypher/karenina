@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080">
+  <defs>
+    <filter id="shadow20" x="-5%" y="-5%" width="115%" height="115%">
+      <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#000" flood-opacity="0.08"/>
+    </filter>
+    <marker id="flowArrow20" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#E0E4E8"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1920" height="1080" fill="#FFFFFF"/>
+
+  <!-- ==================== Decorative pattern (upper-right) ==================== -->
+  <g transform="translate(1600, 100)">
+    <!-- Network/molecular overlapping circles -->
+    <circle cx="0" cy="0" r="60" fill="#4285F4" opacity="0.06"/>
+    <circle cx="80" cy="-40" r="45" fill="#4285F4" opacity="0.08"/>
+    <circle cx="160" cy="20" r="55" fill="#4285F4" opacity="0.05"/>
+    <circle cx="40" cy="80" r="50" fill="#4285F4" opacity="0.07"/>
+    <circle cx="120" cy="90" r="35" fill="#4285F4" opacity="0.06"/>
+    <circle cx="-40" cy="-60" r="40" fill="#4285F4" opacity="0.04"/>
+    <circle cx="200" cy="-50" r="30" fill="#4285F4" opacity="0.05"/>
+    <circle cx="-80" cy="40" r="35" fill="#4285F4" opacity="0.04"/>
+    <circle cx="180" cy="110" r="25" fill="#4285F4" opacity="0.06"/>
+
+    <!-- Connecting lines (network edges) -->
+    <line x1="0" y1="0" x2="80" y2="-40" stroke="#4285F4" stroke-width="1.5" opacity="0.1"/>
+    <line x1="80" y1="-40" x2="160" y2="20" stroke="#4285F4" stroke-width="1.5" opacity="0.1"/>
+    <line x1="0" y1="0" x2="40" y2="80" stroke="#4285F4" stroke-width="1.5" opacity="0.1"/>
+    <line x1="40" y1="80" x2="120" y2="90" stroke="#4285F4" stroke-width="1.5" opacity="0.1"/>
+    <line x1="160" y1="20" x2="120" y2="90" stroke="#4285F4" stroke-width="1.5" opacity="0.1"/>
+    <line x1="80" y1="-40" x2="200" y2="-50" stroke="#4285F4" stroke-width="1" opacity="0.08"/>
+    <line x1="-40" y1="-60" x2="0" y2="0" stroke="#4285F4" stroke-width="1" opacity="0.08"/>
+    <line x1="-80" y1="40" x2="0" y2="0" stroke="#4285F4" stroke-width="1" opacity="0.06"/>
+    <line x1="120" y1="90" x2="180" y2="110" stroke="#4285F4" stroke-width="1" opacity="0.08"/>
+
+    <!-- Small dots at intersections -->
+    <circle cx="0" cy="0" r="4" fill="#4285F4" opacity="0.2"/>
+    <circle cx="80" cy="-40" r="4" fill="#4285F4" opacity="0.2"/>
+    <circle cx="160" cy="20" r="4" fill="#4285F4" opacity="0.2"/>
+    <circle cx="40" cy="80" r="3" fill="#4285F4" opacity="0.2"/>
+    <circle cx="120" cy="90" r="3" fill="#4285F4" opacity="0.2"/>
+    <circle cx="200" cy="-50" r="3" fill="#4285F4" opacity="0.15"/>
+    <circle cx="-40" cy="-60" r="3" fill="#4285F4" opacity="0.15"/>
+  </g>
+
+  <!-- Mirrored pattern (upper-left, subtle) -->
+  <g transform="translate(150, 60)">
+    <circle cx="0" cy="0" r="40" fill="#4285F4" opacity="0.04"/>
+    <circle cx="-50" cy="40" r="30" fill="#4285F4" opacity="0.03"/>
+    <circle cx="50" cy="50" r="25" fill="#4285F4" opacity="0.03"/>
+    <line x1="0" y1="0" x2="-50" y2="40" stroke="#4285F4" stroke-width="1" opacity="0.06"/>
+    <line x1="0" y1="0" x2="50" y2="50" stroke="#4285F4" stroke-width="1" opacity="0.06"/>
+    <circle cx="0" cy="0" r="3" fill="#4285F4" opacity="0.12"/>
+    <circle cx="-50" cy="40" r="2" fill="#4285F4" opacity="0.12"/>
+    <circle cx="50" cy="50" r="2" fill="#4285F4" opacity="0.12"/>
+  </g>
+
+  <!-- ==================== CENTER: Title block ==================== -->
+  <text x="960" y="360" font-family="Trebuchet MS, Arial, sans-serif" font-size="80" font-weight="bold" fill="#1A4565" text-anchor="middle">Karenina</text>
+
+  <!-- Thin blue line -->
+  <rect x="860" y="380" width="200" height="3" rx="1.5" fill="#4285F4"/>
+
+  <!-- GitHub link -->
+  <text x="960" y="430" font-family="Roboto, Arial, sans-serif" font-size="24" fill="#4285F4" text-anchor="middle">github.com/biocypher/karenina</text>
+
+  <!-- License -->
+  <text x="960" y="465" font-family="Roboto, Arial, sans-serif" font-size="20" fill="#78909C" text-anchor="middle">Open Source · MIT Licensed</text>
+
+  <!-- ==================== MINI RECAP ROW ==================== -->
+  <g transform="translate(960, 600)">
+    <!-- Step 1: Generate (speech bubble) -->
+    <g transform="translate(-200, 0)">
+      <circle cx="0" cy="0" r="40" fill="#4285F4" filter="url(#shadow20)"/>
+      <!-- Speech bubble icon -->
+      <rect x="-16" y="-14" width="32" height="22" rx="6" fill="#FFFFFF"/>
+      <polygon points="-6,8 2,8 -10,18" fill="#FFFFFF"/>
+      <!-- Text lines -->
+      <rect x="-10" y="-8" width="18" height="2.5" rx="1" fill="#4285F4" opacity="0.5"/>
+      <rect x="-10" y="-2" width="14" height="2.5" rx="1" fill="#4285F4" opacity="0.35"/>
+      <rect x="-10" y="4" width="10" height="2.5" rx="1" fill="#4285F4" opacity="0.25"/>
+      <!-- Label -->
+      <text x="0" y="65" font-family="Roboto, Arial, sans-serif" font-size="18" fill="#1A4565" text-anchor="middle" font-weight="bold">Generate</text>
+    </g>
+
+    <!-- Arrow 1 -->
+    <line x1="-140" y1="0" x2="-80" y2="0" stroke="#E0E4E8" stroke-width="3" marker-end="url(#flowArrow20)"/>
+
+    <!-- Step 2: Parse (magnifying glass) -->
+    <g transform="translate(0, 0)">
+      <circle cx="0" cy="0" r="40" fill="#0097A7" filter="url(#shadow20)"/>
+      <!-- Magnifying glass icon -->
+      <circle cx="-4" cy="-4" r="12" fill="none" stroke="#FFFFFF" stroke-width="2.5"/>
+      <line x1="4" y1="4" x2="14" y2="14" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
+      <!-- Label -->
+      <text x="0" y="65" font-family="Roboto, Arial, sans-serif" font-size="18" fill="#1A4565" text-anchor="middle" font-weight="bold">Parse</text>
+    </g>
+
+    <!-- Arrow 2 -->
+    <line x1="60" y1="0" x2="120" y2="0" stroke="#E0E4E8" stroke-width="3" marker-end="url(#flowArrow20)"/>
+
+    <!-- Step 3: Verify (shield+check) -->
+    <g transform="translate(200, 0)">
+      <circle cx="0" cy="0" r="40" fill="#4CAF50" filter="url(#shadow20)"/>
+      <!-- Shield icon -->
+      <path d="M0,-16 L14,-10 L14,4 C14,14 0,20 0,20 C0,20 -14,14 -14,4 L-14,-10 Z" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+      <!-- Checkmark -->
+      <polyline points="-6,2 -1,8 8,-5" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <!-- Label -->
+      <text x="0" y="65" font-family="Roboto, Arial, sans-serif" font-size="18" fill="#1A4565" text-anchor="middle" font-weight="bold">Verify</text>
+    </g>
+  </g>
+
+  <!-- ==================== BOTTOM: Questions ==================== -->
+  <text x="960" y="790" font-family="Trebuchet MS, Arial, sans-serif" font-size="48" font-weight="bold" fill="#1A4565" text-anchor="middle">Questions?</text>
+
+  <!-- Bottom accent bar -->
+  <rect x="0" y="1074" width="1920" height="6" fill="#4285F4"/>
+</svg>

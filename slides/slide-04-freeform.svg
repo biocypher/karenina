@@ -1,0 +1,254 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080">
+  <defs>
+    <filter id="cardShadow" x="-5%" y="-5%" width="115%" height="115%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="8" result="blur"/>
+      <feOffset dx="0" dy="4" result="offsetBlur"/>
+      <feFlood flood-color="#000000" flood-opacity="0.12" result="color"/>
+      <feComposite in2="offsetBlur" operator="in" result="shadow"/>
+      <feMerge>
+        <feMergeNode in="shadow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="smallCardShadow" x="-5%" y="-5%" width="115%" height="115%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="4" result="blur"/>
+      <feOffset dx="0" dy="2" result="offsetBlur"/>
+      <feFlood flood-color="#000000" flood-opacity="0.08" result="color"/>
+      <feComposite in2="offsetBlur" operator="in" result="shadow"/>
+      <feMerge>
+        <feMergeNode in="shadow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="warnGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="6" result="blur"/>
+      <feFlood flood-color="#FFAB40" flood-opacity="0.2" result="color"/>
+      <feComposite in2="blur" operator="in" result="glow"/>
+      <feMerge>
+        <feMergeNode in="glow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="brainGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="4" result="blur"/>
+      <feFlood flood-color="#4285F4" flood-opacity="0.18" result="color"/>
+      <feComposite in2="blur" operator="in" result="glow"/>
+      <feMerge>
+        <feMergeNode in="glow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <linearGradient id="blueAccentGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#4285F4"/>
+      <stop offset="100%" stop-color="#0097A7"/>
+    </linearGradient>
+    <linearGradient id="amberGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFAB40"/>
+      <stop offset="100%" stop-color="#FF8F00"/>
+    </linearGradient>
+    <linearGradient id="judgeBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4285F4" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#4285F4" stop-opacity="0.02"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ==================== BACKGROUND ==================== -->
+  <rect width="1920" height="1080" fill="#FFFFFF"/>
+
+  <!-- Subtle background texture: light grid pattern -->
+  <pattern id="bgGrid" width="40" height="40" patternUnits="userSpaceOnUse">
+    <rect width="40" height="40" fill="none"/>
+    <line x1="40" y1="0" x2="40" y2="40" stroke="#E0E4E8" stroke-width="0.3" stroke-opacity="0.5"/>
+    <line x1="0" y1="40" x2="40" y2="40" stroke="#E0E4E8" stroke-width="0.3" stroke-opacity="0.5"/>
+  </pattern>
+  <rect width="1920" height="1080" fill="url(#bgGrid)" opacity="0.4"/>
+
+  <!-- ==================== TITLE ==================== -->
+  <text x="100" y="105" font-family="Trebuchet MS, Arial, sans-serif" font-size="44" font-weight="bold" fill="#1A4565">Approach 2: Free-Form Judging</text>
+
+  <!-- Blue underline accent -->
+  <rect x="100" y="120" width="260" height="4" rx="2" ry="2" fill="url(#blueAccentGrad)"/>
+
+  <!-- ==================== LEFT HALF (100-880) ==================== -->
+
+  <!-- Section label -->
+  <text x="490" y="178" font-family="Roboto, Arial, sans-serif" font-size="16" fill="#78909C" text-anchor="middle" letter-spacing="3">THE APPROACH</text>
+
+  <!-- Large container card -->
+  <rect x="130" y="195" width="720" height="720" rx="16" ry="16" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1.5" filter="url(#cardShadow)"/>
+
+  <!-- Model Response label -->
+  <text x="170" y="245" font-family="Roboto, Arial, sans-serif" font-size="18" fill="#78909C" letter-spacing="1">MODEL RESPONSE</text>
+
+  <!-- Response text card -->
+  <rect x="170" y="262" width="640" height="220" rx="12" ry="12" fill="#FFFFFF" stroke="#E0E4E8" stroke-width="1" filter="url(#smallCardShadow)"/>
+
+  <!-- Subtle top accent on text card -->
+  <rect x="170" y="262" width="640" height="3" rx="1.5" ry="1.5" fill="#0097A7" opacity="0.4"/>
+
+  <!-- Biomedical response text -->
+  <text x="200" y="308" font-family="Roboto, Arial, sans-serif" font-size="20" fill="#1A4565">BCL2 is overexpressed in CLL, making</text>
+  <text x="200" y="340" font-family="Roboto, Arial, sans-serif" font-size="20" fill="#1A4565">it a validated target for venetoclax,</text>
+  <text x="200" y="372" font-family="Roboto, Arial, sans-serif" font-size="20" fill="#1A4565">which induces apoptosis by mimicking</text>
+  <text x="200" y="404" font-family="Roboto, Arial, sans-serif" font-size="20" fill="#1A4565">BH3-only proteins...</text>
+
+  <!-- Highlighted terms (inline accents) -->
+  <rect x="193" y="289" width="48" height="24" rx="4" ry="4" fill="#4285F4" opacity="0.08"/>
+  <rect x="193" y="385" width="186" height="24" rx="4" ry="4" fill="#0097A7" opacity="0.08"/>
+
+  <!-- Ellipsis dots to show continuation -->
+  <text x="200" y="450" font-family="Roboto, Arial, sans-serif" font-size="16" fill="#78909C">displacing pro-apoptotic BAX and BAK from BCL2 sequestration.</text>
+
+  <!-- Arrow down (dashed) -->
+  <g transform="translate(490, 500)">
+    <line x1="0" y1="0" x2="0" y2="65" stroke="#78909C" stroke-width="2" stroke-dasharray="6,4"/>
+    <polygon points="0,75 -8,59 8,59" fill="#78909C"/>
+  </g>
+
+  <!-- Judge LLM section -->
+  <text x="170" y="605" font-family="Roboto, Arial, sans-serif" font-size="18" fill="#78909C" letter-spacing="1">JUDGE LLM</text>
+
+  <!-- Judge card with blue left border -->
+  <rect x="170" y="620" width="640" height="260" rx="12" ry="12" fill="#FFFFFF" stroke="#E0E4E8" stroke-width="1" filter="url(#smallCardShadow)"/>
+  <!-- Blue left border -->
+  <rect x="170" y="620" width="5" height="260" rx="2.5" ry="0" fill="#4285F4"/>
+  <rect x="170" y="620" width="5" height="14" rx="2.5" ry="2.5" fill="#4285F4"/>
+  <rect x="170" y="866" width="5" height="14" rx="2.5" ry="2.5" fill="#4285F4"/>
+
+  <!-- Light blue inner background -->
+  <rect x="176" y="621" width="633" height="258" rx="10" ry="10" fill="url(#judgeBg)"/>
+
+  <!-- Brain icon (detailed, large) -->
+  <g transform="translate(270, 740)" filter="url(#brainGlow)">
+    <!-- Outer circle -->
+    <circle cx="0" cy="0" r="46" fill="none" stroke="#4285F4" stroke-width="2.5"/>
+    <!-- Inner glow circle -->
+    <circle cx="0" cy="0" r="44" fill="#4285F4" opacity="0.06"/>
+
+    <!-- Brain center line (corpus callosum) -->
+    <line x1="0" y1="-34" x2="0" y2="34" stroke="#4285F4" stroke-width="2" stroke-linecap="round"/>
+
+    <!-- Left hemisphere outline -->
+    <path d="M-2,-34 C-20,-30 -32,-18 -34,-2 C-36,14 -26,28 -12,34 C-8,36 -4,36 -2,34" fill="none" stroke="#4285F4" stroke-width="2.2" stroke-linecap="round"/>
+
+    <!-- Right hemisphere outline -->
+    <path d="M2,-34 C20,-30 32,-18 34,-2 C36,14 26,28 12,34 C8,36 4,36 2,34" fill="none" stroke="#4285F4" stroke-width="2.2" stroke-linecap="round"/>
+
+    <!-- Left brain folds -->
+    <path d="M-4,-20 C-16,-16 -22,-6 -18,4" fill="none" stroke="#4285F4" stroke-width="1.8" stroke-linecap="round"/>
+    <path d="M-4,-4 C-14,0 -20,10 -14,18" fill="none" stroke="#4285F4" stroke-width="1.8" stroke-linecap="round"/>
+    <path d="M-6,12 C-12,14 -16,20 -10,26" fill="none" stroke="#4285F4" stroke-width="1.5" stroke-linecap="round"/>
+
+    <!-- Right brain folds -->
+    <path d="M4,-20 C16,-16 22,-6 18,4" fill="none" stroke="#4285F4" stroke-width="1.8" stroke-linecap="round"/>
+    <path d="M4,-4 C14,0 20,10 14,18" fill="none" stroke="#4285F4" stroke-width="1.8" stroke-linecap="round"/>
+    <path d="M6,12 C12,14 16,20 10,26" fill="none" stroke="#4285F4" stroke-width="1.5" stroke-linecap="round"/>
+
+    <!-- Small decorative neural dots -->
+    <circle cx="-18" cy="-12" r="2" fill="#4285F4" opacity="0.5"/>
+    <circle cx="18" cy="-12" r="2" fill="#4285F4" opacity="0.5"/>
+    <circle cx="-12" cy="20" r="2" fill="#4285F4" opacity="0.5"/>
+    <circle cx="12" cy="20" r="2" fill="#4285F4" opacity="0.5"/>
+  </g>
+
+  <!-- Judge LLM text -->
+  <text x="340" y="725" font-family="Trebuchet MS, Arial, sans-serif" font-size="26" font-weight="bold" fill="#4285F4">Judge LLM</text>
+
+  <!-- Question text in quotes -->
+  <text x="340" y="762" font-family="Roboto, Arial, sans-serif" font-size="22" fill="#1A4565">"Is this answer correct?"</text>
+
+  <!-- Decorative question mark watermark inside judge card -->
+  <text x="720" y="830" font-family="Trebuchet MS, Arial, sans-serif" font-size="120" fill="#4285F4" opacity="0.06" text-anchor="middle">?</text>
+
+  <!-- Small status indicators -->
+  <g transform="translate(340, 800)">
+    <rect x="0" y="0" width="100" height="30" rx="15" ry="15" fill="#4CAF50" opacity="0.12"/>
+    <text x="50" y="21" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#4CAF50" text-anchor="middle" font-weight="500">CORRECT</text>
+  </g>
+  <g transform="translate(460, 800)">
+    <rect x="0" y="0" width="120" height="30" rx="15" ry="15" fill="#E53935" opacity="0.12"/>
+    <text x="60" y="21" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#E53935" text-anchor="middle" font-weight="500">INCORRECT</text>
+  </g>
+  <g transform="translate(600, 800)">
+    <rect x="0" y="0" width="100" height="30" rx="15" ry="15" fill="#FFAB40" opacity="0.12"/>
+    <text x="50" y="21" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#FFAB40" text-anchor="middle" font-weight="500">PARTIAL</text>
+  </g>
+
+  <!-- ==================== RIGHT HALF (960-1820) ==================== -->
+
+  <!-- Section label -->
+  <text x="1390" y="178" font-family="Roboto, Arial, sans-serif" font-size="16" fill="#78909C" text-anchor="middle" letter-spacing="3">THE PROBLEM</text>
+
+  <!-- Large warning triangle -->
+  <g transform="translate(1390, 330)" filter="url(#warnGlow)">
+    <!-- Triangle shadow -->
+    <polygon points="0,-55 65,50 -65,50" fill="#FFAB40" opacity="0.1" transform="translate(3,3)"/>
+    <!-- Triangle body -->
+    <polygon points="0,-55 65,50 -65,50" fill="url(#amberGrad)" stroke="#FF8F00" stroke-width="1.5" stroke-linejoin="round"/>
+    <!-- Inner highlight -->
+    <polygon points="0,-38 48,36 -48,36" fill="none" stroke="#FFFFFF" stroke-width="1" stroke-opacity="0.3" stroke-linejoin="round"/>
+    <!-- Exclamation mark -->
+    <rect x="-5" y="-28" width="10" height="40" rx="5" ry="5" fill="#FFFFFF"/>
+    <circle cx="0" cy="28" r="7" fill="#FFFFFF"/>
+  </g>
+
+  <!-- Warning label -->
+  <text x="1390" y="420" font-family="Trebuchet MS, Arial, sans-serif" font-size="28" font-weight="bold" fill="#1A4565" text-anchor="middle">Inconsistent</text>
+
+  <!-- Amber-bordered cards stacked -->
+
+  <!-- Card 1: Opaque reasoning -->
+  <rect x="980" y="470" width="820" height="100" rx="14" ry="14" fill="#FFFFFF" stroke="#E0E4E8" stroke-width="1" filter="url(#smallCardShadow)"/>
+  <!-- Amber left border -->
+  <rect x="980" y="470" width="5" height="100" rx="2.5" ry="0" fill="#FFAB40"/>
+  <rect x="980" y="470" width="5" height="14" rx="2.5" ry="2.5" fill="#FFAB40"/>
+  <rect x="980" y="556" width="5" height="14" rx="2.5" ry="2.5" fill="#FFAB40"/>
+  <!-- Amber tint -->
+  <rect x="985" y="471" width="814" height="98" rx="12" ry="12" fill="#FFAB40" opacity="0.04"/>
+
+  <!-- Warning mini triangle -->
+  <g transform="translate(1024, 520)">
+    <polygon points="0,-12 14,10 -14,10" fill="#FFAB40" stroke="#FF8F00" stroke-width="0.8"/>
+    <text x="0" y="7" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">!</text>
+  </g>
+  <text x="1062" y="527" font-family="Roboto, Arial, sans-serif" font-size="22" fill="#1A4565">Opaque reasoning</text>
+
+  <!-- Card 2: Subjective judgments -->
+  <rect x="980" y="600" width="820" height="100" rx="14" ry="14" fill="#FFFFFF" stroke="#E0E4E8" stroke-width="1" filter="url(#smallCardShadow)"/>
+  <!-- Amber left border -->
+  <rect x="980" y="600" width="5" height="100" rx="2.5" ry="0" fill="#FFAB40"/>
+  <rect x="980" y="600" width="5" height="14" rx="2.5" ry="2.5" fill="#FFAB40"/>
+  <rect x="980" y="686" width="5" height="14" rx="2.5" ry="2.5" fill="#FFAB40"/>
+  <!-- Amber tint -->
+  <rect x="985" y="601" width="814" height="98" rx="12" ry="12" fill="#FFAB40" opacity="0.04"/>
+
+  <!-- Warning mini triangle -->
+  <g transform="translate(1024, 650)">
+    <polygon points="0,-12 14,10 -14,10" fill="#FFAB40" stroke="#FF8F00" stroke-width="0.8"/>
+    <text x="0" y="7" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">!</text>
+  </g>
+  <text x="1062" y="657" font-family="Roboto, Arial, sans-serif" font-size="22" fill="#1A4565">Subjective judgments</text>
+
+  <!-- Card 3: Still needs structured output -->
+  <rect x="980" y="730" width="820" height="100" rx="14" ry="14" fill="#FFFFFF" stroke="#E0E4E8" stroke-width="1" filter="url(#smallCardShadow)"/>
+  <!-- Amber left border -->
+  <rect x="980" y="730" width="5" height="100" rx="2.5" ry="0" fill="#FFAB40"/>
+  <rect x="980" y="730" width="5" height="14" rx="2.5" ry="2.5" fill="#FFAB40"/>
+  <rect x="980" y="816" width="5" height="14" rx="2.5" ry="2.5" fill="#FFAB40"/>
+  <!-- Amber tint -->
+  <rect x="985" y="731" width="814" height="98" rx="12" ry="12" fill="#FFAB40" opacity="0.04"/>
+
+  <!-- Warning mini triangle -->
+  <g transform="translate(1024, 780)">
+    <polygon points="0,-12 14,10 -14,10" fill="#FFAB40" stroke="#FF8F00" stroke-width="0.8"/>
+    <text x="0" y="7" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">!</text>
+  </g>
+  <text x="1062" y="787" font-family="Roboto, Arial, sans-serif" font-size="22" fill="#1A4565">Still needs structured output</text>
+
+  <!-- Summary pill badge -->
+  <rect x="1060" y="880" width="560" height="50" rx="25" ry="25" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1"/>
+  <text x="1340" y="912" font-family="Roboto, Arial, sans-serif" font-size="20" fill="#78909C" font-style="italic" text-anchor="middle">Flexible, but unreliable</text>
+
+  <!-- ==================== BOTTOM ACCENT BAR ==================== -->
+  <rect x="0" y="1074" width="1920" height="6" fill="#4285F4"/>
+</svg>

@@ -1,0 +1,173 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080">
+  <defs>
+    <filter id="shadow19" x="-5%" y="-5%" width="115%" height="115%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000" flood-opacity="0.10"/>
+    </filter>
+    <marker id="convArrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#E53935" opacity="0.5"/>
+    </marker>
+    <marker id="divArrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#4285F4" opacity="0.5"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1920" height="1080" fill="#FFFFFF"/>
+
+  <!-- Title -->
+  <text x="100" y="80" font-family="Trebuchet MS, Arial, sans-serif" font-size="44" font-weight="bold" fill="#1A4565">The Gaming Problem</text>
+  <rect x="100" y="92" width="310" height="4" rx="2" fill="#4285F4"/>
+
+  <!-- ==================== LEFT PANEL: Public Benchmark ==================== -->
+  <g transform="translate(80, 130)">
+    <rect width="820" height="730" rx="16" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1.5" filter="url(#shadow19)"/>
+    <!-- Red top border -->
+    <rect x="0" y="0" width="820" height="6" rx="16" fill="#E53935"/>
+    <rect x="0" y="3" width="820" height="6" fill="#E53935"/>
+
+    <!-- Header -->
+    <text x="410" y="50" font-family="Trebuchet MS, Arial, sans-serif" font-size="28" font-weight="bold" fill="#1A4565" text-anchor="middle">Public Benchmark</text>
+
+    <!-- Illustration area -->
+    <g transform="translate(410, 270)">
+      <!-- Single podium/trophy at center -->
+      <!-- Podium base -->
+      <rect x="-50" y="20" width="100" height="60" rx="6" fill="#E53935" opacity="0.15"/>
+      <rect x="-40" y="10" width="80" height="15" rx="4" fill="#E53935" opacity="0.25"/>
+      <!-- Trophy -->
+      <g transform="translate(0, -20)">
+        <rect x="-4" y="10" width="8" height="20" rx="2" fill="#E53935" opacity="0.4"/>
+        <rect x="-14" y="26" width="28" height="6" rx="3" fill="#E53935" opacity="0.3"/>
+        <ellipse cx="0" cy="-2" rx="20" ry="18" fill="#E53935" opacity="0.2" stroke="#E53935" stroke-width="1.5" stroke-opacity="0.4"/>
+        <text x="0" y="4" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#E53935" text-anchor="middle" font-weight="bold">#1</text>
+      </g>
+
+      <!-- Model circles ALL converging toward trophy -->
+      <!-- Model 1 -->
+      <circle cx="-250" cy="-130" r="25" fill="#E53935" opacity="0.3" stroke="#E53935" stroke-width="1.5" stroke-opacity="0.4"/>
+      <text x="-250" y="-125" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#E53935" text-anchor="middle">M1</text>
+      <line x1="-225" y1="-118" x2="-40" y2="-30" stroke="#E53935" stroke-width="1.5" opacity="0.3" marker-end="url(#convArrow)"/>
+
+      <!-- Model 2 -->
+      <circle cx="-200" cy="130" r="25" fill="#E53935" opacity="0.3" stroke="#E53935" stroke-width="1.5" stroke-opacity="0.4"/>
+      <text x="-200" y="135" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#E53935" text-anchor="middle">M2</text>
+      <line x1="-178" y1="120" x2="-35" y2="30" stroke="#E53935" stroke-width="1.5" opacity="0.3" marker-end="url(#convArrow)"/>
+
+      <!-- Model 3 -->
+      <circle cx="250" cy="-120" r="25" fill="#E53935" opacity="0.3" stroke="#E53935" stroke-width="1.5" stroke-opacity="0.4"/>
+      <text x="250" y="-115" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#E53935" text-anchor="middle">M3</text>
+      <line x1="228" y1="-108" x2="40" y2="-25" stroke="#E53935" stroke-width="1.5" opacity="0.3" marker-end="url(#convArrow)"/>
+
+      <!-- Model 4 -->
+      <circle cx="230" cy="140" r="25" fill="#E53935" opacity="0.3" stroke="#E53935" stroke-width="1.5" stroke-opacity="0.4"/>
+      <text x="230" y="145" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#E53935" text-anchor="middle">M4</text>
+      <line x1="208" y1="130" x2="40" y2="35" stroke="#E53935" stroke-width="1.5" opacity="0.3" marker-end="url(#convArrow)"/>
+
+      <!-- Model 5 -->
+      <circle cx="-80" cy="-160" r="25" fill="#E53935" opacity="0.3" stroke="#E53935" stroke-width="1.5" stroke-opacity="0.4"/>
+      <text x="-80" y="-155" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#E53935" text-anchor="middle">M5</text>
+      <line x1="-65" y1="-138" x2="-10" y2="-35" stroke="#E53935" stroke-width="1.5" opacity="0.3" marker-end="url(#convArrow)"/>
+
+      <!-- Model 6 -->
+      <circle cx="100" cy="160" r="25" fill="#E53935" opacity="0.3" stroke="#E53935" stroke-width="1.5" stroke-opacity="0.4"/>
+      <text x="100" y="165" font-family="Roboto, Arial, sans-serif" font-size="10" fill="#E53935" text-anchor="middle">M6</text>
+      <line x1="82" y1="145" x2="20" y2="40" stroke="#E53935" stroke-width="1.5" opacity="0.3" marker-end="url(#convArrow)"/>
+    </g>
+
+    <!-- Tagline -->
+    <text x="410" y="500" font-family="Roboto, Arial, sans-serif" font-size="20" fill="#E53935" font-style="italic" text-anchor="middle">Optimize for the test</text>
+
+    <!-- Bullets -->
+    <circle cx="170" cy="555" r="4" fill="#E53935" opacity="0.5"/>
+    <text x="185" y="560" font-family="Roboto, Arial, sans-serif" font-size="19" fill="#78909C">Everyone targets the same metric</text>
+    <circle cx="170" cy="595" r="4" fill="#E53935" opacity="0.5"/>
+    <text x="185" y="600" font-family="Roboto, Arial, sans-serif" font-size="19" fill="#78909C">Leaderboard chasing</text>
+    <circle cx="170" cy="635" r="4" fill="#E53935" opacity="0.5"/>
+    <text x="185" y="640" font-family="Roboto, Arial, sans-serif" font-size="19" fill="#78909C">Goodhart's Law in action</text>
+  </g>
+
+  <!-- ==================== RIGHT PANEL: Your Benchmark ==================== -->
+  <g transform="translate(1000, 130)">
+    <rect width="820" height="730" rx="16" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1.5" filter="url(#shadow19)"/>
+    <!-- Green top border -->
+    <rect x="0" y="0" width="820" height="6" rx="16" fill="#4CAF50"/>
+    <rect x="0" y="3" width="820" height="6" fill="#4CAF50"/>
+
+    <!-- Header -->
+    <text x="410" y="50" font-family="Trebuchet MS, Arial, sans-serif" font-size="28" font-weight="bold" fill="#1A4565" text-anchor="middle">Your Benchmark</text>
+
+    <!-- Illustration area: diverse targets -->
+    <g transform="translate(410, 270)">
+      <!-- Target 1: Circle (blue) -->
+      <circle cx="-220" cy="-100" r="30" fill="#4285F4" opacity="0.15" stroke="#4285F4" stroke-width="2"/>
+      <circle cx="-220" cy="-100" r="15" fill="#4285F4" opacity="0.25"/>
+      <circle cx="-220" cy="-100" r="5" fill="#4285F4" opacity="0.5"/>
+
+      <!-- Target 2: Diamond (teal) -->
+      <g transform="translate(200, -80)">
+        <polygon points="0,-32 32,0 0,32 -32,0" fill="#0097A7" opacity="0.15" stroke="#0097A7" stroke-width="2"/>
+        <polygon points="0,-16 16,0 0,16 -16,0" fill="#0097A7" opacity="0.25"/>
+        <circle cx="0" cy="0" r="5" fill="#0097A7" opacity="0.5"/>
+      </g>
+
+      <!-- Target 3: Hexagon (amber) -->
+      <g transform="translate(-100, 120)">
+        <polygon points="0,-30 26,-15 26,15 0,30 -26,15 -26,-15" fill="#FFAB40" opacity="0.15" stroke="#FFAB40" stroke-width="2"/>
+        <polygon points="0,-15 13,-7.5 13,7.5 0,15 -13,7.5 -13,-7.5" fill="#FFAB40" opacity="0.25"/>
+        <circle cx="0" cy="0" r="5" fill="#FFAB40" opacity="0.5"/>
+      </g>
+
+      <!-- Target 4: Star (green) -->
+      <g transform="translate(250, 100)">
+        <polygon points="0,-30 7,-10 28,-10 12,3 18,24 0,12 -18,24 -12,3 -28,-10 -7,-10" fill="#4CAF50" opacity="0.15" stroke="#4CAF50" stroke-width="2"/>
+        <circle cx="0" cy="0" r="6" fill="#4CAF50" opacity="0.4"/>
+      </g>
+
+      <!-- Model circles going to different targets -->
+      <!-- Model A to target 1 -->
+      <circle cx="-300" cy="30" r="20" fill="#4285F4" opacity="0.5" stroke="#4285F4" stroke-width="1.5"/>
+      <text x="-300" y="35" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#FFFFFF" text-anchor="middle" font-weight="bold">A</text>
+      <line x1="-282" y1="18" x2="-248" y2="-80" stroke="#4285F4" stroke-width="1.5" opacity="0.35" marker-end="url(#divArrow)"/>
+
+      <!-- Model B to target 2 -->
+      <circle cx="80" cy="-160" r="22" fill="#0097A7" opacity="0.5" stroke="#0097A7" stroke-width="1.5"/>
+      <text x="80" y="-155" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#FFFFFF" text-anchor="middle" font-weight="bold">B</text>
+      <line x1="98" y1="-148" x2="180" y2="-92" stroke="#0097A7" stroke-width="1.5" opacity="0.35" marker-end="url(#divArrow)"/>
+
+      <!-- Model C to target 3 -->
+      <circle cx="-280" cy="150" r="18" fill="#FFAB40" opacity="0.5" stroke="#FFAB40" stroke-width="1.5"/>
+      <text x="-280" y="155" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#FFFFFF" text-anchor="middle" font-weight="bold">C</text>
+      <line x1="-264" y1="142" x2="-122" y2="126" stroke="#FFAB40" stroke-width="1.5" opacity="0.35" marker-end="url(#divArrow)"/>
+
+      <!-- Model D to target 4 -->
+      <circle cx="150" cy="160" r="20" fill="#4CAF50" opacity="0.5" stroke="#4CAF50" stroke-width="1.5"/>
+      <text x="150" y="165" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#FFFFFF" text-anchor="middle" font-weight="bold">D</text>
+      <line x1="168" y1="150" x2="235" y2="115" stroke="#4CAF50" stroke-width="1.5" opacity="0.35" marker-end="url(#divArrow)"/>
+
+      <!-- Model E to target 1 -->
+      <circle cx="-160" cy="-170" r="18" fill="#4285F4" opacity="0.4" stroke="#4285F4" stroke-width="1.5"/>
+      <text x="-160" y="-165" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#FFFFFF" text-anchor="middle" font-weight="bold">E</text>
+      <line x1="-152" y1="-154" x2="-228" y2="-126" stroke="#4285F4" stroke-width="1.5" opacity="0.35" marker-end="url(#divArrow)"/>
+    </g>
+
+    <!-- Tagline -->
+    <text x="410" y="500" font-family="Roboto, Arial, sans-serif" font-size="20" fill="#4CAF50" font-style="italic" text-anchor="middle">Optimize for real-world usefulness</text>
+
+    <!-- Bullets -->
+    <circle cx="170" cy="555" r="4" fill="#4CAF50" opacity="0.5"/>
+    <text x="185" y="560" font-family="Roboto, Arial, sans-serif" font-size="19" fill="#78909C">Unique to your domain</text>
+    <circle cx="170" cy="595" r="4" fill="#4CAF50" opacity="0.5"/>
+    <text x="185" y="600" font-family="Roboto, Arial, sans-serif" font-size="19" fill="#78909C">Tests what actually matters</text>
+    <circle cx="170" cy="635" r="4" fill="#4CAF50" opacity="0.5"/>
+    <text x="185" y="640" font-family="Roboto, Arial, sans-serif" font-size="19" fill="#78909C">Genuine improvement rewarded</text>
+  </g>
+
+  <!-- ==================== BOTTOM BANNER ==================== -->
+  <g transform="translate(260, 890)">
+    <rect width="1400" height="60" rx="12" fill="#F5F7FA" stroke="#4285F4" stroke-width="2"/>
+    <text x="700" y="38" font-family="Roboto, Arial, sans-serif" font-size="20" fill="#1A4565" text-anchor="middle">When anyone can build a benchmark on their own terms, genuine improvement is the only winning strategy.</text>
+  </g>
+
+  <!-- Bottom accent bar -->
+  <rect x="0" y="1074" width="1920" height="6" fill="#4285F4"/>
+</svg>

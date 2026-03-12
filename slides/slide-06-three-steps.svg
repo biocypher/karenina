@@ -1,0 +1,271 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080">
+  <defs>
+    <!-- Drop shadow filter -->
+    <filter id="cardShadow6" x="-5%" y="-5%" width="115%" height="115%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000000" flood-opacity="0.12"/>
+    </filter>
+    <filter id="softShadow6" x="-5%" y="-5%" width="115%" height="115%">
+      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#000000" flood-opacity="0.08"/>
+    </filter>
+    <filter id="circleShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#4285F4" flood-opacity="0.3"/>
+    </filter>
+    <!-- Shield gradient -->
+    <linearGradient id="shieldGrad6" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4CAF50"/>
+      <stop offset="100%" stop-color="#388E3C"/>
+    </linearGradient>
+    <!-- Magnifying glass gradient -->
+    <linearGradient id="lensGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4285F4" stop-opacity="0.05"/>
+      <stop offset="100%" stop-color="#4285F4" stop-opacity="0.12"/>
+    </linearGradient>
+    <!-- Title bar gradient -->
+    <linearGradient id="titleBarGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#4285F4"/>
+      <stop offset="100%" stop-color="#0097A7"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1920" height="1080" fill="#FFFFFF"/>
+
+  <!-- Bottom accent bar -->
+  <rect x="0" y="1074" width="1920" height="6" fill="#4285F4"/>
+
+  <!-- Title -->
+  <text x="100" y="80" font-family="Trebuchet MS, Arial, sans-serif" font-size="44" font-weight="bold" fill="#1A4565">How It Works</text>
+  <!-- Blue underline -->
+  <rect x="100" y="94" width="240" height="4" rx="2" fill="#4285F4"/>
+
+  <!-- ============================================ -->
+  <!-- STEP 1: Generate                             -->
+  <!-- ============================================ -->
+
+  <!-- Numbered circle -->
+  <circle cx="320" cy="240" r="40" fill="#4285F4" filter="url(#circleShadow)"/>
+  <text x="320" y="255" font-family="Trebuchet MS, Arial, sans-serif" font-size="36" font-weight="bold" fill="#FFFFFF" text-anchor="middle">1</text>
+
+  <!-- Card -->
+  <g transform="translate(90, 300)">
+    <rect x="0" y="0" width="460" height="620" rx="16" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1.5" filter="url(#cardShadow6)"/>
+
+    <!-- Chat interface mockup illustration -->
+    <g transform="translate(30, 25)">
+      <!-- Browser/app frame -->
+      <rect x="0" y="0" width="400" height="280" rx="10" fill="#FFFFFF" stroke="#E0E4E8" stroke-width="1.5" filter="url(#softShadow6)"/>
+
+      <!-- Title bar -->
+      <rect x="0" y="0" width="400" height="36" rx="10" fill="url(#titleBarGrad)"/>
+      <rect x="0" y="26" width="400" height="10" fill="url(#titleBarGrad)"/>
+      <!-- Window controls -->
+      <circle cx="20" cy="18" r="5" fill="#FFFFFF" opacity="0.4"/>
+      <circle cx="38" cy="18" r="5" fill="#FFFFFF" opacity="0.4"/>
+      <circle cx="56" cy="18" r="5" fill="#FFFFFF" opacity="0.4"/>
+      <!-- Title text -->
+      <text x="200" y="23" font-family="Roboto, Arial, sans-serif" font-size="13" fill="#FFFFFF" text-anchor="middle" opacity="0.9">Karenina Chat</text>
+
+      <!-- User message bubble (right-aligned) -->
+      <rect x="150" y="50" width="230" height="50" rx="12" fill="#4285F4" opacity="0.12"/>
+      <rect x="150" y="50" width="230" height="50" rx="12" fill="none" stroke="#4285F4" stroke-width="0.75" opacity="0.3"/>
+      <!-- User message text lines -->
+      <rect x="170" y="63" width="180" height="6" rx="3" fill="#1A4565" opacity="0.5"/>
+      <rect x="170" y="77" width="140" height="6" rx="3" fill="#1A4565" opacity="0.4"/>
+      <!-- User avatar -->
+      <circle cx="395" cy="75" r="0" fill="#4285F4" opacity="0.3"/>
+
+      <!-- AI response bubble (left-aligned) -->
+      <rect x="20" y="115" width="280" height="130" rx="12" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1"/>
+      <!-- AI icon -->
+      <rect x="30" y="125" width="22" height="22" rx="6" fill="#4285F4" opacity="0.15"/>
+      <text x="41" y="141" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#4285F4" text-anchor="middle" font-weight="bold">AI</text>
+      <!-- AI text lines (longer, natural response) -->
+      <rect x="60" y="128" width="220" height="6" rx="3" fill="#78909C" opacity="0.5"/>
+      <rect x="60" y="142" width="200" height="6" rx="3" fill="#78909C" opacity="0.45"/>
+      <rect x="30" y="162" width="250" height="6" rx="3" fill="#78909C" opacity="0.5"/>
+      <rect x="30" y="176" width="230" height="6" rx="3" fill="#78909C" opacity="0.45"/>
+      <rect x="30" y="190" width="260" height="6" rx="3" fill="#78909C" opacity="0.5"/>
+      <rect x="30" y="204" width="180" height="6" rx="3" fill="#78909C" opacity="0.4"/>
+      <rect x="30" y="218" width="220" height="6" rx="3" fill="#78909C" opacity="0.45"/>
+
+      <!-- Typing indicator area -->
+      <rect x="20" y="252" width="360" height="22" rx="6" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="0.75"/>
+      <text x="35" y="267" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#78909C" opacity="0.5">Type a message...</text>
+    </g>
+
+    <!-- Divider -->
+    <line x1="40" y1="330" x2="420" y2="330" stroke="#E0E4E8" stroke-width="1"/>
+
+    <!-- Step label -->
+    <text x="230" y="375" font-family="Trebuchet MS, Arial, sans-serif" font-size="28" font-weight="bold" fill="#4285F4" text-anchor="middle">Generate</text>
+
+    <!-- Description -->
+    <text x="230" y="410" font-family="Roboto, Arial, sans-serif" font-size="20" fill="#1A4565" text-anchor="middle">
+      <tspan x="230" dy="0">LLM answers the question</tspan>
+      <tspan x="230" dy="28">naturally, in its own words</tspan>
+    </text>
+
+    <!-- Subtle accent -->
+    <rect x="170" y="470" width="120" height="3" rx="1.5" fill="#4285F4" opacity="0.2"/>
+
+    <!-- No-code indicator -->
+    <g transform="translate(130, 500)">
+      <rect x="0" y="0" width="200" height="36" rx="8" fill="#4285F4" opacity="0.1" stroke="#4285F4" stroke-width="0.75"/>
+      <text x="100" y="23" font-family="Roboto, Arial, sans-serif" font-size="15" fill="#4285F4" text-anchor="middle" opacity="0.7">No format constraints</text>
+    </g>
+  </g>
+
+  <!-- ============================================ -->
+  <!-- ARROW 1                                      -->
+  <!-- ============================================ -->
+  <g transform="translate(560, 580)">
+    <!-- Arrow background pill -->
+    <rect x="0" y="-20" width="80" height="40" rx="12" fill="#E0E4E8" opacity="0.4"/>
+    <!-- Arrow -->
+    <line x1="12" y1="0" x2="58" y2="0" stroke="#4285F4" stroke-width="4" stroke-linecap="round"/>
+    <path d="M52,-8 L64,0 L52,8" fill="none" stroke="#4285F4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- ============================================ -->
+  <!-- STEP 2: Parse                                -->
+  <!-- ============================================ -->
+
+  <!-- Numbered circle -->
+  <circle cx="960" cy="240" r="40" fill="#4285F4" filter="url(#circleShadow)"/>
+  <text x="960" y="255" font-family="Trebuchet MS, Arial, sans-serif" font-size="36" font-weight="bold" fill="#FFFFFF" text-anchor="middle">2</text>
+
+  <!-- Card -->
+  <g transform="translate(730, 300)">
+    <rect x="0" y="0" width="460" height="620" rx="16" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1.5" filter="url(#cardShadow6)"/>
+
+    <!-- Magnifying glass over document illustration -->
+    <g transform="translate(30, 25)">
+      <!-- Document -->
+      <rect x="50" y="20" width="260" height="240" rx="8" fill="#FFFFFF" stroke="#E0E4E8" stroke-width="1.5" filter="url(#softShadow6)"/>
+      <!-- Document header line -->
+      <rect x="70" y="40" width="160" height="8" rx="4" fill="#1A4565" opacity="0.25"/>
+      <!-- Document text lines -->
+      <rect x="70" y="65" width="220" height="6" rx="3" fill="#78909C" opacity="0.35"/>
+      <rect x="70" y="82" width="200" height="6" rx="3" fill="#78909C" opacity="0.3"/>
+      <rect x="70" y="99" width="210" height="6" rx="3" fill="#78909C" opacity="0.35"/>
+
+      <!-- Highlighted/selected sections (amber highlights) -->
+      <rect x="66" y="120" width="180" height="14" rx="3" fill="#FFAB40" opacity="0.25"/>
+      <rect x="70" y="123" width="170" height="6" rx="3" fill="#78909C" opacity="0.5"/>
+
+      <rect x="70" y="145" width="190" height="6" rx="3" fill="#78909C" opacity="0.3"/>
+
+      <rect x="66" y="160" width="200" height="14" rx="3" fill="#FFAB40" opacity="0.25"/>
+      <rect x="70" y="163" width="190" height="6" rx="3" fill="#78909C" opacity="0.5"/>
+
+      <rect x="70" y="185" width="150" height="6" rx="3" fill="#78909C" opacity="0.3"/>
+
+      <rect x="66" y="200" width="130" height="14" rx="3" fill="#FFAB40" opacity="0.25"/>
+      <rect x="70" y="203" width="120" height="6" rx="3" fill="#78909C" opacity="0.5"/>
+
+      <rect x="70" y="225" width="180" height="6" rx="3" fill="#78909C" opacity="0.3"/>
+      <rect x="70" y="242" width="140" height="6" rx="3" fill="#78909C" opacity="0.25"/>
+
+      <!-- Magnifying glass (large, overlaid) -->
+      <!-- Glass circle -->
+      <circle cx="280" cy="140" r="70" fill="url(#lensGrad)" stroke="#4285F4" stroke-width="3"/>
+      <!-- Inner highlight ring -->
+      <circle cx="280" cy="140" r="65" fill="none" stroke="#4285F4" stroke-width="0.5" opacity="0.3"/>
+      <!-- Glass reflection -->
+      <path d="M245,105 Q255,95 270,100" fill="none" stroke="#FFFFFF" stroke-width="2.5" opacity="0.5" stroke-linecap="round"/>
+      <!-- Handle -->
+      <line x1="330" y1="190" x2="370" y2="235" stroke="#4285F4" stroke-width="8" stroke-linecap="round"/>
+      <line x1="330" y1="190" x2="370" y2="235" stroke="#0097A7" stroke-width="4" stroke-linecap="round" opacity="0.5"/>
+    </g>
+
+    <!-- Divider -->
+    <line x1="40" y1="330" x2="420" y2="330" stroke="#E0E4E8" stroke-width="1"/>
+
+    <!-- Step label -->
+    <text x="230" y="375" font-family="Trebuchet MS, Arial, sans-serif" font-size="28" font-weight="bold" fill="#4285F4" text-anchor="middle">Parse</text>
+
+    <!-- Description -->
+    <text x="230" y="410" font-family="Roboto, Arial, sans-serif" font-size="20" fill="#1A4565" text-anchor="middle">
+      <tspan x="230" dy="0">A judge LLM extracts structured</tspan>
+      <tspan x="230" dy="28">data from the response</tspan>
+    </text>
+
+    <!-- Code-like fragment -->
+    <g transform="translate(95, 475)">
+      <rect x="0" y="0" width="270" height="44" rx="8" fill="#1A4565" opacity="0.06" stroke="#E0E4E8" stroke-width="1"/>
+      <text x="135" y="28" font-family="'Courier New', Consolas, monospace" font-size="17" fill="#1A4565" text-anchor="middle">{"target": "BCL2"}</text>
+    </g>
+  </g>
+
+  <!-- ============================================ -->
+  <!-- ARROW 2                                      -->
+  <!-- ============================================ -->
+  <g transform="translate(1200, 580)">
+    <rect x="0" y="-20" width="80" height="40" rx="12" fill="#E0E4E8" opacity="0.4"/>
+    <line x1="12" y1="0" x2="58" y2="0" stroke="#4285F4" stroke-width="4" stroke-linecap="round"/>
+    <path d="M52,-8 L64,0 L52,8" fill="none" stroke="#4285F4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- ============================================ -->
+  <!-- STEP 3: Verify                               -->
+  <!-- ============================================ -->
+
+  <!-- Numbered circle -->
+  <circle cx="1600" cy="240" r="40" fill="#4285F4" filter="url(#circleShadow)"/>
+  <text x="1600" y="255" font-family="Trebuchet MS, Arial, sans-serif" font-size="36" font-weight="bold" fill="#FFFFFF" text-anchor="middle">3</text>
+
+  <!-- Card -->
+  <g transform="translate(1370, 300)">
+    <rect x="0" y="0" width="460" height="620" rx="16" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1.5" filter="url(#cardShadow6)"/>
+
+    <!-- Shield with checkmark illustration -->
+    <g transform="translate(30, 15)">
+      <!-- Shield shape (centered) -->
+      <path d="M200,20 L320,60 L320,170 C320,230 270,270 200,290 C130,270 80,230 80,170 L80,60 Z" fill="url(#shieldGrad6)" filter="url(#softShadow6)"/>
+      <!-- Shield highlight -->
+      <path d="M200,28 L310,65 L310,170 C310,225 265,262 200,280 C135,262 90,225 90,170 L90,65 Z" fill="none" stroke="#FFFFFF" stroke-width="1" opacity="0.2"/>
+      <!-- Inner shield glow -->
+      <path d="M200,50 L290,80 L290,168 C290,215 255,245 200,260 C145,245 110,215 110,168 L110,80 Z" fill="#FFFFFF" opacity="0.08"/>
+
+      <!-- Large white checkmark -->
+      <path d="M155,160 L185,195 L250,120" fill="none" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+
+      <!-- Comparison visual below shield -->
+      <g transform="translate(30, 305)">
+        <!-- Left box -->
+        <rect x="0" y="0" width="130" height="38" rx="8" fill="#E8F5E9" stroke="#4CAF50" stroke-width="1"/>
+        <text x="65" y="25" font-family="'Courier New', Consolas, monospace" font-size="16" fill="#2E7D32" text-anchor="middle">"BCL2"</text>
+
+        <!-- Equals sign -->
+        <text x="165" y="27" font-family="Trebuchet MS, Arial, sans-serif" font-size="28" font-weight="bold" fill="#4CAF50" text-anchor="middle">==</text>
+
+        <!-- Right box -->
+        <rect x="200" y="0" width="130" height="38" rx="8" fill="#E8F5E9" stroke="#4CAF50" stroke-width="1"/>
+        <text x="265" y="25" font-family="'Courier New', Consolas, monospace" font-size="16" fill="#2E7D32" text-anchor="middle">"BCL2"</text>
+      </g>
+    </g>
+
+    <!-- Divider -->
+    <line x1="40" y1="390" x2="420" y2="390" stroke="#E0E4E8" stroke-width="1"/>
+
+    <!-- Step label -->
+    <text x="230" y="430" font-family="Trebuchet MS, Arial, sans-serif" font-size="28" font-weight="bold" fill="#4285F4" text-anchor="middle">Verify</text>
+
+    <!-- Description -->
+    <text x="230" y="465" font-family="Roboto, Arial, sans-serif" font-size="20" fill="#1A4565" text-anchor="middle">
+      <tspan x="230" dy="0">Python code checks extracted</tspan>
+      <tspan x="230" dy="28">values against ground truth</tspan>
+    </text>
+
+    <!-- Code fragment -->
+    <g transform="translate(105, 520)">
+      <rect x="0" y="0" width="250" height="44" rx="8" fill="#1A4565" opacity="0.06" stroke="#E0E4E8" stroke-width="1"/>
+      <text x="125" y="28" font-family="'Courier New', Consolas, monospace" font-size="17" fill="#4CAF50" text-anchor="middle">verify() → True</text>
+    </g>
+  </g>
+
+  <!-- Subtle background decorative elements -->
+  <circle cx="1870" cy="60" r="50" fill="#4285F4" opacity="0.03"/>
+  <circle cx="100" cy="990" r="40" fill="#FFAB40" opacity="0.04"/>
+  <circle cx="960" cy="980" r="30" fill="#0097A7" opacity="0.03"/>
+</svg>

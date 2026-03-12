@@ -1,0 +1,210 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080">
+  <defs>
+    <style>
+      .title-font { font-family: "Trebuchet MS", Arial, sans-serif; }
+      .body-font { font-family: Roboto, Arial, sans-serif; }
+    </style>
+
+    <!-- Card shadow -->
+    <filter id="cardShadow" x="-8%" y="-8%" width="116%" height="124%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#1A4565" flood-opacity="0.10"/>
+    </filter>
+
+    <!-- Hexagon shadow (stronger) -->
+    <filter id="hexShadow" x="-15%" y="-15%" width="130%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="14" flood-color="#1A4565" flood-opacity="0.22"/>
+    </filter>
+
+    <!-- Gradient for central hexagon -->
+    <linearGradient id="hexGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4285F4"/>
+      <stop offset="100%" stop-color="#0097A7"/>
+    </linearGradient>
+
+    <!-- Subtle radial glow behind hexagon -->
+    <radialGradient id="hexGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#4285F4" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#4285F4" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- White background -->
+  <rect width="1920" height="1080" fill="#FFFFFF"/>
+
+  <!-- Bottom accent bar -->
+  <rect x="0" y="1074" width="1920" height="6" fill="#4285F4"/>
+
+  <!-- Title -->
+  <text x="100" y="80" fill="#1A4565" font-size="44" font-weight="bold" class="title-font">Adapter Architecture</text>
+  <!-- Blue underline -->
+  <rect x="100" y="94" width="280" height="4" rx="2" fill="#4285F4"/>
+
+  <!-- Subtle radial glow behind hexagon -->
+  <circle cx="960" cy="480" r="340" fill="url(#hexGlow)"/>
+
+  <!-- ==================== CONNECTION LINES ==================== -->
+  <!-- Lines from adapter cards to hexagon with colored dots at hex end -->
+
+  <!-- 1. LangChain (top-left) to hex upper-left -->
+  <line x1="590" y1="230" x2="845" y2="380" stroke="#E0E4E8" stroke-width="2"/>
+  <circle cx="845" cy="380" r="5" fill="#4285F4"/>
+
+  <!-- 2. Claude Agent SDK (top-right) to hex upper-right -->
+  <line x1="1330" y1="230" x2="1075" y2="380" stroke="#E0E4E8" stroke-width="2"/>
+  <circle cx="1075" cy="380" r="5" fill="#4285F4"/>
+
+  <!-- 3. Claude Tool (right) to hex right -->
+  <line x1="1400" y1="480" x2="1140" y2="480" stroke="#E0E4E8" stroke-width="2"/>
+  <circle cx="1140" cy="480" r="5" fill="#FFAB40"/>
+
+  <!-- 4. OpenRouter (bottom-right) to hex lower-right -->
+  <line x1="1330" y1="750" x2="1075" y2="580" stroke="#E0E4E8" stroke-width="2"/>
+  <circle cx="1075" cy="580" r="5" fill="#FFAB40"/>
+
+  <!-- 5. OpenAI Endpoint (bottom-left) to hex lower-left -->
+  <line x1="590" y1="750" x2="845" y2="580" stroke="#E0E4E8" stroke-width="2"/>
+  <circle cx="845" cy="580" r="5" fill="#4285F4"/>
+
+  <!-- 6. Manual (left) to hex left -->
+  <line x1="470" y1="480" x2="780" y2="480" stroke="#E0E4E8" stroke-width="2"/>
+  <circle cx="780" cy="480" r="5" fill="#0097A7"/>
+
+  <!-- ==================== CENTRAL HEXAGON ==================== -->
+  <g filter="url(#hexShadow)">
+    <polygon
+      points="960,300 1116,390 1116,570 960,660 804,570 804,390"
+      fill="url(#hexGrad)"
+      stroke="#FFFFFF"
+      stroke-width="2.5"
+    />
+  </g>
+
+  <!-- Inner hexagon highlight ring -->
+  <polygon
+    points="960,318 1098,400 1098,560 960,642 822,560 822,400"
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-width="0.8"
+    opacity="0.25"
+  />
+
+  <!-- Text inside hexagon -->
+  <text x="960" y="468" fill="#FFFFFF" font-size="28" font-weight="bold" text-anchor="middle" class="title-font">Karenina</text>
+  <text x="960" y="502" fill="#FFFFFF" font-size="24" text-anchor="middle" class="body-font" opacity="0.9">Core</text>
+
+  <!-- ==================== PORT LABELS ==================== -->
+  <!-- LLMPort: upper-right edge of hexagon -->
+  <g>
+    <rect x="1078" y="352" width="88" height="28" rx="14" fill="#F5F7FA" stroke="#4285F4" stroke-width="1.5"/>
+    <text x="1122" y="372" fill="#4285F4" font-size="14" font-weight="bold" text-anchor="middle" class="body-font">LLMPort</text>
+  </g>
+
+  <!-- AgentPort: left edge of hexagon -->
+  <g>
+    <rect x="718" y="376" width="100" height="28" rx="14" fill="#F5F7FA" stroke="#0097A7" stroke-width="1.5"/>
+    <text x="768" y="396" fill="#0097A7" font-size="14" font-weight="bold" text-anchor="middle" class="body-font">AgentPort</text>
+  </g>
+
+  <!-- ParserPort: lower-right edge of hexagon -->
+  <g>
+    <rect x="1078" y="566" width="100" height="28" rx="14" fill="#F5F7FA" stroke="#FFAB40" stroke-width="1.5"/>
+    <text x="1128" y="586" fill="#FFAB40" font-size="14" font-weight="bold" text-anchor="middle" class="body-font">ParserPort</text>
+  </g>
+
+  <!-- ==================== ADAPTER CARDS ==================== -->
+
+  <!-- 1. LangChain (top-left) -->
+  <g filter="url(#cardShadow)">
+    <rect x="370" y="160" width="220" height="80" rx="12" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1.5"/>
+  </g>
+  <!-- Chain link icon -->
+  <g transform="translate(400, 192)">
+    <ellipse cx="0" cy="0" rx="10" ry="6" fill="none" stroke="#4285F4" stroke-width="1.8" transform="rotate(-30)"/>
+    <ellipse cx="12" cy="0" rx="10" ry="6" fill="none" stroke="#4285F4" stroke-width="1.8" transform="rotate(30)"/>
+  </g>
+  <text x="440" y="198" fill="#1A4565" font-size="20" font-weight="bold" class="body-font">LangChain</text>
+  <text x="440" y="222" fill="#78909C" font-size="14" class="body-font">LLM orchestration</text>
+
+  <!-- 2. Claude Agent SDK (top-right) -->
+  <g filter="url(#cardShadow)">
+    <rect x="1210" y="160" width="240" height="80" rx="12" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1.5"/>
+  </g>
+  <!-- Agent icon (small person silhouette with gear) -->
+  <g transform="translate(1242, 192)">
+    <circle cx="0" cy="-4" r="5" fill="none" stroke="#0097A7" stroke-width="1.5"/>
+    <path d="M-8,10 C-8,2 8,2 8,10" fill="none" stroke="#0097A7" stroke-width="1.5"/>
+  </g>
+  <text x="1266" y="198" fill="#1A4565" font-size="20" font-weight="bold" class="body-font">Claude Agent SDK</text>
+  <text x="1266" y="222" fill="#78909C" font-size="14" class="body-font">Agentic workflows</text>
+
+  <!-- 3. Claude Tool (right) -->
+  <g filter="url(#cardShadow)">
+    <rect x="1400" y="440" width="220" height="80" rx="12" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1.5"/>
+  </g>
+  <!-- Tool icon (wrench) -->
+  <g transform="translate(1432, 472)">
+    <path d="M-6,-6 L2,2 M0,0 L6,-6 M4,-8 L8,-4 L6,-2 L2,-6 Z" fill="none" stroke="#FFAB40" stroke-width="1.5"/>
+  </g>
+  <text x="1452" y="478" fill="#1A4565" font-size="20" font-weight="bold" class="body-font">Claude Tool</text>
+  <text x="1452" y="502" fill="#78909C" font-size="14" class="body-font">Tool-use parsing</text>
+
+  <!-- 4. OpenRouter (bottom-right) -->
+  <g filter="url(#cardShadow)">
+    <rect x="1210" y="720" width="220" height="80" rx="12" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1.5"/>
+  </g>
+  <!-- Router icon (branching paths) -->
+  <g transform="translate(1242, 752)">
+    <circle cx="0" cy="0" r="4" fill="#4285F4"/>
+    <line x1="4" y1="-3" x2="12" y2="-8" stroke="#4285F4" stroke-width="1.5"/>
+    <line x1="4" y1="3" x2="12" y2="8" stroke="#4285F4" stroke-width="1.5"/>
+    <circle cx="13" cy="-9" r="2.5" fill="none" stroke="#4285F4" stroke-width="1.2"/>
+    <circle cx="13" cy="9" r="2.5" fill="none" stroke="#4285F4" stroke-width="1.2"/>
+  </g>
+  <text x="1266" y="758" fill="#1A4565" font-size="20" font-weight="bold" class="body-font">OpenRouter</text>
+  <text x="1266" y="782" fill="#78909C" font-size="14" class="body-font">Multi-provider routing</text>
+
+  <!-- 5. OpenAI Endpoint (bottom-left) -->
+  <g filter="url(#cardShadow)">
+    <rect x="370" y="720" width="240" height="80" rx="12" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1.5"/>
+  </g>
+  <!-- API endpoint icon -->
+  <g transform="translate(400, 752)">
+    <rect x="-8" y="-6" width="16" height="12" rx="2" fill="none" stroke="#4285F4" stroke-width="1.5"/>
+    <line x1="-4" y1="-2" x2="4" y2="-2" stroke="#4285F4" stroke-width="1"/>
+    <line x1="-4" y1="2" x2="2" y2="2" stroke="#4285F4" stroke-width="1"/>
+  </g>
+  <text x="424" y="758" fill="#1A4565" font-size="20" font-weight="bold" class="body-font">OpenAI Endpoint</text>
+  <text x="424" y="782" fill="#78909C" font-size="14" class="body-font">OpenAI-compatible APIs</text>
+
+  <!-- 6. Manual (left) -->
+  <g filter="url(#cardShadow)">
+    <rect x="250" y="440" width="220" height="80" rx="12" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1.5"/>
+  </g>
+  <!-- Hand/manual icon -->
+  <g transform="translate(282, 472)">
+    <path d="M-4,6 L-4,-2 L0,-6 L4,-2 L4,6" fill="none" stroke="#0097A7" stroke-width="1.5"/>
+    <line x1="-6" y1="6" x2="6" y2="6" stroke="#0097A7" stroke-width="1.5"/>
+  </g>
+  <text x="306" y="478" fill="#1A4565" font-size="20" font-weight="bold" class="body-font">Manual</text>
+  <text x="306" y="502" fill="#78909C" font-size="14" class="body-font">Human-in-the-loop</text>
+
+  <!-- ==================== BOTTOM TAGLINE ==================== -->
+  <g>
+    <text x="960" y="910" text-anchor="middle" class="body-font" font-size="24">
+      <tspan fill="#4285F4" font-weight="bold">Three ports</tspan><tspan fill="#1A4565">.&#160;</tspan><tspan fill="#0097A7" font-weight="bold">Six adapters</tspan><tspan fill="#1A4565">. Switch by changing one config field.</tspan>
+    </text>
+  </g>
+
+  <!-- Subtle decorative dots pattern in corner -->
+  <g opacity="0.06">
+    <circle cx="1820" cy="160" r="3" fill="#0097A7"/>
+    <circle cx="1840" cy="160" r="3" fill="#0097A7"/>
+    <circle cx="1860" cy="160" r="3" fill="#0097A7"/>
+    <circle cx="1820" cy="180" r="3" fill="#0097A7"/>
+    <circle cx="1840" cy="180" r="3" fill="#0097A7"/>
+    <circle cx="1860" cy="180" r="3" fill="#0097A7"/>
+    <circle cx="1820" cy="200" r="3" fill="#0097A7"/>
+    <circle cx="1840" cy="200" r="3" fill="#0097A7"/>
+    <circle cx="1860" cy="200" r="3" fill="#0097A7"/>
+  </g>
+</svg>

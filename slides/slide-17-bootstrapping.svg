@@ -1,0 +1,243 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080">
+  <defs>
+    <filter id="shadow17" x="-5%" y="-5%" width="115%" height="115%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000" flood-opacity="0.10"/>
+    </filter>
+    <filter id="glowGreen" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feFlood flood-color="#4CAF50" flood-opacity="0.35" result="color"/>
+      <feComposite in="color" in2="blur" operator="in" result="glow"/>
+      <feMerge><feMergeNode in="glow"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <linearGradient id="arrowGrad17" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#4285F4" stop-opacity="0.2"/>
+      <stop offset="50%" stop-color="#4285F4" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#4285F4" stop-opacity="0.2"/>
+    </linearGradient>
+    <marker id="arrowTip17" markerWidth="12" markerHeight="8" refX="11" refY="4" orient="auto">
+      <polygon points="0 0, 12 4, 0 8" fill="#4285F4"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1920" height="1080" fill="#FFFFFF"/>
+
+  <!-- Title -->
+  <text x="100" y="80" font-family="Trebuchet MS, Arial, sans-serif" font-size="44" font-weight="bold" fill="#1A4565">Bootstrapped Authoring</text>
+  <rect x="100" y="92" width="320" height="4" rx="2" fill="#4285F4"/>
+
+  <!-- ==================== STEP 1: Spreadsheet ==================== -->
+  <g transform="translate(110, 160)">
+    <rect width="420" height="520" rx="16" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1.5" filter="url(#shadow17)"/>
+
+    <!-- Spreadsheet illustration -->
+    <g transform="translate(35, 30)">
+      <!-- Spreadsheet frame -->
+      <rect width="350" height="260" rx="8" fill="#FFFFFF" stroke="#E0E4E8" stroke-width="1.5"/>
+
+      <!-- Header row -->
+      <rect x="0" y="0" width="350" height="44" rx="8" fill="#4285F4"/>
+      <!-- Fix bottom corners of header -->
+      <rect x="0" y="20" width="350" height="24" fill="#4285F4"/>
+
+      <!-- Column headers -->
+      <text x="18" y="28" font-family="Roboto, Arial, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF">Question</text>
+      <text x="120" y="28" font-family="Roboto, Arial, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF">Expected</text>
+      <text x="222" y="28" font-family="Roboto, Arial, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF">Source</text>
+      <text x="300" y="28" font-family="Roboto, Arial, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF">Tags</text>
+
+      <!-- Column dividers -->
+      <line x1="110" y1="0" x2="110" y2="260" stroke="#E0E4E8" stroke-width="0.8"/>
+      <line x1="213" y1="0" x2="213" y2="260" stroke="#E0E4E8" stroke-width="0.8"/>
+      <line x1="290" y1="0" x2="290" y2="260" stroke="#E0E4E8" stroke-width="0.8"/>
+
+      <!-- Row 1 (white) -->
+      <rect x="1" y="44" width="348" height="43" fill="#FFFFFF"/>
+      <text x="10" y="70" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1A4565">What drug targets...</text>
+      <text x="120" y="70" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1A4565">EGFR, HER2</text>
+      <text x="222" y="70" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1A4565">PubMed</text>
+      <text x="300" y="70" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1A4565">onco</text>
+
+      <!-- Row 2 (highlighted) -->
+      <rect x="1" y="87" width="348" height="43" fill="#EBF2FF"/>
+      <rect x="0" y="87" width="4" height="43" rx="2" fill="#4285F4"/>
+      <text x="10" y="113" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1A4565">Mechanism of...</text>
+      <text x="120" y="113" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1A4565">Competitive inh.</text>
+      <text x="222" y="113" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1A4565">DrugBank</text>
+      <text x="300" y="113" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1A4565">pharma</text>
+
+      <!-- Row 3 (white) -->
+      <rect x="1" y="130" width="348" height="43" fill="#FFFFFF"/>
+      <text x="10" y="156" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1A4565">Side effects of...</text>
+      <text x="120" y="156" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1A4565">Nausea, fatigue</text>
+      <text x="222" y="156" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1A4565">FDA label</text>
+      <text x="300" y="156" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1A4565">safety</text>
+
+      <!-- Row 4 (alt) -->
+      <rect x="1" y="173" width="348" height="43" fill="#F9FAFB"/>
+      <text x="10" y="199" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1A4565">Gene expression...</text>
+      <text x="120" y="199" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1A4565">TP53, BRCA1</text>
+      <text x="222" y="199" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1A4565">GEO</text>
+      <text x="300" y="199" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1A4565">genomics</text>
+
+      <!-- Row 5 (white) -->
+      <rect x="1" y="216" width="348" height="43" fill="#FFFFFF"/>
+      <text x="10" y="242" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1A4565">Clinical trials for...</text>
+      <text x="120" y="242" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1A4565">Phase III results</text>
+      <text x="222" y="242" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1A4565">ClinicalTrials</text>
+      <text x="300" y="242" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#1A4565">trials</text>
+    </g>
+
+    <!-- Step label -->
+    <text x="210" y="340" font-family="Roboto, Arial, sans-serif" font-size="24" font-weight="bold" fill="#1A4565" text-anchor="middle">Spreadsheet</text>
+    <text x="210" y="370" font-family="Roboto, Arial, sans-serif" font-size="18" fill="#78909C" text-anchor="middle">Questions + expected answers</text>
+
+    <!-- Step number badge -->
+    <circle cx="38" cy="38" r="22" fill="#4285F4"/>
+    <text x="38" y="45" font-family="Trebuchet MS, Arial, sans-serif" font-size="20" font-weight="bold" fill="#FFFFFF" text-anchor="middle">1</text>
+  </g>
+
+  <!-- ARROW 1 -->
+  <g transform="translate(545, 390)">
+    <line x1="0" y1="0" x2="140" y2="0" stroke="#4285F4" stroke-width="3" marker-end="url(#arrowTip17)" opacity="0.7"/>
+    <text x="70" y="-18" font-family="Roboto, Arial, sans-serif" font-size="15" fill="#78909C" font-style="italic" text-anchor="middle">LLM generates</text>
+    <!-- Sparkle -->
+    <g transform="translate(70, -40)">
+      <polygon points="0,-10 3,-3 10,0 3,3 0,10 -3,3 -10,0 -3,-3" fill="#FFAB40"/>
+      <polygon points="0,-6 1.5,-1.5 6,0 1.5,1.5 0,6 -1.5,1.5 -6,0 -1.5,-1.5" fill="#FFAB40" transform="translate(14,-8) scale(0.5)"/>
+    </g>
+  </g>
+
+  <!-- ==================== STEP 2: Auto-Generate ==================== -->
+  <g transform="translate(710, 160)">
+    <rect width="420" height="520" rx="16" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1.5" filter="url(#shadow17)"/>
+
+    <!-- Generation illustration -->
+    <g transform="translate(35, 30)">
+      <rect width="350" height="260" rx="8" fill="#FFFFFF" stroke="#E0E4E8" stroke-width="1"/>
+
+      <!-- Central gear/sparkle -->
+      <g transform="translate(175, 100)">
+        <!-- Outer gear ring -->
+        <circle cx="0" cy="0" r="40" fill="none" stroke="#4285F4" stroke-width="3" opacity="0.25"/>
+        <circle cx="0" cy="0" r="28" fill="#4285F4" opacity="0.08"/>
+        <!-- Gear teeth -->
+        <rect x="-5" y="-46" width="10" height="14" rx="3" fill="#4285F4" opacity="0.4"/>
+        <rect x="-5" y="32" width="10" height="14" rx="3" fill="#4285F4" opacity="0.4"/>
+        <rect x="-46" y="-5" width="14" height="10" rx="3" fill="#4285F4" opacity="0.4"/>
+        <rect x="32" y="-5" width="14" height="10" rx="3" fill="#4285F4" opacity="0.4"/>
+        <!-- Center sparkle -->
+        <polygon points="0,-20 5,-5 20,0 5,5 0,20 -5,5 -20,0 -5,-5" fill="#4285F4"/>
+        <polygon points="0,-12 3,-3 12,0 3,3 0,12 -3,3 -12,0 -3,-3" fill="#FFFFFF" opacity="0.5"/>
+        <!-- Small sparkles -->
+        <polygon points="0,-6 1.5,-1.5 6,0 1.5,1.5 0,6 -1.5,1.5 -6,0 -1.5,-1.5" fill="#FFAB40" transform="translate(50,-35)"/>
+        <polygon points="0,-5 1.2,-1.2 5,0 1.2,1.2 0,5 -1.2,1.2 -5,0 -1.2,-1.2" fill="#FFAB40" transform="translate(-45,40)"/>
+        <polygon points="0,-4 1,-1 4,0 1,1 0,4 -1,1 -4,0 -1,-1" fill="#FFAB40" transform="translate(40,45)"/>
+      </g>
+
+      <!-- Output cards fanning out -->
+      <!-- Template card -->
+      <g transform="translate(30, 170) rotate(-8)">
+        <rect width="85" height="55" rx="6" fill="#FFFFFF" stroke="#4285F4" stroke-width="1.5"/>
+        <rect x="10" y="8" width="40" height="3" rx="1.5" fill="#4285F4" opacity="0.5"/>
+        <rect x="10" y="16" width="60" height="2" rx="1" fill="#E0E4E8"/>
+        <rect x="10" y="22" width="50" height="2" rx="1" fill="#E0E4E8"/>
+        <rect x="10" y="28" width="55" height="2" rx="1" fill="#E0E4E8"/>
+        <text x="42" y="46" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#4285F4" text-anchor="middle" font-weight="bold">Template</text>
+      </g>
+      <!-- Rubric card -->
+      <g transform="translate(133, 175)">
+        <rect width="85" height="55" rx="6" fill="#FFFFFF" stroke="#0097A7" stroke-width="1.5"/>
+        <rect x="10" y="8" width="40" height="3" rx="1.5" fill="#0097A7" opacity="0.5"/>
+        <rect x="10" y="16" width="60" height="2" rx="1" fill="#E0E4E8"/>
+        <rect x="10" y="22" width="50" height="2" rx="1" fill="#E0E4E8"/>
+        <rect x="10" y="28" width="55" height="2" rx="1" fill="#E0E4E8"/>
+        <text x="42" y="46" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#0097A7" text-anchor="middle" font-weight="bold">Rubric</text>
+      </g>
+      <!-- Traits card -->
+      <g transform="translate(240, 170) rotate(8)">
+        <rect width="85" height="55" rx="6" fill="#FFFFFF" stroke="#FFAB40" stroke-width="1.5"/>
+        <rect x="10" y="8" width="40" height="3" rx="1.5" fill="#FFAB40" opacity="0.5"/>
+        <rect x="10" y="16" width="60" height="2" rx="1" fill="#E0E4E8"/>
+        <rect x="10" y="22" width="50" height="2" rx="1" fill="#E0E4E8"/>
+        <rect x="10" y="28" width="55" height="2" rx="1" fill="#E0E4E8"/>
+        <text x="42" y="46" font-family="Roboto, Arial, sans-serif" font-size="9" fill="#FFAB40" text-anchor="middle" font-weight="bold">Traits</text>
+      </g>
+
+      <!-- Dotted connector lines from gear to cards -->
+      <line x1="135" y1="130" x2="72" y2="170" stroke="#E0E4E8" stroke-width="1.5" stroke-dasharray="4,3"/>
+      <line x1="175" y1="140" x2="175" y2="175" stroke="#E0E4E8" stroke-width="1.5" stroke-dasharray="4,3"/>
+      <line x1="215" y1="130" x2="282" y2="170" stroke="#E0E4E8" stroke-width="1.5" stroke-dasharray="4,3"/>
+    </g>
+
+    <!-- Step label -->
+    <text x="210" y="340" font-family="Roboto, Arial, sans-serif" font-size="24" font-weight="bold" fill="#1A4565" text-anchor="middle">Auto-Generate</text>
+    <text x="210" y="370" font-family="Roboto, Arial, sans-serif" font-size="18" fill="#78909C" text-anchor="middle">Templates, rubrics, traits</text>
+
+    <!-- Step number badge -->
+    <circle cx="38" cy="38" r="22" fill="#4285F4"/>
+    <text x="38" y="45" font-family="Trebuchet MS, Arial, sans-serif" font-size="20" font-weight="bold" fill="#FFFFFF" text-anchor="middle">2</text>
+  </g>
+
+  <!-- ARROW 2 -->
+  <g transform="translate(1145, 390)">
+    <line x1="0" y1="0" x2="140" y2="0" stroke="#4285F4" stroke-width="3" marker-end="url(#arrowTip17)" opacity="0.7"/>
+  </g>
+
+  <!-- ==================== STEP 3: Benchmark Ready ==================== -->
+  <g transform="translate(1310, 160)">
+    <rect width="420" height="520" rx="16" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1.5" filter="url(#shadow17)"/>
+
+    <!-- Checkpoint file illustration -->
+    <g transform="translate(35, 30)">
+      <rect width="350" height="260" rx="8" fill="#FFFFFF" stroke="#E0E4E8" stroke-width="1"/>
+
+      <!-- Document shape -->
+      <g transform="translate(95, 20)">
+        <rect width="160" height="200" rx="6" fill="#FFFFFF" stroke="#1A4565" stroke-width="1.5"/>
+        <!-- Folded corner -->
+        <path d="M130,0 L160,0 L160,30 Z" fill="#F5F7FA" stroke="#1A4565" stroke-width="1"/>
+        <line x1="130" y1="0" x2="130" y2="30" stroke="#1A4565" stroke-width="1"/>
+        <line x1="130" y1="30" x2="160" y2="30" stroke="#1A4565" stroke-width="1"/>
+
+        <!-- JSON-like content -->
+        <text x="15" y="50" font-family="monospace" font-size="10" fill="#78909C">{</text>
+        <text x="25" y="65" font-family="monospace" font-size="10" fill="#4285F4">"benchmark"</text>
+        <text x="95" y="65" font-family="monospace" font-size="10" fill="#78909C">: {</text>
+        <text x="35" y="80" font-family="monospace" font-size="10" fill="#0097A7">"questions"</text>
+        <text x="103" y="80" font-family="monospace" font-size="10" fill="#78909C">: 42,</text>
+        <text x="35" y="95" font-family="monospace" font-size="10" fill="#0097A7">"templates"</text>
+        <text x="107" y="95" font-family="monospace" font-size="10" fill="#78909C">: 3,</text>
+        <text x="35" y="110" font-family="monospace" font-size="10" fill="#0097A7">"rubrics"</text>
+        <text x="92" y="110" font-family="monospace" font-size="10" fill="#78909C">: 5,</text>
+        <text x="35" y="125" font-family="monospace" font-size="10" fill="#0097A7">"traits"</text>
+        <text x="80" y="125" font-family="monospace" font-size="10" fill="#78909C">: 12</text>
+        <text x="25" y="140" font-family="monospace" font-size="10" fill="#78909C">},</text>
+        <text x="25" y="155" font-family="monospace" font-size="10" fill="#4285F4">"status"</text>
+        <text x="76" y="155" font-family="monospace" font-size="10" fill="#4CAF50">: "ready"</text>
+        <text x="15" y="170" font-family="monospace" font-size="10" fill="#78909C">}</text>
+
+        <!-- Green checkmark badge -->
+        <g transform="translate(140, -10)" filter="url(#glowGreen)">
+          <circle cx="0" cy="0" r="16" fill="#4CAF50"/>
+          <polyline points="-7,0 -2,6 8,-5" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        </g>
+      </g>
+    </g>
+
+    <!-- Step label -->
+    <text x="210" y="340" font-family="Roboto, Arial, sans-serif" font-size="24" font-weight="bold" fill="#1A4565" text-anchor="middle">Benchmark Ready</text>
+    <text x="210" y="370" font-family="Roboto, Arial, sans-serif" font-size="18" fill="#78909C" text-anchor="middle">Ready to evaluate</text>
+
+    <!-- Step number badge -->
+    <circle cx="38" cy="38" r="22" fill="#4285F4"/>
+    <text x="38" y="45" font-family="Trebuchet MS, Arial, sans-serif" font-size="20" font-weight="bold" fill="#FFFFFF" text-anchor="middle">3</text>
+  </g>
+
+  <!-- ==================== BOTTOM TAGLINE ==================== -->
+  <text x="960" y="790" font-family="Trebuchet MS, Arial, sans-serif" font-size="32" font-weight="bold" fill="#1A4565" text-anchor="middle">Minutes, not weeks.</text>
+  <text x="960" y="828" font-family="Roboto, Arial, sans-serif" font-size="22" fill="#78909C" text-anchor="middle">Domain experts provide the knowledge. Karenina handles the infrastructure.</text>
+
+  <!-- Bottom accent bar -->
+  <rect x="0" y="1074" width="1920" height="6" fill="#4285F4"/>
+</svg>

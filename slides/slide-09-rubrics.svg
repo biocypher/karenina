@@ -1,0 +1,255 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080">
+  <defs>
+    <filter id="cardShadow" x="-3%" y="-3%" width="106%" height="110%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#1A4565" flood-opacity="0.12"/>
+    </filter>
+    <filter id="softShadow" x="-2%" y="-2%" width="104%" height="108%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#1A4565" flood-opacity="0.08"/>
+    </filter>
+    <filter id="responseGlow" x="-1%" y="-5%" width="102%" height="115%">
+      <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#4285F4" flood-opacity="0.10"/>
+    </filter>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#FAFBFD"/>
+    </linearGradient>
+    <linearGradient id="llmHeader" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#4285F4"/>
+      <stop offset="100%" stop-color="#5C9CFF"/>
+    </linearGradient>
+    <linearGradient id="regexHeader" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0097A7"/>
+      <stop offset="100%" stop-color="#00BCD4"/>
+    </linearGradient>
+    <linearGradient id="callableHeader" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#607D8B"/>
+      <stop offset="100%" stop-color="#78909C"/>
+    </linearGradient>
+    <linearGradient id="metricHeader" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#FFAB40"/>
+      <stop offset="100%" stop-color="#FFC170"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1920" height="1080" fill="url(#bgGrad)"/>
+
+  <!-- Bottom accent bar -->
+  <rect x="0" y="1074" width="1920" height="6" fill="#4285F4"/>
+
+  <!-- Title -->
+  <text x="100" y="80" font-family="Trebuchet MS, Arial, sans-serif" font-size="44" font-weight="bold" fill="#1A4565">Rubric Traits</text>
+  <!-- Blue underline -->
+  <rect x="100" y="94" width="220" height="4" rx="2" fill="#4285F4"/>
+
+  <!-- ==================== CONTENT GROUP (shifted down for centering) ==================== -->
+  <g transform="translate(0,80)">
+
+  <!-- ==================== RESPONSE SOURCE CARD ==================== -->
+  <g filter="url(#responseGlow)">
+    <rect x="260" y="130" width="1400" height="100" rx="14" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1.5"/>
+  </g>
+  <!-- Label -->
+  <text x="290" y="160" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#78909C" letter-spacing="1">RAW RESPONSE</text>
+  <!-- Response text -->
+  <text x="290" y="198" font-family="Roboto, Arial, sans-serif" font-size="20" fill="#1A4565">BCL2 is overexpressed in CLL, making it a validated target for venetoclax, which induces apoptosis...</text>
+  <!-- Truncation indicator -->
+  <rect x="1580" y="170" width="60" height="30" rx="8" fill="#E0E4E8" opacity="0.5"/>
+  <text x="1610" y="190" font-family="Roboto, Arial, sans-serif" font-size="16" fill="#78909C" text-anchor="middle">...</text>
+
+  <!-- ==================== CURVED ARROWS FROM RESPONSE ==================== -->
+  <!-- Arrow 1: to LLM card -->
+  <path d="M 500,230 C 500,290 280,290 280,360" stroke="#E0E4E8" stroke-width="2" fill="none" marker-end="url(#arrowHead)"/>
+  <!-- Arrow 2: to Regex card -->
+  <path d="M 760,230 C 760,290 690,290 690,360" stroke="#E0E4E8" stroke-width="2" fill="none" marker-end="url(#arrowHead)"/>
+  <!-- Arrow 3: to Callable card -->
+  <path d="M 1100,230 C 1100,290 1100,290 1100,360" stroke="#E0E4E8" stroke-width="2" fill="none" marker-end="url(#arrowHead)"/>
+  <!-- Arrow 4: to Metric card -->
+  <path d="M 1380,230 C 1380,290 1510,290 1510,360" stroke="#E0E4E8" stroke-width="2" fill="none" marker-end="url(#arrowHead)"/>
+  <defs>
+    <marker id="arrowHead" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 Z" fill="#E0E4E8"/>
+    </marker>
+  </defs>
+
+  <!-- ==================== CARD 1: LLM TRAIT (x=90) ==================== -->
+  <g filter="url(#cardShadow)">
+    <rect x="90" y="360" width="380" height="520" rx="16" fill="#FFFFFF" stroke="#E0E4E8" stroke-width="1"/>
+  </g>
+  <!-- Header strip -->
+  <rect x="90" y="360" width="380" height="56" rx="16" fill="url(#llmHeader)"/>
+  <rect x="90" y="392" width="380" height="24" fill="url(#llmHeader)"/>
+  <!-- Brain icon -->
+  <g transform="translate(118,372)">
+    <circle cx="16" cy="16" r="14" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+    <path d="M16,4 C16,4 16,28 16,28" stroke="#FFFFFF" stroke-width="1.5" fill="none"/>
+    <path d="M10,8 C6,12 6,20 10,24" stroke="#FFFFFF" stroke-width="1.5" fill="none"/>
+    <path d="M22,8 C26,12 26,20 22,24" stroke="#FFFFFF" stroke-width="1.5" fill="none"/>
+    <path d="M12,10 C9,14 9,18 12,22" stroke="#FFFFFF" stroke-width="1" fill="none" opacity="0.7"/>
+    <path d="M20,10 C23,14 23,18 20,22" stroke="#FFFFFF" stroke-width="1" fill="none" opacity="0.7"/>
+  </g>
+  <text x="160" y="396" font-family="Roboto, Arial, sans-serif" font-size="22" font-weight="bold" fill="#FFFFFF">LLM Trait</text>
+  <!-- Body -->
+  <!-- Description card -->
+  <rect x="110" y="440" width="340" height="90" rx="8" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1"/>
+  <text x="130" y="468" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#78909C" letter-spacing="0.5">DESCRIPTION</text>
+  <text x="130" y="498" font-family="Roboto, Arial, sans-serif" font-size="18" fill="#1A4565">Is the reasoning clear and</text>
+  <text x="130" y="520" font-family="Roboto, Arial, sans-serif" font-size="18" fill="#1A4565">logically structured?</text>
+  <!-- How it works -->
+  <text x="130" y="570" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#78909C" letter-spacing="0.5">HOW IT WORKS</text>
+  <text x="130" y="596" font-family="Roboto, Arial, sans-serif" font-size="17" fill="#1A4565">Judge LLM evaluates the</text>
+  <text x="130" y="618" font-family="Roboto, Arial, sans-serif" font-size="17" fill="#1A4565">response against the description</text>
+  <!-- Output section -->
+  <text x="130" y="670" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#78909C" letter-spacing="0.5">RETURNS</text>
+  <rect x="130" y="682" width="120" height="30" rx="15" fill="#4285F4" fill-opacity="0.10"/>
+  <text x="190" y="702" font-family="Roboto, Arial, sans-serif" font-size="15" fill="#4285F4" font-weight="bold" text-anchor="middle">bool / score</text>
+  <!-- Bottom tag -->
+  <rect x="110" y="830" width="340" height="36" rx="18" fill="#FFAB40" fill-opacity="0.15"/>
+  <text x="280" y="854" font-family="Roboto, Arial, sans-serif" font-size="15" fill="#FFAB40" font-weight="bold" text-anchor="middle">Requires LLM call</text>
+  <!-- Small decorative brain -->
+  <g transform="translate(390,800)" opacity="0.08">
+    <circle cx="30" cy="30" r="28" fill="#4285F4"/>
+    <path d="M30,6 L30,54" stroke="#FFFFFF" stroke-width="2"/>
+    <path d="M18,12 C10,22 10,38 18,48" stroke="#FFFFFF" stroke-width="2" fill="none"/>
+    <path d="M42,12 C50,22 50,38 42,48" stroke="#FFFFFF" stroke-width="2" fill="none"/>
+  </g>
+
+  <!-- ==================== CARD 2: REGEX TRAIT (x=500) ==================== -->
+  <g filter="url(#cardShadow)">
+    <rect x="500" y="360" width="380" height="520" rx="16" fill="#FFFFFF" stroke="#E0E4E8" stroke-width="1"/>
+  </g>
+  <!-- Header strip -->
+  <rect x="500" y="360" width="380" height="56" rx="16" fill="url(#regexHeader)"/>
+  <rect x="500" y="392" width="380" height="24" fill="url(#regexHeader)"/>
+  <!-- Pattern icon /.*/ -->
+  <g transform="translate(528,372)">
+    <text font-family="monospace" font-size="26" fill="#FFFFFF" font-weight="bold">/</text>
+    <circle cx="16" cy="12" r="3" fill="#FFFFFF" opacity="0.7"/>
+    <text x="20" font-family="monospace" font-size="18" fill="#FFFFFF" opacity="0.8">.*</text>
+    <text x="38" font-family="monospace" font-size="26" fill="#FFFFFF" font-weight="bold">/</text>
+  </g>
+  <text x="590" y="396" font-family="Roboto, Arial, sans-serif" font-size="22" font-weight="bold" fill="#FFFFFF">Regex Trait</text>
+  <!-- Body -->
+  <!-- Code-style description card -->
+  <rect x="520" y="440" width="340" height="70" rx="8" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1"/>
+  <text x="540" y="465" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#78909C" letter-spacing="0.5">PATTERN</text>
+  <text x="540" y="497" font-family="'Courier New', monospace" font-size="19" fill="#1A4565" font-weight="bold">PMID:\d+</text>
+  <!-- Question -->
+  <rect x="520" y="530" width="340" height="60" rx="8" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1"/>
+  <text x="540" y="555" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#78909C" letter-spacing="0.5">CHECKS</text>
+  <text x="540" y="580" font-family="Roboto, Arial, sans-serif" font-size="18" fill="#1A4565">Has citations?</text>
+  <!-- How it works -->
+  <text x="540" y="630" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#78909C" letter-spacing="0.5">HOW IT WORKS</text>
+  <text x="540" y="656" font-family="Roboto, Arial, sans-serif" font-size="17" fill="#1A4565">Runs regex pattern against</text>
+  <text x="540" y="678" font-family="Roboto, Arial, sans-serif" font-size="17" fill="#1A4565">the response text</text>
+  <!-- Returns -->
+  <text x="540" y="718" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#78909C" letter-spacing="0.5">RETURNS</text>
+  <rect x="540" y="730" width="70" height="30" rx="15" fill="#0097A7" fill-opacity="0.10"/>
+  <text x="575" y="750" font-family="Roboto, Arial, sans-serif" font-size="15" fill="#0097A7" font-weight="bold" text-anchor="middle">bool</text>
+  <!-- Bottom tag -->
+  <rect x="520" y="830" width="340" height="36" rx="18" fill="#4CAF50" fill-opacity="0.15"/>
+  <text x="690" y="854" font-family="Roboto, Arial, sans-serif" font-size="15" fill="#4CAF50" font-weight="bold" text-anchor="middle">No LLM needed</text>
+
+  <!-- ==================== CARD 3: CALLABLE TRAIT (x=910) ==================== -->
+  <g filter="url(#cardShadow)">
+    <rect x="910" y="360" width="380" height="520" rx="16" fill="#FFFFFF" stroke="#E0E4E8" stroke-width="1"/>
+  </g>
+  <!-- Header strip -->
+  <rect x="910" y="360" width="380" height="56" rx="16" fill="url(#callableHeader)"/>
+  <rect x="910" y="392" width="380" height="24" fill="url(#callableHeader)"/>
+  <!-- Gear/cog icon -->
+  <g transform="translate(940,374)">
+    <circle cx="16" cy="16" r="8" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+    <circle cx="16" cy="16" r="3.5" fill="#FFFFFF"/>
+    <!-- Gear teeth -->
+    <rect x="13" y="0" width="6" height="6" rx="1" fill="#FFFFFF"/>
+    <rect x="13" y="26" width="6" height="6" rx="1" fill="#FFFFFF"/>
+    <rect x="0" y="13" width="6" height="6" rx="1" fill="#FFFFFF"/>
+    <rect x="26" y="13" width="6" height="6" rx="1" fill="#FFFFFF"/>
+    <rect x="4" y="4" width="5" height="5" rx="1" fill="#FFFFFF" transform="rotate(0,6.5,6.5)"/>
+    <rect x="23" y="4" width="5" height="5" rx="1" fill="#FFFFFF"/>
+    <rect x="4" y="23" width="5" height="5" rx="1" fill="#FFFFFF"/>
+    <rect x="23" y="23" width="5" height="5" rx="1" fill="#FFFFFF"/>
+  </g>
+  <text x="988" y="396" font-family="Roboto, Arial, sans-serif" font-size="22" font-weight="bold" fill="#FFFFFF">Callable Trait</text>
+  <!-- Body -->
+  <!-- Code card -->
+  <rect x="930" y="440" width="340" height="70" rx="8" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1"/>
+  <text x="950" y="465" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#78909C" letter-spacing="0.5">FUNCTION</text>
+  <text x="950" y="497" font-family="'Courier New', monospace" font-size="19" fill="#1A4565" font-weight="bold">len(response) &lt; 150</text>
+  <!-- Question -->
+  <rect x="930" y="530" width="340" height="60" rx="8" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1"/>
+  <text x="950" y="555" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#78909C" letter-spacing="0.5">CHECKS</text>
+  <text x="950" y="580" font-family="Roboto, Arial, sans-serif" font-size="18" fill="#1A4565">Under 150 words?</text>
+  <!-- How it works -->
+  <text x="950" y="630" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#78909C" letter-spacing="0.5">HOW IT WORKS</text>
+  <text x="950" y="656" font-family="Roboto, Arial, sans-serif" font-size="17" fill="#1A4565">Runs a Python function</text>
+  <text x="950" y="678" font-family="Roboto, Arial, sans-serif" font-size="17" fill="#1A4565">against the response</text>
+  <!-- Returns -->
+  <text x="950" y="718" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#78909C" letter-spacing="0.5">RETURNS</text>
+  <rect x="950" y="730" width="70" height="30" rx="15" fill="#78909C" fill-opacity="0.10"/>
+  <text x="985" y="750" font-family="Roboto, Arial, sans-serif" font-size="15" fill="#78909C" font-weight="bold" text-anchor="middle">bool</text>
+  <!-- Bottom tag -->
+  <rect x="930" y="830" width="340" height="36" rx="18" fill="#4CAF50" fill-opacity="0.15"/>
+  <text x="1100" y="854" font-family="Roboto, Arial, sans-serif" font-size="15" fill="#4CAF50" font-weight="bold" text-anchor="middle">No LLM needed</text>
+
+  <!-- ==================== CARD 4: METRIC TRAIT (x=1320) ==================== -->
+  <g filter="url(#cardShadow)">
+    <rect x="1320" y="360" width="380" height="520" rx="16" fill="#FFFFFF" stroke="#E0E4E8" stroke-width="1"/>
+  </g>
+  <!-- Header strip -->
+  <rect x="1320" y="360" width="380" height="56" rx="16" fill="url(#metricHeader)"/>
+  <rect x="1320" y="392" width="380" height="24" fill="url(#metricHeader)"/>
+  <!-- Bar chart icon -->
+  <g transform="translate(1348,370)">
+    <rect x="2" y="18" width="8" height="14" rx="1.5" fill="#FFFFFF" opacity="0.8"/>
+    <rect x="13" y="8" width="8" height="24" rx="1.5" fill="#FFFFFF"/>
+    <rect x="24" y="13" width="8" height="19" rx="1.5" fill="#FFFFFF" opacity="0.9"/>
+  </g>
+  <text x="1396" y="396" font-family="Roboto, Arial, sans-serif" font-size="22" font-weight="bold" fill="#FFFFFF">Metric Trait</text>
+  <!-- Body -->
+  <!-- Mini chart visual -->
+  <rect x="1340" y="440" width="340" height="120" rx="8" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1"/>
+  <text x="1360" y="465" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#78909C" letter-spacing="0.5">VISUALIZATION</text>
+  <!-- Bar chart -->
+  <g transform="translate(1380,475)">
+    <!-- Axis -->
+    <line x1="0" y1="70" x2="260" y2="70" stroke="#E0E4E8" stroke-width="1"/>
+    <!-- Bars -->
+    <rect x="20" y="15" width="50" height="55" rx="4" fill="#4285F4" opacity="0.8"/>
+    <rect x="90" y="5" width="50" height="65" rx="4" fill="#0097A7" opacity="0.8"/>
+    <rect x="160" y="25" width="50" height="45" rx="4" fill="#FFAB40" opacity="0.8"/>
+    <!-- Labels -->
+    <text x="45" y="85" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#78909C" text-anchor="middle">Precision</text>
+    <text x="115" y="85" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#78909C" text-anchor="middle">Recall</text>
+    <text x="185" y="85" font-family="Roboto, Arial, sans-serif" font-size="12" fill="#78909C" text-anchor="middle">F1</text>
+    <!-- Values -->
+    <text x="45" y="10" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#4285F4" text-anchor="middle" font-weight="bold">0.85</text>
+    <text x="115" y="0" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#0097A7" text-anchor="middle" font-weight="bold">0.92</text>
+    <text x="185" y="20" font-family="Roboto, Arial, sans-serif" font-size="11" fill="#FFAB40" text-anchor="middle" font-weight="bold">0.78</text>
+  </g>
+  <!-- Description -->
+  <text x="1360" y="600" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#78909C" letter-spacing="0.5">COMPUTES</text>
+  <text x="1360" y="626" font-family="Roboto, Arial, sans-serif" font-size="18" fill="#1A4565">Precision / Recall / F1</text>
+  <!-- How it works -->
+  <text x="1360" y="670" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#78909C" letter-spacing="0.5">HOW IT WORKS</text>
+  <text x="1360" y="696" font-family="Roboto, Arial, sans-serif" font-size="17" fill="#1A4565">Compares parsed output</text>
+  <text x="1360" y="718" font-family="Roboto, Arial, sans-serif" font-size="17" fill="#1A4565">against reference data</text>
+  <!-- Returns -->
+  <text x="1360" y="758" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#78909C" letter-spacing="0.5">RETURNS</text>
+  <rect x="1360" y="770" width="130" height="30" rx="15" fill="#FFAB40" fill-opacity="0.10"/>
+  <text x="1425" y="790" font-family="Roboto, Arial, sans-serif" font-size="15" fill="#FFAB40" font-weight="bold" text-anchor="middle">metrics dict</text>
+  <!-- Bottom tag -->
+  <rect x="1340" y="830" width="340" height="36" rx="18" fill="#4CAF50" fill-opacity="0.15"/>
+  <text x="1510" y="854" font-family="Roboto, Arial, sans-serif" font-size="15" fill="#4CAF50" font-weight="bold" text-anchor="middle">No LLM needed</text>
+
+  </g><!-- end content group -->
+
+  <!-- ==================== SUBTLE DECORATIONS ==================== -->
+  <!-- Top-right decorative circles -->
+  <circle cx="1840" cy="60" r="40" fill="#4285F4" opacity="0.04"/>
+  <circle cx="1870" cy="90" r="25" fill="#0097A7" opacity="0.04"/>
+
+  <!-- Slide number -->
+  <text x="1860" y="1060" font-family="Roboto, Arial, sans-serif" font-size="16" fill="#78909C" text-anchor="end">09</text>
+</svg>

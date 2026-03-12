@@ -1,0 +1,196 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080">
+  <defs>
+    <style>
+      .title-font { font-family: "Trebuchet MS", Arial, sans-serif; }
+      .body-font { font-family: Roboto, Arial, sans-serif; }
+    </style>
+
+    <!-- Card shadow -->
+    <filter id="cardShadow" x="-5%" y="-5%" width="110%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="10" flood-color="#1A4565" flood-opacity="0.10"/>
+    </filter>
+
+    <!-- Arrow track background gradient -->
+    <linearGradient id="arrowTrackGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#E0E4E8"/>
+      <stop offset="100%" stop-color="#F5F7FA"/>
+    </linearGradient>
+
+    <!-- Arrow marker (blue) -->
+    <marker id="arrowBlue" markerWidth="12" markerHeight="10" refX="6" refY="10" orient="auto">
+      <path d="M0,0 L6,10 L12,0" fill="#4285F4"/>
+    </marker>
+  </defs>
+
+  <!-- White background -->
+  <rect width="1920" height="1080" fill="#FFFFFF"/>
+
+  <!-- Bottom accent bar -->
+  <rect x="0" y="1074" width="1920" height="6" fill="#4285F4"/>
+
+  <!-- Title -->
+  <text x="100" y="80" fill="#1A4565" font-size="44" font-weight="bold" class="title-font">The Ecosystem</text>
+  <!-- Blue underline -->
+  <rect x="100" y="94" width="200" height="4" rx="2" fill="#4285F4"/>
+
+  <!-- ==================== TOP LAYER: karenina-gui ==================== -->
+  <g filter="url(#cardShadow)">
+    <rect x="280" y="260" width="700" height="170" rx="16" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1.5"/>
+  </g>
+  <!-- Teal top border -->
+  <rect x="280" y="260" width="700" height="6" rx="3" fill="#0097A7"/>
+
+  <!-- React logo icon -->
+  <g transform="translate(340, 360)">
+    <ellipse cx="0" cy="0" rx="26" ry="10" fill="none" stroke="#0097A7" stroke-width="1.8" opacity="0.7"/>
+    <ellipse cx="0" cy="0" rx="26" ry="10" fill="none" stroke="#0097A7" stroke-width="1.8" opacity="0.7" transform="rotate(60)"/>
+    <ellipse cx="0" cy="0" rx="26" ry="10" fill="none" stroke="#0097A7" stroke-width="1.8" opacity="0.7" transform="rotate(120)"/>
+    <circle cx="0" cy="0" r="4" fill="#0097A7" opacity="0.8"/>
+  </g>
+
+  <text x="390" y="342" fill="#1A4565" font-size="28" font-weight="bold" class="title-font">karenina-gui</text>
+  <text x="390" y="374" fill="#78909C" font-size="20" class="body-font">React web interface</text>
+
+  <!-- Browser window icon (right side) -->
+  <g transform="translate(890, 328)">
+    <rect x="0" y="0" width="50" height="38" rx="4" fill="none" stroke="#0097A7" stroke-width="1.5" opacity="0.5"/>
+    <line x1="0" y1="10" x2="50" y2="10" stroke="#0097A7" stroke-width="1" opacity="0.4"/>
+    <circle cx="8" cy="5" r="2" fill="#0097A7" opacity="0.3"/>
+    <circle cx="16" cy="5" r="2" fill="#0097A7" opacity="0.3"/>
+    <circle cx="24" cy="5" r="2" fill="#0097A7" opacity="0.3"/>
+  </g>
+
+  <!-- ==================== ARROW: GUI -> Server ==================== -->
+  <g>
+    <!-- Arrow track (wide background bar) -->
+    <rect x="618" y="436" width="24" height="70" rx="12" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1"/>
+    <!-- Arrow itself -->
+    <path d="M630,442 L630,496" stroke="#4285F4" stroke-width="3" fill="none"/>
+    <polygon points="622,492 630,506 638,492" fill="#4285F4"/>
+    <!-- Label -->
+    <rect x="654" y="454" width="158" height="28" rx="14" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1"/>
+    <text x="733" y="474" fill="#78909C" font-size="14" text-anchor="middle" class="body-font">REST / WebSocket</text>
+  </g>
+
+  <!-- ==================== MIDDLE LAYER: karenina-server ==================== -->
+  <g filter="url(#cardShadow)">
+    <rect x="280" y="510" width="700" height="170" rx="16" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1.5"/>
+  </g>
+  <!-- Blue top border -->
+  <rect x="280" y="510" width="700" height="6" rx="3" fill="#4285F4"/>
+
+  <!-- Lightning bolt icon -->
+  <g transform="translate(340, 610)">
+    <path d="M-2,-20 L-10,2 L2,-2 L-2,20 L10,-2 L-2,2 Z" fill="#4285F4" opacity="0.7"/>
+  </g>
+
+  <text x="390" y="592" fill="#1A4565" font-size="28" font-weight="bold" class="title-font">karenina-server</text>
+  <text x="390" y="624" fill="#78909C" font-size="20" class="body-font">FastAPI REST API</text>
+
+  <!-- API endpoint icon (right side) -->
+  <g transform="translate(890, 578)">
+    <rect x="0" y="0" width="50" height="38" rx="4" fill="none" stroke="#4285F4" stroke-width="1.5" opacity="0.5"/>
+    <text x="25" y="26" fill="#4285F4" font-size="14" text-anchor="middle" opacity="0.5" class="body-font">API</text>
+  </g>
+
+  <!-- ==================== ARROW: Server -> Library ==================== -->
+  <g>
+    <!-- Arrow track -->
+    <rect x="618" y="686" width="24" height="70" rx="12" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1"/>
+    <!-- Arrow -->
+    <path d="M630,692 L630,746" stroke="#4285F4" stroke-width="3" fill="none"/>
+    <polygon points="622,742 630,756 638,742" fill="#4285F4"/>
+    <!-- Label -->
+    <rect x="654" y="704" width="90" height="28" rx="14" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1"/>
+    <text x="699" y="724" fill="#78909C" font-size="14" text-anchor="middle" class="body-font">imports</text>
+  </g>
+
+  <!-- ==================== BOTTOM LAYER: karenina ==================== -->
+  <g filter="url(#cardShadow)">
+    <rect x="280" y="760" width="700" height="170" rx="16" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1.5"/>
+  </g>
+  <!-- Amber top border -->
+  <rect x="280" y="760" width="700" height="6" rx="3" fill="#FFAB40"/>
+
+  <!-- Python logo icon (two interlocking curves) -->
+  <g transform="translate(340, 856)">
+    <path d="M-10,-14 C-10,-22 2,-22 2,-14 L2,-4 C2,4 14,4 14,-4 L14,-14"
+          fill="none" stroke="#FFAB40" stroke-width="2" opacity="0.7"/>
+    <path d="M14,14 C14,22 2,22 2,14 L2,4 C2,-4 -10,-4 -10,4 L-10,14"
+          fill="none" stroke="#FFAB40" stroke-width="2" opacity="0.7"/>
+    <circle cx="-4" cy="-14" r="2.5" fill="#FFAB40" opacity="0.7"/>
+    <circle cx="8" cy="14" r="2.5" fill="#FFAB40" opacity="0.7"/>
+  </g>
+
+  <text x="390" y="842" fill="#1A4565" font-size="28" font-weight="bold" class="title-font">karenina</text>
+  <text x="390" y="874" fill="#78909C" font-size="20" class="body-font">Python library</text>
+
+  <!-- Package icon (right side) -->
+  <g transform="translate(890, 828)">
+    <rect x="0" y="6" width="44" height="30" rx="3" fill="none" stroke="#FFAB40" stroke-width="1.5" opacity="0.5"/>
+    <path d="M0,6 L22,-4 L44,6" fill="none" stroke="#FFAB40" stroke-width="1.5" opacity="0.5"/>
+    <line x1="22" y1="-4" x2="22" y2="36" stroke="#FFAB40" stroke-width="1" opacity="0.35"/>
+  </g>
+
+  <!-- ==================== RIGHT SIDE ANNOTATIONS ==================== -->
+
+  <!-- Domain experts (aligned with top layer) -->
+  <g>
+    <!-- Curved arrow pointing to top layer -->
+    <path d="M1180,340 C1120,340 1030,345 1000,345"
+          fill="none" stroke="#0097A7" stroke-width="2" stroke-dasharray="6,4" opacity="0.5"/>
+    <polygon points="1004,340 992,345 1004,350" fill="#0097A7" opacity="0.5"/>
+
+    <!-- Person icon (simple bust shape) -->
+    <g transform="translate(1210, 320)">
+      <circle cx="0" cy="0" r="16" fill="none" stroke="#0097A7" stroke-width="2"/>
+      <path d="M-22,46 C-22,26 -12,18 0,18 C12,18 22,26 22,46" fill="none" stroke="#0097A7" stroke-width="2"/>
+    </g>
+
+    <text x="1250" y="328" fill="#1A4565" font-size="22" font-weight="bold" class="body-font">Domain experts</text>
+    <text x="1250" y="358" fill="#0097A7" font-size="20" class="body-font">use the GUI</text>
+  </g>
+
+  <!-- Subtle vertical connector between annotations -->
+  <line x1="1210" y1="390" x2="1210" y2="820" stroke="#E0E4E8" stroke-width="1" stroke-dasharray="4,8" opacity="0.4"/>
+
+  <!-- Developers (aligned with bottom layer) -->
+  <g>
+    <!-- Curved arrow pointing to bottom layer -->
+    <path d="M1180,845 C1120,845 1030,845 1000,845"
+          fill="none" stroke="#FFAB40" stroke-width="2" stroke-dasharray="6,4" opacity="0.5"/>
+    <polygon points="1004,840 992,845 1004,850" fill="#FFAB40" opacity="0.5"/>
+
+    <!-- Code brackets icon </> -->
+    <g transform="translate(1210, 828)">
+      <path d="M-14,-12 L-24,0 L-14,12" fill="none" stroke="#FFAB40" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M14,-12 L24,0 L14,12" fill="none" stroke="#FFAB40" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="-4" y1="14" x2="4" y2="-14" stroke="#FFAB40" stroke-width="2" stroke-linecap="round"/>
+    </g>
+
+    <text x="1250" y="832" fill="#1A4565" font-size="22" font-weight="bold" class="body-font">Developers</text>
+    <text x="1250" y="862" fill="#FFAB40" font-size="20" class="body-font">use the library or CLI</text>
+  </g>
+
+  <!-- ==================== DECORATIVE ELEMENTS ==================== -->
+
+  <!-- Subtle dot grid in top-right corner -->
+  <g opacity="0.05">
+    <circle cx="1780" cy="140" r="3" fill="#4285F4"/>
+    <circle cx="1800" cy="140" r="3" fill="#4285F4"/>
+    <circle cx="1820" cy="140" r="3" fill="#4285F4"/>
+    <circle cx="1840" cy="140" r="3" fill="#4285F4"/>
+    <circle cx="1860" cy="140" r="3" fill="#4285F4"/>
+    <circle cx="1780" cy="160" r="3" fill="#4285F4"/>
+    <circle cx="1800" cy="160" r="3" fill="#4285F4"/>
+    <circle cx="1820" cy="160" r="3" fill="#4285F4"/>
+    <circle cx="1840" cy="160" r="3" fill="#4285F4"/>
+    <circle cx="1860" cy="160" r="3" fill="#4285F4"/>
+    <circle cx="1780" cy="180" r="3" fill="#4285F4"/>
+    <circle cx="1800" cy="180" r="3" fill="#4285F4"/>
+    <circle cx="1820" cy="180" r="3" fill="#4285F4"/>
+    <circle cx="1840" cy="180" r="3" fill="#4285F4"/>
+    <circle cx="1860" cy="180" r="3" fill="#4285F4"/>
+  </g>
+
+</svg>

@@ -1,0 +1,238 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080">
+  <defs>
+    <!-- Drop shadow filter -->
+    <filter id="cardShadow" x="-5%" y="-5%" width="115%" height="115%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000000" flood-opacity="0.12"/>
+    </filter>
+    <filter id="softShadow" x="-5%" y="-5%" width="115%" height="115%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000000" flood-opacity="0.08"/>
+    </filter>
+    <!-- Funnel gradient -->
+    <linearGradient id="funnelGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4285F4"/>
+      <stop offset="100%" stop-color="#0097A7"/>
+    </linearGradient>
+    <!-- Shield gradient -->
+    <linearGradient id="shieldGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4CAF50"/>
+      <stop offset="100%" stop-color="#388E3C"/>
+    </linearGradient>
+    <!-- Arrow marker -->
+    <marker id="arrowFilled" markerWidth="16" markerHeight="12" refX="14" refY="6" orient="auto">
+      <path d="M0,0 L16,6 L0,12 Z" fill="#4285F4"/>
+    </marker>
+    <!-- Bubble gradient -->
+    <linearGradient id="bubbleFill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4285F4" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#4285F4" stop-opacity="0.15"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1920" height="1080" fill="#FFFFFF"/>
+
+  <!-- Bottom accent bar -->
+  <rect x="0" y="1074" width="1920" height="6" fill="#4285F4"/>
+
+  <!-- Title -->
+  <text x="100" y="80" font-family="Trebuchet MS, Arial, sans-serif" font-size="44" font-weight="bold" fill="#1A4565">The Karenina Strategy</text>
+  <!-- Blue underline -->
+  <rect x="100" y="94" width="320" height="4" rx="2" fill="#4285F4"/>
+
+  <!-- ============================================ -->
+  <!-- PANEL 1: Answer Naturally                    -->
+  <!-- ============================================ -->
+  <g transform="translate(80, 230)">
+    <!-- Card -->
+    <rect x="0" y="0" width="450" height="550" rx="16" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1.5" filter="url(#cardShadow)"/>
+
+    <!-- Speech bubble illustration -->
+    <g transform="translate(55, 30)">
+      <!-- Bubble body -->
+      <rect x="0" y="0" width="340" height="240" rx="20" fill="url(#bubbleFill)" stroke="#4285F4" stroke-width="2"/>
+      <!-- Bubble tail -->
+      <path d="M50,240 L30,280 L90,240" fill="url(#bubbleFill)" stroke="#4285F4" stroke-width="2" stroke-linejoin="round"/>
+      <!-- Fill the tail interior to match -->
+      <path d="M52,240 L32,278 L88,240 Z" fill="#F5F7FA" fill-opacity="0.5"/>
+
+      <!-- Text lines inside bubble -->
+      <rect x="30" y="35" width="260" height="8" rx="4" fill="#78909C" opacity="0.7"/>
+      <rect x="30" y="58" width="220" height="8" rx="4" fill="#78909C" opacity="0.55"/>
+      <rect x="30" y="81" width="280" height="8" rx="4" fill="#78909C" opacity="0.7"/>
+      <rect x="30" y="104" width="200" height="8" rx="4" fill="#78909C" opacity="0.55"/>
+      <rect x="30" y="127" width="250" height="8" rx="4" fill="#78909C" opacity="0.7"/>
+      <rect x="30" y="150" width="180" height="8" rx="4" fill="#78909C" opacity="0.45"/>
+      <rect x="30" y="173" width="240" height="8" rx="4" fill="#78909C" opacity="0.6"/>
+      <rect x="30" y="196" width="140" height="8" rx="4" fill="#78909C" opacity="0.4"/>
+    </g>
+
+    <!-- Small decorative dots (representing natural language) -->
+    <circle cx="120" cy="330" r="4" fill="#4285F4" opacity="0.3"/>
+    <circle cx="140" cy="330" r="4" fill="#4285F4" opacity="0.5"/>
+    <circle cx="160" cy="330" r="4" fill="#4285F4" opacity="0.7"/>
+
+    <!-- Label -->
+    <text x="225" y="380" font-family="Roboto, Arial, sans-serif" font-size="24" font-weight="bold" fill="#1A4565" text-anchor="middle">Answering Model</text>
+    <text x="225" y="410" font-family="Roboto, Arial, sans-serif" font-size="18" fill="#78909C" text-anchor="middle">Responds in natural language</text>
+
+    <!-- Pill badge -->
+    <rect x="140" y="450" width="170" height="38" rx="19" fill="#4285F4"/>
+    <text x="225" y="475" font-family="Roboto, Arial, sans-serif" font-size="16" font-weight="bold" fill="#FFFFFF" text-anchor="middle">Free text</text>
+  </g>
+
+  <!-- ============================================ -->
+  <!-- ARROW 1                                      -->
+  <!-- ============================================ -->
+  <g>
+    <!-- Thick curved arrow -->
+    <path d="M560,505 C610,505 620,500 670,500" fill="none" stroke="#4285F4" stroke-width="8" marker-end="url(#arrowFilled)" stroke-linecap="round"/>
+    <!-- Second stroke for thickness illusion -->
+    <path d="M560,505 C610,505 620,500 670,500" fill="none" stroke="#4285F4" stroke-width="4" opacity="0.3"/>
+    <!-- Label -->
+    <text x="615" y="540" font-family="Roboto, Arial, sans-serif" font-size="16" font-style="italic" fill="#78909C" text-anchor="middle">raw response</text>
+  </g>
+
+  <!-- ============================================ -->
+  <!-- PANEL 2: Parse with Schema                   -->
+  <!-- ============================================ -->
+  <g transform="translate(710, 230)">
+    <!-- Card -->
+    <rect x="0" y="0" width="450" height="550" rx="16" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1.5" filter="url(#cardShadow)"/>
+
+    <!-- Funnel illustration -->
+    <g transform="translate(55, 25)">
+      <!-- Input text lines (going into funnel top) -->
+      <rect x="40" y="0" width="200" height="6" rx="3" fill="#78909C" opacity="0.4"/>
+      <rect x="60" y="14" width="160" height="6" rx="3" fill="#78909C" opacity="0.35"/>
+      <rect x="30" y="28" width="220" height="6" rx="3" fill="#78909C" opacity="0.45"/>
+      <rect x="50" y="42" width="180" height="6" rx="3" fill="#78909C" opacity="0.4"/>
+
+      <!-- Funnel body (trapezoid) -->
+      <path d="M0,60 L340,60 L260,200 L80,200 Z" fill="url(#funnelGrad)" opacity="0.85"/>
+      <!-- Funnel rim highlight -->
+      <path d="M0,60 L340,60 L330,70 L10,70 Z" fill="#4285F4" opacity="0.3"/>
+      <!-- Funnel interior lines (processing) -->
+      <line x1="60" y1="90" x2="280" y2="90" stroke="#FFFFFF" stroke-width="1" opacity="0.3"/>
+      <line x1="80" y1="120" x2="260" y2="120" stroke="#FFFFFF" stroke-width="1" opacity="0.3"/>
+      <line x1="100" y1="150" x2="240" y2="150" stroke="#FFFFFF" stroke-width="1" opacity="0.3"/>
+      <line x1="110" y1="180" x2="230" y2="180" stroke="#FFFFFF" stroke-width="1" opacity="0.3"/>
+
+      <!-- Funnel spout -->
+      <rect x="130" y="200" width="80" height="30" fill="#0097A7" opacity="0.9"/>
+
+      <!-- Structured blocks coming out bottom -->
+      <rect x="110" y="240" width="120" height="16" rx="3" fill="#0097A7" opacity="0.7"/>
+      <rect x="120" y="262" width="100" height="16" rx="3" fill="#4285F4" opacity="0.6"/>
+      <rect x="115" y="284" width="110" height="16" rx="3" fill="#0097A7" opacity="0.5"/>
+    </g>
+
+    <!-- Decorative dots -->
+    <circle cx="120" cy="345" r="4" fill="#0097A7" opacity="0.3"/>
+    <circle cx="140" cy="345" r="4" fill="#0097A7" opacity="0.5"/>
+    <circle cx="160" cy="345" r="4" fill="#0097A7" opacity="0.7"/>
+
+    <!-- Label -->
+    <text x="225" y="380" font-family="Roboto, Arial, sans-serif" font-size="24" font-weight="bold" fill="#1A4565" text-anchor="middle">Judge LLM</text>
+    <text x="225" y="410" font-family="Roboto, Arial, sans-serif" font-size="18" fill="#78909C" text-anchor="middle">Parses response into schema</text>
+
+    <!-- Pill badge -->
+    <rect x="125" y="450" width="200" height="38" rx="19" fill="#0097A7"/>
+    <text x="225" y="475" font-family="Roboto, Arial, sans-serif" font-size="16" font-weight="bold" fill="#FFFFFF" text-anchor="middle">JSON schema</text>
+  </g>
+
+  <!-- ============================================ -->
+  <!-- ARROW 2                                      -->
+  <!-- ============================================ -->
+  <g>
+    <path d="M1190,505 C1240,505 1250,500 1300,500" fill="none" stroke="#4285F4" stroke-width="8" marker-end="url(#arrowFilled)" stroke-linecap="round"/>
+    <path d="M1190,505 C1240,505 1250,500 1300,500" fill="none" stroke="#4285F4" stroke-width="4" opacity="0.3"/>
+    <text x="1245" y="540" font-family="Roboto, Arial, sans-serif" font-size="16" font-style="italic" fill="#78909C" text-anchor="middle">parsed data</text>
+  </g>
+
+  <!-- ============================================ -->
+  <!-- PANEL 3: Structured Result                   -->
+  <!-- ============================================ -->
+  <g transform="translate(1340, 230)">
+    <!-- Card -->
+    <rect x="0" y="0" width="450" height="550" rx="16" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1.5" filter="url(#cardShadow)"/>
+
+    <!-- Structured data visualization (table/grid) -->
+    <g transform="translate(40, 30)">
+      <!-- Table container -->
+      <rect x="0" y="0" width="370" height="280" rx="12" fill="#FFFFFF" stroke="#E0E4E8" stroke-width="1.5" filter="url(#softShadow)"/>
+
+      <!-- Table header -->
+      <rect x="0" y="0" width="370" height="50" rx="12" fill="#4285F4" opacity="0.1"/>
+      <rect x="0" y="40" width="370" height="10" fill="#4285F4" opacity="0.1"/>
+      <text x="80" y="33" font-family="Roboto, Arial, sans-serif" font-size="16" font-weight="bold" fill="#78909C" text-anchor="middle">Field</text>
+      <text x="230" y="33" font-family="Roboto, Arial, sans-serif" font-size="16" font-weight="bold" fill="#78909C" text-anchor="middle">Value</text>
+      <text x="340" y="33" font-family="Roboto, Arial, sans-serif" font-size="16" font-weight="bold" fill="#78909C" text-anchor="middle">OK</text>
+
+      <!-- Divider below header -->
+      <line x1="0" y1="50" x2="370" y2="50" stroke="#E0E4E8" stroke-width="1.5"/>
+      <!-- Vertical dividers -->
+      <line x1="150" y1="0" x2="150" y2="280" stroke="#E0E4E8" stroke-width="1"/>
+      <line x1="310" y1="0" x2="310" y2="280" stroke="#E0E4E8" stroke-width="1"/>
+
+      <!-- Row 1: target -->
+      <text x="20" y="90" font-family="'Courier New', monospace" font-size="17" fill="#1A4565">target</text>
+      <rect x="160" y="70" width="135" height="30" rx="6" fill="#E8F5E9"/>
+      <text x="228" y="92" font-family="'Courier New', monospace" font-size="17" fill="#2E7D32" text-anchor="middle">BCL2</text>
+      <!-- Checkmark -->
+      <circle cx="340" cy="85" r="14" fill="#4CAF50" opacity="0.15"/>
+      <path d="M330,85 L337,92 L352,77" fill="none" stroke="#4CAF50" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+      <!-- Row divider -->
+      <line x1="10" y1="115" x2="360" y2="115" stroke="#E0E4E8" stroke-width="0.75"/>
+
+      <!-- Row 2: mechanism -->
+      <text x="20" y="155" font-family="'Courier New', monospace" font-size="17" fill="#1A4565">mechanism</text>
+      <rect x="160" y="135" width="135" height="30" rx="6" fill="#E8F5E9"/>
+      <text x="228" y="157" font-family="'Courier New', monospace" font-size="15" fill="#2E7D32" text-anchor="middle">BH3 mimetic</text>
+      <!-- Checkmark -->
+      <circle cx="340" cy="150" r="14" fill="#4CAF50" opacity="0.15"/>
+      <path d="M330,150 L337,157 L352,142" fill="none" stroke="#4CAF50" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+      <!-- Row divider -->
+      <line x1="10" y1="180" x2="360" y2="180" stroke="#E0E4E8" stroke-width="0.75"/>
+
+      <!-- Row 3: approved -->
+      <text x="20" y="220" font-family="'Courier New', monospace" font-size="17" fill="#1A4565">approved</text>
+      <rect x="160" y="200" width="135" height="30" rx="6" fill="#E8F5E9"/>
+      <text x="228" y="222" font-family="'Courier New', monospace" font-size="17" fill="#2E7D32" text-anchor="middle">True</text>
+      <!-- Checkmark -->
+      <circle cx="340" cy="215" r="14" fill="#4CAF50" opacity="0.15"/>
+      <path d="M330,215 L337,222 L352,207" fill="none" stroke="#4CAF50" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+      <!-- Bottom status bar -->
+      <rect x="0" y="250" width="370" height="30" rx="0" fill="#4CAF50" opacity="0.08"/>
+      <rect x="0" y="268" width="370" height="12" rx="0 0 12 12" fill="#4CAF50" opacity="0.08"/>
+      <text x="185" y="272" font-family="Roboto, Arial, sans-serif" font-size="14" font-weight="bold" fill="#4CAF50" text-anchor="middle">3/3 fields verified</text>
+    </g>
+
+    <!-- Decorative dots -->
+    <circle cx="120" cy="345" r="4" fill="#4CAF50" opacity="0.3"/>
+    <circle cx="140" cy="345" r="4" fill="#4CAF50" opacity="0.5"/>
+    <circle cx="160" cy="345" r="4" fill="#4CAF50" opacity="0.7"/>
+
+    <!-- Label -->
+    <text x="225" y="380" font-family="Roboto, Arial, sans-serif" font-size="24" font-weight="bold" fill="#1A4565" text-anchor="middle">Structured Output</text>
+    <text x="225" y="410" font-family="Roboto, Arial, sans-serif" font-size="18" fill="#78909C" text-anchor="middle">Verified, typed, deterministic</text>
+
+    <!-- Pill badge -->
+    <rect x="125" y="450" width="200" height="38" rx="19" fill="#4CAF50"/>
+    <text x="225" y="475" font-family="Roboto, Arial, sans-serif" font-size="16" font-weight="bold" fill="#FFFFFF" text-anchor="middle">Verified data</text>
+  </g>
+
+  <!-- ============================================ -->
+  <!-- TAGLINE                                      -->
+  <!-- ============================================ -->
+  <text x="960" y="960" font-family="Trebuchet MS, Arial, sans-serif" font-size="32" font-weight="bold" fill="#1A4565" text-anchor="middle">Natural input. Reliable output.</text>
+  <!-- Decorative line below tagline -->
+  <rect x="810" y="975" width="300" height="3" rx="1.5" fill="#4285F4" opacity="0.6"/>
+
+  <!-- Subtle background decorative elements -->
+  <circle cx="1850" cy="120" r="60" fill="#4285F4" opacity="0.03"/>
+  <circle cx="1870" cy="100" r="40" fill="#0097A7" opacity="0.03"/>
+  <circle cx="120" cy="980" r="50" fill="#FFAB40" opacity="0.04"/>
+</svg>

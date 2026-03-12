@@ -1,0 +1,206 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080">
+  <defs>
+    <filter id="cardShadow" x="-5%" y="-5%" width="115%" height="115%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="8" result="blur"/>
+      <feOffset dx="0" dy="4" result="offsetBlur"/>
+      <feFlood flood-color="#000000" flood-opacity="0.12" result="color"/>
+      <feComposite in2="offsetBlur" operator="in" result="shadow"/>
+      <feMerge>
+        <feMergeNode in="shadow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="smallCardShadow" x="-5%" y="-5%" width="115%" height="115%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="4" result="blur"/>
+      <feOffset dx="0" dy="2" result="offsetBlur"/>
+      <feFlood flood-color="#000000" flood-opacity="0.08" result="color"/>
+      <feComposite in2="offsetBlur" operator="in" result="shadow"/>
+      <feMerge>
+        <feMergeNode in="shadow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="iconGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="3" result="blur"/>
+      <feFlood flood-color="#4285F4" flood-opacity="0.15" result="color"/>
+      <feComposite in2="blur" operator="in" result="glow"/>
+      <feMerge>
+        <feMergeNode in="glow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <linearGradient id="blueAccentGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#4285F4"/>
+      <stop offset="100%" stop-color="#0097A7"/>
+    </linearGradient>
+    <linearGradient id="pillBlueBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4285F4" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#4285F4" stop-opacity="0.06"/>
+    </linearGradient>
+    <clipPath id="leftCardClip">
+      <rect x="130" y="195" width="720" height="720" rx="16" ry="16"/>
+    </clipPath>
+  </defs>
+
+  <!-- ==================== BACKGROUND ==================== -->
+  <rect width="1920" height="1080" fill="#FFFFFF"/>
+
+  <!-- Subtle background texture: light grid pattern -->
+  <pattern id="bgGrid" width="40" height="40" patternUnits="userSpaceOnUse">
+    <rect width="40" height="40" fill="none"/>
+    <line x1="40" y1="0" x2="40" y2="40" stroke="#E0E4E8" stroke-width="0.3" stroke-opacity="0.5"/>
+    <line x1="0" y1="40" x2="40" y2="40" stroke="#E0E4E8" stroke-width="0.3" stroke-opacity="0.5"/>
+  </pattern>
+  <rect width="1920" height="1080" fill="url(#bgGrid)" opacity="0.4"/>
+
+  <!-- ==================== TITLE ==================== -->
+  <text x="100" y="105" font-family="Trebuchet MS, Arial, sans-serif" font-size="44" font-weight="bold" fill="#1A4565">Approach 1: Constrain the Output</text>
+
+  <!-- Blue underline accent -->
+  <rect x="100" y="120" width="260" height="4" rx="2" ry="2" fill="url(#blueAccentGrad)"/>
+
+  <!-- ==================== LEFT HALF: The Approach ==================== -->
+
+  <!-- Section label -->
+  <text x="490" y="178" font-family="Roboto, Arial, sans-serif" font-size="16" fill="#78909C" text-anchor="middle" letter-spacing="3" text-transform="uppercase">THE APPROACH</text>
+
+  <!-- Large container card -->
+  <rect x="130" y="195" width="720" height="720" rx="16" ry="16" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1.5" filter="url(#cardShadow)"/>
+
+  <!-- Top inner section: Prompt -->
+  <text x="170" y="245" font-family="Roboto, Arial, sans-serif" font-size="18" fill="#78909C" letter-spacing="1">PROMPT</text>
+
+  <!-- Prompt card with blue left border -->
+  <rect x="170" y="262" width="640" height="160" rx="12" ry="12" fill="#FFFFFF" stroke="#E0E4E8" stroke-width="1" filter="url(#smallCardShadow)"/>
+  <rect x="170" y="262" width="5" height="160" rx="2.5" ry="0" fill="#4285F4"/>
+  <!-- Round the top-left and bottom-left of the blue border -->
+  <rect x="170" y="262" width="5" height="12" rx="2.5" ry="2.5" fill="#4285F4"/>
+  <rect x="170" y="410" width="5" height="12" rx="2.5" ry="2.5" fill="#4285F4"/>
+
+  <!-- Prompt text -->
+  <text x="200" y="305" font-family="Roboto, Arial, sans-serif" font-size="22" fill="#1A4565" font-weight="500">Reply with ONLY</text>
+
+  <!-- Multiple choice option pills -->
+  <!-- Option A -->
+  <rect x="200" y="330" width="56" height="42" rx="21" ry="21" fill="none" stroke="#4285F4" stroke-width="2.5"/>
+  <text x="228" y="358" font-family="Roboto, Arial, sans-serif" font-size="22" fill="#4285F4" font-weight="bold" text-anchor="middle">A</text>
+
+  <!-- Option B -->
+  <rect x="276" y="330" width="56" height="42" rx="21" ry="21" fill="none" stroke="#4285F4" stroke-width="2.5"/>
+  <text x="304" y="358" font-family="Roboto, Arial, sans-serif" font-size="22" fill="#4285F4" font-weight="bold" text-anchor="middle">B</text>
+
+  <!-- Option C -->
+  <rect x="352" y="330" width="56" height="42" rx="21" ry="21" fill="none" stroke="#4285F4" stroke-width="2.5"/>
+  <text x="380" y="358" font-family="Roboto, Arial, sans-serif" font-size="22" fill="#4285F4" font-weight="bold" text-anchor="middle">C</text>
+
+  <!-- Option D -->
+  <rect x="428" y="330" width="56" height="42" rx="21" ry="21" fill="none" stroke="#4285F4" stroke-width="2.5"/>
+  <text x="456" y="358" font-family="Roboto, Arial, sans-serif" font-size="22" fill="#4285F4" font-weight="bold" text-anchor="middle">D</text>
+
+  <!-- Prompt hint text -->
+  <text x="200" y="405" font-family="Roboto, Arial, sans-serif" font-size="17" fill="#78909C" font-style="italic">No explanation. Just the letter.</text>
+
+  <!-- Arrow down -->
+  <g transform="translate(490, 440)">
+    <line x1="0" y1="0" x2="0" y2="70" stroke="#78909C" stroke-width="2" stroke-dasharray="6,4"/>
+    <polygon points="0,80 -8,64 8,64" fill="#78909C"/>
+  </g>
+
+  <!-- Bottom inner section: Response -->
+  <text x="170" y="548" font-family="Roboto, Arial, sans-serif" font-size="18" fill="#78909C" letter-spacing="1">RESPONSE</text>
+
+  <!-- Response card with light blue background -->
+  <rect x="280" y="565" width="420" height="310" rx="16" ry="16" fill="#FFFFFF" stroke="#E0E4E8" stroke-width="1" filter="url(#smallCardShadow)"/>
+
+  <!-- Inner blue-tinted area for the letter -->
+  <rect x="310" y="595" width="360" height="240" rx="12" ry="12" fill="url(#pillBlueBg)"/>
+  <rect x="310" y="595" width="360" height="240" rx="12" ry="12" fill="none" stroke="#4285F4" stroke-width="1" stroke-opacity="0.2"/>
+
+  <!-- Large bold A -->
+  <text x="490" y="755" font-family="Trebuchet MS, Arial, sans-serif" font-size="120" font-weight="bold" fill="#4285F4" text-anchor="middle">A</text>
+
+  <!-- Decorative small checkmark in corner of response -->
+  <circle cx="640" cy="618" r="18" fill="#4CAF50" opacity="0.9"/>
+  <path d="M631,618 L637,625 L650,611" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <!-- ==================== RIGHT HALF: The Tradeoff ==================== -->
+
+  <!-- Section label -->
+  <text x="1390" y="178" font-family="Roboto, Arial, sans-serif" font-size="16" fill="#78909C" text-anchor="middle" letter-spacing="3">THE TRADEOFF</text>
+
+  <!-- Pro card -->
+  <rect x="980" y="210" width="820" height="100" rx="14" ry="14" fill="#FFFFFF" stroke="#E0E4E8" stroke-width="1" filter="url(#smallCardShadow)"/>
+  <!-- Green left border -->
+  <rect x="980" y="210" width="5" height="100" rx="2.5" ry="0" fill="#4CAF50"/>
+  <rect x="980" y="210" width="5" height="14" rx="2.5" ry="2.5" fill="#4CAF50"/>
+  <rect x="980" y="296" width="5" height="14" rx="2.5" ry="2.5" fill="#4CAF50"/>
+  <!-- Green tint background -->
+  <rect x="985" y="211" width="814" height="98" rx="12" ry="12" fill="#4CAF50" opacity="0.04"/>
+
+  <!-- Checkmark circle -->
+  <circle cx="1024" cy="260" r="22" fill="#4CAF50"/>
+  <path d="M1013,260 L1020,268 L1036,251" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <!-- Pro text -->
+  <text x="1062" y="267" font-family="Roboto, Arial, sans-serif" font-size="22" fill="#1A4565">Easy to grade automatically</text>
+
+  <!-- Divider space -->
+
+  <!-- Con card 1 -->
+  <rect x="980" y="350" width="820" height="100" rx="14" ry="14" fill="#FFFFFF" stroke="#E0E4E8" stroke-width="1" filter="url(#smallCardShadow)"/>
+  <!-- Red left border -->
+  <rect x="980" y="350" width="5" height="100" rx="2.5" ry="0" fill="#E53935"/>
+  <rect x="980" y="350" width="5" height="14" rx="2.5" ry="2.5" fill="#E53935"/>
+  <rect x="980" y="436" width="5" height="14" rx="2.5" ry="2.5" fill="#E53935"/>
+  <!-- Red tint background -->
+  <rect x="985" y="351" width="814" height="98" rx="12" ry="12" fill="#E53935" opacity="0.03"/>
+
+  <!-- X circle -->
+  <circle cx="1024" cy="400" r="22" fill="#E53935"/>
+  <line x1="1013" y1="389" x2="1035" y2="411" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="1035" y1="389" x2="1013" y2="411" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round"/>
+
+  <!-- Con 1 text -->
+  <text x="1062" y="407" font-family="Roboto, Arial, sans-serif" font-size="22" fill="#1A4565">Unnatural task format</text>
+
+  <!-- Con card 2 -->
+  <rect x="980" y="480" width="820" height="100" rx="14" ry="14" fill="#FFFFFF" stroke="#E0E4E8" stroke-width="1" filter="url(#smallCardShadow)"/>
+  <!-- Red left border -->
+  <rect x="980" y="480" width="5" height="100" rx="2.5" ry="0" fill="#E53935"/>
+  <rect x="980" y="480" width="5" height="14" rx="2.5" ry="2.5" fill="#E53935"/>
+  <rect x="980" y="566" width="5" height="14" rx="2.5" ry="2.5" fill="#E53935"/>
+  <!-- Red tint background -->
+  <rect x="985" y="481" width="814" height="98" rx="12" ry="12" fill="#E53935" opacity="0.03"/>
+
+  <!-- X circle -->
+  <circle cx="1024" cy="530" r="22" fill="#E53935"/>
+  <line x1="1013" y1="519" x2="1035" y2="541" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="1035" y1="519" x2="1013" y2="541" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round"/>
+
+  <!-- Con 2 text -->
+  <text x="1062" y="537" font-family="Roboto, Arial, sans-serif" font-size="22" fill="#1A4565">Fragile to prompt changes</text>
+
+  <!-- Con card 3 -->
+  <rect x="980" y="610" width="820" height="100" rx="14" ry="14" fill="#FFFFFF" stroke="#E0E4E8" stroke-width="1" filter="url(#smallCardShadow)"/>
+  <!-- Red left border -->
+  <rect x="980" y="610" width="5" height="100" rx="2.5" ry="0" fill="#E53935"/>
+  <rect x="980" y="610" width="5" height="14" rx="2.5" ry="2.5" fill="#E53935"/>
+  <rect x="980" y="696" width="5" height="14" rx="2.5" ry="2.5" fill="#E53935"/>
+  <!-- Red tint background -->
+  <rect x="985" y="611" width="814" height="98" rx="12" ry="12" fill="#E53935" opacity="0.03"/>
+
+  <!-- X circle -->
+  <circle cx="1024" cy="660" r="22" fill="#E53935"/>
+  <line x1="1013" y1="649" x2="1035" y2="671" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="1035" y1="649" x2="1013" y2="671" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round"/>
+
+  <!-- Con 3 text -->
+  <text x="1062" y="667" font-family="Roboto, Arial, sans-serif" font-size="22" fill="#1A4565">Lost signal in reasoning</text>
+
+  <!-- Summary pill badge -->
+  <rect x="1060" y="770" width="560" height="50" rx="25" ry="25" fill="#F5F7FA" stroke="#E0E4E8" stroke-width="1"/>
+  <text x="1340" y="802" font-family="Roboto, Arial, sans-serif" font-size="20" fill="#78909C" font-style="italic" text-anchor="middle">Reliable grading, but unnatural evaluation</text>
+
+  <!-- ==================== BOTTOM ACCENT BAR ==================== -->
+  <rect x="0" y="1074" width="1920" height="6" fill="#4285F4"/>
+</svg>

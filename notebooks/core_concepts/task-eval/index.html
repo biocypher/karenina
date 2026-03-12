@@ -13,6 +13,10 @@
         <link rel="canonical" href="https://biocypher.github.io/karenina/notebooks/core_concepts/task-eval/">
       
       
+        <link rel="prev" href="../../../core_concepts/questions-and-benchmarks/checkpoints/">
+      
+      
+        <link rel="next" href="../answer-templates/">
       
       
       <link rel="icon" href="../../../assets/images/favicon.png">
@@ -268,10 +272,12 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
+      <li class="md-tabs__item md-tabs__item--active">
         <a href="../../../core_concepts/" class="md-tabs__link">
           
   
@@ -707,6 +713,8 @@
       
   
   
+    
+  
   
   
     
@@ -734,22 +742,25 @@
       
         
       
+        
+      
     
     
     
+      
+        
+        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
         
           
           <div class="md-nav__link md-nav__container">
@@ -766,13 +777,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             Core Concepts
@@ -806,10 +817,13 @@
       
       
         
+          
+          
+        
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
@@ -832,7 +846,7 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3_2" id="__nav_3_2_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_3_2" id="__nav_3_2_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
@@ -928,6 +942,212 @@
                 
   
   
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    TaskEval
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    TaskEval
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-what-is-taskeval" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. What Is TaskEval?
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-why-taskeval-exists" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Why TaskEval Exists
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. How It Works
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. How It Works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-phase-1-record" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.1 Phase 1: Record
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-phase-2-attach-evaluation-criteria" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.2 Phase 2: Attach Evaluation Criteria
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-phase-3-evaluate" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.3 Phase 3: Evaluate
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#34-walkthrough" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.4 Walkthrough
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-benchmark-vs-taskeval" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Benchmark vs TaskEval
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-object-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      5. Object Structure
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-attaching-evaluation-criteria" class="md-nav__link">
+    <span class="md-ellipsis">
+      6. Attaching Evaluation Criteria
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-logging" class="md-nav__link">
+    <span class="md-ellipsis">
+      7. Logging
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-merge-strategies" class="md-nav__link">
+    <span class="md-ellipsis">
+      8. Merge Strategies
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-step-specific-evaluation" class="md-nav__link">
+    <span class="md-ellipsis">
+      9. Step-Specific Evaluation
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-result-objects" class="md-nav__link">
+    <span class="md-ellipsis">
+      10. Result Objects
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-next-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      11. Next Steps
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
   
   
     <li class="md-nav__item">
@@ -974,16 +1194,19 @@
       
       
         
+          
+          
+        
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_4" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_5" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -1000,14 +1223,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_3_5" id="__nav_3_5_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_4">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_5">
             <span class="md-nav__icon md-icon"></span>
             Rubric Traits
           </label>
@@ -1122,7 +1345,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../core_concepts/template-vs-rubric/" class="md-nav__link">
+      <a href="../template-vs-rubric/" class="md-nav__link">
         
   
   
@@ -1168,12 +1391,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../core_concepts/results-and-scoring/" class="md-nav__link">
+      <a href="../results-and-scoring/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    Results & Scoring
+    Results and Scoring
     
   </span>
   
@@ -1203,19 +1426,22 @@
       
       
         
+          
+          
+        
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_8" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_9" >
         
           
-          <label class="md-nav__link" for="__nav_3_8" id="__nav_3_8_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_3_9" id="__nav_3_9_label" tabindex="">
             
   
   
@@ -1228,8 +1454,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_8">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_9">
             <span class="md-nav__icon md-icon"></span>
             Question Context
           </label>
@@ -1242,12 +1468,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../core_concepts/adele/" class="md-nav__link">
+      <a href="../adele/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    ADeLe
+    ADeLe: Question Classification
     
   </span>
   
@@ -1265,12 +1491,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../core_concepts/few-shot/" class="md-nav__link">
+      <a href="../few-shot/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    Few-Shot
+    Few-Shot Examples
     
   </span>
   
@@ -1308,19 +1534,22 @@
       
       
         
+          
+          
+        
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_9" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_10" >
         
           
-          <label class="md-nav__link" for="__nav_3_9" id="__nav_3_9_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_3_10" id="__nav_3_10_label" tabindex="">
             
   
   
@@ -1333,8 +1562,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_9_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_9">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_10">
             <span class="md-nav__icon md-icon"></span>
             Pipeline
           </label>
@@ -1370,7 +1599,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../core_concepts/prompt-assembly/" class="md-nav__link">
+      <a href="../prompt-assembly/" class="md-nav__link">
         
   
   
@@ -1415,19 +1644,22 @@
       
       
         
+          
+          
+        
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_10" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_11" >
         
           
-          <label class="md-nav__link" for="__nav_3_10" id="__nav_3_10_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_3_11" id="__nav_3_11_label" tabindex="">
             
   
   
@@ -1440,8 +1672,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_10_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_10">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_11">
             <span class="md-nav__icon md-icon"></span>
             Infrastructure
           </label>
@@ -1477,12 +1709,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../core_concepts/mcp-overview/" class="md-nav__link">
+      <a href="../mcp-overview/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    MCP Overview
+    MCP Integration
     
   </span>
   
@@ -1500,7 +1732,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../core_concepts/manual-interface/" class="md-nav__link">
+      <a href="../manual-interface/" class="md-nav__link">
         
   
   
@@ -13791,64 +14023,64 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#what-is-taskeval" class="md-nav__link">
+  <a href="#1-what-is-taskeval" class="md-nav__link">
     <span class="md-ellipsis">
-      What Is TaskEval?
+      1. What Is TaskEval?
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#how-taskeval-works" class="md-nav__link">
+  <a href="#2-why-taskeval-exists" class="md-nav__link">
     <span class="md-ellipsis">
-      How TaskEval Works
+      2. Why TaskEval Exists
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="How TaskEval Works">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. How It Works
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. How It Works">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#phase-1-record" class="md-nav__link">
+  <a href="#31-phase-1-record" class="md-nav__link">
     <span class="md-ellipsis">
-      Phase 1: Record
+      3.1 Phase 1: Record
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#phase-2-attach-evaluation-criteria" class="md-nav__link">
+  <a href="#32-phase-2-attach-evaluation-criteria" class="md-nav__link">
     <span class="md-ellipsis">
-      Phase 2: Attach evaluation criteria
+      3.2 Phase 2: Attach Evaluation Criteria
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#phase-3-evaluate" class="md-nav__link">
+  <a href="#33-phase-3-evaluate" class="md-nav__link">
     <span class="md-ellipsis">
-      Phase 3: Evaluate
+      3.3 Phase 3: Evaluate
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#putting-it-together" class="md-nav__link">
+  <a href="#34-walkthrough" class="md-nav__link">
     <span class="md-ellipsis">
-      Putting it together
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#object-structure" class="md-nav__link">
-    <span class="md-ellipsis">
-      Object structure
+      3.4 Walkthrough
     </span>
   </a>
   
@@ -13860,45 +14092,72 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#benchmark-vs-taskeval" class="md-nav__link">
+  <a href="#4-benchmark-vs-taskeval" class="md-nav__link">
     <span class="md-ellipsis">
-      Benchmark vs TaskEval
+      4. Benchmark vs TaskEval
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#attaching-evaluation-criteria" class="md-nav__link">
+  <a href="#5-object-structure" class="md-nav__link">
     <span class="md-ellipsis">
-      Attaching Evaluation Criteria
+      5. Object Structure
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#logging" class="md-nav__link">
+  <a href="#6-attaching-evaluation-criteria" class="md-nav__link">
     <span class="md-ellipsis">
-      Logging
+      6. Attaching Evaluation Criteria
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#merge-strategies" class="md-nav__link">
+  <a href="#7-logging" class="md-nav__link">
     <span class="md-ellipsis">
-      Merge Strategies
+      7. Logging
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#step-specific-evaluation" class="md-nav__link">
+  <a href="#8-merge-strategies" class="md-nav__link">
     <span class="md-ellipsis">
-      Step-Specific Evaluation
+      8. Merge Strategies
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-step-specific-evaluation" class="md-nav__link">
+    <span class="md-ellipsis">
+      9. Step-Specific Evaluation
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-result-objects" class="md-nav__link">
+    <span class="md-ellipsis">
+      10. Result Objects
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-next-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      11. Next Steps
     </span>
   </a>
   
@@ -14365,7 +14624,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h1 id="taskeval">TaskEval<a class="anchor-link" href="#taskeval">¶</a></h1><p>TaskEval evaluates any free text output using karenina's two evaluation primitives: <a href="answer-templates.md">templates</a> for correctness and <a href="rubrics/index.md">rubrics</a> for quality.</p>
+<h1 id="taskeval">TaskEval<a class="anchor-link" href="#taskeval">¶</a></h1><p>TaskEval applies Karenina's evaluation engine (<a href="answer-templates.md">templates</a> for correctness, <a href="rubrics/index.md">rubrics</a> for quality) to text you supply, without generating responses.</p>
 </div>
 </div>
 </div>
@@ -14376,29 +14635,101 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="what-is-taskeval">What Is TaskEval?<a class="anchor-link" href="#what-is-taskeval">¶</a></h2><p><a href="questions-and-benchmarks/index.md">Benchmark</a> is a closed-loop workflow: it defines questions, generates responses through the <a href="verification-pipeline.md">verification pipeline</a>, and evaluates them together. TaskEval is the open-loop counterpart. You supply any free text output and evaluate it using karenina's primitives (templates and rubrics), with no question definition or answer generation required.</p>
-<p>Use TaskEval whenever you have text that needs structured evaluation:</p>
+<h2 id="1-what-is-taskeval">1. What Is TaskEval?<a class="anchor-link" href="#1-what-is-taskeval">¶</a></h2><p>Karenina has two evaluation workflows. <a href="questions-and-benchmarks/index.md">Benchmark</a> is a closed-loop workflow: it defines questions, sends them to an answering model through the <a href="verification-pipeline.md">verification pipeline</a>, and evaluates the generated responses. TaskEval is the open-loop counterpart. You supply pre-existing text (an agent trace, a pipeline output, a human-written response) and evaluate it using the same pipeline, the same templates, the same rubrics, and the same judge LLM. No question definition or answer generation is required.</p>
+<p><strong>The abstraction boundary</strong>: TaskEval handles recording text, attaching evaluation criteria, and routing evaluation through the verification pipeline. It does not generate responses, manage questions, or provide persistence. It is a stateless evaluation container: you populate it, evaluate, and read the results.</p>
+<p>Use TaskEval whenever you have text that already exists and needs structured evaluation:</p>
 <ul>
 <li><strong>Agent workflows</strong> that produce multi-step traces you want to score for correctness or quality</li>
 <li><strong>CI pipelines</strong> that capture outputs from production runs and need post-hoc quality checks</li>
-<li><strong>Any free text</strong> from external systems, user submissions, or one-off experiments that you want to evaluate with karenina's judge LLM machinery</li>
+<li><strong>One-off experiments</strong> where you want to evaluate a response against a template or rubric without building a full benchmark</li>
 </ul>
-<h2 id="how-taskeval-works">How TaskEval Works<a class="anchor-link" href="#how-taskeval-works">¶</a></h2><p>TaskEval is a recording and evaluation container. The text it evaluates is always produced by external code: an agent, a pipeline, a human annotator. TaskEval never generates responses. Instead, it provides methods to record that text, attach evaluation criteria to it, and run evaluation through karenina's judge LLM.</p>
-<p>The workflow has three phases.</p>
-<h3 id="phase-1-record">Phase 1: Record<a class="anchor-link" href="#phase-1-record">¶</a></h3><p>External code produces text. You record it into a TaskEval instance using <code>log()</code> for plain text or <code>log_trace()</code> for structured conversation traces. Each call appends to the TaskEval's log store.</p>
-<p>If your process has distinct phases, you can assign each log entry to a named step via the <code>step_id</code> parameter. For example, an agent workflow with a retrieval phase and a synthesis phase can record outputs separately under <code>step_id="retrieval"</code> and <code>step_id="synthesis"</code>. Logs without a <code>step_id</code> go to the global scope.</p>
-<h3 id="phase-2-attach-evaluation-criteria">Phase 2: Attach evaluation criteria<a class="anchor-link" href="#phase-2-attach-evaluation-criteria">¶</a></h3><p>Once text is recorded, you attach evaluation criteria: <a href="answer-templates.md">templates</a> for correctness, <a href="rubrics/index.md">rubrics</a> for quality, or both.</p>
-<p>A template is a structured schema that tells a judge LLM what to extract from the text, paired with a <code>verify()</code> method that checks the extracted values against ground truth. A rubric defines qualitative dimensions (conciseness, citation quality, logical coherence) that a judge LLM scores independently from factual correctness. Each rubric trait describes one dimension.</p>
-<p>Criteria can be attached globally (evaluated against all recorded text) or to a specific step (evaluated against only that step's logs).</p>
-<h3 id="phase-3-evaluate">Phase 3: Evaluate<a class="anchor-link" href="#phase-3-evaluate">¶</a></h3><p>Calling <code>evaluate()</code> sends the recorded text through karenina's <a href="verification-pipeline.md">verification pipeline</a>. The pipeline's judge LLM parses the text into any attached templates, runs <code>verify()</code>, and scores each rubric trait. No questions to define, no answers to generate: the text you recorded is the response, and the criteria you attached define what to check.</p>
-<h3 id="putting-it-together">Putting it together<a class="anchor-link" href="#putting-it-together">¶</a></h3><p>Suppose an agent workflow looked up a cancer drug and produced this output:</p>
+<h2 id="2-why-taskeval-exists">2. Why TaskEval Exists<a class="anchor-link" href="#2-why-taskeval-exists">¶</a></h2><p>Many evaluation scenarios start with text that already exists. A coding agent produced a solution. A RAG pipeline returned a synthesis. A production system logged a response. In all these cases, the text is already produced; what you need is a way to evaluate it.</p>
+<p>Benchmark assumes it controls the full loop: it sends a question to a model, captures the response, and evaluates it. If your text was produced by a different system, at a different time, or through a process Benchmark cannot orchestrate (a multi-step agent, a human annotator, an external API), you need a way to feed that text directly into the evaluation engine.</p>
+<p>The most important idea is that <strong>TaskEval reuses the same verification pipeline as Benchmark</strong>. Internally, it injects your text as <code>cached_answer_data</code>, bypassing the answer generation stage while running every subsequent stage identically: template validation, judge parsing, <code>verify()</code>, rubric evaluation, abstention detection, and metric computation. The evaluation quality is the same; only the source of the text being evaluated differs.</p>
+<pre><code>Benchmark mode:                  TaskEval mode:
+  Questions + Answering Model      Pre-existing text
+          │                              │
+          ▼                              ▼
+  Generate Answer (Stage 2)        cached_answer_data
+          │                              │
+          └───────────┬──────────────────┘
+                      ▼
+            Stages 3-13 (identical)
+            Parse → Verify → Rubric
+                      │
+                      ▼
+               VerificationResult
+</code></pre>
+<h2 id="3-how-it-works">3. How It Works<a class="anchor-link" href="#3-how-it-works">¶</a></h2><p>TaskEval is a recording and evaluation container with a three-phase lifecycle.</p>
+<h3 id="31-phase-1-record">3.1 Phase 1: Record<a class="anchor-link" href="#31-phase-1-record">¶</a></h3><p>External code produces text. You record it into a TaskEval instance using <code>log()</code> for plain strings or <code>log_trace()</code> for structured conversation traces (lists of <code>Message</code> objects from <code>karenina.ports.messages</code>). Each call appends to the TaskEval's internal log store.</p>
+<p>If your process has distinct phases, you can assign each log entry to a named <strong>step</strong> via the <code>step_id</code> parameter. An agent workflow with a retrieval phase and a synthesis phase can record outputs separately under <code>step_id="retrieval"</code> and <code>step_id="synthesis"</code>. Logs without a <code>step_id</code> go to the global scope.</p>
+<h3 id="32-phase-2-attach-evaluation-criteria">3.2 Phase 2: Attach Evaluation Criteria<a class="anchor-link" href="#32-phase-2-attach-evaluation-criteria">¶</a></h3><p>Once text is recorded, you attach evaluation criteria: <a href="answer-templates.md">templates</a> for correctness, <a href="rubrics/index.md">rubrics</a> for quality, or both.</p>
+<p>A template is a structured Pydantic schema that tells the judge LLM what to extract from the text, paired with a <code>verify()</code> method that checks the extracted values against ground truth. A rubric defines qualitative dimensions (conciseness, citation quality, logical coherence) that the judge LLM scores independently from factual correctness.</p>
+<p>Criteria can be attached <strong>globally</strong> (evaluated against all recorded text) or to a <strong>specific step</strong> (evaluated against only that step's logs). The <a href="../notebooks/core_concepts/evaluation-modes.ipynb">evaluation mode</a> is auto-detected from what you attach: <code>template_only</code>, <code>rubric_only</code>, or <code>template_and_rubric</code>.</p>
+<h3 id="33-phase-3-evaluate">3.3 Phase 3: Evaluate<a class="anchor-link" href="#33-phase-3-evaluate">¶</a></h3><p>Calling <code>evaluate()</code> sends the recorded text through Karenina's <a href="verification-pipeline.md">verification pipeline</a>. The pipeline's judge LLM parses the text into any attached templates, runs <code>verify()</code>, and scores each rubric trait. TaskEval returns a <code>TaskEvalResult</code> containing verification outcomes for both global and per-step scopes.</p>
+<h3 id="34-walkthrough">3.4 Walkthrough<a class="anchor-link" href="#34-walkthrough">¶</a></h3><p>Suppose an agent workflow looked up a cancer drug and produced this output:</p>
 <blockquote>
 <p><em>"The primary pharmacological target of venetoclax is BCL2 (B-cell lymphoma 2), a protein that inhibits apoptosis. Venetoclax binds selectively to BCL2, displacing pro-apoptotic proteins and triggering programmed cell death in cancer cells [1]."</em></p>
 </blockquote>
-<p>You want to evaluate this along two dimensions. Did the response identify BCL2 as the primary target? This is a correctness check, expressed as a <a href="answer-templates.md">template</a> with a boolean field and a <code>verify()</code> method. Is the response concise and well cited? These are quality checks, expressed as <a href="rubrics/index.md">rubric</a> traits.</p>
-<p>You would record this text with <code>log()</code>, attach a template for the BCL2 check and a rubric for conciseness and citation quality, then call <code>evaluate()</code>. The pipeline handles the rest.</p>
-<p>See the <a href="../notebooks/task-eval/index.ipynb">workflow page</a> for the complete code walkthrough.</p>
-<h3 id="object-structure">Object structure<a class="anchor-link" href="#object-structure">¶</a></h3><p>A TaskEval instance holds two parallel scopes: global and per-step. Each scope stores logs (the text to evaluate), templates (correctness criteria), and rubrics (quality criteria).</p>
+<p>You want to evaluate this along two dimensions:</p>
+<ol>
+<li><strong>Correctness</strong>: Did the response identify BCL2 as the primary target? This is a template check: a boolean field (<code>identifies_bcl2</code>) and a <code>verify()</code> method that compares it against ground truth.</li>
+<li><strong>Quality</strong>: Is the response concise and well cited? These are rubric traits, scored by the judge LLM.</li>
+</ol>
+<p>You would record this text with <code>log()</code>, attach a template for the BCL2 check and a rubric for conciseness, then call <code>evaluate()</code>. The verification pipeline handles judge parsing, <code>verify()</code>, and trait scoring. The <a href="../notebooks/task-eval/index.ipynb">workflow page</a> shows the complete code for this scenario.</p>
+<h2 id="4-benchmark-vs-taskeval">4. Benchmark vs TaskEval<a class="anchor-link" href="#4-benchmark-vs-taskeval">¶</a></h2><table>
+<thead>
+<tr>
+<th>Dimension</th>
+<th>Benchmark</th>
+<th>TaskEval</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Workflow</td>
+<td>Closed-loop: generate + evaluate</td>
+<td>Open-loop: evaluate only</td>
+</tr>
+<tr>
+<td>Starting point</td>
+<td>Questions (define what to ask)</td>
+<td>Text (record what happened)</td>
+</tr>
+<tr>
+<td>Answer generation</td>
+<td>Pipeline generates responses</td>
+<td>You supply pre-recorded text</td>
+</tr>
+<tr>
+<td>Question definition</td>
+<td>Required</td>
+<td>Not required</td>
+</tr>
+<tr>
+<td>Pipeline stages used</td>
+<td>All 13 stages</td>
+<td>Same pipeline; generation stage bypassed</td>
+</tr>
+<tr>
+<td>Result type</td>
+<td><code>VerificationResult</code> (per question/model)</td>
+<td><code>TaskEvalResult</code> (global + per-step)</td>
+</tr>
+<tr>
+<td>Best for</td>
+<td>Controlled model comparison</td>
+<td>Evaluating existing outputs</td>
+</tr>
+</tbody>
+</table>
+<p><strong>When to use which</strong>:</p>
+<ul>
+<li><strong>Use Benchmark</strong> when you control the question-and-answer loop: you have questions, you want to send them to one or more models, and you want to compare the results.</li>
+<li><strong>Use TaskEval</strong> when the text already exists: an agent produced a trace, a pipeline captured an output, or you are working with outputs from a system Benchmark cannot orchestrate.</li>
+</ul>
+<p>A useful litmus test: if you need <code>answering_models</code> in your <code>VerificationConfig</code>, you need Benchmark. If you only need <code>parsing_models</code> (with <code>parsing_only=True</code>), TaskEval is the right tool.</p>
+<h2 id="5-object-structure">5. Object Structure<a class="anchor-link" href="#5-object-structure">¶</a></h2><p>A TaskEval instance holds two parallel scopes: <strong>global</strong> and <strong>per-step</strong>. Each scope stores logs (the text to evaluate), templates (correctness criteria), and rubrics (quality criteria).</p>
 </div>
 </div>
 </div>
@@ -14449,8 +14780,8 @@ task = TaskEval(
 <pre><code>┌───────────────────────────────────────────────────────┐
 │                      TaskEval                         │
 │                                                       │
-│  task_id: "agent-drug-lookup"                         │
-│  metadata: {"model": "claude-sonnet-4"}               │
+│  task_id: "agent-drug-target"                         │
+│  metadata: {"model": "claude-haiku-4-5"}              │
 │  merge_strategy: "concatenate"                        │
 │                                                       │
 │  ┌─────────────────────────────────────────────────┐  │
@@ -14470,44 +14801,36 @@ task = TaskEval(
 │  └──────────────────┘  └──────────────────┘           │
 └───────────────────────────────────────────────────────┘
 </code></pre>
-<p>The global scope evaluates all logs together. Per-step scopes evaluate only the logs, templates, and rubrics attached to that step. When you call <code>evaluate()</code> without a <code>step_id</code>, TaskEval runs global evaluation first, then auto-evaluates each step that has data.</p>
-<h2 id="benchmark-vs-taskeval">Benchmark vs TaskEval<a class="anchor-link" href="#benchmark-vs-taskeval">¶</a></h2><table>
+<p>The global scope evaluates all logs together. Per-step scopes evaluate only the logs, templates, and rubrics attached to that step. When you call <code>evaluate()</code> without a <code>step_id</code>, TaskEval runs global evaluation first, then automatically evaluates each step that has data.</p>
+<p>The constructor accepts two additional parameters: <code>merge_strategy</code> (see <a href="#8-merge-strategies">Merge Strategies</a>) and <code>callable_registry</code>, a <code>dict[str, Callable]</code> for pre-registering functions used by <a href="rubrics/callable-traits.md">callable rubric traits</a>.</p>
+<h2 id="6-attaching-evaluation-criteria">6. Attaching Evaluation Criteria<a class="anchor-link" href="#6-attaching-evaluation-criteria">¶</a></h2><p>Pass a <code>BaseAnswer</code> subclass via <code>add_template()</code> for correctness checks, and a <code>Rubric</code> via <code>add_rubric()</code> for quality traits. Both can be scoped globally or to a specific step via the <code>step_id</code> parameter.</p>
+<p>The evaluation mode is auto-detected from what you attach:</p>
+<table>
 <thead>
 <tr>
-<th>Dimension</th>
-<th>Benchmark</th>
-<th>TaskEval</th>
+<th>You attach</th>
+<th>Detected mode</th>
+<th>Pipeline behavior</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Workflow</td>
-<td>Closed-loop: generate + evaluate</td>
-<td>Open-loop: evaluate only</td>
+<td>Template only</td>
+<td><code>template_only</code></td>
+<td>Judge parses response into template; <code>verify()</code> runs</td>
 </tr>
 <tr>
-<td>Starting point</td>
-<td>Questions (define what to ask)</td>
-<td>Traces (record what happened)</td>
+<td>Rubric only</td>
+<td><code>rubric_only</code></td>
+<td>A synthetic pass-through template is created internally; rubric traits are scored</td>
 </tr>
 <tr>
-<td>Answer generation</td>
-<td>Pipeline generates responses</td>
-<td>You supply pre-recorded outputs</td>
-</tr>
-<tr>
-<td>Question required</td>
-<td>Yes</td>
-<td>No</td>
-</tr>
-<tr>
-<td>Best for</td>
-<td>Controlled model comparison</td>
-<td>Evaluating any free text output</td>
+<td>Both</td>
+<td><code>template_and_rubric</code></td>
+<td>Full evaluation: template parsing, <code>verify()</code>, and rubric scoring</td>
 </tr>
 </tbody>
 </table>
-<h2 id="attaching-evaluation-criteria">Attaching Evaluation Criteria<a class="anchor-link" href="#attaching-evaluation-criteria">¶</a></h2><p>Pass a <code>BaseAnswer</code> subclass via <code>add_template()</code> for correctness checks, and a <code>Rubric</code> via <code>add_rubric()</code> for quality traits. The <a href="../notebooks/core_concepts/evaluation-modes.ipynb">evaluation mode</a> is auto-detected from what you attach: <code>template_only</code>, <code>rubric_only</code>, or <code>template_and_rubric</code>. Both can be scoped globally or to a specific step via the <code>step_id</code> parameter.</p>
 </div>
 </div>
 </div>
@@ -14559,8 +14882,51 @@ task.add_rubric(Rubric(llm_traits=[
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>See the <a href="../notebooks/task-eval/index.ipynb#step-3-attach-evaluation-criteria">workflow</a> for complete examples including rubric trait types and step-scoped criteria.</p>
-<h2 id="logging">Logging<a class="anchor-link" href="#logging">¶</a></h2><p>Use <code>log()</code> for plain text and <code>log_trace()</code> for structured <code>Message</code> traces from <code>karenina.ports.messages</code>. Both accept <code>step_id</code> to group output under a named step and <code>target</code> to control where the log is stored (<code>"global"</code>, <code>"step"</code>, or <code>"both"</code>).</p>
+<div class="admonition note">
+<p class="admonition-title"><code>add_template()</code> requires inspectable source</p>
+<p><code>add_template()</code> extracts the source code of your <code>BaseAnswer</code> subclass using <code>inspect.getsource()</code>. The class must be defined in a <code>.py</code> file or Jupyter notebook, not constructed dynamically at runtime. For dynamically defined templates, use <code>add_question()</code> with template source code passed as a string in the <code>answer_template</code> field.</p>
+</div>
+<p>If your rubric includes <a href="rubrics/callable-traits.md">callable traits</a>, register the callable functions before calling <code>evaluate()</code>:</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=f557edd6">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="CodeMirror cm-s-jupyter">
+<div class="zeroclipboard-container">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-3">
+<div>
+<span class="notice" hidden="">Copied!</span>
+<svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
+<path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+<path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+</svg>
+</div>
+</clipboard-copy>
+</div>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">task</span><span class="o">.</span><span class="n">register_callable</span><span class="p">(</span><span class="s2">"under_150_words"</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">text</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">text</span><span class="o">.</span><span class="n">split</span><span class="p">())</span> <span class="o">&lt;</span> <span class="mi">150</span><span class="p">)</span>
+</pre></div>
+<div class="clipboard-copy-txt" id="cell-3">task.register_callable("under_150_words", lambda text: len(text.split()) &lt; 150)</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=1307c035">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p>When multiple rubrics are attached to the same scope, TaskEval merges them into a single rubric. Trait names must be unique across all rubrics in the same scope; duplicate names raise a <code>ValueError</code>.</p>
+<p>See the <a href="../notebooks/task-eval/index.ipynb#step-3-attach-evaluation-criteria">workflow</a> for complete examples including all trait types and step-scoped criteria.</p>
+<h2 id="7-logging">7. Logging<a class="anchor-link" href="#7-logging">¶</a></h2><p>Use <code>log()</code> for plain text and <code>log_trace()</code> for structured <code>Message</code> traces from <code>karenina.ports.messages</code>. Both accept <code>step_id</code> to scope output to a named step and <code>target</code> to control where the log is stored.</p>
 </div>
 </div>
 </div>
@@ -14573,7 +14939,7 @@ task.add_rubric(Rubric(llm_traits=[
 <div class="jp-InputPrompt jp-InputArea-prompt">In [4]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-3">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-4">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -14593,7 +14959,7 @@ task.add_rubric(Rubric(llm_traits=[
     <span class="n">Message</span><span class="o">.</span><span class="n">assistant</span><span class="p">(</span><span class="s2">"The primary pharmacological target of venetoclax is BCL2."</span><span class="p">),</span>
 <span class="p">])</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-3"># Plain text
+<div class="clipboard-copy-txt" id="cell-4"># Plain text
 task.log("BCL2 is the primary pharmacological target of venetoclax.")
 task.log("Found 3 relevant papers.", step_id="retrieval")
 
@@ -14614,14 +14980,115 @@ task.log_trace([
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>See the <a href="../notebooks/task-eval/index.ipynb#step-2-log-outputs">workflow</a> for complete parameter reference, tool call traces, and scoping examples.</p>
-<h2 id="merge-strategies">Merge Strategies<a class="anchor-link" href="#merge-strategies">¶</a></h2><p>When evaluation runs, TaskEval combines logged outputs into a single response for the pipeline. Two strategies control this merging:</p>
-<p><strong><code>concatenate</code></strong> (default): Combines text and trace logs into a single response. Text logs are wrapped as <code>Message.assistant()</code> objects; trace messages are included as-is. All messages are serialized together.</p>
-<p><strong><code>traces_only</code></strong>: Uses only logs that contain structured <code>Message</code> traces. Text-only logs are ignored. Use this when your text logs are debugging output that should not be part of the evaluated response.</p>
-<p>The strategy is set at construction time via <code>merge_strategy</code> and can be overridden per <code>evaluate()</code> call.</p>
-<h2 id="step-specific-evaluation">Step-Specific Evaluation<a class="anchor-link" href="#step-specific-evaluation">¶</a></h2><p>TaskEval supports both global and step-level scoping for logs, questions, and rubrics. This enables per-phase analysis of multi-step agent workflows.</p>
-<p>When you call <code>evaluate()</code> without a <code>step_id</code>, TaskEval runs global evaluation and then auto-evaluates all steps that have logs. Results are available in <code>result.global_eval</code> and <code>result.per_step</code>. Pass <code>step_id</code> to evaluate only one step's logs and criteria.</p>
+<p>The <code>target</code> parameter controls routing when a <code>step_id</code> is provided:</p>
+<table>
+<thead>
+<tr>
+<th><code>target</code> value</th>
+<th>Global scope</th>
+<th>Step scope</th>
+<th>Use when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"both"</code> (default)</td>
+<td>Yes</td>
+<td>Yes (requires <code>step_id</code>)</td>
+<td>The log is relevant to both overall and step-specific evaluation</td>
+</tr>
+<tr>
+<td><code>"global"</code></td>
+<td>Yes</td>
+<td>No</td>
+<td>The <code>step_id</code> is for bookkeeping, but the text should only appear in global evaluation</td>
+</tr>
+<tr>
+<td><code>"step"</code></td>
+<td>No</td>
+<td>Yes (requires <code>step_id</code>)</td>
+<td>The text is relevant only to this step, not the overall evaluation</td>
+</tr>
+</tbody>
+</table>
+<p>Without a <code>step_id</code>, only the global scope receives the log regardless of the <code>target</code> value.</p>
+<p><code>log_trace()</code> also accepts a plain string, which is automatically wrapped as a single <code>Message.assistant()</code> object. When structured traces contain tool calls, the full message structure (including tool use and tool results) is preserved for the pipeline.</p>
+<p>See the <a href="../notebooks/task-eval/index.ipynb#step-2-log-outputs">workflow</a> for complete parameter reference and tool call trace examples.</p>
+<h2 id="8-merge-strategies">8. Merge Strategies<a class="anchor-link" href="#8-merge-strategies">¶</a></h2><p>When evaluation runs, TaskEval combines logged outputs into a single response for the verification pipeline. The <code>merge_strategy</code> parameter controls this merging:</p>
+<table>
+<thead>
+<tr>
+<th>Strategy</th>
+<th>Behavior</th>
+<th>Use when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"concatenate"</code> (default)</td>
+<td>Text logs are wrapped as <code>Message.assistant()</code> objects; trace messages are included as-is. All messages are serialized together into a single response string.</td>
+<td>You want all logged output evaluated together</td>
+</tr>
+<tr>
+<td><code>"traces_only"</code></td>
+<td>Only logs that contain structured <code>Message</code> traces are used. Text-only logs are ignored.</td>
+<td>Your text logs are debugging output or metadata that should not be part of the evaluated response</td>
+</tr>
+</tbody>
+</table>
+<p>Set the strategy at construction time or override it per <code>evaluate()</code> call via <code>task.evaluate(config, merge_strategy="traces_only")</code>.</p>
+<h2 id="9-step-specific-evaluation">9. Step-Specific Evaluation<a class="anchor-link" href="#9-step-specific-evaluation">¶</a></h2><p>TaskEval supports both global and step-level scoping for logs, templates, and rubrics. This enables per-phase analysis of multi-step agent workflows.</p>
+<p>When you call <code>evaluate()</code> without a <code>step_id</code>, TaskEval:</p>
+<ol>
+<li>Runs global evaluation against all global-scope logs and criteria</li>
+<li>Automatically evaluates every step that has logs, templates, or rubrics defined</li>
+</ol>
+<p>Results are structured as:</p>
+<ul>
+<li><code>result.global_eval</code>: a <code>StepEval</code> containing global verification results</li>
+<li><code>result.per_step</code>: a <code>dict[str, StepEval]</code> mapping step IDs to their evaluation results</li>
+</ul>
+<p>To evaluate only one step, pass <code>step_id</code> to <code>evaluate()</code>.</p>
 <p>See the <a href="../notebooks/task-eval/index.ipynb#step-4-configure-and-evaluate">workflow</a> for step-scoped evaluation examples.</p>
+<h2 id="10-result-objects">10. Result Objects<a class="anchor-link" href="#10-result-objects">¶</a></h2><p><code>evaluate()</code> returns a <code>TaskEvalResult</code> that wraps all evaluation outcomes. Each scope (global or per-step) is represented by a <code>StepEval</code>, which stores <code>VerificationResult</code> objects keyed by question ID.</p>
+<table>
+<thead>
+<tr>
+<th>Method on <code>TaskEvalResult</code></th>
+<th>Returns</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>summary()</code></td>
+<td>One-line summary: "2/3 template verifications passed | 4/5 rubric traits passed"</td>
+</tr>
+<tr>
+<td><code>summary_compact()</code></td>
+<td>Compact one-liner with task ID and success rate</td>
+</tr>
+<tr>
+<td><code>display()</code></td>
+<td>Formatted multi-line report with all verification details</td>
+</tr>
+<tr>
+<td><code>export_json()</code></td>
+<td>Full results serialized as a JSON string</td>
+</tr>
+<tr>
+<td><code>export_markdown()</code></td>
+<td>Results formatted as Markdown</td>
+</tr>
+</tbody>
+</table>
+<p><code>StepEval</code> provides <code>get_summary_stats()</code> for aggregate statistics (traces passed, template verification counts, rubric trait counts, success rate) and <code>aggregate_rubric_results()</code> for averaging rubric scores across replicates. For replicate support, set <code>replicate_count</code> on your <code>VerificationConfig</code>.</p>
+<h2 id="11-next-steps">11. Next Steps<a class="anchor-link" href="#11-next-steps">¶</a></h2><ul>
+<li><a href="../notebooks/task-eval/index.ipynb">TaskEval workflow</a>: step-by-step guide with complete code</li>
+<li><a href="answer-templates.md">Answer templates</a>: writing templates for correctness evaluation</li>
+<li><a href="rubrics/index.md">Rubrics</a>: defining quality traits</li>
+<li><a href="verification-pipeline.md">Verification pipeline</a>: the 13-stage pipeline TaskEval routes through</li>
+<li><a href="../notebooks/core_concepts/evaluation-modes.ipynb">Evaluation modes</a>: <code>template_only</code>, <code>rubric_only</code>, <code>template_and_rubric</code></li>
+</ul>
 </div>
 </div>
 </div>

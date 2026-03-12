@@ -1,0 +1,224 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080">
+  <defs>
+    <!-- Shadow filter -->
+    <filter id="shadow" x="-5%" y="-5%" width="115%" height="115%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000000" flood-opacity="0.12"/>
+    </filter>
+    <filter id="shadowLg" x="-5%" y="-5%" width="115%" height="120%">
+      <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#000000" flood-opacity="0.15"/>
+    </filter>
+
+    <!-- Block 1 gradient: blue to teal -->
+    <linearGradient id="gradSetup" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4285F4"/>
+      <stop offset="100%" stop-color="#0097A7"/>
+    </linearGradient>
+
+    <!-- Finalize green gradient -->
+    <linearGradient id="gradFinalize" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="rgba(76,175,80,0.15)"/>
+      <stop offset="100%" stop-color="rgba(76,175,80,0.08)"/>
+    </linearGradient>
+
+    <!-- Arrow markers -->
+    <marker id="arrowBlue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#4285F4"/>
+    </marker>
+    <marker id="arrowGray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#B0BEC5"/>
+    </marker>
+    <marker id="arrowTeal" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#0097A7"/>
+    </marker>
+    <marker id="arrowDash" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#78909C"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1920" height="1080" fill="#FFFFFF"/>
+
+  <!-- Title -->
+  <text x="100" y="80" font-family="Trebuchet MS, Arial, sans-serif" font-size="44" font-weight="bold" fill="#1A4565">Verification Pipeline</text>
+  <!-- Blue underline -->
+  <rect x="100" y="94" width="180" height="4" rx="2" fill="#4285F4"/>
+
+  <!-- ====================================================================== -->
+  <!-- CONTENT GROUP (shifted down for centering)                             -->
+  <!-- ====================================================================== -->
+  <g transform="translate(0,110)">
+
+  <!-- ====================================================================== -->
+  <!-- BLOCK 1: Setup + Generate                                              -->
+  <!-- ====================================================================== -->
+  <g filter="url(#shadowLg)">
+    <rect x="100" y="240" width="240" height="130" rx="14" fill="url(#gradSetup)"/>
+  </g>
+  <!-- Number badge -->
+  <rect x="300" y="244" width="36" height="22" rx="11" fill="rgba(255,255,255,0.3)"/>
+  <text x="318" y="260" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF">1-2</text>
+  <!-- Chat bubble icon -->
+  <g transform="translate(185, 268)">
+    <rect x="0" y="0" width="30" height="22" rx="5" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+    <polygon points="8,22 13,29 18,22" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+    <line x1="7" y1="8" x2="23" y2="8" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="7" y1="14" x2="19" y2="14" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round"/>
+  </g>
+  <text x="220" y="330" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="20" font-weight="bold" fill="#FFFFFF">Setup + Generate</text>
+
+  <!-- ====================================================================== -->
+  <!-- CONNECTOR ARROW 1 to 2                                                 -->
+  <!-- ====================================================================== -->
+  <rect x="352" y="296" width="56" height="8" rx="4" fill="#E0E4E8"/>
+  <line x1="354" y1="300" x2="398" y2="300" stroke="#4285F4" stroke-width="3" marker-end="url(#arrowBlue)"/>
+
+  <!-- ====================================================================== -->
+  <!-- BLOCK 2: Guards                                                        -->
+  <!-- ====================================================================== -->
+  <g filter="url(#shadow)">
+    <rect x="420" y="240" width="220" height="130" rx="14" fill="#F5F7FA" stroke="#FFAB40" stroke-width="2"/>
+  </g>
+  <!-- Number badge -->
+  <rect x="600" y="244" width="36" height="22" rx="11" fill="#FFAB40"/>
+  <text x="618" y="260" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF">3-4</text>
+  <!-- Shield icon -->
+  <g transform="translate(505, 264)">
+    <path d="M12,0 L24,5 L24,14 C24,21 12,26 12,26 C12,26 0,21 0,14 L0,5 Z" fill="none" stroke="#FFAB40" stroke-width="2"/>
+    <polyline points="7,13 10,16 17,9" fill="none" stroke="#FFAB40" stroke-width="2"/>
+  </g>
+  <text x="530" y="322" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="20" font-weight="bold" fill="#1A4565">Guards</text>
+  <text x="530" y="348" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="16" fill="#78909C">recursion, trace</text>
+
+  <!-- ====================================================================== -->
+  <!-- CONNECTOR ARROW 2 to 3                                                 -->
+  <!-- ====================================================================== -->
+  <rect x="652" y="296" width="56" height="8" rx="4" fill="#E0E4E8"/>
+  <line x1="654" y1="300" x2="698" y2="300" stroke="#4285F4" stroke-width="3" marker-end="url(#arrowBlue)"/>
+
+  <!-- ====================================================================== -->
+  <!-- BLOCK 3: Pre-Parse Checks                                              -->
+  <!-- ====================================================================== -->
+  <g filter="url(#shadow)">
+    <rect x="720" y="240" width="240" height="130" rx="14" fill="#F5F7FA" stroke="#78909C" stroke-width="2"/>
+  </g>
+  <!-- Number badge -->
+  <rect x="920" y="244" width="36" height="22" rx="11" fill="#78909C"/>
+  <text x="938" y="260" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF">5-6</text>
+  <!-- Filter/funnel icon -->
+  <g transform="translate(818, 264)">
+    <polygon points="0,0 28,0 19,12 19,22 9,22 9,12" fill="none" stroke="#78909C" stroke-width="2"/>
+  </g>
+  <text x="840" y="322" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="20" font-weight="bold" fill="#1A4565">Pre-Parse</text>
+  <text x="840" y="348" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="16" fill="#78909C">abstention, sufficiency</text>
+
+  <!-- Dashed annotation: "can skip parsing" -->
+  <line x1="840" y1="378" x2="840" y2="420" stroke="#78909C" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#arrowDash)"/>
+  <text x="840" y="442" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="14" font-style="italic" fill="#78909C">can skip parsing</text>
+
+  <!-- ====================================================================== -->
+  <!-- Y-FORK: Path splits into Template (upper) and Rubric (lower)           -->
+  <!-- ====================================================================== -->
+  <!-- Main connector from Pre-Parse -->
+  <line x1="960" y1="305" x2="1000" y2="305" stroke="#B0BEC5" stroke-width="3"/>
+  <!-- Fork node -->
+  <circle cx="1000" cy="305" r="6" fill="#FFFFFF" stroke="#4285F4" stroke-width="2"/>
+
+  <!-- Upper branch line -->
+  <path d="M1000,305 L1000,220 L1058,220" stroke="#4285F4" stroke-width="2.5" fill="none" marker-end="url(#arrowBlue)"/>
+  <!-- Lower branch line -->
+  <path d="M1000,305 L1000,460" stroke="#0097A7" stroke-width="2.5" fill="none"/>
+  <line x1="1000" y1="460" x2="1058" y2="460" stroke="#0097A7" stroke-width="2.5" marker-end="url(#arrowTeal)"/>
+
+  <!-- ====================================================================== -->
+  <!-- UPPER LANE: Template Path                                              -->
+  <!-- ====================================================================== -->
+  <text x="1075" y="175" font-family="Roboto, Arial, sans-serif" font-size="18" font-weight="bold" fill="#4285F4">Template Path</text>
+
+  <g filter="url(#shadow)">
+    <rect x="1070" y="190" width="400" height="70" rx="12" fill="rgba(66,133,244,0.08)" stroke="#4285F4" stroke-width="2"/>
+  </g>
+  <!-- Number badge -->
+  <rect x="1428" y="194" width="38" height="22" rx="11" fill="#4285F4"/>
+  <text x="1447" y="210" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF">7-9</text>
+  <!-- Magnifying glass icon -->
+  <g transform="translate(1088, 210)">
+    <circle cx="9" cy="9" r="7" fill="none" stroke="#4285F4" stroke-width="1.8"/>
+    <line x1="14" y1="14" x2="20" y2="20" stroke="#4285F4" stroke-width="1.8" stroke-linecap="round"/>
+  </g>
+  <!-- Sub-labels with arrows -->
+  <text x="1175" y="232" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="18" font-weight="bold" fill="#1A4565">Parse</text>
+  <text x="1223" y="232" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="16" fill="#B0BEC5">&gt;</text>
+  <text x="1275" y="232" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="18" font-weight="bold" fill="#1A4565">Verify</text>
+  <text x="1323" y="232" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="16" fill="#B0BEC5">&gt;</text>
+  <text x="1393" y="232" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="18" font-weight="bold" fill="#1A4565">Embedding</text>
+
+  <!-- ====================================================================== -->
+  <!-- LOWER LANE: Rubric Path                                                -->
+  <!-- ====================================================================== -->
+  <text x="1075" y="430" font-family="Roboto, Arial, sans-serif" font-size="18" font-weight="bold" fill="#0097A7">Rubric Path</text>
+
+  <g filter="url(#shadow)">
+    <rect x="1070" y="440" width="400" height="70" rx="12" fill="rgba(0,151,167,0.08)" stroke="#0097A7" stroke-width="2"/>
+  </g>
+  <!-- Number badge -->
+  <rect x="1422" y="444" width="44" height="22" rx="11" fill="#0097A7"/>
+  <text x="1444" y="460" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF">11-12</text>
+  <!-- Checklist icon -->
+  <g transform="translate(1088, 458)">
+    <rect x="0" y="0" width="22" height="28" rx="3" fill="none" stroke="#0097A7" stroke-width="1.8"/>
+    <polyline points="5,9 8,12 14,6" fill="none" stroke="#0097A7" stroke-width="1.8"/>
+    <line x1="5" y1="20" x2="17" y2="20" stroke="#0097A7" stroke-width="1.3"/>
+  </g>
+  <text x="1220" y="484" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="18" font-weight="bold" fill="#1A4565">Evaluate Traits</text>
+  <text x="1350" y="500" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="14" fill="#78909C">LLM  &#183;  regex  &#183;  callable  &#183;  metric</text>
+
+  <!-- ====================================================================== -->
+  <!-- CONVERGENCE: Both lanes merge toward Finalize                          -->
+  <!-- ====================================================================== -->
+  <!-- Upper lane to convergence point -->
+  <path d="M1470,225 L1540,225 L1540,355" stroke="#4285F4" stroke-width="2.5" fill="none"/>
+  <!-- Lower lane to convergence point -->
+  <path d="M1470,475 L1540,475 L1540,355" stroke="#0097A7" stroke-width="2.5" fill="none"/>
+  <!-- Convergence node -->
+  <circle cx="1540" cy="355" r="6" fill="#FFFFFF" stroke="#4285F4" stroke-width="2"/>
+  <!-- Arrow to finalize -->
+  <line x1="1546" y1="355" x2="1598" y2="355" stroke="#4285F4" stroke-width="2.5" marker-end="url(#arrowBlue)"/>
+
+  <!-- ====================================================================== -->
+  <!-- BLOCK 5: Finalize                                                      -->
+  <!-- ====================================================================== -->
+  <g filter="url(#shadowLg)">
+    <rect x="1610" y="290" width="210" height="130" rx="14" fill="url(#gradFinalize)" stroke="#4CAF50" stroke-width="2"/>
+  </g>
+  <!-- Number badge -->
+  <rect x="1782" y="294" width="34" height="22" rx="11" fill="#4CAF50"/>
+  <text x="1799" y="310" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF">13</text>
+  <!-- Database/save icon -->
+  <g transform="translate(1690, 310)">
+    <ellipse cx="13" cy="4" rx="13" ry="4" fill="none" stroke="#4CAF50" stroke-width="2"/>
+    <path d="M0,4 L0,22 C0,26 6,28 13,28 C20,28 26,26 26,22 L26,4" fill="none" stroke="#4CAF50" stroke-width="2"/>
+    <path d="M0,13 C0,17 6,19 13,19 C20,19 26,17 26,13" fill="none" stroke="#4CAF50" stroke-width="1.5"/>
+  </g>
+  <text x="1715" y="370" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="20" font-weight="bold" fill="#1A4565">Finalize</text>
+  <text x="1715" y="396" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="14" font-style="italic" fill="#4CAF50">always runs</text>
+
+  <!-- ====================================================================== -->
+  <!-- BOTTOM CALLOUT BANNER                                                  -->
+  <!-- ====================================================================== -->
+  <g filter="url(#shadow)">
+    <rect x="310" y="580" width="1300" height="70" rx="12" fill="#F5F7FA" stroke="#4CAF50" stroke-width="2"/>
+  </g>
+  <!-- Shield icon -->
+  <g transform="translate(340, 596)">
+    <path d="M14,0 L28,6 L28,17 C28,25 14,30 14,30 C14,30 0,25 0,17 L0,6 Z" fill="none" stroke="#4CAF50" stroke-width="2.2"/>
+    <polyline points="8,15 12,19 20,10" fill="none" stroke="#4CAF50" stroke-width="2.2"/>
+  </g>
+  <text x="390" y="622" font-family="Roboto, Arial, sans-serif" font-size="22" fill="#1A4565">Always produces a result. Never crashes without output.</text>
+
+  </g><!-- end content group -->
+
+  <!-- ====================================================================== -->
+  <!-- Bottom accent bar                                                      -->
+  <!-- ====================================================================== -->
+  <rect x="0" y="1074" width="1920" height="6" fill="#4285F4"/>
+</svg>
