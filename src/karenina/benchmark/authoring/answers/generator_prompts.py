@@ -15,15 +15,19 @@ You are an expert evaluation designer. Given a question and its reference answer
 
 Think through:
 1. What distinct pieces of information the reference answer contains.
-2. For each piece, what type best captures it:
-   - `bool` for presence/absence checks
-   - `str` with ExactMatch for short canonical identifiers (gene symbols, codes)
-   - `list[str]` with SetContainment for multiple expected items
+2. For each piece, what type best captures it. STRONGLY prefer `bool` fields:
+   - `bool` for presence/absence checks (PREFERRED for most factual claims)
    - `Literal['option1', 'option2']` for categorical values with few options
    - `int` or `float` for numeric values
+   - `list[str]` with SetContainment for multiple expected items
    - `date` for date values
-3. Whether any string fields will need normalization (e.g., case folding, abbreviation handling).
-4. Whether the answer requires a single field or multiple independent fields.
+   - `str` with ExactMatch ONLY when answer_notes explicitly request string extraction
+3. Whether the answer requires a single field or multiple independent fields.
+
+IMPORTANT: String fields are fragile because they require exact normalization to match.
+Boolean fields ("does the response identify X?") are more robust because the judge
+answers true/false rather than extracting and normalizing text. Default to boolean
+encoding unless answer_notes explicitly request otherwise.
 
 Produce your reasoning as free text. Do not produce JSON or code.
 """.strip()
@@ -48,38 +52,40 @@ You are an expert evaluation designer extracting ground-truth attributes from a 
 
 CRITICAL: Use the MINIMUM number of attributes necessary. One attribute per independent piece of information.
 
+BOOLEAN-FIRST PRINCIPLE:
+String fields are fragile: they require exact normalization to match, and minor formatting
+differences (capitalization, hyphens, abbreviations) cause false negatives. Boolean fields
+are robust: the judge answers true/false about whether a concept is present, which is
+reliable across judge models. ALWAYS prefer `bool` over `str` unless answer_notes
+explicitly request string extraction.
+
 Type selection rules (in order of preference):
-1. For YES/NO questions: Use a single `bool` attribute.
-2. For single-value factual answers (IDs, names, numbers): Use a single attribute with the appropriate type:
-   - `Literal['value']` for exact text matches (IDs, codes, specific terms)
-   - `str` for short canonical identifiers (gene symbols, codes) when normalization is needed
-   - `int` or `float` for numeric answers
-   - `bool` for presence/absence checks
-   - `date` for date values
-3. For categorical answers with few options: Use `Literal['option1', 'option2', ...]`
-4. For multiple independent items: Use `list[str]` with SetContainment, or create ONE `bool` attribute per item.
+1. `bool` for factual claims, concept presence, or identity checks (STRONGLY PREFERRED).
+   Convert "What is X?" into "Does the response identify X as Y?" with a bool.
+2. `Literal['option1', 'option2', ...]` for categorical answers with few fixed options.
+3. `int` or `float` for numeric answers.
+4. `list[str]` with SetContainment for multiple expected items (e.g., gene lists).
+5. `date` for date values.
+6. `str` ONLY when answer_notes explicitly request string extraction. Do not use `str`
+   by default.
 
 FORBIDDEN:
 - Never use `Dict[str, str]` types.
 - Never create redundant attributes that check the same information twice.
 - Never create a "mentions_X" boolean AND a Literal/value check for the same answer.
-
-GUIDANCE for `str` fields:
-- Prefer `Literal` types when the expected value is fixed and exact.
-- Use `str` only when normalization is needed (e.g., case-insensitive matching for gene symbols).
-- If you use `str`, the verification system will apply ExactMatch with normalization.
+- Never use `str` type unless answer_notes explicitly ask for it.
 
 Examples of CORRECT minimal schemas:
 - Q: "What is the MESH ID for X?" A: "D010300" → ONE attribute: `mesh_id: Literal['D010300']`
 - Q: "Is X a symptom of Y?" A: "Yes" → ONE attribute: `is_symptom: bool`
 - Q: "What genes are involved?" A: "BRCA1, TP53" → ONE attribute: `genes: list[str]` with ground_truth ["BRCA1", "TP53"]
-- Q: "What is the primary target?" A: "BCL2" → ONE attribute: `target: str` with ground_truth "BCL2"
+- Q: "What is the primary target?" A: "BCL2" → ONE attribute: `identifies_bcl2_as_target: bool` with ground_truth True
 
 Example JSON output:
 {{
   "attributes": [
     {{
-      "name": "mesh_id",
+      "name": "identifies_correct_mesh_id",
       "type": "Literal['D010300']",
       "ground_truth": "D010300"
     }}
@@ -100,11 +106,12 @@ Identify the minimal set of structured attributes that a judge must extract from
 
 When selecting types, follow these guidelines:
 - FORBIDDEN: Never use `Dict[str, str]` types.
-- Use `bool` to capture presence or absence of concepts, entities, or patterns. This is the primary evaluation mechanism.
-- Use `str` for short canonical identifiers when normalization is needed (gene symbols, codes).
+- FORBIDDEN: Never use `str` type unless answer_notes explicitly request string extraction.
+- Use `bool` as the DEFAULT type for factual claims and concept identification. Convert factual answers into boolean checks (e.g., "BCL2" becomes "identifies_bcl2_as_target: bool = True").
+- Use `Literal` types when the reference answer suggests a categorical classification with few fixed options.
 - Use `list[str]` for multiple expected items that form a set.
-- When the reference answer suggests a categorical classification or scale, use `Literal` types with all reasonable values in that domain.
-- When the reference answer contains compound terms or phrases, treat them as single semantic units and create one boolean attribute for the complete concept, not separate attributes for individual words.
+- When the reference answer contains compound terms or phrases, treat them as single semantic units and create one boolean attribute for the complete concept.
+- If answer_notes are provided and explicitly request string fields or specific extraction behavior, follow those instructions and override the boolean-first default.
 
 Return only valid JSON.
 """.strip()

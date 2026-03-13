@@ -175,6 +175,95 @@ def _extract_literal_values(annotation: Any) -> list[str] | None:
     return None
 
 
+def validate_spec(spec: TemplateSpec) -> list[str]:
+    """Validate a TemplateSpec against the primitive registry.
+
+    Checks that every field has a valid type, a recognized primitive with
+    correct parameters, and that the primitive is compatible with the field
+    type. Returns a list of error messages; an empty list means the spec
+    is valid.
+
+    Args:
+        spec: The TemplateSpec to validate.
+
+    Returns:
+        List of human-readable error strings. Empty if valid.
+    """
+    from pydantic import ValidationError
+
+    from karenina.schemas.entities.primitives import _PRIMITIVE_REGISTRY
+
+    valid_field_types = {"bool", "str", "int", "float", "list_str", "literal", "date"}
+
+    # Primitive-to-compatible-field-types mapping
+    type_compatibility: dict[str, set[str]] = {
+        "BooleanMatch": {"bool"},
+        "ExactMatch": {"str", "int", "float"},
+        "ContainsAny": {"str"},
+        "ContainsAll": {"str"},
+        "RegexMatch": {"str"},
+        "SemanticMatch": {"str"},
+        "NumericExact": {"int", "float"},
+        "NumericTolerance": {"float"},
+        "NumericRange": {"int", "float"},
+        "SetContainment": {"list_str"},
+        "OrderedMatch": {"list_str"},
+        "LiteralMatch": {"literal", "str"},
+        "DateMatch": {"date", "str"},
+        "DateTolerance": {"date", "str"},
+        "DateRange": {"date", "str"},
+        "TraceRegex": {"bool"},
+        "TraceContains": {"bool"},
+        "TraceLength": {"bool"},
+    }
+
+    errors: list[str] = []
+
+    for field in spec.fields:
+        prefix = f"Field '{field.name}'"
+
+        # 1. Check field type is valid
+        if field.type not in valid_field_types:
+            errors.append(f"{prefix}: invalid field type '{field.type}'. Must be one of: {sorted(valid_field_types)}")
+
+        # 2. Check literal fields have literal_values
+        if field.type == "literal" and not field.literal_values:
+            errors.append(f"{prefix}: literal type requires 'literal_values'")
+
+        # 3. Check verify_with has a 'type' key
+        prim_type = field.verify_with.get("type")
+        if not prim_type:
+            errors.append(f"{prefix}: 'verify_with' must include a 'type' key")
+            continue
+
+        # 4. Check primitive name exists in registry
+        if prim_type not in _PRIMITIVE_REGISTRY:
+            available = sorted(_PRIMITIVE_REGISTRY.keys())
+            errors.append(f"{prefix}: unknown primitive '{prim_type}'. Available: {available}")
+            continue
+
+        # 5. Check primitive parameters are valid (try to instantiate)
+        try:
+            _reconstruct_primitive(field.verify_with)
+        except (ValueError, ValidationError) as e:
+            errors.append(f"{prefix}: invalid parameters for '{prim_type}': {e}")
+            continue
+
+        # 6. Check primitive/field-type compatibility
+        compatible_types = type_compatibility.get(prim_type, set())
+        if compatible_types and field.type not in compatible_types:
+            errors.append(
+                f"{prefix}: primitive '{prim_type}' is not compatible with "
+                f"field type '{field.type}'. Compatible types: {sorted(compatible_types)}"
+            )
+
+        # 7. Check trace primitives are only on bool fields
+        if field.is_trace and field.type != "bool":
+            errors.append(f"{prefix}: trace primitives require field type 'bool', got '{field.type}'")
+
+    return errors
+
+
 def spec_to_python(spec: TemplateSpec) -> str:
     """Generate Python template code from a TemplateSpec.
 
@@ -186,7 +275,14 @@ def spec_to_python(spec: TemplateSpec) -> str:
 
     Returns:
         Python source code string, ready for exec() or file storage.
+
+    Raises:
+        ValueError: If the spec fails validation.
     """
+    errors = validate_spec(spec)
+    if errors:
+        raise ValueError("Invalid TemplateSpec:\n" + "\n".join(f"  - {e}" for e in errors))
+
     lines: list[str] = []
     used_primitives: set[str] = set()
 

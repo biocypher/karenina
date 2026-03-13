@@ -6,6 +6,7 @@ from karenina.benchmark.verification.utils.template_converter import (
     detect_template_mode,
     python_to_spec,
     spec_to_python,
+    validate_spec,
 )
 from karenina.schemas.entities.template_spec import TemplateFieldSpec, TemplateSpec
 
@@ -345,3 +346,117 @@ class Answer(BaseAnswer):
         assert "ExactMatch" in code
         assert "BooleanMatch" not in code
         assert "NumericTolerance" not in code
+
+
+def _field(name="target", type="str", ground_truth="BCL2", verify_with=None, **kwargs):
+    """Helper to build a TemplateFieldSpec with sensible defaults."""
+    return TemplateFieldSpec(
+        name=name,
+        type=type,
+        description=f"Test field {name}",
+        ground_truth=ground_truth,
+        verify_with=verify_with or {"type": "ExactMatch"},
+        **kwargs,
+    )
+
+
+@pytest.mark.unit
+class TestValidateSpec:
+    def test_valid_spec_returns_no_errors(self):
+        spec = TemplateSpec(
+            fields=[
+                _field(name="target", type="str", verify_with={"type": "ExactMatch"}),
+                _field(name="approved", type="bool", ground_truth=True, verify_with={"type": "BooleanMatch"}),
+            ],
+        )
+        errors = validate_spec(spec)
+        assert errors == []
+
+    def test_unknown_primitive_name(self):
+        spec = TemplateSpec(
+            fields=[_field(verify_with={"type": "FuzzyMatch", "threshold": 0.6})],
+        )
+        errors = validate_spec(spec)
+        assert len(errors) == 1
+        assert "FuzzyMatch" in errors[0]
+        assert "unknown primitive" in errors[0].lower()
+
+    def test_missing_type_key_in_verify_with(self):
+        spec = TemplateSpec(
+            fields=[_field(verify_with={"threshold": 0.6})],
+        )
+        errors = validate_spec(spec)
+        assert len(errors) == 1
+        assert "'type'" in errors[0]
+
+    def test_invalid_primitive_parameters(self):
+        spec = TemplateSpec(
+            fields=[_field(verify_with={"type": "ContainsAll", "terms": ["a", "b"]})],
+        )
+        errors = validate_spec(spec)
+        assert len(errors) == 1
+        assert "ContainsAll" in errors[0]
+
+    def test_primitive_field_type_mismatch(self):
+        spec = TemplateSpec(
+            fields=[
+                _field(name="flag", type="bool", ground_truth=True, verify_with={"type": "ExactMatch"}),
+            ],
+        )
+        errors = validate_spec(spec)
+        assert len(errors) == 1
+        assert "not compatible" in errors[0].lower()
+
+    def test_invalid_field_type(self):
+        spec = TemplateSpec(
+            fields=[_field(type="object")],
+        )
+        errors = validate_spec(spec)
+        assert len(errors) >= 1
+        assert any("object" in e for e in errors)
+
+    def test_literal_field_missing_literal_values(self):
+        spec = TemplateSpec(
+            fields=[
+                _field(
+                    type="literal",
+                    ground_truth="a",
+                    verify_with={"type": "LiteralMatch"},
+                    literal_values=None,
+                ),
+            ],
+        )
+        errors = validate_spec(spec)
+        assert len(errors) == 1
+        assert "literal_values" in errors[0].lower()
+
+    def test_trace_primitive_on_non_bool_field(self):
+        spec = TemplateSpec(
+            fields=[
+                _field(
+                    type="str",
+                    verify_with={"type": "TraceContains", "substring": "hello"},
+                    is_trace=True,
+                ),
+            ],
+        )
+        errors = validate_spec(spec)
+        assert any("trace" in e.lower() and "bool" in e.lower() for e in errors)
+
+    def test_multiple_errors_reported(self):
+        spec = TemplateSpec(
+            fields=[
+                _field(name="bad_prim", verify_with={"type": "FuzzyMatch"}),
+                _field(name="bad_type", type="object"),
+            ],
+        )
+        errors = validate_spec(spec)
+        assert len(errors) >= 2
+
+    def test_spec_to_python_rejects_invalid_spec(self):
+        """spec_to_python should raise ValueError for invalid specs."""
+        spec = TemplateSpec(
+            fields=[_field(verify_with={"type": "FuzzyMatch"})],
+        )
+        with pytest.raises(ValueError, match="FuzzyMatch"):
+            spec_to_python(spec)
