@@ -65,37 +65,32 @@ These are not alternative ways of doing the same thing. They evaluate orthogonal
                      PASS or FAIL
 ```
 
-A template is a [Pydantic model](https://docs.pydantic.dev/latest/) that defines **what to extract** from the response and **how to check it**. The Judge LLM fills in the schema fields, then the `verify()` method compares them against expected values.
+A template is a [Pydantic model](https://docs.pydantic.dev/latest/) that defines **what to extract** from the response and **how to check it**. Each field uses `VerifiedField` to declare the extraction description, the ground truth, and the verification primitive in a single declaration. The Judge LLM fills in the schema fields, then the primitive's `check()` method compares them against the expected values.
 
-The judge's role varies by field type. With `str` fields, the judge acts as a pure parser: it extracts values that `verify()` then checks. With `bool` fields, the description often encodes the evaluation criterion ("True if TP53 is identified as the most common"), so the judge performs some evaluation during extraction. See [Answer Templates](../answer-templates/) for guidance on this tradeoff.
+The judge's role varies by field type. With `str` fields, the judge acts as a pure parser: it extracts values that the primitive then checks. With `bool` fields, the description often encodes the evaluation criterion ("True if TP53 is identified as the most common"), so the judge performs some evaluation during extraction. See [Answer Templates](../answer-templates/) for guidance on this tradeoff.
 
 ```python
-from pydantic import Field
-from karenina.schemas.entities import BaseAnswer
+from karenina.schemas.entities import BaseAnswer, VerifiedField
+from karenina.schemas.entities.primitives import ExactMatch
 
 
 class Answer(BaseAnswer):
-    tissue: str = Field(
+    tissue: str = VerifiedField(
         description=(
             "The tissue or organ stated in the response as the site where "
             "KRAS dependency is strongest. Use the standard anatomical name "
             "(e.g., 'lung' not 'lung tissue', 'colon' not 'colorectal'). "
             "If the response lists multiple tissues, extract only the one "
             "described as most essential or most dependent."
-        )
+        ),
+        ground_truth="pancreas",
+        verify_with=ExactMatch(normalize=["lowercase", "strip"]),
     )
-
-    def ground_truth(self):
-        self.correct = {"tissue": "pancreas"}
-
-    def verify(self) -> bool:
-        return self.tissue.strip().lower() == self.correct["tissue"]
 
 
 # Simulate what happens after the Judge LLM fills in the schema
 parsed = Answer(tissue="Pancreas")
 print(f"Extracted: {parsed.tissue}")
-print(f"Ground truth: {parsed.correct}")
 print(f"Verified: {parsed.verify()}")
 ```
 
@@ -285,19 +280,19 @@ Consider the question: *"Which is the putative target of venetoclax?"*
 **Template** (correctness): extract the drug target and verify it against ground truth.
 
 ```python
+from karenina.schemas.entities import BaseAnswer, VerifiedField
+from karenina.schemas.entities.primitives import BooleanMatch
+
+
 class VenetoclaxAnswer(BaseAnswer):
-    identifies_bcl2_as_target: bool = Field(
+    identifies_bcl2_as_target: bool = VerifiedField(
         description=(
             "True if the response identifies BCL2 (including Bcl-2, BCL-2, or "
             "B-cell lymphoma 2) as the direct pharmacological target."
-        )
+        ),
+        ground_truth=True,
+        verify_with=BooleanMatch(),
     )
-
-    def ground_truth(self):
-        self.correct = {"identifies_bcl2_as_target": True}
-
-    def verify(self) -> bool:
-        return self.identifies_bcl2_as_target == self.correct["identifies_bcl2_as_target"]
 
 
 # Simulate what the Judge LLM would produce after parsing a correct response
@@ -344,7 +339,7 @@ print(f"Regex trait '{has_citations.name}' on sample without citations: {has_cit
 1. **Stages 1-2**: The pipeline validates the template and generates an answer (or uses a cached response in TaskEval).
 2. **Stages 3-6**: Guard stages run (recursion limit, trace validation, optional abstention/sufficiency checks).
 3. **Stage 7 (ParseTemplate)**: The Judge LLM receives the question, the response, and the template's JSON schema. It fills in `identifies_bcl2_as_target`.
-4. **Stage 8 (VerifyTemplate)**: `verify()` compares the parsed value against `self.correct`. Result: **PASS** or **FAIL**.
+4. **Stage 8 (VerifyTemplate)**: `verify()` runs each field's primitive against its ground truth. Result: **PASS** or **FAIL**.
 5. **Stage 11 (RubricEvaluation)**: Each trait evaluates the raw response independently. The LLM trait assesses whether the mechanism is explained. The regex trait checks for `[N]` citation patterns.
 6. **Stage 13 (FinalizeResult)**: All results are combined into a single `VerificationResult`.
 
