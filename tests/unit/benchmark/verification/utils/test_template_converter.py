@@ -1,0 +1,200 @@
+"""Unit tests for template converter."""
+
+import pytest
+
+from karenina.benchmark.verification.utils.template_converter import (
+    detect_template_mode,
+    python_to_spec,
+)
+from karenina.schemas.entities.template_spec import TemplateSpec
+
+
+@pytest.mark.unit
+class TestDetectTemplateMode:
+    def test_verified_template(self):
+        code = """
+from karenina.schemas.entities import BaseAnswer, VerifiedField, ExactMatch
+
+class Answer(BaseAnswer):
+    target: str = VerifiedField(
+        description="target",
+        ground_truth="BCL2",
+        verify_with=ExactMatch(),
+    )
+"""
+        assert detect_template_mode(code) == "verified"
+
+    def test_classic_template(self):
+        code = """
+from pydantic import Field
+from karenina.schemas.entities import BaseAnswer
+
+class Answer(BaseAnswer):
+    target: str = Field(description="target")
+
+    def ground_truth(self):
+        self.correct = {"target": "BCL2"}
+
+    def verify(self) -> bool:
+        return self.target == self.correct["target"]
+"""
+        assert detect_template_mode(code) == "classic"
+
+    def test_mixed_template(self):
+        code = """
+from pydantic import Field
+from karenina.schemas.entities import BaseAnswer, VerifiedField, ExactMatch
+
+class Answer(BaseAnswer):
+    target: str = VerifiedField(
+        description="target",
+        ground_truth="BCL2",
+        verify_with=ExactMatch(),
+    )
+    notes: str = Field(description="extra notes", default="")
+"""
+        assert detect_template_mode(code) == "mixed"
+
+    def test_invalid_code_raises(self):
+        with pytest.raises(ValueError, match="Failed to compile"):
+            detect_template_mode("def broken(")
+
+    def test_no_answer_class_raises(self):
+        code = """
+class NotAnAnswer:
+    pass
+"""
+        with pytest.raises(ValueError, match="No Answer class found"):
+            detect_template_mode(code)
+
+
+@pytest.mark.unit
+class TestPythonToSpec:
+    def test_basic_verified_template(self):
+        code = """
+from karenina.schemas.entities import BaseAnswer, VerifiedField, ExactMatch, BooleanMatch
+
+class DrugAnswer(BaseAnswer):
+    target: str = VerifiedField(
+        description="Protein target",
+        ground_truth="BCL2",
+        verify_with=ExactMatch(normalize=["lowercase", "strip"]),
+    )
+    is_approved: bool = VerifiedField(
+        description="FDA approved",
+        ground_truth=True,
+        verify_with=BooleanMatch(),
+    )
+"""
+        spec = python_to_spec(code)
+        assert isinstance(spec, TemplateSpec)
+        assert spec.class_name == "DrugAnswer"
+        assert len(spec.fields) == 2
+        assert spec.fields[0].name == "target"
+        assert spec.fields[0].ground_truth == "BCL2"
+        assert spec.fields[0].verify_with["type"] == "ExactMatch"
+        assert spec.fields[1].name == "is_approved"
+        assert spec.fields[1].verify_with["type"] == "BooleanMatch"
+
+    def test_trace_field_detected(self):
+        code = """
+from karenina.schemas.entities import BaseAnswer, VerifiedField, TraceRegex
+
+class Answer(BaseAnswer):
+    has_cites: bool = VerifiedField(
+        description="citations",
+        ground_truth=True,
+        verify_with=TraceRegex(pattern=r"\\[\\d+\\]"),
+    )
+"""
+        spec = python_to_spec(code)
+        assert spec.fields[0].is_trace is True
+
+    def test_extraction_hint_preserved(self):
+        code = """
+from karenina.schemas.entities import BaseAnswer, VerifiedField, ExactMatch
+
+class Answer(BaseAnswer):
+    target: str = VerifiedField(
+        description="target",
+        extraction_hint="Normalize to uppercase",
+        ground_truth="BCL2",
+        verify_with=ExactMatch(),
+    )
+"""
+        spec = python_to_spec(code)
+        assert spec.fields[0].extraction_hint == "Normalize to uppercase"
+
+    def test_classic_template_raises(self):
+        code = """
+from karenina.schemas.entities import BaseAnswer
+from pydantic import Field
+
+class Answer(BaseAnswer):
+    target: str = Field(description="target")
+
+    def verify(self) -> bool:
+        return True
+"""
+        with pytest.raises(ValueError, match="classic"):
+            python_to_spec(code)
+
+    def test_mixed_template_only_converts_verified_fields(self):
+        """Mixed templates: only VerifiedField fields appear in the spec."""
+        code = """
+from pydantic import Field
+from karenina.schemas.entities import BaseAnswer, VerifiedField, ExactMatch
+
+class Answer(BaseAnswer):
+    target: str = VerifiedField(
+        description="target",
+        ground_truth="BCL2",
+        verify_with=ExactMatch(),
+    )
+    notes: str = Field(description="extra notes", default="")
+"""
+        spec = python_to_spec(code)
+        assert len(spec.fields) == 1
+        assert spec.fields[0].name == "target"
+
+    def test_field_types_detected(self):
+        code = """
+from karenina.schemas.entities import BaseAnswer, VerifiedField, ExactMatch, BooleanMatch, NumericExact
+
+class Answer(BaseAnswer):
+    name: str = VerifiedField(
+        description="name",
+        ground_truth="test",
+        verify_with=ExactMatch(),
+    )
+    count: int = VerifiedField(
+        description="count",
+        ground_truth=42,
+        verify_with=NumericExact(),
+    )
+    active: bool = VerifiedField(
+        description="active",
+        ground_truth=True,
+        verify_with=BooleanMatch(),
+    )
+"""
+        spec = python_to_spec(code)
+        type_map = {f.name: f.type for f in spec.fields}
+        assert type_map["name"] == "str"
+        assert type_map["count"] == "int"
+        assert type_map["active"] == "bool"
+
+    def test_weight_preserved(self):
+        code = """
+from karenina.schemas.entities import BaseAnswer, VerifiedField, ExactMatch
+
+class Answer(BaseAnswer):
+    target: str = VerifiedField(
+        description="target",
+        ground_truth="BCL2",
+        verify_with=ExactMatch(),
+        weight=2.5,
+    )
+"""
+        spec = python_to_spec(code)
+        assert spec.fields[0].weight == 2.5
