@@ -1,16 +1,19 @@
 """
 Structured answer template generator for Karenina benchmarks.
 
-This module implements a two-phase structured generation approach:
+This module implements a multi-phase structured generation approach:
+0. Planning: free-text field design reasoning (optional)
 1. Ground truth extraction from question/answer pairs
 2. Field description generation for judge prompts
 3. Pydantic class code generation
+4. Smoke test: exec() and verify() the generated code
 
 This module uses the port/adapter pattern for LLM invocation,
 decoupling from specific LLM backends like LangChain.
 """
 
 import json
+import logging
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field, field_validator
@@ -18,6 +21,10 @@ from tqdm import tqdm
 
 from karenina.adapters import get_llm
 from karenina.benchmark.authoring.questions.reader import read_questions_from_file
+from karenina.benchmark.verification.utils.class_discovery import find_answer_class
+from karenina.benchmark.verification.utils.template_validation import (
+    _build_exec_namespace,
+)
 from karenina.ports import Message
 from karenina.schemas.entities import BaseAnswer  # noqa: F401
 
@@ -29,7 +36,11 @@ from .generator_prompts import (
     FIELD_DESCRIPTION_USER_PROMPT_TEMPLATE,
     GROUND_TRUTH_SYSTEM_PROMPT,
     GROUND_TRUTH_USER_PROMPT_TEMPLATE,
+    PLANNING_SYSTEM_PROMPT,
+    PLANNING_USER_PROMPT_TEMPLATE,
 )
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     # Schema classes (used by builder.py)
@@ -69,19 +80,24 @@ class GroundTruthSpec(BaseModel):
 
     @field_validator("attributes")
     @classmethod
-    def validate_no_string_attributes(cls, v: list[GroundTruthField]) -> list[GroundTruthField]:
-        """Ensure no free string attributes are allowed."""
-        forbidden_types = ["str", "List[str]", "Dict[str, str]"]
+    def validate_attribute_types(cls, v: list[GroundTruthField]) -> list[GroundTruthField]:
+        """Validate attribute types.
+
+        Allows str and list[str] (verified via ExactMatch/SetContainment).
+        Forbids Dict[str, str] which is not well-supported.
+        Logs a warning for str fields that lack a Literal constraint.
+        """
+        forbidden_types = ["Dict[str, str]"]
         errors = []
 
         for attr in v:
             if attr.type in forbidden_types:
-                errors.append(
-                    f"Attribute '{attr.name}' uses forbidden type '{attr.type}'. Use boolean attributes instead."
-                )
-            elif "str" in attr.type and not attr.type.startswith("Literal"):
-                errors.append(
-                    f"Attribute '{attr.name}' uses type '{attr.type}' which contains strings. Use boolean attributes or Literal types instead."
+                errors.append(f"Attribute '{attr.name}' uses forbidden type '{attr.type}'.")
+            elif attr.type == "str":
+                logger.warning(
+                    "Attribute '%s' uses free-text 'str' type. Consider using "
+                    "Literal types for more precise verification.",
+                    attr.name,
                 )
 
         if errors:
@@ -95,6 +111,10 @@ class FieldDescriptionItem(BaseModel):
 
     name: str = Field(..., description="The attribute name (must match an attribute from the ground-truth spec).")
     description: str = Field(..., description="Instructional text explaining what to extract from the response.")
+    extraction_hint: str | None = Field(
+        None,
+        description="Optional hint for the extraction model about normalization or formatting concerns.",
+    )
 
 
 class AttributeDescriptions(BaseModel):
@@ -168,14 +188,96 @@ def _generate_structured_output(
     )
 
 
+def _generate_plan(
+    question: str,
+    answer: str,
+    config: "ModelConfig",
+    answer_notes: str | None = None,
+) -> str:
+    """Phase 0: Generate a field design plan via free-text LLM reasoning.
+
+    Args:
+        question: The question text.
+        answer: The reference answer text.
+        config: Model configuration.
+        answer_notes: Optional interpretation guidance.
+
+    Returns:
+        Free-text plan string with field design reasoning.
+    """
+    llm = get_llm(config)
+
+    answer_notes_section = ""
+    if answer_notes:
+        answer_notes_section = f"\nAnswer Notes:\n{answer_notes}\n"
+
+    messages = [
+        Message.system(PLANNING_SYSTEM_PROMPT),
+        Message.user(
+            PLANNING_USER_PROMPT_TEMPLATE.format(
+                question=question,
+                answer=answer,
+                answer_notes_section=answer_notes_section,
+            )
+        ),
+    ]
+
+    response = llm.invoke(messages)
+    return response.content
+
+
+def _smoke_test_generated_code(template_code: str) -> tuple[bool, str | None]:
+    """Phase 4: Smoke test generated code by exec() and verify().
+
+    Executes the generated template code, discovers the Answer class,
+    instantiates it with ground truth values, and runs verify().
+
+    Args:
+        template_code: The generated Python code string.
+
+    Returns:
+        Tuple of (success, error_message).
+    """
+    ns = _build_exec_namespace()
+    try:
+        exec(template_code, ns)  # noqa: S102
+    except Exception as e:
+        return False, f"exec() failed: {e}"
+
+    try:
+        answer_cls = find_answer_class(ns)
+    except ValueError as e:
+        return False, f"Class discovery failed: {e}"
+
+    try:
+        verified_fields = answer_cls._get_verified_fields()  # type: ignore[attr-defined]
+        if verified_fields:
+            # Build kwargs from ground truth values
+            kwargs = {}
+            for field_name, meta in verified_fields.items():
+                kwargs[field_name] = meta.ground_truth
+            instance = answer_cls(**kwargs)
+            result = instance.verify()
+            if not result:
+                return False, "verify() returned False with ground truth values"
+    except Exception as e:
+        return False, f"Smoke test failed: {e}"
+
+    return True, None
+
+
 def _generate_structured_outputs(
     question: str,
     answer: str,
     config: "ModelConfig",
     max_retries: int = 2,
     answer_notes: str | None = None,
+    planning_enabled: bool = True,
 ) -> dict[str, Any]:
-    """Generate structured outputs (ground truth + field descriptions) using two-phase approach.
+    """Generate structured outputs (ground truth + field descriptions) using multi-phase approach.
+
+    When planning is enabled, Phase 0 produces free-text reasoning that is
+    passed as context to Phase 1 and Phase 2.
 
     Retry logic with error feedback is handled by the adapter's with_structured_output().
     """
@@ -183,10 +285,22 @@ def _generate_structured_outputs(
     if answer_notes:
         answer_notes_section = f"\nAnswer Notes (interpretation guidance):\n{answer_notes}\n"
 
+    # Phase 0: Planning (optional)
+    plan_section = ""
+    if planning_enabled:
+        logger.info("Phase 0: Generating field design plan")
+        plan_text = _generate_plan(question, answer, config, answer_notes)
+        plan_section = f"\nField Design Plan (use as guidance):\n{plan_text}\n"
+
     # Phase 1: Generate ground truth specification
     gt_result = _generate_structured_output(
         "ground_truth",
-        {"question": question, "answer": answer, "answer_notes_section": answer_notes_section},
+        {
+            "question": question,
+            "answer": answer,
+            "answer_notes_section": answer_notes_section,
+            "plan_section": plan_section,
+        },
         config,
         GroundTruthSpec,
         max_retries,
@@ -223,10 +337,14 @@ def _generate_structured_outputs(
     # Convert list of FieldDescriptionItem to dict[str, str]
     # (list format is needed for Anthropic's beta.messages.parse compatibility)
     field_descriptions_dict = {item.name: item.description for item in fd_typed.field_descriptions}
+    extraction_hints_dict = {
+        item.name: item.extraction_hint for item in fd_typed.field_descriptions if item.extraction_hint is not None
+    }
 
     return {
         "attributes": gt_json["attributes"],
         "field_descriptions": field_descriptions_dict,
+        "extraction_hints": extraction_hints_dict,
     }
 
 
@@ -311,7 +429,7 @@ def generate_answer_template(
             endpoint_api_key=SecretStr(endpoint_api_key) if endpoint_api_key else None,
         )
 
-    # Phase 1 & 2: Generate structured outputs (ground truth + field descriptions)
+    # Phase 0, 1, & 2: Generate structured outputs (plan + ground truth + field descriptions)
     max_retries = getattr(model_config, "max_retries", 2)  # Default to 2 if not set
     spec = _generate_structured_outputs(
         question_obj.question,
@@ -323,6 +441,17 @@ def generate_answer_template(
 
     # Phase 3: Generate Pydantic class code
     template_code = _generate_pydantic_class(spec)
+
+    # Phase 4: Smoke test the generated code
+    success, error_msg = _smoke_test_generated_code(template_code)
+    if not success:
+        logger.warning(
+            "Smoke test failed for question '%s': %s",
+            question_obj.id,
+            error_msg,
+        )
+        # TODO: retry logic (feed error back to Phase 0 and re-run all phases,
+        # max 1 retry) is future work; for now, return the code as-is.
 
     return template_code
 
@@ -359,13 +488,13 @@ def generate_answer_templates_from_questions_file(
         if not code_blocks:
             code_blocks = answer_template
 
-        # define the class in a local namespace
-        local_ns: dict[str, Any] = {}
-        exec(code_blocks, globals(), local_ns)
-        Answer = local_ns["Answer"]
+        # Execute in a namespace with VerifiedField types available
+        ns = _build_exec_namespace()
+        exec(code_blocks, ns)  # noqa: S102
+        Answer = find_answer_class(ns)
 
         # Store the template code for exec-created classes
-        Answer._source_code = code_blocks
+        Answer._source_code = code_blocks  # type: ignore[attr-defined]
 
         # Inject the question ID programmatically
         AnswerWithID = inject_question_id_into_answer_class(Answer, question.id)
@@ -400,13 +529,13 @@ def load_answer_templates_from_json(
 
     answer_templates = {}
     for question_id, code_blocks in all_code_blocks.items():
-        # Define the class in a local namespace
-        local_ns: dict[str, Any] = {}
-        exec(code_blocks, globals(), local_ns)
-        Answer = local_ns["Answer"]
+        # Execute in a namespace with VerifiedField types available
+        ns = _build_exec_namespace()
+        exec(code_blocks, ns)  # noqa: S102
+        Answer = find_answer_class(ns)
 
         # Store the template code for exec-created classes
-        Answer._source_code = code_blocks
+        Answer._source_code = code_blocks  # type: ignore[attr-defined]
 
         # Inject the question ID programmatically
         AnswerWithID = inject_question_id_into_answer_class(Answer, question_id)
