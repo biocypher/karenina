@@ -103,6 +103,9 @@ class VerificationConfig(BaseModel):
     # Sufficiency detection settings
     sufficiency_enabled: bool = False  # Enable trace sufficiency detection
 
+    # Extraction hint settings (controls whether hints are appended to the parsing prompt)
+    include_extraction_hints: bool = True  # Include extraction hints in the parsing prompt
+
     # Embedding check settings (semantic similarity fallback)
     embedding_check_enabled: bool = False  # Enable semantic similarity fallback
     embedding_check_model: str = DEFAULT_EMBEDDING_MODEL  # SentenceTransformer model for embeddings
