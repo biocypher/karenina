@@ -2,1510 +2,1610 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://biocypher.github.io/karenina/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/advanced/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/contributing/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/advanced-adapters/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/advanced-adapters/available-adapters/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/advanced-adapters/mcp-integration/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/advanced-adapters/ports/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/advanced-adapters/writing-adapters/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/advanced-pipeline/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/advanced-pipeline/custom-stages/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/advanced-pipeline/deep-judgment-rubrics/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/advanced-pipeline/deep-judgment-templates/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/advanced-pipeline/prompt-assembly/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/advanced-pipeline/stages/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/core_concepts/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/core_concepts/adapters/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/core_concepts/questions-and-benchmarks/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/core_concepts/questions-and-benchmarks/checkpoints/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/core_concepts/rubrics/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/getting-started/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/getting-started/installation/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/getting-started/workspace-init/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/home/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/home/philosophy/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/home/reading-paths/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/analyzing-results/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/creating-benchmark/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/custom-templates/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/dataframe-analysis/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/mcp-verification/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/multi-model-eval/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/quickstart-taskeval/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/quickstart/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/rubric-traits/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/running-verification/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/analyzing-results/database-persistence/</loc>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/analyzing-results/dataframe-analysis/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/core_concepts/adele/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/core_concepts/answer-templates/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/core_concepts/evaluation-modes/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/core_concepts/few-shot/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/core_concepts/manual-interface/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/core_concepts/mcp-overview/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/core_concepts/prompt-assembly/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/core_concepts/results-and-scoring/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/core_concepts/task-eval/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/core_concepts/template-vs-rubric/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/core_concepts/verification-pipeline/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/core_concepts/verification-primitives/</loc>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/core_concepts/questions-and-benchmarks/benchmarks/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/core_concepts/questions-and-benchmarks/questions/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/core_concepts/rubrics/callable-traits/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/core_concepts/rubrics/llm-traits/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/core_concepts/rubrics/metric-traits/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/core_concepts/rubrics/regex-traits/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/creating-benchmarks/adele-classification/</loc>
+         <lastmod>2026-03-13</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/creating-benchmarks/ai-assisted-authoring/</loc>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/creating-benchmarks/benchmark-operations/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/creating-benchmarks/choosing-rubric-traits/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/creating-benchmarks/factual-qa-benchmark/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/creating-benchmarks/full-evaluation-benchmark/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/creating-benchmarks/quality-assessment-benchmark/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/creating-benchmarks/scaled-authoring/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/running-verification/basic-verification/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/running-verification/deep-judgment/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/running-verification/few-shot-configuration/</loc>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/running-verification/full-evaluation/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/running-verification/manual-interface-workflow/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/running-verification/mcp-agent-evaluation/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/running-verification/multi-model-comparison/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/running-verification/progressive-save/</loc>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/task-eval/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/task-eval/basic-evaluation/</loc>
+         <lastmod>2026-03-13</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/task-eval/multi-step-evaluation/</loc>
+         <lastmod>2026-03-13</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/task-eval/quality-assessment/</loc>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/SUMMARY/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/cli/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/exceptions/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/integrations/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/ports/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/storage/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/utils/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/claude_agent_sdk/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/claude_tool/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/factory/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/langchain/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/llm_parallel/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/manual/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/registry/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/claude_agent_sdk/agent/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/claude_agent_sdk/availability/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/claude_agent_sdk/errors/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/claude_agent_sdk/llm/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/claude_agent_sdk/mcp/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/claude_agent_sdk/messages/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/claude_agent_sdk/parser/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/claude_agent_sdk/prompts/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/claude_agent_sdk/registration/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/claude_agent_sdk/trace/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/claude_agent_sdk/usage/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/claude_agent_sdk/prompts/deep_judgment/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/claude_agent_sdk/prompts/parsing/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/claude_agent_sdk/prompts/rubric/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/claude_tool/agent/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/claude_tool/llm/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/claude_tool/mcp/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/claude_tool/messages/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/claude_tool/parser/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/claude_tool/prompts/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/claude_tool/registration/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/claude_tool/tools/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/claude_tool/trace/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/claude_tool/usage/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/claude_tool/prompts/deep_judgment/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/claude_tool/prompts/parsing/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/claude_tool/prompts/rubric/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/langchain/agent/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/langchain/initialization/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/langchain/llm/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/langchain/mcp/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/langchain/messages/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/langchain/middleware/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/langchain/models/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/langchain/parser/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/langchain/prompts/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/langchain/registration/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/langchain/trace/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/langchain/usage/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/langchain/prompts/deep_judgment/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/langchain/prompts/feedback_format/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/langchain/prompts/feedback_null/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/langchain/prompts/format_instructions/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/langchain/prompts/parsing/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/langchain/prompts/rubric/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/langchain/prompts/summarization/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/manual/exceptions/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/manual/helpers/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/manual/manager/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/manual/message_utils/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/manual/registration/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/adapters/manual/traces/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/authoring/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/benchmark/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/benchmark_helpers/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/core/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/task_eval/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/authoring/answers/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/authoring/questions/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/authoring/answers/builder/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/authoring/answers/generator/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/authoring/answers/generator_code/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/authoring/answers/generator_prompts/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/authoring/answers/reader/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/authoring/questions/extractor/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/authoring/questions/reader/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/core/base/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/core/exports/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/core/metadata/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/core/question_query/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/core/questions/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/core/results/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/core/results_io/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/core/rubrics/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/core/templates/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/core/verification_manager/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/task_eval/helpers/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/task_eval/models/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/task_eval/task_eval/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/batch_runner/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/evaluators/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/executor/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/prompts/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/runner/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/stages/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/utils/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/evaluators/rubric/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/evaluators/template/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/evaluators/trace/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/evaluators/rubric/deep_judgment/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/evaluators/rubric/evaluator/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/evaluators/rubric/llm_trait/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/evaluators/rubric/metric_trait/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/evaluators/template/deep_judgment/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/evaluators/template/evaluator/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/evaluators/template/results/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/evaluators/trace/abstention/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/evaluators/trace/sufficiency/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/prompts/assembler/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/prompts/deep_judgment/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/prompts/parsing/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/prompts/rubric/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/prompts/task_types/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/prompts/trace/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/prompts/deep_judgment/rubric/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/prompts/deep_judgment/template/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/prompts/deep_judgment/rubric/deep_judgment/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/prompts/deep_judgment/template/excerpt/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/prompts/deep_judgment/template/hallucination/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/prompts/deep_judgment/template/reasoning/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/prompts/parsing/parsing_instructions/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/prompts/rubric/literal_trait/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/prompts/rubric/llm_trait/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/prompts/rubric/metric_trait/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/prompts/trace/abstention/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/prompts/trace/sufficiency/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/stages/core/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/stages/helpers/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/stages/pipeline/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/stages/core/autofail_stage_base/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/stages/core/base/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/stages/core/check_stage_base/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/stages/core/orchestrator/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/stages/helpers/deep_judgment_helpers/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/stages/helpers/results_exporter/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/stages/pipeline/abstention_check/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/stages/pipeline/deep_judgment_autofail/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/stages/pipeline/deep_judgment_rubric_auto_fail/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/stages/pipeline/embedding_check/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/stages/pipeline/finalize_result/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/stages/pipeline/generate_answer/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/stages/pipeline/parse_template/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/stages/pipeline/recursion_limit_autofail/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/stages/pipeline/rubric_evaluation/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/stages/pipeline/sufficiency_check/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/stages/pipeline/trace_validation_autofail/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/stages/pipeline/validate_template/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/stages/pipeline/verify_template/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/utils/cache_helpers/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/utils/class_discovery/</loc>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/utils/embedding_check/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/utils/error_helpers/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/utils/llm_detection/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/utils/llm_invocation/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/utils/llm_judge_helpers/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/utils/resource_helpers/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/utils/schema_builder/</loc>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/utils/search_helpers/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/utils/search_provider/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/utils/search_tavily/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/utils/storage_helpers/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/utils/task_helpers/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/utils/template_converter/</loc>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/utils/template_parsing_helpers/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/utils/template_validation/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/utils/trace_agent_metrics/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/utils/trace_formatting/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/utils/trace_fuzzy_match/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/utils/trace_parsing/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/utils/trace_usage_tracker/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/cli/interactive/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/cli/optimize/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/cli/preset/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/cli/serve/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/cli/status/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/cli/utils/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/cli/verify/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/cli/verify_config/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/cli/verify_output/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/integrations/adele/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/integrations/gepa/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/integrations/adele/classifier/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/integrations/adele/parser/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/integrations/adele/prompts/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/integrations/adele/schemas/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/integrations/adele/traits/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/integrations/adele/prompts/system/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/integrations/adele/prompts/user/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/integrations/gepa/adapter/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/integrations/gepa/config/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/integrations/gepa/data_types/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/integrations/gepa/export/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/integrations/gepa/feedback/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/integrations/gepa/prompts/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/integrations/gepa/scoring/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/integrations/gepa/splitting/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/integrations/gepa/tracking/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/integrations/gepa/verbose/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/integrations/gepa/prompts/defaults/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/integrations/gepa/prompts/feedback/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/ports/adapter_instruction/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/ports/agent/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/ports/capabilities/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/ports/errors/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/ports/llm/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/ports/messages/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/ports/parser/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/ports/usage/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/checkpoint/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/config/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/dataframes/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/entities/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/outputs/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/results/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/shared/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/verification/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/config/models/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/dataframes/judgment/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/dataframes/rubric/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/dataframes/template/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/entities/answer/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/entities/composition/</loc>
+         <lastmod>2026-03-13</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/entities/normalizers/</loc>
+         <lastmod>2026-03-13</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/entities/primitives/</loc>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/entities/question/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/entities/rubric/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/entities/template_spec/</loc>
+         <lastmod>2026-03-13</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/entities/verified_field/</loc>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/outputs/rubric/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/results/aggregation/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/results/judgment/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/results/rubric/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/results/rubric_judgment/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/results/template/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/results/verification_result_set/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/shared/search/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/verification/api_models/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/verification/config/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/verification/config_presets/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/verification/job/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/verification/model_identity/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/verification/prompt_config/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/verification/result/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/schemas/verification/result_components/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/storage/auto_mapper/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/storage/base/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/storage/converters/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/storage/db_config/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/storage/engine/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/storage/generated_models/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/storage/migrate_question_keywords/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/storage/migrate_template_id/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/storage/models/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/storage/operations/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/storage/queries/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/storage/rubric_serializer/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/storage/utils/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/storage/views/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/storage/views/combination_info/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/storage/views/deep_judgment_rubric_traits/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/storage/views/models_used/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/storage/views/question_attributes/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/storage/views/raw_llm_answers/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/storage/views/result_mcp_servers/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/storage/views/result_tools_used/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/storage/views/results_metadata/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/storage/views/rubric_traits/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/storage/views/template_attributes/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/storage/views/template_results/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/storage/views/utils/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/utils/answer_cache/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/utils/checkpoint/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/utils/checkpoint_trait_converters/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/utils/code/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/utils/errors/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/utils/file_ops/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/utils/json_extraction/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/utils/mcp/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/utils/messages/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/utils/progressive_save/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/utils/retry/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/utils/testing/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/utils/version/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/utils/mcp/client/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/api/karenina/utils/mcp/tools/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/cli/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/cli/init/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/cli/optimize/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/cli/preset/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/cli/serve/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/cli/verify-status/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/cli/verify/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/configuration/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/configuration/env-vars/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/configuration/model-config/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/configuration/preset-schema/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/configuration/prompt-config/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/reference/configuration/verification-config/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/workflows/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/workflows/analyzing-results/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/workflows/analyzing-results/database-persistence/</loc>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/workflows/analyzing-results/exporting/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/workflows/analyzing-results/iterating/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/workflows/analyzing-results/verification-result/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/workflows/configuration/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/workflows/configuration/environment-variables/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/workflows/configuration/presets/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/workflows/creating-benchmarks/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/workflows/creating-benchmarks/adele-classification/</loc>
+         <lastmod>2026-03-13</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/workflows/creating-benchmarks/ai-assisted-authoring/</loc>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/workflows/creating-benchmarks/benchmark-operations/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/workflows/running-verification/</loc>
-         <lastmod>2026-03-12</lastmod>
+         <lastmod>2026-03-13</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/workflows/running-verification/few-shot-configuration/</loc>
+         <lastmod>2026-03-13</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/workflows/running-verification/progressive-save/</loc>
+         <lastmod>2026-03-13</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/workflows/task-eval/basic-evaluation/</loc>
+         <lastmod>2026-03-13</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/workflows/task-eval/multi-step-evaluation/</loc>
+         <lastmod>2026-03-13</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/workflows/task-eval/quality-assessment/</loc>
+         <lastmod>2026-03-13</lastmod>
     </url>
 </urlset>
