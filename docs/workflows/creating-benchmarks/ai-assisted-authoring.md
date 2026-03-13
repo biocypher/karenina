@@ -41,25 +41,20 @@ from karenina.schemas.entities.question import Question
 from karenina.benchmark.authoring.answers.builder import AnswerBuilder
 
 # Realistic generated template code (matches actual generator output format)
-_GENERATED_CODE = '''from karenina.schemas.entities import BaseAnswer
-from pydantic import Field
+_GENERATED_CODE = '''from karenina.schemas.entities import BaseAnswer, VerifiedField
+from karenina.schemas.entities.primitives import BooleanMatch
 
 class Answer(BaseAnswer):
-    identifies_target: bool = Field(
-        description="True if the response identifies BCL2 as the primary pharmacological target of venetoclax."
+    identifies_target: bool = VerifiedField(
+        description="True if the response identifies BCL2 as the primary pharmacological target of venetoclax.",
+        ground_truth=True,
+        verify_with=BooleanMatch(),
     )
-    mentions_mechanism: bool = Field(
-        description="True if the response describes venetoclax as a selective BCL2 inhibitor that mimics BH3-only proteins."
+    mentions_mechanism: bool = VerifiedField(
+        description="True if the response describes venetoclax as a selective BCL2 inhibitor that mimics BH3-only proteins.",
+        ground_truth=True,
+        verify_with=BooleanMatch(),
     )
-
-    def ground_truth(self):
-        self.correct = {"identifies_target": True, "mentions_mechanism": True}
-
-    def verify(self) -> bool:
-        for field, expected in self.correct.items():
-            if getattr(self, field) != expected:
-                return False
-        return True
 '''
 
 def _mock_generate_answer_template(question_obj, **kwargs):
@@ -133,21 +128,21 @@ Before attaching a generated template to your benchmark, review it for correctne
 
 1. **Field types**: Are `bool`, `str`, `float`, and `Literal` types appropriate for each field?
 2. **Descriptions**: Do they give the judge enough context to parse correctly?
-3. **`ground_truth()` values**: Do they match the reference answer?
-4. **`verify()` logic**: Does it implement the right comparison?
+3. **`ground_truth` values**: Do they match the reference answer?
+4. **`verify_with` primitives**: Is the right primitive selected for each field type?
 
 ```python
 # The generated code above defines:
-#   identifies_target: bool   -> checks if BCL2 is identified
-#   mentions_mechanism: bool  -> checks if BH3 mimicry is mentioned
-#   verify() iterates over self.correct and compares each field
+#   identifies_target: bool   -> VerifiedField with BooleanMatch, ground_truth=True
+#   mentions_mechanism: bool  -> VerifiedField with BooleanMatch, ground_truth=True
+#   No ground_truth() or verify() methods needed; VerifiedField handles both.
 
 # Inspect the structure
 lines = code_string.strip().split("\n")
 print(f"Total lines: {len(lines)}")
 print(f"Fields defined: identifies_target, mentions_mechanism")
 print(f"Ground truth: identifies_target=True, mentions_mechanism=True")
-print(f"Verify logic: iterates over self.correct, checks each field")
+print(f"Verification: BooleanMatch() for both fields")
 ```
 
 For boolean fields, the most common issue is descriptions that are too vague. A description like "True if the response mentions BCL2" may return True for responses that mention BCL2 in a different context. The generated code above is more precise: it specifies "as the primary pharmacological target of venetoclax."
@@ -179,23 +174,22 @@ print(f"Progress: {benchmark.get_progress()}%")
 
 ## Edit Generated Templates
 
-Generated templates are code strings, so you can modify them with standard string operations before attaching. This is useful when the generated `verify()` logic needs stricter checks or the field descriptions need refinement.
+Generated templates are code strings, so you can modify them with standard string operations before attaching. This is useful when a field description needs refinement, a ground truth value needs correction, or you want to swap a primitive for a more appropriate one.
 
 ```python
-# Add stricter verification: require both fields to be True,
-# and add a docstring explaining the rationale
+# Refine the identifies_target description to be more precise,
+# and add normalization to handle case variations
 edited_code = code_string.replace(
-    "    def verify(self) -> bool:\n"
-    "        for field, expected in self.correct.items():\n"
-    "            if getattr(self, field) != expected:\n"
-    "                return False\n"
-    "        return True",
-    "    def verify(self) -> bool:\n"
-    '        """Both target identification and mechanism description are required."""\n'
-    "        return (\n"
-    "            self.identifies_target == self.correct['identifies_target']\n"
-    "            and self.mentions_mechanism == self.correct['mentions_mechanism']\n"
-    "        )",
+    '        description="True if the response identifies BCL2 as the primary pharmacological target of venetoclax.",\n'
+    "        ground_truth=True,\n"
+    "        verify_with=BooleanMatch(),",
+    '        description=(\n'
+    '            "True if the response identifies BCL2 (including Bcl-2, BCL-2, or "\n'
+    '            "B-cell lymphoma 2) as the direct pharmacological target of venetoclax. "\n'
+    '            "False if BCL2 is mentioned only as a pathway member."\n'
+    "        ),\n"
+    "        ground_truth=True,\n"
+    "        verify_with=BooleanMatch(),",
 )
 
 # Re-attach the edited version
@@ -204,7 +198,7 @@ print(f"Template updated for: {q1_id[:50]}...")
 print(f"Has template: {benchmark.has_template(q1_id)}")
 ```
 
-For minor edits (tweaking a description, adjusting a ground truth value), string replacement works well. For larger structural changes (adding fields, rewriting `verify()`), consider writing the template by hand or using `AnswerBuilder` instead.
+For minor edits (tweaking a description, adjusting a ground truth value, swapping a primitive), string replacement works well. For larger structural changes (adding fields, introducing custom composition logic), consider writing the template by hand or using `AnswerBuilder` instead.
 
 ---
 
