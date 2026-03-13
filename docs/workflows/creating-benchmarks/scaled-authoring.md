@@ -41,17 +41,16 @@ def _mock_generate_all_templates(self, **kwargs):
     results = {}
     for qid in self.get_question_ids():
         if not self.get_template(qid) or kwargs.get("force_regenerate"):
-            # Create a simple boolean template for each question
-            template_code = '''class Answer(BaseAnswer):
-    is_correct: bool = Field(
-        description="True if the response contains the expected answer."
+            # Create a simple VerifiedField template for each question
+            template_code = '''from karenina.schemas.entities import BaseAnswer, BooleanMatch, VerifiedField
+
+
+class Answer(BaseAnswer):
+    is_correct: bool = VerifiedField(
+        description="True if the response contains the expected answer.",
+        ground_truth=True,
+        verify_with=BooleanMatch(),
     )
-
-    def ground_truth(self):
-        self.correct = {"is_correct": True}
-
-    def verify(self) -> bool:
-        return self.is_correct == self.correct["is_correct"]
 '''
             self.add_answer_template(qid, template_code)
             results[qid] = {"success": True, "template_code": template_code, "skipped": False}
@@ -175,7 +174,7 @@ print(template)
 
 ## Programmatic Templates with AnswerBuilder
 
-For questions where you want precise control without writing template class code by hand, `AnswerBuilder` provides a fluent interface. It builds `Answer` classes from attribute and regex specifications, then compiles them into executable classes.
+For questions where you want precise control without writing template class code by hand, `AnswerBuilder` provides a fluent interface. It builds `Answer` classes using `VerifiedField` with appropriate verification primitives, then compiles them into executable classes. Each attribute you add is mapped to a `VerifiedField` with a matching primitive (`BooleanMatch` for booleans, `ExactMatch` for strings, `NumericTolerance` for floats, and so on).
 
 ```python
 from karenina.benchmark.authoring.answers.builder import AnswerBuilder
@@ -195,10 +194,22 @@ benchmark.update_template(metformin_id, Answer)
 print(f"Updated template for: {metformin_id[:50]}...")
 ```
 
+The compiled class uses `VerifiedField` internally. For example, `add_attribute("mentions_ampk", "bool", ..., True)` produces a field equivalent to:
+
+```python
+mentions_ampk: bool = VerifiedField(
+    description="Whether AMPK activation is mentioned",
+    ground_truth=True,
+    verify_with=BooleanMatch(),
+)
+```
+
+`BaseAnswer` auto-generates `ground_truth()`, `verify()`, and `verify_granular()` from the `VerifiedField` metadata, so the compiled class needs no hand-written verification methods.
+
 When to use each approach:
 
-- **AnswerBuilder**: Quick boolean/regex templates built from data — no string manipulation needed.
-- **Class definitions or code strings**: Complex `verify()` logic, custom normalization, multi-step checks that need full Python expressiveness.
+- **AnswerBuilder**: Quick boolean/regex templates built from data, no string manipulation needed.
+- **Class definitions or code strings**: Complex verification logic, custom normalization, multi-step checks that need full Python expressiveness.
 
 ---
 
