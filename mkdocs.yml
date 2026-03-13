@@ -11,6 +11,7 @@ exclude_docs: |
   getting-started/quickstart-taskeval.md
   workflows/task-eval/index.md
   core_concepts/answer-templates.md
+  core_concepts/verification-primitives.md
   core_concepts/rubrics/llm-traits.md
   core_concepts/rubrics/literal-traits.md
   core_concepts/rubrics/regex-traits.md
@@ -172,6 +173,7 @@ nav:
       - "Checkpoints: The Memory of Evaluation": core_concepts/questions-and-benchmarks/checkpoints.md
     - TaskEval: notebooks/core_concepts/task-eval.ipynb
     - Answer Templates: notebooks/core_concepts/answer-templates.ipynb
+    - Verification Primitives: notebooks/core_concepts/verification-primitives.ipynb
     - Rubric Traits:
       - Overview: core_concepts/rubrics/index.md
       - LLM Traits: notebooks/core_concepts/rubrics/llm-traits.ipynb
