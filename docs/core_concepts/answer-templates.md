@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.19.1
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -209,12 +209,12 @@ The `weight` parameter controls how much each field contributes to partial credi
 
 This is the same separation that classic templates achieve through `ground_truth()` and `verify()` methods: the judge never sees the expected answers or verification logic.
 
-### 2.3. Naming Requirement
+### 2.3. Class Requirements
 
-All answer template classes **must be named `Answer`**. The pipeline looks for this exact class name when executing template code. If you add templates through the Python API (e.g., `benchmark.templates.add_answer_template(q_id, MyCustomAnswer)`), the framework automatically renames your class to `Answer` internally. The naming requirement applies when writing template source code directly.
+An answer template must inherit from `BaseAnswer`. The class can have any name; the pipeline discovers it by scanning for the leaf `BaseAnswer` subclass in the template code. If multiple `BaseAnswer` subclasses are defined in the same template, the pipeline raises an error.
 
 ```python
-# Correct
+# Both are valid: the pipeline discovers the BaseAnswer subclass by type, not by name
 class Answer(BaseAnswer):
     value: str = VerifiedField(
         description="The answer value",
@@ -223,11 +223,15 @@ class Answer(BaseAnswer):
     )
 
 
-# The Judge LLM would extract this from the answering model's response.
-# Here we populate the field directly to demonstrate verify().
-a = Answer(value="42")
-print(f"verify(): {a.verify()}")
+class VenetoclaxAnswer(BaseAnswer):
+    target: str = VerifiedField(
+        description="Drug target protein",
+        ground_truth="BCL2",
+        verify_with=ExactMatch(normalize=["lowercase", "strip"]),
+    )
 ```
+
+By convention, most templates use the name `Answer`, but this is not enforced. When adding templates via the Python API (e.g., `benchmark.templates.add_answer_template(q_id, MyCustomAnswer)`), any `BaseAnswer` subclass works.
 
 Because `BaseAnswer` uses Pydantic's `extra="allow"` configuration, you can attach any attribute to `self` inside custom methods. The framework uses this for `self.correct` (expected values) and `self.regex` (pattern checks) in classic templates (see [Section 8](#8-advanced-custom-verification)). None of these appear in the JSON schema sent to the judge.
 

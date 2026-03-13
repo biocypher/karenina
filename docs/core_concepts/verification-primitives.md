@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.19.1
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -38,11 +38,11 @@ class MyTemplate(BaseAnswer):
 
 ---
 
-## Parsed Primitives
+## 1. Parsed Primitives
 
 Parsed primitives receive two values: the judge-extracted field value and the `ground_truth` set on the field. They return a boolean indicating whether verification passed.
 
-### Boolean
+### 1.1. Boolean
 
 #### BooleanMatch
 
@@ -62,7 +62,7 @@ is_approved: bool = VerifiedField(
 
 ---
 
-### String
+### 1.2. String
 
 #### ExactMatch
 
@@ -164,7 +164,7 @@ rationale: str = VerifiedField(
 
 ---
 
-### Numeric
+### 1.3. Numeric
 
 #### NumericExact
 
@@ -223,7 +223,7 @@ p_value: float = VerifiedField(
 
 ---
 
-### List
+### 1.4. List
 
 #### SetContainment
 
@@ -264,7 +264,7 @@ authors: list[str] = VerifiedField(
 
 ---
 
-### Categorical
+### 1.5. Categorical
 
 #### LiteralMatch
 
@@ -286,7 +286,7 @@ trial_phase: Literal["I", "II", "III", "IV"] = VerifiedField(
 
 ---
 
-### Date and Time
+### 1.6. Date and Time
 
 #### DateMatch
 
@@ -349,7 +349,7 @@ submission_date: str = VerifiedField(
 
 ---
 
-## Trace Primitives
+## 2. Trace Primitives
 
 Fields using trace primitives are excluded from the judge's parsing schema. The field type must be `bool` because the primitive evaluates the raw response directly rather than a judge-extracted value.
 
@@ -405,7 +405,7 @@ is_substantive: bool = VerifiedField(
 
 ---
 
-## Normalizers
+## 3. Normalizers
 
 Normalizers preprocess string values before comparison. They are applied sequentially to both the extracted value and the expected value.
 
@@ -438,7 +438,7 @@ class GeneTemplate(BaseAnswer):
 
 ---
 
-## Writing Custom Primitives
+## 4. Writing Custom Primitives
 
 Both primitive base classes are in `karenina.schemas.entities.primitives`.
 
