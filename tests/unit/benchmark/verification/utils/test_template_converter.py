@@ -5,8 +5,9 @@ import pytest
 from karenina.benchmark.verification.utils.template_converter import (
     detect_template_mode,
     python_to_spec,
+    spec_to_python,
 )
-from karenina.schemas.entities.template_spec import TemplateSpec
+from karenina.schemas.entities.template_spec import TemplateFieldSpec, TemplateSpec
 
 
 @pytest.mark.unit
@@ -198,3 +199,149 @@ class Answer(BaseAnswer):
 """
         spec = python_to_spec(code)
         assert spec.fields[0].weight == 2.5
+
+
+@pytest.mark.unit
+class TestSpecToPython:
+    def test_basic_two_field_template(self):
+        spec = TemplateSpec(
+            fields=[
+                TemplateFieldSpec(
+                    name="target",
+                    type="str",
+                    description="Protein target",
+                    ground_truth="BCL2",
+                    verify_with={"type": "ExactMatch", "normalize": ["lowercase", "strip"]},
+                ),
+                TemplateFieldSpec(
+                    name="is_approved",
+                    type="bool",
+                    description="FDA approved",
+                    ground_truth=True,
+                    verify_with={"type": "BooleanMatch"},
+                ),
+            ],
+        )
+        code = spec_to_python(spec)
+        assert "class Answer(BaseAnswer):" in code
+        assert "VerifiedField(" in code
+        assert "ground_truth='BCL2'" in code
+        assert "ExactMatch(" in code
+        assert "BooleanMatch()" in code
+
+    def test_custom_class_name(self):
+        spec = TemplateSpec(
+            class_name="DrugAnswer",
+            fields=[
+                TemplateFieldSpec(
+                    name="target",
+                    type="str",
+                    description="target",
+                    ground_truth="BCL2",
+                    verify_with={"type": "ExactMatch"},
+                ),
+            ],
+        )
+        code = spec_to_python(spec)
+        assert "class DrugAnswer(BaseAnswer):" in code
+
+    def test_generated_code_is_executable(self):
+        """Round-trip: spec -> python -> exec -> verify."""
+        spec = TemplateSpec(
+            fields=[
+                TemplateFieldSpec(
+                    name="target",
+                    type="str",
+                    description="target",
+                    ground_truth="BCL2",
+                    verify_with={"type": "ExactMatch"},
+                ),
+            ],
+        )
+        code = spec_to_python(spec)
+        ns = {}
+        exec(code, ns)
+        from karenina.schemas.entities import BaseAnswer
+
+        cls = next(v for v in ns.values() if isinstance(v, type) and issubclass(v, BaseAnswer) and v is not BaseAnswer)
+        instance = cls(target="BCL2")
+        assert instance.verify() is True
+
+    def test_round_trip_python_to_spec_to_python(self):
+        """Full round-trip: python -> spec -> python -> verify same results."""
+        original_code = """
+from karenina.schemas.entities import BaseAnswer, VerifiedField, ExactMatch, BooleanMatch
+
+class Answer(BaseAnswer):
+    target: str = VerifiedField(
+        description="Protein target",
+        ground_truth="BCL2",
+        verify_with=ExactMatch(normalize=["lowercase", "strip"]),
+    )
+    is_approved: bool = VerifiedField(
+        description="FDA approved",
+        ground_truth=True,
+        verify_with=BooleanMatch(),
+    )
+"""
+        spec = python_to_spec(original_code)
+        regenerated_code = spec_to_python(spec)
+
+        from karenina.benchmark.verification.utils.class_discovery import find_answer_class
+        from karenina.benchmark.verification.utils.template_validation import _build_exec_namespace
+
+        ns = _build_exec_namespace()
+        exec(regenerated_code, ns)
+        cls = find_answer_class(ns)
+        instance = cls(target="bcl2", is_approved=True)
+        assert instance.verify() is True
+
+    def test_trace_field_generated(self):
+        spec = TemplateSpec(
+            fields=[
+                TemplateFieldSpec(
+                    name="has_cites",
+                    type="bool",
+                    description="Has citations",
+                    ground_truth=True,
+                    verify_with={"type": "TraceRegex", "pattern": r"\[\d+\]"},
+                    is_trace=True,
+                ),
+            ],
+        )
+        code = spec_to_python(spec)
+        assert "TraceRegex(" in code
+
+    def test_literal_field_generated(self):
+        spec = TemplateSpec(
+            fields=[
+                TemplateFieldSpec(
+                    name="category",
+                    type="literal",
+                    description="Drug category",
+                    ground_truth="inhibitor",
+                    literal_values=["inhibitor", "antibody", "small_molecule"],
+                    verify_with={"type": "LiteralMatch"},
+                ),
+            ],
+        )
+        code = spec_to_python(spec)
+        assert "Literal[" in code
+        assert "LiteralMatch()" in code
+
+    def test_imports_only_used_primitives(self):
+        spec = TemplateSpec(
+            fields=[
+                TemplateFieldSpec(
+                    name="target",
+                    type="str",
+                    description="target",
+                    ground_truth="BCL2",
+                    verify_with={"type": "ExactMatch"},
+                ),
+            ],
+        )
+        code = spec_to_python(spec)
+        assert "ExactMatch" in code
+        assert "BooleanMatch" not in code
+        assert "NumericTolerance" not in code

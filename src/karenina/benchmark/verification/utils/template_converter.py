@@ -173,3 +173,105 @@ def _extract_literal_values(annotation: Any) -> list[str] | None:
         args = getattr(annotation, "__args__", ())
         return [str(a) for a in args]
     return None
+
+
+def spec_to_python(spec: TemplateSpec) -> str:
+    """Generate Python template code from a TemplateSpec.
+
+    Produces a complete, self-contained Python source string that defines
+    a BaseAnswer subclass with VerifiedField declarations.
+
+    Args:
+        spec: TemplateSpec with field definitions and optional strategy.
+
+    Returns:
+        Python source code string, ready for exec() or file storage.
+    """
+    lines: list[str] = []
+    used_primitives: set[str] = set()
+
+    # Collect used primitives
+    for field in spec.fields:
+        prim_type = field.verify_with.get("type", "")
+        if prim_type:
+            used_primitives.add(prim_type)
+
+    # Build imports
+    imports = ["BaseAnswer", "VerifiedField"]
+    imports.extend(sorted(used_primitives))
+
+    # Check if we need typing imports
+    needs_literal = any(f.type == "literal" for f in spec.fields)
+
+    if needs_literal:
+        lines.append("from typing import Literal")
+        lines.append("")
+
+    lines.append(f"from karenina.schemas.entities import {', '.join(imports)}")
+    lines.append("")
+    lines.append("")
+    lines.append(f"class {spec.class_name}(BaseAnswer):")
+
+    # Field definitions
+    for field in spec.fields:
+        type_annotation = _spec_type_to_python_annotation(field)
+        primitive_code = _primitive_dict_to_code(field.verify_with)
+        ground_truth_repr = repr(field.ground_truth)
+
+        lines.append(f"    {field.name}: {type_annotation} = VerifiedField(")
+        escaped_desc = field.description.replace('"', '\\"')
+        lines.append(f'        description="{escaped_desc}",')
+
+        if field.extraction_hint:
+            escaped_hint = field.extraction_hint.replace('"', '\\"')
+            lines.append(f'        extraction_hint="{escaped_hint}",')
+
+        lines.append(f"        ground_truth={ground_truth_repr},")
+        lines.append(f"        verify_with={primitive_code},")
+
+        if field.weight != 1.0:
+            lines.append(f"        weight={field.weight},")
+
+        lines.append("    )")
+
+    # Add trailing newline
+    lines.append("")
+
+    return "\n".join(lines)
+
+
+def _spec_type_to_python_annotation(field: TemplateFieldSpec) -> str:
+    """Convert a spec type string to a Python type annotation."""
+    type_map = {
+        "bool": "bool",
+        "str": "str",
+        "int": "int",
+        "float": "float",
+        "list_str": "list[str]",
+        "date": "str",
+    }
+
+    if field.type == "literal" and field.literal_values:
+        values = ", ".join(repr(v) for v in field.literal_values)
+        return f"Literal[{values}]"
+
+    return type_map.get(field.type, "str")
+
+
+def _primitive_dict_to_code(primitive: dict[str, Any]) -> str:
+    """Convert a serialized primitive dict to Python constructor code.
+
+    Args:
+        primitive: Dict with 'type' key and optional parameters.
+
+    Returns:
+        Python expression string, e.g. 'ExactMatch(normalize=["lowercase"])'.
+    """
+    prim_type = primitive.get("type", "ExactMatch")
+    params = {k: v for k, v in primitive.items() if k != "type"}
+
+    if not params:
+        return f"{prim_type}()"
+
+    param_strs = [f"{k}={v!r}" for k, v in params.items()]
+    return f"{prim_type}({', '.join(param_strs)})"
