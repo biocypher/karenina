@@ -6,10 +6,13 @@ validation for answer structures.
 """
 
 import inspect
+import logging
 import re
-from typing import Any, ClassVar
+from typing import Any, ClassVar, cast
 
 from pydantic import BaseModel, ConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class BaseAnswer(BaseModel):
@@ -52,6 +55,35 @@ class BaseAnswer(BaseModel):
                 original_gt(self)
 
             cls.model_post_init = _bridged_model_post_init  # type: ignore[method-assign]
+
+    @classmethod
+    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
+        """Auto-assign verify/verify_granular for VerifiedField templates.
+
+        This hook runs after Pydantic has fully built the model, so
+        model_fields is populated and _get_verified_fields() can inspect
+        json_schema_extra. Only templates with at least one VerifiedField
+        get the auto-generated methods; classic templates are left alone.
+        """
+        super().__pydantic_init_subclass__(**kwargs)
+
+        verified = cls._get_verified_fields()
+        if not verified:
+            return
+
+        def _has_own_method(target_cls: type, method_name: str) -> bool:
+            """Check if any class in MRO (between cls and BaseAnswer) defines method."""
+            for klass in target_cls.__mro__:
+                if klass is BaseAnswer:
+                    break
+                if method_name in klass.__dict__:
+                    return True
+            return False
+
+        if not _has_own_method(cls, "verify"):
+            cls.verify = BaseAnswer._auto_verify  # type: ignore[attr-defined]
+        if not _has_own_method(cls, "verify_granular"):
+            cls.verify_granular = BaseAnswer._auto_verify_granular  # type: ignore[attr-defined]
 
     @classmethod
     def get_source_code(cls) -> str | None:
@@ -127,6 +159,19 @@ class BaseAnswer(BaseModel):
         except Exception as e:
             print(f"Warning: Could not capture source code: {e}")
 
+    def model_post_init(self, __context: Any) -> None:
+        """Post-init hook for auto-generating ground truth from VerifiedField metadata.
+
+        For templates using VerifiedField, this automatically populates
+        self.correct with {field_name: ground_truth} if not already set.
+        Classic templates and templates with custom ground_truth() are unaffected
+        because the bridge in __init_subclass__ overrides this method.
+        """
+        if not hasattr(self, "correct") or getattr(self, "correct", None) is None:
+            verified = self.__class__._get_verified_fields()
+            if verified:
+                self.correct = {name: meta.ground_truth for name, meta in verified.items()}
+
     def set_question_id(self, question_id: str) -> None:
         """Set the question ID programmatically.
 
@@ -134,6 +179,123 @@ class BaseAnswer(BaseModel):
             question_id: The unique identifier for the question this answer relates to.
         """
         self.id = question_id
+
+    @classmethod
+    def _get_verified_fields(cls) -> dict[str, Any]:
+        """Extract VerificationMeta from all VerifiedField-annotated fields.
+
+        Returns:
+            Mapping of field name to VerificationMeta for fields that carry
+            verification metadata in json_schema_extra["__verification__"].
+        """
+        from karenina.schemas.entities.verified_field import VerificationMeta
+
+        result: dict[str, VerificationMeta] = {}
+        for name, field_info in cls.model_fields.items():
+            extra = field_info.json_schema_extra
+            if isinstance(extra, dict) and "__verification__" in extra:
+                meta = VerificationMeta.model_validate(extra["__verification__"])
+                result[name] = meta
+        return result
+
+    def _compute_field_results(self) -> dict[str, bool]:
+        """Evaluate all VerifiedField checks and cache in _field_results.
+
+        For TracePrimitive fields, reads self._raw_trace and compares
+        check_trace() result against bool(meta.ground_truth). For parsed
+        fields, calls primitive.check(extracted, ground_truth).
+
+        Returns:
+            Mapping of field name to pass/fail boolean.
+
+        Raises:
+            ValueError: If a trace field is used but _raw_trace is not set.
+        """
+        cached = self.__dict__.get("_field_results")
+        if cached is not None:
+            return cast(dict[str, bool], cached)
+
+        from karenina.schemas.entities.primitives import TracePrimitive, _reconstruct_primitive
+
+        verified = self.__class__._get_verified_fields()
+        results: dict[str, bool] = {}
+
+        for name, meta in verified.items():
+            primitive = _reconstruct_primitive(meta.verify_with)
+
+            if isinstance(primitive, TracePrimitive):
+                raw_trace = getattr(self, "_raw_trace", None)
+                if raw_trace is None:
+                    raise ValueError(f"Field {name!r} uses a TracePrimitive but requires _raw_trace to be set")
+                trace_result = primitive.check_trace(raw_trace)
+                results[name] = trace_result == bool(meta.ground_truth)
+            else:
+                extracted = getattr(self, name)
+                results[name] = primitive.check(extracted, meta.ground_truth)
+
+        self.__dict__["_field_results"] = results
+        return results
+
+    def _auto_verify(self) -> bool:
+        """Auto-generated verify() for VerifiedField templates.
+
+        If the subclass defines a VerificationStrategy inner class with a
+        verify_strategy attribute, uses evaluate_strategy() to combine field
+        results. Otherwise, requires all fields to pass.
+
+        Returns:
+            True if verification passes.
+
+        Raises:
+            NotImplementedError: If the template has no VerifiedField fields
+                (classic templates must define their own verify()).
+        """
+        from karenina.schemas.entities.composition import evaluate_strategy
+
+        verified = self.__class__._get_verified_fields()
+        if not verified:
+            raise NotImplementedError("No VerifiedField fields found. Define verify() manually for classic templates.")
+
+        field_results = self._compute_field_results()
+
+        # Check for VerificationStrategy inner class
+        strategy_cls = getattr(self.__class__, "VerificationStrategy", None)
+        if strategy_cls is not None:
+            strategy = getattr(strategy_cls, "verify_strategy", None)
+            if strategy is not None:
+                return evaluate_strategy(strategy, field_results)
+
+        return all(field_results.values())
+
+    def _auto_verify_granular(self) -> float:
+        """Auto-generated verify_granular() for VerifiedField templates.
+
+        Computes a flat weighted average over all VerifiedField results.
+
+        Returns:
+            Score between 0.0 and 1.0.
+
+        Raises:
+            NotImplementedError: If the template has no VerifiedField fields.
+        """
+        verified = self.__class__._get_verified_fields()
+        if not verified:
+            raise NotImplementedError(
+                "No VerifiedField fields found. Define verify_granular() manually for classic templates."
+            )
+
+        field_results = self._compute_field_results()
+
+        total_weight = 0.0
+        weighted_sum = 0.0
+        for name, meta in verified.items():
+            total_weight += meta.weight
+            if field_results.get(name, False):
+                weighted_sum += meta.weight
+
+        if total_weight == 0.0:
+            return 0.0
+        return weighted_sum / total_weight
 
     def verify_regex(self, raw_trace: str) -> dict[str, Any]:
         """Verify regex patterns against the raw LLM response trace.
