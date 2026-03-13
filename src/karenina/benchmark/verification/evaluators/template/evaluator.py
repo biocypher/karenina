@@ -16,6 +16,7 @@ from karenina.adapters import get_llm, get_parser
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
 from karenina.benchmark.verification.prompts.parsing.parsing_instructions import TemplatePromptBuilder
 from karenina.benchmark.verification.utils import prepare_evaluation_input
+from karenina.benchmark.verification.utils.schema_builder import build_parsing_schema
 from karenina.ports import LLMPort
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.entities import BaseAnswer
@@ -285,7 +286,7 @@ class TemplateEvaluator:
                 user_text=user_text,
                 user_instructions=user_instructions,
                 instruction_context={
-                    "json_schema": self.answer_class.model_json_schema(),
+                    "json_schema": build_parsing_schema(self.answer_class),
                     "format_instructions": "",
                 },
             )
@@ -409,7 +410,7 @@ class TemplateEvaluator:
             user_text="",
             user_instructions=user_instructions,
             instruction_context={
-                "json_schema": self.answer_class.model_json_schema(),
+                "json_schema": build_parsing_schema(self.answer_class),
                 "format_instructions": format_instructions,
             },
         )

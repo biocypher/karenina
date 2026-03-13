@@ -8,11 +8,35 @@ from typing import Any
 
 from karenina.benchmark.verification.evaluators import TemplateEvaluator
 from karenina.benchmark.verification.utils.template_parsing_helpers import is_regex_only_template
+from karenina.schemas.entities.answer import BaseAnswer
 
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
 # Set up logger
 logger = logging.getLogger(__name__)
+
+
+def is_trace_only_template(answer_class: type) -> bool:
+    """Check if a template has only trace fields (no parsed fields for the judge).
+
+    A template is "trace-only" when build_parsing_schema() returns a schema
+    where all user-defined properties have been removed (only inherited
+    BaseAnswer fields remain). These templates verify against the raw trace
+    directly and do not require LLM judge parsing.
+
+    Args:
+        answer_class: A Pydantic BaseAnswer subclass.
+
+    Returns:
+        True if the template has only trace fields (no fields for the judge
+        to parse), False otherwise.
+    """
+    from karenina.benchmark.verification.utils.schema_builder import build_parsing_schema
+
+    schema = build_parsing_schema(answer_class)
+    props = set(schema.get("properties", {}).keys())
+    inherited = set(BaseAnswer.model_json_schema().get("properties", {}).keys())
+    return props <= inherited
 
 
 class ParseTemplateStage(BaseVerificationStage):
@@ -121,11 +145,27 @@ class ParseTemplateStage(BaseVerificationStage):
 
         # Fast path: regex-only templates need no LLM parsing
         if is_regex_only_template(Answer):
-            logger.info("Regex-only template detected — skipping LLM parsing")
+            logger.info("Regex-only template detected, skipping LLM parsing")
             parsed_answer = Answer()
             context.set_artifact(ArtifactKeys.PARSED_ANSWER, parsed_answer)
             context.set_artifact(ArtifactKeys.TEMPLATE_EVALUATOR, None)
             context.set_artifact(ArtifactKeys.PARSING_MODEL_STR, "regex_only (no LLM)")
+            context.set_artifact(ArtifactKeys.DEEP_JUDGMENT_PERFORMED, False)
+            context.set_result_field(ArtifactKeys.USED_FULL_TRACE, context.use_full_trace_for_template)
+            context.set_result_field(ArtifactKeys.TRACE_EXTRACTION_ERROR, None)
+            return
+
+        # Fast path: trace-only VerifiedField templates need no LLM parsing.
+        # All user fields are TracePrimitive fields verified directly against the
+        # raw response, so the judge has nothing to parse.
+        if is_trace_only_template(Answer):
+            logger.info("Trace-only template detected, skipping LLM parsing")
+            raw_llm_response = context.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
+            parsed_answer = Answer()
+            parsed_answer._raw_trace = raw_llm_response
+            context.set_artifact(ArtifactKeys.PARSED_ANSWER, parsed_answer)
+            context.set_artifact(ArtifactKeys.TEMPLATE_EVALUATOR, None)
+            context.set_artifact(ArtifactKeys.PARSING_MODEL_STR, "trace_only (no LLM)")
             context.set_artifact(ArtifactKeys.DEEP_JUDGMENT_PERFORMED, False)
             context.set_result_field(ArtifactKeys.USED_FULL_TRACE, context.use_full_trace_for_template)
             context.set_result_field(ArtifactKeys.TRACE_EXTRACTION_ERROR, None)

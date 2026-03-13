@@ -65,6 +65,7 @@ class ArtifactKeys:
     RAW_ANSWER = "RawAnswer"
     TEMPLATE_VALIDATION_ERROR = "template_validation_error"
     TEMPLATE_EVALUATOR = "template_evaluator"
+    TEMPLATE_MODE = "template_mode"  # "classic", "verified", or "mixed"
 
     # Model Identification
     ANSWERING_MODEL_STR = "answering_model_str"

@@ -102,6 +102,11 @@ class VerifyTemplateStage(BaseVerificationStage):
         parsed_answer = context.get_artifact(ArtifactKeys.PARSED_ANSWER)
         raw_llm_response = context.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
 
+        # Inject raw trace for VerifiedField templates that use TracePrimitive fields.
+        # _raw_trace is consumed by _compute_field_results() during verify().
+        if not hasattr(parsed_answer, "_raw_trace") or parsed_answer._raw_trace is None:
+            parsed_answer._raw_trace = raw_llm_response
+
         # Get evaluator from context (created by ParseTemplateStage, or None for regex-only)
         evaluator = context.get_artifact(ArtifactKeys.TEMPLATE_EVALUATOR)
 
