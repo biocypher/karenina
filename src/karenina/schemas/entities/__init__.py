@@ -45,6 +45,7 @@ from .rubric import (
     TraitKind,
     merge_rubrics,
 )
+from .template_spec import TemplateFieldSpec, TemplateSpec, VerifyStrategySpec
 from .verified_field import VerificationMeta, VerifiedField
 
 __all__ = [
@@ -86,6 +87,10 @@ __all__ = [
     "SynonymMap",
     "apply_normalizer",
     "apply_normalizers",
+    # TemplateSpec (GUI interchange)
+    "TemplateFieldSpec",
+    "TemplateSpec",
+    "VerifyStrategySpec",
     # Questions
     "Question",
     "QuestionRegistryEntry",
