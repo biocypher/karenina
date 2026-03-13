@@ -71,6 +71,7 @@ class TemplateEvaluator:
         answer_class: type[BaseAnswer],
         raw_answer_class: type[BaseAnswer] | None = None,
         prompt_config: "PromptConfig | None" = None,
+        include_extraction_hints: bool = False,
     ):
         """
         Initialize the template evaluator.
@@ -80,6 +81,8 @@ class TemplateEvaluator:
             answer_class: The Answer class (with question ID injected) for parsing
             raw_answer_class: The RawAnswer class (before ID injection) for ground truth extraction
             prompt_config: Optional per-task-type user instructions for prompt assembly
+            include_extraction_hints: Whether to inject per-field extraction hints from
+                VerifiedField metadata into the judge's system prompt.
 
         Raises:
             ValueError: If model configuration is invalid (validated by adapter factory)
@@ -87,6 +90,7 @@ class TemplateEvaluator:
         """
         self.model_config = model_config
         self._prompt_config = prompt_config
+        self._include_extraction_hints = include_extraction_hints
         self.answer_class: type[BaseAnswer] = answer_class
         self.raw_answer_class: type[BaseAnswer] = raw_answer_class or answer_class
 
@@ -266,6 +270,7 @@ class TemplateEvaluator:
             system_text = self._prompt_builder.build_system_prompt(
                 has_tool_traces=False,
                 ground_truth=self._get_ground_truth(),
+                extraction_hints=self._get_extraction_hints(),
             )
             user_text = self._prompt_builder.build_user_prompt(
                 question_text=question_text,
@@ -327,8 +332,29 @@ class TemplateEvaluator:
             _, ground_truth = create_test_instance_from_answer_class(self.raw_answer_class)
             return ground_truth
         except Exception as e:
-            logger.warning(f"Could not extract ground truth: {e}")
+            logger.warning("Could not extract ground truth: %s", e)
             return None
+
+    def _get_extraction_hints(self) -> dict[str, str] | None:
+        """Collect extraction hints from VerifiedField metadata.
+
+        Reads extraction_hint from each VerificationMeta attached to the answer class.
+        Returns None if hints are disabled or no hints are defined on any field.
+
+        Returns:
+            Mapping of field name to extraction hint string, or None if not applicable.
+        """
+        if not self._include_extraction_hints:
+            return None
+        try:
+            verified_fields = self.answer_class._get_verified_fields()
+        except Exception as e:
+            logger.warning("Could not read verified fields for extraction hints: %s", e)
+            return None
+        hints = {
+            name: meta.extraction_hint for name, meta in verified_fields.items() if meta.extraction_hint is not None
+        }
+        return hints if hints else None
 
     # ========================================================================
     # Deep Judgment Parsing (via composition)
@@ -391,11 +417,12 @@ class TemplateEvaluator:
 
                 _, ground_truth = create_test_instance_from_answer_class(self.raw_answer_class)
             except Exception as e:
-                logger.warning(f"Could not extract ground truth: {e}")
+                logger.warning("Could not extract ground truth: %s", e)
 
         combined_system_prompt = self._prompt_builder.build_system_prompt(
             has_tool_traces=False,
             ground_truth=ground_truth,
+            extraction_hints=self._get_extraction_hints(),
         )
 
         # Apply adapter + user instructions via PromptAssembler

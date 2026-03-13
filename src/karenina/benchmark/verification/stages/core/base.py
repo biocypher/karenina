@@ -275,6 +275,9 @@ class VerificationContext:
     # Prompt Configuration
     prompt_config: PromptConfig | None = None
 
+    # Extraction Hints Configuration
+    include_extraction_hints: bool = True
+
     # Few-Shot Configuration
     few_shot_examples: list[dict[str, str]] | None = None
 
