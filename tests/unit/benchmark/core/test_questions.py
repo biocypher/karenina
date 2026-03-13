@@ -13,7 +13,7 @@ Tests cover:
 import pytest
 
 from karenina import Benchmark
-from karenina.benchmark.core.questions import QuestionManager, _rename_answer_class_to_standard
+from karenina.benchmark.core.questions import QuestionManager
 from karenina.schemas.entities import BaseAnswer, Question
 
 # Valid template for testing
@@ -25,32 +25,6 @@ VALID_TEMPLATE = '''class Answer(BaseAnswer):
     def verify(self) -> bool:
         return len(self.value) > 0
 '''
-
-
-@pytest.mark.unit
-class TestRenameAnswerClassToStandard:
-    """Tests for _rename_answer_class_to_standard helper function."""
-
-    def test_already_named_answer(self) -> None:
-        """Test that class already named 'Answer' is unchanged."""
-        source = "class Answer(BaseAnswer):\n    pass"
-        result = _rename_answer_class_to_standard(source, "Answer")
-        assert result == source
-
-    def test_renames_custom_class_name(self) -> None:
-        """Test that custom class name is renamed to 'Answer'."""
-        source = "class VenetoclaxAnswer(BaseAnswer):\n    value: int"
-        result = _rename_answer_class_to_standard(source, "VenetoclaxAnswer")
-        assert "class Answer(BaseAnswer):" in result
-        assert "VenetoclaxAnswer" not in result
-        assert "value: int" in result
-
-    def test_fallback_on_ast_parse_error(self) -> None:
-        """Test string replacement fallback when AST parsing fails."""
-        # Use source that might cause AST issues (e.g., with special comments)
-        source = "class CustomAnswer(BaseAnswer):\n    # Some comment\n    pass"
-        result = _rename_answer_class_to_standard(source, "CustomAnswer")
-        assert "class Answer(" in result
 
 
 @pytest.mark.unit

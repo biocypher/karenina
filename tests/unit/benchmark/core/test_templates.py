@@ -273,8 +273,8 @@ class TestUpdateTemplate:
         assert "target" in result
         assert "BCL2" in result
 
-    def test_update_template_with_class_renames_to_answer(self) -> None:
-        """Test that a non-Answer class name is renamed to Answer."""
+    def test_update_template_with_custom_class_name_preserves_name(self) -> None:
+        """Test that a custom class name is preserved (not renamed to Answer)."""
         from pydantic import Field
 
         from karenina.schemas.entities import BaseAnswer
@@ -292,8 +292,7 @@ class TestUpdateTemplate:
         manager.update_template(q_id, VenetoclaxAnswer)
 
         result = manager.get_template(q_id)
-        assert "class Answer(" in result
-        assert "VenetoclaxAnswer" not in result
+        assert "class VenetoclaxAnswer(" in result
 
     def test_update_template_with_non_baseanswer_class_raises(self) -> None:
         """Test that passing a non-BaseAnswer class raises TypeError."""

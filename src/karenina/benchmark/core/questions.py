@@ -7,6 +7,7 @@ are delegated to QuestionQueryBuilder for single responsibility.
 
 import inspect
 import logging
+import textwrap
 from collections.abc import Iterator
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Union
@@ -20,7 +21,6 @@ from karenina.schemas.entities.question import QuestionRegistryEntry
 from karenina.utils.checkpoint import add_question_to_benchmark
 
 from .question_query import QuestionQueryBuilder
-from .templates import _rename_answer_class_to_standard
 
 logger = logging.getLogger(__name__)
 
@@ -149,9 +149,6 @@ class QuestionManager:
                 if not issubclass(answer_template, BaseAnswer):
                     raise TypeError(f"answer_template class must inherit from BaseAnswer, got {answer_template}")
 
-                # Capture the original class name for renaming
-                original_class_name = getattr(answer_template, "__name__", "Answer")
-
                 # Convert Answer class to source code string
                 try:
                     # First try to get source code using the BaseAnswer method
@@ -159,9 +156,7 @@ class QuestionManager:
                     if source_code is None:
                         source_code = inspect.getsource(answer_template)
 
-                    # Rename the class to "Answer" for verification system compatibility
-                    # This allows users to use any class name (e.g., VenetoclaxAnswer)
-                    answer_template = _rename_answer_class_to_standard(source_code, original_class_name)
+                    answer_template = textwrap.dedent(source_code)
                 except (OSError, TypeError) as e:
                     class_name = getattr(answer_template, "__name__", "Unknown")
                     raise ValueError(

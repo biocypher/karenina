@@ -18,37 +18,6 @@ from ..verification.utils.template_validation import validate_answer_template
 logger = logging.getLogger(__name__)
 
 
-def _rename_answer_class_to_standard(source_code: str, original_class_name: str) -> str:
-    """Rename a BaseAnswer subclass to 'Answer' in source code.
-
-    This allows users to define classes with any name (e.g., VenetoclaxAnswer),
-    but stores them with the standard 'Answer' name that the verification system expects.
-
-    Args:
-        source_code: The source code containing the class definition
-        original_class_name: The original name of the class to rename
-
-    Returns:
-        Modified source code with the class renamed to 'Answer'
-    """
-    if original_class_name == "Answer":
-        return source_code
-
-    try:
-        tree = ast.parse(source_code)
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef) and node.name == original_class_name:
-                node.name = "Answer"
-        return ast.unparse(tree)
-    except Exception:
-        logger.debug(
-            "AST parsing failed for class rename %s -> Answer, falling back to string replacement",
-            original_class_name,
-            exc_info=True,
-        )
-        return source_code.replace(f"class {original_class_name}(", "class Answer(")
-
-
 def resolve_template_code(template: str | type) -> str:
     """Convert a template argument to source code string.
 
@@ -95,8 +64,7 @@ def resolve_template_code(template: str | type) -> str:
                 "or call cls.set_source_code_from_notebook() in Jupyter."
             )
 
-        source_code = textwrap.dedent(source_code)
-        return _rename_answer_class_to_standard(source_code, original_class_name)
+        return textwrap.dedent(source_code)
 
     raise TypeError(f"template must be a string or BaseAnswer subclass, got {type(template).__name__}")
 
