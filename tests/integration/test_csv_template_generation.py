@@ -128,7 +128,9 @@ def test_template_generation_with_openai_endpoint(csv_file_path: Path, openai_en
         # Verify the template was generated
         assert template_code, "Template code is empty"
         assert "class Answer(BaseAnswer):" in template_code, "Template doesn't contain Answer class"
-        assert "def verify(self)" in template_code, "Template doesn't contain verify method"
+        # VerifiedField-based templates have no manual verify() method;
+        # BaseAnswer auto-generates it from the VerifiedField metadata.
+        assert "VerifiedField(" in template_code, "Template doesn't use VerifiedField"
 
 
 @pytest.mark.slow

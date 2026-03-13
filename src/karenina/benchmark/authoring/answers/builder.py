@@ -189,22 +189,37 @@ class AnswerBuilder:
         # Execute the code to create the class
         local_ns: dict[str, Any] = {}
 
-        # Add imports to the code
-        imports = "from karenina.schemas.entities import BaseAnswer\nfrom pydantic import Field\n\n"
-        final_code = imports + final_code
-
         try:
             # Import the required modules
             from typing import Literal, Union
 
             from pydantic import Field
 
-            from karenina.schemas.entities import BaseAnswer
+            from karenina.schemas.entities import (
+                BaseAnswer,
+                BooleanMatch,
+                ExactMatch,
+                LiteralMatch,
+                NumericExact,
+                NumericTolerance,
+                SetContainment,
+                VerifiedField,
+            )
 
-            # Set up globals with necessary imports
+            # Set up globals with necessary imports.
+            # The generated code contains its own import line, but having
+            # the symbols pre-populated here also supports minimal class
+            # generation (which doesn't include an import line).
             globals_dict = {
                 "BaseAnswer": BaseAnswer,
                 "Field": Field,
+                "VerifiedField": VerifiedField,
+                "BooleanMatch": BooleanMatch,
+                "ExactMatch": ExactMatch,
+                "LiteralMatch": LiteralMatch,
+                "NumericExact": NumericExact,
+                "NumericTolerance": NumericTolerance,
+                "SetContainment": SetContainment,
                 "List": list,
                 "Dict": dict,
                 "Literal": Literal,
@@ -238,7 +253,25 @@ class AnswerBuilder:
 """
 
     def _add_regex_support(self, base_code: str, class_name: str) -> str:
-        """Add regex field and initialization to existing class code."""
+        """Add regex field and initialization to existing class code.
+
+        For classic templates (with ground_truth() or model_post_init()), the
+        regex dict is injected into the existing init method. For VerifiedField
+        templates (no ground_truth() method), a model_post_init() is appended
+        to the class.
+        """
+        regex_dict = self._build_regex_dict()
+        regex_field_line = '    regex: dict = Field(default_factory=dict, description="Regex validation patterns")'
+
+        # Detect whether this is a VerifiedField template (no ground_truth method)
+        is_verified_field_template = (
+            "def ground_truth(self):" not in base_code and "def model_post_init(self, __context):" not in base_code
+        )
+
+        if is_verified_field_template:
+            return self._add_regex_support_verified_field(base_code, class_name, regex_dict, regex_field_line)
+
+        # Classic template path: inject into existing ground_truth / model_post_init
         lines = base_code.split("\n")
         modified_lines = []
         in_class = False
@@ -246,15 +279,13 @@ class AnswerBuilder:
         init_method_indent = ""
         added_regex_field = False
 
-        regex_dict = self._build_regex_dict()
-
         for line in lines:
             if f"class {class_name}(BaseAnswer):" in line:
                 in_class = True
                 modified_lines.append(line)
                 continue
 
-            # Add regex field after other Field definitions
+            # Add regex field after other Field definitions (once we leave the class body fields)
             if (
                 in_class
                 and not added_regex_field
@@ -262,10 +293,7 @@ class AnswerBuilder:
                 and not line.startswith("    ")
                 and not line.strip().startswith("#")
             ):
-                # We've left the field definitions area
-                modified_lines.append(
-                    '    regex: dict = Field(default_factory=dict, description="Regex validation patterns")'
-                )
+                modified_lines.append(regex_field_line)
                 modified_lines.append("")
                 added_regex_field = True
 
@@ -288,11 +316,59 @@ class AnswerBuilder:
         if not added_regex_field:
             for i, line in enumerate(modified_lines):
                 if "def model_post_init(self, __context):" in line or "def ground_truth(self):" in line:
-                    modified_lines.insert(
-                        i, '    regex: dict = Field(default_factory=dict, description="Regex validation patterns")'
-                    )
+                    modified_lines.insert(i, regex_field_line)
                     modified_lines.insert(i + 1, "")
                     break
+
+        return "\n".join(modified_lines)
+
+    def _add_regex_support_verified_field(
+        self, base_code: str, class_name: str, regex_dict: str, regex_field_line: str
+    ) -> str:
+        """Inject regex support into a VerifiedField-based template.
+
+        Appends a regex field declaration and a model_post_init() that calls
+        super() (so BaseAnswer's VerifiedField post-init still runs) then sets
+        self.regex to the regex pattern dict.
+
+        Args:
+            base_code: Generated VerifiedField class code.
+            class_name: Class name used in the code.
+            regex_dict: String representation of the regex patterns dict.
+            regex_field_line: The regex field declaration line to insert.
+
+        Returns:
+            Modified source code with regex support added.
+        """
+        lines = base_code.split("\n")
+        modified_lines = []
+        in_class = False
+        added_regex_field = False
+
+        for line in lines:
+            if f"class {class_name}(BaseAnswer):" in line:
+                in_class = True
+                modified_lines.append(line)
+                continue
+
+            # Insert regex field after the last VerifiedField closing paren line
+            # by detecting when we see an indented closing "    )" that ends a field
+            if in_class and not added_regex_field and line.strip() == ")" and line.startswith("    "):
+                modified_lines.append(line)
+                # Check if the next line is blank or end-of-code; we'll add after all fields
+                # by deferring to end-of-class handling
+                continue
+
+            modified_lines.append(line)
+
+        # If no regex field was added yet, append it plus a model_post_init to the class
+        if in_class and not added_regex_field:
+            modified_lines.append("")
+            modified_lines.append(regex_field_line)
+            modified_lines.append("")
+            modified_lines.append("    def model_post_init(self, __context: object) -> None:")
+            modified_lines.append("        super().model_post_init(__context)")
+            modified_lines.append(f"        self.regex = {regex_dict}")
 
         return "\n".join(modified_lines)
 
