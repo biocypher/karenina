@@ -155,3 +155,37 @@ class TestAgenticParseTemplateStage:
 
         assert ctx.error is not None
         assert "agent failed" in ctx.error
+
+    @patch("karenina.benchmark.verification.stages.pipeline.agentic_parse_template.get_agent")
+    @patch("karenina.benchmark.verification.stages.pipeline.agentic_parse_template.get_parser")
+    def test_execute_marks_error_on_extraction_failure(self, mock_get_parser, mock_get_agent):
+        from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (
+            AgenticParseTemplateStage,
+        )
+        from karenina.ports import AgentResult, UsageMetadata
+
+        # Agent succeeds
+        mock_agent = MagicMock()
+        mock_agent.run.return_value = AgentResult(
+            final_response='{"test_field": true}',
+            raw_trace="investigation trace",
+            trace_messages=[],
+            usage=UsageMetadata(),
+            turns=3,
+            limit_reached=False,
+        )
+        mock_get_agent.return_value = mock_agent
+
+        # Parser fails
+        mock_parser = MagicMock()
+        mock_parser.parse_to_pydantic.side_effect = RuntimeError("parser failed")
+        mock_get_parser.return_value = mock_parser
+
+        stage = AgenticParseTemplateStage()
+        ctx = _make_context()
+        stage.execute(ctx)
+
+        assert ctx.error is not None
+        assert "extraction failed" in ctx.error.lower()
+        # Investigation trace should still be stored
+        assert ctx.get_artifact(ArtifactKeys.INVESTIGATION_TRACE) == "investigation trace"

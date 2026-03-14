@@ -101,7 +101,8 @@ class GenerateAnswerStage(BaseVerificationStage):
             return
 
         root = context.workspace_root
-        assert root is not None, "workspace_root must be set when agentic_parsing is True"
+        if root is None:
+            raise RuntimeError("workspace_root must be set when agentic_parsing is True")
 
         # Build unique suffix (replicate-safe for parallel execution)
         timestamp = time.strftime("%Y%m%dT%H%M%S")

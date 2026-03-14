@@ -7,11 +7,13 @@ data from the investigation findings.
 
 import json
 import logging
+from typing import Any
 
 from karenina.adapters import get_agent, get_parser
 from karenina.benchmark.verification.utils.schema_builder import build_parsing_schema
 from karenina.ports import AgentConfig, Message
 from karenina.schemas.entities.answer import BaseAnswer
+from karenina.schemas.verification.model_identity import ModelIdentity
 
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
@@ -87,9 +89,12 @@ class AgenticParseTemplateStage(BaseVerificationStage):
         answer_class = context.get_artifact(ArtifactKeys.ANSWER)
         parsing_model = context.parsing_model
 
+        # Build schema once for both investigation and extraction
+        clean_schema = build_parsing_schema(answer_class)
+
         # Step 1: Investigation
         try:
-            investigation_trace = self._run_investigation(context, answer_class)
+            investigation_trace = self._run_investigation(context, clean_schema)
         except Exception as e:
             context.mark_error(f"Agentic investigation failed: {e}")
             return
@@ -102,14 +107,13 @@ class AgenticParseTemplateStage(BaseVerificationStage):
                 context,
                 answer_class,
                 investigation_trace,
+                clean_schema,
             )
         except Exception as e:
             context.mark_error(f"Agentic extraction failed: {e}")
             return
 
         # Store results
-        from karenina.schemas.verification.model_identity import ModelIdentity
-
         model_str = ModelIdentity.from_model_config(
             parsing_model,
             role="parsing",
@@ -136,19 +140,18 @@ class AgenticParseTemplateStage(BaseVerificationStage):
     def _run_investigation(
         self,
         context: VerificationContext,
-        answer_class: type[BaseAnswer],
+        clean_schema: dict[str, Any],
     ) -> str:
         """Run investigation agent with tools.
 
         Args:
             context: Verification context.
-            answer_class: The answer template class.
+            clean_schema: Pre-built JSON schema for the answer template.
 
         Returns:
             Raw trace from the investigation agent.
         """
         agent = get_agent(context.parsing_model)
-        clean_schema = build_parsing_schema(answer_class)
         schema_json = json.dumps(clean_schema, indent=2)
 
         system_prompt = (
@@ -200,6 +203,7 @@ class AgenticParseTemplateStage(BaseVerificationStage):
         context: VerificationContext,
         answer_class: type[BaseAnswer],
         investigation_trace: str,
+        clean_schema: dict[str, Any],
     ) -> BaseAnswer:
         """Extract structured answer from investigation findings.
 
@@ -207,12 +211,12 @@ class AgenticParseTemplateStage(BaseVerificationStage):
             context: Verification context.
             answer_class: The answer template class.
             investigation_trace: Raw trace from investigation agent.
+            clean_schema: Pre-built JSON schema for the answer template.
 
         Returns:
             Parsed answer instance.
         """
         parser = get_parser(context.parsing_model)
-        clean_schema = build_parsing_schema(answer_class)
         schema_json = json.dumps(clean_schema, indent=2)
 
         messages = [
