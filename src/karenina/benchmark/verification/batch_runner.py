@@ -94,6 +94,7 @@ def generate_task_queue(
                             # Context
                             "rubric": rubric,
                             "keywords": template.keywords,
+                            "question_workspace_path": template.workspace_path,
                             "few_shot_examples": few_shot,
                             # Feature flags (from config)
                             **extract_feature_flags(config),
@@ -215,6 +216,15 @@ def execute_task(
             deep_judgment_rubric_search_tool=task.get("deep_judgment_rubric_search_tool", "tavily"),
             # Prompt configuration
             prompt_config=task.get("prompt_config"),
+            # Agentic parsing
+            agentic_parsing=task.get("agentic_parsing", False),
+            agentic_judge_context=task.get("agentic_judge_context", "workspace_only"),
+            agentic_parsing_max_turns=task.get("agentic_parsing_max_turns", 15),
+            agentic_parsing_timeout=task.get("agentic_parsing_timeout", 120.0),
+            workspace_root=task.get("workspace_root"),
+            workspace_copy=task.get("workspace_copy", True),
+            workspace_cleanup=task.get("workspace_cleanup", True),
+            question_workspace_path=task.get("question_workspace_path"),
             cached_answer_data=cached_answer_data,
         )
 
