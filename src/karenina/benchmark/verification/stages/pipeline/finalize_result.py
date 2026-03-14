@@ -4,6 +4,7 @@ Builds the final VerificationResult from accumulated context.
 """
 
 import logging
+import shutil
 from typing import Any
 
 from karenina.benchmark.verification.utils.llm_invocation import _split_parsed_response
@@ -338,3 +339,15 @@ class FinalizeResultStage(BaseVerificationStage):
 
         # Store final result
         context.set_artifact(ArtifactKeys.FINAL_RESULT, result)
+
+        # Clean up workspace working copies (never originals)
+        if context.workspace_path and context.workspace_cleanup and context.workspace_is_copy:
+            try:
+                shutil.rmtree(context.workspace_path)
+                logger.debug("Cleaned up workspace: %s", context.workspace_path)
+            except Exception:
+                logger.warning(
+                    "Failed to clean up workspace: %s",
+                    context.workspace_path,
+                    exc_info=True,
+                )
