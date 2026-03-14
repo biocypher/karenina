@@ -120,6 +120,13 @@ class VerificationResultTemplate(BaseModel):
     # Recursion limit metadata
     recursion_limit_reached: bool = False  # Whether agent hit recursion limit
 
+    # Agentic parsing
+    investigation_trace: str | None = Field(
+        default=None,
+        description="Raw trace from the agentic judge investigation step, if agentic parsing was used.",
+    )
+    agentic_parsing_performed: bool = False  # Whether agentic parsing was used
+
     # Abstention
     abstention_check_performed: bool = False  # Whether abstention check was attempted
     abstention_detected: bool | None = None  # Whether model refused/abstained from answering
