@@ -6,6 +6,7 @@ Uses a unified adapter path for ALL interfaces including manual.
 
 import hashlib
 import logging
+import os
 import shutil
 import time
 import traceback
@@ -106,7 +107,7 @@ class GenerateAnswerStage(BaseVerificationStage):
 
         # Build unique suffix (replicate-safe for parallel execution)
         timestamp = time.strftime("%Y%m%dT%H%M%S")
-        suffix = f"run_{timestamp}"
+        suffix = f"run_{timestamp}_pid{os.getpid()}"
         if context.replicate is not None:
             suffix += f"_rep{context.replicate}"
 
