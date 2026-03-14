@@ -119,6 +119,7 @@ class VerificationManager:
                 few_shot_examples=q_data.get("few_shot_examples"),
                 question_rubric=question_rubric_dict,
                 keywords=q_data.get("keywords"),
+                workspace_path=q_data.get("workspace_path"),
             )
             templates.append(template)
 
