@@ -43,6 +43,15 @@ class Question(BaseModel):
     sources: list[dict[str, Any]] | None = None
     custom_metadata: dict[str, Any] | None = None
     question_rubric: dict[str, Any] | None = None
+    workspace_path: str | None = Field(
+        default=None,
+        description=(
+            "Relative path from workspace_root to this question's working "
+            "directory. For coding benchmarks, this points to the pre-existing "
+            "folder containing starter code, tests, or other artifacts for this "
+            "task (e.g., 'task_01'). Resolved as workspace_root / workspace_path."
+        ),
+    )
 
     @model_validator(mode="before")
     @classmethod
