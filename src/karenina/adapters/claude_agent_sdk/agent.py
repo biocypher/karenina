@@ -177,6 +177,10 @@ class ClaudeSDKAgentAdapter:
         if env_vars:
             options_kwargs["env"] = env_vars
 
+        # Wire workspace_path to SDK's cwd for filesystem isolation
+        if config.workspace_path:
+            options_kwargs["cwd"] = str(config.workspace_path)
+
         return ClaudeAgentOptions(**options_kwargs)
 
     def _build_raw_trace(self, messages: list[Any]) -> str:
