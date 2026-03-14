@@ -4,6 +4,7 @@ Main entry point for running verification using the stage-based pipeline archite
 """
 
 import logging
+from pathlib import Path
 from typing import Any
 
 from karenina.schemas.config import ModelConfig
@@ -60,6 +61,15 @@ def run_single_model_verification(
     # Trace filtering configuration (MCP Agent Evaluation)
     use_full_trace_for_template: bool = False,
     use_full_trace_for_rubric: bool = True,
+    # Agentic parsing configuration
+    agentic_parsing: bool = False,
+    agentic_judge_context: str = "workspace_only",
+    agentic_parsing_max_turns: int = 15,
+    agentic_parsing_timeout: float = 120.0,
+    workspace_root: Path | None = None,
+    workspace_copy: bool = True,
+    workspace_cleanup: bool = True,
+    question_workspace_path: str | None = None,
 ) -> VerificationResult:
     """
     Run verification for a single question with specific answering and parsing models.
@@ -157,6 +167,15 @@ def run_single_model_verification(
         use_full_trace_for_rubric=use_full_trace_for_rubric,
         # Answer Caching
         cached_answer_data=cached_answer_data,
+        # Agentic Parsing
+        agentic_parsing=agentic_parsing,
+        agentic_judge_context=agentic_judge_context,
+        agentic_parsing_max_turns=agentic_parsing_max_turns,
+        agentic_parsing_timeout=agentic_parsing_timeout,
+        question_workspace_path=question_workspace_path,
+        workspace_root=workspace_root,
+        workspace_copy=workspace_copy,
+        workspace_cleanup=workspace_cleanup,
     )
 
     # Build ModelIdentity objects for pipeline use (needed even if validation fails)
@@ -189,6 +208,7 @@ def run_single_model_verification(
         sufficiency_enabled=sufficiency_enabled,
         deep_judgment_enabled=deep_judgment_enabled,
         evaluation_mode=evaluation_mode,
+        agentic_parsing=agentic_parsing,
     )
 
     # Execute verification pipeline
