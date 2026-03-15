@@ -1,7 +1,7 @@
 """Verification primitives for VerifiedField-based answer templates.
 
 Primitives define how extracted values are compared against ground truth.
-Three categories:
+Four categories:
 - Parsed primitives: operate on judge-extracted values (field included in parsing schema)
 - Trace primitives: operate on raw LLM response (field excluded from parsing schema)
 - Composition: generic boolean composition nodes (AllOf, AnyOf, AtLeastN)
