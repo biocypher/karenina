@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.entities import Question
 from karenina.schemas.primitives import VerificationPrimitive
+
+if TYPE_CHECKING:
+    from karenina.schemas.scenario.checks import OutcomeNode
 
 # Sentinel for scenario termination
 END: str = "__end__"
@@ -62,7 +65,7 @@ class ScenarioEdge(BaseModel):
 
     source: str
     target: str  # node_id or END
-    condition: StateCheck | list[StateCheck] | None = None
+    condition: EdgeCondition | None = None
 
     # Callable condition (excluded from serialization)
     condition_callable: Callable[..., Any] | None = Field(default=None, exclude=True)
@@ -97,10 +100,9 @@ class ScenarioOutcomeCriterion(BaseModel):
     name: str
     description: str
 
-    # Primary: declarative check (fully serializable)
-    # OutcomeNode type is defined in checks.py; use Any here to avoid circular import.
-    # The actual type constraint comes from the checks module.
-    check: Any | None = None
+    # Primary: declarative check (fully serializable via Pydantic).
+    # OutcomeNode is a forward reference resolved by model_rebuild() in __init__.py.
+    check: OutcomeNode | None = None
 
     # Escape hatch: callable (excluded from serialization)
     evaluate: Callable[..., Any] | None = Field(default=None, exclude=True)

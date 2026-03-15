@@ -26,6 +26,13 @@ from .types import (
     ToolFilterEntry,
 )
 
+# Resolve OutcomeNode forward reference in ScenarioOutcomeCriterion.check
+# (types.py cannot import from checks.py without creating a circular import)
+ScenarioOutcomeCriterion.model_rebuild(
+    force=True,
+    _types_namespace={"OutcomeNode": OutcomeNode},
+)
+
 __all__ = [
     # Sentinel
     "END",
