@@ -197,6 +197,14 @@ class ArtifactKeys:
     WORKSPACE_PATH = "workspace_path"
     AGENTIC_PARSING_PERFORMED = "agentic_parsing_performed"
 
+    # ==========================================================================
+    # Agentic Rubric Evaluation
+    # ==========================================================================
+
+    AGENTIC_RUBRIC_EVALUATION_PERFORMED = "agentic_rubric_evaluation_performed"
+    AGENTIC_TRAIT_SCORES = "agentic_trait_scores"
+    AGENTIC_TRAIT_INVESTIGATION_TRACES = "agentic_trait_investigation_traces"
+
 
 @dataclass
 class VerificationContext:
@@ -302,6 +310,10 @@ class VerificationContext:
     agentic_judge_context: str = "workspace_only"
     agentic_parsing_max_turns: int = 15
     agentic_parsing_timeout: float = 120.0
+
+    # Agentic Rubric Configuration
+    agentic_rubric_strategy: str = "individual"  # "individual" or "shared"
+    agentic_rubric_parallel: bool = False
 
     # Workspace
     question_workspace_path: str | None = None  # Raw relative path from Question
