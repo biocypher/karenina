@@ -393,6 +393,44 @@ def test_rubric_get_trait_by_name_not_found() -> None:
     assert result is None
 
 
+@pytest.mark.unit
+class TestVerificationResultRubricAgenticFields:
+    """Tests for agentic trait fields on VerificationResultRubric."""
+
+    def test_agentic_fields_default_none(self):
+        rubric = VerificationResultRubric()
+        assert rubric.agentic_trait_scores is None
+        assert rubric.agentic_trait_investigation_traces is None
+
+    def test_get_all_trait_scores_includes_agentic(self):
+        rubric = VerificationResultRubric(
+            llm_trait_scores={"clarity": 4},
+            agentic_trait_scores={"code_quality": 3},
+        )
+        scores = rubric.get_all_trait_scores()
+        assert scores == {"clarity": 4, "code_quality": 3}
+
+    def test_get_trait_by_name_finds_agentic(self):
+        rubric = VerificationResultRubric(
+            agentic_trait_scores={"code_quality": True},
+        )
+        result = rubric.get_trait_by_name("code_quality")
+        assert result == (True, "agentic")
+
+    def test_get_trait_by_name_returns_none_for_missing(self):
+        rubric = VerificationResultRubric(
+            agentic_trait_scores={"code_quality": True},
+        )
+        assert rubric.get_trait_by_name("nonexistent") is None
+
+    def test_investigation_traces_stored(self):
+        traces = {"code_quality": "I investigated the code and found it follows PEP 8."}
+        rubric = VerificationResultRubric(
+            agentic_trait_investigation_traces=traces,
+        )
+        assert "investigated" in rubric.agentic_trait_investigation_traces["code_quality"]
+
+
 # =============================================================================
 # VerificationResultDeepJudgment Tests
 # =============================================================================

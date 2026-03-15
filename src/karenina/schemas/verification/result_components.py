@@ -188,6 +188,18 @@ class VerificationResultRubric(BaseModel):
     # Structure: {"trait_name": {"tp": ["excerpt1", ...], "tn": [...], "fp": [...], "fn": [...]}}
     # Each trait has four lists (TP/TN/FP/FN) containing extracted excerpts from the answer
 
+    # Agentic trait evaluation
+    agentic_trait_scores: dict[str, int | bool] | None = Field(
+        default=None,
+        description="Scores from agentic rubric traits. Keyed by trait name.",
+    )
+    agentic_trait_investigation_traces: dict[str, str] | None = Field(
+        default=None,
+        description="Investigation traces from agentic rubric traits. "
+        "Each trace is the raw agent investigation output string. "
+        "Keyed by trait name.",
+    )
+
     def get_all_trait_scores(self) -> dict[str, int | bool | dict[str, float]]:
         """
         Get all trait scores across all trait types in a flat dictionary.
@@ -210,6 +222,8 @@ class VerificationResultRubric(BaseModel):
             scores.update(self.callable_trait_scores)
         if self.metric_trait_scores:
             scores.update(self.metric_trait_scores)
+        if self.agentic_trait_scores:
+            scores.update(self.agentic_trait_scores)
 
         return scores
 
@@ -232,6 +246,8 @@ class VerificationResultRubric(BaseModel):
             return (self.callable_trait_scores[name], "callable")
         if self.metric_trait_scores and name in self.metric_trait_scores:
             return (self.metric_trait_scores[name], "metric")
+        if self.agentic_trait_scores and name in self.agentic_trait_scores:
+            return (self.agentic_trait_scores[name], "agentic")
         return None
 
     def get_llm_trait_labels(self) -> dict[str, str]:
