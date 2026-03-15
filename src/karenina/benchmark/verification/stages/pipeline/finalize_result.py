@@ -224,7 +224,9 @@ class FinalizeResultStage(BaseVerificationStage):
 
         # Create rubric subclass (if rubric evaluation was performed)
         rubric_result = None
-        if rubric_evaluation_performed:
+        agentic_evaluation_performed = context.get_result_field(ArtifactKeys.AGENTIC_RUBRIC_EVALUATION_PERFORMED, False)
+
+        if rubric_evaluation_performed or agentic_evaluation_performed:
             # Split verify_rubric into separate trait score dicts
             verify_rubric = context.get_result_field(ArtifactKeys.VERIFY_RUBRIC)
             # Get rubric definition from context directly (not from result_field)
@@ -272,6 +274,10 @@ class FinalizeResultStage(BaseVerificationStage):
             # Get llm_trait_labels for literal-kind LLM traits (maps trait name to class name)
             llm_trait_labels = context.get_result_field(ArtifactKeys.LLM_TRAIT_LABELS)
 
+            # Get agentic trait evaluation results (populated by Stage 11b)
+            agentic_trait_scores = context.get_result_field(ArtifactKeys.AGENTIC_TRAIT_SCORES)
+            agentic_trait_traces = context.get_result_field(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES)
+
             rubric_result = VerificationResultRubric(
                 rubric_evaluation_performed=rubric_evaluation_performed,
                 rubric_evaluation_strategy=context.get_result_field(ArtifactKeys.RUBRIC_EVALUATION_STRATEGY),
@@ -281,6 +287,8 @@ class FinalizeResultStage(BaseVerificationStage):
                 callable_trait_scores=callable_trait_scores,
                 metric_trait_scores=metric_trait_scores_dict,
                 metric_trait_confusion_lists=context.get_result_field(ArtifactKeys.METRIC_TRAIT_CONFUSION_LISTS),
+                agentic_trait_scores=agentic_trait_scores,
+                agentic_trait_investigation_traces=agentic_trait_traces,
             )
 
         # Create deep-judgment subclass (if enabled)
