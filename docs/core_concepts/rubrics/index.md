@@ -6,7 +6,7 @@ Rubrics evaluate **how** a model responded by assessing observable properties of
 
     For agent workflows, `VerificationConfig.use_full_trace_for_rubric` controls whether rubric evaluation uses the full trace (`True`, the default) or only the final AI message (`False`). See the [VerificationConfig Reference](../../reference/configuration/verification-config.md#trace-filtering) for the config fields and [MCP-enabled verification](../../notebooks/running-verification/mcp-agent-evaluation.ipynb#trace-handling) for an end-to-end example.
 
-Rubrics come in four trait types (LLM, regex, callable, metric) that work differently: some require an LLM call, others run locally with no model involved. They can be applied **globally** across all questions or **per-question** for domain-specific checks.
+Rubrics come in five trait types (LLM, regex, callable, metric, agentic) that work differently: some require an LLM call, others run locally with no model involved, and agentic traits launch an agent to investigate workspace artifacts. They can be applied **globally** across all questions or **per-question** for domain-specific checks.
 
 ## 1. What Are Rubrics?
 
@@ -14,7 +14,7 @@ A **rubric** is a collection of evaluation traits that assess observable propert
 
 - **No ground truth needed**: rubrics evaluate properties you can judge by reading the response alone (conciseness, safety, presence of citations)
 - **Complement templates**: templates check factual correctness via `verify()`; rubrics assess qualities that characterize the answer style or structure
-- **Multiple trait types**: four types (LLM, regex, callable, metric) with different execution models
+- **Multiple trait types**: five types (LLM, regex, callable, metric, agentic) with different execution models
 
 Unlike templates, which operate on parsed structured data, rubrics evaluate the **raw response text** directly. See [templates vs rubrics](../../notebooks/core_concepts/template-vs-rubric.ipynb) for a full comparison of the two evaluation building blocks.
 
@@ -40,6 +40,7 @@ rubric = Rubric(
             higher_is_better=True,
         ),
     ],
+    agentic_traits=[...],
     # callable_traits and metric_traits default to empty lists
 )
 ```
@@ -69,6 +70,7 @@ Given the question "Which is the putative target of venetoclax?", a [template](.
 | [**RegexTrait**](../../notebooks/core_concepts/rubrics/regex-traits.ipynb) | `bool` | No | "Has bracket citations `[N]`" | 100% reproducible; supports `case_sensitive` and `invert_result` options |
 | [**CallableTrait**](../../notebooks/core_concepts/rubrics/callable-traits.ipynb) | `bool` or `int` | No | "Under 150 words" | Created via `from_callable()`; Karenina runs your Python function locally, but the function may itself call external services. Serialized with cloudpickle; only load from trusted sources |
 | [**MetricRubricTrait**](../../notebooks/core_concepts/rubrics/metric-traits.ipynb) | metrics dict | Yes | "Expected drug interactions mentioned" | Two modes: `tp_only` (precision/recall/F1) and `full_matrix` (adds specificity/accuracy) |
+| [**AgenticRubricTrait**](../../notebooks/core_concepts/rubrics/agentic-traits.ipynb) (boolean/score/literal) | `bool`, `int`, or class index | Yes (agent) | "Which library was used for logistic regression?" | Agent investigates workspace, parser extracts score |
 
 Trait descriptions are not questions sent to the model; they are evaluation criteria applied to the response after the fact. Each trait type's sub-page includes a [pipeline diagram](../../notebooks/core_concepts/verification-pipeline.ipynb) showing how evaluation works (RubricEvaluation).
 
@@ -93,36 +95,41 @@ For a hands-on tutorial that walks through each of these needs with a complete e
 ### Decision Flowchart
 
 ```
-1. Does the check require language understanding?
+0. Does the check require inspecting workspace artifacts (code files, output data)?
    │
-   ├─ NO: Can it be expressed as a single regex pattern?
-   │   │
-   │   ├─ YES → RegexTrait
-   │   │        Check presence: higher_is_better=True
-   │   │        Check absence:  invert_result=True
-   │   │
-   │   └─ NO (multiple patterns, numeric logic, conditionals)
-   │       → CallableTrait
-   │         Accepts one str, returns bool or int.
+   ├─ YES → AgenticRubricTrait
+   │        context_mode controls what the agent sees.
    │
-   └─ YES: Is it a checklist of items the response should cover?
-       │
-       ├─ YES → MetricRubricTrait
-       │        Coverage only: evaluation_mode="tp_only"
-       │        Coverage + absence: evaluation_mode="full_matrix"
-       │
-       └─ NO: What kind of judgment?
-           │
-           ├─ Yes/no → LLMRubricTrait (kind="boolean")
-           │           Need traceable evidence? Add deep_judgment_enabled=True
-           │
-           ├─ Named tiers with observable boundaries
-           │   → LLMRubricTrait (kind="literal")
-           │     Write mutually exclusive class descriptions.
-           │
-           └─ Continuous scale (no clear category boundaries)
-               → LLMRubricTrait (kind="score")
-                 Anchor the scale at 3+ points with concrete criteria.
+   └─ NO: Does the check require language understanding?
+      │
+      ├─ NO: Can it be expressed as a single regex pattern?
+      │   │
+      │   ├─ YES → RegexTrait
+      │   │        Check presence: higher_is_better=True
+      │   │        Check absence:  invert_result=True
+      │   │
+      │   └─ NO (multiple patterns, numeric logic, conditionals)
+      │       → CallableTrait
+      │         Accepts one str, returns bool or int.
+      │
+      └─ YES: Is it a checklist of items the response should cover?
+          │
+          ├─ YES → MetricRubricTrait
+          │        Coverage only: evaluation_mode="tp_only"
+          │        Coverage + absence: evaluation_mode="full_matrix"
+          │
+          └─ NO: What kind of judgment?
+              │
+              ├─ Yes/no → LLMRubricTrait (kind="boolean")
+              │           Need traceable evidence? Add deep_judgment_enabled=True
+              │
+              ├─ Named tiers with observable boundaries
+              │   → LLMRubricTrait (kind="literal")
+              │     Write mutually exclusive class descriptions.
+              │
+              └─ Continuous scale (no clear category boundaries)
+                  → LLMRubricTrait (kind="score")
+                    Anchor the scale at 3+ points with concrete criteria.
 ```
 
 **Priority heuristic**: prefer regex traits, and prefer pure local callable traits, over LLM traits when possible. They are usually faster, cheaper, and more reproducible. Callable traits inherit those properties only if the function itself stays local and deterministic. Use LLM traits when the evaluation genuinely requires language understanding or when your callable would just re-implement an external judge.
@@ -145,5 +152,6 @@ This field is used by analysis tools and DataFrame builders to correctly interpr
 - [Regex traits](../../notebooks/core_concepts/rubrics/regex-traits.ipynb): deterministic pattern matching
 - [Callable traits](../../notebooks/core_concepts/rubrics/callable-traits.ipynb): custom Python functions
 - [Metric traits](../../notebooks/core_concepts/rubrics/metric-traits.ipynb): precision, recall, F1 computation
+- [Agentic traits](../../notebooks/core_concepts/rubrics/agentic-traits.ipynb): agent-investigated evaluation for workspace artifacts
 - [Evaluation modes](../../notebooks/core_concepts/evaluation-modes.ipynb): template_only, template_and_rubric, rubric_only
 - [Full Evaluation Benchmark](../../notebooks/creating-benchmarks/full-evaluation-benchmark.ipynb): workflow guide for adding rubrics to benchmarks

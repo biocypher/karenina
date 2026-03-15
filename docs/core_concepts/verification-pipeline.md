@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.18.1
+      jupytext_version: 1.19.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -15,7 +15,7 @@ jupyter:
 
 # Verification Pipeline
 
-The **verification pipeline** is the execution engine that turns a question and its evaluation criteria into a structured `VerificationResult`. It runs a fixed sequence of up to 13 stages, each performing one step: validating a template, generating a response, parsing it, checking correctness, evaluating rubric traits, or finalizing the result.
+The **verification pipeline** is the execution engine that turns a question and its evaluation criteria into a structured `VerificationResult`. It runs a fixed sequence of up to 14 stages, each performing one step: validating a template, generating a response, parsing it, checking correctness, evaluating rubric traits, or finalizing the result.
 
 The most important idea is that the pipeline is a **result-producing machine**: it always returns a `VerificationResult`, even when the model fails, abstains, or a stage throws an exception. Individual stages may skip, fail, or override earlier outcomes, but the pipeline itself never crashes without producing an output.
 
@@ -61,7 +61,7 @@ Structuring evaluation as an ordered sequence of stages provides four guarantees
 | **Configurability** | Optional stages are included or skipped based on feature flags without affecting the rest of the sequence |
 | **Error containment** | Guard stages catch problems early; `FinalizeResult` always runs to assemble whatever data is available into a valid result |
 
-## 2. Anatomy: The 13 Stages
+## 2. Anatomy: The 14 Stages
 
 The pipeline groups its stages into functional categories. Within each category, stages execute in the order shown.
 
@@ -79,6 +79,7 @@ The pipeline groups its stages into functional categories. Within each category,
   Enhancements       9. EmbeddingCheck                 Template modes only
                     10. DeepJudgmentAutoFail            If deep_judgment_enabled
   Rubric path       11. RubricEvaluation               If rubric has traits + mode includes rubric
+                   11b. AgenticRubricEvaluation        If rubric has agentic traits
                     12. DeepJudgmentRubricAutoFail      If rubric stages present
   Finalization      13. FinalizeResult                  Yes (always last)
 ```
@@ -241,6 +242,8 @@ The rubric evaluation input depends on `use_full_trace_for_rubric`: the full tra
 
 When any LLM trait has `deep_judgment_enabled=True`, the stage switches to a deep-judgment path that extracts verbatim excerpts supporting each trait assessment.
 
+**AgenticRubricEvaluation** (stage 11b) runs when the rubric includes agentic traits. It deploys an agent per trait to investigate workspace artifacts, then extracts a structured score from the investigation findings. See [agentic rubric traits](rubrics/agentic-traits.md) and [Stage 11b internals](../../advanced-pipeline/agentic-rubric-evaluation.md).
+
 **DeepJudgmentRubricAutoFail** (stage 12) mirrors stage 10 for rubric traits. If any trait lacks valid supporting excerpts after deep-judgment evaluation, it overrides `verify_result` to `False`. Abstention detection takes priority and skips this stage.
 
 ### Finalization
@@ -255,7 +258,7 @@ When any LLM trait has `deep_judgment_enabled=True`, the stage switches to a dee
 | `result.deep_judgment` | Template deep-judgment excerpts, reasoning, retry counts |
 | `result.deep_judgment_rubric` | Rubric deep-judgment excerpts, reasoning, trait metadata |
 
-## 5. The Two Evaluation Paths
+## 5. The Three Evaluation Paths
 
 Within a single pipeline run, template evaluation and rubric evaluation are independent paths that share the same generated response but operate on different inputs and produce different outputs.
 
@@ -267,10 +270,15 @@ GenerateAnswer
   │      Judge:  parses into Answer schema
   │      Output: verify_result (bool), parsed fields, optional embeddings/deep judgment
   │
-  └─── Rubric path (stages 11-12)
-         Input:  rubric evaluation input (full trace or final AI message)
-         Judge:  evaluates each trait independently
-         Output: trait scores (booleans, integers, metrics dicts)
+  ├─── Classical rubric path (stage 11)
+  │      Input:  rubric evaluation input (full trace or final AI message)
+  │      Judge:  evaluates each trait independently
+  │      Output: trait scores (booleans, integers, metrics dicts)
+  │
+  └─── Agentic rubric path (stage 11b)
+         Input:  workspace artifacts + optional trace (per context_mode)
+         Agent:  investigates workspace, parser extracts score
+         Output: agentic trait scores, investigation traces
 ```
 
 The defaults are intentionally asymmetric:
@@ -330,6 +338,7 @@ The full matrix:
 | EmbeddingCheck | Present (runs conditionally) | Present (runs conditionally) | No |
 | DeepJudgmentAutoFail | If enabled | If enabled | No |
 | RubricEvaluation | No | If rubric has traits | If rubric has traits |
+| AgenticRubricEvaluation | No | If agentic traits | If agentic traits |
 | DeepJudgmentRubricAutoFail | No | If rubric stages present | If rubric stages present |
 | FinalizeResult | Yes | Yes | Yes |
 
@@ -377,6 +386,7 @@ Every stage inherits a default `should_run()` that returns `False` when `context
 | EmbeddingCheck | `field_verification_result` is `False` |
 | DeepJudgmentAutoFail | Deep judgment was performed and attributes are missing excerpts |
 | RubricEvaluation | Rubric has traits; trace validation did not fail (or full trace is being used) |
+| AgenticRubricEvaluation | Rubric has agentic traits; no error |
 | DeepJudgmentRubricAutoFail | Deep judgment rubric was performed and traits are missing excerpts |
 | FinalizeResult | **Always** (overrides the error check) |
 
